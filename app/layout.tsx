@@ -1,14 +1,13 @@
 import type { Metadata } from 'next';
-import { Geist, Geist_Mono, Instrument_Serif } from 'next/font/google';
+import { Geist, Geist_Mono } from 'next/font/google';
 import { Provider } from '@/components/provider';
 import { appName } from '@/lib/shared';
 import './global.css';
 
-// Real AgentKit brand font stack (mirrors ak-web/app/root-document.tsx):
-// Geist for body/UI, Geist Mono for code/labels, Instrument Serif for EN
-// display headings. Instrument Serif is latin-only and is applied to EN
-// headings only — Vietnamese headings swap to Geist via a locale rule in
-// global.css.
+// AgentKit brand font stack: Geist for everything (body, UI, and headings in
+// both EN and VI), Geist Mono for code/labels. All-sans headings keep the two
+// locales visually identical (a serif would only work for EN — Vietnamese
+// diacritics force sans — so we use sans for both).
 //
 // NOTE (bilingual VI): Google Fonts' Geist exposes only latin / latin-ext /
 // cyrillic subsets — no dedicated `vietnamese` subset. latin-ext covers most
@@ -25,13 +24,6 @@ const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
 });
 
-const instrumentSerif = Instrument_Serif({
-  subsets: ['latin'],
-  weight: '400',
-  style: ['normal', 'italic'],
-  variable: '--font-instrument-serif',
-});
-
 export const metadata: Metadata = {
   title: {
     default: `${appName} Docs`,
@@ -44,7 +36,7 @@ export default function Layout({ children }: LayoutProps<'/'>) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${instrumentSerif.variable}`}
+      className={`${geistSans.variable} ${geistMono.variable}`}
       suppressHydrationWarning
     >
       <body className="flex flex-col min-h-screen font-sans">
