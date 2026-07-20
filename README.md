@@ -2,9 +2,7 @@
 
 Official documentation site for the **AgentKit** (`ak`) CLI — [docs.agentkit.best](https://docs.agentkit.best) *(domain pending)*.
 
-Built with [Fumadocs](https://fumadocs.dev) (Next.js, **static export**) and deployed to **Cloudflare Pages** ($0 hosting, no server runtime). The site tracks two release channels — **stable** and **beta** — and keeps the CLI reference in sync with released binaries via an automated pipeline. Design system reuses the real agentkit.best brand tokens.
-
-The design direction, tokens, and full build plan live in [`plans/260719-docs-pipeline/`](./plans/260719-docs-pipeline/).
+Built with [Fumadocs](https://fumadocs.dev) (Next.js, **static export**) and deployed to **Cloudflare Pages** ($0 hosting, no server runtime). The site tracks two release channels — **stable** and **beta** — and keeps the CLI reference in sync with released binaries via an automated pipeline. The design system reuses the real agentkit.best brand tokens (dark-first canvas, steel-blue accent, Instrument Serif + Geist).
 
 ## Local development
 
