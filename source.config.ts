@@ -18,6 +18,14 @@ export const docs = defineDocs({
 
 export default defineConfig({
   mdxOptions: {
-    // MDX options
+    // Code blocks stay dark in both light and dark mode (developer expectation;
+    // matches the agentkit.best brand guideline §3.3). Using one dark Shiki
+    // theme for both keeps syntax colors AA-legible on the dark code surface.
+    rehypeCodeOptions: {
+      themes: {
+        light: 'github-dark',
+        dark: 'github-dark',
+      },
+    },
   },
 });
