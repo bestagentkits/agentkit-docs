@@ -63,13 +63,15 @@ Locale root redirects live in `public/_redirects` (copied into `out/`; Workers s
 
 ## CI
 
-`.github/workflows/ci.yml` runs on every PR and push to `main` / `dev`: install (frozen lockfile) → typecheck → lint (MDX) → unit tests → generated-dir guard → build → internal link check → static-output assertion. Keep it green; all steps are deterministic and offline (the link check validates internal links only).
+`.github/workflows/ci.yml` runs on every PR and push to `main` / `dev`: install (frozen lockfile) → typecheck → lint (MDX) → unit tests → reference hygiene → generated-dir guard → reference-regeneration check (regenerate from `reference-raw/` + `reference-prose/`, assert no drift) → build → internal link check → static-output assertion. Keep it green; all steps are deterministic and offline (the link check validates internal links only).
 
 Deploy workflows run their own typecheck + build, then `wrangler deploy` — they do not wait on the CI workflow.
 
 ## Release sync pipeline
 
 Docs stay in sync with `ak` releases via a deterministic pipeline (scripts + workflows) and a guardrailed LLM agent. Everything is validated against hand-built fixtures in `fixtures/`, so no `ak-cli` change is required to run it.
+
+The CLI reference is **two layers**: the _facts_ (usage, examples, flags, exit codes, related commands) are projected mechanically from `ak --help` — always exact, never drifting — while the _narrative_ (overview + when-to-use + notes) is reviewed prose in `reference-prose/<slug>.md`. The published pages under `content/docs/beta/reference/cli/` are **derived**: `generateReference` = normalize(`reference-raw/<slug>.mdx` source + prose overlay). Because they are a pure function of committed sources, CI regenerates them and asserts a zero diff — so the reference can't silently drift or be hand-edited. See [`reference-prose/README.md`](reference-prose/README.md) for the authoring contract.
 
 ### docs-bundle contract (v1)
 
@@ -86,9 +88,10 @@ All contract parsing/validation lives in `scripts/lib/manifest.mjs` (`schemaVers
 
 ### Scripts (plain Node, no build step; `pnpm test` covers them)
 
-- `scripts/sync-release.mjs --bundle <dir|tar.gz> | --tag <vX.Y.Z-beta.N>` — beta ingestion: replace the generated pages in `content/docs/beta/reference/cli/` (preserving the human-owned `meta.json`/`meta.vi.json` nav), rewrite the `.generated` marker, write `release-notes.mdx`, update `channels.json.beta`. Idempotent (re-running a tag reproduces byte-identical output — `generatedAt` comes from the manifest, never the clock).
+- `scripts/sync-release.mjs --bundle <dir|tar.gz> | --tag <vX.Y.Z-beta.N>` — beta ingestion: refresh the raw source in `reference-raw/` from the bundle (hygiene-scrubbed: private-repo links → public support repo), then derive `content/docs/beta/reference/cli/` from it + prose overlays (preserving the human-owned `meta.json`/`meta.vi.json` nav), rewrite the `.generated` marker, write `release-notes.mdx`, update `channels.json.beta`. Idempotent (re-running a tag reproduces byte-identical output — `generatedAt` comes from the manifest, never the clock).
+- `scripts/generate-reference.mjs [--channel beta]` — regenerate the derived pages from `reference-raw/` + `reference-prose/` via `scripts/lib/normalize-reference.mjs` (raw `cobra/doc` → web-native MDX, prose overlay merged). Idempotent. CI runs it and asserts a zero diff to prove the reference is exactly `generator(source + overlays)`.
 - `scripts/promote-docs.mjs --bundle <stable-bundle-dir>` — stable promotion: whole-copy the beta tree at tag `docs/{promotedFrom}` into `content/docs/stable/`, assert it is channel-neutral, update `channels.json.stable`. Emits a branch name; the workflow opens the PR (stable is never direct-committed).
-- `scripts/check-generated.mjs --base <ref>` — CI guard: fails any hand edit to a `.generated`-marked dir's generated pages (ownership judged at the base ref, so bootstrapping a new generated dir is allowed; `meta*.json` nav is exempt); the sync bot (`GITHUB_ACTOR`) is exempt.
+- `scripts/check-generated.mjs --base <ref>` — CI guard: fails any hand edit to a `.generated`-marked dir's generated pages (ownership judged at the base ref, so bootstrapping a new generated dir is allowed; `meta*.json` nav is exempt); the sync bot (`GITHUB_ACTOR`) is exempt. Dirs covered by the regenerate-and-diff reproducibility step (`REPRODUCIBLE_DIRS`, e.g. beta's reference) are exempt here — that check is stronger, so generator-change PRs need no bot bypass.
 - `scripts/check-agent-pr.mjs --base <ref>` — agent-PR scope guard (modify-only, `content/docs/beta/{getting-started,guides}` prose).
 - `scripts/check-links.mjs` — internal link checker over `out/`.
 
