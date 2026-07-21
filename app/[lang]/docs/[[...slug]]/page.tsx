@@ -13,7 +13,7 @@ import { getMDXComponents } from '@/components/mdx';
 import { BetaBanner } from '@/components/beta-banner';
 import { channelFromSlug } from '@/lib/channels';
 import type { Metadata } from 'next';
-import { createRelativeLink } from 'fumadocs-ui/mdx';
+import { createDocsRelativeLink } from '@/lib/docs-relative-link';
 import { gitConfig } from '@/lib/shared';
 
 export default async function Page(props: PageProps<'/[lang]/docs/[[...slug]]'>) {
@@ -54,8 +54,8 @@ export default async function Page(props: PageProps<'/[lang]/docs/[[...slug]]'>)
       <DocsBody>
         <MDX
           components={getMDXComponents({
-            // this allows you to link to other pages with relative file paths
-            a: createRelativeLink(source, page),
+            // Relative MDX links (including extensionless ./path) → locale URLs
+            a: createDocsRelativeLink(source, page),
           })}
         />
       </DocsBody>
