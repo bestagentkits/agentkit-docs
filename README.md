@@ -1,8 +1,8 @@
 # ak-docs
 
-Official documentation site for the **AgentKit** (`ak`) CLI — [docs.agentkit.best](https://docs.agentkit.best) *(domain pending)*.
+Official documentation site for the **AgentKit** (`ak`) CLI — [docs.agentkit.best](https://docs.agentkit.best).
 
-Built with [Fumadocs](https://fumadocs.dev) (Next.js, **static export**) and deployed to **Cloudflare Pages** ($0 hosting, no server runtime). The site tracks two release channels — **stable** and **beta** — and keeps the CLI reference in sync with released binaries via an automated pipeline. The design system reuses the real agentkit.best brand tokens (dark-first canvas, steel-blue accent, Instrument Serif + Geist).
+Built with [Fumadocs](https://fumadocs.dev) (Next.js, **static export**) and deployed to **Cloudflare Workers** (static assets, no server runtime). The site tracks two release channels — **stable** and **beta** — and keeps the CLI reference in sync with released binaries via an automated pipeline. The design system reuses the real agentkit.best brand tokens (dark-first canvas, steel-blue accent, Instrument Serif + Geist).
 
 ## Local development
 
@@ -30,24 +30,42 @@ source.config.ts  fumadocs-mdx collections + frontmatter schema
 The build is 100% static: `pnpm build` emits `out/` with no `.next/server` runtime.
 Client-side search uses a build-time Orama index (`/api/search` prerenders to a static asset).
 
-## Deployment — Cloudflare Pages
+## Deployment — Cloudflare Workers
 
-Deployed via Cloudflare Pages **Git integration** (gives production + per-PR preview deploys for free). Console setup (not reproducible from code — recorded here):
+Static export (`pnpm build` → `out/`) is deployed as a **Workers static assets** Worker via [Wrangler](https://developers.cloudflare.com/workers/wrangler/). Zone `agentkit.best` is already on Cloudflare DNS (account `digitop.vn@gmail.com`); custom domains are attached with `custom_domain = true` in `wrangler.toml` (no manual DNS CNAME required).
 
-1. Cloudflare dashboard → **Workers & Pages** → **Create** → **Pages** → **Connect to Git** → select this repo.
-2. Build settings:
-   - **Framework preset:** None
-   - **Build command:** `pnpm build`
-   - **Build output directory:** `out`
-   - **Environment variable:** `NODE_VERSION = 22`
-3. Enable **preview deployments** for pull requests (default on).
-4. (Later, once the domain is confirmed) add the custom domain `docs.agentkit.best` + DNS.
+| Branch | Workflow | Worker | Domain |
+| --- | --- | --- | --- |
+| `dev` | `.github/workflows/deploy-staging.yml` | `agentkit-docs-staging` | https://staging.docs.agentkit.best |
+| `main` | `.github/workflows/deploy-production.yml` | `agentkit-docs` | https://docs.agentkit.best |
 
-`wrangler pages deploy out` is the documented fallback if the org later wants workflow-controlled deploys instead of Git integration.
+### Repo secrets (required)
+
+Set once in GitHub → Settings → Secrets and variables → Actions (same Cloudflare account as `agentkit-web`):
+
+| Name | Purpose |
+| --- | --- |
+| `CLOUDFLARE_API_TOKEN` | API token with **Workers Scripts:Edit**, **Workers Routes:Edit**, **Account:Read**, **Zone:Read** (and ability to manage custom domains on `agentkit.best`) |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID for `digitop.vn@gmail.com` |
+
+GitHub Environments `staging` and `production` are referenced by the deploy workflows (optional protection rules / deployment URLs).
+
+### Local deploy
+
+```bash
+export CLOUDFLARE_API_TOKEN=...
+export CLOUDFLARE_ACCOUNT_ID=...
+pnpm deploy:staging     # build + wrangler deploy --env staging
+pnpm deploy:production  # build + wrangler deploy --env production
+```
+
+Locale root redirects live in `public/_redirects` (copied into `out/`; Workers static assets honor the file).
 
 ## CI
 
-`.github/workflows/ci.yml` runs on every PR and push to `main`: install (frozen lockfile) → typecheck → lint (MDX) → unit tests → generated-dir guard → build → internal link check → static-output assertion. Keep it green; all steps are deterministic and offline (the link check validates internal links only).
+`.github/workflows/ci.yml` runs on every PR and push to `main` / `dev`: install (frozen lockfile) → typecheck → lint (MDX) → unit tests → generated-dir guard → build → internal link check → static-output assertion. Keep it green; all steps are deterministic and offline (the link check validates internal links only).
+
+Deploy workflows run their own typecheck + build, then `wrangler deploy` — they do not wait on the CI workflow.
 
 ## Release sync pipeline
 
@@ -76,7 +94,8 @@ All contract parsing/validation lives in `scripts/lib/manifest.mjs` (`schemaVers
 
 ### Workflows
 
-- `docs-sync.yml` (`repository_dispatch: release-docs`): beta → sync + commit `docs-sync: beta <tag>` + tag `docs/<tag>` + push (Pages deploys); stable → promotion PR labeled `docs-promotion`. Concurrency is queued per channel.
+- `docs-sync.yml` (`repository_dispatch: release-docs`): beta → sync + commit `docs-sync: beta <tag>` + tag `docs/<tag>` + push (triggers production deploy on `main`); stable → promotion PR labeled `docs-promotion`. Concurrency is queued per channel.
+- `deploy-staging.yml` / `deploy-production.yml`: push to `dev` / `main` → build static export → `wrangler deploy --env staging|production`.
 - `docs-agent.yml` (`workflow_run` after a green beta sync): the docs agent patches drifted beta prose via a PR only; beta-only + ≥1h rate limit. Runs under its own non-bypass identity so guards always apply. Disable it by deleting/disabling this one file — the sync pipeline is unaffected.
 - `agent-guard.yml`: enforces agent-PR scope on the diff.
 
@@ -89,6 +108,8 @@ All contract parsing/validation lives in `scripts/lib/manifest.mjs` (`schemaVers
 | `AK_CLI_READ_TOKEN` | secret | Fine-grained PAT, contents:read on the private `ak-cli` repo only, to download the release asset. Document a rotation owner. |
 | `ANTHROPIC_API_KEY` | secret | Docs agent (Claude Code Action). |
 | `AK_CLI_REPO` | variable | Source repo slug (default `bestagentkits/agentkit`). |
+| `CLOUDFLARE_API_TOKEN` | secret | Wrangler deploy (Workers + custom domains on `agentkit.best`). |
+| `CLOUDFLARE_ACCOUNT_ID` | secret | Cloudflare account ID (`digitop.vn@gmail.com`). |
 
 Branch protection / ruleset on `main`: required checks (CI build + guards), no direct pushes except the `agentkit-docs-bot` app (ruleset bypass list = that app only — **not** the agent app), review required via `.github/CODEOWNERS`. **Caveat:** enforced rulesets/CODEOWNERS on a **private** repo require a paid GitHub plan — verify the org tier; if unavailable, fall back to required status checks + review discipline and record the gap in `AGENTS.md`/`CODEOWNERS`.
 

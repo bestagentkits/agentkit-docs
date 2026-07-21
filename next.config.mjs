@@ -4,7 +4,7 @@ const withMDX = createMDX();
 
 /** @type {import('next').NextConfig} */
 const config = {
-  // Static export → Cloudflare Pages. No server runtime; all routes prerender.
+  // Static export → Cloudflare Workers (static assets). No server runtime; all routes prerender.
   output: 'export',
   reactStrictMode: true,
   // Required by `output: 'export'` — the static build cannot use the Image
