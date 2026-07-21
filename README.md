@@ -1,6 +1,6 @@
 # ak-docs
 
-Official documentation site for the **AgentKit** (`ak`) CLI — [docs.agentkit.best](https://docs.agentkit.best) *(domain pending)*.
+Official documentation site for the **AgentKit** (`ak`) CLI — [docs.agentkit.best](https://docs.agentkit.best).
 
 Built with [Fumadocs](https://fumadocs.dev) (Next.js, **static export**) and deployed to **Cloudflare Workers** (static assets, no server runtime). The site tracks two release channels — **stable** and **beta** — and keeps the CLI reference in sync with released binaries via an automated pipeline. The design system reuses the real agentkit.best brand tokens (dark-first canvas, steel-blue accent, Instrument Serif + Geist).
 
