@@ -73,6 +73,18 @@ test('sync applies the beta bundle and reports a summary', async () => {
   assert.match(akPage, /github\.com\/bestagentkits\/agentkit-support/);
   assert.doesNotMatch(akPage, /github\.com\/bestagentkits\/agentkit(?![-\w])/);
 
+  // The published page is DERIVED (normalized): the duplicated H2 + Synopsis dump
+  // are gone and flags are tabulated.
+  assert.doesNotMatch(akPage, /^## ak$/m);
+  assert.doesNotMatch(akPage, /### Synopsis/);
+  assert.match(akPage, /### Flags\n\n\| Flag \| Description \|/);
+
+  // The raw `ak --help` projection is committed under reference-raw/ as the
+  // machine source of truth (scrubbed, still in cobra shape).
+  const rawAk = await readFile(join(repoRoot, 'reference-raw', 'ak.mdx'), 'utf8');
+  assert.match(rawAk, /### Synopsis/);
+  assert.doesNotMatch(rawAk, /github\.com\/bestagentkits\/agentkit(?![-\w])/);
+
   const notes = await readFile(
     join(repoRoot, 'content', 'docs', 'beta', 'reference', 'release-notes.mdx'),
     'utf8',
