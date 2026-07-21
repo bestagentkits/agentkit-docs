@@ -1,9 +1,13 @@
 import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
 import { appName, gitConfig } from './shared';
 
-export function baseOptions(): BaseLayoutProps {
+// `locale` prefixes internal nav links so the logo/home link stays inside the
+// active language (/en, /vi). The language switcher itself is rendered by the
+// layout from the i18n provider context, so it needs no config here.
+export function baseOptions(locale: string): BaseLayoutProps {
   return {
     nav: {
+      url: `/${locale}`,
       title: (
         <>
           {/* Real AgentKit logo mark (public/logo-icon.svg). Plain <img> so it

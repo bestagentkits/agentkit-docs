@@ -1,20 +1,24 @@
 import { docs } from 'collections/server';
 import { loader } from 'fumadocs-core/source';
+import { i18n } from './i18n';
 import { docsContentRoute, docsImageRoute, docsRoute } from './shared';
 
 // See https://fumadocs.dev/docs/headless/source-api for more info
 export const source = loader({
   baseUrl: docsRoute,
+  i18n,
   source: docs.toFumadocsSource(),
   plugins: [],
 });
 
+// The OG-image and raw-markdown route handlers live under the `[lang]` segment,
+// so their URLs carry the page's locale prefix (`/en/og/docs/...`).
 export function getPageImage(page: (typeof source)['$inferPage']) {
   const segments = [...page.slugs, 'image.png'];
 
   return {
     segments,
-    url: `${docsImageRoute}/${segments.join('/')}`,
+    url: `/${page.locale}${docsImageRoute}/${segments.join('/')}`,
   };
 }
 
@@ -23,7 +27,7 @@ export function getPageMarkdownUrl(page: (typeof source)['$inferPage']) {
 
   return {
     segments,
-    url: `${docsContentRoute}/${segments.join('/')}`,
+    url: `/${page.locale}${docsContentRoute}/${segments.join('/')}`,
   };
 }
 

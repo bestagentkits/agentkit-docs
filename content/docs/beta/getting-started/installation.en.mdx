@@ -1,0 +1,155 @@
+---
+title: Installation
+description: Install the ak command-line tool, verify the binary, and pick a release channel — about two minutes on any platform.
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+import { Accordion, Accordions } from 'fumadocs-ui/components/accordion';
+
+AgentKit ships as a single binary, `ak`. The installer detects your platform,
+fetches the signed binary for your channel, and puts `ak` on your `PATH`. It is
+idempotent — re-run it any time to upgrade in place.
+
+## Quick install
+
+<Tabs items={['macOS / Linux', 'Windows']}>
+  <Tab value="macOS / Linux">
+
+```bash
+curl -fsSL https://agentkit.best/install.sh | sh
+```
+
+Installs to `~/.local/bin` on the **stable** channel by default.
+
+  </Tab>
+  <Tab value="Windows">
+
+```powershell
+irm https://agentkit.best/install.ps1 | iex
+```
+
+Installs to `%USERPROFILE%\bin`, adds it to your user `PATH`, and uses the
+**stable** channel by default. Open a new terminal afterward.
+
+  </Tab>
+</Tabs>
+
+<Callout type="info">
+  If a corporate network blocks the primary domain, the release host
+  `releases.agentkit.best` serves the byte-identical installer with the same
+  verification chain — swap it into either command above.
+</Callout>
+
+## Verify and configure
+
+<Steps>
+  <Step>
+    ### Verify the binary
+
+    Confirm the installed version and that `ak` resolves on your `PATH`:
+
+    ```bash
+    ak --version
+    ```
+
+    If you get `command not found`, make sure the install directory
+    (`~/.local/bin`, or `%USERPROFILE%\bin` on Windows) is on your `PATH`.
+  </Step>
+  <Step>
+    ### Choose a channel (optional)
+
+    The default is `stable`. To install the beta channel instead, set
+    `AK_CHANNEL` before piping the installer:
+
+    <Tabs items={['macOS / Linux', 'Windows']}>
+      <Tab value="macOS / Linux">
+
+    ```bash
+    curl -fsSL https://agentkit.best/install.sh | AK_CHANNEL=beta sh
+    ```
+
+      </Tab>
+      <Tab value="Windows">
+
+    ```powershell
+    $env:AK_CHANNEL = "beta"; irm https://agentkit.best/install.ps1 | iex
+    ```
+
+      </Tab>
+    </Tabs>
+  </Step>
+  <Step>
+    ### Clear the first-launch warning
+
+    AgentKit binaries are signed for release provenance but are not yet notarized
+    by Apple or Microsoft, so the OS may warn on first launch. See the note for
+    your platform below — it is a one-time step per install.
+  </Step>
+</Steps>
+
+## First launch by platform
+
+<Accordions type="single">
+  <Accordion title="macOS">
+    Binaries fetched with `curl` do not carry the quarantine flag, so the CLI
+    just runs. If you downloaded through a browser instead, clear the flag once:
+
+    ```bash
+    xattr -d com.apple.quarantine ~/.local/bin/ak
+    ```
+
+    No `sudo` needed — you own the file.
+  </Accordion>
+  <Accordion title="Linux">
+    No extra step for the CLI. Ensure your install directory is on `PATH`:
+
+    ```bash
+    echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+    ```
+  </Accordion>
+  <Accordion title="Windows">
+    The first time you run an unrecognized binary, SmartScreen may show
+    *"Windows protected your PC."* Click **More info → Run anyway**. Windows
+    records the approval for that binary on that machine; later runs are silent.
+  </Accordion>
+</Accordions>
+
+## Install-time overrides
+
+Set these before piping the installer to change its behavior.
+
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `AK_CHANNEL` | `stable` | Release channel to install (`stable` or `beta`). |
+| `AK_VERSION` | latest | Pin an exact version, e.g. `AK_VERSION=1.0.0`. |
+| `AK_INSTALL_DIR` | `~/.local/bin` | Target install directory. |
+
+## Updating
+
+`ak` verifies signed release metadata and the target artifact before replacing
+itself:
+
+```bash
+ak self-update --check              # read-only: is a newer release available?
+ak self-update --channel stable --yes
+```
+
+If `ak` was installed by a package manager, `self-update` reports the managed
+install and prints the manager-native command instead of replacing files.
+
+## Uninstall
+
+Remove installed kits first so AgentKit can unregister them cleanly, then delete
+the binary and state:
+
+```bash
+ak kit list
+ak kit uninstall <kit> --yes        # repeat per installed kit
+
+rm ~/.local/bin/ak                  # macOS / Linux
+rm -rf ~/.agentkit                  # project registry, kits, caches
+```
+
+On Windows, remove `ak.exe` from your install directory and delete
+`%USERPROFILE%\.agentkit`.
