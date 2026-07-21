@@ -94,7 +94,7 @@ All contract parsing/validation lives in `scripts/lib/manifest.mjs` (`schemaVers
 
 ### Workflows
 
-- `docs-sync.yml` (`repository_dispatch: release-docs`): beta → sync + commit `docs-sync: beta <tag>` + tag `docs/<tag>` + push (triggers production deploy on `main`); stable → promotion PR labeled `docs-promotion`. Concurrency is queued per channel.
+- `docs-sync.yml` (`repository_dispatch: release-docs`): beta → sync + commit `docs-sync: beta <tag>` + tag `docs/<tag>` + push to **`dev`** (deploys to staging); stable → promotion PR **into `dev`** labeled `docs-promotion`. Concurrency is queued per channel. Everything lands on `dev` (staging) first; a `dev` → `main` merge promotes it to production.
 - `deploy-staging.yml` / `deploy-production.yml`: push to `dev` / `main` → build static export → `wrangler deploy --env staging|production`.
 - `docs-agent.yml` (`workflow_run` after a green beta sync): the docs agent patches drifted beta prose via a PR only; beta-only + ≥1h rate limit. Runs under its own non-bypass identity so guards always apply. Disable it by deleting/disabling this one file — the sync pipeline is unaffected.
 - `agent-guard.yml`: enforces agent-PR scope on the diff.
@@ -103,7 +103,7 @@ All contract parsing/validation lives in `scripts/lib/manifest.mjs` (`schemaVers
 
 | Name | Kind | Purpose |
 | --- | --- | --- |
-| `DOCS_BOT_APP_ID` / `DOCS_BOT_PRIVATE_KEY` | secret | **agentkit-docs-bot** GitHub App (contents:write + pull-requests:write on ak-docs only). Sole ruleset-bypass identity on `main`; sync commits/tags and promotion PRs use its short-lived token. |
+| `DOCS_BOT_APP_ID` / `DOCS_BOT_PRIVATE_KEY` | secret | **agentkit-docs-bot** GitHub App (contents:write + pull-requests:write on ak-docs only). Ruleset-bypass identity on **`dev`** (where the sync bot pushes commits + tags); promotion PRs use its short-lived token too. |
 | `DOCS_AGENT_APP_ID` / `DOCS_AGENT_PRIVATE_KEY` | secret | **agentkit-docs-agent** GitHub App for the docs agent. Same write scopes but **NOT** on the ruleset bypass list — so agent changes must always pass the PR guards + CODEOWNERS. Keep it off the bypass list. |
 | `AK_CLI_READ_TOKEN` | secret | Fine-grained PAT, contents:read on the private `ak-cli` repo only, to download the release asset. Document a rotation owner. |
 | `ANTHROPIC_API_KEY` | secret | Docs agent (Claude Code Action). |
@@ -111,7 +111,12 @@ All contract parsing/validation lives in `scripts/lib/manifest.mjs` (`schemaVers
 | `CLOUDFLARE_API_TOKEN` | secret | Wrangler deploy (Workers + custom domains on `agentkit.best`). |
 | `CLOUDFLARE_ACCOUNT_ID` | secret | Cloudflare account ID (`digitop.vn@gmail.com`). |
 
-Branch protection / ruleset on `main`: required checks (CI build + guards), no direct pushes except the `agentkit-docs-bot` app (ruleset bypass list = that app only — **not** the agent app), review required via `.github/CODEOWNERS`. **Caveat:** enforced rulesets/CODEOWNERS on a **private** repo require a paid GitHub plan — verify the org tier; if unavailable, fall back to required status checks + review discipline and record the gap in `AGENTS.md`/`CODEOWNERS`.
+Branch protection / rulesets:
+
+- **`dev`** (integration → staging): required checks (CI build + guards); direct push allowed only for the `agentkit-docs-bot` app (bypass list = that app only — **not** the agent app), so the beta sync can commit while agent/human PRs still pass the guards.
+- **`main`** (production): required checks + review via `.github/CODEOWNERS`; **no** direct push, no bot bypass — production is updated only by a reviewed `dev` → `main` promotion.
+
+**Caveat:** enforced rulesets/CODEOWNERS on a **private** repo require a paid GitHub plan — verify the org tier; if unavailable, fall back to required status checks + review discipline and record the gap in `AGENTS.md`/`CODEOWNERS`.
 
 ### Runbook
 
@@ -120,6 +125,7 @@ Branch protection / ruleset on `main`: required checks (CI build + guards), no d
   gh api repos/bestagentkits/agentkit-docs/dispatches -f event_type=release-docs \
     -F 'client_payload[channel]=beta' -F 'client_payload[tag]=v0.42.0-beta.7' -F 'client_payload[sha]=<sha>'
   ```
-- **Recover a failed/half-applied sync:** the workflow stages everything and commits once, so a partial state is unusual; if it happens, revert the bad commit on `main` and re-dispatch the tag (idempotent).
+- **Promote staging → production:** open a `dev` → `main` PR (or fast-forward merge) once staging looks right; merging it triggers `deploy-production.yml`. This is the only way prod changes.
+- **Recover a failed/half-applied sync:** the workflow stages everything and commits once, so a partial state is unusual; if it happens, revert the bad commit on `dev` and re-dispatch the tag (idempotent).
 - **Reviewing agent PRs:** confirm the diff is minimal and factual; the guard already proves it is modify-only beta prose. Release notes are semi-trusted (built from PR titles) — read on merits.
 - **Local validation without ak-cli:** `node scripts/sync-release.mjs --bundle fixtures/docs-bundle-beta` and `node scripts/promote-docs.mjs --bundle fixtures/docs-bundle-stable --beta-source content/docs/beta` (the `--beta-source` flag skips the git checkout).

@@ -107,11 +107,11 @@ prompt trust.
   (`.github/workflows/agent-guard.yml`): modify-only, inside
   `content/docs/beta/{getting-started,guides}` prose, never generated dirs /
   reference / `stable/` / workflows / config. A human reviews every agent PR
-  (CODEOWNERS on `content/docs/**`). The agent runs under its **own** identity
-  (`agentkit-docs-agent`), which is deliberately **not** on the `main` ruleset
-  bypass list — so every agent change must pass the PR guards, even if the run is
-  compromised. Disabling the agent is one file: delete/disable `docs-agent.yml`;
-  the sync pipeline is unaffected.
+  (CODEOWNERS on `content/docs/**`). The agent targets the `dev` integration
+  branch and runs under its **own** identity (`agentkit-docs-agent`), which is
+  deliberately **not** on the `dev` ruleset bypass list — so every agent change
+  must pass the PR guards, even if the run is compromised. Disabling the agent is
+  one file: delete/disable `docs-agent.yml`; the sync pipeline is unaffected.
   - **Reviewer note:** release notes are semi-trusted input (generated from PR
     titles). The agent has no write power beyond a guarded PR, but read agent PR
     diffs on their merits.
