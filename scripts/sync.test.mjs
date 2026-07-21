@@ -68,6 +68,11 @@ test('sync applies the beta bundle and reports a summary', async () => {
   assert.equal(marker.source, 'ak-cli');
   assert.ok(!('channel' in marker), 'marker must be channel-neutral for promotion');
 
+  // Hygiene: private source-repo links are rewritten to the public support repo.
+  const akPage = await readFile(join(cliDir, 'ak.mdx'), 'utf8');
+  assert.match(akPage, /github\.com\/bestagentkits\/agentkit-support/);
+  assert.doesNotMatch(akPage, /github\.com\/bestagentkits\/agentkit(?![-\w])/);
+
   const notes = await readFile(
     join(repoRoot, 'content', 'docs', 'beta', 'reference', 'release-notes.mdx'),
     'utf8',

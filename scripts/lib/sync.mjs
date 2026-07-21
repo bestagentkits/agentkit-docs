@@ -1,6 +1,7 @@
 import { cp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseManifest } from './manifest.mjs';
+import { scrubPrivateLinks } from './hygiene.mjs';
 
 // Beta ingestion. A bundle directory laid out per the docs-bundle contract:
 //   manifest.json, reference/cli/**, release-notes.md
@@ -44,11 +45,18 @@ export async function syncBetaRelease({ repoRoot, bundleDir }) {
     await rm(join(cliDir, e.name), { recursive: true, force: true });
   }
   // Copy bundle pages; a bundle-provided meta never clobbers the human nav meta.
+  // Markdown pages are hygiene-scrubbed (private-repo links → public support repo).
   let referenceFiles = 0;
   for (const e of await readdir(bundleCli, { withFileTypes: true })) {
     if (isNavMeta(e.name)) continue;
-    await cp(join(bundleCli, e.name), join(cliDir, e.name), { recursive: true });
-    if (e.isFile()) referenceFiles++;
+    const dest = join(cliDir, e.name);
+    if (e.isFile() && /\.mdx?$/.test(e.name)) {
+      await writeFile(dest, scrubPrivateLinks(await readFile(join(bundleCli, e.name), 'utf8')));
+      referenceFiles++;
+    } else {
+      await cp(join(bundleCli, e.name), dest, { recursive: true });
+      if (e.isFile()) referenceFiles++;
+    }
   }
 
   // 2. Rewrite the machine-owned marker with this tag's provenance. No channel
