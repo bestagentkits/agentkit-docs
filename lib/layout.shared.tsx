@@ -1,5 +1,5 @@
 import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
-import { appName, supportUrl } from './shared';
+import { appName, gitConfig } from './shared';
 
 // `locale` prefixes internal nav links so the logo/home link stays inside the
 // active language (/en, /vi). The language switcher itself is rendered by the
@@ -23,6 +23,6 @@ export function baseOptions(locale: string): BaseLayoutProps {
         </>
       ),
     },
-    githubUrl: supportUrl,
+    githubUrl: `https://github.com/${gitConfig.user}/${gitConfig.repo}`,
   };
 }

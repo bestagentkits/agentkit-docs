@@ -14,6 +14,7 @@ import { BetaBanner } from '@/components/beta-banner';
 import { channelFromSlug } from '@/lib/channels';
 import type { Metadata } from 'next';
 import { createRelativeLink } from 'fumadocs-ui/mdx';
+import { gitConfig } from '@/lib/shared';
 
 export default async function Page(props: PageProps<'/[lang]/docs/[[...slug]]'>) {
   const params = await props.params;
@@ -44,11 +45,11 @@ export default async function Page(props: PageProps<'/[lang]/docs/[[...slug]]'>)
       <DocsTitle>{page.data.title}</DocsTitle>
       <DocsDescription className="mb-0">{page.data.description}</DocsDescription>
       <div className="flex flex-row gap-2 items-center border-b pb-6">
-        {/* No "view/edit on GitHub" link: the docs source repo is private, so a
-            source link would 404 for readers. Only the site's own raw Markdown
-            (public) is offered. */}
         <MarkdownCopyButton markdownUrl={markdownUrl} />
-        <ViewOptionsPopover markdownUrl={markdownUrl} />
+        <ViewOptionsPopover
+          markdownUrl={markdownUrl}
+          githubUrl={`https://github.com/${gitConfig.user}/${gitConfig.repo}/blob/${gitConfig.branch}/content/docs/${page.path}`}
+        />
       </div>
       <DocsBody>
         <MDX
