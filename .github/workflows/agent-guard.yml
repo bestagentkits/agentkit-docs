@@ -1,0 +1,27 @@
+name: agent-guard
+
+# Scope-enforces docs-agent PRs on the diff: modify-only, content/docs/beta prose,
+# never generated dirs / stable / workflows / config. Runs on any PR labeled
+# `docs-agent` or authored by the agent identity (defense in depth).
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    if: >-
+      contains(github.event.pull_request.labels.*.name, 'docs-agent') ||
+      github.event.pull_request.user.login == 'agentkit-docs-bot[bot]'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Check agent PR scope
+        run: node scripts/check-agent-pr.mjs --base "${{ github.event.pull_request.base.sha }}"

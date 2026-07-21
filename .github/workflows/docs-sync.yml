@@ -1,0 +1,92 @@
+name: docs-sync
+
+# Fired by ak-cli's release job via repository_dispatch. The payload is only a
+# trigger; the workflow re-downloads the docs-bundle asset and trusts its
+# manifest, not the payload.
+on:
+  repository_dispatch:
+    types: [release-docs]
+
+# Serialize per channel — every tag must land, so queue rather than cancel.
+concurrency:
+  group: docs-sync-${{ github.event.client_payload.channel }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      # Short-lived token for the agentkit-docs-bot GitHub App (the sole
+      # ruleset-bypass identity on main). App-token pushes re-trigger downstream
+      # workflows (unlike GITHUB_TOKEN), keeping the deploy + docs-agent chain live.
+      - name: Mint bot token
+        id: bot
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.DOCS_BOT_APP_ID }}
+          private-key: ${{ secrets.DOCS_BOT_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ steps.bot.outputs.token }}
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Download docs-bundle
+        env:
+          # Fine-grained PAT: contents:read on the private ak-cli repo only.
+          GH_TOKEN: ${{ secrets.AK_CLI_READ_TOKEN }}
+          TAG: ${{ github.event.client_payload.tag }}
+          AK_CLI_REPO: ${{ vars.AK_CLI_REPO || 'bestagentkits/agentkit' }}
+        run: |
+          mkdir -p _bundle
+          gh release download "$TAG" --repo "$AK_CLI_REPO" \
+            --pattern docs-bundle.tar.gz --dir _bundle
+          tar -xzf _bundle/docs-bundle.tar.gz -C _bundle
+          rm _bundle/docs-bundle.tar.gz
+
+      - name: Configure bot identity
+        run: |
+          git config user.name  'agentkit-docs-bot[bot]'
+          git config user.email '${{ secrets.DOCS_BOT_APP_ID }}+agentkit-docs-bot[bot]@users.noreply.github.com'
+
+      # ---- Beta: direct commit + docs tag + push (Pages deploys) ----
+      - name: Sync beta
+        if: github.event.client_payload.channel == 'beta'
+        id: beta
+        run: |
+          SUMMARY=$(node scripts/sync-release.mjs --bundle _bundle)
+          TAG=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).tag)" "$SUMMARY")
+          rm -rf _bundle
+          git add -A content/docs channels.json
+          git commit -m "docs-sync: beta ${TAG}"
+          git tag "docs/${TAG}"
+          git push origin HEAD "refs/tags/docs/${TAG}"
+
+      # ---- Stable: open a promotion PR (never direct-commit to stable) ----
+      - name: Promote stable
+        if: github.event.client_payload.channel == 'stable'
+        env:
+          GH_TOKEN: ${{ steps.bot.outputs.token }}
+        run: |
+          OUT=$(node scripts/promote-docs.mjs --bundle _bundle)
+          BRANCH=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).branch)" "$OUT")
+          TAG=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).tag)" "$OUT")
+          FROM=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).promotedFrom)" "$OUT")
+          rm -rf _bundle
+          git switch -c "$BRANCH"
+          git add -A content/docs channels.json
+          git commit -m "docs-promotion: ${TAG}"
+          git push origin "$BRANCH"
+          gh pr create --base main --head "$BRANCH" --label docs-promotion \
+            --title "docs-promotion: ${TAG}" \
+            --body "Promotes \`${FROM}\` → stable \`${TAG}\`. Stable is now a whole-copy of that beta docs tag. Review the diff and merge."

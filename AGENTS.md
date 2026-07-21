@@ -75,6 +75,44 @@ continuous with the marketing site. Do **not** invent colours, fonts, or radii.
   (`null` until first sync). Read it null-safely; the beta banner and version
   display already do.
 
+## Docs pipeline & agent governance
+
+The docs are kept in sync with `ak` releases by a deterministic pipeline plus a
+guardrailed LLM agent. Guardrails are enforced by CI on the diff, **not** by
+prompt trust.
+
+- **Authoring rules (humans and agents):**
+  - Never hand-edit a generated dir (any dir with a `.generated` marker). Its
+    generated pages are overwritten on the next sync and rejected by CI
+    (`scripts/check-generated.mjs`). The co-located `meta.json` / `meta.vi.json`
+    (localized nav labels) are human-owned — sync preserves them and the guard
+    exempts them.
+  - Prose lives in `getting-started/` and `guides/`. Keep command invocations
+    minimal in prose and lean on the generated reference for exact syntax.
+  - `stable/` changes **only** via a promotion PR (whole-copy from a beta docs
+    tag). Never hand-edit `stable/` to fix something — fix `beta/`, it promotes.
+  - Keep content channel-neutral: no `beta`/`stable` wording or `/docs/<channel>/`
+    links baked into pages. Channel identity is path-keyed in the layout (the
+    beta banner); promotion asserts nothing channel-specific survives the copy.
+  - Style: factual, concise, second person; no internal repo paths, ADR/issue
+    numbers, private URLs, or planning-phase references in published pages.
+- **The docs agent** (`.github/workflows/docs-agent.yml`) runs after a beta
+  docs-sync, compares release notes + the reference diff against existing guides,
+  and opens a **PR-only**, minimal patch when a guide has gone stale — or skips
+  when unsure. Its scope is enforced by `scripts/check-agent-pr.mjs`
+  (`.github/workflows/agent-guard.yml`): modify-only, inside
+  `content/docs/beta/{getting-started,guides}` prose, never generated dirs /
+  reference / `stable/` / workflows / config. A human reviews every agent PR
+  (CODEOWNERS on `content/docs/**`). The agent runs under its **own** identity
+  (`agentkit-docs-agent`), which is deliberately **not** on the `main` ruleset
+  bypass list — so every agent change must pass the PR guards, even if the run is
+  compromised. Disabling the agent is one file: delete/disable `docs-agent.yml`;
+  the sync pipeline is unaffected.
+  - **Reviewer note:** release notes are semi-trusted input (generated from PR
+    titles). The agent has no write power beyond a guarded PR, but read agent PR
+    diffs on their merits.
+- **docs-bundle contract + secrets + runbook:** see the README pipeline section.
+
 ## Repo conventions
 
 - Package manager: pnpm (see `packageManager` in `package.json`); Node ≥ 20.9.

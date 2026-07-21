@@ -15,6 +15,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history so the generated-dir guard can diff against the base.
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
 
@@ -29,12 +32,32 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Lint (MDX content)
+        run: pnpm lint
+
+      - name: Unit tests (pipeline scripts)
+        run: pnpm test
+
+      - name: Generated-dir guard
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+        run: |
+          BASE="${{ github.event.pull_request.base.sha || github.event.before }}"
+          # Skip on a branch's first push (no meaningful base to diff against).
+          if [[ -z "$BASE" || "$BASE" == 0000000000000000000000000000000000000000 ]]; then
+            echo "no base ref to diff — skipping generated-dir guard"
+          else
+            node scripts/check-generated.mjs --base "$BASE"
+          fi
+
       - name: Build (static export)
         run: pnpm build
 
+      - name: Link check (internal)
+        run: pnpm check:links
+
       - name: Assert static output
         run: |
-          # i18n moves pages under /{lang}; the bare root is a Cloudflare redirect.
           test -f out/en/docs.html
           test -f out/vi/docs.html
           test -f out/en/llms.txt
