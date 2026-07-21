@@ -1,0 +1,114 @@
+---
+title: Làm quen
+description: Thiết lập lần đầu sau khi cài — xác thực, kit, app desktop, cập nhật, backup và phản hồi.
+---
+
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+
+Sau khi cài `ak`, checklist này giúp bạn dựng một setup chạy được và cho biết
+dữ liệu của bạn nằm ở đâu.
+
+<Steps>
+  <Step>
+    ### Xác nhận bản cài
+
+    ```bash
+    ak --version
+    ak doctor --json
+    ```
+
+    `ak doctor` báo cáo tình trạng môi trường và cấu hình. Dùng `--json` khi bạn
+    cần output ở định dạng máy đọc được để gửi kèm yêu cầu hỗ trợ.
+  </Step>
+  <Step>
+    ### Xác thực
+
+    ```bash
+    ak login
+    ak whoami --json
+    ak licenses --json
+    ```
+
+    Đây là hai bước kiểm tra riêng biệt: **đăng nhập** để xác định bạn là ai,
+    còn **quyền dùng kit** quyết định bạn được tải và cài kit nào. Nếu một kit
+    bạn mong đợi không xuất hiện trong `ak licenses`, nghĩa là tài khoản của bạn
+    chưa được cấp kit đó — hãy dừng lại trước khi thử cài.
+  </Step>
+  <Step>
+    ### Cài một kit
+
+    ```bash
+    ak kit init engineer --target claude-code --global
+    ```
+
+    Bạn có thể cài vào nhiều runtime cùng lúc (ví dụ Claude Code và Codex). Xem
+    [Cài kit](../guides/installing-kits) để biết về target và cách chọn skill.
+  </Step>
+  <Step>
+    ### App desktop (tùy chọn)
+
+    App desktop được kiểm soát bằng license: khi mới mở, app chỉ hiện màn hình
+    kích hoạt và hỗ trợ cho đến khi có license app hợp lệ mở khóa. License app
+    (mở khóa app desktop) và quyền dùng kit (kiểm soát việc tải kit) là hai thứ
+    độc lập — chỉ đăng nhập bằng API key hoặc email sẽ không mở khóa được app
+    desktop.
+  </Step>
+</Steps>
+
+## Cập nhật
+
+Kiểm tra trước, sau đó mới áp dụng trên kênh stable. Việc apply thủ công cần
+`--yes`:
+
+```bash
+ak self-update --check --channel stable --json
+ak self-update --channel stable --yes
+```
+
+Xem trước những thay đổi trước khi cập nhật:
+
+```bash
+ak changelog --since-current --channel stable
+```
+
+## Backup và rollback
+
+Trong các thao tác thông thường, AgentKit giữ nguyên những tệp lạ và tệp do
+người dùng chỉnh sửa. Những thao tác ghi mang tính phá hủy được theo dõi sẽ cần
+bạn xác nhận tường minh và được tạo snapshot khôi phục trước. `ak backups restore`
+chỉ khôi phục **state dự án/vòng đời**, không phải binary đã cài:
+
+```bash
+ak backups list --json
+ak backups restore --latest     # khôi phục snapshot state trước thay đổi gần nhất
+```
+
+Để rollback **binary**, hãy cài lại bản phát hành trước đó (ví dụ dùng
+`AK_VERSION=<tag>` với trình cài đặt). Xem [Cập nhật ak](../guides/updating).
+
+## Phản hồi
+
+Gửi phản hồi trực tiếp từ CLI:
+
+```bash
+ak feedback --type bug --title "Short title" --body "What happened" --yes
+ak feedback --type feature --title "Request" --motivation "Why it matters"
+```
+
+Hãy ghi rõ OS và kiến trúc, lệnh hoặc màn hình liên quan, cùng tag phát hành.
+Chỉ đính kèm bản tóm tắt `ak doctor` đã được redacted bằng `--attach-diagnostics`
+khi bộ phận hỗ trợ yêu cầu — toàn bộ diagnostics đầy đủ vẫn ở lại trên máy bạn.
+
+<Callout type="warn">
+  Tuyệt đối không chia sẻ tệp môi trường thô, cấu hình provider, khóa riêng,
+  license key hay transcript phiên làm việc. Hãy dùng `ak diagnostics export --json`
+  để tạo một bundle đã được redacted trước khi gửi bằng chứng.
+</Callout>
+
+## Giới hạn đã biết
+
+- Việc tạo dự án, các thao tác vòng đời mang tính phá hủy và thay đổi plan chỉ
+  thực hiện được trên CLI; dashboard cục bộ (`ak gui` / `ak config`) chỉ đọc đối
+  với các thao tác đó.
+- Bind dashboard ra ngoài loopback cần auth token.
+- Không có telemetry — không có SDK analytics và không có usage beacon.
