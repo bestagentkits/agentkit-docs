@@ -1,0 +1,153 @@
+---
+title: Cài đặt
+description: Cài công cụ dòng lệnh ak, xác minh binary và chọn kênh phát hành — khoảng hai phút trên mọi nền tảng.
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+import { Accordion, Accordions } from 'fumadocs-ui/components/accordion';
+
+AgentKit là một binary duy nhất, `ak`. Trình cài đặt tự nhận diện nền tảng, tải
+binary đã ký của kênh bạn chọn và thêm `ak` vào `PATH`. Nó idempotent — chạy lại
+bất cứ lúc nào để nâng cấp tại chỗ.
+
+## Cài nhanh
+
+<Tabs items={['macOS / Linux', 'Windows']}>
+  <Tab value="macOS / Linux">
+
+```bash
+curl -fsSL https://agentkit.best/install.sh | sh
+```
+
+Mặc định cài vào `~/.local/bin` trên kênh **stable**.
+
+  </Tab>
+  <Tab value="Windows">
+
+```powershell
+irm https://agentkit.best/install.ps1 | iex
+```
+
+Cài vào `%USERPROFILE%\bin`, thêm vào `PATH` người dùng và dùng kênh **stable**
+mặc định. Mở terminal mới sau khi cài.
+
+  </Tab>
+</Tabs>
+
+<Callout type="info">
+  Nếu mạng công ty chặn domain chính, host phát hành `releases.agentkit.best`
+  phục vụ trình cài đặt giống hệt từng byte với cùng chuỗi xác minh — thay vào
+  một trong hai lệnh trên.
+</Callout>
+
+## Xác minh và cấu hình
+
+<Steps>
+  <Step>
+    ### Xác minh binary
+
+    Kiểm tra phiên bản đã cài và `ak` có trên `PATH`:
+
+    ```bash
+    ak --version
+    ```
+
+    Nếu gặp `command not found`, hãy chắc chắn thư mục cài (`~/.local/bin`, hoặc
+    `%USERPROFILE%\bin` trên Windows) nằm trên `PATH`.
+  </Step>
+  <Step>
+    ### Chọn kênh (tùy chọn)
+
+    Mặc định là `stable`. Để cài kênh beta, đặt `AK_CHANNEL` trước khi pipe
+    trình cài đặt:
+
+    <Tabs items={['macOS / Linux', 'Windows']}>
+      <Tab value="macOS / Linux">
+
+    ```bash
+    curl -fsSL https://agentkit.best/install.sh | AK_CHANNEL=beta sh
+    ```
+
+      </Tab>
+      <Tab value="Windows">
+
+    ```powershell
+    $env:AK_CHANNEL = "beta"; irm https://agentkit.best/install.ps1 | iex
+    ```
+
+      </Tab>
+    </Tabs>
+  </Step>
+  <Step>
+    ### Bỏ cảnh báo lần chạy đầu
+
+    Binary AgentKit được ký để chứng minh nguồn gốc phát hành nhưng chưa được
+    Apple hay Microsoft notarize, nên hệ điều hành có thể cảnh báo ở lần chạy
+    đầu. Xem ghi chú cho nền tảng của bạn bên dưới — đây là bước một lần cho mỗi
+    lần cài.
+  </Step>
+</Steps>
+
+## Lần chạy đầu theo nền tảng
+
+<Accordions type="single">
+  <Accordion title="macOS">
+    Binary tải bằng `curl` không mang cờ quarantine nên CLI chạy được ngay. Nếu
+    bạn tải qua trình duyệt, xóa cờ một lần:
+
+    ```bash
+    xattr -d com.apple.quarantine ~/.local/bin/ak
+    ```
+
+    Không cần `sudo` — bạn sở hữu tệp này.
+  </Accordion>
+  <Accordion title="Linux">
+    CLI không cần bước phụ. Đảm bảo thư mục cài nằm trên `PATH`:
+
+    ```bash
+    echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+    ```
+  </Accordion>
+  <Accordion title="Windows">
+    Lần đầu chạy một binary chưa được nhận diện, SmartScreen có thể hiện
+    *"Windows protected your PC."* Bấm **More info → Run anyway**. Windows ghi
+    nhận chấp thuận cho binary đó trên máy đó; các lần sau sẽ im lặng.
+  </Accordion>
+</Accordions>
+
+## Biến ghi đè khi cài
+
+Đặt các biến này trước khi pipe trình cài đặt để đổi hành vi.
+
+| Biến | Mặc định | Tác dụng |
+| --- | --- | --- |
+| `AK_CHANNEL` | `stable` | Kênh phát hành để cài (`stable` hoặc `beta`). |
+| `AK_VERSION` | mới nhất | Ghim một phiên bản chính xác, ví dụ `AK_VERSION=1.0.0`. |
+| `AK_INSTALL_DIR` | `~/.local/bin` | Thư mục cài đích. |
+
+## Cập nhật
+
+`ak` xác minh metadata phát hành đã ký và artifact đích trước khi tự thay thế:
+
+```bash
+ak self-update --check              # chỉ đọc: có bản mới hơn không?
+ak self-update --channel stable --yes
+```
+
+Nếu `ak` được cài bởi trình quản lý gói, `self-update` sẽ báo là bản managed và
+in lệnh gốc của trình quản lý thay vì thay tệp.
+
+## Gỡ cài đặt
+
+Gỡ các kit đã cài trước để AgentKit hủy đăng ký sạch sẽ, rồi xóa binary và state:
+
+```bash
+ak kit list
+ak kit uninstall <kit> --yes        # lặp cho mỗi kit đã cài
+
+rm ~/.local/bin/ak                  # macOS / Linux
+rm -rf ~/.agentkit                  # project registry, kit, cache
+```
+
+Trên Windows, xóa `ak.exe` khỏi thư mục cài và xóa `%USERPROFILE%\.agentkit`.
