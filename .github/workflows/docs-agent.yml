@@ -1,0 +1,123 @@
+name: docs-agent
+
+# After a successful BETA docs-sync, evaluate whether any beta guide has drifted
+# and, if so, open one minimal PR-only patch. Stable promotions are human-only —
+# the agent never touches stable. Disabling this file stops the agent without
+# affecting the sync pipeline.
+on:
+  workflow_run:
+    workflows: [docs-sync]
+    types: [completed]
+
+# One agent run at a time; the rate-limit step below caps frequency to ≥1h.
+concurrency:
+  group: docs-agent
+  cancel-in-progress: false
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    # Only after a green sync. The beta-only + loop guards run as the first step
+    # (workflow_run can't see the dispatch payload, so we read the head commit).
+    if: github.event.workflow_run.conclusion == 'success'
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      # SEPARATE identity from the sync bot. This app has contents:write +
+      # pull-requests:write but is NOT on the `main` ruleset bypass list, so every
+      # agent change must traverse a PR where agent-guard + CODEOWNERS run — a
+      # prompt-injected agent cannot push to main or self-merge. (The sync bot's
+      # bypass token is deliberately never handed to this LLM-driven workflow.)
+      - name: Mint agent token
+        id: agent
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.DOCS_AGENT_APP_ID }}
+          private-key: ${{ secrets.DOCS_AGENT_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ steps.agent.outputs.token }}
+          fetch-depth: 0
+
+      - name: Gate — beta sync only, no agent loop, rate limit
+        id: gate
+        env:
+          GH_TOKEN: ${{ steps.agent.outputs.token }}
+        run: |
+          MSG=$(git log -1 --pretty=%s)
+          # Beta-only: sync commits are "docs-sync: beta <tag>".
+          if [[ "$MSG" != docs-sync:\ beta\ * ]]; then
+            echo "not a beta sync ($MSG) — skipping"; echo "run=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          # Rate limit on the agent's actual output (last docs-agent PR), not on
+          # run completions — skip/no-op runs must not starve a real drift check.
+          LAST=$(gh pr list --state all --label docs-agent --limit 1 \
+                 --json createdAt --jq '.[0].createdAt // empty')
+          if [[ -n "$LAST" ]]; then
+            AGE=$(( $(date +%s) - $(date -d "$LAST" +%s) ))
+            if (( AGE < 3600 )); then echo "rate-limited (${AGE}s)"; echo "run=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+          fi
+          TAG="${MSG##docs-sync: beta }"
+          echo "run=true" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Assemble context bundle
+        if: steps.gate.outputs.run == 'true'
+        id: ctx
+        run: |
+          TAG="${{ steps.gate.outputs.tag }}"
+          # Previous beta docs tag = the line exactly after docs/$TAG in the
+          # creation-ordered list (exact-line match, so beta.7 never matches beta.70).
+          PREV=$(git tag --list 'docs/*-beta.*' --sort=-creatordate \
+                 | grep -A1 -Fx "docs/${TAG}" | tail -n +2 | head -1)
+          {
+            echo "## Release notes (${TAG})"
+            cat "content/docs/beta/reference/release-notes.mdx" 2>/dev/null || echo "(none)"
+            echo
+            echo "## Reference diff since ${PREV:-'(no previous tag)'}"
+            if [[ -n "$PREV" ]]; then
+              git diff "$PREV..docs/${TAG}" -- content/docs/beta/reference/ || true
+            else
+              echo "(no previous beta tag to diff)"
+            fi
+          } > /tmp/agent-context.md
+          # Random heredoc delimiter — the context is semi-trusted (release notes
+          # are built from PR titles); a static EOF could be closed early by content.
+          DELIM="CTX_$(openssl rand -hex 16)"
+          echo "context<<${DELIM}" >> "$GITHUB_OUTPUT"
+          cat /tmp/agent-context.md >> "$GITHUB_OUTPUT"
+          echo "${DELIM}" >> "$GITHUB_OUTPUT"
+
+      # Verify the action version + inputs against its docs when first wiring this.
+      - name: Run docs agent (Claude Code Action)
+        if: steps.gate.outputs.run == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ steps.agent.outputs.token }}
+          prompt: |
+            You maintain the AgentKit BETA docs prose. Below is the context bundle
+            for release ${{ steps.gate.outputs.tag }}: the release notes and the
+            generated CLI-reference diff. The private source code is NOT available
+            to you — this bundle is your only input.
+
+            Task: DIFF-AND-PATCH ONLY.
+            - Compare the notes + reference diff against the existing guides in
+              content/docs/beta/getting-started/ and content/docs/beta/guides/.
+            - Edit ONLY where a guide now states something the release made false.
+            - Keep every edit minimal and factual. Do not rewrite for style.
+            - NEVER create, delete, or rename files. NEVER touch generated dirs
+              (any dir with a .generated marker), content/docs/beta/reference/**,
+              content/docs/stable/**, workflows, scripts, AGENTS.md, or channels.json.
+            - If nothing is clearly stale, or you are unsure, make NO changes and
+              summarize why. Do not invent updates.
+
+            If (and only if) you changed a guide, open a pull request:
+              branch: docs-agent/${{ steps.gate.outputs.tag }}
+              base: main, label: docs-agent
+              body: the tag, the inputs you used, and a per-file rationale.
+
+            Context bundle:
+            ${{ steps.ctx.outputs.context }}
