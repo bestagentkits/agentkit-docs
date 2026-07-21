@@ -2,7 +2,7 @@
 
 Guidance for AI agents and human contributors working in **ak-docs** — the docs
 site for the AgentKit (`ak`) CLI. Built with Fumadocs (Next.js, static export)
-and deployed to Cloudflare Pages.
+and deployed to Cloudflare Workers (static assets via Wrangler).
 
 This is a minimal starting point. Content-authoring rules, generated-directory
 protection, and the docs-agent scope will be expanded here when the release-sync
@@ -12,12 +12,16 @@ pipeline and docs agent land.
 
 ```bash
 pnpm install
-pnpm dev         # http://localhost:3000
-pnpm build       # static export → ./out
+pnpm dev                # http://localhost:3000
+pnpm build              # static export → ./out
 pnpm typecheck
+pnpm deploy:staging     # wrangler deploy --env staging (needs CF creds)
+pnpm deploy:production  # wrangler deploy --env production
 ```
 
-CI (`.github/workflows/ci.yml`) runs install → typecheck → build on every PR.
+CI (`.github/workflows/ci.yml`) runs install → typecheck → build on every PR and
+push to `main`/`dev`. Deploy: push `dev` → `staging.docs.agentkit.best`, push
+`main` → `docs.agentkit.best` (see `wrangler.toml` + deploy workflows).
 Keep the build a pure static export — no server-only routes, no dynamic runtime.
 
 ## Design system — read before touching any styling
