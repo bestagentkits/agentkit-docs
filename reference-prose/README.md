@@ -78,38 +78,9 @@ The derived pages are byte-stable: re-running generation with unchanged sources
 produces zero diff. CI enforces this — if you edit an overlay but forget to
 regenerate, the reference-regeneration check fails.
 
-## Remaining commands (117 without prose)
+## Coverage
 
-`ak`, `ak kit`, `ak kit install`, `ak mcp add` are done. Still needed:
-
-ak_activity, ak_activity_list, ak_activity_stats, ak_activity_tail, ak_agents,
-ak_agents_install, ak_agents_list, ak_agents_remove, ak_agents_search,
-ak_agents_show, ak_api, ak_api_start, ak_api_status, ak_api_stop, ak_audit,
-ak_audit_scripts, ak_backups, ak_backups_list, ak_backups_prune,
-ak_backups_restore, ak_backups_show, ak_backups_verify, ak_changelog,
-ak_codex-agent-runtime, ak_codex-agent-runtime_register,
-ak_codex-agent-runtime_serve, ak_codex-agent-runtime_unregister, ak_commands,
-ak_commands_install, ak_commands_list, ak_commands_remove, ak_commands_search,
-ak_commands_show, ak_config, ak_config_start, ak_config_status, ak_config_stop,
-ak_content, ak_content_publish, ak_content_queue, ak_content_queue_cancel,
-ak_content_queue_list, ak_content_queue_run-pending, ak_content_schedule,
-ak_content_schedule_daemon, ak_diagnostics, ak_diagnostics_export, ak_doctor,
-ak_feedback, ak_gui, ak_init, ak_kit_init, ak_kit_install-path, ak_kit_list-kits,
-ak_kit_refresh, ak_kit_repair-install-mode, ak_kit_uninstall, ak_kit_validate,
-ak_licenses, ak_login, ak_logout, ak_mcp, ak_mcp_link, ak_mcp_list,
-ak_mcp_remove, ak_mcp_show, ak_mcp_verify, ak_migrate, ak_migrate_rollback,
-ak_new, ak_plan, ak_plan_add-phase, ak_plan_check, ak_plan_create,
-ak_plan_kanban, ak_plan_parse, ak_plan_status, ak_plan_uncheck, ak_plan_validate,
-ak_projects, ak_projects_add, ak_projects_list, ak_projects_prune,
-ak_projects_remove, ak_projects_show, ak_recover, ak_run, ak_self-update,
-ak_sessions, ak_sessions_list, ak_sessions_redact, ak_sessions_show,
-ak_sessions_stats, ak_sessions_tail, ak_setup, ak_skill, ak_skill_install,
-ak_skill_remove, ak_skill_repair, ak_skill_upgrade, ak_skill_verify, ak_skills,
-ak_skills_graph, ak_skills_install, ak_skills_list, ak_skills_remove,
-ak_skills_search, ak_skills_show, ak_uninstall, ak_update, ak_versions, ak_watch,
-ak_watch_dry-run, ak_watch_start, ak_watch_status, ak_watch_stop, ak_whoami
-
-Recompute anytime:
+All 122 CLI reference slugs have prose overlays (recompute anytime to find gaps):
 
 ```bash
 comm -23 \

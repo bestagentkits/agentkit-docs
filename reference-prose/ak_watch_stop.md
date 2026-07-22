@@ -1,0 +1,5 @@
+Stop a running watch daemon for the given repository by setting `active=false` in the watch state file. The next daemon poll cycle detects the inactive flag and stops automatically.
+
+**When to use it:** When you want to stop a watch daemon started with `ak watch start --daemon`, or deactivate a repository from automated triage. Safe when no daemon is running—it exits 0 with an informational message.
+
+Writes `active=false` to `~/.agentkit/watch/<repo-slug>/state.json`.
