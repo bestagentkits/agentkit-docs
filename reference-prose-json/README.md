@@ -63,3 +63,5 @@ node scripts/compile-prose.mjs --check
 ```
 
 Commit both `reference-prose-json/` and `reference-prose/` when adopting JSON for a slug.
+
+See also: [`docs/workflows/cli-reference-pipeline.md`](../docs/workflows/cli-reference-pipeline.md).

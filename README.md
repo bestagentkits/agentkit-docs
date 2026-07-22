@@ -71,7 +71,7 @@ Deploy workflows run their own typecheck + build, then `wrangler deploy` — the
 
 Docs stay in sync with `ak` releases via a deterministic pipeline (scripts + workflows) and a guardrailed LLM agent. Everything is validated against hand-built fixtures in `fixtures/`, so no `ak-cli` change is required to run it.
 
-The CLI reference is **two layers**: the _facts_ (usage, examples, flags, exit codes, related commands) are projected mechanically from `ak --help` — always exact, never drifting — while the _narrative_ (overview + when-to-use + notes) is reviewed prose in `reference-prose/<slug>.md`. The published pages under `content/docs/beta/reference/cli/` are **derived**: `generateReference` = normalize(`reference-raw/<slug>.mdx` source + prose overlay). Because they are a pure function of committed sources, CI regenerates them and asserts a zero diff — so the reference can't silently drift or be hand-edited. See [`reference-prose/README.md`](reference-prose/README.md) for the authoring contract.
+The CLI reference is **two layers**: the _facts_ (usage, examples, flags, exit codes, related commands) are projected mechanically from `ak --help` — always exact, never drifting — while the _narrative_ (overview + when-to-use + notes) is reviewed prose in `reference-prose/<slug>.md`. The published pages under `content/docs/beta/reference/cli/` are **derived**: `generateReference` = normalize(`reference-raw/<slug>.mdx` source + prose overlay). Because they are a pure function of committed sources, CI regenerates them and asserts a zero diff — so the reference can't silently drift or be hand-edited. See [`reference-prose/README.md`](reference-prose/README.md) for the authoring contract and [`docs/workflows/cli-reference-pipeline.md`](docs/workflows/cli-reference-pipeline.md) for diagrams.
 
 ### docs-bundle contract (v1)
 
@@ -98,7 +98,7 @@ All contract parsing/validation lives in `scripts/lib/manifest.mjs` (`schemaVers
 
 ### Workflows
 
-- `docs-sync.yml` (`repository_dispatch: release-docs`): beta → sync + commit `docs-sync: beta <tag>` + tag `docs/<tag>` + push to **`dev`** (deploys to staging); stable → promotion PR **into `dev`** labeled `docs-promotion`. Concurrency is queued per channel. Everything lands on `dev` (staging) first; a `dev` → `main` merge promotes it to production.
+- `docs-sync.yml` (`repository_dispatch: release-docs`): beta → sync + commit `docs-sync: beta <tag>` + tag `docs/<tag>` + push to **`dev`** (deploys to staging); stable → promotion PR **into `dev`** labeled `docs-promotion`. Concurrency is queued per channel. Everything lands on `dev` (staging) first; a `dev` → `main` merge promotes it to production. Diagrams: [`docs/workflows/release-and-deploy.md`](docs/workflows/release-and-deploy.md).
 - `deploy-staging.yml` / `deploy-production.yml`: push to `dev` / `main` → build static export → `wrangler deploy --env staging|production`.
 - `docs-agent.yml` (`workflow_run` after a green beta sync): the docs agent patches drifted beta prose via a PR only; beta-only + ≥1h rate limit. Runs under its own non-bypass identity so guards always apply. Disable it by deleting/disabling this one file — the sync pipeline is unaffected.
 - `agent-guard.yml`: enforces agent-PR scope on the diff.

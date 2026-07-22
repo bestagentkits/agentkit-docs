@@ -22,6 +22,8 @@ human wrote.
 - A command **without** an overlay falls back to the mechanical synopsis
   projection — so coverage can grow incrementally, page by page.
 
+Workflow diagrams: [`docs/workflows/cli-reference-pipeline.md`](../docs/workflows/cli-reference-pipeline.md).
+
 ## I/O contract (for authoring in Cursor / any agent)
 
 - **Input (source of truth):** `content/docs/beta/reference/cli/<slug>.mdx` — the
