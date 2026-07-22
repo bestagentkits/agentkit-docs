@@ -22,6 +22,55 @@
 const FIELD_LABEL = /^([A-Z][^:\n]{0,40}):[ \t]*(.*)$/;
 
 // ---------------------------------------------------------------------------
+// Shared-boilerplate dedupe. Every command page carries the same universal
+// flags, output-modes table and standard exit codes; repeating them 120+ times
+// buries what is page-specific. They are documented once on the
+// `cli-conventions` page, and filtered here — matched by EXACT flag+description
+// (resp. code+meaning), so a command that overloads a universal spelling with
+// different semantics keeps its row.
+// ---------------------------------------------------------------------------
+
+const UNIVERSAL_FLAGS = new Map([
+  ['--json', 'Emit machine-readable JSON (implies --no-interactive)'],
+  ['--no-interactive', 'Disable interactive prompts (CI-safe)'],
+  ['-q, --quiet', 'Suppress non-error output on stderr'],
+  ['-V, --verbose', 'Extra diagnostic output on stderr (loses to --quiet)'],
+  ['-y, --yes', 'Assume yes for all prompts'],
+]);
+
+// `-h, --help` embeds the command name in its description, so it matches by
+// flag spec alone.
+function isUniversalFlag({ flag, desc }) {
+  if (/^-h, --help\b/.test(flag)) return true;
+  return UNIVERSAL_FLAGS.get(flag) === desc;
+}
+
+const STANDARD_EXIT_CODES = new Map([
+  ['0', 'success'],
+  ['1', 'runtime error'],
+  ['2', 'invalid flags'],
+  ['3', 'user-cancel (SIGINT, prompt-cancel)'],
+]);
+
+const CANONICAL_OUTPUT_MODES = [
+  ['pretty', 'default on TTY (colors, ASCII markers)'],
+  ['plain', 'auto when stdout piped or --no-interactive'],
+  ['json', '--json (single-object envelope, NDJSON-safe)'],
+];
+
+function isCanonicalOutputModes(rows) {
+  return (
+    rows.length === CANONICAL_OUTPUT_MODES.length &&
+    rows.every((r, i) => r.key === CANONICAL_OUTPUT_MODES[i][0] && r.value === CANONICAL_OUTPUT_MODES[i][1])
+  );
+}
+
+const CONVENTIONS_NOTE =
+  'Global flags, output modes, and the standard exit codes (`0`–`3`) are shared by every ' +
+  'command — see [CLI conventions](../cli-conventions). The sections below list only what ' +
+  'is specific to this command.';
+
+// ---------------------------------------------------------------------------
 // Frontmatter
 // ---------------------------------------------------------------------------
 
@@ -163,14 +212,20 @@ function flagTable(rows) {
   return out.join('\n');
 }
 
-// Two-column table from aligned value lines, split by `splitRe` into [key, rest].
-function kvTable(lines, headers, splitRe) {
-  const out = [`| ${headers[0]} | ${headers[1]} |`, '| --- | --- |'];
+// Aligned value lines → [{key, value}], split by `splitRe` into [key, rest].
+function kvRows(lines, splitRe) {
+  const rows = [];
   for (const line of lines) {
     if (!line.trim()) continue;
     const m = line.match(splitRe);
-    if (m) out.push(`| \`${m[1]}\` | ${escapeCell(m[2].trim())} |`);
+    if (m) rows.push({ key: m[1], value: m[2].trim() });
   }
+  return rows;
+}
+
+function kvTable(rows, headers) {
+  const out = [`| ${headers[0]} | ${headers[1]} |`, '| --- | --- |'];
+  for (const { key, value } of rows) out.push(`| \`${key}\` | ${escapeCell(value)} |`);
   return out.length > 2 ? out.join('\n') : '';
 }
 
@@ -285,9 +340,9 @@ export function normalizeReferenceMdx(input, { prose } = {}) {
     } else if (key === 'examples') {
       examples = decodeEntities(dedent(rest.length ? rest : [inline]).join('\n').replace(/\n+$/, ''));
     } else if (key === 'output modes') {
-      outputModes = kvTable(rest, ['Mode', 'Behavior'], /^\s*(\S+)\s{2,}(.*)$/);
+      outputModes = kvRows(rest, /^\s*(\S+)\s{2,}(.*)$/);
     } else if (key === 'exit codes') {
-      exitCodes = kvTable(rest, ['Code', 'Meaning'], /^\s*(\d+)\s+(.*)$/);
+      exitCodes = kvRows(rest, /^\s*(\d+)\s+(.*)$/);
     } else {
       metadata.push(`**${label}:** ${escapeText(proseValue(inline, rest))}`);
     }
@@ -306,10 +361,31 @@ export function normalizeReferenceMdx(input, { prose } = {}) {
   }
   if (usage) parts.push('### Usage', '```bash\n' + usage + '\n```');
   if (examples) parts.push('### Examples', '```bash\n' + examples + '\n```');
-  if (flags?.length) parts.push('### Flags', flagTable(flags));
+
+  // Dedupe the shared boilerplate against the cli-conventions page. Only rows
+  // matching the universal spelling exactly are dropped; anything a command
+  // overrides or extends stays. The pointer paragraph appears only when
+  // something was actually filtered.
+  const ownFlags = (flags ?? []).filter((r) => !isUniversalFlag(r));
+  const ownExitCodes = (exitCodes ?? []).filter(
+    (r) => STANDARD_EXIT_CODES.get(r.key) !== r.value,
+  );
+  const filtered =
+    (flags?.length ?? 0) > ownFlags.length ||
+    (exitCodes?.length ?? 0) > ownExitCodes.length ||
+    (outputModes ? isCanonicalOutputModes(outputModes) : false);
+  if (filtered) parts.push(CONVENTIONS_NOTE);
+
+  if (ownFlags.length) parts.push('### Flags', flagTable(ownFlags));
   if (inherited?.length) parts.push('### Inherited flags', flagTable(inherited));
-  if (outputModes) parts.push('### Output modes', outputModes);
-  if (exitCodes) parts.push('### Exit codes', exitCodes);
+  if (outputModes && !isCanonicalOutputModes(outputModes)) {
+    const table = kvTable(outputModes, ['Mode', 'Behavior']);
+    if (table) parts.push('### Output modes', table);
+  }
+  if (ownExitCodes.length) {
+    const table = kvTable(ownExitCodes, ['Code', 'Meaning']);
+    if (table) parts.push('### Exit codes', table);
+  }
   if (related.length) parts.push('### Related commands', related.join('\n'));
   if (docsFeedback) parts.push(docsFeedback);
 
