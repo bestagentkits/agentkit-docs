@@ -26,9 +26,15 @@ human wrote.
 
 - **Input (source of truth):** `content/docs/beta/reference/cli/<slug>.mdx` — the
   faithful projection of `ak <cmd> --help`. This is the ONLY ground truth.
-- **Output:** `reference-prose/<slug>.md` — prose body only. **No** `##` heading
-  (the layout renders the title), **no** frontmatter, **no** flag/exit-code
-  tables, usage lines, or `SEE ALSO` list (those are generated mechanically).
+- **LLM wire format (recommended for agents):** `reference-prose-json/<slug>.json`
+  — structured `{ overview, whenToUse, notes? }` per
+  [`reference-prose-json/schema.json`](../reference-prose-json/schema.json).
+  Compile with `node scripts/compile-prose.mjs` → `reference-prose/<slug>.md`.
+  See [`reference-prose-json/README.md`](../reference-prose-json/README.md).
+- **Compiled overlay:** `reference-prose/<slug>.md` — prose body only. **No**
+  `##` heading (the layout renders the title), **no** frontmatter, **no**
+  flag/exit-code tables, usage lines, or `SEE ALSO` list (those are generated
+  mechanically). May be hand-edited or rendered from JSON.
 
 ## Authoring prompt (reusable)
 
@@ -64,15 +70,19 @@ human wrote.
 
 ## Regenerate + validate loop
 
-After writing/updating overlays:
+After writing/updating overlays (JSON and/or markdown):
 
 ```bash
+node scripts/compile-prose.mjs       # reference-prose-json/*.json → reference-prose/*.md
 node scripts/generate-reference.mjs  # raw source + overlays → derived pages (idempotent)
 pnpm lint                            # MDX lint (--frail)
 pnpm check:reference                 # fail-closed on internal-only leaks
 pnpm build                           # static export must parse every page
 pnpm check:links                     # internal link integrity
 ```
+
+When a slug has JSON in `reference-prose-json/`, CI runs `compile-prose --check` so
+the markdown overlay cannot drift from the structured source.
 
 The derived pages are byte-stable: re-running generation with unchanged sources
 produces zero diff. CI enforces this — if you edit an overlay but forget to
