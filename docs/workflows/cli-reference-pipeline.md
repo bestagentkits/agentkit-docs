@@ -64,6 +64,15 @@ flowchart LR
 The lead comes from `reference-prose/` (or JSON compiled into it). Everything
 from **Usage** downward is parsed from `reference-raw/` by `normalize-reference.mjs`.
 
+Shared boilerplate is deduped at generation time: universal flags
+(`--json`, `--quiet`, `--verbose`, `--yes`, `--no-interactive`, `--help`), the
+canonical output-modes table, and the standard exit codes (`0`–`3`) are
+documented once on the human-owned `cli-conventions` page; command pages keep
+only rows specific to them (matched by exact flag+description / code+meaning,
+so overloaded spellings survive) plus a pointer line. The `cli/index` page is
+also compiled — a grouped table of contents built from each command page's
+frontmatter (`scripts/lib/reference-index.mjs`) instead of the raw projection.
+
 ## Authoring workflow (LLM + human)
 
 ```mermaid

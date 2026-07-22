@@ -45,6 +45,7 @@ Output modes:
 Exit codes:
   0  success
   2  invalid flags
+  5  demo target missing
 
 \`\`\`
 ak demo <name> [flags]
@@ -106,11 +107,18 @@ test('usage is lifted under its own heading', () => {
 test('flags render as a table with MDX-safe cells', () => {
   const out = normalizeReferenceMdx(RAW);
   assert.match(out, /### Flags\n\n\| Flag \| Description \|/);
-  assert.match(out, /\| `-h, --help` \| help for demo \|/);
   // `|` inside a description is escaped so it does not split the column
   assert.match(out, /claude-code \\\| codex/);
   // `<id>` is escaped so MDX does not parse it as JSX
   assert.match(out, /Restore positional &lt;id>/);
+});
+
+test('universal flags are deduped to the conventions page', () => {
+  const out = normalizeReferenceMdx(RAW);
+  assert.doesNotMatch(out, /\| `-h, --help` \|/);
+  assert.match(out, /see \[CLI conventions\]\(\.\.\/cli-conventions\)/);
+  // command-specific flags survive
+  assert.match(out, /\| `--target string` \|/);
 });
 
 test('inherited flags get their own table', () => {
@@ -119,10 +127,28 @@ test('inherited flags get their own table', () => {
   assert.match(out, /\| `--cwd string` \| Project directory override \|/);
 });
 
-test('output modes and exit codes become tables', () => {
+test('non-canonical output modes stay; standard exit codes are deduped', () => {
   const out = normalizeReferenceMdx(RAW);
+  // this fixture's modes differ from the canonical trio, so the table stays
   assert.match(out, /### Output modes\n\n\| Mode \| Behavior \|\n\| --- \| --- \|\n\| `pretty` \| default on TTY \|/);
-  assert.match(out, /### Exit codes\n\n\| Code \| Meaning \|\n\| --- \| --- \|\n\| `0` \| success \|/);
+  // standard rows (0/2 with standard meanings) are deduped; the extra code stays
+  assert.match(out, /### Exit codes\n\n\| Code \| Meaning \|\n\| --- \| --- \|\n\| `5` \| demo target missing \|/);
+  assert.doesNotMatch(out, /\| `0` \| success \|/);
+});
+
+test('a fully standard exit-code table is dropped entirely', () => {
+  const raw = RAW.replace(
+    'Exit codes:\n  0  success\n  2  invalid flags\n  5  demo target missing',
+    'Exit codes:\n  0  success\n  2  invalid flags',
+  );
+  const out = normalizeReferenceMdx(raw);
+  assert.doesNotMatch(out, /### Exit codes/);
+});
+
+test('an overloaded standard code with different meaning survives', () => {
+  const raw = RAW.replace('2  invalid flags', '2  invalid filters');
+  const out = normalizeReferenceMdx(raw);
+  assert.match(out, /\| `2` \| invalid filters \|/);
 });
 
 test('SEE ALSO tabs become a clean related-commands list', () => {

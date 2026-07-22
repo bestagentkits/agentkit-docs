@@ -27,7 +27,8 @@ What it does:
 ### Options
 
 \`\`\`
-  -h, --help   help for demo
+  -h, --help        help for demo
+      --id string   Demo id
 \`\`\`
 
 ### SEE ALSO
