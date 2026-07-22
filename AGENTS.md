@@ -118,6 +118,7 @@ prompt trust.
     titles). The agent has no write power beyond a guarded PR, but read agent PR
     diffs on their merits.
 - **docs-bundle contract + secrets + runbook:** see the README pipeline section.
+- **Workflow diagrams:** [`docs/README.md`](docs/README.md) (CLI reference layers, release sync, deploy, CI).
 
 ## Repo conventions
 
