@@ -74,13 +74,13 @@ const CONVENTIONS_NOTE =
 // Frontmatter
 // ---------------------------------------------------------------------------
 
-function splitFrontmatter(text) {
+export function splitFrontmatter(text) {
   const m = text.match(/^(---\n[\s\S]*?\n---\n)([\s\S]*)$/);
   if (!m) return { frontmatter: '', body: text };
   return { frontmatter: m[1], body: m[2] };
 }
 
-function frontmatterValue(frontmatter, key) {
+export function frontmatterValue(frontmatter, key) {
   const m = frontmatter.match(new RegExp(`^${key}:[ \\t]*(.*)$`, 'm'));
   if (!m) return '';
   return m[1].trim().replace(/^["']|["']$/g, '');
@@ -93,7 +93,7 @@ function frontmatterValue(frontmatter, key) {
 // reference-hygiene.mjs), so escaping never introduces a false leak.
 // ---------------------------------------------------------------------------
 
-function escapeText(s) {
+export function escapeText(s) {
   // Escape only outside inline-code spans so `<...>`/`{...}` inside backticks
   // still render as literal code.
   return s
@@ -106,7 +106,7 @@ function escapeText(s) {
     .join('');
 }
 
-function escapeCell(s) {
+export function escapeCell(s) {
   return escapeText(s).replace(/\|/g, '\\|');
 }
 
