@@ -1,0 +1,82 @@
+---
+title: Migrating from ClaudeKit
+description: Move an existing ClaudeKit (ck) install to AgentKit with ak migrate — dry-run first, review the plan, then apply.
+---
+
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+
+If you already use ClaudeKit, `ak migrate` discovers your install, classifies
+what it finds, and produces a **per-user migration plan**. The command scans
+`~/.claude/`, `~/.claudekit/`, and the current directory. Nothing is written until
+you explicitly opt in.
+
+For every flag and exit code, see the reference pages for
+[`ak migrate`](../reference/cli/ak_migrate) and
+[`ak migrate rollback`](../reference/cli/ak_migrate_rollback).
+
+<Steps>
+  <Step>
+    ### Run a dry-run (default)
+
+    ```bash
+    ak migrate
+    ```
+
+    **Dry-run is the default** — preview the plan without writing files. Add
+    `--from=ck` if you want to be explicit (it is the only supported source
+    today).
+  </Step>
+  <Step>
+    ### Review the plan
+
+    Read what the command would change under your migration target. Use
+    `--json` or `--no-interactive` when you need machine-readable output in CI.
+  </Step>
+  <Step>
+    ### Apply the migration
+
+    When the plan looks right:
+
+    ```bash
+    ak migrate --from=ck --dry-run=false --yes
+    ```
+
+    Runtime safety gates still apply; `--yes` skips interactive prompts.
+  </Step>
+  <Step>
+    ### Choose native vs project plugin (optional)
+
+    By default the plan follows the discovered delivery mode. To **authorize
+    Claude Code project-plugin delivery** instead:
+
+    ```bash
+    ak migrate --from=ck --switch-to-plugin --dry-run=false --yes
+    ```
+  </Step>
+  <Step>
+    ### Verify and install kits
+
+    After migration, sign in and install kits as needed. See
+    [Installing kits](./installing-kits).
+  </Step>
+  <Step>
+    ### Roll back if needed
+
+    If an apply failed or you want to undo it:
+
+    ```bash
+    ak migrate rollback
+    ```
+
+    This restores the pre-apply state from the rollback journal written during
+    the failed apply.
+  </Step>
+</Steps>
+
+## Caveats
+
+- **`--force-unlock`** clears a stale migration lock left by a crashed run
+  before you retry.
+- **`--no-backup` on a global install** skips the snapshot and ClaudeKit
+  takeover, leaving CK content active. Power users only — prefer the default
+  backup behavior unless you know you need this.
