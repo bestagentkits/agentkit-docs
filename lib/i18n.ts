@@ -6,12 +6,13 @@ import { defineI18n } from 'fumadocs-core/i18n';
 // so the two locale trees always resolve the same slugs — the tree shape stays
 // identical (a promotion/whole-copy invariant) even while VI prose is partial.
 //
-// hideLocale 'never': both locales carry an explicit URL prefix (/en, /vi).
-// parser 'dot': content files use `.en.mdx` / `.vi.mdx` suffixes.
+// hideLocale 'default-locale': English URLs omit the /en prefix; Vietnamese keeps /vi.
+// Prefixless en paths are rewritten to /en/… at the edge via public/_redirects
+// (static export — Next.js middleware is unavailable). parser 'dot': .en.mdx / .vi.mdx.
 export const i18n = defineI18n({
   defaultLanguage: 'en',
   languages: ['en', 'vi'],
-  hideLocale: 'never',
+  hideLocale: 'default-locale',
   parser: 'dot',
   fallbackLanguage: 'en',
 });

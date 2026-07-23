@@ -28,15 +28,45 @@ function extractHrefs(html) {
   return [...hrefs];
 }
 
+// hideLocale: default-locale — prefixless en paths map to the /en/… static tree.
+const EN_INTERNAL_PREFIX = '/en';
+const RESERVED_PREFIXES = ['/vi', '/en', '/api', '/_next', '/icon.svg', '/og', '/llms'];
+
+function internalCandidates(sitePath) {
+  const clean = sitePath.split('#')[0].split('?')[0];
+  const candidates = [clean];
+  if (
+    clean !== '/' &&
+    !RESERVED_PREFIXES.some((p) => clean === p || clean.startsWith(`${p}/`))
+  ) {
+    candidates.push(`${EN_INTERNAL_PREFIX}${clean}`);
+  }
+  if (clean === '/') {
+    candidates.push(`${EN_INTERNAL_PREFIX}.html`, `${EN_INTERNAL_PREFIX}/`);
+  }
+  return candidates;
+}
+
 // A site path resolves if any of these exist: the literal file (assets), or
 // path.html / path/index.html (Next static export emits page.html for /page).
 // Trying all three — rather than branching on a file extension — avoids
 // misclassifying a route segment that merely contains a dot (e.g. /docs/v1.2.3).
 function resolves(outDir, sitePath) {
-  const clean = sitePath.split('#')[0].split('?')[0];
-  if (clean === '' || clean === '/') return existsSync(join(outDir, 'index.html'));
-  const base = join(outDir, clean);
-  return existsSync(base) || existsSync(`${base}.html`) || existsSync(join(base, 'index.html'));
+  for (const candidate of internalCandidates(sitePath)) {
+    if (candidate === '' || candidate === '/') {
+      if (existsSync(join(outDir, 'index.html'))) return true;
+      continue;
+    }
+    const base = join(outDir, candidate);
+    if (
+      existsSync(base) ||
+      existsSync(`${base}.html`) ||
+      existsSync(join(base, 'index.html'))
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 async function main() {

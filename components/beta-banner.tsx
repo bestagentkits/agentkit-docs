@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { getChannelVersion } from '@/lib/channels';
+import { localePath } from '@/lib/locale-path';
 
 // Persistent beta-channel notice. Rendered on every `beta/` docs page (keyed on
 // the slug's channel prefix by the caller). The version is read from
@@ -50,7 +51,7 @@ export function BetaBanner({
   const t = copy[locale as keyof typeof copy] ?? copy.en;
   const version = getChannelVersion('beta');
   // Same page on the stable channel = swap the leading `beta` segment.
-  const stableHref = `/${locale}/docs/${['stable', ...slug.slice(1)].join('/')}`;
+  const stableHref = localePath(locale, 'stable', ...slug.slice(1));
 
   return (
     <div className="not-prose -mx-2 mb-6 flex flex-wrap items-center gap-x-2.5 gap-y-1 rounded-md border border-fd-border border-l-2 border-l-fd-primary bg-fd-primary/5 px-3.5 py-2 text-sm text-fd-muted-foreground">
