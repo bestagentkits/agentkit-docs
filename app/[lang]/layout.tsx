@@ -18,6 +18,7 @@ import '../global.css';
 // Vietnamese letterset, so VI renders in Geist instead of a fallback font.
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://docs.agentkit.best'),
   title: {
     default: `${appName} Docs`,
     template: `%s · ${appName} Docs`,

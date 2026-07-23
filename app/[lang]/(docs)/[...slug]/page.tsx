@@ -14,9 +14,10 @@ import { BetaBanner } from '@/components/beta-banner';
 import { channelFromSlug } from '@/lib/channels';
 import type { Metadata } from 'next';
 import { createDocsRelativeLink } from '@/lib/docs-relative-link';
+import { docsPageMetadata } from '@/lib/metadata';
 import { gitConfig } from '@/lib/shared';
 
-export default async function Page(props: PageProps<'/[lang]/docs/[[...slug]]'>) {
+export default async function Page(props: PageProps<'/[lang]/[...slug]'>) {
   const params = await props.params;
   const page = source.getPage(params.slug, params.lang);
   if (!page) notFound();
@@ -68,17 +69,17 @@ export async function generateStaticParams() {
 }
 
 export async function generateMetadata(
-  props: PageProps<'/[lang]/docs/[[...slug]]'>,
+  props: PageProps<'/[lang]/[...slug]'>,
 ): Promise<Metadata> {
   const params = await props.params;
   const page = source.getPage(params.slug, params.lang);
   if (!page) notFound();
 
-  return {
+  return docsPageMetadata(params.lang, params.slug ?? [], {
     title: page.data.title,
     description: page.data.description,
     openGraph: {
       images: getPageImage(page).url,
     },
-  };
+  });
 }
