@@ -49,10 +49,7 @@ export function HomeTerminal({
   return (
     <div className="ak-terminal ak-terminal-window overflow-hidden rounded-lg border border-fd-border bg-fd-card text-left">
       <div className="ak-terminal-bar flex items-center gap-1.5 border-b border-fd-border px-4 py-3">
-        <span aria-hidden className="ak-terminal-light size-2 rounded-full" />
-        <span aria-hidden className="ak-terminal-light size-2 rounded-full" />
-        <span aria-hidden className="ak-terminal-light size-2 rounded-full" />
-        <span className="ak-terminal-context ml-2 font-mono text-xs text-fd-muted-foreground">
+        <span className="ak-terminal-context font-mono text-xs text-fd-muted-foreground">
           ak / quickstart
         </span>
         <button

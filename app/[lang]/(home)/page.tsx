@@ -196,34 +196,12 @@ export default async function HomePage({ params }: PageProps<'/[lang]'>) {
   const t = copy[lang as keyof typeof copy] ?? copy.en;
 
   return (
-    <main className="ak-home relative flex flex-1 flex-col overflow-x-clip">
-      <div
-        aria-hidden
-        className="ak-dot-grid pointer-events-none absolute inset-x-0 top-0 h-[42rem]"
-      />
-      <div className="ak-ambient-field pointer-events-none" aria-hidden>
-        <span className="ak-ambient-orbit ak-ambient-orbit-a" />
-        <span className="ak-ambient-orbit ak-ambient-orbit-b" />
-        <span className="ak-ambient-beam" />
-      </div>
-
+    <main className="ak-home ak-editorial relative flex flex-1 flex-col overflow-x-clip">
       <div className="ak-home-shell">
         <section className="ak-breakout-hero" aria-labelledby="ak-home-title">
           <div className="ak-command-spine" aria-hidden>
             <span>ak</span>
             <i />
-            <span>01</span>
-          </div>
-
-          <div className="ak-hero-status" aria-hidden>
-            <span>
-              <i className="ak-status-dot" />
-              {channels.stable.tag}
-            </span>
-            <span>
-              {commandGroups.length} groups / {commandCount} commands
-            </span>
-            <span>EN · VI</span>
           </div>
 
           <header className="ak-hero-copy">
@@ -246,7 +224,6 @@ export default async function HomePage({ params }: PageProps<'/[lang]'>) {
                 className="ak-button-primary inline-flex min-h-11 items-center rounded-md bg-fd-primary px-5 py-2.5 text-sm font-medium text-fd-primary-foreground"
               >
                 {t.cta}
-                <ArrowUpRight aria-hidden className="ml-2 size-4" />
               </Link>
               <Link
                 href={localePath(lang, 'stable', 'getting-started', 'quickstart')}
@@ -261,7 +238,7 @@ export default async function HomePage({ params }: PageProps<'/[lang]'>) {
             <div className="ak-proof-frame">
               <div className="ak-proof-frame-label" aria-hidden>
                 <span>AK / QUICKSTART</span>
-                <span>01 — 05</span>
+                <span>{channels.stable.tag}</span>
               </div>
               <HomeTerminal
                 lines={terminalLines}
@@ -273,8 +250,8 @@ export default async function HomePage({ params }: PageProps<'/[lang]'>) {
           </div>
 
           <dl className="ak-proof-strip">
-            {t.stats.map((stat, index) => (
-              <div key={stat.label} data-index={String(index + 1).padStart(2, '0')}>
+            {t.stats.map((stat) => (
+              <div key={stat.label}>
                 <dd className="font-mono text-2xl font-medium tracking-tight text-fd-foreground md:text-3xl">
                   {stat.value}
                 </dd>
@@ -288,7 +265,7 @@ export default async function HomePage({ params }: PageProps<'/[lang]'>) {
 
         <section className="ak-route-section" aria-labelledby="ak-route-title">
           <div className="ak-section-marker" aria-hidden>
-            <span>02</span>
+            <span className="ak-section-node" />
           </div>
           <header className="ak-route-intro">
             <Eyebrow>{t.howLabel}</Eyebrow>
@@ -299,12 +276,9 @@ export default async function HomePage({ params }: PageProps<'/[lang]'>) {
             </h2>
           </header>
           <ol className="ak-step-route">
-            {t.steps.map((step, i) => (
+            {t.steps.map((step) => (
               <li key={step.title}>
                 <div className="ak-step-heading">
-                  <span className="font-mono text-sm text-fd-primary" aria-hidden>
-                    {String(i + 1).padStart(2, '0')}
-                  </span>
                   <h3 className="!text-base font-semibold">{step.title}</h3>
                 </div>
                 <p className="mt-2 text-sm text-fd-muted-foreground">
@@ -320,7 +294,7 @@ export default async function HomePage({ params }: PageProps<'/[lang]'>) {
 
         <section className="ak-surface-grid" aria-labelledby="ak-surface-title">
           <div className="ak-section-marker" aria-hidden>
-            <span>03</span>
+            <span className="ak-section-node" />
           </div>
           <header className="ak-surface-heading">
             <Eyebrow>{t.surfaceLabel}</Eyebrow>
@@ -368,7 +342,7 @@ export default async function HomePage({ params }: PageProps<'/[lang]'>) {
 
         <section className="ak-start-grid" aria-labelledby="ak-start-title">
           <div className="ak-section-marker" aria-hidden>
-            <span>04</span>
+            <span className="ak-section-node" />
           </div>
           <header className="ak-start-heading">
             <Eyebrow>{t.sectionLabel}</Eyebrow>
@@ -377,15 +351,12 @@ export default async function HomePage({ params }: PageProps<'/[lang]'>) {
             </h2>
           </header>
           <nav aria-label={t.sectionLabel} className="ak-start-links">
-            {t.links.map((link, i) => (
+            {t.links.map((link) => (
               <Link
                 key={link.href}
                 href={localePath(lang, ...link.href.split('/'))}
                 className="group flex min-h-24 items-baseline gap-4 py-5"
               >
-                <span className="font-mono text-xs text-fd-muted-foreground">
-                  {String(i + 1).padStart(2, '0')}
-                </span>
                 <span className="flex-1">
                   <span className="flex items-center justify-between font-medium">
                     {link.title}
@@ -428,7 +399,6 @@ export default async function HomePage({ params }: PageProps<'/[lang]'>) {
                 className="ak-button-primary inline-flex min-h-11 items-center rounded-md bg-fd-primary px-5 py-2.5 text-sm font-medium text-fd-primary-foreground"
               >
                 {t.cta}
-                <ArrowUpRight aria-hidden className="ml-2 size-4" />
               </Link>
             </div>
           </div>
