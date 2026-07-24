@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Deterministic merge: kits-raw + kits-prose-json → content/docs/beta/kits/*.mdx
+// Deterministic merge: kits-raw + kits-brief → content/docs/beta/kits/*.mdx
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -10,15 +10,19 @@ import {
   renderKitIndexMdx,
   renderKitOverviewMdx,
 } from './lib/kit-catalog.mjs';
+import { loadKitBriefs } from './lib/kit-brief.mjs';
 
 const { values } = parseArgs({
   options: {
     channel: { type: 'string', default: 'beta' },
     rawDir: { type: 'string', default: join(repoRoot, 'kits-raw') },
-    proseDir: { type: 'string', default: join(repoRoot, 'kits-prose-json') },
+    briefDir: { type: 'string', default: join(repoRoot, 'kits-brief') },
+    // legacy alias — same as briefDir
+    proseDir: { type: 'string' },
   },
 });
 
+const briefDir = values.proseDir || values.briefDir;
 const KITS = ['engineer', 'marketing'];
 const LOCALES = ['en', 'vi'];
 const DERIVED = new Set([
@@ -48,16 +52,22 @@ async function main() {
   }
 
   const rawKits = [];
-  const proseByKit = {};
+  const briefsByKit = {};
   for (const id of KITS) {
     rawKits.push(await loadJson(values.rawDir, `${id}.json`));
-    proseByKit[id] = await loadJson(values.proseDir, `${id}.json`);
+    briefsByKit[id] = await loadKitBriefs(briefDir, id);
   }
 
   let written = 0;
   for (const locale of LOCALES) {
     const indexBody = renderKitIndexMdx({
-      kits: rawKits.map((k) => ({ id: k.id, title: k.name, description: k.description, counts: k.counts })),
+      kits: rawKits.map((k) => ({
+        id: k.id,
+        title: k.name,
+        description: k.description,
+        counts: k.counts,
+        version: k.version,
+      })),
       locale,
     });
     await writeFile(
@@ -71,9 +81,8 @@ async function main() {
     for (const locale of LOCALES) {
       const overview = renderKitOverviewMdx({ kit, locale });
       const catalog = renderKitCatalogMdx({
-        kit,
         skills: kit.skills,
-        proseBySlug: proseByKit[kit.id],
+        briefsBySlug: briefsByKit[kit.id],
         locale,
       });
       await writeFile(

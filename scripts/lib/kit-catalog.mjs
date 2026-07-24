@@ -1,24 +1,27 @@
 import { escapeText } from './normalize-reference.mjs';
+import { resolveBriefLocale } from './kit-brief.mjs';
 
 const ACCORDION_THRESHOLD = 6;
 
-function pickProse(proseEntry, skill, locale) {
-  if (!proseEntry) {
-    return {
-      overview: skill.descriptionRaw,
-      whenToUse: skill.whenToUseRaw || skill.descriptionRaw,
-    };
-  }
-  if (locale === 'vi') {
-    return {
-      overview: proseEntry.overviewVi || proseEntry.overview || skill.descriptionRaw,
-      whenToUse: proseEntry.whenToUseVi || proseEntry.whenToUse || skill.whenToUseRaw || skill.descriptionRaw,
-    };
-  }
-  return {
-    overview: proseEntry.overview || skill.descriptionRaw,
-    whenToUse: proseEntry.whenToUse || skill.whenToUseRaw || skill.descriptionRaw,
-  };
+const CATEGORY_VI = {
+  utilities: 'Tiện ích',
+  'dev-tools': 'Công cụ dev',
+  'ai-ml': 'AI / ML',
+  backend: 'Backend',
+  database: 'Cơ sở dữ liệu',
+  frameworks: 'Framework',
+  frontend: 'Frontend',
+  design: 'Thiết kế',
+  testing: 'Kiểm thử',
+  marketing: 'Marketing',
+  content: 'Nội dung',
+  Other: 'Khác',
+  other: 'Khác',
+};
+
+function categoryLabel(cat, locale) {
+  if (locale !== 'vi') return cat;
+  return CATEGORY_VI[cat] || cat;
 }
 
 function groupByCategory(skills) {
@@ -31,51 +34,124 @@ function groupByCategory(skills) {
   return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
 }
 
-function renderSkillRow(skill, proseEntry, locale) {
-  const { overview, whenToUse } = pickProse(proseEntry, skill, locale);
+function slashForSlug(slug) {
+  if (!slug) return '';
+  if (slug.startsWith('ak-')) return `/ak:${slug.slice(3)}`;
+  return `/${slug}`;
+}
+
+function renderTokenList(items, emptySkip = true) {
+  if (!items?.length) return emptySkip ? '' : '';
+  const lines = items
+    .filter((f) => f.name)
+    .map((f) => {
+      const desc = f.desc?.trim();
+      return desc
+        ? `- \`${escapeText(f.name)}\` — ${escapeText(desc)}`
+        : `- \`${escapeText(f.name)}\``;
+    });
+  return lines.length ? lines.join('\n') : '';
+}
+
+/**
+ * Compact cheatsheet block for one skill.
+ * syntax · description · usage per adapter · flags · when-to-use · see-also
+ */
+export function renderSkillCheatsheet(skill, briefEntry, locale) {
+  const brief = resolveBriefLocale(briefEntry, locale);
+  const slash = skill.slash || slashForSlug(skill.slug);
+  const overview =
+    brief?.overview || skill.descriptionRaw || '';
+  const whenToUse =
+    brief?.whenToUse || skill.whenToUseRaw || overview;
   const whenLabel = locale === 'vi' ? 'Khi nào dùng' : 'When to use';
-  return [
-    `### \`${skill.slash}\``,
+  const usageLabel = locale === 'vi' ? 'Cách gọi' : 'Usage';
+  const flagsLabel = locale === 'vi' ? 'Cờ' : 'Flags';
+  const subsLabel = locale === 'vi' ? 'Lệnh con' : 'Subcommands';
+  const seeLabel = locale === 'vi' ? 'Xem thêm' : 'See also';
+  const guideLabel = locale === 'vi' ? 'Hướng dẫn' : 'Guide';
+
+  const inv = brief?.invocation ?? {
+    'claude-code': slash,
+    codex: skill.name?.startsWith('ak:') ? `$${skill.name}` : '',
+  };
+
+  const parts = [
+    `### \`${slash}\``,
     '',
     escapeText(overview),
     '',
-    `**${whenLabel}:** ${escapeText(whenToUse)}`,
+    `**${usageLabel}**`,
     '',
-  ].join('\n');
+    `| | |`,
+    `| --- | --- |`,
+    `| Claude Code | \`${escapeText(inv['claude-code'] || slash)}\` |`,
+    `| Codex | \`${escapeText(inv.codex || '')}\` |`,
+    '',
+  ];
+
+  const flagBlock = renderTokenList(brief?.flags);
+  if (flagBlock) {
+    parts.push(`**${flagsLabel}**`, '', flagBlock, '');
+  }
+
+  const subBlock = renderTokenList(brief?.subcommands);
+  if (subBlock) {
+    parts.push(`**${subsLabel}**`, '', subBlock, '');
+  }
+
+  parts.push(`**${whenLabel}:** ${escapeText(whenToUse)}`, '');
+
+  const related = brief?.related ?? [];
+  if (related.length) {
+    const links = related.map((slug) => `\`${slashForSlug(slug)}\``).join(', ');
+    parts.push(`**${seeLabel}:** ${links}`, '');
+  }
+
+  if (brief?.guide) {
+    parts.push(`**${guideLabel}:** [${escapeText(brief.guide)}](${brief.guide})`, '');
+  }
+
+  return parts.join('\n');
 }
 
-function renderCategoryBlock(title, skills, proseBySlug, locale) {
+function renderCategoryBlock(title, skills, briefsBySlug, locale) {
   const body = skills
-    .map((skill) => renderSkillRow(skill, proseBySlug[skill.slug], locale))
+    .map((skill) => renderSkillCheatsheet(skill, briefsBySlug[skill.slug], locale))
     .join('\n');
 
+  const label = categoryLabel(title, locale);
   if (skills.length >= ACCORDION_THRESHOLD) {
-    return [`<Accordion title="${escapeText(title)} (${skills.length})">`, body, '</Accordion>'].join('\n');
+    return [
+      `<Accordion title="${escapeText(label)} (${skills.length})">`,
+      body,
+      '</Accordion>',
+    ].join('\n');
   }
-  return [`## ${title}`, '', body].join('\n');
+  return [`## ${escapeText(label)}`, '', body].join('\n');
 }
 
-export function renderKitCatalogMdx({ kit, skills, proseBySlug, locale }) {
+export function renderKitCatalogMdx({ skills, briefsBySlug, locale }) {
   const groups = groupByCategory(skills);
   const accordionBlocks = groups.filter(([, items]) => items.length >= ACCORDION_THRESHOLD);
   const plainBlocks = groups.filter(([, items]) => items.length < ACCORDION_THRESHOLD);
 
   const parts = [
     locale === 'vi'
-      ? 'Danh mục skill theo thể loại. Mỗi mục ghi lệnh slash, tóm tắt và gợi ý khi nào dùng.'
-      : 'Skill catalog grouped by category. Each entry lists the slash command, a short overview, and when to use it.',
+      ? 'Bảng tra skill gọn theo thể loại. Mỗi mục: cú pháp, mô tả, cách gọi theo adapter (Claude Code `/ak:…`, Codex `$ak:…`), cờ/lệnh con (kèm giải thích khi có), khi nào dùng, và liên kết liên quan.'
+      : 'Compact skill cheatsheet grouped by category. Each entry: syntax, description, adapter usage (Claude Code `/ak:…`, Codex `$ak:…`), flags/subcommands with explanations when the source provides them, when to use, and related skills.',
     '',
   ];
 
   for (const [cat, items] of plainBlocks) {
-    parts.push(renderCategoryBlock(cat, items, proseBySlug, locale));
+    parts.push(renderCategoryBlock(cat, items, briefsBySlug, locale));
     parts.push('');
   }
 
   if (accordionBlocks.length) {
     parts.push('<Accordions type="multiple">');
     for (const [cat, items] of accordionBlocks) {
-      parts.push(renderCategoryBlock(cat, items, proseBySlug, locale));
+      parts.push(renderCategoryBlock(cat, items, briefsBySlug, locale));
     }
     parts.push('</Accordions>');
   }
@@ -89,7 +165,9 @@ export function renderKitIndexMdx({ kits, locale }) {
       ? [
           '**Kit** là gói skill cho trợ lý mã hoá. AgentKit phân phối kit qua registry; bạn cài bằng `ak kit init`.',
           '',
-          'Xem [Cài đặt kit](./guides/installing-kits) để chọn runtime và skill.',
+          'Mỗi trang kit là **bảng tra (cheatsheet)** — cú pháp, cách gọi theo adapter, cờ, và khi nào dùng. Phiên bản hiển thị là semver của kit (`kit.yaml`), không phải train beta/stable.',
+          '',
+          'Xem [Cài đặt kit](../guides/installing-kits) để chọn runtime và skill.',
           '',
           '## Kit có sẵn',
           '',
@@ -97,7 +175,9 @@ export function renderKitIndexMdx({ kits, locale }) {
       : [
           'A **kit** is a bundle of skills for a coding assistant. AgentKit distributes kits through the registry; install with `ak kit init`.',
           '',
-          'See [Installing kits](./guides/installing-kits) for runtime targets and skill selection.',
+          'Each kit page is a **cheatsheet** — syntax, adapter invocations, flags, and when to use each skill. The version shown is the kit content semver from `kit.yaml`, not the beta/stable train.',
+          '',
+          'See [Installing kits](../guides/installing-kits) for runtime targets and skill selection.',
           '',
           '## Available kits',
           '',
@@ -106,7 +186,7 @@ export function renderKitIndexMdx({ kits, locale }) {
   const rows = kits.map((kit) => {
     const label = locale === 'vi' ? 'skill' : 'skills';
     const agentLabel = locale === 'vi' ? 'agent' : 'agents';
-    return `- [**${kit.title}**](./${kit.id}) — ${kit.counts.skills} ${label}, ${kit.counts.agents} ${agentLabel}. ${escapeText(kit.description)}`;
+    return `- [**${kit.title}**](./${kit.id}) — \`${kit.version}\` · ${kit.counts.skills} ${label}, ${kit.counts.agents} ${agentLabel}. ${escapeText(kit.description)}`;
   });
 
   return [...intro, ...rows, ''].join('\n');
@@ -114,16 +194,16 @@ export function renderKitIndexMdx({ kits, locale }) {
 
 export function kitPageFrontmatter({ kit, locale, page, withAccordion = false }) {
   const titles = {
-    engineer: { en: 'Engineer kit', vi: 'Kit Engineer' },
-    marketing: { en: 'Marketing kit', vi: 'Kit Marketing' },
-    index: { en: 'Kits', vi: 'Kit' },
+    engineer: { en: 'Engineer kit', vi: 'Kit kỹ sư' },
+    marketing: { en: 'Marketing kit', vi: 'Kit marketing' },
+    index: { en: 'Kits', vi: 'Kits' },
   };
   const title = titles[page]?.[locale] ?? kit.name;
   const description =
     page === 'index'
       ? locale === 'vi'
-        ? 'Tổng quan kit AgentKit — Engineer và Marketing.'
-        : 'AgentKit kits overview — Engineer and Marketing.'
+        ? 'Tổng quan kit AgentKit — bảng tra Engineer và Marketing.'
+        : 'AgentKit kits overview — Engineer and Marketing cheatsheets.'
       : kit.description;
 
   const imports = withAccordion
@@ -143,7 +223,7 @@ export function renderKitOverviewMdx({ kit, locale }) {
   const agentLabel = locale === 'vi' ? 'Agent' : 'Agents';
   const versionLabel = locale === 'vi' ? 'Phiên bản kit' : 'Kit version';
   const tierLabel = locale === 'vi' ? 'Gói' : 'Tier';
-  const trainLabel = locale === 'vi' ? 'Train' : 'Train';
+  const trainLabel = locale === 'vi' ? 'Giao trong train' : 'Delivered in train';
 
   return [
     `| | |`,
