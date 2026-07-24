@@ -8,13 +8,15 @@ import {
 } from './channels';
 import { localePath } from './locale-path';
 
-export type DocsSection = 'docs' | 'reference';
+// Top-level areas shown as visible navbar tabs. Desktop App is a page inside
+// Docs (one teaser), not its own area. `kits` stays a product term in both locales.
+export type DocsSection = 'docs' | 'kits' | 'reference';
 
 const REFERENCE_FOLDER = '/reference';
 
 const sectionLabels = {
-  en: { docs: 'Docs', reference: 'CLI Reference' },
-  vi: { docs: 'Tài liệu', reference: 'Tham chiếu CLI' },
+  en: { docs: 'Docs', kits: 'Kits', reference: 'CLI Reference' },
+  vi: { docs: 'Tài liệu', kits: 'Kits', reference: 'Tham chiếu CLI' },
 } as const;
 
 /** Strip locale prefix and return slug segments under the docs mount. */
@@ -36,26 +38,34 @@ export function getActiveChannel(slug: string[]): ChannelId {
 export function getDocsSection(slug: string[]): DocsSection {
   const channel = channelFromSlug(slug);
   const rest = channel ? slug.slice(1) : slug;
-  return rest[0] === 'reference' ? 'reference' : 'docs';
+  const head = rest[0];
+  if (head === 'reference') return 'reference';
+  if (head === 'kits') return 'kits';
+  return 'docs'; // getting-started, guides, desktop-app, index …
 }
 
-function isReferenceFolder(node: PageTree.Node): boolean {
-  if (node.type !== 'folder') return false;
-  const folder = node.$ref?.folder ?? '';
-  if (folder.endsWith(REFERENCE_FOLDER) || folder.endsWith('reference')) {
-    return true;
+/** Classify a channel-child node into its top-nav area. */
+function nodeArea(node: PageTree.Node): DocsSection {
+  if (node.type === 'folder') {
+    const folder = node.$ref?.folder ?? '';
+    const url = node.index?.url ?? '';
+    if (folder.endsWith(REFERENCE_FOLDER) || folder.endsWith('reference') || url.includes('/reference')) {
+      return 'reference';
+    }
+    if (folder.endsWith('/kits') || folder.endsWith('kits') || url.includes('/kits')) {
+      return 'kits';
+    }
+    return 'docs';
   }
-  return node.index?.url.includes('/reference') ?? false;
+  // Leaf pages (incl. the desktop-app teaser) live in Docs.
+  return 'docs';
 }
 
 function filterChannelChildren(
   children: PageTree.Node[],
   section: DocsSection,
 ): PageTree.Node[] {
-  if (section === 'reference') {
-    return children.filter(isReferenceFolder);
-  }
-  return children.filter((node) => !isReferenceFolder(node));
+  return children.filter((node) => nodeArea(node) === section);
 }
 
 function filterRootChildren(
@@ -71,7 +81,7 @@ function filterRootChildren(
   });
 }
 
-/** Scope the sidebar tree to Docs vs CLI Reference within each channel root. */
+/** Scope the sidebar tree to the active area within each channel root. */
 export function filterPageTreeBySection(
   tree: PageTree.Root,
   section: DocsSection,
@@ -98,7 +108,7 @@ function channelIdFromFolder(node: PageTree.Folder): ChannelId | null {
   return null;
 }
 
-/** Add the released version label to channel dropdown entries. */
+/** Add the released train version label to the channel sidebar dropdown. */
 export function transformChannelTab(
   option: import('fumadocs-ui/layouts/shared').LayoutTab,
   node: PageTree.Folder,
@@ -116,26 +126,24 @@ export function transformChannelTab(
   };
 }
 
-export function buildSectionNavLinks(
+// Visible top-nav area tabs: Docs · Kits · CLI Reference. Active tab is derived
+// from the pathname (nested-url), keeping all areas one click away.
+export function buildAreaNav(
   locale: string,
   channel: ChannelId,
 ): LinkItemType[] {
   const labels = sectionLabels[locale as keyof typeof sectionLabels] ?? sectionLabels.en;
+  const tab = (text: string, ...segments: string[]): LinkItemType => ({
+    type: 'main',
+    text,
+    url: localePath(locale, channel, ...segments),
+    on: 'nav',
+    active: 'nested-url',
+  });
 
   return [
-    {
-      type: 'main',
-      text: labels.docs,
-      url: localePath(locale, channel, 'getting-started'),
-      on: 'nav',
-      active: 'nested-url',
-    },
-    {
-      type: 'main',
-      text: labels.reference,
-      url: localePath(locale, channel, 'reference', 'cli'),
-      on: 'nav',
-      active: 'nested-url',
-    },
+    tab(labels.docs, 'getting-started'),
+    tab(labels.kits, 'kits'),
+    tab(labels.reference, 'reference', 'cli'),
   ];
 }
