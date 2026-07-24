@@ -1,0 +1,98 @@
+---
+title: Gỡ lỗi và sửa
+description: Chứng minh root cause trước khi đổi code, rồi sửa và khoá hành vi bằng test.
+---
+
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Bug tốn thời gian nhất khi vá triệu chứng. Workflow này buộc **chẩn đoán trước**,
+rồi sửa trúng nguyên nhân, rồi test fail nếu thiếu fix.
+
+<Callout type="info">
+  Ưu tiên `/ak:debug` (hoặc `$ak:debug` trên Codex) thay vì nhảy vào cook khi
+  hành vi “đã sửa” còn mơ hồ. Danh sách cờ nằm ở
+  [bảng tra kit Engineer](../kits/engineer).
+</Callout>
+
+## Khi nào dùng
+
+- Test fail, 500, CI flaky, dữ liệu sai, hoặc “hôm qua còn chạy”.
+- Regression hiệu năng cần nguyên nhân đo được.
+- Mọi thay đổi mà đoán fix đã thất bại một lần.
+
+## Workflow
+
+<Steps>
+<Step>
+
+### Định khung hành vi đã sửa
+
+Nêu “fixed” trông ra sao, ràng buộc (không phá API im lặng, an toàn dữ liệu),
+và cách biết xong. Nếu intent còn mơ hồ, mở `/ak:brainstorm` trên outcome đã
+sửa — không brainstorm các bản vá phỏng đoán.
+
+</Step>
+<Step>
+
+### Chứng minh root cause
+
+```text
+/ak:debug Orders export returns 500 when the table is empty
+```
+
+Scout đường fail, reproduce, đọc log/stack, gọi tên nguyên nhân kèm bằng chứng.
+Đừng đề xuất viết lại kiến trúc khi cause chưa vững. Helper liên quan:
+`/ak:scout`, `/ak:repomix`, skill browser cho lỗi chỉ UI.
+
+</Step>
+<Step>
+
+### Sửa theo nguyên nhân
+
+```text
+/ak:fix Null-guard empty orders query and return 200 with empty CSV
+```
+
+Fix triển khai sau chẩn đoán — không phải brainstorm lần hai. Giữ scope ở
+nguyên nhân đã chứng minh và caller trực tiếp.
+
+</Step>
+<Step>
+
+### Khoá bằng test
+
+```text
+/ak:test
+```
+
+Thêm/mở rộng test fail trên hành vi hỏng và pass sau fix. Nếu suite đã phủ,
+chạy lại và ghi kết quả trước khi ship.
+
+</Step>
+</Steps>
+
+## Prompt mẫu
+
+```text
+/ak:debug CI fails on auth middleware after the session PR
+/ak:fix Align middleware with new session shape; keep public routes public
+/ak:test
+```
+
+## Cạm bẫy
+
+- **Vòng fix-first** — vá phỏng đoán thêm khi chưa có cause.
+- **Phóng scope** — null guard biến thành migration framework.
+- **Không regression test** — bug quay lại tuần sau.
+
+## Skills dùng
+
+| Skill | Vai trò | Bảng tra |
+| --- | --- | --- |
+| `/ak:debug` | Điều tra root cause | [Engineer](../kits/engineer) |
+| `/ak:fix` | Sửa theo nguyên nhân | [Engineer](../kits/engineer) |
+| `/ak:test` | Khoá regression | [Engineer](../kits/engineer) |
+| `/ak:scout` | Định vị surface lỗi | [Engineer](../kits/engineer) |
+
+Liên quan: [Vòng lặp cốt lõi](./core-loop), [Thoát kẹt](./get-unstuck).

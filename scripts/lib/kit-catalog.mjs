@@ -109,7 +109,11 @@ export function renderSkillCheatsheet(skill, briefEntry, locale) {
   }
 
   if (brief?.guide) {
-    parts.push(`**${guideLabel}:** [${escapeText(brief.guide)}](${brief.guide})`, '');
+    // Brief stores a guide slug (e.g. core-loop); resolve relative to kits/*.mdx
+    const slug = String(brief.guide).replace(/^\.\.\/guides\//, '').replace(/\.mdx$/, '');
+    const href = `../guides/${slug}`;
+    const label = slug.replace(/-/g, ' ');
+    parts.push(`**${guideLabel}:** [${escapeText(label)}](${href})`, '');
   }
 
   return parts.join('\n');

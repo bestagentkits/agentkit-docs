@@ -1,0 +1,99 @@
+---
+title: Debug and fix
+description: Prove root cause before changing code, then fix and lock the behavior with tests.
+---
+
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Bugs waste the most time when you patch symptoms. This workflow forces
+**diagnosis first**, then a targeted fix, then a test that fails without the fix.
+
+<Callout type="info">
+  Prefer `/ak:debug` (or `$ak:debug` on Codex) over jumping into cook when the
+  expected repaired behavior is unclear. Flag lists live on the
+  [Engineer kit cheatsheet](../kits/engineer).
+</Callout>
+
+## When to use
+
+- Failing tests, 500s, flaky CI, bad data, or “it worked yesterday”.
+- Performance regressions where you need a measured cause.
+- Any change where guessing the fix has already failed once.
+
+## Workflow
+
+<Steps>
+<Step>
+
+### Frame the repaired behavior
+
+State what “fixed” looks like, constraints (no silent API break, data safety),
+and how you will know you are done. If intent is still fuzzy, open with
+`/ak:brainstorm` on the repaired outcome — not on speculative patches.
+
+</Step>
+<Step>
+
+### Prove the root cause
+
+```text
+/ak:debug Orders export returns 500 when the table is empty
+```
+
+Scout the failing path, reproduce, read logs and stack frames, and name the
+cause with evidence. Do not propose architecture rewrites until the cause is
+solid. Related helpers when needed: `/ak:scout`, `/ak:repomix`, browser skills
+for UI-only failures.
+
+</Step>
+<Step>
+
+### Apply a cause-aligned fix
+
+```text
+/ak:fix Null-guard empty orders query and return 200 with empty CSV
+```
+
+Fix implements the repair after diagnosis — it is not a second brainstorm. Keep
+scope to the proven cause and its direct callers.
+
+</Step>
+<Step>
+
+### Lock it with a test
+
+```text
+/ak:test
+```
+
+Add or extend a test that failed on the broken behavior and passes after the
+fix. If the suite already covers it, re-run and record the result before ship.
+
+</Step>
+</Steps>
+
+## Sample prompts
+
+```text
+/ak:debug CI fails on auth middleware after the session PR
+/ak:fix Align middleware with new session shape; keep public routes public
+/ak:test
+```
+
+## Pitfalls
+
+- **Fix-first loops** — another speculative patch without a proven cause.
+- **Over-scoping** — turning a null guard into a framework migration.
+- **No regression test** — the same bug returns next week.
+
+## Skills used
+
+| Skill | Role | Cheatsheet |
+| --- | --- | --- |
+| `/ak:debug` | Root-cause investigation | [Engineer](../kits/engineer) |
+| `/ak:fix` | Cause-aligned repair | [Engineer](../kits/engineer) |
+| `/ak:test` | Regression lock | [Engineer](../kits/engineer) |
+| `/ak:scout` | Locate the failing surface | [Engineer](../kits/engineer) |
+
+Related: [The core loop](./core-loop), [Get unstuck](./get-unstuck).
