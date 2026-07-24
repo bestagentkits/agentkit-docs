@@ -16,6 +16,19 @@ npx serve out       # serve the static build locally
 
 Requires Node ≥ 20.9 (see `.nvmrc` → 22) and pnpm (see `packageManager` in `package.json`).
 
+## Local agent runtime
+
+The `thieung-os` agent control plane provisions selected AgentKit Engineer workflows
+for both Claude Code and Codex. `ak-git` is included for kit-owned Git operations;
+repository-specific contribution and commit rules in `AGENTS.md` remain authoritative.
+Generated `ak-*` resources are runtime-owned and should be refreshed through the
+control-plane manifest rather than edited directly.
+
+Three project-scoped design workflows are also linked from the control plane for
+isolated frontend experiments: `ui-craft`, upstream `design-taste-frontend`
+(`taste-skill` bundle), and upstream `hallmark`. Invoke only one design authority per
+experiment; do not blend their instructions into the same redesign run.
+
 ## Project layout
 
 ```
