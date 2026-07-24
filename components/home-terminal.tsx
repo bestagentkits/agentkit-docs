@@ -26,34 +26,52 @@ export function HomeTerminal({
   const [copied, setCopied] = useState(false);
 
   async function copy() {
-    await navigator.clipboard.writeText(copyCommand);
+    try {
+      await navigator.clipboard.writeText(copyCommand);
+    } catch {
+      const textarea = document.createElement('textarea');
+      textarea.value = copyCommand;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      const copiedWithFallback = document.execCommand('copy');
+      textarea.remove();
+
+      if (!copiedWithFallback) return;
+    }
+
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
 
   return (
-    <div className="ak-terminal overflow-hidden rounded-lg border border-fd-border bg-fd-card text-left shadow-2xl shadow-fd-primary/5">
-      <div className="flex items-center gap-1.5 border-b border-fd-border px-4 py-3">
-        <span aria-hidden className="size-2.5 rounded-full bg-fd-border" />
-        <span aria-hidden className="size-2.5 rounded-full bg-fd-border" />
-        <span aria-hidden className="size-2.5 rounded-full bg-fd-border" />
-        <span className="ml-2 font-mono text-xs text-fd-muted-foreground">
-          ak
+    <div className="ak-terminal ak-terminal-window overflow-hidden rounded-lg border border-fd-border bg-fd-card text-left">
+      <div className="ak-terminal-bar flex items-center gap-1.5 border-b border-fd-border px-4 py-3">
+        <span aria-hidden className="ak-terminal-light size-2 rounded-full" />
+        <span aria-hidden className="ak-terminal-light size-2 rounded-full" />
+        <span aria-hidden className="ak-terminal-light size-2 rounded-full" />
+        <span className="ak-terminal-context ml-2 font-mono text-xs text-fd-muted-foreground">
+          ak / quickstart
         </span>
         <button
           type="button"
           onClick={copy}
           aria-label={copied ? copiedLabel : copyLabel}
-          className="ml-auto rounded-sm p-1.5 text-fd-muted-foreground transition-colors hover:bg-fd-secondary hover:text-fd-foreground"
+          className="ml-auto inline-flex size-11 items-center justify-center rounded-sm text-fd-muted-foreground transition-colors hover:bg-fd-secondary hover:text-fd-foreground"
         >
           {copied ? (
             <Check aria-hidden className="size-3.5 text-fd-success" />
           ) : (
             <Copy aria-hidden className="size-3.5" />
           )}
+          <span className="sr-only" aria-live="polite">
+            {copied ? copiedLabel : ''}
+          </span>
         </button>
       </div>
-      <pre className="overflow-x-auto p-4 font-mono text-[13px] leading-6">
+      <pre className="ak-terminal-body overflow-x-auto p-4 font-mono text-[13px] leading-6">
         {lines.map((line, i) => (
           <div key={i} data-line style={{ animationDelay: `${0.3 + i * 0.5}s` }}>
             {line.kind === 'cmd' ? (

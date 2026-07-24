@@ -196,75 +196,116 @@ export default async function HomePage({ params }: PageProps<'/[lang]'>) {
   const t = copy[lang as keyof typeof copy] ?? copy.en;
 
   return (
-    <main className="relative flex flex-1 flex-col overflow-x-clip">
-      {/* Brand-blue glow anchored to the terminal side of the hero. */}
+    <main className="ak-home relative flex flex-1 flex-col overflow-x-clip">
       <div
         aria-hidden
-        className="pointer-events-none absolute -top-40 right-[-10%] size-[36rem] rounded-full bg-fd-primary/10 blur-[120px]"
+        className="ak-dot-grid pointer-events-none absolute inset-x-0 top-0 h-[42rem]"
       />
-      {/* Dot-grid texture fading out below the hero. */}
-      <div aria-hidden className="ak-dot-grid pointer-events-none absolute inset-x-0 top-0 h-[32rem]" />
+      <div className="ak-ambient-field pointer-events-none" aria-hidden>
+        <span className="ak-ambient-orbit ak-ambient-orbit-a" />
+        <span className="ak-ambient-orbit ak-ambient-orbit-b" />
+        <span className="ak-ambient-beam" />
+      </div>
 
-      <div className="mx-auto w-full max-w-6xl px-6 pb-24 pt-16 md:pt-24">
-        {/* Asymmetric hero: pitch left, live terminal right. */}
-        <div className="grid items-center gap-10 md:grid-cols-[1.1fr_1fr] md:gap-14">
-          <div>
+      <div className="ak-home-shell">
+        <section className="ak-breakout-hero" aria-labelledby="ak-home-title">
+          <div className="ak-command-spine" aria-hidden>
+            <span>ak</span>
+            <i />
+            <span>01</span>
+          </div>
+
+          <div className="ak-hero-status" aria-hidden>
+            <span>
+              <i className="ak-status-dot" />
+              {channels.stable.tag}
+            </span>
+            <span>
+              {commandGroups.length} groups / {commandCount} commands
+            </span>
+            <span>EN · VI</span>
+          </div>
+
+          <header className="ak-hero-copy">
             <Eyebrow>{t.eyebrow}</Eyebrow>
-            {/* Two-tone display heading: hierarchy through color, not size. */}
-            <h1 className="ak-display mb-5 text-balance font-semibold tracking-tight">
+            <h1
+              id="ak-home-title"
+              className="ak-display mb-5 text-balance font-semibold tracking-tight"
+            >
               <span className="block">{t.titleA}</span>
-              <span className="block text-fd-muted-foreground">{t.titleB}</span>
+              <span className="ak-title-indent block text-fd-muted-foreground">
+                {t.titleB}
+              </span>
             </h1>
-            <p className="mb-8 max-w-md text-fd-muted-foreground">{t.body}</p>
-            <div className="flex flex-wrap items-center gap-3">
+            <p className="ak-hero-body mb-8 max-w-md text-fd-muted-foreground">
+              {t.body}
+            </p>
+            <div className="ak-primary-actions flex flex-wrap items-center gap-3">
               <Link
                 href={localePath(lang, 'stable')}
-                className="inline-flex items-center rounded-md bg-fd-primary px-5 py-2.5 text-sm font-medium text-fd-primary-foreground transition-opacity hover:opacity-90"
+                className="ak-button-primary inline-flex min-h-11 items-center rounded-md bg-fd-primary px-5 py-2.5 text-sm font-medium text-fd-primary-foreground"
               >
                 {t.cta}
+                <ArrowUpRight aria-hidden className="ml-2 size-4" />
               </Link>
               <Link
                 href={localePath(lang, 'stable', 'getting-started', 'quickstart')}
-                className="inline-flex items-center rounded-md border border-fd-border px-5 py-2.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent"
+                className="ak-button-secondary inline-flex min-h-11 items-center rounded-md border border-fd-border px-5 py-2.5 text-sm font-medium text-fd-foreground"
               >
                 {t.ctaSecondary}
               </Link>
             </div>
+          </header>
+
+          <div className="ak-hero-proof min-w-0">
+            <div className="ak-proof-frame">
+              <div className="ak-proof-frame-label" aria-hidden>
+                <span>AK / QUICKSTART</span>
+                <span>01 — 05</span>
+              </div>
+              <HomeTerminal
+                lines={terminalLines}
+                copyCommand={installCommand}
+                copyLabel={t.copyLabel}
+                copiedLabel={t.copiedLabel}
+              />
+            </div>
           </div>
 
-          <HomeTerminal
-            lines={terminalLines}
-            copyCommand={installCommand}
-            copyLabel={t.copyLabel}
-            copiedLabel={t.copiedLabel}
-          />
-        </div>
+          <dl className="ak-proof-strip">
+            {t.stats.map((stat, index) => (
+              <div key={stat.label} data-index={String(index + 1).padStart(2, '0')}>
+                <dd className="font-mono text-2xl font-medium tracking-tight text-fd-foreground md:text-3xl">
+                  {stat.value}
+                </dd>
+                <dt className="mt-1.5 text-xs text-fd-muted-foreground">
+                  {stat.label}
+                </dt>
+              </div>
+            ))}
+          </dl>
+        </section>
 
-        {/* Stat mosaic: hairline-separated cells (gap-px over the border token). */}
-        <dl className="mt-20 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-fd-border bg-fd-border md:grid-cols-4">
-          {t.stats.map((stat) => (
-            <div key={stat.label} className="bg-fd-background p-6">
-              <dd className="font-mono text-2xl font-medium tracking-tight text-fd-foreground md:text-3xl">
-                {stat.value}
-              </dd>
-              <dt className="mt-1.5 text-xs text-fd-muted-foreground">
-                {stat.label}
-              </dt>
-            </div>
-          ))}
-        </dl>
-
-        {/* How it works: three numbered steps, each anchored by a real command. */}
-        <div className="mt-24">
-          <Eyebrow>{t.howLabel}</Eyebrow>
-          <ol className="grid gap-10 md:grid-cols-3 md:gap-8">
+        <section className="ak-route-section" aria-labelledby="ak-route-title">
+          <div className="ak-section-marker" aria-hidden>
+            <span>02</span>
+          </div>
+          <header className="ak-route-intro">
+            <Eyebrow>{t.howLabel}</Eyebrow>
+            <h2 id="ak-route-title" className="ak-route-title">
+              {t.steps.map((step) => (
+                <span key={step.title}>{step.title}</span>
+              ))}
+            </h2>
+          </header>
+          <ol className="ak-step-route">
             {t.steps.map((step, i) => (
-              <li key={step.title} className="border-t border-fd-border pt-6">
-                <div className="flex items-baseline gap-3">
-                  <span className="font-mono text-sm text-fd-primary">
+              <li key={step.title}>
+                <div className="ak-step-heading">
+                  <span className="font-mono text-sm text-fd-primary" aria-hidden>
                     {String(i + 1).padStart(2, '0')}
                   </span>
-                  <h2 className="!text-base font-semibold">{step.title}</h2>
+                  <h3 className="!text-base font-semibold">{step.title}</h3>
                 </div>
                 <p className="mt-2 text-sm text-fd-muted-foreground">
                   {step.desc}
@@ -275,52 +316,72 @@ export default async function HomePage({ params }: PageProps<'/[lang]'>) {
               </li>
             ))}
           </ol>
-        </div>
+        </section>
 
-        {/* Command surface: the real CLI namespace map, straight from the
-            generated reference. Density is the point — this is the product. */}
-        <div className="mt-24">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2">
-            <div>
-              <Eyebrow>{t.surfaceLabel}</Eyebrow>
-              <h2 className="!text-2xl font-semibold tracking-tight">
-                {t.surfaceTitle}
-              </h2>
-            </div>
-            <p className="font-mono text-xs text-fd-muted-foreground">
+        <section className="ak-surface-grid" aria-labelledby="ak-surface-title">
+          <div className="ak-section-marker" aria-hidden>
+            <span>03</span>
+          </div>
+          <header className="ak-surface-heading">
+            <Eyebrow>{t.surfaceLabel}</Eyebrow>
+            <h2
+              id="ak-surface-title"
+              className="!text-2xl font-semibold tracking-tight"
+            >
+              {t.surfaceTitle}
+            </h2>
+            <p className="mt-4 max-w-sm font-mono text-xs leading-5 text-fd-muted-foreground">
               {t.surfaceDesc(commandGroups.length, commandCount)}
             </p>
+          </header>
+          <div className="ak-command-console">
+            <div className="ak-console-bar" aria-hidden>
+              <span>ak://commands</span>
+              <span>{commandGroups.length} namespaces</span>
+            </div>
+            <ul className="ak-command-index">
+              {commandGroups.map(([group, count]) => (
+                <li key={group}>
+                  <Link
+                    href={localePath(
+                      lang,
+                      'stable',
+                      'reference',
+                      'cli',
+                      `ak_${group}`,
+                    )}
+                    className="group inline-flex min-h-11 items-center gap-1.5 font-mono text-xs text-fd-foreground transition-colors hover:text-fd-primary"
+                  >
+                    <span className="text-fd-muted-foreground">ak</span>
+                    {group}
+                    {count > 1 && (
+                      <sup className="text-[10px] text-fd-muted-foreground">
+                        {count}
+                      </sup>
+                    )}
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </div>
-          <ul className="mt-8 flex flex-wrap gap-2">
-            {commandGroups.map(([group, count]) => (
-              <li key={group}>
-                <Link
-                  href={localePath(lang, 'stable', 'reference', 'cli', `ak_${group}`)}
-                  className="inline-flex items-baseline gap-1.5 rounded-md border border-fd-border bg-fd-card px-3 py-1.5 font-mono text-xs text-fd-foreground transition-colors hover:border-fd-primary/60 hover:text-fd-primary"
-                >
-                  <span className="text-fd-muted-foreground">ak</span>
-                  {group}
-                  {count > 1 && (
-                    <span className="text-fd-muted-foreground">{count}</span>
-                  )}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
+        </section>
 
-        {/* Start-here rail: hairline-ruled rows, not cards. */}
-        <div className="mt-24">
-          <Eyebrow>{t.sectionLabel}</Eyebrow>
-          <nav
-            aria-label={t.sectionLabel}
-            className="grid gap-x-14 sm:grid-cols-2"
-          >
+        <section className="ak-start-grid" aria-labelledby="ak-start-title">
+          <div className="ak-section-marker" aria-hidden>
+            <span>04</span>
+          </div>
+          <header className="ak-start-heading">
+            <Eyebrow>{t.sectionLabel}</Eyebrow>
+            <h2 id="ak-start-title" className="sr-only">
+              {t.sectionLabel}
+            </h2>
+          </header>
+          <nav aria-label={t.sectionLabel} className="ak-start-links">
             {t.links.map((link, i) => (
               <Link
                 key={link.href}
                 href={localePath(lang, ...link.href.split('/'))}
-                className="group flex items-baseline gap-4 border-t border-fd-border py-5 transition-colors hover:bg-fd-accent/50"
+                className="group flex min-h-24 items-baseline gap-4 py-5"
               >
                 <span className="font-mono text-xs text-fd-muted-foreground">
                   {String(i + 1).padStart(2, '0')}
@@ -337,18 +398,18 @@ export default async function HomePage({ params }: PageProps<'/[lang]'>) {
                     {link.desc}
                   </span>
                 </span>
+                <i className="ak-link-signal" aria-hidden />
               </Link>
             ))}
           </nav>
-        </div>
+        </section>
 
-        {/* Closing band: same dark terminal material as the hero. */}
-        <div className="ak-terminal relative mt-24 overflow-hidden rounded-lg border border-fd-border bg-fd-card px-8 py-12 md:px-12">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute -right-24 -top-24 size-72 rounded-full bg-fd-primary/15 blur-[100px]"
-          />
-          <div className="relative flex flex-col items-start gap-6 md:flex-row md:items-center md:justify-between">
+        <section className="ak-final-route ak-terminal">
+          <div className="ak-final-marker font-mono text-fd-primary" aria-hidden>
+            <span>ak</span>
+            <i />
+          </div>
+          <div className="ak-final-copy">
             <div>
               <h2 className="!text-2xl font-semibold tracking-tight text-fd-foreground">
                 {t.ctaTitle}
@@ -357,20 +418,21 @@ export default async function HomePage({ params }: PageProps<'/[lang]'>) {
                 {t.ctaDesc}
               </p>
             </div>
-            <div className="flex flex-col items-start gap-4 md:items-end">
+            <div className="flex min-w-0 flex-col items-start gap-4 md:items-end">
               <code className="block max-w-full overflow-x-auto whitespace-nowrap font-mono text-sm text-fd-foreground">
                 <span className="select-none text-fd-primary">$ </span>
                 {installCommand}
               </code>
               <Link
                 href={localePath(lang, 'stable')}
-                className="inline-flex items-center rounded-md bg-fd-primary px-5 py-2.5 text-sm font-medium text-fd-primary-foreground transition-opacity hover:opacity-90"
+                className="ak-button-primary inline-flex min-h-11 items-center rounded-md bg-fd-primary px-5 py-2.5 text-sm font-medium text-fd-primary-foreground"
               >
                 {t.cta}
+                <ArrowUpRight aria-hidden className="ml-2 size-4" />
               </Link>
             </div>
           </div>
-        </div>
+        </section>
       </div>
     </main>
   );
