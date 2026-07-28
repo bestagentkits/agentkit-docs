@@ -17,11 +17,15 @@ export function HomeTerminal({
   copyCommand,
   copyLabel,
   copiedLabel,
+  context,
+  meta,
 }: {
   lines: TerminalLine[];
   copyCommand: string;
   copyLabel: string;
   copiedLabel: string;
+  context: string;
+  meta?: string;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -47,16 +51,21 @@ export function HomeTerminal({
   }
 
   return (
-    <div className="ak-terminal ak-terminal-window overflow-hidden rounded-lg border border-fd-border bg-fd-card text-left">
+    <div className="ak-terminal ak-terminal-window overflow-hidden border border-fd-border bg-fd-card text-left">
       <div className="ak-terminal-bar flex items-center gap-1.5 border-b border-fd-border px-4 py-3">
         <span className="ak-terminal-context font-mono text-xs text-fd-muted-foreground">
-          ak / quickstart
+          {context}
         </span>
+        {meta ? (
+          <span className="ml-auto font-mono text-xs text-fd-muted-foreground">
+            {meta}
+          </span>
+        ) : null}
         <button
           type="button"
           onClick={copy}
           aria-label={copied ? copiedLabel : copyLabel}
-          className="ml-auto inline-flex size-11 items-center justify-center rounded-sm text-fd-muted-foreground transition-colors hover:bg-fd-secondary hover:text-fd-foreground"
+          className={`inline-flex size-11 items-center justify-center rounded-sm text-fd-muted-foreground transition-colors hover:bg-fd-secondary hover:text-fd-foreground ${meta ? '' : 'ml-auto'}`}
         >
           {copied ? (
             <Check aria-hidden className="size-3.5 text-fd-success" />
@@ -70,7 +79,7 @@ export function HomeTerminal({
       </div>
       <pre className="ak-terminal-body overflow-x-auto p-4 font-mono text-[13px] leading-6">
         {lines.map((line, i) => (
-          <div key={i} data-line style={{ animationDelay: `${0.3 + i * 0.5}s` }}>
+          <div key={i} data-line style={{ animationDelay: `${0.05 + i * 0.09}s` }}>
             {line.kind === 'cmd' ? (
               <>
                 <span className="select-none text-fd-primary">$ </span>
@@ -81,7 +90,7 @@ export function HomeTerminal({
             )}
           </div>
         ))}
-        <div data-line style={{ animationDelay: `${0.3 + lines.length * 0.5}s` }}>
+        <div data-line style={{ animationDelay: `${0.05 + lines.length * 0.09}s` }}>
           <span className="select-none text-fd-primary">$ </span>
           <span
             aria-hidden
