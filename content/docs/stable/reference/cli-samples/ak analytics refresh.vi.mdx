@@ -1,0 +1,85 @@
+---
+title: ak analytics refresh
+description: Refresh tăng dần cho index analytics cục bộ đã enable trong khi giữ nguyên các tệp nguồn có thẩm quyền.
+---
+
+Dùng `ak analytics refresh` để cập nhật index đã enable trong khi tái sử dụng
+fact từ các tệp nguồn không đổi.
+
+## Cách dùng
+
+```bash
+ak analytics refresh
+```
+
+Lệnh không nhận argument theo vị trí và không có cờ riêng.
+
+## Preview và apply
+
+```bash
+ak analytics refresh --json --no-interactive
+ak analytics refresh --yes --json --no-interactive
+```
+
+Preview đọc lifecycle và current status nhưng không quét session root và không
+ghi. Apply có thể migrate store cũ thuộc sở hữu, liệt kê nguồn cục bộ trong
+allowlist, tái sử dụng fact từ nguồn không đổi, phân tích nguồn đã đổi và publish
+replacement generation theo cách nguyên tử.
+
+Refresh chỉ dùng được khi lifecycle đang enabled. Nó không tạo store
+uninitialized hoặc enable lại analytics disabled/deleted. Dùng `enable` cho các
+transition đó.
+
+## Hành vi xác nhận
+
+Khi prompt được bật, chỉ `y` hoặc `yes` mới apply. Mọi câu trả lời khác hoặc EOF
+in preview rồi hiện thoát `0`. Với `--json` hoặc `--no-interactive`, thiếu
+`--yes` sẽ in preview rồi thoát `3`. Không có cờ dry-run hay force.
+
+## Output và status
+
+Output cho người dùng nằm trên stdout, prompt trên stderr. JSON dùng
+`kind=analytics.plan` với `data.plan`, `data.applied` và `data.status`; không có
+`scan`.
+
+`status` trong plan là state trước thao tác đã review. Khi apply,
+`data.status` báo state sau refresh gồm serving mode, health, fact count,
+staleness reason tuỳ chọn và last successful timestamp. Với preview chưa apply,
+bỏ qua `data.status` có giá trị zero và đọc `data.plan.status`.
+
+## Dữ liệu, retention và recovery
+
+Refresh đọc phiên Claude Code, phiên Codex và activity event AgentKit từ các
+root cục bộ đã cấu hình. Nó chỉ lưu aggregate đã xác minh và HMAC identity trong
+`~/.agentkit/analytics/analytics.db`. Lệnh không upload dữ liệu và không cần
+auth, entitlement hay provider.
+
+Publication nằm trong một database transaction; generation trước bị xoá sau
+khi generation mới thành current. Tệp nguồn và activity log append-only không
+bị prune. Refresh không giữ rollback copy cho người dùng sau thành công; nếu
+publication lỗi, previous committed generation vẫn được chọn.
+
+Refresh không thể sửa fact sai được mang sang từ nguồn không đổi. Dùng
+`rebuild` khi cần phân tích lại mọi nguồn.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Refresh đã apply, hoặc prompt được bật bị từ chối/kết thúc tại EOF. |
+| `1` | Analytics chưa enabled, hoặc plan, migration, source capture, contention, publication hay output thất bại; argument theo vị trí cũng dùng `1`. |
+| `2` | Cờ không hợp lệ. |
+| `3` | Preview noninteractive hoàn tất mà không có `--yes`. |
+
+Lỗi lifecycle/service trong chế độ JSON phát error envelope có phiên bản trên
+stderr. Lỗi parse cờ, xác minh argument và render output cuối có thể nằm ngoài
+đường này.
+
+Trên macOS, guard first-launch dùng chung của CLI cũng có thể ghi
+`~/.agentkit/.first-run-darwin` và in hint một lần lên stderr trước khi lệnh
+này chạy.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak analytics refresh`](../cli/ak_analytics_refresh)
+- [Quy ước CLI](../cli-conventions)

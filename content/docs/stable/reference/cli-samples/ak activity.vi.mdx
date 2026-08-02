@@ -1,0 +1,80 @@
+---
+title: ak activity
+description: Kiểm tra activity feed cục bộ của AgentKit, chọn snapshot hữu hạn, thống kê tổng hợp hoặc luồng trực tiếp và hiểu rõ ranh giới riêng tư.
+---
+
+Dùng `ak activity` để kiểm tra bằng chứng chạy skill cục bộ mà không cần mở
+dashboard hay ứng dụng desktop. Nhóm lệnh này chỉ đọc và cung cấp ba cách xem
+dữ liệu cục bộ.
+
+## Cách dùng
+
+```bash
+ak activity
+```
+
+Nhóm lệnh không nhận argument theo vị trí và không có cờ riêng. Khi không có
+lệnh con, lệnh in help rồi thoát `0`.
+
+## Chọn lệnh con
+
+| Mục tiêu | Lệnh | Hành vi |
+| --- | --- | --- |
+| Đọc snapshot có giới hạn | `ak activity list` | Trả về các event gần đây theo thứ tự mới nhất trước. |
+| Tổng hợp mức sử dụng skill | `ak activity stats` | Nhóm dữ liệu sử dụng cục bộ có giới hạn riêng tư trong một khoảng nhìn lại. |
+| Theo dõi event mới | `ak activity tail` | Chờ ở cuối log hiện tại và stream các phần ghi nối tiếp sau đó. |
+
+```bash
+ak activity list --json
+ak activity stats --window 7d --json
+ak activity tail --json
+```
+
+## Dữ liệu cục bộ và quyền riêng tư
+
+Activity log nằm tại `~/.agentkit/activity/events.ndjson`. `AGENTKIT_HOME` đổi
+phần gốc `~/.agentkit`. Đây là tệp NDJSON append-only cục bộ do các lệnh tạo
+activity như `ak run` ghi; các lệnh activity không cắt ngắn hay áp dụng retention
+cho tệp này.
+
+Event có thể chứa timestamp, loại event, định danh skill, runtime, thời lượng và
+exit code của subprocess. Event không chứa nội dung prompt hay argument của
+skill. `stats` còn có thể đọc tệp JSONL phiên Claude Code để suy ra dữ liệu tổng
+hợp về lần gọi công cụ Skill. Không lệnh activity nào gửi analytics, gọi
+provider, kiểm tra entitlement hay thay đổi vòng đời analytics.
+
+Index analytics có thể tăng tốc `stats` chỉ khi đã có generation hợp lệ. Nếu
+không, `stats` đọc các nguồn cục bộ có thẩm quyền; lệnh không tạo, enable,
+refresh hay sửa index.
+
+## Output và tương tác
+
+`list` và `stats` ghi một báo cáo cho người dùng hoặc một JSON envelope có phiên
+bản trên stdout. `tail --json` khác: mỗi dòng là một envelope
+`kind=activity.event`, vì vậy consumer phải đọc như NDJSON.
+
+Các lệnh này không prompt và không đọc stdin. `--yes` không có tác dụng.
+`--no-interactive` chỉ chọn cách render plain. Xem trang từng lệnh con để biết
+output và hành vi hủy chính xác.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Help hoặc thao tác đọc đã hoàn tất; hủy `tail` qua command context cũng thoát `0`. |
+| `1` | Đọc/quét nguồn cục bộ hoặc ghi output thất bại; argument theo vị trí không mong đợi hiện cũng dùng `1`. |
+| `2` | Cờ không hợp lệ hoặc không phân tích được `stats --window`. |
+
+Lỗi runtime activity trong chế độ `--json` không đi qua JSON error renderer dùng
+chung. Lệnh có thể trả mã khác không nhưng để trống cả stdout lẫn stderr. Hãy
+dùng trạng thái process làm tín hiệu chính và xác minh success envelope trước
+khi đọc. Lỗi parse cờ vẫn là usage dạng plain text trên stderr.
+
+Trên macOS, guard first-launch dùng chung của CLI cũng có thể ghi
+`~/.agentkit/.first-run-darwin` và in hint một lần lên stderr trước khi lệnh
+này chạy.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak activity`](../cli/ak_activity)
+- [Quy ước CLI](../cli-conventions)

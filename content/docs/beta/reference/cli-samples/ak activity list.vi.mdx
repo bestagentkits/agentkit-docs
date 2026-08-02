@@ -1,0 +1,95 @@
+---
+title: ak activity list
+description: Đọc snapshot có giới hạn theo thứ tự mới nhất trước từ activity log cục bộ và dùng đúng schema event JSON.
+---
+
+Dùng `ak activity list` khi bạn cần snapshot hữu hạn của các event chạy skill
+cục bộ gần đây. Lệnh đọc log append-only cục bộ và không chờ event mới.
+
+## Cách dùng
+
+```bash
+ak activity list
+```
+
+Lệnh không nhận argument theo vị trí.
+
+## Cờ của lệnh
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--limit <n>` | `100` | Trả về tối đa `n` event khớp gần đây nhất. Giá trị không dương hiện quay về `100`. |
+| `--since <id>` | Trống | Giữ các event có ID lớn hơn cursor này theo thứ tự từ điển. |
+
+Các cờ dùng chung nằm trong [quy ước CLI](../cli-conventions).
+
+## Đọc event gần đây
+
+```bash
+ak activity list --limit 20
+ak activity list --since 00000000000000000000-000000 --limit 20 --json
+```
+
+Lệnh lọc trước khi áp dụng giới hạn: giữ event sau `--since`, lấy các event mới
+nhất đến `--limit`, rồi trả về theo thứ tự mới nhất trước. `--since` là phép so
+sánh cursor không diễn giải; hãy sao chép đúng `id` từ kết quả trước.
+
+Log không tồn tại tạo kết quả rỗng thành công. Dòng NDJSON rỗng hoặc lỗi bị bỏ
+qua, nên `total` chỉ đếm event giải mã được và được trả về trong lần gọi này.
+
+## Output cho người dùng
+
+Output cho người dùng in phần tổng hợp rồi đến `id`, `kind`, `skill` và
+timestamp của từng event. Nó không in runtime, duration hay exit code tuỳ chọn;
+dùng JSON nếu cần các trường đó.
+
+## Output JSON
+
+Khi thành công, stdout chứa một envelope:
+
+```text
+schema_version: 1
+kind: activity.list
+data.schema_version: 1
+data.total: integer
+data.events: array
+```
+
+Mỗi event có thể chứa:
+
+```text
+id, ts, kind, skill, runtime, duration_ms, exit_code
+```
+
+`kind` hiện là `run.started`, `run.completed` hoặc `run.failed`. Trường tuỳ chọn
+bị lược bỏ khi rỗng hoặc bằng không. Hãy kiểm tra `schema_version` và `kind` bên
+ngoài trước khi đọc `data`.
+
+## Ranh giới dữ liệu và retention
+
+Lệnh đọc `~/.agentkit/activity/events.ndjson`; `AGENTKIT_HOME` đổi phần gốc. Nó
+không tạo, ghi lại, xoá hay prune log. `--limit` và `--since` chỉ giới hạn
+response, không đổi dữ liệu trên đĩa.
+
+Lệnh không dùng mạng, xác thực, entitlement, provider, subprocess, TTY hay
+stdin. `--yes` không có tác dụng.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Snapshot được trả về, kể cả snapshot rỗng. |
+| `1` | Không đọc được log cục bộ, ghi output thất bại hoặc có argument theo vị trí. |
+| `2` | Không phân tích được một giá trị cờ. |
+
+Trong chế độ `--json`, lỗi runtime và argument có thể không có JSON error body.
+Lỗi parse cờ in usage dạng plain text lên stderr.
+
+Trên macOS, guard first-launch dùng chung của CLI cũng có thể ghi
+`~/.agentkit/.first-run-darwin` và in hint một lần lên stderr trước khi lệnh
+này chạy.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak activity list`](../cli/ak_activity_list)
+- [Quy ước CLI](../cli-conventions)

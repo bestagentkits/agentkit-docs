@@ -1,0 +1,86 @@
+---
+title: ak analytics disable
+description: Stop indexed analytics reads while retaining the private database and authoritative local sources.
+---
+
+Use `ak analytics disable` when you want analytics-backed views to use their
+authoritative live collectors without deleting the existing derived index.
+
+## Usage
+
+```bash
+ak analytics disable
+```
+
+The command accepts no positional arguments and has no command-specific flags.
+
+## Preview and apply
+
+```bash
+ak analytics disable --json --no-interactive
+ak analytics disable --yes --json --no-interactive
+```
+
+The first invocation returns an unapplied plan and exits `3`. The second writes
+disabled intent to `~/.agentkit/analytics-state.json` and leaves
+`~/.agentkit/analytics/analytics.db` in place. `AGENTKIT_HOME` changes the base.
+
+Disable is allowed when analytics is uninitialized, enabled, or already
+disabled, so it is safe to repeat. It refuses deleted state; use `enable` when
+you want to opt in again.
+
+The operation does not scan source contents, refresh facts, delete
+generations, or modify Claude, Codex, or AgentKit activity source files. It
+starts no scheduler and performs no network, provider, auth, or entitlement
+work.
+
+## Confirmation behavior
+
+When prompts are enabled, only `y` or `yes` applies. Any other answer or EOF
+prints the preview, leaves state unchanged, and currently exits `0`.
+
+With `--json` or `--no-interactive`, no prompt is read. Without `--yes`, the
+command prints the preview and exits `3`. There is no dry-run or force flag.
+
+## Output
+
+Human preview or success is written to stdout; the interactive prompt is on
+stderr. JSON uses one `kind=analytics.plan` envelope on stdout:
+
+```text
+data.plan: schema_version, plan_id, operation, status, expires_at
+data.applied: boolean
+data.status: post-operation status when applied
+```
+
+Disable does not include a `scan`. For an unapplied preview, use
+`data.plan.status`; `data.status` is currently a zero-value object.
+
+## Recovery boundary
+
+Disable is reversible without rebuilding: run `ak analytics enable --yes` to
+re-enable the retained store and refresh it before success. If storage changed
+while the confirmation was open, apply fails instead of acting on unreviewed
+state.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Disable applied, or an enabled prompt was declined/ended at EOF. |
+| `1` | Planning, state validation, storage, contention, or output failed; positional arguments also use `1`. |
+| `2` | A flag was invalid. |
+| `3` | A noninteractive preview completed without `--yes`. |
+
+Lifecycle/service failures in JSON mode emit a structured error envelope on
+stderr. Flag-parse, argument-validation, and final output-render failures can
+fall outside that path.
+
+On macOS, the CLI-wide first-launch guard can also write
+`~/.agentkit/.first-run-darwin` and print a one-time hint to stderr before this
+command runs.
+
+## Related commands
+
+- [Complete `ak analytics disable` command facts](../cli/ak_analytics_disable)
+- [CLI conventions](../cli-conventions)

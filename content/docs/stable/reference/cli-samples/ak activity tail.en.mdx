@@ -1,0 +1,90 @@
+---
+title: ak activity tail
+description: Follow only newly appended local activity events and consume the JSON stream as NDJSON.
+---
+
+Use `ak activity tail` while another process produces AgentKit activity. It
+starts at the current end of the log, so it does not replay existing history.
+
+## Usage
+
+```bash
+ak activity tail
+```
+
+The command accepts no positional arguments and has no command-specific flags.
+
+## Stream behavior
+
+```bash
+ak activity tail
+ak activity tail --json
+```
+
+The command polls the local log for appended complete lines. A missing log is
+not an error; the process waits for it to appear. Empty and malformed lines are
+skipped.
+
+The stream is best-effort. Events can be dropped when the internal bounded
+buffer is backpressured, and transient open/read errors are retried rather than
+reported. Use `ak activity list --since <last-id>` after reconnecting when you
+need to fill a gap.
+
+## Human and JSON output
+
+Human mode writes one line per event with `id`, `kind`, `skill`, and timestamp.
+It prints no initial header or historical snapshot.
+
+`--json` emits newline-delimited JSON, not one finite document. Every line is a
+separate envelope:
+
+```text
+schema_version: 1
+kind: activity.event
+data.id, data.ts, data.kind
+data.skill, data.runtime, data.duration_ms, data.exit_code: optional
+```
+
+Keep stdout open and decode one JSON object per line. Do not wait for a closing
+array.
+
+## TTY, stdin, and cancellation
+
+Tail behavior is the same on a TTY and in a pipe. It never prompts and does not
+read stdin. `--yes` and `--no-interactive` do not change the stream.
+
+The implementation writes events directly rather than through the normal
+quiet renderer, so `--quiet` does not suppress streamed event lines. Stop with
+Ctrl-C, SIGTERM, or context cancellation; the normal signal-aware cancellation
+path exits `0` and prints no terminal JSON record.
+
+## Local effects and privacy
+
+The command only reads `~/.agentkit/activity/events.ndjson`;
+`AGENTKIT_HOME` changes the base. It does not create, truncate, rotate, or prune
+the log, and it does not contact a network service or provider.
+
+Events expose bounded run metadata, not prompts or skill arguments. Protect the
+stream as local operational data because skill names, runtime names, durations,
+and exit codes can still reveal work patterns.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The stream ended through normal cancellation or its worker ended cleanly. |
+| `1` | Home resolution or stdout encoding/writing failed, or a positional argument was supplied. |
+| `2` | A flag was invalid. |
+
+Runtime failures in `--json` mode can have no error envelope. A clean
+cancellation also has no final envelope, so process status distinguishes the
+two.
+
+On macOS, the CLI-wide first-launch guard can also write
+`~/.agentkit/.first-run-darwin` and print a one-time hint to stderr before this
+command runs.
+
+## Related commands
+
+- [Complete `ak activity tail` command facts](../cli/ak_activity_tail)
+- [CLI conventions](../cli-conventions)

@@ -1,0 +1,87 @@
+---
+title: ak analytics rebuild
+description: Phân tích lại mọi nguồn cục bộ trong allowlist và thay thế generation analytics dùng một lần theo cách nguyên tử.
+---
+
+Dùng `ak analytics rebuild` khi refresh không thể sửa fact dẫn xuất cũ hoặc sai,
+hay khi bạn muốn mọi nguồn được phân tích lại bằng parser hiện tại.
+
+## Cách dùng
+
+```bash
+ak analytics rebuild
+```
+
+Lệnh không nhận argument theo vị trí và không có cờ riêng.
+
+## Preview và apply
+
+```bash
+ak analytics rebuild --json --no-interactive
+ak analytics rebuild --yes --json --no-interactive
+```
+
+Preview chỉ đọc lifecycle và status. Apply liệt kê và phân tích lại mọi nguồn
+Claude Code, Codex và activity AgentKit trong allowlist, rồi publish current
+generation mới mà không tái sử dụng fact của nguồn trước.
+
+Rebuild hoạt động khi analytics enabled. Nó cũng có thể tạo lại analytics đã
+delete rõ ràng vì nguồn có thẩm quyền vẫn còn. Nó không hoạt động từ state
+uninitialized hoặc disabled; dùng `enable` ở các state đó.
+
+Dù tên là rebuild, lệnh không xoá tệp nguồn và không để reader thấy database
+rỗng trước. Nó thay generation theo transaction trong private store.
+
+## Hành vi xác nhận
+
+Chỉ `y` hoặc `yes` apply prompt tương tác. Mọi câu trả lời khác hoặc EOF in
+preview và hiện thoát `0`. `--json` ngầm chọn noninteractive; với `--json` hoặc
+`--no-interactive`, bỏ `--yes` để nhận preview chưa apply và exit `3`.
+
+Không có cờ dry-run hay force. Rebuild có thể tốn tài nguyên hơn refresh đáng kể
+vì không tái sử dụng fact của nguồn không đổi.
+
+## Output
+
+Output cho người dùng nằm trên stdout và prompt trên stderr. JSON là một
+envelope `kind=analytics.plan` với `data.plan`, `data.applied` và `data.status`;
+rebuild không có `scan`.
+
+Khi `applied=true`, `data.status` là lifecycle status sau rebuild. Với preview,
+đọc `data.plan.status`; result `data.status` hiện là object có giá trị zero.
+
+## Quyền riêng tư, retention và recovery
+
+Rebuild chỉ hoạt động cục bộ. Index lưu aggregate đã xác minh, token đóng và
+HMAC identity thay vì prompt, transcript text, raw path, session ID, trace ID
+hay raw error.
+
+Publication thành công xoá generation cũ và không giữ rollback snapshot cho
+người dùng. Database transaction giữ previous committed generation nếu
+publication lỗi. Schema upgrade theo transaction; việc thu hồi dung lượng theo
+best effort có thể chạy sau upgrade.
+
+Rebuild không prune activity log hoặc runtime session có thẩm quyền. Xoá các
+nguồn đó nằm ngoài phạm vi lệnh.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Rebuild đã apply, hoặc prompt được bật bị từ chối/kết thúc tại EOF. |
+| `1` | Lifecycle transition bị từ chối, hoặc plan, migration, source capture, contention, publication hay output thất bại; argument theo vị trí cũng dùng `1`. |
+| `2` | Cờ không hợp lệ. |
+| `3` | Preview noninteractive hoàn tất mà không có `--yes`. |
+
+Lỗi lifecycle/service trong chế độ JSON phát structured error envelope trên
+stderr. Lỗi parse cờ, xác minh argument và render output cuối có thể nằm ngoài
+đường này.
+
+Trên macOS, guard first-launch dùng chung của CLI cũng có thể ghi
+`~/.agentkit/.first-run-darwin` và in hint một lần lên stderr trước khi lệnh
+này chạy.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak analytics rebuild`](../cli/ak_analytics_rebuild)
+- [Quy ước CLI](../cli-conventions)

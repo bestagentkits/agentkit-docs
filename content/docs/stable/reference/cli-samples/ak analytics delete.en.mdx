@@ -1,0 +1,89 @@
+---
+title: ak analytics delete
+description: Remove AgentKit-owned derived analytics files while retaining a disabled intent marker and all authoritative source data.
+---
+
+Use `ak analytics delete` to remove the disposable local analytics database.
+It does not delete Claude Code sessions, Codex sessions, or the AgentKit
+activity log.
+
+## Usage
+
+```bash
+ak analytics delete
+```
+
+The command accepts no positional arguments and has no command-specific flags.
+
+## Preview and apply
+
+```bash
+ak analytics delete --json --no-interactive
+ak analytics delete --yes --json --no-interactive
+```
+
+Preview reads lifecycle and status only; it does not scan source contents or
+write. Apply removes AgentKit-owned files under
+`~/.agentkit/analytics/analytics.db`, including SQLite sidecars, and purges the
+analytics recovery directory. It retains only
+`~/.agentkit/analytics-state.json` with deleted intent so indexed reads and
+automatic reconciliation stay disabled. `AGENTKIT_HOME` changes the base.
+
+Delete is valid from any lifecycle state, including when no database exists,
+so it is safe to repeat.
+
+## Ownership and recovery boundaries
+
+The operation refuses unsafe paths, a newer-schema database, foreign database
+content, or unrecognized non-database bytes. It can remove an owned corrupt
+database or an interrupted empty enable artifact when ownership can be
+established without trusting the damaged schema.
+
+For a readable index, delete makes a consistent temporary rollback snapshot.
+For an owned unreadable index, it copies bounded sidecars. Those files exist
+only to restore a failed partial removal and are purged after success; they are
+not exposed as a user-restorable backup.
+
+Successful deletion is therefore irreversible for the derived index. Because
+sources remain authoritative, you can explicitly recreate it with
+`ak analytics enable --yes` or `ak analytics rebuild --yes`.
+
+## Confirmation behavior
+
+When prompting is enabled, only `y` or `yes` applies. Any other answer or EOF
+prints the preview, changes nothing, and currently exits `0`.
+
+With `--json` or `--no-interactive`, no prompt is read. Without `--yes`, the
+preview exits `3`. There is no dry-run or force flag.
+
+## Output and privacy
+
+Human output goes to stdout and the prompt to stderr. JSON uses one
+`kind=analytics.plan` envelope with `data.plan`, `data.applied`, and
+`data.status`; delete includes no source `scan`.
+
+Use `data.plan.status` for a preview and the post-operation `data.status` only
+when `applied=true`. The response and operation expose no source paths or raw
+transcript content and perform no network, provider, auth, or entitlement work.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Delete applied, was already effectively deleted, or an enabled prompt was declined/ended at EOF. |
+| `1` | Planning, ownership/safety validation, contention, removal, rollback, or output failed; positional arguments also use `1`. |
+| `2` | A flag was invalid. |
+| `3` | A noninteractive preview completed without `--yes`. |
+
+Lifecycle/service failures in JSON mode emit a versioned error envelope on
+stderr. Flag-parse, argument-validation, and final output-render failures can
+fall outside that path.
+
+On macOS, the CLI-wide first-launch guard can also write
+`~/.agentkit/.first-run-darwin` and print a one-time hint to stderr before this
+command runs.
+
+## Related commands
+
+- [Complete `ak analytics delete` command facts](../cli/ak_analytics_delete)
+- [CLI conventions](../cli-conventions)

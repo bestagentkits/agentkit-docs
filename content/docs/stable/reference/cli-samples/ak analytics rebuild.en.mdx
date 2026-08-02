@@ -1,0 +1,90 @@
+---
+title: ak analytics rebuild
+description: Reparse every allowlisted local source and atomically replace the disposable analytics generation.
+---
+
+Use `ak analytics rebuild` when refresh cannot repair stale or incorrect
+derived facts, or when you want every source reparsed with the current parser.
+
+## Usage
+
+```bash
+ak analytics rebuild
+```
+
+The command accepts no positional arguments and has no command-specific flags.
+
+## Preview and apply
+
+```bash
+ak analytics rebuild --json --no-interactive
+ak analytics rebuild --yes --json --no-interactive
+```
+
+Preview reads lifecycle and status only. Apply enumerates and reparses every
+allowlisted Claude Code session, Codex session, and AgentKit activity source,
+then publishes a new current generation without reusing prior source facts.
+
+Rebuild operates when analytics is enabled. It can also recreate explicitly
+deleted analytics, because authoritative sources remain intact. It does not
+operate from uninitialized or disabled state; use `enable` in those states.
+
+Despite its name, rebuild does not delete source files or first expose an empty
+database to readers. It replaces the generation transactionally inside the
+private store.
+
+## Confirmation behavior
+
+Only `y` or `yes` applies an interactive prompt. Any other answer or EOF prints
+the preview and currently exits `0`. `--json` implies noninteractive behavior;
+with either `--json` or `--no-interactive`, omit `--yes` to receive an
+unapplied preview and exit `3`.
+
+There is no dry-run or force flag. Rebuild may be substantially more expensive
+than refresh because no unchanged-source facts are reused.
+
+## Output
+
+Human output is written to stdout and prompts to stderr. JSON is one
+`kind=analytics.plan` envelope with `data.plan`, `data.applied`, and
+`data.status`; rebuild has no `scan` field.
+
+When `applied=true`, `data.status` is the post-rebuild lifecycle status. For a
+preview, read `data.plan.status`; the result `data.status` is currently a
+zero-value object.
+
+## Privacy, retention, and recovery
+
+Rebuild is local-only. The index persists validated aggregates, closed tokens,
+and HMAC identities rather than prompts, transcript text, raw paths, session
+IDs, trace IDs, or raw errors.
+
+A successful publication removes superseded index generations and retains no
+user-facing rollback snapshot. The database transaction keeps the previous
+committed generation if publication fails. Schema upgrades are transactional;
+best-effort space reclamation can occur after an upgrade.
+
+Rebuild does not prune the authoritative activity log or runtime sessions.
+Deleting those sources is outside this command's scope.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Rebuild applied, or an enabled prompt was declined/ended at EOF. |
+| `1` | The lifecycle transition was forbidden, or planning, migration, source capture, contention, publication, or output failed; positional arguments also use `1`. |
+| `2` | A flag was invalid. |
+| `3` | A noninteractive preview completed without `--yes`. |
+
+Lifecycle/service failures in JSON mode emit a structured error envelope on
+stderr. Flag-parse, argument-validation, and final output-render failures can
+fall outside that path.
+
+On macOS, the CLI-wide first-launch guard can also write
+`~/.agentkit/.first-run-darwin` and print a one-time hint to stderr before this
+command runs.
+
+## Related commands
+
+- [Complete `ak analytics rebuild` command facts](../cli/ak_analytics_rebuild)
+- [CLI conventions](../cli-conventions)

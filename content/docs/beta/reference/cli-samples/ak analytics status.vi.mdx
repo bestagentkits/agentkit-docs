@@ -1,0 +1,88 @@
+---
+title: ak analytics status
+description: Kiểm tra lifecycle, serving mode, freshness và aggregate count cục bộ mà không tạo state analytics.
+---
+
+Dùng `ak analytics status` trước khi thay đổi index analytics cục bộ hoặc khi
+một view dựa trên analytics quay về collector trực tiếp.
+
+## Cách dùng
+
+```bash
+ak analytics status
+```
+
+Lệnh không nhận argument theo vị trí và không có cờ riêng. Các cờ dùng chung
+nằm trong [quy ước CLI](../cli-conventions).
+
+## Đọc status
+
+```bash
+ak analytics status
+ak analytics status --json --no-interactive
+```
+
+Output cho người dùng là một dòng chứa serving mode và health. JSON thành công
+ghi một envelope lên stdout:
+
+```text
+schema_version: 1
+kind: analytics.status
+data.schema_version: 1
+data.enabled: boolean
+data.serving_mode: index | live
+data.health: string
+data.will_auto_sync: boolean
+data.staleness_reason: optional string
+data.fact_count: integer
+data.last_successful_at: optional timestamp
+```
+
+`serving_mode=index` nghĩa current generation đã qua kiểm tra compatibility và
+validity. `serving_mode=live` nghĩa reader phải dùng nguồn cục bộ có thẩm quyền.
+Index đang phục vụ vẫn có thể có `staleness_reason` khi nguồn tiến lên sau lúc
+publish; reason đó mô tả độ mới mà không làm các fact đã publish mất hiệu lực.
+
+Các giá trị health lifecycle thường gặp gồm `uninitialized`, `disabled`,
+`deleted` và `ready`. Lỗi store có thể báo `missing`, `stale`, `busy`,
+`newer-schema`, `foreign-database`, `migration-error`, `corruption`,
+`permission` hoặc `disk-full`.
+
+`will_auto_sync` cho biết reconciler bên ngoài trong dashboard hoặc desktop có
+được phép xử lý state hay không. Lệnh CLI này không khởi động scheduler và không
+để lại process nền.
+
+## Ranh giới chỉ đọc và quyền riêng tư
+
+Status đọc `~/.agentkit/analytics-state.json` và chỉ khi enabled mới đọc
+database riêng tư có sẵn tại `~/.agentkit/analytics/analytics.db`.
+`AGENTKIT_HOME` đổi phần gốc.
+
+Lệnh không tạo AgentKit home, marker, directory, database, lease, generation
+hay recovery snapshot. Nó không quét nội dung session, refresh index, gọi mạng
+hay đọc stdin. `--yes` không có tác dụng.
+
+Response chủ động loại path, tên nguồn, giá trị HMAC và diagnostics của database
+driver.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Status được trả về, kể cả state unhealthy hoặc disabled. |
+| `1` | Resolve home hoặc đọc status thất bại, hay có argument theo vị trí. |
+| `2` | Cờ không hợp lệ. |
+
+Lỗi lifecycle/status với `--json` phát error envelope có phiên bản lên stderr
+gồm `schema_version`, `error`, `error_code` và `exit_code`. Lỗi parse cờ, xác
+minh argument và render output cuối có thể nằm ngoài đường này, nên vẫn có thể
+là plain text hoặc không có body.
+
+Trên macOS, guard first-launch dùng chung của CLI cũng có thể ghi
+`~/.agentkit/.first-run-darwin` và in hint một lần lên stderr trước khi lệnh
+này chạy.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak analytics status`](../cli/ak_analytics_status)
+- [Quy ước CLI](../cli-conventions)

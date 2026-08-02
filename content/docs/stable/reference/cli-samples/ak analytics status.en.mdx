@@ -1,0 +1,89 @@
+---
+title: ak analytics status
+description: Inspect the local analytics lifecycle, serving mode, freshness, and aggregate count without creating analytics state.
+---
+
+Use `ak analytics status` before changing the local analytics index or when an
+analytics-backed view falls back to live collection.
+
+## Usage
+
+```bash
+ak analytics status
+```
+
+The command accepts no positional arguments and has no command-specific flags.
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+## Read the status
+
+```bash
+ak analytics status
+ak analytics status --json --no-interactive
+```
+
+Human output is one line containing the serving mode and health. JSON success
+writes one envelope to stdout:
+
+```text
+schema_version: 1
+kind: analytics.status
+data.schema_version: 1
+data.enabled: boolean
+data.serving_mode: index | live
+data.health: string
+data.will_auto_sync: boolean
+data.staleness_reason: optional string
+data.fact_count: integer
+data.last_successful_at: optional timestamp
+```
+
+`serving_mode=index` means the current generation passed compatibility and
+validity checks. `serving_mode=live` means readers must use authoritative local
+sources. A serving index can still have a `staleness_reason` when sources have
+advanced since publication; that reason labels currency without invalidating
+the already published facts.
+
+Common lifecycle health values include `uninitialized`, `disabled`, `deleted`,
+and `ready`. Store failures can report states such as `missing`, `stale`,
+`busy`, `newer-schema`, `foreign-database`, `migration-error`, `corruption`,
+`permission`, or `disk-full`.
+
+`will_auto_sync` describes whether an external dashboard or desktop reconciler
+is allowed to act on the state. This CLI command starts no scheduler and leaves
+no background process.
+
+## Read-only and privacy boundaries
+
+Status reads `~/.agentkit/analytics-state.json` and, only when enabled, the
+existing private database at `~/.agentkit/analytics/analytics.db`.
+`AGENTKIT_HOME` changes the base.
+
+It does not create the AgentKit home, marker, directory, database, lease,
+generation, or recovery snapshot. It does not scan session contents, refresh
+the index, contact the network, or use stdin. `--yes` has no effect.
+
+The response deliberately excludes paths, source names, HMAC values, and
+database-driver diagnostics.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Status was returned, including unhealthy or disabled states. |
+| `1` | Home resolution or a status read failed, or a positional argument was supplied. |
+| `2` | A flag was invalid. |
+
+Lifecycle/status failures with `--json` emit a versioned error envelope on
+stderr with `schema_version`, `error`, `error_code`, and `exit_code`.
+Flag-parse, argument-validation, and final output-render failures can fall
+outside that path and remain plain text or bodyless.
+
+On macOS, the CLI-wide first-launch guard can also write
+`~/.agentkit/.first-run-darwin` and print a one-time hint to stderr before this
+command runs.
+
+## Related commands
+
+- [Complete `ak analytics status` command facts](../cli/ak_analytics_status)
+- [CLI conventions](../cli-conventions)

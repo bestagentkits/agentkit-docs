@@ -1,0 +1,101 @@
+---
+title: ak activity stats
+description: Aggregate privacy-bounded local skill usage across AgentKit activity and Claude Code sessions without enabling analytics.
+---
+
+Use `ak activity stats` to summarize local skill use by skill, kit, runtime,
+source, date, status, and duration bucket. It is a local read, not remote
+telemetry.
+
+## Usage
+
+```bash
+ak activity stats
+```
+
+The command accepts no positional arguments.
+
+## Command flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--kit <id>` | Empty | Keep rows for one exact kit ID. |
+| `--runtime <id>` | Empty | Keep rows for one exact runtime, such as `codex` or `claude-code`. |
+| `--window <duration>` | `7d` | Set a positive lookback such as `24h`, `7d`, or `2w`. |
+
+Day and week forms use fixed 24-hour days. Standard positive Go durations are
+also accepted. Zero, negative, or malformed windows exit `2`.
+
+## Common examples
+
+```bash
+ak activity stats --window 24h
+ak activity stats --runtime codex --window 7d --json
+ak activity stats --kit engineer --window 2w
+```
+
+Filters are exact and combine when both are present. The result counts events,
+not unique sessions or users.
+
+## Sources and privacy
+
+The live collector reads:
+
+- `~/.agentkit/activity/events.ndjson`, with `AGENTKIT_HOME` changing the base;
+- JSONL session files under `~/.claude/projects`, with
+  `AGENTKIT_CLAUDE_HOME` changing the Claude home.
+
+An existing verified analytics generation can serve the same aggregate. If the
+index is unavailable or invalid, the command silently falls back to the live
+sources. It never enables, creates, refreshes, or repairs the index.
+
+Rows deliberately exclude prompts, paths, arguments, session IDs, trace IDs,
+and raw errors. Claude Code Skill-tool calls are parsed locally. There is no
+direct Codex or OpenCode session parser for this report; their usage can still
+appear when recorded in the AgentKit activity log. The coverage object names
+those parser gaps.
+
+The lookback window only filters the report. It does not delete session files,
+the activity log, or indexed facts. The command performs no network or provider
+operation and requires no AgentKit authentication or entitlement.
+
+## Human and JSON output
+
+Human output prints aggregate rows with skill, runtime, source, status,
+duration bucket, count, and UTC date bucket. JSON success uses:
+
+```text
+schema_version: 1
+kind: activity.stats
+data.schema_version: 1
+data.rows: array
+data.total: integer
+data.coverage.sources: source, parsed, and skipped counts
+data.coverage.no_parser_runtimes: array
+```
+
+Each row contains `skill`, optional `kit`, `runtime`, `source`, `date_bucket`,
+`status`, `duration_bucket`, and `count`. `total` is the sum of row counts, not
+the number of rows.
+
+## Interaction and exits
+
+The command never prompts and ignores stdin. `--yes` has no effect.
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Aggregation completed, including when no usage matched. |
+| `1` | A local source scan/read or output write failed, or a positional argument was supplied. |
+| `2` | A flag was invalid or `--window` was not a positive supported duration. |
+
+Command failures in `--json` mode can return no structured error body. Use the
+process status and validate the success envelope before consuming it.
+
+On macOS, the CLI-wide first-launch guard can also write
+`~/.agentkit/.first-run-darwin` and print a one-time hint to stderr before this
+command runs.
+
+## Related commands
+
+- [Complete `ak activity stats` command facts](../cli/ak_activity_stats)
+- [CLI conventions](../cli-conventions)
