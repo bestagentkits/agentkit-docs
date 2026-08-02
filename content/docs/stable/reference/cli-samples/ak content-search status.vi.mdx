@@ -1,0 +1,77 @@
+---
+title: ak content-search status
+description: Kiểm tra vòng đời và sức khoẻ shard đã lược bỏ dữ liệu nhạy cảm mà không tạo tệp shard.
+---
+
+Dùng `ak content-search status` trước khi enable, search, disable, delete hoặc
+rebuild shard của project. Bước kiểm tra content shard chỉ đọc và không tạo thư
+mục `operational/content`.
+
+## Cách dùng
+
+```bash
+ak content-search status --project <uuid>
+```
+
+Lệnh không nhận đối số theo vị trí trong cú pháp được công bố.
+
+## Cờ của lệnh
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--project <uuid>` | Trống, bắt buộc | UUIDv7 chữ thường chuẩn của project do actor hiện tại sở hữu. |
+
+Status vẫn mở operational store hiện có ở chế độ read-only để phân giải actor
+và membership. Vì vậy `operational.db` bị thiếu, busy, unhealthy hoặc không
+truy cập được sẽ ngăn status ngay cả khi shard chưa tồn tại. Lệnh không gọi
+registry, entitlement, provider hay network.
+
+## Đầu ra
+
+Human stdout là một dòng:
+
+```text
+lifecycle=<value> health=<value> docs=<count>
+```
+
+JSON stdout là status object thô, không phải envelope dùng chung:
+
+```text
+projectId: UUID project chuẩn
+lifecycle: absent | enabled | disabled
+health: absent | ready | disabled | building | stale | corrupt | incompatible | foreign-database | permission | busy
+documentCount: bỏ qua khi bằng 0
+logicalBytes: bỏ qua khi bằng 0
+disclosure: thông báo plaintext at rest
+```
+
+`logicalBytes` là bộ đếm độ dài title cộng body đã lưu do SQLite báo, không phải kích thước vật lý
+của `.db` cộng sidecar. Status không trả path shard hay excerpt nội dung.
+
+Kết quả absent vẫn thành công: `lifecycle=absent`, `health=absent` và không tạo
+content directory. Lỗi JSON không được bảo đảm có body có cấu trúc.
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Status đã lược bỏ dữ liệu nhạy cảm, kể cả `absent`, được phát. |
+| `1` | Thiếu flag, UUID không hợp lệ, actor không phải owner hoặc không thể kiểm tra operational store/shard an toàn. |
+| `2` | Giá trị flag không phân tích được. |
+
+## Hành động theo status
+
+| Kết quả | Bước tiếp theo |
+| --- | --- |
+| `absent` | Đọc công bố plaintext rồi chạy `enable --yes` nếu tìm kiếm cục bộ phù hợp. |
+| `disabled` | Bật lại để giữ document hoặc delete để xoá plaintext. |
+| `ready` | Tìm kiếm bình thường. |
+| `corrupt`, `incompatible`, `foreign-database` | Giữ bản sao ngoài nếu cần rồi chỉ rebuild sau khi chấp nhận thay shard vĩnh viễn. |
+| `permission`, `busy` | Sửa quyền hoặc chờ thao tác store hiện tại; không force-delete cả thư mục. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak content-search status`](../cli/ak_content-search_status)
+- [Bật content search](../cli/ak_content-search_enable)
+- [Rebuild shard](../cli/ak_content-search_rebuild)
+- [Quy ước CLI](../cli-conventions)

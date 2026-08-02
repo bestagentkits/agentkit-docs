@@ -1,0 +1,101 @@
+---
+title: ak data retention
+description: Phân giải và preview một class retention của dữ liệu dẫn xuất, đồng thời nêu rõ giới hạn apply hiện tại.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak data retention` để đánh giá một retention policy trong bộ nhớ và tạo
+preview đã lược bỏ dữ liệu nhạy cảm, có thời hạn. `--days` không persist policy
+cho các lần chạy sau.
+
+## Cách dùng
+
+```bash
+ak data retention --class <data-class> [--days <n>] [--apply]
+```
+
+Lệnh không nhận đối số theo vị trí trong cú pháp được công bố.
+
+## Cờ của lệnh
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--class <data-class>` | `session_metrics` | Chọn một derived class đã biết. |
+| `--days <n>` | `0` | Chỉ dùng khoảng giữ fixed khi `n > 0`; zero hoặc âm phân giải thành `forever`. |
+| `--apply` | `false` | Yêu cầu apply sau khi tạo preview. Không có bước xác nhận riêng. |
+
+Các class đã biết là `session_metrics`, `skill_invocations`, `ingestion_runs`,
+`ingestion_failures`, `change_log`, `outbox` và `content_shard`. Chỉ
+`ingestion_runs`, `ingestion_failures`, `change_log`, `outbox` ánh xạ tới
+allowlist automatic prune hiện tại. Các class khác có thể preview nhưng bị từ
+chối khi apply.
+
+## Preview trước
+
+```bash
+ak data retention --class ingestion_runs --days 30 --json
+```
+
+Preview fixed cho class hiện có thể prune mở operational store có quyền ghi để đếm row đủ điều kiện. Bước
+này có thể tạo hoặc migrate `operational.db` và lấy writer lease dù không xoá
+row. Preview không chứa path, raw session ID hay excerpt nội dung, và hết hạn
+sau 30 phút.
+
+Forecast chỉ minh hoạ, không được đo: command cung cấp giả định cố định 1 MiB/ngày
+với 14 sample. `eligibleBytes` hiện là `0`; store chỉ được query số row đủ điều
+kiện.
+
+Khi không có `--days` dương, policy là `forever`, không có cutoff và preview báo
+zero row đủ điều kiện. Vì vậy mặc định là không tự động xoá.
+
+## Giới hạn apply hiện tại
+
+<Callout type="warning">
+  Không dựa vào `--apply` trong release này. Với fixed class prunable, command
+  vẫn giữ writer lease của preview rồi cố mở cùng store lần nữa để apply. Lần mở
+  thứ hai báo `busy`, command thoát `1` và không prune. Fixed class không
+  prunable và apply `forever` cũng bị từ chối.
+</Callout>
+
+Quyết định prune dự kiến giới hạn 500 row đủ điều kiện cũ nhất và chỉ nhắm vào
+table trong allowlist đóng, không syncable, prunable. Nó không xoá tệp nguồn
+Claude Code/Codex hay content-search shard. Không có TTY prompt, đọc stdin,
+kiểm tra `--yes`, dry-run flag hoặc backup tự động; bỏ `--apply` chính là preview.
+
+## Đầu ra JSON
+
+Preview JSON là một object thô trên stdout:
+
+```text
+policy.Scope, policy.ScopeKey, policy.DataClass, policy.Mode, policy.RetainDays
+preview.planId, dataClass, policyMode, retainDays, cutoffMs
+preview.eligibleCount, eligibleBytes, generation, createdAt, expiresAt, forever
+forecast.oneMonthBytes, threeMonthBytes, twelveMonthBytes
+forecast.assumptions, confidence, policyMode
+```
+
+Các key của `Policy` bắt đầu bằng chữ hoa vì structure đó không có JSON field
+tag. Không có envelope `schema_version` / `kind` và không phải NDJSON. Đường
+`--apply` thất bại hiện không phát payload trước khi trả lỗi; JSON mode có thể
+có stdout rỗng và không có error body có cấu trúc.
+
+## Mã thoát và khôi phục
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Preview được phát. |
+| `1` | Class/policy/store không hợp lệ hoặc không khả dụng, apply bị từ chối hay apply gặp writer lease còn giữ. |
+| `2` | `--days` hoặc giá trị flag khác không phân tích được. |
+
+Trước khi dùng đường apply đã được sửa ở release tương lai, hãy tạo và giữ
+operational snapshot, xem lại eligible count và cutoff, rồi lặp theo batch nếu
+có hơn 500 row. Không dùng xoá diện rộng trên filesystem để thay thế.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak data retention`](../cli/ak_data_retention)
+- [Kiểm tra mặc định đã compile](../cli/ak_data_status)
+- [Tạo snapshot](../cli/ak_backups_create)
+- [Xoá content-search shard](../cli/ak_content-search_delete)
+- [Quy ước CLI](../cli-conventions)

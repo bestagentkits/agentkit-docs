@@ -1,0 +1,95 @@
+---
+title: ak content-search
+description: Opt a project into private local content search while understanding plaintext shard, ownership, and deletion boundaries.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak content-search` to manage the explicit, per-project search opt-in. The
+feature keeps one local SQLite FTS shard per project. It is separate from
+`operational.db` and is never created merely because AgentKit starts or runs an
+operational ingest.
+
+## Usage
+
+```bash
+ak content-search
+```
+
+The group accepts no documented positional arguments and shows its subcommands.
+
+## Choose a lifecycle command
+
+| Goal | Command | Primary effect |
+| --- | --- | --- |
+| Inspect state | `ak content-search status --project <uuid>` | Reads redacted lifecycle, health, and size facts without creating a shard. |
+| Opt in | `ak content-search enable --project <uuid> --yes` | Creates or re-enables that project's shard. |
+| Pause search | `ak content-search disable --project <uuid>` | Disables indexing and search but keeps shard files. |
+| Search | `ak content-search search --project <uuid> --query <tokens>` | Runs a bounded query against an enabled, healthy shard. |
+| Remove derived search data | `ak content-search delete --project <uuid>` | Previews; add `--yes` to remove the shard files. |
+| Recover a bad shard | `ak content-search rebuild --project <uuid> --yes` | Deletes and recreates an empty enabled shard. |
+
+`<uuid>` must be the canonical lowercase UUIDv7 for a project in the local
+operational store. Every operation resolves the current local actor again and
+requires the project `owner` role. A viewer or unresolved actor is denied.
+
+## Understand the privacy boundary
+
+<Callout type="warning">
+  Searchable titles, bodies, and snippets are plaintext inside the local SQLite
+  shard unless the operating system disk is encrypted. Enable only after the
+  project owner accepts that at-rest disclosure.
+</Callout>
+
+With the default home, shards live under
+`~/.agentkit/operational/content/`. `AGENTKIT_HOME` changes the base directory.
+AgentKit validates the UUID before forming a path, rejects symlinks or unsafe
+ownership, protects directories and files for the current user, and never
+returns a raw shard path in status output.
+
+The shard is local-only: it does not sync, enter `operational.db`, contact the
+registry, require AgentKit authentication or entitlement, or modify the coding
+runtime's source session files. Local-only does not mean encrypted.
+
+## Opt in deliberately
+
+There is no interactive prompt. `enable` and `rebuild` require `--yes` even on a
+TTY; `--no-interactive` and stdin do not replace it. `delete` always builds a
+preview, then exits `2` without `--yes`.
+
+```bash
+ak content-search status --project <uuid> --json
+ak content-search enable --project <uuid> --yes --no-interactive --json
+ak content-search search --project <uuid> --query token --json
+```
+
+`disable` writes immediately without confirmation. Re-enabling an existing
+disabled shard preserves its indexed documents. `rebuild` and an applied
+`delete` do not create a backup.
+
+## Automation output
+
+These commands emit command-local JSON directly on stdout. They do not use the
+shared `schema_version` / `kind` envelope and do not emit NDJSON. Shapes vary by
+operation: status values, delete plans, search pages, and small mutation result
+objects are documented on the subcommand pages.
+
+Runtime errors normally exit `1`. In JSON mode, this command family can return
+a non-zero exit without a structured error object, so always check process
+status as well as stdout. Malformed flag values exit `2`; a missing Cobra
+required flag currently falls through as exit `1`.
+
+## Recover safely
+
+Use `disable` when you want a reversible pause. Before `delete` or `rebuild`,
+record the status and assume the indexed shard cannot be restored: these
+commands create no AgentKit recovery snapshot. The original runtime sources are
+outside the deletion boundary, but another indexing path must repopulate a new
+shard.
+
+## Related commands
+
+- [Complete `ak content-search` command facts](../cli/ak_content-search)
+- [Inspect content-search status](../cli/ak_content-search_status)
+- [Inspect local operational data](../cli/ak_data)
+- [CLI conventions](../cli-conventions)

@@ -1,0 +1,70 @@
+---
+title: ak data
+description: Kiểm tra mặc định của dữ liệu dẫn xuất, refresh operational read model cục bộ và xem trước ranh giới retention.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak data` cho các bề mặt dữ liệu operational dẫn xuất cục bộ. Các lệnh này
+không quản lý content-search shard dù `content_shard` xuất hiện như một data
+class của retention.
+
+## Cách dùng
+
+```bash
+ak data
+```
+
+Nhóm lệnh không nhận đối số theo vị trí trong cú pháp được công bố và hiển thị
+các lệnh con.
+
+## Chọn lệnh
+
+| Mục tiêu | Lệnh | Tác động |
+| --- | --- | --- |
+| Kiểm tra mặc định đã compile | `ak data status --json` | Báo bảy class với tư thế mặc định `forever`; không kiểm tra database. |
+| Refresh dữ liệu runtime dẫn xuất | `ak data ingest --json` | Đọc JSONL cục bộ của Claude Code và Codex rồi ghi `operational.db`. |
+| Preview một policy | `ak data retention --class ingestion_runs --days 30 --json` | Đếm row đủ điều kiện cho fixed class được hỗ trợ và phát preview dùng một lần. |
+| Yêu cầu apply | `ak data retention --class ingestion_runs --days 30 --apply` | Dự kiến prune tối đa 500 row, nhưng release hiện tại không hoàn thành được đường apply; hãy đọc trang retention trước. |
+
+## Storage và riêng tư
+
+Với home mặc định, operational database là
+`~/.agentkit/operational/operational.db`; `AGENTKIT_HOME` thay đổi base. Store
+dùng path riêng tư của user hiện tại và từ chối symlink không an toàn, foreign
+database, store corrupt hoặc schema mới hơn thay vì rebuild.
+
+Ingest lưu metadata session dẫn xuất, bộ đếm token/tool/skill, định danh nguồn
+opaque và checkpoint, failure code đã lược bỏ dữ liệu nhạy cảm, cùng absolute
+source locator chỉ ở máy cục bộ. Nó không lưu raw message body trong operational
+table, nhưng có đọc tệp session cục bộ để dẫn xuất record.
+
+Không lệnh `ak data` nào gọi registry, provider hay network; không lệnh nào cần
+registry authentication hoặc kit entitlement.
+
+## Ranh giới an toàn
+
+<Callout type="warning">
+  `--json`, `--no-interactive` và `--yes` không phải cơ chế xác nhận cho nhóm
+  này. Không có prompt. Bỏ `--apply` là cách chọn preview retention; ingest ghi
+  ngay.
+</Callout>
+
+Tệp nguồn thuộc Claude Code và Codex không bao giờ bị ingest hoặc retention xoá
+hay sửa. Retention chỉ nhắm vào allowlist đóng của các table cục bộ, không
+syncable và prunable. Xoá content-search dùng vòng đời riêng
+`ak content-search delete`.
+
+## Đầu ra tự động hoá và mã thoát
+
+Các lệnh con phát JSON riêng trực tiếp ra stdout, không phải envelope có phiên
+bản và không phải NDJSON. Lỗi runtime thường thoát `1`; giá trị flag sai kiểu
+thoát `2`. Lỗi JSON không được bảo đảm có cấu trúc.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak data`](../cli/ak_data)
+- [Kiểm tra mặc định dữ liệu](../cli/ak_data_status)
+- [Quản lý content-search shard](../cli/ak_content-search)
+- [Tạo operational snapshot](../cli/ak_backups_create)
+- [Quy ước CLI](../cli-conventions)

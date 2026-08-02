@@ -1,0 +1,93 @@
+---
+title: ak content-search
+description: Chủ động bật tìm kiếm nội dung cục bộ cho một project với ranh giới rõ ràng về shard plaintext, quyền sở hữu và xoá dữ liệu.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak content-search` để quản lý lựa chọn tham gia tìm kiếm theo từng project.
+Tính năng giữ một shard SQLite FTS cục bộ cho mỗi project. Shard này tách khỏi
+`operational.db` và không được tạo chỉ vì AgentKit khởi động hoặc chạy
+operational ingest.
+
+## Cách dùng
+
+```bash
+ak content-search
+```
+
+Nhóm lệnh không nhận đối số theo vị trí trong cú pháp được công bố và hiển thị
+các lệnh con.
+
+## Chọn lệnh vòng đời
+
+| Mục tiêu | Lệnh | Tác động chính |
+| --- | --- | --- |
+| Kiểm tra trạng thái | `ak content-search status --project <uuid>` | Đọc vòng đời, sức khoẻ và kích thước đã lược bỏ dữ liệu nhạy cảm mà không tạo shard. |
+| Chủ động bật | `ak content-search enable --project <uuid> --yes` | Tạo hoặc bật lại shard của project. |
+| Tạm dừng | `ak content-search disable --project <uuid>` | Dừng index và tìm kiếm nhưng giữ tệp shard. |
+| Tìm kiếm | `ak content-search search --project <uuid> --query <tokens>` | Chạy truy vấn có giới hạn trên shard đang bật và healthy. |
+| Xoá dữ liệu dẫn xuất | `ak content-search delete --project <uuid>` | Xem trước; thêm `--yes` để xoá tệp shard. |
+| Khôi phục shard lỗi | `ak content-search rebuild --project <uuid> --yes` | Xoá rồi tạo lại shard rỗng ở trạng thái enabled. |
+
+`<uuid>` phải là UUIDv7 chữ thường, có dấu gạch nối chuẩn của project trong
+operational store cục bộ. Mỗi thao tác đều phân giải lại actor hiện tại và yêu
+cầu role `owner`; viewer hoặc actor không phân giải được sẽ bị từ chối.
+
+## Hiểu ranh giới riêng tư
+
+<Callout type="warning">
+  Title, body và snippet có thể tìm kiếm được lưu dạng plaintext trong shard
+  SQLite cục bộ, trừ khi đĩa của hệ điều hành được mã hoá. Chỉ bật sau khi owner
+  chấp nhận công bố về dữ liệu at rest này.
+</Callout>
+
+Với home mặc định, shard nằm dưới `~/.agentkit/operational/content/`.
+`AGENTKIT_HOME` thay đổi thư mục gốc. AgentKit kiểm tra UUID trước khi tạo path,
+từ chối symlink hoặc quyền sở hữu không an toàn, bảo vệ thư mục/tệp cho user
+hiện tại và không trả về path shard thô trong status.
+
+Shard chỉ ở máy cục bộ: không sync, không đi vào `operational.db`, không liên hệ
+registry, không cần xác thực hay entitlement AgentKit và không sửa tệp session
+nguồn của runtime. Cục bộ không đồng nghĩa với được mã hoá.
+
+## Chủ động chọn tham gia
+
+Không có prompt tương tác. `enable` và `rebuild` luôn yêu cầu `--yes`, kể cả trên
+TTY; `--no-interactive` và stdin không thay thế được. `delete` luôn tạo preview,
+sau đó thoát `2` nếu thiếu `--yes`.
+
+```bash
+ak content-search status --project <uuid> --json
+ak content-search enable --project <uuid> --yes --no-interactive --json
+ak content-search search --project <uuid> --query token --json
+```
+
+`disable` ghi ngay mà không xác nhận. Bật lại shard đang disabled sẽ giữ các
+document đã index. `rebuild` và `delete` đã apply không tạo backup.
+
+## Đầu ra cho tự động hoá
+
+Các lệnh phát JSON riêng của command trực tiếp ra stdout. Chúng không dùng
+envelope chung `schema_version` / `kind` và không phát NDJSON. Status, delete
+plan, search page và object kết quả mutation có shape khác nhau; xem trang lệnh
+con tương ứng.
+
+Lỗi runtime thường thoát `1`. Ở chế độ JSON, command có thể thoát khác `0` mà
+không có error object có cấu trúc, vì vậy phải kiểm tra cả process status. Giá
+trị flag sai kiểu thoát `2`; thiếu flag được Cobra đánh dấu required hiện rơi
+vào exit `1`.
+
+## Khôi phục an toàn
+
+Dùng `disable` để tạm dừng có thể đảo ngược. Trước `delete` hoặc `rebuild`, ghi
+lại status và xem shard đã index là không thể khôi phục: các lệnh này không tạo
+recovery snapshot. Tệp runtime nguồn nằm ngoài ranh giới xoá, nhưng cần một
+đường index khác để nạp lại shard mới.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak content-search`](../cli/ak_content-search)
+- [Kiểm tra trạng thái content-search](../cli/ak_content-search_status)
+- [Kiểm tra dữ liệu operational cục bộ](../cli/ak_data)
+- [Quy ước CLI](../cli-conventions)
