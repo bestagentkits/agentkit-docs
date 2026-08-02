@@ -1,0 +1,175 @@
+---
+title: Thiết kế experiment có thể đo lường với ak:ab-test-setup
+description: Biến giả thuyết có bằng chứng thành A/B test plan với metric, giả định mẫu, guardrail và quy tắc quyết định rõ ràng.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:ab-test-setup` để biến một thay đổi được đề xuất cho trang, feature
+hoặc campaign thành experiment plan có thể review. Skill xác định giả thuyết,
+variant, audience, metric, cách phân bổ, hướng implementation và quy tắc phân
+tích cần có trước khi đưa người tham gia vào test.
+
+## Chọn ak:ab-test-setup cho quyết định có thể kiểm thử
+
+### Dùng ak:ab-test-setup khi
+
+- Bạn có quan sát hoặc dữ liệu làm cơ sở cho một thay đổi cụ thể.
+- Bạn có thể xác định một metric quyết định chính và guardrail về tác hại.
+- Bạn hiểu baseline, audience đủ điều kiện, traffic và mức tác động nhỏ nhất
+  đáng quan tâm đủ để nêu rõ giả định.
+- Bạn cần thiết kế A/B, A/B/n, multivariate hoặc split-URL cùng checklist trước
+  khi chạy.
+
+### Chọn workflow khác khi
+
+- Bạn chỉ cần instrumentation cho event. Hãy dùng workflow analytics của
+  Marketing.
+- Bạn còn cần giả thuyết conversion cho form hoặc onboarding. Bắt đầu với
+  `ak:form-cro` hoặc `ak:onboarding-cro`, rồi đưa giả thuyết đã chọn vào đây.
+- Bạn muốn rollout một thay đổi đã biết mà không ước lượng tác động nhân quả.
+  Feature flag hoặc staged release có thể phù hợp hơn experiment.
+- Bạn không thể gán variant nhất quán, đo outcome đáng tin cậy hoặc đối xử công
+  bằng với người tham gia. Hãy sửa các constraint đó trước khi kết luận nhân quả.
+
+## Chuẩn bị bằng chứng và quyền truy cập runtime
+
+Trước khi bắt đầu, hãy cung cấp trải nghiệm hiện tại, vấn đề quan sát được,
+audience đủ điều kiện, định nghĩa baseline metric, traffic dự kiến, yếu tố mùa
+vụ đã biết, constraint kỹ thuật và quyết định mà test cần hỗ trợ. Nêu mọi yêu
+cầu về consent, quyền riêng tư, pháp lý, thương hiệu hoặc accessibility.
+
+Hoàn thành [Làm quen](../../../getting-started/onboarding), rồi xác nhận Marketing
+Kit đã được cài cho đúng runtime và scope đang dùng.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:ab-test-setup ...` | Phân phối native là mặc định; phân phối plugin rõ ràng cũng được hỗ trợ. |
+| Cursor | `/ak:ab-test-setup ...` | Cách gọi bằng slash đã được người dùng xác minh; bằng chứng này không thiết lập hành vi giống nhau cho mọi component được projection. |
+| Codex | `$ak:ab-test-setup ...` | Skill dùng discovery native của Codex; Hook chỉ được projection một phần. |
+
+Xem [Runtime adapter](../../../concepts/runtime-adapters) để hiểu khác biệt ở
+mức component.
+
+## Chạy Skill
+
+Hãy yêu cầu plan trước khi quyền implementation, dữ liệu production hoặc
+provider experiment chưa được phê duyệt.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:ab-test-setup "Lập A/B test plan cho headline yêu cầu demo. Dùng demo request đủ điều kiện làm metric chính, bảo vệ chất lượng lead và accessibility, nêu mọi giả định sample size, không sửa hoặc chạy bất kỳ thứ gì"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:ab-test-setup "Lập A/B test plan cho headline yêu cầu demo. Dùng demo request đủ điều kiện làm metric chính, bảo vệ chất lượng lead và accessibility, nêu mọi giả định sample size, không sửa hoặc chạy bất kỳ thứ gì"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:ab-test-setup "Lập A/B test plan cho headline yêu cầu demo. Dùng demo request đủ điều kiện làm metric chính, bảo vệ chất lượng lead và accessibility, nêu mọi giả định sample size, không sửa hoặc chạy bất kỳ thứ gì"
+```
+
+  </Tab>
+</Tabs>
+
+Input hữu ích tách quan sát khỏi dự đoán:
+
+```text
+Vì [bằng chứng], chúng tôi tin rằng [một thay đổi] sẽ tạo ra [outcome có hướng]
+cho [audience đủ điều kiện]. Chúng tôi sẽ quyết định bằng [metric chính], đồng
+thời theo dõi [guardrail].
+```
+
+Đừng thêm target lift chỉ để giả thuyết trông chính xác. Hãy xác định minimum
+detectable effect từ giá trị quyết định, traffic, chi phí và rủi ro.
+
+## Hiểu các giai đoạn experiment
+
+1. **Xác nhận quyết định.** Skill ghi nhận quan sát, thay đổi, audience, hướng
+   tác động dự kiến và hành động mà mỗi kết quả có thể hỗ trợ.
+2. **Chọn thiết kế.** Skill phân biệt thiết kế A/B, A/B/n, multivariate và
+   split-URL, đồng thời giải thích trade-off về traffic và diễn giải.
+3. **Đăng ký trước cách đo.** Skill xác định một metric chính, metric hỗ trợ,
+   guardrail, điều kiện tham gia, exposure, analysis unit, segment và stopping
+   rule trước khi chạy.
+4. **Lập kế hoạch mẫu và thời lượng.** Skill dùng baseline, minimum detectable
+   effect, significance threshold, power, số variant, traffic và business cycle
+   làm giả định rõ ràng.
+5. **Mô tả variant và delivery.** Skill ghi lại control không đổi, thay đổi được
+   cô lập, phân bổ, persistence, QA, tracking và cách làm client-side,
+   server-side hoặc feature flag.
+6. **Chuẩn bị phân tích và học hỏi.** Skill ghi confidence interval, effect
+   size, kết quả guardrail, segment check đã định trước, giới hạn và quyết định
+   winner, loser hoặc inconclusive.
+
+## Giữ consent và quyết định thống kê rõ ràng
+
+<Callout type="warn" title="Test plan không phải phê duyệt chạy test">
+  Skill có thể đề xuất instrumentation và bước implementation. Skill không cấp
+  quyền thay đổi production, đưa người tham gia vào test, truy cập provider,
+  thu thập dữ liệu cá nhân, chi tiêu, publish hoặc dừng sớm. Hãy phê duyệt riêng
+  từng hành động đó.
+</Callout>
+
+- Chỉ randomize population đủ điều kiện và giữ assignment ổn định cho analysis
+  unit đã khai báo.
+- Chỉ thu thập dữ liệu tối thiểu cần thiết, ghi rõ retention cùng access và có
+  consent bắt buộc trước khi track hành vi nhạy cảm.
+- Không dùng scarcity gây hiểu lầm, giá ẩn, variant thiếu accessibility hoặc
+  cách đối xử bất bình đẳng có thể gây hại hợp lý cho người tham gia.
+- Không liên tục xem một fixed-horizon test rồi dừng khi có kết quả thuận lợi.
+  Nếu cần sequential monitoring, hãy định trước phương pháp sequential hợp lệ.
+- Ngưỡng như `p < 0.05` không phải xác suất kết quả là ngẫu nhiên, còn
+  statistical significance không chứng minh giá trị thực tiễn.
+- Coi phát hiện segment ngoài kế hoạch là exploratory cho đến khi được kiểm thử
+  độc lập.
+
+## Review output và bằng chứng
+
+Kết quả hữu ích gồm:
+
+- Giả thuyết đầy đủ và quyết định mà giả thuyết cần hỗ trợ.
+- Mô tả control cùng variant, với một khác biệt có thể quy kết khi khả thi.
+- Định nghĩa metric, guardrail, eligibility, allocation và exposure.
+- Tính sample size và duration với giả định cùng phương pháp được nêu rõ.
+- Checklist implementation và QA, không phải mutation production chưa review.
+- Analysis plan định trước và results template có thể ghi kết quả inconclusive
+  mà không ép chọn winner.
+
+Hãy tính lại thiết kế cùng owner analytics hoặc experimentation. Plan của Skill
+không thể xác minh tracking, chất lượng traffic, interference, novelty, yếu tố
+mùa vụ hoặc external event mà nó không quan sát được.
+
+## Xử lý sự cố workflow
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Không có baseline hoặc ước lượng traffic | Instrument trải nghiệm hiện tại và thu thập baseline đại diện trước khi chốt mẫu hoặc thời lượng. |
+| Nhiều yếu tố đổi cùng lúc | Tách giả thuyết, hoặc ghi rõ bundle effect không xác định được đóng góp của từng yếu tố. |
+| Kết quả không significant | Báo inconclusive trừ khi bằng chứng định trước hỗ trợ kết luận khác; không tạo winner từ segment. |
+| Guardrail xấu đi | Tạm dừng theo stopping rule đã duyệt và review tác hại cho người tham gia cùng tính đúng của implementation. |
+| Runtime không tìm thấy Skill | Xác nhận target cùng scope, khởi động lại runtime, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+## Biết các giới hạn
+
+- Skill không cung cấp benchmark, traffic, baseline hay causal validity đáng tin
+  nếu bằng chứng của bạn không có.
+- Sample size phụ thuộc phương pháp và giả định đã chọn; lookup table chung
+  không thay thế phép tính được review cho experiment này.
+- Traffic thấp, network interference, novelty, multiple comparison và thay đổi
+  metric có thể làm test inconclusive hoặc gây hiểu lầm.
+- Các package release được mô tả chứa nội dung cùng cách gọi
+  `ak:ab-test-setup` giống nhau.
+
+Tiếp tục với [Tổng quan Marketing Kit](../../marketing), hoặc dùng
+`ak:form-cro`, `ak:onboarding-cro` hay `ak:pricing-strategy` để phát triển giả
+thuyết ứng viên trước khi thiết kế test.
