@@ -1,0 +1,73 @@
+---
+title: ak projects remove
+description: Xoá idempotently một project-registry entry mà không xoá hoặc thay đổi project directory.
+---
+
+Dùng `ak projects remove` để quên một project đã di chuyển, bị xoá hoặc được bỏ
+đăng ký có chủ đích.
+
+## Cách dùng
+
+```bash
+ak projects remove <name|path>
+```
+
+Cung cấp đúng một exact name hoặc path. Lookup theo cùng quy tắc với
+`projects show`: input giống path khớp canonical directory candidate trước;
+input plain khớp exact name có phân biệt hoa thường. Dùng path khi name trùng
+nhau gây mơ hồ.
+
+## Ví dụ
+
+```bash
+ak projects remove myproj
+ak projects remove ./myproj
+ak projects remove /workspace/myproj --json
+```
+
+## Mutation và idempotency
+
+Khi có entry khớp, lệnh xoá nó khỏi `projects.json` bằng registry save atomic
+dưới advisory lock. Lệnh không bao giờ xoá, di chuyển, mở hoặc sửa project
+directory đã đăng ký hay journal, plan, config, ownership file bên trong.
+
+Khi không có entry khớp, lệnh cố ý idempotent: nó báo không tìm thấy và thoát
+`0` mà không ghi lại registry. Không có prompt, preview, yêu cầu `--yes`,
+`--force`, backup hay rollback.
+
+Name mơ hồ không được xem là đã không tồn tại. Lệnh thất bại để bạn thử lại bằng
+path tường minh.
+
+## Đầu ra và JSON
+
+Đầu ra dành cho người dùng báo đã xoá hoặc `not found in registry (nothing to
+remove)`. JSON thành công dùng `kind=projects.remove` với `name_or_dir`,
+`removed` và `not_found` trong `data`. Với entry không tồn tại, `removed` là
+`false`, `not_found` là `true` và mã thoát vẫn là `0`.
+
+`--quiet` ẩn stdout thành công. Path trong đầu ra có thể làm lộ chi tiết
+workspace cục bộ. Lệnh không dùng mạng, auth, provider, cache hay process.
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Một entry được xoá hoặc đã không tồn tại. |
+| `1` | Lock/read/write registry thất bại hoặc name khớp nhiều entry. |
+| `2` | Parse argument hoặc cờ không hợp lệ. |
+
+Trong JSON mode, lỗi cấp command dùng error envelope trên stderr. Lỗi parse cờ
+vẫn có thể là plain text.
+
+## Khôi phục
+
+Vì removal chỉ ảnh hưởng metadata registry và không tạo backup, hãy recovery
+bằng `ak projects add <path>` khi directory vẫn tồn tại. Việc này tạo timestamp
+registration mới, không khôi phục timestamp ban đầu.
+
+## Lệnh liên quan
+
+- [Hiển thị entry trước khi xoá](./projects-show)
+- [Thêm directory](./projects-add)
+- [Prune entry stale](./projects-prune)
+- [Thông tin đầy đủ của `ak projects remove`](../cli/ak_projects_remove)

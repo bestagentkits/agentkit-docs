@@ -1,0 +1,111 @@
+---
+title: ak projects prune
+description: Preview or apply orphan cleanup, or explicitly wipe all project-registry entries without touching project files.
+---
+
+Use `ak projects prune` to clean registry metadata after project directories
+have moved or been deleted. The command is preview-first and never deletes a
+project directory.
+
+## Usage
+
+```bash
+ak projects prune
+```
+
+You must select `--orphans` or `--all`.
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--orphans` | `false` | Select entries whose registered directories are confirmed absent. |
+| `--all` | `false` | Select every registry entry; requires `--force`. |
+| `--dry-run` | `false` | Force preview even when `--yes` is present. |
+| `--force` | `false` | Required safety gate for `--all`; it has no special effect on orphan selection. |
+
+`--yes` is the apply switch. The command never opens a TTY confirmation prompt.
+Without `--yes`, effective dry-run is `true` even though the displayed default
+for `--dry-run` is `false`.
+
+## Preview orphan cleanup
+
+```bash
+ak projects prune --orphans
+ak projects prune --orphans --json
+```
+
+The command stats each registered directory. Only a definite not-found result
+is an orphan; permission and other stat errors are kept. Preview reads the
+registry and filesystem metadata but does not rewrite `projects.json`.
+
+A completed preview writes the candidate result to stdout and exits `3`, even
+when no orphan exists. In JSON mode stdout contains one success-shaped
+`kind=projects.prune` envelope with `dry_run: true`, `removed_count`, and the
+candidate path array named `removed`. No JSON error object follows the exit
+`3`. Scripts must accept and inspect both the envelope and process status.
+
+In human modes, the preview remains on stdout and the top-level CLI also writes
+a final dry-run error box to stderr before exiting `3`.
+
+## Apply orphan cleanup
+
+```bash
+ak projects prune --orphans --yes
+ak projects prune --orphans --yes --json
+```
+
+This path checks the directories again under the registry operation and removes
+only confirmed missing entries. The kept registry is saved once atomically
+under the advisory lock. If nothing is missing, it exits `0` without rewriting
+the registry.
+
+## Preview or apply a full registry wipe
+
+`--all` is materially broader than orphan cleanup and requires `--force`:
+
+```bash
+# Preview every entry; exits 3.
+ak projects prune --all --force
+
+# Remove every registry entry.
+ak projects prune --all --force --yes
+```
+
+Omitting `--force` with `--all` exits `2`. `--dry-run` always wins over
+`--yes`, so `--all --force --yes --dry-run` is still a preview.
+
+The full wipe removes entries one at a time through separate atomic registry
+saves. The overall wipe is not transactional: a later lock or write failure can
+leave earlier entries removed. There is no automatic registry backup or
+rollback.
+
+## Effects, output, and recovery
+
+Applied output reports how many paths were removed. JSON uses
+`kind=projects.prune` with `dry_run`, `removed_count`, and `removed`. `--quiet`
+suppresses success output, but it does not change selection or exit behavior.
+
+Neither mode deletes, opens, or modifies any registered project directory,
+journal, plan, config, or ownership file. The command is local and uses no
+network, auth, provider, cache, or child process. Candidate absolute paths can
+be sensitive; review them before sharing output.
+
+To recover a removed entry while its directory exists, run
+`ak projects add <path>`. This creates fresh registration timestamps.
+
+## Exit status
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The selected apply completed, including a no-op apply. |
+| `1` | Registry listing, locking, or writing failed; full-wipe failure may be partial. |
+| `2` | Selection was missing, `--all` lacked `--force`, or arguments were invalid. |
+| `3` | A preview completed without changing the registry. |
+
+## Related commands
+
+- [List the registry first](./projects-list)
+- [Remove one entry idempotently](./projects-remove)
+- [Add an entry](./projects-add)
+- [Complete `ak projects prune` facts](../cli/ak_projects_prune)

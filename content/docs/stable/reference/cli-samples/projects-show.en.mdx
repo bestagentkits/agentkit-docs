@@ -1,0 +1,67 @@
+---
+title: ak projects show
+description: Resolve one registered project by exact path or unambiguous name and print its registry metadata.
+---
+
+Use `ak projects show` to inspect the canonical directory and timestamps for
+one registry entry.
+
+## Usage
+
+```bash
+ak projects show <name|path>
+```
+
+Provide exactly one registered project name or path.
+
+## Lookup rules
+
+Path-like input is checked against canonical directory candidates first. That
+includes an absolute path, `.`, `..`, or a value containing `/` or `\`. Symlink
+and explicit relative-path candidates are resolved when possible.
+
+Plain input is treated only as an exact, case-sensitive name. It is not
+silently interpreted relative to the current working directory. Names are not
+guaranteed unique; if the same name matches multiple entries, use an explicit
+path to disambiguate.
+
+```bash
+ak projects show myproj
+ak projects show ./myproj
+ak projects show /workspace/myproj --json
+```
+
+## Output and effects
+
+Human output prints the entry's name, canonical path, registration timestamp,
+and updated timestamp. JSON success uses `kind=projects.show` with `name`,
+`dir`, `registered_at`, and `updated_at` under `data`. `--quiet` suppresses
+success stdout.
+
+The command reads only the registry file. It does not stat or open the project
+directory, verify ownership, refresh timestamps, authenticate, use the network,
+prompt, or start another process. A found entry can still point to a missing
+directory.
+
+Absolute paths and timestamps are local environment metadata. Review output
+before sharing it.
+
+## Exit status
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | One entry was resolved and printed. |
+| `1` | The registry could not be read, or a name was ambiguous. |
+| `2` | Argument or flag parsing was invalid. |
+| `5` | No registry entry matched the supplied name or path. |
+
+In JSON mode, a missing project writes a `not_found` error envelope with
+`exit_code: 5` to stderr and leaves stdout empty. Other command-level failures
+also use the error envelope; flag-parse errors can remain plain text.
+
+## Related commands
+
+- [List all entries](./projects-list)
+- [Remove one entry](./projects-remove)
+- [Project registry overview](./projects)
+- [Complete `ak projects show` facts](../cli/ak_projects_show)

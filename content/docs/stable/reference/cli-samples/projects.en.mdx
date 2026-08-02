@@ -1,0 +1,73 @@
+---
+title: ak projects
+description: Inspect and maintain the local per-user registry that maps AgentKit project names to canonical directories.
+---
+
+Use `ak projects` to manage the per-user project registry. By default the
+registry is `~/.agentkit/projects.json`; `AGENTKIT_HOME` replaces the
+`~/.agentkit` root when set.
+
+`ak init` and `ak new` normally register projects automatically. The registry
+is discovery metadata only: registration does not prove that a directory is a
+valid or currently healthy AgentKit project.
+
+## Choose a subcommand
+
+| Goal | Command | Effect |
+| --- | --- | --- |
+| Register or refresh a directory | `ak projects add <path>` | Canonicalizes the directory and writes one entry. |
+| Inspect the registry | `ak projects list` | Reads all entries, sorted by canonical directory. |
+| Inspect one entry | `ak projects show <name-or-path>` | Resolves an exact path first, then an exact name. |
+| Deregister one entry | `ak projects remove <name-or-path>` | Removes only registry metadata. |
+| Clean stale or all entries | `ak projects prune ...` | Previews by default; applies only with explicit safety flags. |
+
+Running `ak projects` without a subcommand displays help and does not read or
+write the registry.
+
+## Registry ownership and durability
+
+Each entry records a display name, canonical absolute directory,
+`registered_at`, and `updated_at`. The directory is the canonical key; names
+are derived from the final path component and are not guaranteed unique.
+
+Registry writers use a sibling lock file and wait for the advisory lock for up
+to 10 seconds. Individual saves use a same-directory temporary file, sync it,
+and rename it over `projects.json`. Registry and lock files are owner-only; the
+AgentKit state directory is created with owner/group access.
+
+There is no registry backup or rollback command. `add` deliberately replaces a
+malformed or unsupported registry with a fresh registry containing the added
+entry. Preserve a copy before using `add` as recovery if existing metadata
+matters.
+
+## Safety and privacy
+
+This family is local. It performs no registry-server request, auth exchange,
+provider call, cache download, or child process launch. Subcommands do not show
+TTY prompts; mutation is controlled by exact command arguments and, for
+`prune`, `--yes` and related gates.
+
+Human and JSON output exposes canonical absolute project paths and timestamps.
+Review it before attaching logs or sharing output. `remove` and `prune` do not
+delete project directories or their files.
+
+## Output and exits
+
+Successful subcommands write human or versioned JSON output to stdout.
+`--quiet` suppresses success stdout. JSON kinds are `projects.add`,
+`projects.list`, `projects.show`, `projects.remove`, and `projects.prune`.
+Command errors emitted after renderer setup use a JSON error envelope on
+stderr; flag-parse errors remain plain text.
+
+Exit meanings are command-local. Notably, missing `show` is `5`, idempotent
+missing `remove` is `0`, and a completed prune preview is `3`.
+
+## Related commands
+
+- [Register a project](./projects-add)
+- [List projects](./projects-list)
+- [Prune registry entries](./projects-prune)
+- [Remove one entry](./projects-remove)
+- [Show one entry](./projects-show)
+- [Journal command group](./journal)
+- [CLI conventions](../cli-conventions)

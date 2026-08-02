@@ -1,0 +1,88 @@
+---
+title: ak journal validate
+description: Kiểm tra khả năng đọc, title, date và extension của một journal, đồng thời giữ kết quả không hợp lệ ở dạng machine-readable.
+---
+
+Dùng `ak journal validate` sau khi tạo entry hoặc khi audit journal cũ. Mỗi lần
+gọi kiểm tra một target và không bao giờ sửa file.
+
+## Cách dùng
+
+```bash
+ak journal validate [path-or-id]
+```
+
+Dù help hiển thị argument tuỳ chọn, implementation yêu cầu một path hoặc ID và
+thoát `2` khi bỏ qua.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--project <name>` | Project đã đăng ký khớp cwd, sau đó là cwd | Chọn chính xác tên project đã đăng ký trước khi resolve bare ID. |
+
+## Resolve target
+
+Bare slug, filename stem hoặc filename được resolve an toàn trong
+`plans/journals/` của project đã chọn. Giá trị có path separator hoặc absolute
+path được đọc trực tiếp. Direct path không bị giới hạn trong `plans/journals/`,
+vì vậy chỉ truyền file mà bạn thực sự muốn AgentKit đọc và báo cáo.
+
+```bash
+ak journal validate 2026-07-27-fix-install-race
+ak journal validate ./plans/journals/legacy-entry.md
+ak journal validate /workspace/project/plans/journals/legacy-entry.md --json
+```
+
+Project selection xảy ra trước khi xử lý target. Vì vậy `--project` tường minh
+nhưng không hợp lệ vẫn thất bại kể cả khi target là absolute path.
+
+## Quy tắc validation
+
+Kết quả hợp lệ khi thoả tất cả điều kiện sau:
+
+- file đọc được;
+- có title trong frontmatter hoặc H1 đầu tiên;
+- date đã resolve parse được theo `YYYY-MM-DD`;
+- path kết thúc bằng `.md`.
+
+Date ưu tiên từ frontmatter, sau đó từ filename có prefix ngày được hỗ trợ.
+Thiếu date chỉ là warning, không phải validation error. Lệnh không validate nội
+dung prose tuỳ ý hoặc quyết định ghi chép lịch sử còn là nguồn thẩm quyền hay
+không.
+
+## Đầu ra và mã thoát
+
+Đầu ra dành cho người dùng in `ok` hoặc `fail`, path, error và warning. JSON
+thành công dùng `kind=journal.validate`; `data` chứa `path`, `ok`, `title` và
+`date` tuỳ chọn, cùng array `warnings` và `errors` tuỳ chọn.
+
+File đọc được nhưng không hợp lệ là trường hợp quan trọng: lệnh trước tiên ghi
+toàn bộ validation result lên stdout rồi thoát `3`. Trong JSON mode, kết quả vẫn
+là envelope dạng thành công `journal.validate`; không có JSON error object thứ
+hai. Hãy parse `data.ok` và đồng thời kiểm tra process exit code.
+
+Direct path không đọc được hoặc không tồn tại theo cùng contract
+result-cộng-exit-`3`. Bare ID không resolve được thất bại sớm hơn với mã `1` và
+không có validation result.
+
+Trong human mode, chi tiết validation vẫn nằm trên stdout và CLI cấp cao nhất
+còn ghi failure box cuối cùng lên stderr cho mã `3`. Hãy giữ hai stream tách
+biệt trong automation.
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Target qua validation; vẫn có thể có warning. |
+| `1` | Không resolve được bare ID, AgentKit home lỗi hoặc resolution I/O thất bại. |
+| `2` | Thiếu target, project selection không hợp lệ hoặc không parse được argument. |
+| `3` | Validation hoàn tất và `data.ok` là `false`, gồm cả direct path không đọc được. |
+
+Lệnh chỉ đọc và hoạt động cục bộ. Nó không dùng mạng, auth, prompt, preview,
+apply, backup hay recovery. Đầu ra validation chứa path target và có thể làm lộ
+cấu trúc project cục bộ.
+
+## Lệnh liên quan
+
+- [Tạo entry](./journal-create)
+- [Hiển thị entry](./journal-show)
+- [Nhóm lệnh journal](./journal)
