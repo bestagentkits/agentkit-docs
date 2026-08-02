@@ -1,0 +1,189 @@
+---
+title: Ghi lịch sử công việc theo thời gian với ak:journal
+description: Biến sự kiện đáng kể trong session thành technical journal cục bộ mà không coi entry là authority hiện hành hoặc publish nó.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:journal` sau công việc implementation, review, incident hoặc analysis
+đáng kể khi project cần bản ghi theo thời gian về điều đã xảy ra và lý do. Skill
+soạn entry ngắn gọn, lưu qua `ak journal create` và giữ tệp local làm nguồn sự
+thật.
+
+## Chọn ak:journal cho lịch sử công việc
+
+### Dùng ak:journal khi
+
+- Session tìm ra root cause, thay đổi quan trọng, tác động hoặc bài học đáng lưu.
+- Contributor tương lai cần bản ghi theo thời gian về quyết định và next step.
+- Bạn muốn ghi lại error, path và outcome cụ thể sau công việc.
+- Một failure đáng kể cần reflection trung thực hoặc phân tích lịch sử failure.
+
+### Chọn workflow khác khi
+
+- Bạn cần quyết định product, policy, specification hoặc authority marketing
+  hiện hành. Cập nhật ADR hay owner tài liệu tương ứng.
+- Bạn cần chuyển giao sang session mới với trạng thái hội thoại. Dùng
+  `ak:handoff`.
+- Bạn cần báo cáo lấy từ repository trên branch, worktree, plan và roadmap.
+  Dùng `ak:watzup`.
+- Bạn muốn publish một entry. Publication nằm ngoài Skill này và cần workflow
+  được review riêng.
+
+## Chuẩn bị entry an toàn
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding), cài Marketing Kit
+  và bảo đảm CLI `ak` khả dụng.
+- Chạy từ project dự kiến, hoặc biết tên project đã đăng ký để dùng
+  `--project <registry-name>`.
+- Chỉ tập hợp sự kiện có tín hiệu cao: root cause, thay đổi, impact, quyết định,
+  bằng chứng và next step.
+- Loại credential, customer data, personal data, private URL và chi tiết thương
+  mại nhạy cảm không nên đi vào lịch sử repository.
+- Xác định ADR hoặc owner tài liệu hiện hành cho mọi quyết định lâu dài cũng cần
+  cập nhật.
+
+Khi không có `--project`, CLI ưu tiên project đã đăng ký khớp current directory,
+sau đó fallback về current directory. Hãy xác nhận project được resolve trước
+khi chấp nhận path tệp.
+
+## Gọi Skill
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:journal [topic or reflection]` | Skill soạn entry và gọi CLI `ak journal` hạng nhất để lưu. |
+| Cursor | `/ak:journal [topic or reflection]` | Cách gọi bằng slash đã được người dùng xác minh cho AgentKit Skill đã cài. Quyền truy cập CLI và filesystem vẫn phụ thuộc environment. |
+| Codex | `$ak:journal [topic or reflection]` | Codex tìm Skill bằng discovery native; persistence vẫn cần binary `ak` và quyền ghi vào project được resolve. |
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:journal "Ghi lý do review launch brief dừng lại, bằng chứng đã kiểm tra, wording bị loại và legal dependency đang chờ. Loại tên customer và không publish hoặc commit"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:journal "Ghi lý do review launch brief dừng lại, bằng chứng đã kiểm tra, wording bị loại và legal dependency đang chờ. Loại tên customer và không publish hoặc commit"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:journal "Ghi lý do review launch brief dừng lại, bằng chứng đã kiểm tra, wording bị loại và legal dependency đang chờ. Loại tên customer và không publish hoặc commit"
+```
+
+  </Tab>
+</Tabs>
+
+Đọc [Runtime adapter](../../../concepts/runtime-adapters) để hiểu khác biệt về
+discovery và tooling. Format journal được lưu do CLI sở hữu, không phải editor
+riêng của runtime.
+
+## Hiểu các giai đoạn
+
+1. **Tập hợp sự kiện quan trọng.** Skill trích xuất root cause, thay đổi chính,
+   impact, quyết định, bằng chứng và next step từ session hiện tại.
+2. **Soạn title, summary và body.** Skill ưu tiên error, path và outcome cụ thể
+   thay vì retrospective mơ hồ.
+3. **Lưu qua CLI.** Skill truyền body Markdown bằng standard input nên workflow
+   không phụ thuộc `$EDITOR`.
+4. **Validate khi cần.** Skill có thể chạy `ak journal validate` với slug hoặc
+   filename stem mới.
+5. **Giữ publication riêng biệt.** Skill báo `AgentWiki publish skipped` và giữ
+   tệp local làm nguồn sự thật.
+6. **Cung cấp cách duyệt chỉ đọc.** Có thể xem entry hiện có bằng
+   `ak journal list` và `ak journal show <slug>`.
+
+Cấu trúc persistence chuẩn là:
+
+```bash
+ak journal create "<title>" --summary "<one-line summary>" --stdin <<'EOF'
+## What happened
+...
+
+## Decision
+...
+
+## Next steps
+...
+EOF
+```
+
+Dùng `--date YYYY-MM-DD` để thay ngày UTC mặc định, hoặc
+`--project <registry-name>` để nhắm project đã đăng ký. Tệp được tạo dùng tên
+`YYYY-MM-DD-<slug>.md`; khi trùng tên, CLI thêm suffix `-2`, `-3` và tiếp theo
+thay vì overwrite entry hiện có.
+
+## Tách lịch sử, authority và publication
+
+<Callout type="warn" title="Journal là lịch sử, không phải authority hiện hành">
+  CLI thêm notice rằng entry là bản ghi công việc lịch sử. Hãy chuyển mọi quyết
+  định lâu dài vào owner docs, specification hoặc ADR hiện hành của project.
+  Không để người đọc sau suy ra policy hiện tại chỉ từ journal cũ.
+</Callout>
+
+- `ak journal create` ghi một tệp mới dưới
+  `<project>/plans/journals/`. CLI tạo thư mục khi cần và ghi atomically qua tệp
+  tạm.
+- `ak journal list`, `ak journal show` và `ak journal validate` ở chế độ chỉ đọc.
+- Entry có thể chứa path repository, error và quyết định. Hãy redact nội dung
+  không nên được giữ, commit, index hoặc chia sẻ.
+- Publication lên AgentWiki được deferred. Skill phải báo đã bỏ qua thay vì
+  claim có bản sao remote.
+- Thao tác ghi tệp không cấp quyền Git staging, commit, push, publication,
+  deployment, outreach, account mutation, truy cập provider hay spend.
+
+## Xác minh output
+
+Một lần chạy hoàn tất nên cung cấp:
+
+- Một tệp Markdown mới dưới `<project>/plans/journals/` với filename an toàn,
+  không collision.
+- Frontmatter chứa title và date, cùng summary khi được cung cấp.
+- Body ghi điều đã xảy ra, quyết định hoặc bài học và next step.
+- Notice chuẩn rằng entry là lịch sử công việc, không phải authority bền vững.
+- Path được tạo và kết quả `ak journal validate` khi có yêu cầu validation.
+- Statement `AgentWiki publish skipped` rõ ràng.
+
+Bạn có thể kiểm tra entry mà không thay đổi nó:
+
+```bash
+ak journal validate <slug-or-filename-stem>
+ak journal list
+ak journal show <slug>
+```
+
+Review tệp và diff repository trước khi quyết định lịch sử này có nên được
+commit hoặc chia sẻ không.
+
+## Xử lý sự cố an toàn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Runtime không nhận diện `ak:journal` | Xác nhận target và scope Marketing, khởi động lại runtime rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+| CLI resolve sai project | Dừng và chạy lại với đúng `--project <registry-name>` đã đăng ký sau khi xác nhận. |
+| `ak journal create` từ chối date | Dùng đúng `YYYY-MM-DD`; mặc định là ngày hiện tại theo UTC. |
+| Filename đã tồn tại | Để CLI cấp suffix chống collision. Không overwrite entry cũ. |
+| Validation thất bại | Giữ tệp local, sửa title bị thiếu hoặc date không hợp lệ rồi chạy lại validation. |
+| Entry chứa policy lâu dài | Cập nhật owner docs hoặc ADR hiện hành và link journal làm context lịch sử. |
+| Có đề xuất publish | Dừng. Publication được deferred trong Skill này và cần workflow được cấp quyền riêng. |
+
+Tiếp tục với [Tổng quan Marketing Kit](../../marketing) hoặc
+[Projects, artifact và checkpoint](../../../concepts/projects-artifacts-checkpoints)
+để hiểu hướng dẫn rộng hơn về persistence và ownership.
+
+## Biết các giới hạn hiện tại
+
+- Journal phản ánh bằng chứng nhìn thấy trong session hiện tại; Skill không tự
+  dựng lại toàn bộ lịch sử repository hay provider.
+- `validate` kiểm tra cấu trúc Markdown có thể đọc, title, date và extension của
+  tệp. Nó không chứng minh tính đúng của fact hay authority hiện hành.
+- Agent `journal-writer` tùy chọn có thể đào sâu reflection về failure khi
+  runtime hỗ trợ, nhưng entry vẫn được lưu qua `ak journal create`.

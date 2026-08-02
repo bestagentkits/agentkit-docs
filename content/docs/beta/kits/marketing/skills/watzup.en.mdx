@@ -1,0 +1,195 @@
+---
+title: Summarize repository work with ak:watzup
+description: Scan local Git refs, worktrees, plans, and roadmaps to produce a short evidence-backed status report without changing the checkout.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:watzup` when you need a concise repository-derived view of what is in
+flight, how unfinished plans are progressing, and which next steps deserve
+attention. The default scan reads local branches, cached remote refs,
+worktrees, plans, roadmaps, status, and history without fetching or changing
+the checkout.
+
+## Choose ak:watzup for repository status
+
+### Use ak:watzup when
+
+- You enter a fresh worktree or detached checkout and need orientation.
+- You want an end-of-session status grounded in Git and plan evidence.
+- Multiple branches or worktrees may contain unfinished plans.
+- You need priority-ranked next steps with checkbox progress and rationale.
+- You want remote-tracking branches included while accepting that local refs
+  may be stale.
+
+### Choose another workflow when
+
+- You need to preserve conversation decisions, rationale, blockers, and source
+  pointers for a fresh session. Use `ak:handoff`.
+- You need a chronological reflection. Use `ak:journal`.
+- You need to implement, edit, checkout, merge, commit, push, or publish. Use
+  the owning workflow and authorize the mutation separately.
+- You need live provider or campaign status that is not represented in the
+  repository. Obtain current evidence through an approved integration.
+
+## Prepare a bounded scan
+
+Before starting:
+
+- Complete [Onboarding](../../../getting-started/onboarding) and install
+  Marketing Kit for the active runtime and scope.
+- Run from the intended Git repository.
+- Decide whether cached remote refs are sufficient. The default performs no
+  network operation.
+- Review whether branch names, commit subjects, worktree paths, plan titles,
+  roadmaps, or status lines contain private information.
+- Request path redaction when output will be copied outside the current trusted
+  context.
+
+The underlying scanner supports `--redact-paths`, which replaces absolute paths
+with stable labels. This protects paths, not every sensitive word in branch
+names, commit subjects, plan titles, or working-tree status.
+
+## Invoke the Skill
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:watzup ...` | The Skill runs its bundled Node scanner and returns a report from repository evidence. |
+| Cursor | `/ak:watzup ...` | Slash invocation is user-verified for installed AgentKit Skills. Script execution and visibility of registered worktrees depend on the environment. |
+| Codex | `$ak:watzup ...` | Codex discovers the Skill natively. The scanner still requires Node, Git, and read access to visible worktrees and refs. |
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:watzup "Report current marketing work from local refs only. Do not fetch, checkout, edit, commit, push, or publish. Redact absolute paths and flag stale remote-ref risk"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:watzup "Report current marketing work from local refs only. Do not fetch, checkout, edit, commit, push, or publish. Redact absolute paths and flag stale remote-ref risk"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:watzup "Report current marketing work from local refs only. Do not fetch, checkout, edit, commit, push, or publish. Redact absolute paths and flag stale remote-ref risk"
+```
+
+  </Tab>
+</Tabs>
+
+Use [Runtime adapters](../../../concepts/runtime-adapters) for general Skill and
+tooling differences. This workflow depends mainly on local Node, Git, and
+filesystem access rather than Hook parity.
+
+## Understand the scan stages
+
+1. **Resolve the Git root.** The scanner records the current branch or detached
+   `HEAD`, short commit, dirty state, up to 20 status lines, and active worktree.
+2. **Read refs and worktrees.** It scans local and remote-tracking refs,
+   registered worktrees, recent commit subjects, and checkout relationships.
+3. **Find plans.** It reads unfinished `plan.md` files from visible worktrees
+   and tracked refs. Filesystem plans also receive aggregate checkbox progress
+   from Markdown files in the plan directory, with `phase-*.md` breakdowns.
+4. **Read roadmap evidence.** It inspects `docs/*roadmap*.md` and
+   `docs/*milestones*.md` in visible worktrees for active milestones.
+5. **Rank next steps.** It combines plan status, current-workspace alignment,
+   source provenance, and progress momentum. Dirty working tree and detached
+   `HEAD` hygiene remain first; roadmap items fill remaining slots.
+6. **Render a short report.** It presents current state, selected recent work,
+   in-flight plans, roadmaps, five or six ranked next steps, and warnings.
+
+The Skill runs the bundled scanner in JSON mode first. If it fails, the
+workflow may use minimal read-only Git and filesystem commands, but it must say
+that fallback was used and must not claim a full scan succeeded.
+
+## Interpret priority and freshness
+
+| Signal | Ranking effect |
+| --- | --- |
+| Plan status | `in-progress` outranks `in-review`, which outranks `pending` |
+| Workspace alignment | Current worktree and current branch receive the strongest relevance boosts |
+| Provenance | Filesystem evidence outranks local-ref-only evidence |
+| Momentum | Plans between 40% and 90% complete receive a finish-oriented boost; brand-new plans receive a smaller starter boost |
+| Hygiene | Dirty state and detached `HEAD` appear before plan or roadmap actions |
+
+The score orders evidence; it does not approve an action. Check dependencies,
+owners, campaign timing, legal constraints, and current provider state before
+acting on a recommendation.
+
+## Keep Git, network, and privacy boundaries explicit
+
+<Callout type="warn" title="--fetch changes refs and contacts remotes">
+  Use fresh remote refs only when the user explicitly asks. The scanner’s
+  `--fetch` option runs `git fetch --all --prune`, which uses network and
+  credentials and can update or prune remote-tracking refs. It does not become
+  authorized merely because a status report would be fresher.
+</Callout>
+
+- Default mode runs no network operations, does not change branches, and does
+  not mutate the checkout.
+- The scanner reads plans in every visible registered worktree and may read
+  tracked plan content from many local or remote-tracking refs.
+- JSON evidence includes absolute repository and worktree paths unless
+  `--redact-paths` is used. It also includes branch names, commit subjects,
+  plan titles, roadmap paths, and current status lines.
+- A report can therefore expose internal roadmap, product, campaign, or client
+  identifiers when shared. Review and redact the final report, not only paths.
+- The workflow does not authorize checkout, edit, commit, merge, push,
+  publication, deployment, outreach, account changes, or spend.
+
+## Verify the report
+
+A complete run should provide:
+
+- Current branch or detached `HEAD`, short commit, dirty or clean state, and
+  current worktree.
+- A bounded selection of high-signal local and remote-tracking branches with
+  recent commit evidence.
+- Unfinished plans with `X/Y todos · NN% done` when filesystem checkbox evidence
+  is available.
+- Active roadmap or milestone evidence when matching files exist.
+- Five or six priority-ranked next steps, each with one-line rationale.
+- Warnings for stale remote refs, scan limits, failures, detached `HEAD`, or
+  other incomplete evidence.
+- An explicit statement of whether fetch was requested and whether it succeeded.
+
+Compare the report with `git status --short --branch` and the named plan before
+acting. When remote freshness matters, approve a separate fetch and then rerun
+the report rather than presenting cached refs as live provider state.
+
+## Troubleshoot safely
+
+| Symptom | Safe next step |
+| --- | --- |
+| The runtime does not recognize `ak:watzup` | Confirm Marketing target and scope, restart the runtime, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+| The scanner says the directory is not a Git repository | Move to the intended repository. Do not initialize Git as part of this status workflow. |
+| Remote work looks stale | Keep the stale-ref warning, or explicitly approve `--fetch` after checking network and credential effects. |
+| The report exposes absolute paths | Rerun the scanner with path redaction and review names, subjects, titles, and status lines separately. |
+| A plan is missing | Check whether it lives outside `plans`, beyond scan depth, in an unscanned ref, or beyond the configured plan/ref limits. Do not claim there is no plan. |
+| The scanner fails | Report the error and use only the documented minimal read-only fallback. Label the result partial. |
+| A next step proposes a mutation | Treat it as a recommendation. Choose the owning workflow and request explicit approval before acting. |
+
+Continue with the [Marketing Kit overview](../../marketing) or
+[Projects, artifacts, and checkpoints](../../../concepts/projects-artifacts-checkpoints)
+for ownership and recovery guidance.
+
+## Know the current limits
+
+- Default scanner caps are 12 summarized branches, 3 commits per branch, 8
+  plans in each short plan group, and 80 ranked refs inspected for tracked
+  plans. A report is intentionally not a complete repository archive.
+- Remote branches come from local refs unless `--fetch` is explicitly used, so
+  they may not match the current remote provider.
+- Plan progress is checkbox-based. Missing, inconsistent, or nonstandard plan
+  markup can make percentages incomplete or misleading.
+- Roadmap discovery is limited to matching files under `docs` in visible
+  worktrees.
+- The report cannot establish current campaign performance, revenue,
+  conversion, account state, or provider status unless that evidence is already
+  represented in the scanned repository.

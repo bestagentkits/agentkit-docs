@@ -1,0 +1,207 @@
+---
+title: Preview tệp và tạo visual với ak:preview
+description: Xem content project hoặc tạo explanation Markdown và HTML trong khi kiểm soát thao tác ghi tệp, mở browser, local server, phơi bày mạng và đọc Git.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:preview` để xem tệp hay thư mục hiện có, hoặc tạo visual explanation,
+slide deck, diagram, diff review, plan review hay recap project. Mode đã chọn
+quyết định Skill chỉ đọc content hay còn ghi visual mới, mở browser, khởi động
+process HTTP local, đọc Git history hoặc liên hệ CDN hay GitHub.
+
+## Chọn preview mode nhỏ nhất
+
+### Dùng ak:preview khi
+
+- Bạn cần visual explanation cho workflow marketing hoặc luồng review đã duyệt.
+- Bạn muốn diagram tập trung, ASCII thân thiện với terminal hoặc HTML slide deck.
+- Bạn cần xem tệp Markdown hiện có hoặc duyệt thư mục trong reader UI.
+- Bạn muốn visual diff, so sánh plan hoặc recap project gần đây dựa trên bằng
+  chứng.
+
+### Chọn workflow khác khi
+
+- Bạn cần thay đổi marketing plan, content, code hoặc campaign bên dưới. Hãy
+  preview bằng chứng trước rồi dùng workflow sở hữu phần việc đó.
+- Bạn cần artifact kiến trúc SVG hoặc PNG đạt mức publish. Dùng workflow
+  technical graph chuyên biệt khi khả dụng.
+- Bạn cần image generation hoặc multimodal analysis thay vì visual HTML,
+  Markdown, Mermaid hay ASCII.
+- Bạn cần publish, deploy, liên hệ audience, đổi account hoặc spend.
+  `ak:preview` không cấp quyền cho các tác động đó.
+
+## Chuẩn bị input và ranh giới tác động
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và cài Marketing
+  Kit cho runtime cùng scope đang hoạt động.
+- Chọn path hiện có hoặc topic có scope hẹp.
+- Với `--diff`, xác nhận Git ref, commit, range, working tree hoặc pull request
+  có thể được đọc.
+- Với `--plan-review`, cung cấp plan đã duyệt hoặc xác nhận active plan.
+- Với `--recap`, chọn time window; source workflow mặc định dùng hai tuần.
+- Loại secret và customer data riêng tư khỏi mọi nội dung có thể được render,
+  serve, mở trong browser hay nhúng vào tệp tạo ra.
+- Quyết định tác động local server, browser launch, CDN, GitHub CLI và file write
+  có chấp nhận được không.
+
+## Gọi Skill
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:preview ...` | Source có instruction riêng cho background task Claude và server `${CLAUDE_PLUGIN_ROOT}`. Mode view và Markdown dựa trên server còn phụ thuộc một viewer Skill riêng mà manifest Marketing hiện tại không export. |
+| Cursor | `/ak:preview ...` | Cách gọi bằng slash đã được người dùng xác minh cho AgentKit Skill đã cài. Contract process server riêng cho Claude không phải bằng chứng Cursor parity; generation chỉ bằng tệp phụ thuộc tool khả dụng. |
+| Codex | `$ak:preview ...` | Codex tìm Skill bằng discovery native, nhưng instruction server trong source không phải contract process native của Codex. Generation chỉ bằng tệp và browser action phụ thuộc session hiện tại. |
+
+Để bắt đầu theo cách dễ di chuyển nhất, hãy yêu cầu rõ visual HTML chỉ tạo tệp
+và từ chối browser launch mặc định cho tới khi review external resource
+reference:
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:preview --html --diagram "Luồng review launch đã duyệt từ draft tới duyệt brand, legal và publish. Không dùng customer data. Ghi tệp HTML nhưng không mở hoặc publish; báo external URL"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:preview --html --diagram "Luồng review launch đã duyệt từ draft tới duyệt brand, legal và publish. Không dùng customer data. Ghi tệp HTML nhưng không mở hoặc publish; báo external URL"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:preview --html --diagram "Luồng review launch đã duyệt từ draft tới duyệt brand, legal và publish. Không dùng customer data. Ghi tệp HTML nhưng không mở hoặc publish; báo external URL"
+```
+
+  </Tab>
+</Tabs>
+
+Đọc [Runtime adapter](../../../concepts/runtime-adapters) trước khi giả định
+server, background task, browser, Agent hoặc Hook có parity.
+
+## Chọn mode có chủ đích
+
+| Input hoặc flag | Nội dung đọc | Tác động ghi hoặc process |
+| --- | --- | --- |
+| Không có argument | Không đọc cho tới khi bạn chọn operation | Mở question flow của runtime khi khả dụng |
+| `<file.md>` hoặc `<directory/>` | Tệp đã resolve hoặc thư mục có thể duyệt | Source workflow khởi động viewer server và mở browser |
+| `--stop` | PID record của viewer | Dừng mọi process Markdown Novel Viewer đang chạy được tìm thấy qua PID prefix dùng chung |
+| `--explain <topic>` | Topic và bằng chứng project liên quan | Ghi Markdown dưới thư mục `visuals/` theo plan rồi khởi động viewer server |
+| `--slides <topic>` | Topic và bằng chứng liên quan | Ghi Markdown slide rồi khởi động viewer server |
+| `--diagram <topic>` | Topic và bằng chứng liên quan | Ghi ASCII cùng Mermaid Markdown, render và kiểm tra trực quan diagram rồi khởi động viewer server |
+| `--ascii <topic>` | Topic và bằng chứng liên quan | Tạo ASCII thân thiện với terminal; `--html --ascii` không được hỗ trợ |
+| `--html --explain`, `--html --diagram` hoặc `--html --slides` | Topic, reference của mode và bằng chứng liên quan | Ghi một tệp `.html` và mở bằng browser command của platform; không cần HTTP server |
+| `--html --diff [ref]` | Thống kê Git diff, tệp đã đổi, context gần đó, tín hiệu public API và docs liên quan; số PR dùng `gh pr diff` | Ghi và mở HTML review |
+| `--html --plan-review [plan-file]` | Plan, mọi tệp được tham chiếu, dependency, test, config và tác động public API | Ghi và mở so sánh HTML |
+| `--html --recap [timeframe]` | Danh tính project, Git log và status, plan, ADR cùng context kiến trúc | Ghi và mở HTML recap |
+
+Argument resolution ưu tiên `--stop` cao nhất. `--html` đổi loại output,
+generation flag chọn workflow, còn path hiện có chọn view mode. Nếu không
+resolve được path, Skill nên hỏi thay vì đoán.
+
+## Hiểu các giai đoạn tệp và process
+
+1. **Resolve request.** Skill chọn view hoặc generation mode, validate topic hay
+   path và chuyển topic thành slug tối đa 80 ký tự.
+2. **Tập hợp bằng chứng có scope.** Skill chỉ đọc nguồn mà mode yêu cầu. Các
+   HTML mode nặng về Git có ranh giới đọc rộng hơn như bảng trên.
+3. **Chọn output path.** Khi có active plan, output đi tới
+   `{plan_dir}/visuals/{slug}.md` hoặc `.html`; nếu không, output đi tới
+   `plans/visuals/{slug}.md` hoặc `.html`. Thư mục thiếu sẽ được tạo.
+4. **Tạo và review.** Diagram phải được render rồi kiểm tra trực quan; riêng
+   syntax validation là chưa đủ.
+5. **Mở kết quả.** HTML dùng `open`, `xdg-open` hoặc `start` và không cần server.
+   Markdown cùng view mode cố khởi động process Markdown Novel Viewer riêng.
+6. **Báo bằng chứng.** Skill báo output path, URL khi áp dụng, kết quả browser
+   và dependency không khả dụng hoặc check thất bại.
+
+Source workflow overwrite tệp hiện có tại output path đã chọn mà không hỏi.
+Hãy kiểm tra target path trước generation khi công việc cũ có thể tồn tại.
+
+## Kiểm soát tác động server, network và quyền riêng tư
+
+<Callout type="warn" title="Viewer mode có thể phơi bày content local trên mạng">
+  Source view workflow khởi động HTTP server không có authentication với
+  `--host 0.0.0.0`, khiến URL có thể truy cập qua interface mạng local. Server
+  giới hạn route tệp vào các thư mục được cấu hình, nhưng bất kỳ ai truy cập
+  được process đều có thể yêu cầu content được cho phép. Không serve thư mục
+  hoặc tệp chứa secret, customer data, private plan hay personal data.
+</Callout>
+
+- Viewer mặc định dùng port `3456` và tìm tới `3500` khi port bận. Process ghi
+  PID record dưới `/tmp` và tiếp tục hoạt động cho tới khi bị dừng hoặc
+  background task kết thúc.
+- `--stop` dừng mọi viewer instance tìm thấy qua record
+  `md-novel-viewer-*.pid`, không chỉ tệp mở gần nhất.
+- Export Marketing hiện tại có `ak:preview` nhưng không có dependency
+  `ak:markdown-novel-viewer` riêng được instruction source nhắc tới. Vì vậy
+  không thể hứa mode dựa trên server hoàn tất chỉ từ Marketing Kit.
+- Ngay cả khi viewer riêng hiện diện, source của nó khai báo npm dependency để
+  render Markdown. Không giả định server là zero-dependency hoặc sửa bằng một
+  lần manual install chưa được review.
+- HTML output có thể chứa CDN reference cho Google Fonts, Mermaid, Chart.js,
+  ELK layout hoặc anime.js. Mở tệp có thể liên hệ provider đó và để lộ request
+  metadata; render offline có thể không đầy đủ.
+- Diff theo số PR cần `gh` và quyền truy cập GitHub. Các thao tác đọc Git khác
+  dùng trạng thái local trừ khi command riêng refresh remote.
+- Browser open command và tệp được tạo là tác động local. Chúng không cấp quyền
+  upload, publication, deployment, thay đổi account, outreach hay spend.
+
+## Xác minh output
+
+Một lần chạy hoàn tất nên cung cấp:
+
+- Mode đã chọn, input đã resolve và output path chính xác.
+- Artifact Markdown hoặc HTML dưới thư mục `visuals/` của active plan, hoặc
+  dưới `plans/visuals/` khi không có active plan.
+- Bằng chứng render và kiểm tra cho diagram, gồm việc sửa overlap, label khó đọc
+  hoặc layout hỏng.
+- Local và network URL chỉ khi process viewer thực sự khởi động.
+- Disclosure về host, port, process đang chạy và cách dừng.
+- Disclosure về quyền truy cập CDN hoặc GitHub khi mode đã chọn cần.
+- Phân tách rõ review material được tạo ra với mọi mutation, publication,
+  account action hoặc spend còn chưa duyệt.
+
+Với HTML, kiểm tra source tệp để tìm external URL, mở cả light và dark theme,
+resize trang và xác minh chart hay Mermaid thực sự load. Với review dựa trên
+Git, so sánh ref đã nêu cùng current status với repository trước khi chấp nhận
+kết luận.
+
+## Xử lý sự cố an toàn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Runtime không nhận diện `ak:preview` | Xác nhận target và scope Marketing, khởi động lại runtime rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+| View hoặc Markdown mode không tìm thấy viewer server | Coi đây là dependency gap hiện tại của Marketing. Dùng output HTML chỉ tạo tệp hoặc ASCII, hoặc dừng và chỉ cài qua tuyến được hỗ trợ đã duyệt riêng. |
+| Port bận | Để viewer chọn port tiếp theo và báo URL đầy đủ. Không giả định `3456`. |
+| Content nhạy cảm đã được serve trên `0.0.0.0` | Dừng mọi viewer instance bằng invocation `ak:preview --stop` theo runtime, loại content khỏi scope được serve và review mức phơi bày trước khi khởi động lại. |
+| HTML mở nhưng thiếu diagram hoặc font | Kiểm tra network access cùng CDN reference, hoặc regenerate không dùng external library khi có thể. |
+| `--diff` không có Git context | Chạy trong repository dự kiến và nêu ref chính xác. Số PR còn cần `gh`. |
+| `--plan-review` không tìm thấy plan | Cung cấp explicit plan path hoặc thiết lập active plan; không so sánh với tệp đoán. |
+| Output path đã chứa công việc có giá trị | Dừng và di chuyển hoặc đổi tên artifact cũ trước khi generate; source workflow overwrite mà không hỏi. |
+
+Tiếp tục với [Tổng quan Marketing Kit](../../marketing) hoặc
+[Projects, artifact và checkpoint](../../../concepts/projects-artifacts-checkpoints)
+trước khi khôi phục từ thao tác ghi ngoài ý muốn.
+
+## Biết các giới hạn hiện tại
+
+- Cùng source Skill được đóng gói cho cả ba runtime, nhưng instruction viewer
+  hướng riêng tới Claude và không chứng minh behavior server có thể di chuyển.
+- Marketing Kit hiện bỏ dependency viewer mà mode dựa trên server tham chiếu.
+  Trang này không claim các mode đó hoàn tất chỉ từ package Marketing.
+- Source viewer riêng còn cần npm dependency để render Markdown; chỉ có
+  `ak:preview` không chứng minh các dependency đó khả dụng.
+- “Một tệp HTML” không nhất thiết nghĩa là offline hoặc không có network vì
+  font và JavaScript library tùy chọn có thể vẫn là CDN import.
+- Visual review có thể giải thích bằng chứng nhưng không chứng minh hiệu suất
+  campaign, conversion, revenue, trạng thái provider hiện tại hay tính đúng của
+  source data.
