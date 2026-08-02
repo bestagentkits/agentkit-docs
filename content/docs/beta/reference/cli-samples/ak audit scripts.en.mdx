@@ -1,0 +1,104 @@
+---
+title: ak audit scripts
+description: Scan local hook and skill scripts for advisory risk patterns without executing them.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak audit scripts` to inventory local Hook and skill scripts and flag text
+patterns that deserve review. The scan is heuristic and advisory: risky findings
+do not block an install and do not make the command fail.
+
+## Usage
+
+```bash
+ak audit scripts [path...]
+```
+
+With no path, the command scans `./kits`. Each argument may name a local file or
+directory. It makes no network request and never executes a discovered script.
+
+## Command flag
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--max-file-bytes <bytes>` | `0` | Set the maximum content bytes read from each script. `0` or a negative value selects the internal 512 KiB limit. |
+
+Shared flags are described in [CLI conventions](../cli-conventions). The command
+does not prompt; `--yes` has no effect.
+
+## What the scanner includes
+
+Under path segments named `hooks` or `scripts`, the scanner considers recognized
+shell, Python, JavaScript, TypeScript, PowerShell, batch, and native executable
+extensions. Executable files and files with a recognized shebang can also be
+included. It skips directories named `.git`, `.logs`, `node_modules`, and
+`vendor`.
+
+For readable text within the limit, it reports language, entrypoint,
+dependencies, executable status, size, and the first match for each known risk
+pattern. Current patterns include dynamic execution, child processes,
+download-to-shell pipelines, absolute writes, environment or secret access, and
+network clients. Files above the limit are reported as `executable-only` rather
+than read in full.
+
+```bash
+ak audit scripts ./kits/engineer ./kits/core --json
+ak audit scripts ~/.claude/plugins/ak-engineer --no-interactive
+```
+
+<Callout type="warning">
+  `safe` means no current heuristic matched. It is not a security guarantee.
+  The scanner does not sandbox, validate intent, or prove that dependencies and
+  invoked programs are safe.
+</Callout>
+
+## Privacy boundary
+
+Human and JSON results can include absolute root and file paths plus the full
+matched source line as `evidence`. This command does not apply diagnostics
+redaction. Review output before sharing it, and scan only roots you trust.
+
+Directory walking does not follow a symlinked directory, but a candidate
+symlinked file can resolve to its local target when read. Remove or isolate
+unexpected symlinks before scanning a tree that may contain sensitive files.
+
+## Output and automation
+
+Human stdout begins with script and finding counts, then lists each script and
+finding. JSON uses one stdout envelope:
+
+```text
+schema_version: 1
+kind: audit.scripts
+data.schema_version: 1
+data.roots[]: absolute paths
+data.summary: total, by_risk, by_language, findings, executable_only
+data.scripts[]: rel_path, abs_path, kind, language, shebang, executable,
+                size_bytes, risk_level, entrypoint, dependencies, findings
+data.scripts[].findings[]: code, level, message, line, evidence
+```
+
+This is one JSON document, not NDJSON. A scan with `caution` or `risky` findings
+still exits `0`. Scan failures occur before the renderer; with `--json`, do not
+assume they produce a structured error envelope. Always check the process exit
+status. Flag-parse errors can remain plain text.
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | The requested roots were scanned, regardless of finding severity. | Review every finding and relevant surrounding code. |
+| `1` | A root was missing or invalid, a file was unreadable, walking failed, or output failed. | Fix access or narrow the root, then rerun. |
+| `2` | A flag could not be parsed. | Correct the invocation. |
+
+The command is read-only and creates no snapshot, cache, or
+`.agentkit/script-audit.json` sidecar. It has no apply, fix, force, backup, or
+rollback mode.
+
+## Related commands
+
+- [Check installed-file drift](<./ak audit>)
+- [Complete `ak audit scripts` command facts](../cli/ak_audit_scripts)
+- [Export redacted support diagnostics](<./ak diagnostics export>)
+- [CLI conventions](../cli-conventions)

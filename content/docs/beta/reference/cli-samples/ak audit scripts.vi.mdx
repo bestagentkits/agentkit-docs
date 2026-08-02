@@ -1,0 +1,103 @@
+---
+title: ak audit scripts
+description: Quét Hook và skill script cục bộ để tìm mẫu rủi ro mang tính tham khảo mà không thực thi chúng.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak audit scripts` để lập danh mục Hook và skill script cục bộ, đồng thời
+đánh dấu các mẫu văn bản cần được xem lại. Phép quét chỉ mang tính heuristic và
+tham khảo: finding rủi ro không chặn cài đặt và không làm lệnh thất bại.
+
+## Cách dùng
+
+```bash
+ak audit scripts [path...]
+```
+
+Khi không có đường dẫn, lệnh quét `./kits`. Mỗi argument có thể là tệp hoặc thư
+mục cục bộ. Lệnh không gọi mạng và không thực thi script được phát hiện.
+
+## Tuỳ chọn của lệnh
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--max-file-bytes <bytes>` | `0` | Đặt số byte nội dung tối đa đọc từ mỗi script. `0` hoặc giá trị âm chọn giới hạn nội bộ 512 KiB. |
+
+Các cờ dùng chung được mô tả trong [quy ước CLI](../cli-conventions). Lệnh không
+hiển thị prompt; `--yes` không có tác dụng.
+
+## Scanner bao gồm những gì
+
+Trong segment đường dẫn tên `hooks` hoặc `scripts`, scanner xem xét các phần mở
+rộng shell, Python, JavaScript, TypeScript, PowerShell, batch và native
+executable đã biết. Tệp executable và tệp có shebang nhận diện được cũng có thể
+được đưa vào. Lệnh bỏ qua thư mục `.git`, `.logs`, `node_modules` và `vendor`.
+
+Với nội dung đọc được trong giới hạn, lệnh báo language, entrypoint,
+dependencies, trạng thái executable, kích thước và lần khớp đầu tiên của từng
+mẫu rủi ro đã biết. Các mẫu hiện tại gồm thực thi động, process con, pipeline
+download vào shell, ghi đường dẫn tuyệt đối, truy cập environment hoặc secret và
+network client. Tệp vượt giới hạn được báo là `executable-only` thay vì đọc toàn
+bộ.
+
+```bash
+ak audit scripts ./kits/engineer ./kits/core --json
+ak audit scripts ~/.claude/plugins/ak-engineer --no-interactive
+```
+
+<Callout type="warning">
+  `safe` chỉ có nghĩa không khớp heuristic hiện tại. Đây không phải bảo đảm an
+  ninh. Scanner không sandbox, không xác minh ý định và không chứng minh
+  dependency hay chương trình được gọi là an toàn.
+</Callout>
+
+## Ranh giới quyền riêng tư
+
+Kết quả cho người dùng và JSON có thể chứa root, đường dẫn tệp tuyệt đối và toàn
+bộ dòng nguồn khớp mẫu trong `evidence`. Lệnh không áp dụng redaction của
+diagnostics. Hãy xem đầu ra trước khi chia sẻ và chỉ quét root đáng tin cậy.
+
+Việc duyệt thư mục không đi theo thư mục symlink, nhưng một tệp symlink ứng viên
+có thể resolve tới target cục bộ khi đọc. Hãy loại bỏ hoặc cô lập symlink lạ
+trước khi quét cây có thể chứa tệp nhạy cảm.
+
+## Đầu ra và tự động hoá
+
+Stdout cho người dùng bắt đầu bằng số script và finding, sau đó liệt kê từng
+script và finding. JSON dùng một envelope:
+
+```text
+schema_version: 1
+kind: audit.scripts
+data.schema_version: 1
+data.roots[]: absolute paths
+data.summary: total, by_risk, by_language, findings, executable_only
+data.scripts[]: rel_path, abs_path, kind, language, shebang, executable,
+                size_bytes, risk_level, entrypoint, dependencies, findings
+data.scripts[].findings[]: code, level, message, line, evidence
+```
+
+Đây là một tài liệu JSON, không phải NDJSON. Phép quét có finding `caution` hoặc
+`risky` vẫn thoát `0`. Lỗi quét xảy ra trước renderer; với `--json`, đừng giả
+định sẽ có error envelope có cấu trúc. Luôn kiểm tra mã thoát process. Lỗi phân
+tích cờ có thể vẫn là plain text.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước an toàn tiếp theo |
+| --- | --- | --- |
+| `0` | Các root đã yêu cầu được quét, bất kể mức độ finding. | Xem từng finding và phần mã xung quanh liên quan. |
+| `1` | Root thiếu/không hợp lệ, tệp không đọc được, duyệt cây hoặc xuất kết quả thất bại. | Sửa quyền truy cập hoặc thu hẹp root rồi chạy lại. |
+| `2` | Không phân tích được cờ. | Sửa cách gọi. |
+
+Lệnh chỉ đọc và không tạo snapshot, cache hay sidecar
+`.agentkit/script-audit.json`. Lệnh không có chế độ apply, fix, force, backup
+hoặc rollback.
+
+## Lệnh liên quan
+
+- [Kiểm tra độ lệch của tệp đã cài](<./ak audit>)
+- [Thông tin đầy đủ của lệnh `ak audit scripts`](../cli/ak_audit_scripts)
+- [Xuất diagnostics đã redaction](<./ak diagnostics export>)
+- [Quy ước CLI](../cli-conventions)

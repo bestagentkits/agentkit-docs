@@ -1,0 +1,109 @@
+---
+title: ak audit
+description: Kiểm tra độ lệch của các tệp Kit do AgentKit sở hữu dựa trên dữ liệu đã ghi mà không thay đổi bản cài.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak audit` để so sánh Kit đã cài với fingerprint sở hữu được lưu khi
+AgentKit cài Kit đó. Phép kiểm tra chỉ đọc dữ liệu cục bộ. Lệnh báo tệp đã sửa,
+đã xoá hoặc mới được thêm; lệnh không tự sửa chúng.
+
+## Cách dùng
+
+```bash
+ak audit [kit]
+```
+
+Bỏ `[kit]` để kiểm tra mọi Kit AgentKit được phát hiện. Truyền tối đa một tên
+Kit hợp lệ để thu hẹp kết quả.
+
+## Tuỳ chọn của lệnh
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--plugin-mode` | `false` | Kiểm tra route project-plugin của Claude Code thay vì route project-native. |
+| `--project-dir <dir>` | Trống | Kiểm tra route native của project này; kết hợp với `--plugin-mode` cho project plugin. |
+| `--strict` | `false` | Đồng thời thất bại khi manifest sở hữu hoặc mốc hash bị thiếu hay không hợp lệ. |
+
+Các cờ dùng chung được mô tả trong [quy ước CLI](../cli-conventions). Lệnh không
+hiển thị prompt, vì vậy `--yes` và `--no-interactive` không thay đổi tác động.
+
+## Chọn route cài đặt
+
+Khi không có cờ route, lệnh kiểm tra các Claude Code plugin ở phạm vi user trong
+plugin root đã cấu hình. `AGENTKIT_PLUGIN_DIR` ghi đè root đó;
+`AGENTKIT_CLAUDE_HOME` là mức ghi đè tiếp theo trước Claude home mặc định.
+
+```bash
+ak audit engineer
+ak audit engineer --project-dir .
+ak audit engineer --plugin-mode --project-dir .
+```
+
+Kiểm tra project-native chỉ đọc các đường dẫn có trong chỉ mục hash sở hữu native
+của AgentKit. Tệp project không liên quan không bị xem là độ lệch kiểu `added`.
+Kiểm tra plugin so sánh các tệp thường trong cây plugin được sở hữu với install
+manifest và bỏ qua lifecycle sidecar của chính AgentKit.
+
+## Hiểu ngữ nghĩa strict và độ lệch
+
+Nội dung được sở hữu bị sửa, xoá hoặc thêm là độ lệch và luôn thoát `1`. Bản cài
+cũ không có fingerprint dùng được sẽ không thể chứng minh tính toàn vẹn. Khi
+không có `--strict`, lệnh có thể báo mốc bị thiếu hoặc sai cấu trúc mà không
+thất bại; với `--strict`, lỗi manifest đó thoát `1`. Mốc không đọc được là lỗi
+I/O và thoát `1` ở cả hai chế độ.
+
+<Callout type="warning">
+  Mã thoát `0` chỉ có nghĩa không phát hiện độ lệch trong các đường dẫn mà
+  metadata sở hữu hiện có cho phép AgentKit kiểm tra. Đây không phải phép quét
+  mã độc và không chứng minh bản cài cũ không có mốc là nguyên vẹn.
+</Callout>
+
+## Đầu ra và tự động hoá
+
+Đầu ra cho người dùng nêu install mode và scope, sau đó báo từng Kit và đường
+dẫn tương đối bị lệch. JSON thành công là một envelope trên stdout:
+
+```text
+schema_version: 1
+kind: audit
+data.install_mode: plugin or native
+data.scope: user or project
+data.kits[].kit: string
+data.kits[].plugin_dir: local path
+data.kits[].has_manifest: boolean
+data.kits[].manifest_issue: optional string
+data.kits[].drift[]: rel_path and kind
+```
+
+`kind` của một mục độ lệch là `modified`, `removed` hoặc `added`. Kết quả có độ
+lệch hoặc lỗi manifest strict vẫn ghi báo cáo JSON bình thường lên stdout rồi
+thoát `1`; đó không phải lỗi thực thi JSON. Lỗi I/O và validation dùng stderr.
+Lỗi phân tích cờ có thể vẫn là plain text.
+
+Báo cáo JSON chứa đường dẫn tuyệt đối cục bộ. Hãy xem lại trước khi đính kèm vào
+issue hoặc chia sẻ ra ngoài máy.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước an toàn tiếp theo |
+| --- | --- | --- |
+| `0` | Mọi đường dẫn có mốc đều khớp và không có lỗi manifest strict. | Giữ kết quả làm baseline toàn vẹn. |
+| `1` | Phát hiện độ lệch, validation mốc strict thất bại, có lỗi I/O/render hoặc truyền quá nhiều argument theo vị trí. | Phân biệt độ lệch được báo với lỗi lệnh/cách gọi trước khi xử lý. |
+| `2` | Tên Kit hoặc giá trị cờ không hợp lệ. | Sửa cách gọi. |
+
+## Khôi phục an toàn
+
+Lệnh không tạo backup và không thay đổi tệp, process, cache, credential hay trạng
+thái mạng. Với Kit phát hành có độ lệch, hãy xem các đường dẫn trước rồi preview
+route refresh phù hợp. Đừng xoá tệp lạ hoặc dùng `--force` như phản ứng đầu tiên.
+Nếu đầu ra nêu một nguồn cấu thành nội bộ, hãy refresh Kit con đã cài và sở hữu
+nội dung thay vì tên nguồn nội bộ.
+
+## Lệnh liên quan
+
+- [Kiểm tra Hook và skill script](<./ak audit scripts>)
+- [Thông tin đầy đủ của lệnh `ak audit`](../cli/ak_audit)
+- [Refresh Kit đã cài](../cli/ak_kit_refresh)
+- [Xử lý sự cố cài Kit](../../troubleshooting/kit-installation)

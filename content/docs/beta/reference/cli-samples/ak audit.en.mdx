@@ -1,0 +1,111 @@
+---
+title: ak audit
+description: Check AgentKit-owned kit files for recorded drift without changing the installation.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak audit` to compare an installed kit with the ownership fingerprint saved
+when AgentKit installed it. The check is local and read-only. It reports files
+that were modified, removed, or added; it does not repair them.
+
+## Usage
+
+```bash
+ak audit [kit]
+```
+
+Omit `[kit]` to audit every discovered AgentKit kit. Supply at most one valid
+kit name to restrict the result.
+
+## Command flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--plugin-mode` | `false` | Audit a Claude Code project-plugin route instead of a native project route. |
+| `--project-dir <dir>` | Empty | Audit the native route for this project; combine with `--plugin-mode` for a project plugin. |
+| `--strict` | `false` | Also fail when an ownership manifest or hash anchor is missing or invalid. |
+
+Shared flags are described in [CLI conventions](../cli-conventions). This
+command never prompts, so `--yes` and `--no-interactive` do not change its
+effects.
+
+## Choose the install route
+
+With neither route flag, the command audits user-scope Claude Code plugins under
+the configured plugin root. `AGENTKIT_PLUGIN_DIR` overrides that root;
+`AGENTKIT_CLAUDE_HOME` is the next override before the default Claude home.
+
+```bash
+ak audit engineer
+ak audit engineer --project-dir .
+ak audit engineer --plugin-mode --project-dir .
+```
+
+Project-native audit reads only paths listed in AgentKit's native ownership hash
+index. It does not classify an unrelated project file as added drift. Plugin
+audit compares regular files in the owned plugin tree with its install manifest,
+excluding AgentKit's own lifecycle sidecars.
+
+## Understand strict drift semantics
+
+Modified, removed, or added owned content is drift and exits `1` in every mode.
+A legacy install without a usable fingerprint cannot prove integrity. Without
+`--strict`, a missing or structurally invalid anchor can be reported without
+failing; with `--strict`, that manifest issue exits `1`. An unreadable anchor is
+an I/O error and exits `1` in either mode.
+
+<Callout type="warning">
+  Exit `0` means no detected drift among the paths the available ownership
+  metadata allowed AgentKit to audit. It is not a malware scan and does not
+  prove that an unanchored legacy install is intact.
+</Callout>
+
+## Output and automation
+
+Human output names the install mode and scope, then reports each kit and drifted
+relative path. JSON success output is one stdout envelope:
+
+```text
+schema_version: 1
+kind: audit
+data.install_mode: plugin or native
+data.scope: user or project
+data.kits[].kit: string
+data.kits[].plugin_dir: local path
+data.kits[].has_manifest: boolean
+data.kits[].manifest_issue: optional string
+data.kits[].drift[]: rel_path and kind
+```
+
+`kind` for a drift entry is `modified`, `removed`, or `added`. A drifted or
+strict-manifest result still writes this normal JSON report to stdout and then
+exits `1`; it is not a JSON execution error. I/O and validation failures use
+stderr. Flag-parse failures can remain plain text.
+
+The JSON report contains local absolute paths. Review it before attaching it to
+an issue or sharing it outside your machine.
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | Every audited anchored path matched, with no strict manifest issue. | Keep the result as the integrity baseline. |
+| `1` | Drift was found, strict anchor validation failed, an I/O/rendering error occurred, or too many positional arguments were supplied. | Distinguish reported drift from a command or invocation error before acting. |
+| `2` | The kit name or a flag value was invalid. | Correct the invocation. |
+
+## Recover safely
+
+The command creates no backup and changes no file, process, cache, credential,
+or network state. For a shipped kit with drift, review the paths first, then
+preview the appropriate refresh route. Do not delete unknown files or use
+`--force` as the first response. If output identifies an internal composition
+source, refresh the installed child kit that owns the content rather than the
+internal source name.
+
+## Related commands
+
+- [Audit hook and skill scripts](<./ak audit scripts>)
+- [Complete `ak audit` command facts](../cli/ak_audit)
+- [Refresh an installed kit](../cli/ak_kit_refresh)
+- [Kit installation troubleshooting](../../troubleshooting/kit-installation)
