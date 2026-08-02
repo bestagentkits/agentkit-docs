@@ -1,0 +1,130 @@
+---
+title: Tìm workflow phù hợp với ak:help
+description: Truy vấn catalog AgentKit đang được cài, thu hẹp theo tác vụ và nhận đúng tuyến Skill hoặc CLI mà không dựa vào danh sách cũ.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:help` khi bạn biết mục tiêu nhưng chưa biết Skill hoặc lệnh CLI nào đã
+cài là phù hợp. Skill khám phá catalog hiện tại, lọc các lựa chọn liên quan và
+đưa ra tuyến chính xác thay vì một inventory được sao chép.
+
+## Chọn ak:help để định tuyến
+
+### Dùng ak:help khi
+
+- Bạn muốn biết Skill đã cài nào phù hợp với tác vụ.
+- Bạn cần giải thích ngắn gọn về cách dùng AgentKit.
+- Bạn muốn xác nhận một Skill được nêu tên có thực sự được cài hay không.
+- Bạn cần help hiện tại của một lệnh CLI thay vì cú pháp được nhớ lại.
+
+### Chọn workflow khác khi
+
+- Bạn đã biết Skill và cần chạy workflow thực tế của nó. Hãy gọi Skill đó trực
+  tiếp.
+- Bạn cần tư vấn kiến trúc. Dùng `ak:ask` hoặc `ak:advise`.
+- Bạn cần tài liệu tham chiếu đầy đủ đã xuất bản cho lệnh CLI. Dùng
+  [Tham chiếu CLI](../../../reference/cli) thay vì coi help prose là registry.
+
+## Chuẩn bị project và runtime
+
+Trước khi bắt đầu:
+
+- Hoàn tất [Làm quen](../../../getting-started/onboarding), và xác nhận Engineer
+  Kit đã được cài cho runtime và scope bạn đang dùng.
+- Mô tả kết quả bạn muốn, không chỉ tên Skill phỏng đoán.
+- Xác định bạn cần Skill của trợ lý hay lệnh CLI `ak`.
+- Giữ các scope Skill ở project và user đang hoạt động để kết quả phản ánh bản
+  cài hiện tại.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:help ...` | Chạy như một Engineer Skill đã cài qua cơ chế native hoặc plugin tường minh. |
+| Cursor | `/ak:help ...` | Dùng cách viết slash đã được người dùng xác minh; tính tương đương của catalog và chooser phụ thuộc runtime hiện tại. |
+| Codex | `$ak:help ...` | Dùng cơ chế khám phá native của Codex; bề mặt catalog khả dụng phụ thuộc môi trường Codex hiện tại. |
+
+## Chạy Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:help "I need to compare a proposed migration with the current code, but I do not want implementation yet."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:help "I need to compare a proposed migration with the current code, but I do not want implementation yet."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:help "I need to compare a proposed migration with the current code, but I do not want implementation yet."
+```
+
+  </Tab>
+</Tabs>
+
+Skill nhận một yêu cầu trợ giúp. Skill không có mode flag đã công bố hay output
+tệp.
+
+## Hiểu những gì diễn ra trong một lần chạy
+
+1. **Skill đọc catalog hiện tại.** Skill dùng catalog Skill đã cài của runtime
+   khi bề mặt này khả dụng.
+2. **Skill chuyển sang khám phá có scope khi cần.** Skill tìm các tệp `SKILL.md`
+   hiện tại trong root Skill ở project và user đang hoạt động, rồi chỉ đọc
+   frontmatter của ứng viên liên quan.
+3. **Skill thu hẹp ứng viên.** Skill chỉ tóm tắt các Skill phù hợp với kết quả
+   được yêu cầu.
+4. **Skill kiểm tra khả dụng.** Skill nói rõ khi một Skill được nhắc tới chưa cài.
+5. **Skill xác minh cú pháp CLI khi cần.** Skill đọc `ak --help` hoặc help của
+   lệnh liên quan thay vì dựng lại lệnh từ prose.
+6. **Skill đề xuất một tuyến.** Tác vụ rõ ràng nhận Skill hoặc lệnh cụ thể nhất
+   đang được cài và phù hợp.
+
+## Giữ việc khám phá cập nhật và có scope
+
+<Callout type="info" title="Catalog đã cài là nguồn thẩm quyền">
+  Số lượng, tên và khả dụng của Skill có thể thay đổi theo kit, scope và runtime.
+  `ak:help` không dựa vào danh sách đóng gói hay số lượng được nhớ lại.
+</Callout>
+
+Workflow đọc metadata catalog và command help. Skill không cài Skill, sửa
+project, chạy workflow được đề xuất, xuất bản dữ liệu hay yêu cầu provider bên
+ngoài. Việc khám phá phải nằm trong root Skill ở project và user đang hoạt động.
+
+## Xác minh kết quả
+
+Kết quả đầy đủ nên cung cấp:
+
+- Cách diễn đạt lại ngắn gọn kết quả được yêu cầu.
+- Chỉ các ứng viên đã cài có liên quan.
+- Một Skill hoặc lệnh CLI được khuyến nghị khi tác vụ đã rõ.
+- Cách gọi chính xác cho runtime hiện tại.
+- Thông báo rõ khi Skill được yêu cầu không khả dụng.
+- Command help hiện tại khi yêu cầu liên quan đến CLI.
+
+## Khắc phục sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Có quá nhiều Skill được liệt kê | Nêu lại kết quả mong muốn, ranh giới quyền và bạn cần tư vấn, lập kế hoạch, triển khai hay xác minh. |
+| Skill được đề xuất không được nhận ra | Xác nhận kit, target và scope đã cài, rồi khởi động lại phiên runtime. |
+| Cú pháp CLI có vẻ chưa chắc chắn | Chạy `ak --help` hoặc `ak <command> --help` và dùng [Tham chiếu CLI](../../../reference/cli) đã tạo. |
+| Kết quả phản ánh bản cài cũ | Làm mới phiên runtime để catalog Skill đã cài được dựng lại. |
+| Runtime vẫn không tìm thấy Skill | Làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+## Biết giới hạn hiện tại
+
+- Kết quả chỉ phản ánh Skill nhìn thấy trong scope project và user hiện tại.
+- Help định tuyến tác vụ; help không thực hiện workflow được định tuyến.
+- Help prose không phải command registry đầy đủ.
+- Cách gọi slash trên Cursor là bằng chứng do người dùng xác minh, không chứng
+  minh catalog hoặc chooser tương đương.
+- Stable và beta đóng gói cùng workflow `ak:help`.

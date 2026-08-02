@@ -1,0 +1,222 @@
+---
+title: Xem hoặc giải thích project bằng hình ảnh với ak:preview
+description: Mở nội dung hiện có hoặc tạo giải thích Markdown và HTML, sơ đồ, slide, diff review, plan review và project recap.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:preview` để mở tệp hoặc thư mục hiện có trong reader, hoặc chuyển một
+chủ đề cùng bằng chứng project hiện tại thành visual artifact được lưu. Skill hỗ
+trợ visual Markdown ngắn gọn, trang HTML một tệp, slide deck, sơ đồ, diff review,
+plan review và recap project gần đây.
+
+## Chọn ak:preview khi visual giúp hiểu tốt hơn
+
+### Dùng ak:preview khi
+
+- Bạn muốn duyệt tệp Markdown hoặc thư mục hiện có trong reader.
+- Code path, kiến trúc hoặc data flow dễ hiểu hơn bằng hình ảnh.
+- Bạn cần sơ đồ ASCII hoặc Mermaid cho thảo luận kỹ thuật.
+- Bạn yêu cầu rõ giải thích HTML hoặc slide deck.
+- Bạn muốn visual review cho diff, implementation plan hoặc ngữ cảnh project gần
+  đây.
+
+### Chọn workflow khác khi
+
+- Prose thường hoặc bảng ngắn đã giải thích rõ quan hệ.
+- Bạn cần sơ đồ kiến trúc SVG hoặc PNG đủ chất lượng xuất bản. Dùng
+  `ak:tech-graph`.
+- Bạn cần cập nhật tài liệu project bền vững sau khi tạo visual. Dùng
+  `ak:docs update`.
+- Bạn cần kết quả code review mà không cần visual artifact. Dùng
+  `ak:code-review`.
+
+## Chuẩn bị project và runtime
+
+Trước khi bắt đầu:
+
+- Hoàn tất [Làm quen](../../../getting-started/onboarding), và xác nhận Engineer
+  Kit đã được cài cho runtime và scope bạn đang dùng.
+- Cung cấp path hiện có cho view mode hoặc chủ đề cụ thể để tạo mới.
+- Mở project liên quan khi visual phụ thuộc vào source, lịch sử Git, diff hoặc
+  implementation plan.
+- Review vị trí plan đang hoạt động vì artifact được tạo sẽ lưu trong thư mục
+  `visuals/` của plan khi có.
+- Quyết định việc mở browser, khởi động local network listener, đọc diff rộng
+  hoặc tải tài nguyên CDN có được chấp nhận hay không.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:preview ...` | View mode trong source dùng Markdown viewer được đóng gói như background task của Claude Code. |
+| Cursor | `/ak:preview ...` | Dùng cách viết slash đã được người dùng xác minh; chưa xác lập tính tương đương của background viewer và browser tool. |
+| Codex | `$ak:preview ...` | Dùng cơ chế khám phá native của Codex; source không xác lập cơ chế tương đương trong Codex cho viewer server dành riêng cho Claude. |
+
+## Chạy Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:preview --html --diagram "Request flow from API gateway through authentication, rate limiting, and the order service"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:preview --html --diagram "Request flow from API gateway through authentication, rate limiting, and the order service"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:preview --html --diagram "Request flow from API gateway through authentication, rate limiting, and the order service"
+```
+
+  </Tab>
+</Tabs>
+
+Khi không có đối số, Skill hiển thị chooser thao tác preview. Cách phân giải đối
+số ưu tiên `--stop`, sau đó là HTML và generation flag, rồi path tường minh hoặc
+được giải từ cuộc trò chuyện.
+
+## Chọn mode có chủ đích
+
+| Input | Kết quả | Bằng chứng hoặc điều kiện tiên quyết |
+| --- | --- | --- |
+| `<path>` | Mở tệp hoặc thư mục hiện có trong Markdown viewer | Path phải phân giải được; server path trong source dành riêng cho Claude Code |
+| `--stop` | Dừng Markdown viewer server đang chạy | Phải có viewer instance |
+| `--explain <topic>` | Tạo giải thích Markdown với ASCII, Mermaid, prose và code tùy chọn | Chủ đề không rỗng |
+| `--slides <topic>` | Tạo artifact dạng slide bằng Markdown | Chỉ dùng khi slide được yêu cầu rõ |
+| `--diagram <topic>` | Tạo sơ đồ ASCII và Mermaid tập trung | Kết quả render phải được kiểm tra trực quan |
+| `--ascii <topic>` | Tạo sơ đồ chỉ ASCII thân thiện terminal | Không hỗ trợ `--html --ascii` |
+| `--html --explain <topic>` | Tạo và mở giải thích HTML một tệp | Có browser; áp dụng quy tắc navigation nhiều section |
+| `--html --slides <topic>` | Tạo và mở HTML slide deck | Slide phải được yêu cầu rõ |
+| `--html --diagram <topic>` | Tạo và mở sơ đồ HTML có điều khiển zoom | Xác minh Mermaid và review bản render |
+| `--html --diff [ref]` | Tạo visual diff review | Git repo; không có ref sẽ so với `main`; PR ref cần `gh` |
+| `--html --plan-review [plan-file]` | So sánh plan với code hiện tại | Plan tường minh hoặc active plan context |
+| `--html --recap [timeframe]` | Tạo snapshot ngữ cảnh project gần đây | Có lịch sử Git; timeframe mặc định là `2w` |
+
+Flag chỉ dành cho HTML tự ngụ ý `--html`. Nếu cung cấp nhiều generation flag,
+flag đầu chọn mode và phần còn lại trở thành nội dung chủ đề.
+
+## Hiểu vị trí output và hiệu ứng tệp
+
+Markdown và HTML được tạo dùng topic slug tối đa 80 ký tự:
+
+- **Khi có active plan:** Output nằm ở
+  `<plan-directory>/visuals/<topic-slug>.md` hoặc `.html`.
+- **Khi không có active plan:** Output nằm ở
+  `plans/visuals/<topic-slug>.md` hoặc `.html`.
+- **Khi thiếu thư mục:** Skill tạo path `visuals/` cần thiết.
+- **Khi output đã tồn tại:** Skill ghi đè cùng output path mà không hỏi thêm.
+
+Tạo Markdown sẽ khởi động viewer sau khi ghi và báo URL cục bộ cùng network đầy
+đủ. Tạo HTML mở tệp trực tiếp bằng lệnh browser của nền tảng và không cần viewer
+server đó.
+
+## Hiểu những gì diễn ra khi tạo
+
+1. **Skill phân giải thao tác.** Skill chọn view, stop, tạo Markdown hoặc tạo HTML
+   từ thứ tự đối số.
+2. **Skill thu thập bằng chứng.** Topic mode kiểm tra ngữ cảnh project liên quan;
+   diff, plan-review và recap thu thập bằng chứng Git, plan và source đã định.
+3. **Skill chọn dạng visual.** Mermaid xử lý topology; table xử lý dữ liệu; CSS
+   grid xử lý kiến trúc nhiều text; chart xử lý metric thật; hệ thống phức tạp
+   dùng overview và chi tiết kết hợp.
+4. **Skill tạo artifact.** Markdown dùng template của mode. HTML ghi một trang
+   với CSS và JavaScript của trang inline, toggle sáng/tối, layout responsive và
+   tương tác phù hợp mode.
+5. **Skill xác minh sơ đồ.** Cú pháp Mermaid được kiểm tra, sau đó output render
+   được xem để tìm overlap, va chạm, routing và khả năng đọc.
+6. **Skill mở kết quả.** Markdown dùng viewer server; HTML mở trực tiếp trong
+   browser.
+7. **Skill báo bằng chứng.** Skill trả output path và URL viewer đầy đủ hoặc kết
+   quả mở browser.
+
+## Hiểu các review mode
+
+### Visual diff review
+
+`--html --diff` phát hiện branch, commit, range, `HEAD`, pull request hoặc so
+sánh mặc định với `main`. Skill đọc thống kê và status của diff, tệp đã đổi cùng
+ngữ cảnh xung quanh, thay đổi public API, cập nhật changelog và README liên quan,
+cùng ngữ cảnh quyết định khả dụng.
+
+### Plan review
+
+`--html --plan-review` đọc đầy đủ plan, theo các tệp và dependency được tham
+chiếu, ánh xạ blast radius và so sánh giả định trong plan với code hiện tại.
+Output phân biệt trạng thái hiện tại, dự kiến, quan ngại và khoảng trống.
+
+### Project recap
+
+`--html --recap` đọc nhận dạng project, hoạt động Git gần đây, status hiện tại,
+ngữ cảnh quyết định và kiến trúc. Cửa sổ mặc định là hai tuần; dạng rút gọn như
+`30d` hoặc `3m` sẽ thay đổi cửa sổ.
+
+## Giữ preview an toàn
+
+<Callout type="warn" title="Preview có thể làm lộ hoặc ghi đè nội dung cục bộ">
+  View mode bind server trong source vào `0.0.0.0` và báo một network URL. Tệp
+  được tạo sẽ ghi đè artifact hiện có tại output path đã phân giải mà không hỏi.
+  Hãy review path, thư mục được serve và network trước khi bắt đầu.
+</Callout>
+
+Các ranh giới quan trọng:
+
+- Dừng viewer bằng `--stop` khi không còn cần.
+- Giữ scope view và review tránh xa secret, tệp riêng tư không liên quan và nội
+  dung không nên truy cập được qua local network listener.
+- Diff của pull request dùng GitHub CLI nên phụ thuộc network, xác thực và quyền repo.
+- HTML được tạo giữ page code trong một tệp nhưng có thể tải Google Fonts,
+  Mermaid, Chart.js hoặc anime.js từ CDN được phép. Render offline có thể mất các
+  tài nguyên đó.
+- Workflow tạo artifact cục bộ và mở chúng. Workflow không xuất bản, deploy,
+  commit hay push.
+- Source không định nghĩa phí provider. Skill chuyên môn và tạo ảnh tùy chọn vẫn
+  là ranh giới riêng về khả năng và quyền.
+
+## Xác minh kết quả
+
+Một lần chạy đầy đủ nên cung cấp:
+
+- Path chính xác được tạo hoặc xem.
+- URL cục bộ và network đầy đủ cho viewer mode, gồm path và query.
+- Xác nhận mở browser cho output HTML.
+- Theme toggle và hiển thị sáng, tối có chủ đích cho mọi trang HTML.
+- Nội dung responsive không bị overflow ngang ngoài ý muốn.
+- Điều khiển zoom và label dễ đọc cho sơ đồ Mermaid.
+- Review bản render cho diagram mode, không chỉ cú pháp hợp lệ.
+- Ranh giới bằng chứng và input còn thiếu cho diff, plan-review hoặc recap.
+
+## Khắc phục sự cố an toàn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Không phân giải được path | Cung cấp path tường minh tới tệp hoặc thư mục hiện có. |
+| Generation flag không có topic | Thêm chủ đề không rỗng có chữ cái hoặc số. |
+| Server không khởi động | Kiểm tra viewer đã chạy chưa, dùng `--stop` và kiểm tra port. |
+| Browser mở trang HTML chưa đầy đủ | Kiểm tra truy cập CDN, console error, khởi tạo theme và library import bắt buộc. |
+| Sơ đồ hợp lệ nhưng khó đọc | Xem bản render, giảm node, tăng khoảng cách, đổi routing edge và tạo lại. |
+| `--html --ascii` bị từ chối | Dùng `--ascii` cho terminal hoặc `--html --diagram` cho HTML. |
+| PR diff thất bại | Xác nhận project là Git repo và `gh` đã được cài, xác thực. |
+| Plan review không tìm thấy plan | Truyền plan file tường minh hoặc chạy từ active plan context. |
+| Recap không tìm thấy lịch sử | Chạy trong Git repo có commit. |
+| Runtime không nhận ra Skill | Xác nhận target và scope, khởi động lại phiên runtime, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+## Biết giới hạn hiện tại
+
+- Contract thực thi Markdown viewer dành riêng cho Claude Code; chưa xác lập hành
+  vi background server tương đương trên Cursor hoặc Codex.
+- Artifact HTML là một tệp nhưng không nhất thiết hoạt động đầy đủ offline khi
+  dùng font hoặc thư viện CDN.
+- Chất lượng diff, plan-review và recap bị giới hạn bởi bằng chứng repo và lịch
+  sử có thể đọc.
+- Visual self-review cải thiện layout nhưng không chứng minh kết luận kiến trúc
+  hay code review.
+- Cách gọi slash trên Cursor là bằng chứng do người dùng xác minh, không chứng
+  minh browser, server hay specialist tool tương đương.
+- Stable và beta đóng gói cùng mode và reference template của `ak:preview`.
