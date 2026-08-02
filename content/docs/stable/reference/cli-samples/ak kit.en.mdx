@@ -1,0 +1,105 @@
+---
+title: ak kit
+description: Choose the correct kit discovery, validation, install, refresh, path, repair, or uninstall operation.
+---
+
+Use `ak kit` as the entry point for content-kit lifecycle commands. The group
+itself is read-only: running it without a subcommand prints help and exits `0`.
+
+## Usage
+
+```bash
+ak kit <subcommand>
+```
+
+`ak kit --json` prints group help rather than a JSON result. Put shared flags on
+a runnable leaf command and follow that command’s output contract. Shared flags
+are listed in [CLI conventions](../cli-conventions).
+
+## Choose a subcommand
+
+| Goal | Command | Source and effect |
+| --- | --- | --- |
+| Browse local kit manifests | `ak kit list-kits` | Reads `$AGENTKIT_KITS_DIR` or `./kits`; `--kits-dir` overrides it. |
+| Validate local manifests | `ak kit validate [kits-dir]` | Reads `kit.yaml` files and reports violations. |
+| Resolve and emit a kit | `ak kit init <kit-name>` | Remote registry by default; can install to a runtime route or build/export directory. |
+| Use the install-oriented entry point | `ak kit install <kit-name>` | Same implementation and flags as `ak kit init`. |
+| Reconcile an installed route | `ak kit refresh <kit-name>` | Re-emits the route and removes stale AgentKit-owned output within lifecycle rules. |
+| Resolve the user Claude plugin path | `ak kit install-path <kit-name>` | Read-only path calculation; it does not cover every target or scope. |
+| Preview or remove an installed kit | `ak kit uninstall <kit-name>` | `--dry-run` previews; apply removes selected owned paths after confirmation/yes. |
+| Repair mixed Claude install modes | `ak kit repair-install-mode` | Requires an explicit mode choice and confirmation; writes a recovery snapshot. |
+
+`init` and `install` are equivalent entry points, not different delivery modes.
+Use `refresh` when the route is already installed. Use `ak init` to register an
+existing project and `ak new` to create a new project; neither is a substitute
+for selecting a kit route.
+
+## Separate source, target, scope, and delivery
+
+For install and refresh operations, decide four independent dimensions:
+
+1. **Source:** authenticated remote release by default, or explicit
+   `--local --kits-dir <dir>` for development and CI.
+2. **Target:** for example `claude-code`, `codex`, `cursor`, or a portable
+   export route supported by that command.
+3. **Scope:** current project by default, or user scope with `--global`.
+4. **Delivery:** runtime-native output, Claude plugin mode with
+   `--switch-to-plugin`, or build/export output.
+
+The same kit can have project and user routes at once. Claude native and plugin
+routes are distinct. `ak kit install-path` reports only the user-scoped Claude
+plugin path and must not be used to infer a project, Codex, Cursor, native, or
+build destination.
+
+## Network, authentication, and cache behavior
+
+`list-kits`, `validate`, `install-path`, `uninstall`, and
+`repair-install-mode` operate on local state. Remote `init`, `install`, and
+`refresh` can contact the registry, renew the CLI session, enforce entitlement,
+download a target artifact, and populate the verified cache before emitting
+files. Paid kits require a valid CLI session and active grant.
+
+```bash
+ak whoami
+ak licenses
+```
+
+Local source flags are an explicit development route, not an authentication or
+entitlement fallback.
+
+## Treat each mutation contract separately
+
+- `init`, `install`, and `refresh` show an interactive destination preview, but
+  JSON, `--no-interactive`, or non-TTY stdin can proceed without `--yes`. Use
+  `--yes` in intentional automation.
+- `uninstall` is preview-first and returns without mutation when confirmation
+  is missing.
+- `repair-install-mode` requires an exact keep choice and confirmation.
+- Force and backup flags are command-local. They do not authorize deleting
+  arbitrary unknown files.
+- Lifecycle mutations coordinate through locks and can create bounded recovery
+  snapshots before destructive changes.
+
+Do not infer one leaf command’s exit or JSON behavior from another. For example,
+install routes use a `kind=kit.init` success envelope and can emit status records
+on stderr, while `install-path` uses `kind=kit.install_path` and has no mutation
+status stream.
+
+## Verify an operation
+
+After an install or refresh, review target warnings, reopen the runtime, and
+invoke one installed skill. After uninstall or repair, inspect any reported
+snapshot before changing more files:
+
+```bash
+ak backups show <id>
+ak backups verify <id>
+```
+
+## Related commands
+
+- [Install/build a kit safely](./kit-init)
+- [Complete `ak kit` command facts](../cli/ak_kit)
+- [Register an existing project](../cli/ak_init)
+- [Create a new project](../cli/ak_new)
+- [Kit installation troubleshooting](../../troubleshooting/kit-installation)

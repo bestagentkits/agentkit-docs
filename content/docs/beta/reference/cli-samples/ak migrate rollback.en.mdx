@@ -1,0 +1,129 @@
+---
+title: ak migrate rollback
+description: Resolve the newest pending migration recovery record and mutate local state according to its recorded phase.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak migrate rollback` when a migration left a pending transition or rollback
+journal. The command automatically selects the newest applicable record; you
+cannot pass a plan or journal ID.
+
+## Usage
+
+```bash
+ak migrate rollback
+```
+
+There are no command-specific flags and no documented positional arguments.
+The current implementation ignores extra positional tokens; do not rely on
+that behavior.
+
+<Callout type="warning">
+  This command mutates immediately. It has no dry-run, preview, confirmation,
+  `--yes`, apply, or force gate. Inspect the current migration state and keep an
+  independent filesystem backup before running it.
+</Callout>
+
+## Understand which recovery record wins
+
+The command resolves the AgentKit home from local discovery, then uses this
+order:
+
+1. the newest non-terminal `legacy-transition` journal;
+2. otherwise, the most recently modified generic migration rollback journal;
+3. otherwise, no action and exit `0`.
+
+Selection is automatic and based on the local journal state and modification
+time, not on a CLI identifier. Do not edit, reorder, or copy migration journal
+files into the AgentKit metadata directory before rollback.
+
+## Understand the legacy-transition exception
+
+The result depends on the persisted transition phase:
+
+- before a replacement installation is proven complete, rollback restores the
+  quarantined legacy directories to their pre-apply locations;
+- when a replacement installation is already recorded as installed or pending
+  finalization, the command verifies the replacement receipts and finalizes the
+  quarantined legacy state instead of removing the replacement.
+
+Therefore the command name does not promise that every pending legacy
+transition returns to ClaudeKit. A verified replacement can be kept and the
+transition completed.
+
+The legacy path takes the shared kit-lifecycle coordinator lock. Lock,
+identity, receipt, quarantine, or journal validation failures return exit `1`
+and can mark the transition as requiring manual recovery.
+
+## Understand generic journal restore
+
+When no legacy-transition journal is pending, the command reads the newest
+generic journal and applies its recorded absolute target paths:
+
+- a file created by migration is removed;
+- a pre-existing file is atomically restored with its captured content, mode,
+  and modification time;
+- directories created by migration are removed only when empty.
+
+Individual restore failures are collected so another entry can still be
+restored. The journal is removed only after the entire command-level restore
+succeeds.
+
+Preference migration uses this generic journal during apply. A failed or
+partial `ak migrate prefs` can therefore be restored. A successful preference
+migration discards its journal, so this command cannot undo it afterward.
+
+## Network, process, and privacy behavior
+
+Rollback is local: it does not contact a registry, authenticate, resolve an
+entitlement, invoke a provider, launch another process, or update a cache. It
+can read, write, and delete the paths recorded in the selected journal.
+
+Migration journals can contain absolute local paths and, for generic file
+journals, pre-image file bytes. Keep the AgentKit metadata directory private and
+do not publish journal contents.
+
+## Output and shared-flag exceptions
+
+Success is always plain human text on stdout:
+
+```text
+[OK] Migration rolled back to pre-apply state.
+```
+
+The exact line differs for a legacy transition or no-op. Failures print a plain
+`[X]` line to stderr.
+
+`--json` does not produce a JSON envelope, `--quiet` does not suppress these
+lines, and `--no-interactive` does not change execution. The command never reads
+stdin. Flag-parse errors still use the CLI-wide plain error path.
+
+## Exit status
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | The selected recovery action completed, or no journal existed. | Re-run migration discovery and verify the affected files. |
+| `1` | Discovery, locking, journal validation, receipt verification, or file restoration failed. Some entries may already have changed. | Stop mutation, preserve journals/quarantines, and inspect the reported path or manual-recovery state. |
+| `2` | A flag could not be parsed. | Correct the invocation. |
+
+Exit `3` is not used as a confirmation result because the command has no
+confirmation path.
+
+## Verify after rollback
+
+Check the files named by the migration result, then run a dry-run discovery:
+
+```bash
+ak migrate
+```
+
+Do not delete pending journals or quarantine directories until the desired
+state is verified.
+
+## Related commands
+
+- [Complete `ak migrate rollback` command facts](../cli/ak_migrate_rollback)
+- [Complete migration command facts](../cli/ak_migrate)
+- [Migrate from ClaudeKit](../../guides/migrating-from-claudekit)
+- [Inspect rollback snapshots](../cli/ak_backups)

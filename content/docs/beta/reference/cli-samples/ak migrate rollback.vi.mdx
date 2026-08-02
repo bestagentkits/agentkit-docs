@@ -1,0 +1,125 @@
+---
+title: ak migrate rollback
+description: Resolve bản ghi recovery migration mới nhất rồi thay đổi trạng thái cục bộ theo phase đã ghi.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak migrate rollback` khi migration để lại transition hoặc rollback journal
+đang chờ. Lệnh tự chọn bản ghi phù hợp mới nhất; bạn không thể truyền plan ID
+hoặc journal ID.
+
+## Cách dùng
+
+```bash
+ak migrate rollback
+```
+
+Lệnh không có cờ riêng và không có argument theo vị trí được công bố.
+Implementation hiện tại bỏ qua token theo vị trí thừa; đừng dựa vào hành vi này.
+
+<Callout type="warning">
+  Lệnh thay đổi dữ liệu ngay lập tức. Không có dry-run, preview, xác nhận,
+  `--yes`, apply hay force gate. Hãy kiểm tra trạng thái migration hiện tại và
+  giữ bản sao filesystem độc lập trước khi chạy.
+</Callout>
+
+## Hiểu bản ghi recovery nào được ưu tiên
+
+Lệnh resolve AgentKit home bằng discovery cục bộ, rồi dùng thứ tự:
+
+1. journal `legacy-transition` chưa terminal mới nhất;
+2. nếu không có, migration rollback journal thông thường có thời gian sửa mới nhất;
+3. nếu vẫn không có, không làm gì và thoát `0`.
+
+Việc chọn hoàn toàn tự động theo trạng thái journal và modification time cục bộ,
+không theo định danh CLI. Đừng sửa, đổi thứ tự hoặc chép journal migration vào
+thư mục metadata AgentKit trước rollback.
+
+## Hiểu ngoại lệ legacy-transition
+
+Kết quả phụ thuộc phase transition đã lưu:
+
+- trước khi chứng minh replacement install hoàn tất, rollback đưa thư mục cũ đã
+  quarantine về vị trí trước apply;
+- khi replacement install đã được ghi nhận là installed hoặc chờ finalize, lệnh
+  xác minh receipt của replacement rồi finalize trạng thái cũ đã quarantine thay
+  vì xoá replacement.
+
+Vì vậy tên lệnh không hứa rằng mọi legacy transition đang chờ đều quay lại
+ClaudeKit. Một replacement đã xác minh có thể được giữ và transition được hoàn
+tất.
+
+Nhánh legacy dùng shared kit-lifecycle coordinator lock. Lỗi lock, identity,
+receipt, quarantine hoặc validation journal trả mã `1` và có thể đánh dấu
+transition cần recovery thủ công.
+
+## Hiểu generic journal restore
+
+Khi không có legacy-transition đang chờ, lệnh đọc generic journal mới nhất và
+áp dụng absolute target path đã ghi:
+
+- tệp do migration tạo sẽ bị xoá;
+- tệp tồn tại trước đó được khôi phục atomically với content, mode và
+  modification time đã chụp;
+- thư mục do migration tạo chỉ bị xoá khi trống.
+
+Lỗi ở từng entry được gom lại để entry khác vẫn có thể được khôi phục. Journal
+chỉ bị xoá sau khi toàn bộ restore ở cấp lệnh thành công.
+
+Preference migration dùng generic journal này trong apply. Vì vậy
+`ak migrate prefs` lỗi hoặc hoàn tất một phần có thể được khôi phục. Preference
+migration thành công sẽ bỏ journal, nên lệnh này không thể hoàn tác sau đó.
+
+## Hành vi mạng, tiến trình và riêng tư
+
+Rollback hoàn toàn cục bộ: không liên hệ registry, xác thực, resolve entitlement,
+gọi provider, chạy tiến trình khác hoặc cập nhật cache. Lệnh có thể đọc, ghi và
+xoá path được lưu trong journal đã chọn.
+
+Migration journal có thể chứa absolute path cục bộ và, với generic file journal,
+byte pre-image của tệp. Hãy giữ thư mục metadata AgentKit riêng tư và đừng công
+khai nội dung journal.
+
+## Đầu ra và ngoại lệ của cờ dùng chung
+
+Thành công luôn là human text dạng plain trên stdout:
+
+```text
+[OK] Migration rolled back to pre-apply state.
+```
+
+Dòng chính xác khác nhau với legacy transition hoặc no-op. Lỗi in dòng `[X]`
+dạng plain trên stderr.
+
+`--json` không tạo JSON envelope, `--quiet` không ẩn các dòng này, và
+`--no-interactive` không đổi cách thực thi. Lệnh không bao giờ đọc stdin. Lỗi
+parse cờ vẫn dùng đường lỗi plain dùng chung của CLI.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Recovery action đã chọn hoàn tất, hoặc không có journal. | Chạy lại discovery migration và xác minh tệp bị ảnh hưởng. |
+| `1` | Discovery, khoá, validation journal, xác minh receipt hoặc khôi phục tệp thất bại. Một số entry có thể đã thay đổi. | Dừng thay đổi, giữ journal/quarantine và kiểm tra path hoặc trạng thái manual recovery được báo. |
+| `2` | Không parse được cờ. | Sửa cách gọi. |
+
+Mã `3` không được dùng cho xác nhận vì lệnh không có đường xác nhận.
+
+## Xác minh sau rollback
+
+Kiểm tra các tệp được nêu trong kết quả migration, rồi chạy discovery dry-run:
+
+```bash
+ak migrate
+```
+
+Đừng xoá journal đang chờ hoặc thư mục quarantine cho đến khi xác minh trạng
+thái mong muốn.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak migrate rollback`](../cli/ak_migrate_rollback)
+- [Thông tin đầy đủ của migration](../cli/ak_migrate)
+- [Migrate từ ClaudeKit](../../guides/migrating-from-claudekit)
+- [Xem rollback snapshot](../cli/ak_backups)

@@ -1,0 +1,119 @@
+---
+title: ak backups prune
+description: Preview hoặc xoá rollback snapshot bằng quy tắc giữ theo tuổi và số lượng rõ ràng.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak backups prune` để thu hồi dung lượng trong kho rollback của AgentKit.
+Lệnh mặc định có tính phá huỷ và không bao giờ hỏi xác nhận.
+
+## Cách dùng
+
+```bash
+ak backups prune [flags]
+```
+
+Lệnh không nhận argument theo vị trí.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--older-than <duration>` | Trống | Xoá snapshot cũ hơn Go duration như `168h`, hoặc hậu tố ngày như `30d`. |
+| `--keep-last <n>` | `0` | Giữ lại `n` snapshot mới nhất. |
+| `--dry-run` | `false` | In cùng deletion plan nhưng không xoá snapshot. |
+
+Các cờ đầu ra dùng chung nằm trong [quy ước CLI](../cli-conventions). Lệnh không
+có `--apply` hay `--force`: bỏ `--dry-run` nghĩa là áp dụng plan.
+
+## Hiểu retention policy
+
+Một snapshot được giữ khi bất kỳ lớp bảo vệ phù hợp nào giữ nó:
+
+- snapshot được đánh dấu protected;
+- snapshot nằm trong số `--keep-last` bản mới nhất; hoặc
+- snapshot trẻ hơn khoảng `--older-than`.
+
+Khi có cả hai quy tắc dương, lệnh giữ hợp của hai tập—kết quả bảo vệ nhiều hơn
+sẽ thắng. Nếu không đặt quy tắc nào, hoặc cả hai resolve thành 0, lệnh không làm
+gì.
+
+```bash
+ak backups prune --older-than 30d --keep-last 5 --dry-run
+```
+
+Preview này giữ mọi snapshot protected, mọi snapshot trong 30 ngày gần nhất và
+năm snapshot mới nhất ngay cả khi chúng cũ hơn.
+
+<Callout type="warning">
+  Chỉ truyền giá trị retention không âm. Implementation hiện tại không từ chối
+  `--keep-last` hoặc `--older-than` âm; giá trị đó không tạo bảo vệ theo số lượng
+  hay tuổi và có thể chọn mọi snapshot không protected để xoá.
+</Callout>
+
+Hậu tố ngày `d` và `D` được chấp nhận, kể cả giá trị thập phân. Giá trị khác
+theo cú pháp Go duration và phải có đơn vị. Giá trị trần như `30` không hợp lệ.
+
+## Xem lại tác động phá huỷ
+
+Prune đọc manifest trong `~/.agentkit/backups/` (hoặc
+`$AGENTKIT_HOME/backups/`) và chỉ xoá thư mục snapshot nằm ngoài tập được giữ.
+Lệnh không dùng mạng, xác thực, entitlement, provider hay cache.
+
+Quá trình xoá dùng prune lock không chờ để manual prune và auto-prune đồng thời
+không chọn cùng snapshot. Thư mục ứng viên được đổi tên thành tombstone ẩn dưới
+registry lock ngắn, rồi mới bị xoá. Lần prune sau sẽ dọn tombstone còn lại nếu
+tiến trình bị ngắt. Tranh chấp khoá thoát `4`.
+
+Lệnh không xác minh hash snapshot trước khi xoá. Hãy chạy dry-run và kiểm tra
+những bản quan trọng cần giữ:
+
+```bash
+ak backups prune --keep-last 5 --dry-run
+ak backups verify <id-to-keep>
+ak backups prune --keep-last 5
+```
+
+## Đầu ra và luồng
+
+Stdout dành cho người dùng hiển thị danh sách ID `Keep` và `Remove`. Dry-run
+thêm dòng `dry-run only; no backups removed`. Lệnh không hỏi hoặc đọc stdin.
+
+JSON stdout dùng một success envelope:
+
+```json
+{
+  "schema_version": 1,
+  "kind": "backups.prune",
+  "data": {
+    "deleted": ["20260426T123005Z-deadbeef"],
+    "dry_run": true
+  }
+}
+```
+
+Trong dry-run, `data.deleted` có nghĩa “sẽ xoá”. JSON không chứa danh sách được
+giữ. `--quiet` ẩn đầu ra thành công dạng human, còn `--json` ưu tiên hơn
+`--quiet`. Lỗi runtime ở chế độ JSON đi ra stderr bằng error envelope; lỗi parse
+argument hoặc cờ có thể xảy ra trước khi renderer này hoạt động.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Plan hoàn tất, kể cả no-op hoặc dry-run. | Xem lại đầu ra; với dry-run, chỉ bỏ `--dry-run` khi tập Remove chính xác. |
+| `1` | Liệt kê, reconcile, đổi tên hoặc xoá thất bại; Cobra cũng dùng nhánh này cho argument theo vị trí ngoài dự kiến. Một số ứng viên có thể đã mất. | Liệt kê snapshot lại và kiểm tra kho trước khi thử lại. |
+| `2` | Không parse được cờ hoặc `--older-than` không phải duration hợp lệ. | Sửa cách gọi; thêm đơn vị duration rõ ràng. |
+| `4` | Một thao tác prune hoặc vòng đời backup khác đang giữ khoá liên quan. | Đợi thao tác hoàn tất, liệt kê snapshot rồi thử lại. |
+
+Mỗi ứng viên được thử xoá độc lập, nên mã `1` có thể đi kèm một lần prune chỉ
+hoàn tất một phần. Không có thao tác undo tích hợp sau khi thư mục snapshot bị
+xoá.
+
+## Lệnh liên quan
+
+- [Tổng quan nhóm backup](../cli/ak_backups)
+- [Thông tin đầy đủ của `ak backups prune`](../cli/ak_backups_prune)
+- [Xem snapshot](../cli/ak_backups_show)
+- [Xác minh snapshot](../cli/ak_backups_verify)

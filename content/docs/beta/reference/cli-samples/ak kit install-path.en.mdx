@@ -1,0 +1,122 @@
+---
+title: ak kit install-path
+description: Resolve the lexical user-level Claude Code plugin path for one kit without installing it.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak kit install-path` to inspect the path used by the user-scoped Claude
+Code plugin route. It calculates and validates a path; it does not install,
+download, or verify a kit.
+
+## Usage
+
+```bash
+ak kit install-path <kit-name>
+```
+
+Exactly one positional argument is required. There are no command-specific
+flags. Shared output flags are described in
+[CLI conventions](../cli-conventions).
+
+## Know what the path represents
+
+With no override, the result is:
+
+| Platform | Result for `engineer` |
+| --- | --- |
+| macOS/Linux | `$HOME/.claude/plugins/ak-engineer` |
+| Windows | `%USERPROFILE%\.claude\plugins\ak-engineer` |
+
+The `ak-` prefix is added to the user-facing kit name.
+
+This is specifically the user Claude Code plugin destination. It is not the
+path for:
+
+- a project-scoped Claude plugin;
+- Claude native delivery;
+- Codex or Cursor output;
+- AgentKit lifecycle metadata; or
+- a build/export directory.
+
+Use the install command’s preview for those routes.
+
+## Override and validation behavior
+
+If `AGENTKIT_PLUGIN_DIR` is set, it replaces the plugin root and must be an
+absolute path. The resolver:
+
+- rejects relative and drive-relative overrides;
+- rejects an override containing a `..` path component;
+- rejects an existing override that is itself a symlink or junction;
+- rejects an existing root that is not a directory;
+- resolves existing ancestor links for validation; and
+- returns the cleaned lexical override plus `ak-<kit-name>`.
+
+The root does not need to exist yet when it has a valid existing ancestor. The
+command only inspects the root or its ancestors; it creates no directory.
+
+<Callout type="warning">
+  The command does not validate the argument against a registry kit ID or check
+  that the kit exists. Pass the same canonical kit ID you would use with
+  `ak kit init`; do not treat arbitrary input as a trusted path.
+</Callout>
+
+## Network and disk effects
+
+The command performs no network, authentication, entitlement, provider, cache,
+process-launch, stdin, or confirmation operation. It reads filesystem metadata
+needed to validate the plugin root and writes nothing.
+
+## Output modes
+
+On an interactive color-capable TTY, human stdout is labeled:
+
+```text
+engineer install path: /home/you/.claude/plugins/ak-engineer
+```
+
+In a pipe, CI, `NO_COLOR`, or `--no-interactive` mode, stdout is the raw path
+followed by one newline. That makes this safe for command substitution after a
+successful exit:
+
+```bash
+plugin_path="$(ak kit install-path engineer --no-interactive)"
+```
+
+`--quiet` suppresses human success output. `--json` takes precedence over
+`--quiet` and emits:
+
+```json
+{
+  "schema_version": 1,
+  "kind": "kit.install_path",
+  "data": {
+    "kit": "engineer",
+    "path": "/home/you/.claude/plugins/ak-engineer"
+  }
+}
+```
+
+In JSON mode, path-resolution errors use the shared JSON error envelope on
+stderr. Missing or extra positional arguments fail before the renderer is
+created and therefore do not receive that envelope. Flag-parse failures also
+remain on the CLI-wide plain error path.
+
+## Exit status
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | The path was resolved and rendered. | Use it only for the user Claude plugin route. |
+| `1` | The argument count/name or plugin-root resolution failed. | Supply one canonical kit ID and fix the home or override path. |
+| `2` | A flag could not be parsed. | Correct the invocation. |
+
+The command has no preview/apply/force/backup/rollback cycle because it never
+mutates state.
+
+## Related commands
+
+- [Kit command overview](../cli/ak_kit)
+- [Install/build a kit safely](./kit-init)
+- [Complete `ak kit install-path` command facts](../cli/ak_kit_install-path)
+- [Complete `ak kit init` command facts](../cli/ak_kit_init)

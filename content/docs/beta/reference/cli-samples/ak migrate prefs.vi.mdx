@@ -1,0 +1,141 @@
+---
+title: ak migrate prefs
+description: Preview và merge preference ClaudeKit cũ vào cấu hình AgentKit với precedence và cách xử lý credential rõ ràng.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak migrate prefs` khi cài đặt `.ck.json` cũ vẫn còn, kể cả sau khi nội
+dung Kit đã được chuyển. Lệnh chỉ migrate preference; không di chuyển hoặc cài
+Kit.
+
+## Cách dùng
+
+```bash
+ak migrate prefs [flags]
+```
+
+Lệnh được công bố không có argument theo vị trí. Implementation hiện tại bỏ qua
+token theo vị trí thừa; đừng dựa vào hành vi này.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--from <source>` | `ck` | Chọn nguồn cũ. Chỉ hỗ trợ chính xác giá trị `ck`. |
+| `--dry-run <bool>` | `true` | Preview plan mà không ghi tệp cấu hình. |
+
+Apply yêu cầu cả `--dry-run=false` và `--yes`:
+
+```bash
+ak migrate prefs --dry-run=false --yes
+```
+
+Lệnh không hỏi hoặc đọc stdin. `--json`, `--no-interactive` và stdin không phải
+TTY không bỏ qua yêu cầu `--yes` rõ ràng. Các cờ đầu ra dùng chung nằm trong
+[quy ước CLI](../cli-conventions).
+
+## Quyền quyết định nguồn và đích
+
+Lệnh kiểm tra tối đa hai tệp cục bộ:
+
+| Scope | Nguồn cũ | Đích AgentKit |
+| --- | --- | --- |
+| User | `~/.claude/.ck.json` | `$AGENTKIT_HOME/config.yaml`, thường là `~/.agentkit/config.yaml` |
+| Project hiện tại | `./.claude/.ck.json` | `./.agentkit/config.yaml` |
+
+`AGENTKIT_CLAUDE_HOME` có thể đổi Claude home, còn `AGENTKIT_HOME` có thể đổi
+AgentKit home. Project scope luôn lấy từ thư mục làm việc hiện tại. Lệnh không
+dùng mạng, registry, xác thực, entitlement, provider, tiến trình ngoài hay
+cache.
+
+## Hiểu merge precedence
+
+Mỗi tệp cũ đọc được trở thành plan gồm các action ở mức leaf:
+
+- giá trị chưa có trong AgentKit được đánh dấu `migrate`;
+- giá trị đã có trong `config.yaml`, kể cả null rõ ràng, là `keep_existing` và
+  được ưu tiên;
+- section cấp cao nhất đã biết được map sang tên section AgentKit;
+- key cấp cao nhất chưa biết được giữ dưới `extensions`;
+- giá trị giống credential ở project là `omit_secret` và không bao giờ được ghi
+  vào project config.
+
+Credential ở user scope không bị lược bỏ. Nếu preference user cũ có tên key
+chứa `passphrase`, `password`, `secret`, `token`, `apikey` hoặc `api_key`, apply
+có thể chép giá trị đó vào `config.yaml` của user. Writer đặt mode của tệp kết
+quả thành `0600`.
+
+<Callout type="warning">
+  Hãy xem dry-run plan trước khi apply. Giữ cấu hình user ở chế độ riêng tư và
+  đừng chép nội dung vào log hoặc repository. Giá trị giống credential ở project
+  bị lược bỏ, nhưng preference project không bí mật vẫn được ghi dưới thư mục
+  hiện tại.
+</Callout>
+
+Tệp `.ck.json` cũ luôn được giữ nguyên. Có thể chạy lại migration vì giá trị
+AgentKit hiện có luôn được ưu tiên.
+
+## Ghi dữ liệu, journal và rollback
+
+Dry-run đọc cả hai scope và không ghi gì. Apply tạo thư mục config còn thiếu với
+quyền chỉ dành cho user rồi thay mỗi config atomically qua tệp tạm cùng thư mục.
+
+Trước lần ghi config đầu tiên, AgentKit lưu pre-image của mọi đích vào một
+migration rollback journal. Nếu bất kỳ bước apply nào lỗi, journal được giữ để
+`ak migrate rollback` khôi phục tệp trước apply. Khi mọi lần ghi thành công,
+journal bị bỏ; `ak migrate rollback` không thể hoàn tác một preference migration
+đã hoàn tất.
+
+## Đầu ra human và JSON
+
+Stdout dạng human báo từng nguồn và đích, số lượng `migrate`, `keep_existing`,
+credential bị lược bỏ và nguồn không đọc được. Không có nguồn là kết quả sạch
+`nothing to migrate`.
+
+Một `.ck.json` lỗi hoặc không đọc được sẽ bị bỏ qua trong khi scope đọc được
+khác vẫn tiếp tục. Ngay cả khi mọi nguồn tìm thấy đều không đọc được, lệnh vẫn
+báo `skipped` và thoát `0`; hãy coi `skipped` là một phần của kết quả, không phải
+tín hiệu lỗi fatal.
+
+JSON stdout dùng map riêng của lệnh, không dùng shared envelope `kind/data`:
+
+```json
+{
+  "schema_version": 1,
+  "prefs": {
+    "schema_version": 1,
+    "status": "planned",
+    "plans": [
+      {
+        "schema_version": 1,
+        "scope": "global",
+        "source_path": "/home/you/.claude/.ck.json",
+        "config_path": "/home/you/.agentkit/config.yaml",
+        "entries": [
+          {"legacy_path":"statusline","config_path":"statusline","action":"migrate"}
+        ]
+      }
+    ]
+  }
+}
+```
+
+Status có thể là `no_sources`, `planned` hoặc `completed`. Plan không chứa giá
+trị preference, nhưng báo cáo human và JSON lộ path cục bộ; hãy che path trước
+khi chia sẻ log. Lỗi lệnh vẫn là plain text thay vì shared JSON error envelope.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Discovery/preview/apply hoàn tất, kể cả không có nguồn hoặc nguồn lỗi bị bỏ qua. | Kiểm tra status, plan và `skipped` trước khi xem migration là hoàn tất. |
+| `1` | Resolve home/config, chụp journal, merge config hoặc encode JSON thất bại. | Giữ journal và chạy `ak migrate rollback` nếu apply đã ghi một phần. |
+| `2` | `--from` không chính xác là `ck`, hoặc không parse được cờ. | Sửa cách gọi. |
+| `3` | Yêu cầu apply nhưng thiếu `--yes`. Không có config nào được ghi. | Xem dry-run rồi chạy lại với cả hai cờ apply. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của migration](../cli/ak_migrate)
+- [Migrate từ ClaudeKit](../../guides/migrating-from-claudekit)
+- [Xử lý sự cố cấu hình](../../troubleshooting/configuration)
