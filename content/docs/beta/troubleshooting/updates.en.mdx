@@ -1,0 +1,113 @@
+---
+title: Updates and recovery
+description: Separate binary and Kit updates, interpret preview and failure exits, and restore only verified snapshots.
+---
+
+Use this page when an update does not apply, updates the wrong scope, reports a
+partial failure, or needs to be rolled back.
+
+## Identify what you intended to update
+
+`ak self-update` handles the `ak` binary. `ak update` coordinates the CLI,
+global Kits, and project Kits, or updates an explicitly selected scope.
+
+Check the binary without changing disk:
+
+```bash
+ak --version
+ak self-update --check --json
+```
+
+A successful check exits `0`; read `available`, `status`, and version fields to
+learn whether an update exists. Network, verification, staging, or replacement
+errors exit `1`; invalid flags exit `2`. A package-manager-owned binary reports
+the manager and its native upgrade command instead of replacing the binary.
+
+## Preview Kit and project changes
+
+```bash
+ak update --dry-run --show-diff
+```
+
+An explicit `--dry-run` is read-only and exits `0` when the preview succeeds.
+In a script or non-interactive session, `ak update` without `--yes` also stays
+preview-only, but exits `3` so automation can distinguish “not applied” from an
+applied update. In the interactive wizard, each apply step defaults to **No**.
+
+Apply only after checking the selected project, runtime, Kit, and channel:
+
+```bash
+ak update --yes
+```
+
+An applied runtime error, CLI hard gate, partial Kit failure, or interruption
+after mutation exits `1`. Invalid scope or target combinations exit `2`.
+
+## Check the result
+
+```bash
+ak --version
+ak doctor --json
+ak audit --json
+```
+
+The CLI version and doctor report confirm binary and environment state. Audit
+checks recorded Claude Code Kit content: exit `0` is clean and exit `1` means
+drift or an audit error. Remember that default doctor output can be unhealthy
+while the command exits `0`; inspect `healthy`.
+
+## Inspect recovery snapshots
+
+Mutating update paths take recovery snapshots. Use the snapshot ID printed by
+the failed operation when available:
+
+```bash
+ak backups list
+ak backups show <id>
+ak backups verify <id>
+ak backups restore <id> --dry-run
+```
+
+`list`, `show`, `verify`, and restore preview are read-only. `show` or `verify`
+exits `5` if the ID does not exist; `verify` exits `1` if the snapshot is
+corrupt. Do not restore a snapshot that fails verification.
+
+Project update output can say that its snapshot is outside
+`ak backups restore` scope and print a snapshot-files directory. In that case,
+follow the printed manual copy path for the affected project files; do not try
+to widen restore authority or restore unrelated state.
+
+## Restore a verified snapshot
+
+Preview first, then confirm the exact ID:
+
+```bash
+ak backups restore <id> --dry-run
+ak backups restore <id>
+```
+
+If `ak backups show <id>` lists project bundle roots, authorize only those exact
+absolute paths with one repeated `--allow-root` per root. A broader or different
+path is rejected.
+
+Use `--latest` only after `ak backups list` proves the newest snapshot belongs
+to this operation. Restore exit behavior is classified:
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Preview or restore completed. |
+| `2` | Invalid arguments, such as combining an ID with `--latest`. |
+| `3` | You declined confirmation; nothing was restored. |
+| `4` | Another backup operation holds the lock. |
+| `5` | The snapshot does not exist, or no snapshots exist. |
+
+After restore, repeat `ak --version`, `ak doctor --json`, and the applicable
+audit. Do not delete backup storage, runtime homes, or `~/.agentkit`; those
+actions remove the evidence and recovery path you need. Do not use `--force` as
+a routine update retry.
+
+## Related pages
+
+- [Updating ak](../guides/updating)
+- [Installation problems](./installation)
+- [Kit installation problems](./kit-installation)

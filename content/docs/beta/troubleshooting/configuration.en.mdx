@@ -1,0 +1,82 @@
+---
+title: Configuration problems
+description: Find the effective AgentKit preferences, validate both scopes, and remove only the override that caused the problem.
+---
+
+Use this page when a setting is ignored, behaves differently by project, or
+makes a hook fail.
+
+## Know which file wins
+
+AgentKit preferences can come from two YAML files:
+
+| Scope | Path |
+| --- | --- |
+| User | `$AGENTKIT_HOME/config.yaml`, default `~/.agentkit/config.yaml` |
+| Project | `<project>/.agentkit/config.yaml` |
+
+AgentKit deep-merges the files and the project value wins for the same key. The
+project scope is resolved from the current working directory, so run diagnostic
+commands from the same project as the affected runtime session.
+
+`ak config` opens the local dashboard. It does not print effective preferences,
+and `ak config status` reports the dashboard process rather than configuration
+values.
+
+## Resolve the effective value
+
+```bash
+ak config prefs resolve
+ak config prefs resolve --json
+```
+
+The output names the user and project sources and shows the merged preferences.
+If no preference is set, hooks use their built-in defaults. Exit `1` means a
+configuration file could not be read or parsed.
+
+## Validate before editing
+
+```bash
+ak config prefs validate
+ak config prefs validate --file ./config.yaml
+```
+
+The first command validates whichever user and project files exist against the
+schema embedded in the installed CLI. No configuration files is a valid state.
+The second validates one named file. Exit `0` means there are no errors; exit
+`1` means invalid or unreadable configuration; invalid flags exit `2`.
+
+Warnings can identify an older spelling that still resolves. Errors identify a
+value that cannot be used as written. Fix the reported line and validate again
+before restarting the runtime.
+
+## Change one supported hook preference
+
+Use the CLI instead of deleting or replacing a whole configuration file:
+
+```bash
+ak config prefs set hooks.<hook-name> false --scope project
+ak config prefs unset hooks.<hook-name> --scope project
+```
+
+`set` accepts a supported `hooks.*` key and a boolean. `unset` removes only that
+override so the value falls back to the other scope or the built-in default.
+Choose `--scope user` or `--scope project` explicitly. These commands back up
+and rewrite the selected `config.yaml`; an unsupported key, non-boolean value,
+or schema failure exits `1`.
+
+## Recover safely
+
+If a manual edit broke parsing, keep a copy of the file, repair only the lines
+reported by `validate`, and re-run both `validate` and `resolve`. If one hook
+override caused the problem, use `unset` for that key rather than deleting
+`~/.agentkit`, `.agentkit`, `~/.claude`, or `~/.codex`.
+
+The issue is resolved when validation exits `0`, `resolve` shows the expected
+source and value, and a new runtime session behaves as expected.
+
+## Related pages
+
+- [Runtime cannot find a Skill or Agent](./runtime-cannot-find-skill-or-agent)
+- [Kit installation problems](./kit-installation)
+- [CLI reference](../reference/cli)

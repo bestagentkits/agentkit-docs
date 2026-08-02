@@ -1,0 +1,92 @@
+---
+title: Sign-in and Kit access
+description: Separate authentication from Kit entitlements, verify the active account, and renew credentials without exposing secrets.
+---
+
+Use this page when login fails, the wrong account appears, or you are signed in
+but cannot install a Kit.
+
+## Check identity before access
+
+```bash
+ak whoami --json
+ak licenses --json
+```
+
+These are separate checkpoints:
+
+1. `ak whoami` confirms the active CLI account.
+2. `ak licenses` queries the registry for the Kits granted to that account.
+
+An unauthenticated `ak whoami` result is not a command failure: it reports
+`Authenticated: false` and exits `0`. Read the payload instead of relying only
+on the exit code. If the account is correct but the Kit is absent from
+`ak licenses`, reinstalling cannot add the entitlement; use the account that
+received the Kit or contact support.
+
+## Sign in again
+
+Email login starts an OTP flow:
+
+```bash
+ak login --email you@example.com
+```
+
+For a user API key from your web profile:
+
+```bash
+ak login --api-key ak_live_... --no-interactive
+```
+
+Never put a real API key in shell history, source control, screenshots, or a
+support bundle. API-key login stores the private key in the local AgentKit
+session file; protect that file as a credential.
+
+If the local CLI session is stale, clear only that session and sign in again:
+
+```bash
+ak logout
+ak login --email you@example.com
+ak whoami --json
+ak licenses --json
+```
+
+`ak logout` is idempotent and exits `0` when no CLI session exists. It removes
+the CLI registry credential but preserves a paid App device session.
+
+## App activation is a different check
+
+`ak login --license-key ak_license_...` activates an App device session. It
+does not replace the live Kit entitlement query used by `ak licenses`. A valid
+App license, a successful CLI sign-in, and access to a paid Kit are related
+account states, but one does not prove the others.
+
+## Network or registry errors
+
+Run the network-aware health checks and then an offline comparison:
+
+```bash
+ak doctor --json
+ak doctor --offline --json
+```
+
+If only the network-aware run fails, inspect proxy, DNS, TLS, and registry
+reachability. Do not switch channels or override the registry as a routine
+login fix.
+
+## If it still fails
+
+Export redacted evidence:
+
+```bash
+ak diagnostics export --json > agentkit-diagnostics.json
+```
+
+Review the file before sharing. Do not include the session file, OTP, API key,
+or license key.
+
+## Related pages
+
+- [Onboarding](../getting-started/onboarding)
+- [Kit installation problems](./kit-installation)
+- [Configuration problems](./configuration)

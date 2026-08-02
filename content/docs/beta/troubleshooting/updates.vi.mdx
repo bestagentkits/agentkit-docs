@@ -1,0 +1,113 @@
+---
+title: Cập nhật và khôi phục
+description: Tách cập nhật binary khỏi Kit, diễn giải mã thoát preview và lỗi, rồi chỉ restore snapshot đã xác minh.
+---
+
+Dùng trang này khi cập nhật không apply, cập nhật sai scope, báo lỗi một phần
+hoặc cần rollback.
+
+## Xác định thứ bạn muốn cập nhật
+
+`ak self-update` xử lý binary `ak`. `ak update` điều phối CLI, Kit global và Kit
+project, hoặc cập nhật một scope được chọn rõ ràng.
+
+Kiểm tra binary mà không thay đổi disk:
+
+```bash
+ak --version
+ak self-update --check --json
+```
+
+Check thành công thoát `0`; đọc các trường `available`, `status` và phiên bản để
+biết có bản cập nhật hay không. Lỗi mạng, xác minh, staging hoặc thay binary
+thoát `1`; flag không hợp lệ thoát `2`. Binary do package manager quản lý sẽ báo
+manager và lệnh upgrade gốc thay vì tự thay binary.
+
+## Preview thay đổi Kit và project
+
+```bash
+ak update --dry-run --show-diff
+```
+
+`--dry-run` rõ ràng chỉ đọc và thoát `0` khi preview thành công. Trong script
+hoặc session non-interactive, `ak update` không có `--yes` cũng chỉ preview nhưng
+thoát `3` để automation phân biệt “chưa apply” với cập nhật đã apply. Trong
+interactive wizard, mỗi bước apply mặc định là **No**.
+
+Chỉ apply sau khi kiểm tra project, runtime, Kit và kênh đã chọn:
+
+```bash
+ak update --yes
+```
+
+Lỗi runtime khi apply, CLI hard gate, Kit lỗi một phần hoặc ngắt sau khi đã
+mutation thoát `1`. Kết hợp scope hoặc target không hợp lệ thoát `2`.
+
+## Kiểm tra kết quả
+
+```bash
+ak --version
+ak doctor --json
+ak audit --json
+```
+
+Phiên bản CLI và báo cáo doctor xác nhận state của binary và môi trường. Audit
+kiểm tra nội dung Kit Claude Code đã ghi nhận: thoát `0` là sạch và thoát `1`
+nghĩa là drift hoặc lỗi audit. Nhớ rằng doctor mặc định có thể báo không khỏe
+nhưng vẫn thoát `0`; hãy kiểm tra `healthy`.
+
+## Kiểm tra recovery snapshot
+
+Các đường cập nhật có mutation tạo recovery snapshot. Dùng snapshot ID mà thao
+tác lỗi đã in khi có:
+
+```bash
+ak backups list
+ak backups show <id>
+ak backups verify <id>
+ak backups restore <id> --dry-run
+```
+
+`list`, `show`, `verify` và restore preview đều chỉ đọc. `show` hoặc `verify`
+thoát `5` nếu ID không tồn tại; `verify` thoát `1` nếu snapshot hỏng. Không
+restore snapshot không vượt qua xác minh.
+
+Output cập nhật project có thể nói snapshot nằm ngoài scope của
+`ak backups restore` và in thư mục snapshot files. Khi đó, làm theo đường copy
+thủ công được in cho các tệp project bị ảnh hưởng; không cố mở rộng quyền
+restore hoặc restore state không liên quan.
+
+## Restore snapshot đã xác minh
+
+Preview trước rồi xác nhận đúng ID:
+
+```bash
+ak backups restore <id> --dry-run
+ak backups restore <id>
+```
+
+Nếu `ak backups show <id>` liệt kê project bundle root, chỉ authorize đúng các
+đường dẫn tuyệt đối đó bằng một `--allow-root` lặp lại cho mỗi root. Đường dẫn
+rộng hơn hoặc khác sẽ bị từ chối.
+
+Chỉ dùng `--latest` sau khi `ak backups list` chứng minh snapshot mới nhất thuộc
+thao tác này. Mã thoát restore được phân loại:
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Preview hoặc restore hoàn tất. |
+| `2` | Argument không hợp lệ, ví dụ kết hợp ID với `--latest`. |
+| `3` | Bạn từ chối xác nhận; không có gì được restore. |
+| `4` | Một thao tác backup khác đang giữ lock. |
+| `5` | Snapshot không tồn tại hoặc chưa có snapshot nào. |
+
+Sau restore, chạy lại `ak --version`, `ak doctor --json` và audit áp dụng được.
+Không xóa backup storage, runtime home hoặc `~/.agentkit`; các hành động đó xóa
+bằng chứng và đường khôi phục bạn cần. Không dùng `--force` như cách thử lại cập
+nhật thông thường.
+
+## Trang liên quan
+
+- [Cập nhật ak](../guides/updating)
+- [Lỗi cài đặt](./installation)
+- [Lỗi cài Kit](./kit-installation)

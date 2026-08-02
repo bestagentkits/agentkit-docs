@@ -1,0 +1,91 @@
+---
+title: Runtime không tìm thấy Skill hoặc Agent
+description: Xác minh runtime, scope project hoặc global, nội dung đã cài và projection được hỗ trợ khi runtime không discover được bản cài thành công.
+---
+
+Dùng trang này khi cài Kit thành công nhưng runtime không liệt kê hoặc nhận diện
+Skill hay Agent mong đợi.
+
+## Khớp runtime session với bản cài
+
+Xác nhận bốn thông tin từ output cài đặt ban đầu:
+
+1. Tên Kit.
+2. Runtime đích: `claude-code`, `codex` hoặc adapter được hỗ trợ khác.
+3. Scope: project hiện tại hoặc `--global`.
+4. Các Skill đã chọn, gồm mọi filter `--skills` hoặc `--exclude-skills`.
+
+Project install được discover từ project đó. Global install được discover từ
+user profile của runtime. Mở session runtime mới sau khi cài để nó tải inventory
+hiện tại, và dùng cú pháp gọi Skill hoặc Agent được runtime đó hỗ trợ.
+
+## Kiểm tra adapter, không chỉ sự tồn tại của tệp
+
+```bash
+ak doctor --adapter claude-code --json
+ak doctor --adapter codex --json
+```
+
+Chạy lệnh cho target đã cài. Tệp tồn tại không chứng minh registration hoặc cấu
+hình runtime hợp lệ. Kiểm tra các adapter check và trường `healthy` trong báo
+cáo; doctor mặc định vẫn thoát `0` khi báo cáo không khỏe. Trên Codex, dùng
+doctor như tín hiệu về sức khỏe adapter, không phải bằng chứng duy nhất cho Skill
+inventory đã cài; hãy xác minh discovery ngay trong runtime.
+
+Với bản cài Claude Code, dùng audit chỉ đọc đúng mode như mô tả trong [Lỗi cài
+Kit](./kit-installation). Nếu audit thoát `1`, hãy xử lý drift được báo trước khi
+debug runtime discovery.
+
+## Nếu bản cài báo Hooks bị bỏ
+
+Trên target Codex, bản cài thành công có thể chứa đúng dòng tóm tắt này:
+
+```text
+[!] Hooks dropped (unsupported on this target): 1 group - see warnings
+```
+
+Đây là chẩn đoán partial projection được hỗ trợ, không phải lỗi cài đặt bị che.
+Nó có nghĩa là hook group được nêu dùng matcher cho các Claude tool không có
+tương đương trong namespace tool của Codex, nên group đó và các handler được nêu
+không được project. Các hook tương thích khác cùng Skill hoặc Agent đã cài là
+kết quả riêng; hãy kiểm tra các dòng tương ứng trong cùng install summary.
+
+Con số này đếm matcher group, không phải tệp hoặc script. Warning theo sau nêu
+event, matcher và handler bị ảnh hưởng.
+
+Đọc chi tiết group bị bỏ để biết event, matcher và tên handler. Automation chỉ
+do group bị bỏ cung cấp sẽ không khả dụng trên Codex. Không thử lại với
+`--force`, sao chép cấu hình hook Claude sang Codex hoặc xóa home của runtime để
+loại bỏ cảnh báo.
+
+## Kiểm tra scope cấu hình
+
+Từ cùng thư mục project với runtime session, chạy:
+
+```bash
+ak config prefs resolve
+ak config prefs validate
+```
+
+Tệp project ghi đè preference người dùng. Preference tắt hook có thể thay đổi
+hành vi hook, nhưng không cài Skill hoặc Agent đang thiếu. Xem [Lỗi cấu
+hình](./configuration) trước khi sửa tệp.
+
+## Xác minh kết quả
+
+Sự cố được giải quyết khi báo cáo doctor cho adapter khỏe, audit áp dụng được
+không có drift và session runtime mới trong đúng scope liệt kê hoặc nhận diện
+item mong đợi. Nếu các checkpoint đều đạt nhưng discovery vẫn thất bại, export
+gói đã che dữ liệu nhạy cảm:
+
+```bash
+ak diagnostics export --json > agentkit-diagnostics.json
+```
+
+Ghi lại Kit, target, scope, các Skill đã chọn và phiên bản runtime cùng báo cáo.
+
+## Trang liên quan
+
+- [Lỗi cài Kit](./kit-installation)
+- [Cài Kit](../guides/installing-kits)
+- [Lỗi cấu hình](./configuration)

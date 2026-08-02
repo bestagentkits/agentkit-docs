@@ -1,0 +1,103 @@
+---
+title: Lỗi cài Kit
+description: Chẩn đoán quyền dùng Kit, xác minh nguồn, runtime đích, phạm vi, xung đột ownership và cài đặt dở dang theo thứ tự an toàn.
+---
+
+Dùng trang này khi `ak kit init` hoặc `ak kit install` thất bại trước khi runtime
+đích có thể dùng Kit.
+
+## Xác nhận điều kiện cần
+
+```bash
+ak --version
+ak whoami --json
+ak licenses --json
+```
+
+Các checkpoint mong đợi là đúng phiên bản CLI, đúng tài khoản và có grant cho
+Kit. Đăng nhập thành công nhưng Kit không có trong `ak licenses` là lỗi quyền sử
+dụng, không phải lỗi cài đặt. Hãy xem [Đăng nhập và quyền sử dụng
+Kit](./authentication) trước.
+
+## Xác nhận target và scope
+
+Chạy lệnh cài từ project sẽ sở hữu nội dung project-scoped. Ghi rõ runtime để
+đích không mơ hồ:
+
+```bash
+ak kit init engineer --target claude-code
+ak kit init engineer --target codex
+```
+
+Scope mặc định là project hiện tại. `--global` chọn user scope của runtime. Cài
+thành công trong một scope không làm Kit xuất hiện trong project hoặc user
+profile khác.
+
+Với bản phát hành, authenticated remote registry là nguồn mặc định. `--local`
+dành cho nguồn development hoặc CI rõ ràng và yêu cầu `--kits-dir` hoặc
+`AGENTKIT_KITS_DIR`; đây không phải fallback cho lỗi registry.
+
+## Đọc nhóm lỗi
+
+| Kết quả | Ý nghĩa | Hành động tiếp theo |
+| --- | --- | --- |
+| Thoát `2` | Flag hoặc argument không hợp lệ | Sửa lệnh; không cần khôi phục cài đặt. |
+| Thoát `1` | Lỗi tìm Kit, đích đã có hoặc không an toàn, authentication, tải, xác minh, I/O hoặc runtime | Giữ lại thông báo lỗi và chạy các kiểm tra bên dưới. |
+
+Khi đích đã có tệp, không thử lại ngay với `--force`. Trước tiên hãy xác định
+nội dung do AgentKit sở hữu, thuộc install mode khác hay chứa thay đổi của người
+dùng.
+
+## Kiểm tra runtime và nội dung đã ghi nhận
+
+```bash
+ak doctor --adapter claude-code --json
+ak doctor --adapter codex --json
+```
+
+Chỉ chạy adapter bạn đã chọn. Adapter hoặc check không hợp lệ là lỗi lệnh. Dùng
+`ak doctor --list` nếu cần tên check mà CLI đang cài hỗ trợ.
+
+Với nội dung Claude Code, audit đúng delivery mode:
+
+```bash
+ak audit engineer
+ak audit engineer --project-dir .
+ak audit engineer --plugin-mode --project-dir ./ak-engineer
+```
+
+Lệnh đầu audit user plugin, lệnh thứ hai audit project-native install và lệnh
+thứ ba audit project plugin có plugin root là `./ak-engineer`. `ak audit` chỉ
+đọc: thoát `0` là sạch; thoát `1`
+nghĩa là có drift hoặc audit thất bại. Dùng `--strict` khi manifest bị thiếu
+hoặc không đọc được cũng phải làm check thất bại.
+
+## Khôi phục cài đặt thất bại
+
+Các thao tác cài và refresh dùng đường ghi có snapshot bảo vệ. Nếu lệnh in
+snapshot hoặc recovery ID, hãy kiểm tra trước khi restore:
+
+```bash
+ak backups list
+ak backups show <id>
+ak backups verify <id>
+ak backups restore <id> --dry-run
+```
+
+Chỉ restore sau khi preview nêu đúng state bạn muốn thay thế. Nếu cài đặt hoàn
+tất nhưng `ak audit` chứng minh nội dung phát hành bị drift, làm theo lệnh sửa
+được audit in để refresh dùng cùng Kit, delivery mode và scope. Không thêm
+`--no-backup`, đổi kênh hoặc xóa runtime home để sửa lỗi.
+
+## Xác minh kết quả
+
+Chạy lại doctor cho adapter. Sau đó mở session runtime mới trong cùng project và
+xác minh Skill hoặc Agent mong đợi đã có. Nếu cài đặt khỏe nhưng runtime vẫn
+không discover được, tiếp tục với [Runtime không tìm thấy Skill hoặc
+Agent](./runtime-cannot-find-skill-or-agent).
+
+## Trang liên quan
+
+- [Cài Kit](../guides/installing-kits)
+- [Đăng nhập và quyền sử dụng Kit](./authentication)
+- [Cập nhật và khôi phục](./updates)
