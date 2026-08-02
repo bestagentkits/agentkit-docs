@@ -39,6 +39,7 @@ export function ProductDocsLayout({
       tree={filteredTree}
       tabs={tabs}
       tabMode="top"
+      containerProps={{ className: 'ak-product-docs-layout' }}
       sidebar={{ banner: <ChannelSelector locale={locale} /> }}
       {...baseOptions(locale)}
     >
