@@ -1,0 +1,135 @@
+---
+title: Hook của Engineer và hỗ trợ theo runtime
+description: Tìm hiểu event graph của Hook Engineer, kết quả có thể quan sát và ranh giới hỗ trợ theo runtime.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Hook của Engineer bổ sung automation xoay quanh thao tác với tool, prompt, ranh
+giới session và handoff. Hook có thể trả về hướng dẫn, yêu cầu phê duyệt, dừng
+một thao tác không an toàn hoặc quá rộng, hay cập nhật trạng thái workflow có
+giới hạn. Bạn không gọi Hook như Skill hoặc command; runtime đã chọn sẽ gọi các
+handler được hỗ trợ khi event tương ứng xảy ra.
+
+Package Engineer đã resolve có **44 entry Hook**. Con số này là inventory của
+artifact, không phải 44 behavior độc lập. Nó bao gồm manifest của Hook, event
+handler, thư viện hỗ trợ dùng chung, cùng helper về trạng thái và statusline
+riêng của Engineer. Một handler có thể tham gia nhiều event, còn tệp hỗ trợ có
+thể không bao giờ tự chạy.
+
+<Callout type="warn" title="Hook bổ sung cho biện pháp bảo vệ hiện có">
+  Check và reminder từ Hook có thể giúp giảm sai sót, nhưng không thay thế quyền
+  của runtime, kiểm soát repository, quản lý secret, code review hay sự phê duyệt
+  của bạn. Hãy review mọi hành động được yêu cầu và các thay đổi tạo ra.
+</Callout>
+
+## Event graph đang hoạt động
+
+Graph đang hoạt động được tổ chức theo kết quả thay vì số lượng tệp trong
+package:
+
+| Event | Điều bạn có thể quan sát |
+| --- | --- |
+| `PreToolUse` | Cung cấp hướng dẫn đặt tên cho tệp mới, kiểm tra truy cập tệp nhạy cảm và dừng hoạt động scout quá rộng hoặc đi vào path bị bỏ qua khi request vượt ngoài ranh giới được hỗ trợ. Check có thể cho phép request, trả về hướng dẫn hoặc yêu cầu phê duyệt. |
+| `PostToolUse` | Giữ định dạng plan nhất quán sau khi edit và write, làm mới trạng thái task/session sau thao tác task được hỗ trợ và cập nhật trạng thái sử dụng sau hoạt động của tool. |
+| `PreCompact` | Ghi lại đủ định hướng workflow để tiếp tục sau khi compact context. |
+| `SessionStart` | Khởi tạo context của project và session cho phiên mới. |
+| `SubagentStart` | Khởi tạo trạng thái subagent và cung cấp team context liên quan. |
+| `Stop` | Làm mới trạng thái session và usage, đồng thời có thể nhắc bạn chủ động chuyển bước sau khi lập kế hoạch. |
+| `SubagentStop` | Làm mới trạng thái session dùng chung tại ranh giới subagent. |
+| `UserPromptSubmit` | Cung cấp hướng dẫn phát triển theo project, kiểm tra rủi ro output giống secret, áp dụng gate đơn giản hóa trước khi ship khi phù hợp và làm mới trạng thái usage. |
+
+Những kết quả này hỗ trợ workflow Engineer; chúng không tự phê duyệt plan,
+commit, merge, deploy hay phát hành công việc thay bạn.
+
+## Projection theo runtime
+
+Các nhãn dưới đây mô tả nội dung trở thành active:
+
+- **Emitted** nghĩa là AgentKit ghi một artifact native đang hoạt động.
+- **Translated** nghĩa là AgentKit ánh xạ behavior được hỗ trợ sang event model
+  native của runtime.
+- **Dropped** nghĩa là runtime không biểu diễn được behavior nên behavior đó
+  không hoạt động.
+- **Sidecar-preserved** nghĩa là nội dung package được giữ lại để hỗ trợ hoặc
+  truy vết nguồn gốc, nhưng bản thân nó không phải feature runtime đang hoạt
+  động.
+
+| Bề mặt | Claude Code | Codex | Cursor |
+| --- | --- | --- | --- |
+| Event graph của Hook | **Emitted:** graph đã khai báo dùng bề mặt Hook native hoặc plugin của Claude Code. | **Translated:** event và matcher có thể biểu diễn trở thành đăng ký Hook của Codex. **Dropped:** group không được hỗ trợ bị bỏ qua và được nêu trong kết quả cài đặt; cài đặt vẫn có thể thành công. | **Translated:** group được hỗ trợ trở thành đăng ký Hook của Cursor. Hỗ trợ trong source không chứng minh behavior giống hệt trên mọi thiết lập provider. |
+| Dependency của handler | Dependency cần cho handler đang hoạt động được emit; nội dung hỗ trợ còn lại được sidecar-preserved. | Dependency cần cho handler đã translate được emit; nội dung hỗ trợ còn lại được sidecar-preserved. | Dependency cần cho handler đã translate được emit; nội dung hỗ trợ còn lại được sidecar-preserved. |
+| Statusline Engineer | **Emitted:** hoạt động khi AgentKit có thể cài mà không thay thế statusline không thuộc quyền sở hữu của mình. | **Dropped:** không được hỗ trợ. | **Dropped:** không được hỗ trợ. |
+
+Statusline Engineer **chỉ dành cho Claude Code**. Codex và Cursor không có
+statusline chỉ vì package chứa tệp hỗ trợ statusline.
+
+## Hỗ trợ một phần trên Codex
+
+Codex có event model và matcher model nhỏ hơn Claude Code. AgentKit translate
+group tương thích và drop group không được hỗ trợ thay vì tự tạo trigger gần
+đúng. Cụ thể, Codex không project phần làm mới trạng thái task giữa session của
+Engineer sau các lần gọi tool quản lý task. Trạng thái session vẫn được làm mới
+tại các ranh giới `Stop` và `SubagentStop` được hỗ trợ.
+
+Group bị drop không làm cài đặt thất bại. Output cho người dùng liệt kê group
+đó dưới **Hooks dropped (unsupported on this target)**. Output JSON có
+`hooksDropped` và `droppedHookSummaries`, nhờ đó automation có thể phân biệt
+Hook đã cài và group không được hỗ trợ. Hãy xem các field này là disclosure về
+capability, không phải bằng chứng toàn bộ automation Engineer bị thiếu.
+
+### Hỗ trợ chạy Hook trên Windows
+
+Trên Windows, Hook `.cjs` hợp lệ nằm trong Codex home đã resolve có thể chạy từ
+path thông thường chứa khoảng trắng. AgentKit emit một shim `.cmd` sibling được
+quản lý và tham chiếu shim đó từ cấu hình Hook đã translate. Shim là output do
+AgentKit sở hữu và tham gia lifecycle refresh cùng uninstall thông thường.
+
+Hỗ trợ này có giới hạn rõ ràng. Path có khoảng trắng nhưng nằm ngoài Codex home,
+path chứa metacharacter của `cmd.exe`, tên shim không phải ASCII hoặc argument
+được bake không an toàn hay không phải ASCII vẫn không được hỗ trợ và sẽ tạo
+cảnh báo. Path không cần shim tiếp tục dùng command trực tiếp. Không sửa thủ
+công shim hoặc cấu hình Hook đã được tạo.
+
+## Ownership và lifecycle
+
+Đăng ký Hook ở scope project và người dùng có thể cùng tồn tại. Với cấu hình
+Codex global dùng chung, AgentKit merge các đăng ký do nó sở hữu trong khi giữ
+lại Hook của người dùng, field bên ngoài và đăng ký thuộc Kit khác. Entry đã bị
+sửa hoặc xung đột sẽ được giữ lại hay báo cáo thay vì bị ghi đè âm thầm.
+
+Metadata của Hook do AgentKit sở hữu tham gia rollback. Khi không còn Kit nào sở
+hữu một cấu trúc do AgentKit tạo, quá trình dọn dẹp sẽ loại bỏ cấu trúc rỗng đó
+nhưng giữ lại cấu trúc có sẵn hoặc từ nguồn bên ngoài. Đây là cải thiện độ tin
+cậy của lifecycle, không phải bảo đảm bảo mật hay quyền xóa nội dung tùy ý khỏi
+tệp cấu hình Hook dùng chung.
+
+Refresh và uninstall chỉ tác động lên nội dung được ghi nhận là do AgentKit sở
+hữu, không phải mọi Hook trong runtime. Hãy review preview của thao tác và
+snapshot khôi phục trước khi áp dụng thay đổi lifecycle. Không xóa runtime home
+hoặc toàn bộ tệp cấu hình Hook dùng chung để sửa lỗi.
+
+## Khắc phục sự cố an toàn
+
+1. **Đọc disclosure của cài đặt.** Kiểm tra **Hooks dropped (unsupported on this
+   target)** hoặc các field drop trong JSON trước khi kết luận toàn bộ Hook graph
+   thất bại.
+2. **Xác nhận target và scope.** Bản cài ở project và người dùng là riêng biệt,
+   và runtime có thể nạp một bản khác với bản bạn dự kiến.
+3. **Chạy health check cho Codex.** Dùng `ak doctor --adapter codex --json` và
+   kiểm tra các check được báo cáo thay vì giả định có tệp đồng nghĩa Hook đã
+   được đăng ký.
+4. **Kiểm tra phân loại path trên Windows.** Path `.cjs` hợp lệ trong Codex home
+   có thể dùng shim được quản lý; dạng path bên ngoài hoặc không an toàn sẽ cảnh
+   báo.
+5. **Dùng đúng route lifecycle.** Preview refresh hoặc uninstall, giữ nội dung
+   đã được người dùng sửa và kiểm tra mọi snapshot khôi phục trước khi áp dụng
+   thay đổi.
+
+Để xem flag cài đặt chính xác, hãy đọc [Cài đặt
+Kit](../../../guides/installing-kits) và [tham chiếu `ak kit
+init`](../../../reference/cli/ak_kit_init). Để xem khác biệt capability giữa
+các adapter, hãy đọc [Runtime adapter](../../../concepts/runtime-adapters). Nếu
+việc cài đặt hoặc discovery vẫn chưa rõ, hãy tiếp tục với [Lỗi cài
+Kit](../../../troubleshooting/kit-installation) và [Runtime không tìm thấy Skill
+hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent).

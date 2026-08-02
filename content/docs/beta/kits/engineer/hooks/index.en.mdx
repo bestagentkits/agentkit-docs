@@ -1,0 +1,132 @@
+---
+title: Engineer Hooks and runtime support
+description: Understand the Engineer Hook event graph, visible outcomes, and runtime-specific support boundaries.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Engineer Hooks add workflow automation around tool use, prompts, session
+boundaries, and handoffs. They can return guidance, request approval, stop an
+unsafe or overly broad operation, or update bounded workflow state. You do not
+invoke them as Skills or commands; the selected runtime calls the supported
+handlers when their events occur.
+
+The resolved Engineer package contains **44 Hook package entries**. That number
+is an artifact inventory, not 44 independent behaviors. It includes the Hook
+manifest, event handlers, shared support libraries, and Engineer-specific state
+and statusline helpers. One handler can participate in several events, while a
+support file may never run on its own.
+
+<Callout type="warn" title="Hooks supplement existing safeguards">
+  Hook checks and reminders can reduce mistakes, but they do not replace runtime
+  permissions, repository controls, secret management, code review, or your own
+  approval. Review every requested action and the resulting changes.
+</Callout>
+
+## Active event graph
+
+The active graph is organized around outcomes rather than package file count:
+
+| Event | What you can observe |
+| --- | --- |
+| `PreToolUse` | Provides naming guidance for new files, checks sensitive-file access, and stops overly broad or ignored-path scouting when the request falls outside the supported boundary. A check may allow the request, return guidance, or ask for approval. |
+| `PostToolUse` | Keeps plan formatting coherent after edits and writes, refreshes task/session state after supported task operations, and updates usage state after tool activity. |
+| `PreCompact` | Captures enough workflow orientation to continue after context compaction. |
+| `SessionStart` | Initializes project and session context for the new session. |
+| `SubagentStart` | Initializes subagent state and supplies the relevant team context. |
+| `Stop` | Refreshes session and usage state and can remind you to make a deliberate transition after planning. |
+| `SubagentStop` | Refreshes shared session state at the subagent boundary. |
+| `UserPromptSubmit` | Supplies project-development guidance, checks for secret-like output risk, applies the simplify-before-shipping gate when relevant, and refreshes usage state. |
+
+These outcomes support the Engineer workflow; they do not approve a plan,
+commit, merge, deploy, or release work for you.
+
+## Runtime projection
+
+The labels below describe what becomes active:
+
+- **Emitted** means AgentKit writes an active native artifact.
+- **Translated** means AgentKit maps a supported behavior to the runtime's
+  native event model.
+- **Dropped** means the runtime cannot represent the behavior, so it is not
+  active.
+- **Sidecar-preserved** means package material remains available for support or
+  provenance but is not an active runtime feature by itself.
+
+| Surface | Claude Code | Codex | Cursor |
+| --- | --- | --- | --- |
+| Hook event graph | **Emitted:** the declared graph uses Claude Code's native or plugin Hook surface. | **Translated:** representable events and matchers become Codex Hook registrations. **Dropped:** unsupported groups are omitted and disclosed in the install result; installation can still succeed. | **Translated:** supported groups become Cursor Hook registrations. Source support does not prove identical behavior across every provider setup. |
+| Handler dependencies | Dependencies required by active handlers are emitted; remaining support material is sidecar-preserved. | Dependencies required by translated handlers are emitted; remaining support material is sidecar-preserved. | Dependencies required by translated handlers are emitted; remaining support material is sidecar-preserved. |
+| Engineer statusline | **Emitted:** active when AgentKit can install it without replacing a foreign statusline. | **Dropped:** unsupported. | **Dropped:** unsupported. |
+
+The Engineer statusline is **Claude Code only**. Codex and Cursor do not gain a
+statusline merely because the package contains statusline support files.
+
+## Codex partial support
+
+Codex has a smaller event and matcher model than Claude Code. AgentKit
+translates compatible groups and drops unsupported groups instead of inventing
+an approximate trigger. In particular, Codex does not project Engineer's
+mid-session task-state refresh after task-management tool calls. Session-state
+refresh remains available at supported `Stop` and `SubagentStop` boundaries.
+
+A dropped group does not make installation fail. Human-readable output lists it
+under **Hooks dropped (unsupported on this target)**. JSON output includes
+`hooksDropped` and `droppedHookSummaries`, so automation can distinguish active
+Hook installation from unsupported groups. Treat these fields as capability
+disclosure, not as evidence that all Engineer automation is missing.
+
+### Windows Hook launch support
+
+On Windows, an eligible `.cjs` Hook inside the resolved Codex home can run from
+an ordinary path containing spaces. AgentKit emits a managed sibling `.cmd`
+shim and references that shim from the translated Hook configuration. The shim
+is an AgentKit-owned output and participates in normal refresh and uninstall
+handling.
+
+This support is deliberately bounded. A spaced path outside the Codex home, a
+path with `cmd.exe` metacharacters, a non-ASCII shim name, or unsafe/non-ASCII
+baked arguments remains unsupported and produces a warning. Paths that do not
+need a shim continue to use the direct command. Do not hand-edit the generated
+shim or Hook configuration.
+
+## Ownership and lifecycle
+
+Project and user-scope Hook registrations can coexist. For shared global Codex
+configuration, AgentKit merges registrations it owns while preserving user
+Hooks, foreign fields, and registrations owned by another Kit. A modified or
+conflicting entry is preserved or reported rather than silently overwritten.
+
+Owned Hook metadata participates in rollback, and last-owner cleanup removes
+empty structures created by AgentKit without removing pre-existing or foreign
+structure. This is lifecycle hardening, not a security guarantee and not
+permission to delete arbitrary content from the shared Hooks configuration.
+
+Refresh and uninstall operate on recorded AgentKit-owned material, not every
+Hook in the runtime. Review the operation preview and recovery snapshot before
+applying a lifecycle change. Do not delete a runtime home or the complete shared
+Hooks configuration as a repair step.
+
+## Troubleshoot safely
+
+1. **Read the installation disclosure.** Check **Hooks dropped (unsupported on
+   this target)** or the JSON drop fields before assuming the whole Hook graph
+   failed.
+2. **Confirm the target and scope.** Project and user installs are separate, and
+   the runtime can load a different copy than the one you expected.
+3. **Run the Codex health check.** Use `ak doctor --adapter codex --json` and
+   inspect the reported checks instead of assuming that file presence means a
+   Hook is registered.
+4. **Check the Windows path classification.** An eligible in-home `.cjs` path
+   can use a managed shim; unsupported external or unsafe path forms warn.
+5. **Use the matching lifecycle route.** Preview refresh or uninstall, preserve
+   user-modified content, and inspect any recovery snapshot before applying a
+   change.
+
+For exact install flags, see [Installing kits](../../../guides/installing-kits)
+and the [`ak kit init` reference](../../../reference/cli/ak_kit_init). For
+adapter-wide capability differences, see [Runtime
+adapters](../../../concepts/runtime-adapters). If installation or discovery is
+still unclear, continue with [Kit installation
+problems](../../../troubleshooting/kit-installation) and [Runtime cannot find a
+Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent).
