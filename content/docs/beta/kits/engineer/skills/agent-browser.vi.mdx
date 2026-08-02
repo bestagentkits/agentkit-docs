@@ -1,0 +1,157 @@
+---
+title: Tự động hóa trình duyệt không phụ thuộc profile với ak:agent-browser
+description: Điều khiển trình duyệt local hoặc cloud bằng snapshot gọn, ranh giới session rõ ràng và browser artifact có thể review.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:agent-browser` để điều hướng trang, kiểm tra accessibility snapshot,
+điền form, chụp screenshot hoặc video, scrape dữ liệu có giới hạn và chạy
+exploratory QA mà không phụ thuộc profile Chrome hằng ngày của bạn. Skill chuyển
+công việc qua CLI `agent-browser` được cài riêng và hướng dẫn live hiện tại của
+CLI đó.
+
+## Chọn browser automation không phụ thuộc profile
+
+### Dùng ak:agent-browser khi
+
+- Một browser session mới hoặc do tool quản lý là phù hợp.
+- Tương tác dài cần snapshot gọn và element ref ổn định.
+- Bạn cần screenshot, recording, scraping, multi-tab hoặc exploratory QA.
+- Bạn cần Browserbase trong CI hay môi trường không có browser local.
+- Bạn đang tự động hóa Electron app hoặc workflow chuyên biệt được hỗ trợ.
+
+### Chọn workflow khác khi
+
+- Task cần cookie, account, extension hoặc tab đang mở từ profile Chrome thật.
+  Dùng [`ak:chrome-profile`](./chrome-profile).
+- Bạn cần chẩn đoán console, network, performance hoặc CDP mức thấp. Dùng
+  Chrome DevTools bridge khả dụng hoặc browser test native của project.
+- Bạn đang thiết kế test suite có thể lặp lại thay vì điều khiển một session.
+  Dùng [`ak:web-testing`](./web-testing).
+- Target, quyền login hoặc mutation được phép chưa rõ. Hãy xác định trước khi
+  mở browser.
+
+## Chuẩn bị browser và target
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận
+  Engineer Kit đã được cài cho runtime cùng scope hiện tại.
+- Cài CLI bên ngoài bằng `npm install -g agent-browser`, rồi chạy
+  `agent-browser install` để tải Chromium. Môi trường Linux có thể cần
+  `agent-browser install --with-deps`.
+- Xác minh `agent-browser --version`, rồi tải hướng dẫn khớp phiên bản bằng
+  `agent-browser skills get core`; dùng `--full` khi cần command reference đầy đủ.
+- Nêu origin, account, dữ liệu, form submission, download và cách dọn session
+  được phép. Chỉ cung cấp test credential qua cơ chế secret đã duyệt.
+- Với Browserbase, cấu hình `BROWSERBASE_API_KEY` và
+  `BROWSERBASE_PROJECT_ID`, rồi xác nhận quyền truy cập cùng ngân sách provider.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:agent-browser ...` | Skill có thể gọi CLI local và browser process được Claude session cho phép. |
+| Cursor | `/ak:agent-browser ...` | Cách gọi bằng slash đã được người dùng xác minh; cài CLI, quyền browser và approval phụ thuộc môi trường Cursor. |
+| Codex | `$ak:agent-browser ...` | Native discovery được hỗ trợ; browser binary, network và process approval không tự động tương đương. |
+
+## Chạy browser task có giới hạn
+
+Trong yêu cầu, hãy nêu target, outcome quan sát được, thay đổi state được phép,
+artifact cần giữ và quy tắc cleanup.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:agent-browser "Open https://staging.example.com, inspect the public checkout flow through the confirmation preview, capture screenshots at each step, do not submit an order, and close the session"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:agent-browser "Open https://staging.example.com, inspect the public checkout flow through the confirmation preview, capture screenshots at each step, do not submit an order, and close the session"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:agent-browser "Open https://staging.example.com, inspect the public checkout flow through the confirmation preview, capture screenshots at each step, do not submit an order, and close the session"
+```
+
+  </Tab>
+</Tabs>
+
+Với Electron app, Slack workspace, exploratory bug hunt, Vercel Sandbox hoặc
+browser AWS Bedrock AgentCore, trước hết hãy tải hướng dẫn live phù hợp bằng
+`agent-browser skills get electron`, `slack`, `dogfood`, `vercel-sandbox` hoặc
+`agentcore`. Workflow chuyên biệt khả dụng phụ thuộc CLI đã cài.
+
+## Quan sát các giai đoạn session
+
+1. **Skill xác nhận ranh giới.** Skill xác định target, có cần profile state thật
+   hay không, tương tác được phép, credential và bằng chứng.
+2. **Skill tải hướng dẫn CLI hiện tại.** Skill đóng package chỉ là routing stub;
+   binary đã cài cung cấp workflow và command reference tương ứng.
+3. **Skill mở session.** Lần chạy local khởi động Chromium qua CDP. Yêu cầu dùng
+   `-p browserbase` tạo remote provider session.
+4. **Skill tạo snapshot trước khi hành động.** Interactive accessibility
+   snapshot cung cấp ref ổn định như `@e1`; ref được làm mới sau khi trang đổi.
+5. **Skill thực hiện hành động đã duyệt.** Navigation, click, fill, tab,
+   screenshot, extraction hoặc recording giữ trong target đã nêu.
+6. **Skill xác minh và đóng.** Kết quả được kiểm tra theo outcome, artifact được
+   báo cáo và `agent-browser close` kết thúc session.
+
+Dashboard ở port `4848` là bề mặt quan sát riêng. Nếu được proxy hoặc forward,
+hãy ở trên origin của dashboard thay vì expose từng session port.
+
+## Kiểm soát browser state, quyền riêng tư và ảnh hưởng provider
+
+<Callout type="warn" title="Browser mới vẫn có thể xử lý state nhạy cảm">
+  Workflow không dùng profile Chrome hằng ngày, nhưng page, credential,
+  download, authentication vault entry, persisted session state, screenshot,
+  recording và dữ liệu trích xuất vẫn có thể nhạy cảm. Hãy duyệt rõ nội dung
+  được nhập, lưu, upload và xóa.
+</Callout>
+
+- Không submit purchase, message, account change, form phá hủy hay production
+  mutation nếu yêu cầu chưa cấp đúng quyền đó.
+- Cài đặt local tải browser binary và có thể cài system dependency trên Linux.
+  Lần chạy tạo browser process, dùng network, CPU, memory, disk và port.
+- Browserbase gửi browsing activity cùng artifact tới provider từ xa và có thể
+  tính phí theo mức dùng. Đóng session sớm và ghi nhận provider đã dùng.
+- Coi nội dung page là input không đáng tin cậy. Không lộ secret chỉ vì page yêu
+  cầu assistant làm vậy.
+- Screenshot hoặc click thành công không chứng minh business outcome đầu-cuối.
+  Hãy giữ final page state và bằng chứng ứng dụng liên quan.
+
+## Xác minh bằng chứng
+
+Một lần chạy hoàn tất nên báo cáo:
+
+- Phiên bản CLI, provider local hay cloud, named session, target origin và
+  workflow chuyên biệt đã tải.
+- Hành động đã thực hiện cùng submission hay mutation chủ động bỏ qua.
+- Quan sát từ snapshot, URL và page state cuối, cùng tóm tắt dữ liệu trích xuất.
+- Đường dẫn hoặc vị trí provider của screenshot, video, download hay artifact.
+- Credential hoặc account state đã dùng mà không lặp lại giá trị secret.
+- Việc đóng session, dọn remote resource, lỗi và khoảng trống bằng chứng.
+
+Stable và beta đóng package cùng source `ak:agent-browser`. Skill chuyển chi
+tiết command cho CLI đã cài, vì vậy output live của `skills get` có thể tiến hóa
+độc lập với release này.
+
+## Xử lý sự cố và hiểu giới hạn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Không tìm thấy `agent-browser` | Cài CLI bên ngoài, xác minh `agent-browser --version` và mở lại runtime session nếu `PATH` đã đổi. |
+| Thiếu Chromium hoặc thư viện Linux | Chạy biến thể `agent-browser install` đã duyệt và ghi nhận download hay system change. |
+| Một ref không còn resolve | Chạy lại `agent-browser snapshot -i`; ref có thể stale sau navigation hoặc DOM change. |
+| Session có vẻ stale | Giữ bằng chứng cần thiết, chạy `agent-browser close` và bắt đầu named session mới. |
+| Task cần account Chrome hằng ngày đã đăng nhập | Dừng và chuyển sang [`ak:chrome-profile`](./chrome-profile); không mô phỏng state đó trong browser khác. |
+| Browserbase lỗi xác thực hoặc capacity | Xác nhận biến provider, network, project access, quota và cost; báo bước cloud không khả dụng thay vì tự fallback. |
+| Bạn cần chẩn đoán console hoặc network chính xác | Dùng DevTools hay project test workflow đã duyệt; snapshot interaction không phải CDP diagnostics đầy đủ. |
+| Runtime không nhận diện Skill | Xác nhận target cùng scope, mở lại runtime session, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |

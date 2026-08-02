@@ -1,0 +1,174 @@
+---
+title: Render HTML-first videos with ak:html-video
+description: Build, preview, and verify local MP4 exports from HTML templates through Chromium and FFmpeg with explicit process boundaries.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:html-video` to turn HTML, CSS, JavaScript, templates, and project assets
+into a local MP4 through `nexu-io/html-video`, headless Chromium, and FFmpeg. It
+fits template-driven product promos, explainers, data or social clips, article
+or repository summaries, and HTML-first motion prototypes.
+
+## Choose HTML-first video rendering
+
+### Use ak:html-video when
+
+- A template and browser-rendered layout are a good fit for the video.
+- You need a CLI project, browser preview, optional Studio editing, and MP4 export.
+- Copy, screenshots, logos, structured data, or other project assets drive the scene.
+- You want to inspect the generated HTML before paying the full render cost.
+
+### Choose another workflow when
+
+- You need React and Remotion composition code, frame math, or Remotion-native
+  rendering. Use `ak:remotion`.
+- You only need transcode, trim, thumbnail, HLS or DASH, or batch FFmpeg work.
+  Use [`ak:media-processing`](./media-processing).
+- The result is a static page, slide, document, diagram, or demo without an MP4.
+  Use `ak:preview` or the relevant document workflow.
+- You only need browser QA. Use [`ak:agent-browser`](./agent-browser), or
+  [`ak:chrome-profile`](./chrome-profile) only when real signed-in state matters.
+
+## Prepare the engine and video brief
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Engineer Kit is installed for the current runtime and scope.
+- Define audience, goal, duration, aspect ratio, source assets or URLs, template
+  preference, output path, and whether the deliverable is a draft or polished export.
+- Prefer an existing published `html-video` binary. If none is available, keep
+  a source checkout outside the target project and set `HTML_VIDEO_HOME`; do not
+  vendor the upstream engine into the project or Kit.
+- For the source path described by the shipped Skill, use Node.js 20 or newer,
+  pnpm 9 or newer, and the upstream-declared package manager. The source build,
+  dependency install, and Playwright Chromium download are separate mutations.
+- Run `html_video doctor` and `html_video list-engines`, then inspect
+  `html_video --help`, `project-render --help`, and `studio --help`. Upstream
+  commands can evolve independently of this AgentKit release.
+- Make FFmpeg, Chromium, project assets, enough disk, and a writable output
+  directory available. Review whether templates or source URLs may contact the network.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:html-video ...` | The Skill can orchestrate the external CLI, files, local browser, FFmpeg, and Studio server when the session permits those processes. |
+| Cursor | `/ak:html-video ...` | Slash invocation is user-verified; equivalent browser, shell, local-server, and artifact behavior depend on Cursor. |
+| Codex | `$ak:html-video ...` | Native discovery is supported; the external engine, Chromium, FFmpeg, ports, and process approvals are not bundled runtime guarantees. |
+
+## Create a bounded video project
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:html-video "Create a 12-second 16:9 draft product promo from ./assets/cli-screenshot.png and the headline 'Ship with evidence'; use a discovered template, preview before rendering, write ./artifacts/ship-with-evidence.mp4, make no network asset requests, and do not commit or publish the video"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:html-video "Create a 12-second 16:9 draft product promo from ./assets/cli-screenshot.png and the headline 'Ship with evidence'; use a discovered template, preview before rendering, write ./artifacts/ship-with-evidence.mp4, make no network asset requests, and do not commit or publish the video"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:html-video "Create a 12-second 16:9 draft product promo from ./assets/cli-screenshot.png and the headline 'Ship with evidence'; use a discovered template, preview before rendering, write ./artifacts/ship-with-evidence.mp4, make no network asset requests, and do not commit or publish the video"
+```
+
+  </Tab>
+</Tabs>
+
+### Use the live CLI workflow
+
+| Stage | Command family | Evidence |
+| --- | --- | --- |
+| Diagnose | `html_video doctor`, `html_video list-engines` | Browser, FFmpeg, engine, and environment readiness |
+| Discover | `search-templates`, then `inspect-template` | Ranked template IDs, aspect fit, and variable schema |
+| Create | `project-create`, `project-list`, `project-show` | Stable project ID and saved brief |
+| Configure | `project-set-template`, `project-add-asset`, `project-set-var`, `project-set-vars` | Selected template, copied or inline assets, and explicit variable values |
+| Preview | `project-preview` or `studio --port 3071` | HTML preview path or local Studio endpoint |
+| Render | `project-render <project-id> --output <path> --stream-progress` | Progress events and the requested MP4 path |
+| Verify | `ffprobe -v error -show_streams -show_format -of json <path>` | Nonzero duration, expected dimensions, streams, format, and file size |
+
+Some templates expose CLI-settable variables; others have an empty schema and
+require Studio or project editing. Inspect the template before assuming the CLI
+can theme it.
+
+## Observe the render stages
+
+1. **The Skill pins the video brief.** Audience, message, duration, aspect,
+   assets, output path, quality level, and publication boundary are captured.
+2. **It checks the external engine.** The selected binary or source checkout,
+   current help, Chromium, FFmpeg, and writable project storage are verified.
+3. **It discovers before selecting.** Candidate templates are searched and the
+   chosen template's inputs are inspected.
+4. **It creates and configures a project.** Template, inline text, local files,
+   and supported variables are attached to a project ID.
+5. **It previews in a browser.** The returned HTML is checked for layout,
+   typography, missing assets, motion, timing, console failures, and network use.
+6. **It renders through Chromium and FFmpeg.** The browser captures the scene and
+   FFmpeg encodes the MP4 at the explicit output path.
+7. **It probes the artifact.** `ffprobe` must report nonzero duration and expected
+   video dimensions before the export is treated as complete.
+
+## Control code, network, process, and storage effects
+
+<Callout type="warn" title="Rendering executes HTML, CSS, and JavaScript in Chromium">
+  Treat templates and remote assets as code and network-capable input. Review
+  their origin and behavior before rendering; do not expose local secrets,
+  authenticated pages, private files, or unrestricted network access.
+</Callout>
+
+- Cloning or updating the upstream source uses network and unpinned moving state
+  unless you separately select a reviewed revision. `pnpm install` and the build
+  create a large dependency tree; Playwright installation downloads Chromium.
+- Studio starts a local server, with port `3071` shown in the shipped workflow.
+  Bind and expose it only as intended, stop it after use, and do not assume the
+  page is safe for a shared network.
+- Preview and render start browser and FFmpeg processes and can consume heavy
+  CPU, memory, disk, temporary files, and time. Test a short draft first.
+- Source URLs, fonts, images, scripts, analytics, and embedded media can make
+  external requests. Record or block network effects when privacy or
+  reproducibility matters.
+- Confirm rights for images, logos, copy, fonts, audio, and templates. The Skill
+  does not grant publication or redistribution rights.
+- The workflow writes project state, preview files, scratch data, and MP4 output.
+  It does not commit, upload, publish, or deploy them without separate authority.
+
+## Verify the video and evidence
+
+A complete result should include:
+
+- CLI source or binary identity, current help checked, doctor results, engines,
+  template ID, project ID, and variable schema.
+- Input assets and URLs, inline text, network requests or blocked requests, and
+  any Studio edits.
+- Preview path, visual review notes, render command, progress result, and MP4 path.
+- `ffprobe` evidence for duration, dimensions, video and audio streams, format,
+  and file size.
+- Browser, FFmpeg, dependency, port, storage, rights, privacy, or publication
+  limitations that remain.
+
+Stable and beta package the same `ak:html-video` wrapper. The release does not
+pin an upstream checkout revision or prove a published binary, live template
+catalog, source build, Chromium installation, or cross-runtime render parity.
+
+## Troubleshoot and interpret limits
+
+| Symptom | Safe next step |
+| --- | --- |
+| `html-video` is not found | Use an available binary or a separately approved built source checkout, set `HTML_VIDEO_HOME`, and rerun `doctor`. |
+| The source build or command differs | Follow current upstream `package.json` and live CLI help; preserve the observed version instead of forcing stale syntax. |
+| Playwright reports a missing executable | Install only the required Chromium through the upstream source checkout, record the download, and rerun `doctor`. |
+| FFmpeg is missing | Install it through the approved platform package manager and verify `ffmpeg -version`. |
+| The template has no variables | Use Studio or edit the project after preview; CLI variable commands cannot configure an empty schema. |
+| The preview is blank or assets are missing | Inspect the preview path, console, file references, and network policy before rendering. |
+| The MP4 is blank, zero-duration, or the wrong size | Preserve render logs, preview again, render with progress, and require passing `ffprobe` evidence. |
+| Rendering exhausts local resources | Reduce duration, resolution, asset size, or concurrency and render a smaller draft before retrying. |
+| The output path is wrong | Re-render with an explicit `--output`; do not move a partial render directory and call it complete. |
+| The runtime does not recognize the Skill | Confirm target and scope, restart the runtime session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |

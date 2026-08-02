@@ -1,0 +1,167 @@
+---
+title: Generate visual concepts with ak:ai-artist
+description: Refine a visual brief, search curated prompt patterns, and render reviewable image variations through an approved provider.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:ai-artist` to turn a visual concept into a refined Nano Banana prompt
+and one or more generated PNG assets. The Skill searches a bundled collection
+of 129 prompt patterns, validates the intended style, mood, and color direction,
+then routes rendering through the `ak:ai-multimodal` backend to Google or
+OpenRouter-backed Google image models.
+
+## Choose prompt-led image generation
+
+### Use ak:ai-artist when
+
+- You need a product mockup, campaign visual, social asset, banner, infographic,
+  avatar, concept art, or style exploration.
+- A curated prompt can anchor a consistent visual direction.
+- You want a close match, a remix of several patterns, or an experimental style
+  transformation.
+- You want to inspect the assembled prompt before provider generation.
+
+### Choose another workflow when
+
+- You need to inspect or transform existing image, audio, video, or document
+  inputs. Use [`ak:ai-multimodal`](./ai-multimodal).
+- You need deterministic local resizing, compositing, encoding, or background
+  removal. Use [`ak:media-processing`](./media-processing).
+- You need layout, typography, accessibility, and implementation guidance for a
+  product interface. Use [`ak:frontend-design`](./frontend-design).
+- You cannot send the concept or reference material to an external AI provider.
+
+## Prepare the brief and provider
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Engineer Kit is installed for the current runtime and scope.
+- Provide the subject, audience, use case, style, mood, palette, composition,
+  aspect ratio, exact in-image text, exclusions, and output location.
+- Decide whether the validation interview may be bypassed with `--skip`. Without
+  that explicit option, the Skill must refine the brief before generation.
+- Make Python 3 and `npx` available. The rendering script fetches and runs the
+  pinned `@mrgoonie/multix@0.2.0` package.
+- Configure `GEMINI_API_KEY` for direct Google or `OPENROUTER_API_KEY` for the
+  OpenRouter route, then approve provider terms, network use, and budget.
+- Confirm that the prompt and any brand information may leave the local machine.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:ai-artist ...` | The Skill can run its Python workflow and provider subprocess when local tools, credentials, and network are approved. |
+| Cursor | `/ak:ai-artist ...` | Slash invocation is user-verified; equivalent subprocess, credential, and artifact handling depend on the Cursor session. |
+| Codex | `$ak:ai-artist ...` | Native discovery is supported; external image tools, provider access, and approval behavior are not automatically equivalent. |
+
+## Generate a reviewable variation
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:ai-artist "Create a 16:9 launch banner for a developer CLI: dark background, restrained steel-blue glow, terminal-inspired geometry, no logos, no people, and no text; use search mode and save a PNG"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:ai-artist "Create a 16:9 launch banner for a developer CLI: dark background, restrained steel-blue glow, terminal-inspired geometry, no logos, no people, and no text; use search mode and save a PNG"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:ai-artist "Create a 16:9 launch banner for a developer CLI: dark background, restrained steel-blue glow, terminal-inspired geometry, no logos, no people, and no text; use search mode and save a PNG"
+```
+
+  </Tab>
+</Tabs>
+
+### Select the generation shape
+
+| Input or option | Behavior | Observable output |
+| --- | --- | --- |
+| No mode, or `--mode search` | Uses the highest-ranked matching curated prompt | One image at the requested output path |
+| `--mode creative` | Remixes structure and style hints from the top matching prompts | One combined interpretation |
+| `--mode wild` | Randomly applies an experimental artistic transformation | One non-deterministic interpretation |
+| `--mode all` | Runs search, creative, and wild | Three files suffixed `-search`, `-creative`, and `-wild` |
+| `--provider auto` | Honors `IMAGE_GEN_PROVIDER`; otherwise selects from configured Google or OpenRouter credentials | Provider used should appear in verbose evidence |
+| `--model flash2|flash|pro` | Chooses the declared Nano Banana model alias; `flash2` is the script default | Model ID recorded by a successful run |
+| `-ar, --aspect-ratio` | Selects one of the supported ratios such as `1:1`, `16:9`, or `9:16` | Image with the requested composition ratio |
+| `--size 1K|2K|4K` | Selects provider image size; default is `2K` | Provider-dependent output resolution |
+| `--dry-run` | Builds and prints the prompt without calling image generation | Prompt evidence, no image file |
+| `--skip` on the Skill invocation | Bypasses the mandatory validation interview | The generation script itself does not define this flag |
+
+## Observe the creative stages
+
+1. **The Skill validates the brief.** Unless `--skip` was explicit, it resolves
+   material gaps in subject, style, mood, color, text, and output intent.
+2. **It searches local patterns.** BM25 matching ranks the bundled prompt rows
+   against the concept; search mode falls back to a basic prompt when no row
+   scores above zero.
+3. **It adapts the prompt.** Placeholders are replaced with the concept and
+   negative constraints are added when the source lacks them.
+4. **It applies the selected mode.** Creative mode combines matched hints; wild
+   mode selects a random transformation; all mode prepares three variants.
+5. **It resolves the provider and model.** The script chooses the direct Google
+   or OpenRouter command from explicit options, environment, and credentials.
+6. **It renders the file.** A subprocess sends the prompt and parameters to the
+   provider and writes the requested PNG path, with a five-minute script timeout.
+7. **It returns evidence.** The final prompt when requested, provider, model,
+   output paths, failures, and visual review notes are reported.
+
+## Control privacy, rights, cost, and randomness
+
+<Callout type="warn" title="Generation sends creative material to an external provider">
+  Prompts, brand details, exact text, and any provider metadata leave the local
+  environment. Do not include secrets, private customer data, protected source
+  assets, or identity references without permission and appropriate rights.
+</Callout>
+
+- `npx` can download and execute the pinned rendering package; generation uses
+  network, provider quota, compute, and potentially billable requests.
+- `--mode all` makes three provider calls. Failed or timed-out requests may
+  still consume provider resources; check the provider account before retrying.
+- Wild mode is random, and provider generation is not guaranteed reproducible.
+  Preserve selected files and the prompt rather than assuming a rerun matches.
+- Generated text, logos, anatomy, factual diagrams, and exact brand elements can
+  be wrong. Inspect the pixels; prompt success is not asset approval.
+- Validate usage rights, likeness consent, trademarks, and required disclosure
+  before publishing. The Skill does not grant rights to source prompts or output.
+- Generation writes files but does not publish, upload, commit, or deploy them
+  unless a separate authorized workflow performs that action.
+
+## Verify the output
+
+A complete result should include:
+
+- The validated brief, selected mode, aspect ratio, size, provider, and model.
+- The final prompt or a safe summary, including exact requested text and
+  negative constraints.
+- Every output path and the relationship between each file and its mode.
+- Visual checks for subject, composition, text, unwanted elements, artifacts,
+  and brand constraints.
+- Provider errors, timeouts, missing credentials, cost-sensitive retries, and
+  any rights or privacy review still needed.
+
+Stable and beta ship identical prompt data, scripts, and `ak:ai-artist` source.
+No directly scoped release test proves provider availability, output quality,
+cross-runtime process parity, or deterministic pixels.
+
+## Troubleshoot and interpret limits
+
+| Symptom | Safe next step |
+| --- | --- |
+| The concept matches the wrong prompt | Use a more specific subject and use case, inspect with `--dry-run`, or select creative mode deliberately. |
+| `--skip` fails when passed to `generate.py` | Keep `--skip` on the `ak:ai-artist` invocation; the Python renderer does not accept it. |
+| No provider credential is available | Configure the approved route or stop at `--dry-run`; do not paste a secret into the prompt or repository. |
+| `npx` or Python is unavailable | Install the missing local prerequisite only with approval and record the environment gap. |
+| Generation times out or returns an error | Preserve the provider error, check quota and network, and ask before a potentially billable retry. |
+| Mode `all` produced several files | Review each suffixed output independently; do not treat variation count as quality evidence. |
+| In-image text or layout is wrong | Strengthen exact text and placement constraints, then regenerate only with approved cost; edit locally when deterministic correction is better. |
+| You need to edit an existing asset | Switch to [`ak:ai-multimodal`](./ai-multimodal) or a deterministic [`ak:media-processing`](./media-processing) workflow. |
+| The runtime does not recognize the Skill | Confirm target and scope, restart the runtime session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
