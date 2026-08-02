@@ -24,6 +24,11 @@ Scope does not determine ownership of your repository. A project-scoped install
 lets AgentKit manage its recorded installation files in that project; it does
 not make every project file AgentKit-owned.
 
+Project and user copies can coexist. The runtime may then shadow or duplicate a
+command or Hook, and updating or removing one scope does not automatically
+delete the other. Inspect both scopes when behavior appears twice or a runtime
+loads a different copy than expected.
+
 ## Native and plugin delivery
 
 Delivery answers **how the runtime loads the installation**:
@@ -39,6 +44,10 @@ user-native, project-plugin, or user-plugin delivery. Codex and Cursor installs
 use their native project or user layouts; `--switch-to-plugin` does not select
 plugin delivery for them.
 
+Within one scope, native and plugin delivery for the same Claude Code Kit are
+mutually exclusive. Selecting the other mode starts an explicit transition; it
+does not leave both AgentKit-owned copies active in that scope.
+
 Switching delivery mode is a lifecycle transition. Review the preview because
 AgentKit may need to withdraw its old registration and create a new one while
 preserving foreign or modified content.
@@ -51,8 +60,22 @@ surfaces differ:
 | Runtime | What to expect |
 | --- | --- |
 | Claude Code | Native or explicit plugin delivery. Skills, agents, slash commands, rules, hooks, and the AgentKit status line can be active at project or user scope. |
-| Codex | Native Skill discovery, rules, and Agent dispatch through the local AgentKit runtime. Hook support is partial; unsupported events are reported, and task-state refresh occurs at supported turn and subagent boundaries rather than after every task tool call. Kit command files remain inactive supporting content, and Codex has no AgentKit status-line surface. |
-| Cursor | Native Skills, agents, rules, and hooks at project or user scope. Kit command files remain inactive supporting content, there is no AgentKit status-line surface, and the adapter does not expose a dedicated plan-management tool. |
+| Codex | Native Skill discovery, rules, and Agent dispatch through the local AgentKit runtime. Hook support is partial; unsupported groups are not projected, and task-state refresh occurs at supported turn and subagent boundaries rather than after every task tool call. Kit command files remain inactive supporting content, and Codex has no AgentKit status-line surface. |
+| Cursor | The adapter projects Skills, agents, rules, and hooks at project or user scope. Kit command files remain inactive supporting content, there is no AgentKit status-line surface, and the adapter does not expose a dedicated plan-management tool. Live install, update, and invocation coverage is not complete across provider setups, so do not infer full parity from source support alone. |
+
+A dropped Codex Hook group does not fail the installation. The install summary
+lists it under **Hooks dropped (unsupported on this target)**. With `--json`, the
+result includes `hooksDropped` and `droppedHookSummaries`. For the Engineer
+task-state group that Codex cannot represent, refresh still runs at supported
+turn and subagent boundaries, not in the middle of the session after each task
+tool call.
+
+On Windows, AgentKit can make an eligible `.cjs` Hook inside the resolved Codex
+home work from an ordinary path containing spaces by creating a managed
+sibling `.cmd` shim. This does not cover a spaced external path, a path with
+`cmd.exe` metacharacters, a non-ASCII shim name, or unsafe/non-ASCII baked
+arguments; those cases remain unsupported on Windows and warn. Paths that do not
+need a shim continue to use the direct command.
 
 Do not infer runtime support from a file name or from another runtime's behavior.
 Use the install summary and the relevant Skill documentation as the authority
