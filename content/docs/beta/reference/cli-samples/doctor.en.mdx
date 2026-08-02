@@ -1,0 +1,146 @@
+---
+title: ak doctor
+description: Run AgentKit health checks, interpret the nested JSON report, and opt into repair or exit-code gating safely.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak doctor` to check the AgentKit installation after setup or an update, or
+when a runtime, kit, registry session, or local dependency behaves unexpectedly.
+The command reports health without changing disk by default.
+
+## Usage
+
+```bash
+ak doctor
+```
+
+The command accepts no positional arguments.
+
+## Command flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--adapter <name>` | Empty | Filter checks to `codex`, `claude-code`, or `cursor`. |
+| `--check <names>` | Empty | Run named checks as a comma-separated list, such as `binary_version,codex_binary_present`. |
+| `--exit-on-fail` | `false` | Exit `1` when any completed check fails. |
+| `--fix` | `false` | Attempt available fixes for failing checks. |
+| `--list` | `false` | List registered check names and exit. |
+| `--offline` | `false` | Skip the `binary_version` and `network` checks. |
+
+Shared flags such as `--json`, `--no-interactive`, `--quiet`, `--verbose`, and
+`--yes` are described in [CLI conventions](../cli-conventions).
+
+## Common examples
+
+### Read a human report
+
+```bash
+ak doctor
+```
+
+The report groups checks by subsystem, summarizes `ok`, `warn`, `fail`, and
+`skip` results, and can include suggested fix commands.
+
+### Gate automation on health
+
+Choose either the structured health field or an explicit exit-code gate:
+
+```bash
+ak doctor --json | jq '.data.healthy'
+ak doctor --exit-on-fail
+```
+
+The JSON health field is `.data.healthy`, not `.healthy`.
+
+### Discover and run focused checks
+
+```bash
+ak doctor --list
+ak doctor --check disk_space
+ak doctor --check binary_version,network
+ak doctor --adapter codex
+```
+
+An unknown check name is a command error rather than an empty healthy result.
+
+### Run without network checks
+
+```bash
+ak doctor --offline
+```
+
+Without `--offline`, the full suite includes network-dependent checks. Offline
+mode skips those checks; it does not turn skipped results into successful
+network verification.
+
+## Apply fixes safely
+
+`ak doctor --fix` can run suggested repair commands that modify AgentKit or
+runtime files. On an interactive terminal, it asks before each available fix.
+
+For an intentional unattended repair, include `--yes` explicitly:
+
+```bash
+ak doctor --fix --yes --json
+```
+
+<Callout type="warning">
+  Do not treat `--fix --json` or `--fix --no-interactive` as prompt-free unless
+  you also pass `--yes`. Without `--yes`, the current fix path can still read
+  process stdin. End-of-file skips a fix, while piped confirmation can apply it.
+</Callout>
+
+Review suggested commands before approving them. A fix is rechecked after it
+runs, and a failed repair remains visible in the final report.
+
+## Automation output
+
+Successful JSON output uses a versioned envelope on stdout:
+
+```text
+schema_version: 1
+kind: doctor.report
+data.schema_version: 1
+data.checks: array of check results
+data.summary: total, ok, warn, fail, and skip counts
+data.healthy: boolean
+```
+
+Each check can report a name, status, evidence, a suggested fix command, and
+additional details. Gate on the outer `schema_version` and `kind` before reading
+`data`.
+
+An execution error in JSON mode writes a structured error envelope to stderr.
+Flag-parse errors occur before the renderer and can remain plain-text usage, so
+do not assume every failed invocation emits JSON.
+
+## Exit behavior
+
+| Exit | Meaning | What to do |
+| --- | --- | --- |
+| `0` | The selected checks completed, whether healthy or unhealthy. | Read `.data.healthy` in JSON or the human summary. |
+| `1` | The command failed, a check name was unknown, or `--exit-on-fail` found an unhealthy result. | Correct the check name, inspect the error, or act on the failing checks. |
+| `2` | Flags or arguments were invalid. | Correct the invocation before retrying. |
+
+The default unhealthy result is therefore not a process failure. Use
+`--exit-on-fail` only when process status should represent health.
+
+## Verify and recover
+
+After a repair, rerun the affected check without `--fix`:
+
+```bash
+ak doctor --check <check-name>
+```
+
+If a suggested repair changes kit or runtime files, keep any recovery snapshot
+reported by that underlying command and verify the target runtime before
+removing recovery data. Do not repeat repairs with `--force` as a first step.
+
+## Related commands
+
+- [Complete `ak doctor` command facts](../cli/ak_doctor)
+- [Export redacted diagnostics](../cli/ak_diagnostics_export)
+- [Installation troubleshooting](../../troubleshooting/installation)
+- [CLI conventions](../cli-conventions)
