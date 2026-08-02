@@ -1,0 +1,77 @@
+---
+title: ak commands list
+description: Compare flat installed command files with slash-command templates available in the configured local kits tree.
+---
+
+Use `ak commands list` to inspect the merged local command-template inventory.
+The result includes both installed and locally available records even though
+the short command description says “installed commands.”
+
+## Usage
+
+```bash
+ak commands list
+```
+
+The command accepts no positional arguments and never prompts.
+
+## Command flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--kit <name>` | Empty | Keep records from one exact kit directory. |
+| `--tag <tag>` | Empty list `[]` | Accepted as a repeatable string-slice flag. In these releases, the command lister does not apply this filter. |
+
+Do not use `--tag` as an automation gate. Filter `data.commands` in your caller
+instead. Shared flags are described in [CLI conventions](../cli-conventions).
+
+## Discovery and merge rules
+
+Available commands are recursive regular `.md` files below
+`./kits/<kit>/commands/`. Hidden or underscore-prefixed segments, invalid
+names, symlinked files, and other extensions are skipped. Nested relative paths
+are flattened with `-` to form the asset name; the original nesting produces
+the slash name. Deterministic flattening collisions keep the alphabetically
+first source path.
+
+Installed commands are direct `.md` files below
+`~/.claude/plugins/<kit>/commands/`. Their flat filename is the only retained
+path identity, so an installed record reports that flat value as both its name
+and slash name. `AGENTKIT_KITS_DIR` and `AGENTKIT_PLUGIN_DIR` replace the roots.
+
+Records are unique by `<kit>/<flat-name>`. The installed record wins over the
+available record, and the final list sorts by canonical ref. No remote catalog,
+auth, entitlement, cache, or runtime process is consulted.
+
+## Output
+
+Human stdout is a `NAME`, `DESCRIPTION`, `SOURCE`, and `STATUS` table. Available
+records show the source slash name; installed records show their flat name.
+
+JSON success uses:
+
+```text
+schema_version: 1
+kind: assets.list
+data.commands[]:
+  kit, name, slash_name, rel_path
+  description, tags, installed
+  optional argument_hint
+```
+
+An empty inventory exits successfully with an empty JSON array or human empty
+state. No NDJSON or stderr status stream is emitted.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The local scan completed, including an empty result. |
+| `1` | A root or recursive source scan failed, or positional arguments were supplied. |
+| `2` | A flag could not be parsed. |
+
+## Related commands
+
+- [Complete `ak commands list` command facts](../cli/ak_commands_list)
+- [Search commands](../cli/ak_commands_search)
+- [Install one command](../cli/ak_commands_install)

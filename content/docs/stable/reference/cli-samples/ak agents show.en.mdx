@@ -1,0 +1,70 @@
+---
+title: ak agents show
+description: Inspect metadata for one installed or locally available agent and identify which copy supplied the result.
+---
+
+Use `ak agents show` to inspect one agent before installation or to confirm the
+metadata in the installed copy.
+
+## Usage
+
+```bash
+ak agents show <kit>/<agent>
+```
+
+Exactly one ref is required. Canonical refs are preferred; `ak:<agent>`,
+`ake:<agent>`, and `akm:<agent>` are accepted shorthands for the `core`,
+`engineer`, and `marketing` kits.
+
+There are no command-specific flags. The command is read-only, never prompts,
+and performs no network or authentication work.
+
+## Lookup order
+
+The command first checks
+`~/.claude/plugins/<kit>/agents/<agent>.md`, then falls back to
+`./kits/<kit>/agents/<agent>.md`. `AGENTKIT_PLUGIN_DIR` and
+`AGENTKIT_KITS_DIR` replace those roots.
+
+If both files exist, the installed copy wins. `show` does not compare the two
+files or report drift. A readable leading YAML frontmatter block can supply
+`description`, `model`, `memory`, comma-separated `tools`, and tags. Explicit
+`tags` take precedence over `keywords`. Missing, unreadable, or malformed
+frontmatter yields empty metadata rather than exposing the Markdown body.
+
+## Output
+
+Human stdout reports these fields when available:
+
+```text
+ref, name, kit, description
+model, memory, tools, tags
+state: installed | available
+```
+
+JSON success uses:
+
+```text
+schema_version: 1
+kind: assets.show
+data.kit, data.name, data.description, data.installed
+data.tools?, data.model?, data.memory?, data.tags?
+```
+
+No file contents, source path, secrets, or Markdown body are printed. Errors
+use stderr; JSON execution errors use the shared error envelope.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | An installed or available record was found. |
+| `1` | The positional argument count was wrong or a local runtime error occurred. |
+| `2` | The ref was malformed or a flag could not be parsed. |
+| `5` | Neither installed nor available file exists at the expected path. |
+
+## Related commands
+
+- [Complete `ak agents show` command facts](../cli/ak_agents_show)
+- [Search agents](../cli/ak_agents_search)
+- [Install one agent](../cli/ak_agents_install)

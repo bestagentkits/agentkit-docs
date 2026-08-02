@@ -1,0 +1,95 @@
+---
+title: ak agents install
+description: Copy one agent persona from a trusted local kits tree into the user plugin root, with explicit overwrite limits.
+---
+
+Use `ak agents install` to copy one locally available agent Markdown file into
+the per-kit agent inventory under the user plugin root. It is a one-file copy,
+not a remote catalog install or a runtime-specific kit emission.
+
+## Usage
+
+```bash
+ak agents install <kit>/<agent>
+```
+
+Exactly one ref is required. Each segment must start with a lowercase letter or
+digit and may then contain lowercase letters, digits, `.`, `_`, or `-`.
+Traversal, uppercase, whitespace, extra path segments, and leading dashes are
+rejected.
+
+The canonical form is preferred. The accepted short forms `ak:<agent>`,
+`ake:<agent>`, and `akm:<agent>` expand to `core`, `engineer`, and `marketing`.
+
+## Command flag
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--force` | `false` | Remove the exact destination entry first when it already exists, then copy the source again. |
+
+Shared flags are described in [CLI conventions](../cli-conventions). This
+command never prompts, so `--yes` does not add an approval gate and
+`--no-interactive` only affects presentation.
+
+## Source and destination
+
+For `engineer/researcher`, the command resolves:
+
+```text
+source:      ./kits/engineer/agents/researcher.md
+destination: ~/.claude/plugins/engineer/agents/researcher.md
+```
+
+`AGENTKIT_KITS_DIR` and `AGENTKIT_PLUGIN_DIR` replace the two roots. The
+destination directory is created with mode `0750` when needed; a newly copied
+file is created with mode `0600`.
+
+The operation performs no network request, authentication, entitlement check,
+cache write, subprocess launch, runtime-environment install, ownership-manifest
+update, or backup. The only guaranteed result is the local file copy. Use
+`ak kit init` when you need a complete, runtime-adapted kit route.
+
+## Force and recovery boundary
+
+Without `--force`, an existing destination entry is a conflict and exits `6`
+without changing it. With `--force`, AgentKit deletes that exact entry before
+opening and copying the source; an empty directory can therefore be removed,
+while a non-empty directory makes the operation fail. There is no content hash check, modified-file
+protection, snapshot, temporary-file swap, or rollback. If the copy fails after
+deletion, the previous file is not restored.
+
+Keep a manual copy before forcing an agent you edited. Treat the source and
+plugin roots as trusted: the agent source read can follow a symlink, and this
+command is not a sandbox for untrusted kit content.
+
+## Output
+
+Human success output on stdout reports the ref and `1 files`. JSON success is:
+
+```text
+schema_version: 1
+kind: assets.install
+data.ref, data.kit, data.asset
+data.files_written: 1
+data.env_installed: false
+data.success: true
+```
+
+Errors use stderr. JSON execution errors use the shared error envelope;
+flag-parse errors can remain plain text.
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | One agent file was copied. | Run `ak agents show <kit>/<agent>` and verify runtime discovery separately. |
+| `1` | A filesystem or copy error occurred, or the positional argument count was wrong. | Inspect the destination before retrying; restore your manual copy if force had removed it. |
+| `2` | The ref was malformed or a flag could not be parsed. | Correct the exact ref or flag. |
+| `5` | The expected source file was not found or was a directory. | Check the local kits root and ref. |
+| `6` | The destination already exists without `--force`. | Review the file; force only after preserving edits. |
+
+## Related commands
+
+- [Complete `ak agents install` command facts](../cli/ak_agents_install)
+- [Inspect an agent](../cli/ak_agents_show)
+- [Install a complete kit route](./kit-init)

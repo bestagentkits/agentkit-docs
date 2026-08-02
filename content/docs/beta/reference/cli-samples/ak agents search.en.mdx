@@ -1,0 +1,70 @@
+---
+title: ak agents search
+description: Search the merged local agent inventory by name, description, and tags with deterministic ranking.
+---
+
+Use `ak agents search` when you know a capability keyword but not the exact
+`<kit>/<agent>` ref. The command searches local installed and available files;
+it is not a remote registry search.
+
+## Usage
+
+```bash
+ak agents search <query>
+```
+
+One or more positional tokens are joined with spaces. A missing argument is a
+Cobra argument-count error; a supplied query that trims to empty is rejected as
+an empty query.
+
+There are no command-specific flags. The command is read-only and never
+prompts.
+
+## Search and ranking
+
+The search starts from the same merged inventory as `ak agents list`:
+
+- installed records replace matching available records by canonical ref;
+- source and install roots are local `AGENTKIT_KITS_DIR` and
+  `AGENTKIT_PLUGIN_DIR` locations;
+- no registry, authentication, entitlement, network, or cache lookup occurs.
+
+The query is lowercased and split on whitespace. Each token adds `3` points for
+a substring match in the agent name, `2` for each matching tag, and `1` for a
+description match. A record is included when at least one token scores. Results
+sort by score descending, then canonical ref ascending.
+
+```bash
+ak agents search code
+ak agents search 'code review' --json
+```
+
+Search does not inspect Markdown body text, tools, model, memory, or the kit
+name unless those values also occur in the searched metadata fields.
+
+## Output
+
+Human output uses the same table as list: `NAME`, `DESCRIPTION`, `SOURCE`, and
+`STATUS`. No matches is a successful empty state.
+
+JSON success uses `schema_version: 1`, `kind: assets.list`, and
+`data.agents[]`. Each agent includes `kit`, `name`, `description`, `installed`,
+and any parsed `tools`, `model`, `memory`, or `tags`. Search and list share the
+same JSON kind.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Search completed, including no matches. |
+| `1` | A local inventory root could not be read, or no positional query argument was supplied. |
+| `2` | The supplied query was whitespace-only or a flag could not be parsed. |
+
+Errors go to stderr. JSON execution errors use the shared error envelope;
+flag-parse errors can remain plain text.
+
+## Related commands
+
+- [Complete `ak agents search` command facts](../cli/ak_agents_search)
+- [List agents](../cli/ak_agents_list)
+- [Show one agent](../cli/ak_agents_show)
