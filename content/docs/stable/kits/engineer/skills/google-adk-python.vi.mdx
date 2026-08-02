@@ -1,0 +1,213 @@
+---
+title: Xây dựng và đánh giá Google ADK Python agent với ak:google-adk-python
+description: Thiết kế cấu trúc Google ADK agent, tool, session, multi-agent workflow, evaluation và deployment artifact trong khi xác minh SDK cùng provider contract đã cài.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:google-adk-python` để thiết kế hoặc triển khai Python agent bằng Agent
+Development Kit của Google. Skill bao phủ single cùng multi-agent composition,
+workflow agent, tool và MCP, A2A, session, state, memory, artifact, callback,
+plugin, evaluation cùng deployment planning. Coi ví dụ API và model là guidance
+tại tag phải được kiểm tra với SDK đã cài.
+
+## Chọn ak:google-adk-python cho ADK codebase
+
+### Dùng ak:google-adk-python khi
+
+- Bạn đang tạo hoặc thay đổi Python agent dùng Google ADK.
+- Bạn cần pattern sequential, parallel, loop, coordinator hay remote A2A.
+- Bạn đang tích hợp Python function, long-running tool, MCP server, state,
+  artifact, memory, callback, plugin hay tracing.
+- Bạn cần eval set, CLI test route, service wrapper hoặc deployment artifact cho
+  Cloud Run, Vertex AI hay GKE.
+
+### Chọn workflow khác khi
+
+- Bạn vẫn đang chọn agent framework. So sánh requirement cùng current primary
+  documentation trước khi cam kết với ADK.
+- Bạn chỉ cần provider-independent architecture. Dùng `ak:ask` hoặc `ak:plan` và
+  giữ framework như một decision.
+- Bạn cần xây MCP server thay vì dùng server đó như ADK tool. Dùng workflow xây
+  MCP.
+- Bạn chỉ cần deploy application đã được xác minh. Dùng `ak:deploy` hoặc
+  `ak:devops` với provider boundary rõ ràng.
+
+## Chuẩn bị SDK, provider và project
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận Engineer
+  Kit đã được cài cho runtime cùng scope hiện tại.
+- Xác định version `google-adk` đã cài, Python version, package manager, project
+  layout, model provider, model ID, region, authentication method và target
+  environment.
+- Xác minh tài liệu ADK cùng provider hiện tại cho mọi API, command, model,
+  service, quota, price, region và deployment claim quan trọng.
+- Chỉ cung cấp test credential qua secret mechanism được duyệt của project. Giữ
+  production key cùng customer data ngoài prompt và fixture.
+- Xác định tool permission, data retention, session cùng memory boundary, human
+  approval, evaluation criterion, latency hoặc cost budget và deployment authority.
+
+Skill tại tag khuyên dùng Python 3.10 trở lên và mô tả Python 3.11 là development
+baseline được ưu tiên. Source còn dùng discovery convention sau:
+
+```text
+my_agent/
+├── __init__.py
+└── agent.py
+```
+
+Source yêu cầu `agent.py` expose `root_agent` hoặc `app`, còn package
+initialization import agent definition. Xác nhận loader contract hiện tại của
+ADK trước khi tạo hoặc tái cấu trúc tệp.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:google-adk-python ...` | Có thể kiểm tra, sửa Python project và chạy local check đã duyệt. Provider call, MCP server, cloud CLI cùng deployment cần quyền truy cập riêng. |
+| Cursor | `/ak:google-adk-python ...` | Cách gọi bằng slash đã được người dùng xác minh. Tool, credential, subagent behavior cùng cloud access tương đương phụ thuộc session Cursor. |
+| Codex | `$ak:google-adk-python ...` | Dùng native Skill discovery. Project tool cùng provider access phụ thuộc session; Engineer Hook projection vẫn chỉ một phần. |
+
+Xem [Runtime adapter](../../../concepts/runtime-adapters) để hiểu khác biệt target
+rộng hơn.
+
+## Chạy Skill
+
+Truyền agent outcome cùng operating boundary bằng ngôn ngữ tự nhiên. Skill không
+định nghĩa mode flag riêng; ADK CLI command thuộc project hiện có hoặc được tạo
+và phải khớp version đã cài.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:google-adk-python "Add a Google ADK Python support agent to this existing package. Use the installed SDK, expose read-only account tools through a filtered MCPToolset, keep approval for any write, add a small eval set and unit tests, and do not call a paid model or deploy."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:google-adk-python "Add a Google ADK Python support agent to this existing package. Use the installed SDK, expose read-only account tools through a filtered MCPToolset, keep approval for any write, add a small eval set and unit tests, and do not call a paid model or deploy."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:google-adk-python "Add a Google ADK Python support agent to this existing package. Use the installed SDK, expose read-only account tools through a filtered MCPToolset, keep approval for any write, add a small eval set and unit tests, and do not call a paid model or deploy."
+```
+
+  </Tab>
+</Tabs>
+
+Với project mới, nêu deliverable là architecture-only, local prototype,
+evaluated service hay deployment-ready artifact. Mỗi outcome đi qua dependency
+cùng authority boundary khác nhau.
+
+## Chọn agent và state pattern có chủ đích
+
+| Nhu cầu | Pattern tại tag | Bằng chứng cần có |
+| --- | --- | --- |
+| Dynamic reasoning cùng tool routing | `Agent` hoặc `LlmAgent` | Model/tool behavior với prompt đại diện |
+| Pipeline cố định | `SequentialAgent` | Step order, intermediate state cùng failure handling |
+| Công việc concurrent độc lập | `ParallelAgent` | Isolation, aggregation, limit cùng deterministic test |
+| Refinement có giới hạn | `LoopAgent` | Exit rule, `max_iterations`, cost cùng failure bound |
+| Remote collaboration | `RemoteA2aAgent` | Current A2A contract, agent card, authentication, timeout cùng recovery |
+| Giá trị tạm theo session | `ToolContext.state` | Session lifecycle cùng persistence test |
+| Output binary hoặc lớn | Artifact | Storage backend, version behavior, access, retention cùng cleanup |
+| Recall qua nhiều session | Memory service | Data governance, retrieval quality, deletion cùng cost |
+
+Dùng `App` khi SDK cùng project đã xác minh cần plugin, event compaction hoặc
+custom lifecycle behavior. Đừng thêm production infrastructure chỉ vì reference
+example có hiển thị.
+
+## Quan sát ADK workflow dựa trên bằng chứng
+
+1. **Lần chạy xác minh contract đã cài.** Skill kiểm tra package version, import,
+   agent hiện có, configuration, provider setup cùng current primary docs trước
+   khi chọn API hay model ID.
+2. **Lần chạy xác định agent boundary.** Skill viết responsibility, instruction,
+   tool, data, session behavior, human approval cùng failure behavior trước code.
+3. **Lần chạy chọn composition và persistence.** Skill chọn dynamic hay workflow
+   agent và tách ephemeral state, artifact, session cùng long-term memory.
+4. **Lần chạy triển khai surface nhỏ nhất.** Skill thêm agent module, tool có type
+   cùng docstring, filtered MCP access, callback hay plugin chỉ khi requirement cần.
+5. **Lần chạy test mà không che model variance.** Skill chạy deterministic unit
+   check trước, rồi integration cùng evaluation case đã duyệt, ghi model,
+   provider, configuration, input và result.
+6. **Lần chạy chuẩn bị deployment riêng.** Cloud Run, Vertex AI, GKE, secret,
+   scaling, observability cùng rollback trở thành deployment phase rõ ràng thay
+   vì tự động tiếp tục.
+
+Guide tại tag liệt kê `adk web <agents_dir>`, `adk run <agent_dir>`,
+`adk api_server <agents_dir>` và `adk eval <agent> <evalset.json>` là development
+route chính. Kiểm tra `adk --help` cùng package đã cài trước khi dùng exact
+argument shape.
+
+## Giữ ảnh hưởng model, tool, data và cloud ở trạng thái rõ ràng
+
+<Callout type="warn" title="Agent test có thể gọi service thật">
+  Chạy ADK agent có thể invoke model, MCP server, database, remote agent hay cloud
+  API. Hành động này có thể truyền dữ liệu, mutate hệ thống, tiêu quota và phát
+  sinh chi phí ngay cả khi command được mô tả là test.
+</Callout>
+
+- Mặc định dùng tool cùng fixture local, fake, read-only hoặc sandboxed. Yêu cầu
+  confirmation ngay trước operation nhạy cảm hay khó đảo ngược.
+- Filter MCP tool xuống surface nhỏ nhất, validate argument, đặt timeout và test
+  error propagation cùng session behavior.
+- Không log prompt, tool argument, model response, trace, session state, memory
+  hay artifact mà chưa áp dụng privacy cùng retention policy của project.
+- Coi mọi model name trong reference tại tag, gồm ví dụ Gemini cùng claim về
+  non-Google provider, là point-in-time. Xác minh availability, compatibility,
+  pricing cùng data term hiện tại.
+- Hỏi riêng trước package installation, model call, remote evaluation, tạo cloud
+  resource, đổi secret, expose traffic, deployment hay deletion.
+
+## Xác minh code, evaluation và deployment evidence
+
+Một implementation hoàn tất nên cung cấp:
+
+- Agent responsibility, composition, model cùng provider contract, tool list,
+  approval gate và persistence design.
+- Tệp chính xác được tạo hoặc đổi, gồm agent module, tool, test, eval set,
+  configuration và deployment artifact đã duyệt.
+- SDK cùng Python version đã cài, command đã chạy, unit result, integration
+  result và evaluation criterion với bằng chứng pass cùng failure.
+- Bằng chứng tool filter, invalid input, timeout, provider failure, session
+  boundary, artifact access cùng human approval hoạt động như dự kiến.
+- Model-call count hoặc usage evidence khả dụng, external service đã liên hệ,
+  known cost exposure, live check bị bỏ qua cùng portability risk còn lại.
+- Với deployment, target project cùng region, identity, secret reference, health
+  evidence, observability, scaling bound, rollback route và URL hay endpoint chỉ
+  sau khi authorized deployment thực sự thành công.
+
+Evaluation score không phải production guarantee. Ghi case, judge hoặc matcher,
+model configuration, sample size cùng blind spot đã biết.
+
+## Xử lý sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Import hoặc constructor trong guide thất bại | Kiểm tra version `google-adk` đã cài cùng current primary docs; điều chỉnh code thay vì pin mù quáng theo ví dụ tại tag. |
+| Model ID bị từ chối hoặc không khả dụng | Tra catalog model hiện tại cùng quyền region của provider đã duyệt, rồi chọn rõ với review cost và compatibility. |
+| ADK CLI từ chối command shape được mô tả | Dùng `adk --help` đã cài; command trong reference là guidance tại một thời điểm. |
+| MCP tool error kết thúc hoặc làm hỏng session | Reproduce với ADK cùng MCP version đã cài, kiểm tra event nguyên văn và chỉ upgrade hay thêm recovery có giới hạn khi có evidence. |
+| Test bất ngờ gọi external system | Dừng, thay tool cùng model bằng fake hoặc sandbox endpoint và chạy lại sau khi xác nhận authority boundary. |
+| Eval pass nhưng behavior vẫn không an toàn | Thêm case adversarial, tool permission, data leakage, timeout cùng failure path; tiếp tục chặn deployment. |
+| Runtime không nhận diện Skill | Xác nhận target cùng scope, khởi động lại session, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Chỉ tiếp tục với [Testing](./test), [Web testing](./web-testing) hoặc
+[Deployment](./deploy) khi các bước đó nằm trong scope.
+
+## Biết các giới hạn hiện tại
+
+- Skill bundle guidance cùng example, không bundle `google-adk`, Python, model,
+  credential, MCP server, cloud CLI, cloud resource hay eval dataset.
+- Một số ví dụ API, CLI, server endpoint, model, memory, plugin và deployment gắn
+  với source tại tag và có thể không khớp SDK đã cài.
+- Intent model-agnostic không chứng minh feature parity giữa provider hay model.
+- Stable và beta chứa tệp Skill `ak:google-adk-python` giống nhau trong cặp
+  release này; behavior provider cùng SDK vẫn có thể phát triển độc lập.

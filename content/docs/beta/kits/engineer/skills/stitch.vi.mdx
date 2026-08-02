@@ -1,0 +1,192 @@
+---
+title: Tạo và bàn giao concept interface với ak:stitch
+description: Dùng Google Stitch để tạo concept UI, review variant, export artifact HTML cùng hình ảnh và bàn giao design specification đã kiểm tra cho implementation.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:stitch` cho quá trình khám phá thiết kế dựa trên provider và kết thúc
+bằng artifact có thể review, không phải interface production tự động. Workflow
+được bundle có thể tạo Stitch screen, tải HTML cùng preview image, suy ra một
+`DESIGN.md` ngắn và bàn giao hướng đã duyệt cho Skill implementation.
+
+## Chọn ak:stitch để khám phá UI qua provider
+
+### Dùng ak:stitch khi
+
+- Bạn muốn có concept hoặc variant UI nhanh từ product brief cụ thể.
+- Bạn cần HTML export, screenshot và gợi ý design token trước khi viết code.
+- Bạn muốn tách concept theo repository hoặc plan và review screen trước
+  implementation.
+- Google Stitch được phê duyệt cho content và khả dụng với account hiện tại.
+
+### Chọn workflow khác khi
+
+- Bạn cần triển khai trực tiếp trong design system hiện có. Dùng
+  `ak:frontend-design` hoặc `ak:frontend-development`.
+- Bạn không thể gửi brief hoặc brand material tới provider bên ngoài. Hãy làm từ
+  requirement local và asset đã duyệt.
+- Bạn cần component production responsive, animated và accessible làm output
+  trực tiếp. Workflow Stitch tại tag tạo static design artifact vẫn cần được
+  triển khai và xác minh.
+- Bạn chỉ cần tư vấn thiết kế mà không generation hay ghi tệp. Dùng workflow
+  design ở mode chỉ phân tích.
+
+## Chuẩn bị quyền truy cập provider và project
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận Engineer
+  Kit đã được cài cho runtime cùng scope hiện tại.
+- Lấy Stitch API key và cung cấp dưới dạng `STITCH_API_KEY` qua cơ chế nạp secret
+  đã duyệt. Không đưa key vào prompt, output hay tệp được commit.
+- Cung cấp Node.js cùng npm. Script được bundle khai báo
+  `@google/stitch-sdk` trong range `>=0.0.3 <1.0.0` và dùng `tsx`; quá trình cài
+  sẽ tải package bên thứ ba.
+- Nêu audience, device, content, brand constraint, output directory, số variant
+  và implementation có nằm trong scope hay không.
+- Kiểm tra model, quota, pricing, điều khoản, xử lý dữ liệu và API availability
+  hiện tại của account provider trước generation.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:stitch ...` | Source mô tả environment cùng MCP setup tùy chọn theo Claude. TypeScript script được bundle chỉ chạy khi SDK dependency và credential provider khả dụng. |
+| Cursor | `/ak:stitch ...` | Cách gọi bằng slash đã được người dùng xác minh. MCP config, secret loading, package execution và image review tương đương phụ thuộc session Cursor. |
+| Codex | `$ak:stitch ...` | Dùng native Skill discovery. Quyền truy cập provider, chạy script, review hình và companion Skill phụ thuộc session. |
+
+Xem [Runtime adapter](../../../concepts/runtime-adapters) trước khi giả định MCP,
+Hook hay behavior UI giống nhau giữa các target.
+
+## Chạy Skill
+
+Truyền screen mong muốn cùng constraint bằng ngôn ngữ tự nhiên. Skill có thể
+dùng script `generate`, `export` và quota local được bundle sau khi xác nhận các
+ảnh hưởng network cùng file cần thiết.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:stitch "Generate two desktop checkout concepts for an existing SaaS design system. Use the supplied copy, send no customer data, show previews for approval, and export the selected screen to ./stitch-exports without implementing it."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:stitch "Generate two desktop checkout concepts for an existing SaaS design system. Use the supplied copy, send no customer data, show previews for approval, and export the selected screen to ./stitch-exports without implementing it."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:stitch "Generate two desktop checkout concepts for an existing SaaS design system. Use the supplied copy, send no customer data, show previews for approval, and export the selected screen to ./stitch-exports without implementing it."
+```
+
+  </Tab>
+</Tabs>
+
+Khi phải dùng lại Stitch project hiện có, hãy cung cấp project ID chính xác. Nếu
+không, generator được bundle có thể lookup hoặc tạo project bằng project name
+được nêu rõ, environment override, tên Git repository hoặc current directory,
+rồi tới tên fallback.
+
+## Hiểu các action được bundle
+
+| Action | Kết quả quan sát được | Ranh giới quan trọng |
+| --- | --- | --- |
+| Generate | Screen ID, project ID, preview image URL và variant ID tùy chọn | Gọi Google Stitch và có thể tạo remote project |
+| Export HTML | `design.html` trong output directory đã chọn | Tải HTML do provider tạo |
+| Export image | `design.png` trong output directory đã chọn | Tải preview của provider |
+| Export all | `design.html`, `design.png` và `DESIGN.md` được tạo | `DESIGN.md` được trích xuất local từ pattern HTML và cần review |
+| Check quota | Tóm tắt JSON local về credit đã dùng và còn lại | Đọc local counter để tham khảo, không phải usage của provider |
+
+Generator tại tag đã tự tăng local counter sau generation cùng variant thành
+công. Đừng chạy action `increment` riêng lần nữa cho cùng generation được bundle,
+nếu không usage local sẽ bị đếm hai lần.
+
+## Quan sát workflow design-to-code
+
+1. **Lần chạy xác minh quyền truy cập và ranh giới.** Skill xác nhận key khả
+   dụng, prompt an toàn để gửi, dependency có thể chạy và output path có thể ghi.
+2. **Lần chạy kiểm tra quota tham khảo.** Skill đọc local counter và giải thích
+   enforcement phía provider vẫn là authority.
+3. **Lần chạy xác định project.** Skill dùng ID rõ ràng hoặc tên lookup-or-create
+   có giới hạn và báo cáo mọi remote project được tạo.
+4. **Lần chạy tạo concept.** Skill yêu cầu screen cùng variant đã duyệt, rồi trả
+   về ID và preview URL thay vì che provider response.
+5. **Bạn review visual.** Lần chạy trình bày image khả dụng và chờ lựa chọn hoặc
+   yêu cầu sửa trước implementation.
+6. **Lần chạy export lựa chọn.** Skill tải HTML cùng image đã yêu cầu và suy ra
+   `DESIGN.md` khi chọn `all`.
+7. **Implementation bắt đầu riêng.** Companion workflow đã duyệt điều chỉnh
+   artifact theo repository, thêm responsive cùng interaction behavior và xác
+   minh trong application thật.
+
+## Giữ provider use, quota và tệp được tạo ở trạng thái rõ ràng
+
+<Callout type="warn" title="Generation request rời khỏi workspace local">
+  Stitch nhận prompt cùng mọi content được đưa vào. Generation và export cần
+  network; tạo remote project làm thay đổi state provider; cài package và export
+  làm đổi state local. Xác nhận cả bốn ranh giới trước request đầu tiên.
+</Callout>
+
+- Loại secret, personal data, proprietary customer data và asset chưa được duyệt
+  khỏi prompt.
+- Coi số free credit, thời điểm reset, model ID, ghi chú latency và claim không
+  có paid tier trong source là guidance tại một thời điểm, không phải cam kết
+  provider hiện tại. Kiểm tra account đang dùng trước khi dựa vào chúng.
+- Local quota file chỉ để tham khảo và có thể drift khi Stitch được dùng ở nơi
+  khác. Reset file không khôi phục quota của provider.
+- Review content được tạo về license, brand fit, originality, accessibility và
+  copy không an toàn hoặc gây hiểu nhầm trước khi tái sử dụng.
+- Hỏi trước khi cài package, tạo remote project, overwrite export, triển khai
+  code, commit, publish hay deploy.
+
+## Xác minh output và handoff
+
+Một lần khám phá hoàn tất nên cung cấp:
+
+- Prompt cuối, device target, cách resolve project, screen ID và variant đã chọn.
+- Provider cùng network call đã thực hiện, thêm local quota state trước và sau
+  generation mà không để lộ credential.
+- Preview evidence và lựa chọn rõ ràng của người dùng.
+- Đường dẫn chính xác tới `design.html`, `design.png` và `DESIGN.md` khi được yêu
+  cầu.
+- Review token được suy ra, content, semantic structure, responsive gap,
+  animation gap cùng accessibility work còn lại.
+- Implementation plan hoặc handoff riêng nêu generated detail nào là constraint
+  và detail nào chỉ là gợi ý.
+
+`DESIGN.md` là phần trích xuất nhẹ từ Tailwind-like class cùng HTML element. Tệp
+này không chứng minh một design system hoàn chỉnh và không nên âm thầm ghi đè
+repository token hay requirement đã duyệt mạnh hơn.
+
+## Xử lý sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| `STITCH_API_KEY` thiếu hoặc bị từ chối | Nạp key qua cơ chế secret đã duyệt và thử lại mà không in key. |
+| Script được bundle không import được SDK | Chỉ cài dependency đã khai báo khi được duyệt; Skill tham chiếu một installer không có trong directory được ship. |
+| Quota local báo còn nhưng provider rate-limit | Coi provider là authority, dừng generation và chờ hoặc dùng workflow không qua provider đã duyệt. |
+| Usage local có vẻ quá cao | Kiểm tra generator và `increment` thủ công có cùng chạy không; sửa counter tham khảo mà không claim quota provider đã đổi. |
+| Không tìm thấy screen khi export | Xác nhận screen ID và project ID hoặc cách resolve project name chính xác đã dùng khi generation. |
+| `DESIGN.md` thiếu token quan trọng | Kiểm tra trực tiếp `design.html` cùng visual, rồi sửa handoff thay vì coi extraction là đầy đủ. |
+| Runtime không nhận diện Skill | Xác nhận target cùng scope, khởi động lại session, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Tiếp tục với [Frontend design](./frontend-design) để triển khai phần đã duyệt,
+hoặc xem [Projects, artifacts và checkpoints](../../../concepts/projects-artifacts-checkpoints).
+
+## Biết các giới hạn hiện tại
+
+- Skill bundle wrapper cùng guidance, không bundle Google Stitch, API key, SDK
+  dependency hay provider entitlement đã được xác minh.
+- Source tham chiếu helper `install.sh` không được ship cùng Skill này. Hãy dùng
+  package manifest đã khai báo hoặc project setup được duyệt.
+- Export tại tag là HTML tĩnh, image và design summary được suy ra local;
+  production framework code, responsiveness, motion, accessibility cùng browser
+  QA vẫn là công việc riêng.
+- Stable và beta chứa các tệp `ak:stitch` giống nhau trong cặp release này.
+  Behavior provider hiện tại vẫn có thể khác guidance tại thời điểm tag.

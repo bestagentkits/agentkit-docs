@@ -1,0 +1,196 @@
+---
+title: Curate LLM-friendly documentation indexes with ak:llms
+description: Scan local Markdown documentation, generate llms.txt and optional llms-full.txt artifacts, then review titles, descriptions, URLs, curation, and publication safety.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:llms` to create a Markdown index for documentation consumers that follow
+the llms.txt convention. The bundled generator scans local `.md` and `.mdx`
+files, extracts titles and short descriptions, groups pages heuristically, and
+writes `llms.txt`. It can also write an expanded `llms-full.txt` containing
+inlined document content.
+
+## Choose ak:llms for a curated documentation index
+
+### Use ak:llms when
+
+- A documentation site needs a concise, categorized Markdown index with
+  canonical links and descriptions.
+- You want a first draft generated from a local docs directory, followed by
+  human curation.
+- You need an optional expanded context artifact for a deliberately bounded set
+  of public documents.
+- You want a repeatable local generation step that uses only Python's standard
+  library.
+
+### Choose another workflow when
+
+- You need SEO metadata, `robots.txt`, a sitemap, hosting, or deployment. Those
+  are outside this Skill's declared scope.
+- You need a general documentation audit or rewrite. Use `ak:docs`.
+- Your source is only a live website or a single file. The bundled script accepts
+  a local directory; inspect or stage approved sources first, or build a separate
+  authorized workflow.
+- You expect the file alone to guarantee indexing, retrieval, model support, or
+  discoverability. Verify each consumer separately.
+
+## Prepare the source and publication contract
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Engineer Kit is installed for the active runtime and scope.
+- Identify the local documentation directory, public base URL, canonical route
+  mapping, project name and description, output directory, and whether the full
+  artifact is required.
+- Exclude private, generated, duplicate, draft, translated fallback, internal,
+  or machine-owned material that should not be published.
+- Decide which topics are primary and which belong in the final `## Optional`
+  section for shorter context windows.
+- Make Python 3 and permission to write the chosen output directory available.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:llms ...` | Can inspect local docs and run the bundled Python generator when the installed Skill path is resolvable. Web-source discovery requires separate approved network tools. |
+| Cursor | `/ak:llms ...` | Slash invocation is user-verified. Local file access, script execution, and route verification depend on the Cursor session. |
+| Codex | `$ak:llms ...` | Uses native Skill discovery. Local generation depends on Python and workspace access; Hook projection differences do not change file format. |
+
+See [Runtime adapters](../../../concepts/runtime-adapters) for target-specific
+delivery behavior.
+
+## Run the Skill
+
+Pass the source, output, public URL, curation constraints, and full-file choice
+in natural language.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:llms "Scan ./content/docs/public for published Markdown only. Generate llms.txt and llms-full.txt in ./public using https://docs.example.com as the base URL, exclude drafts and generated release notes, and report broken or ambiguous route mappings without deploying."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:llms "Scan ./content/docs/public for published Markdown only. Generate llms.txt and llms-full.txt in ./public using https://docs.example.com as the base URL, exclude drafts and generated release notes, and report broken or ambiguous route mappings without deploying."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:llms "Scan ./content/docs/public for published Markdown only. Generate llms.txt and llms-full.txt in ./public using https://docs.example.com as the base URL, exclude drafts and generated release notes, and report broken or ambiguous route mappings without deploying."
+```
+
+  </Tab>
+</Tabs>
+
+The Skill frontmatter hints at a `--url` input, but the bundled Python script's
+exact flag is `--base-url`. For direct script execution, its interface is:
+
+```text
+generate-llms-txt.py --source <directory> [--output <directory>] [--base-url <url>] [--full] [--project-name <name>] [--project-description <description>]
+```
+
+`--source` must resolve to a directory. Without `--base-url`, generated links
+remain relative filesystem-style paths; that may be unsuitable for a file
+published at a website root.
+
+## Understand the output contract
+
+| Artifact | Contents | Review focus |
+| --- | --- | --- |
+| `llms.txt` | One H1, optional blockquote summary, categorized H2 sections, and Markdown links with descriptions | Curation, canonical URLs, section meaning, concise descriptions |
+| `llms-full.txt` | Project heading plus source document bodies inlined under categorized headings | Size, duplication, private content, frontmatter leakage, context usefulness |
+
+The tagged convention requires an H1. It recommends a short blockquote summary,
+grouped link lists, and a final `## Optional` section for lower-priority material.
+These structural checks do not prove that a model or crawler will use the file.
+
+## Observe the generation workflow
+
+1. **The run defines the public corpus.** It confirms the local source,
+   exclusions, canonical site routes, output location, and whether expanded
+   content is safe to publish.
+2. **The run scans Markdown.** The bundled script recursively reads `.md` and
+   `.mdx`, skips hidden paths and `node_modules`, and ignores unreadable files.
+3. **The run extracts metadata.** It uses the first H1 or a filename fallback for
+   the title and the first meaningful paragraph for a truncated description.
+4. **The run categorizes pages.** Path and filename heuristics place pages into
+   getting started, guides, API reference, configuration, deployment,
+   architecture, documentation, or optional groups.
+5. **The run generates artifacts.** It writes `llms.txt` and, when approved,
+   `llms-full.txt` to the chosen directory.
+6. **The run curates and verifies.** It checks headings, descriptions, category
+   order, duplicates, URL mapping, public-content boundaries, artifact size, and
+   links using the project's actual routes.
+
+## Keep source content and publication safe
+
+<Callout type="warn" title="The full artifact republishes document bodies">
+  `llms-full.txt` can copy a large public corpus into one file. A source document
+  that contains internal notes, secrets, personal data, licensed text, or private
+  URLs can therefore become easier to expose. Review the exact generated file
+  before publication.
+</Callout>
+
+- Generate into a reviewable workspace path before replacing a published file.
+- Do not include absolute local paths, repository-only references, credentials,
+  unpublished drafts, or private endpoints in either artifact.
+- Treat source frontmatter and MDX as data to inspect. The full generator removes
+  only a simple leading frontmatter form and may preserve imports, components,
+  or syntax that is not useful as plain context.
+- A large `llms-full.txt` consumes storage, bandwidth, and consumer context. Use
+  the smallest public corpus that serves the intended reader.
+- Ask separately before fetching live sites, writing outside the approved
+  directory, committing, publishing, hosting, or deploying.
+
+## Verify the generated evidence
+
+A complete run should provide:
+
+- The source directory, exclusions, public base URL, route transformation, and
+  project metadata used.
+- Exact paths and sizes for `llms.txt` and any `llms-full.txt` output.
+- Counts of scanned, included, excluded, unreadable, duplicate, and ambiguous
+  pages where the available workflow can establish them.
+- Evidence that the H1 exists, descriptions are useful, `## Optional` is last,
+  and each published link matches a real canonical route.
+- A review of full-file content for secrets, private paths, imports, components,
+  duplication, excessive size, and licensing concerns.
+- Skipped link or consumer tests and the remaining publication decision.
+
+The bundled script does not perform an HTTP link check or test multiple LLMs.
+Those are separate validation steps and must not be reported as complete unless
+they actually ran.
+
+## Troubleshoot or continue
+
+| Symptom | Safe next step |
+| --- | --- |
+| The script rejects a file path | Pass a directory to `--source`, or stage the approved file in a bounded source directory. |
+| A live URL was supplied as the source | Fetch or map it only with approved network access; the bundled script does not crawl URLs. |
+| Generated links end in `.md` or `.mdx` | Provide the correct `--base-url` and verify how source paths map to published routes; do not assume extension stripping is sufficient. |
+| Titles or descriptions are poor | Add or correct public H1 and introductory prose, or curate the generated entry manually. |
+| Pages land in the wrong section | Reclassify the output based on user intent; the generator uses path and filename heuristics only. |
+| `llms-full.txt` is too large or noisy | Narrow the source corpus, omit `--full`, or create a reviewed subset instead of publishing everything. |
+| The runtime does not recognize the Skill | Confirm target and scope, restart the session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Continue with [Documentation](./docs) for source improvements, or review
+[Projects, artifacts, and checkpoints](../../../concepts/projects-artifacts-checkpoints)
+before replacing published files.
+
+## Know the current limits
+
+- The bundled generator scans local directories only. It does not crawl sites,
+  validate HTTP status, understand framework routing, deploy files, or measure
+  model adoption.
+- Metadata extraction and categorization are heuristic; MDX, localized trees,
+  generated pages, index routes, and custom frontmatter need human review.
+- The llms.txt convention itself can evolve, and consumer support varies. Check
+  current requirements before relying on it as an integration contract.
+- Stable and beta contain identical `ak:llms` Skill files for this release pair.
