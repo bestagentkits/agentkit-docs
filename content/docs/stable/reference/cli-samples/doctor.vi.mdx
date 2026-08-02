@@ -40,8 +40,23 @@ Các cờ dùng chung như `--json`, `--no-interactive`, `--quiet`, `--verbose` 
 ak doctor
 ```
 
-Báo cáo nhóm các phép kiểm tra theo hệ thống con, tổng hợp kết quả `ok`, `warn`, `fail` và
-`skip`, đồng thời có thể đề xuất lệnh sửa chữa.
+Báo cáo nhóm check theo hệ thống con và tách warning cần hành động khỏi Notes.
+Phần tổng hợp có dạng `Summary: N ✓ N ⚠ N ✗ N ◦`; segment Notes bị lược bỏ khi
+không có note.
+
+### Mở rộng advisory Notes
+
+```bash
+ak doctor -V
+ak doctor --check kit_integrity
+```
+
+Mặc định, nội dung advisory warning được thu gọn thành
+`N notes - rerun with -V for details` (hoặc `1 note ...`). `-V`/`--verbose` và
+`--check` rõ ràng sẽ mở rộng; chỉ dùng `--adapter` thì không. Command từ Note đang
+ẩn không xuất hiện trong Quick Commands. Note không phải success hay failure:
+chúng bao gồm trạng thái advisory như thiếu integrity manifest, còn integrity
+drift và conflict đang hoạt động vẫn cần xử lý.
 
 ### Kiểm soát tự động hoá bằng tình trạng sức khoẻ
 
@@ -107,14 +122,16 @@ Hãy xem lại các lệnh được đề xuất trước khi chấp thuận. Sa
 schema_version: 1
 kind: doctor.report
 data.schema_version: 1
-data.checks: array of check results
+data.checks: array of check results; advisory rows include advisory: true
 data.summary: total, ok, warn, fail, and skip counts
 data.healthy: boolean
 ```
 
-Mỗi phép kiểm tra có thể báo tên, trạng thái, bằng chứng, lệnh sửa được đề xuất và thông
-tin bổ sung. Hãy kiểm tra `schema_version` và `kind` bên ngoài trước khi đọc
-`data`.
+Mỗi check có thể báo tên, trạng thái, bằng chứng, lệnh sửa đề xuất và thông tin
+bổ sung. `advisory: true` chỉ có trên advisory row; giá trị false bị lược bỏ.
+Advisory row vẫn có `status: "warn"`, còn `summary.warn` gồm cả warning cần hành
+động lẫn Notes. Không có field `summary.notes`. Hãy kiểm tra `schema_version` và
+`kind` bên ngoài trước khi đọc `data`.
 
 Lỗi thực thi trong chế độ JSON ghi error envelope có cấu trúc vào stderr. Lỗi
 phân tích cờ xảy ra trước renderer và có thể vẫn là hướng dẫn dùng dạng plain
@@ -128,7 +145,8 @@ text, vì vậy đừng giả định mọi lần gọi thất bại đều phá
 | `1` | Lệnh thất bại, tên phép kiểm tra không tồn tại hoặc `--exit-on-fail` gặp kết quả unhealthy. | Sửa tên phép kiểm tra, đọc lỗi hoặc xử lý các phép kiểm tra thất bại. |
 | `2` | Cờ hoặc argument không hợp lệ. | Sửa cách gọi trước khi thử lại. |
 
-Vì vậy, kết quả unhealthy mặc định không phải lỗi process. Chỉ dùng
+Vì vậy, kết quả unhealthy mặc định không phải lỗi process. Notes không thay đổi
+`healthy`, `--exit-on-fail`, `--fix` hay phân loại exit. Chỉ dùng
 `--exit-on-fail` khi trạng thái process cần phản ánh tình trạng sức khoẻ.
 
 ## Xác minh và khôi phục

@@ -84,6 +84,7 @@ listed in [CLI conventions](../cli-conventions).
 | Claude Code plugin | `ak-<kit>` in the project | `ak-<kit>` under the configured Claude plugin root | Add `--switch-to-plugin`; add `--global` for user scope. |
 | Codex native | Skills under `.agents/skills` and other project `.codex` surfaces | Skills under `~/.agents/skills` and other `~/.codex` surfaces | `--target codex`; add `--global` for user scope. |
 | Cursor | Project `.cursor` surfaces | User `.cursor` surfaces | `--target cursor`; add `--global` for user scope. |
+| AGY | Unsupported | Skills under both `~/.gemini/config/skills` and `~/.gemini/antigravity-cli/skills`, with optional Agents under `~/.gemini/config/agents` | Use `--target agy --global`; remote source resolves the signed `claude-code` package. |
 | Local build | The selected `--out` directory | Not an install scope | Use `--build-only --out <dir>`. |
 | Portable export | The selected `--out` directory | Not an install scope | Use `--target portable --out <dir>`; build mode is implied. |
 
@@ -92,6 +93,18 @@ separate modes within a scope; switching modes is an explicit, snapshot-backed
 transition. Codex does not provide full Claude command, Hook, or status-line
 parity, so review emitted warnings instead of assuming every component was
 projected.
+
+`portable` is export-only. `--target portable` without `--out` exits `1` before
+preview, confirmation, source resolution, lifecycle preflight, or disk writes:
+
+```text
+init: target "portable" is export-only and has no install mode; re-run with --out DIR to export a standalone build
+```
+
+`--out` alone preserves the remote source default and reports `mode: "build"` in
+JSON. Explicit `--build-only --out` remains valid and selects the
+local-development source default. Portable writes no install record. AGY is
+global-only and is not a refresh lifecycle peer.
 
 ## Review confirmation behavior
 
@@ -141,9 +154,9 @@ and `status=complete` after it. Consume stdout and stderr separately.
 Success data can include the selected kit and targets, mode, install mode,
 scope, output directory, file and skill counts, installed Hook summary,
 warnings, project configuration state, mode transitions, and bounded recovery
-snapshot fields. When a target cannot project one or more Hook groups, `data`
-can also include the optional `hooksDropped` count and
-`droppedHookSummaries` array.
+snapshot fields. Hook projection data can also include optional `hooksDropped`,
+`droppedHookSummaries`, `hookMatchersNarrowed`, and `narrowedHookSummaries`;
+zero or nil values are omitted.
 
 ## Exit behavior
 
@@ -182,22 +195,21 @@ and Claude native versus plugin mode before reinstalling.
 
 ## Read hook projection results
 
-The success summary reports installed Hook events and scripts when present. If
-a target cannot project a Hook group, human output adds:
+The success summary reports installed Hook events and scripts when present. Hook
+projection disclosures use separate lines:
 
 ```text
-Hooks dropped (unsupported on this target): <count> groups - see warnings
+Hooks dropped (unsupported on this target): <count> group(s) - see warnings
+Hook matchers narrowed (some tool matches unsupported on this target): <count> matcher(s) - see warnings
 ```
 
-It then prints an actionable summary for each dropped group. This disclosure is
-independent of the installed-Hook line, so it remains visible even when every
-Hook group is dropped.
+It then prints an actionable summary for each drop or narrow. A full drop removes
+the group; a narrow keeps handlers on supported matcher atoms.
 
-For Codex, the Engineer task-lifecycle `PostToolUse` matcher group can be
-reported as not projected because Codex has no equivalent matcher. Compatible
-Hook groups remain installed, and task-state refresh still runs at supported
-`Stop` and `SubagentStop` boundaries. The install still succeeds: a disclosed
-drop is a target limitation, not a repaired Hook or a fatal installation.
+For Codex, Engineer has one fully dropped task-state `PostToolUse` group and two
+shared narrowed matchers. Marketing has no full drop and three narrows. The
+install still succeeds: these are target limitations, not repaired Hooks or
+fatal installation errors.
 
 ## Related commands
 

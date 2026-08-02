@@ -80,11 +80,24 @@ are documented in [CLI conventions](../cli-conventions).
 | User Claude plugin | `--target claude-code --global --switch-to-plugin` | `ak-<kit>` under the configured user plugin root. |
 | Project or user Codex | `--target codex` with optional `--global` | Project or user `.agents` and `.codex` surfaces. |
 | Project or user Cursor | `--target cursor` with optional `--global` | Project or user `.cursor` surfaces. |
+| User AGY | `--target agy --global` | Global Gemini/AGY Skill and optional Agent locations, projected from the signed remote `claude-code` package. |
 | Build or export | `--build-only --out <dir>` or `--target portable --out <dir>` | The selected output directory. |
 
 Project and user installs can coexist. Claude native and plugin delivery are
 separate modes within one scope; switching modes is an explicit,
 snapshot-backed transition.
+
+`portable` is export-only. Without `--out`, `install` shares the early exit `1`
+from the init implementation before preview, prompts, source resolution,
+lifecycle work, or disk writes:
+
+```text
+init: target "portable" is export-only and has no install mode; re-run with --out DIR to export a standalone build
+```
+
+`--out` implies build mode and preserves the remote source default. Explicit
+`--build-only --out` uses the local-development source default. AGY is
+global-only and is not a refresh lifecycle peer.
 
 ## Examples
 
@@ -132,11 +145,12 @@ Hook, warning, transition, configuration, and recovery fields. JSON execution
 errors use `schema_version`, `error`, `error_code`, and `exit_code` on stderr.
 Flag-parse errors can remain plain-text usage.
 
-When a target cannot project a Hook group, `data` can also include the optional
-`hooksDropped` count and `droppedHookSummaries` array. Human output prints
-`Hooks dropped (unsupported on this target): <count> groups - see warnings`
-plus an actionable summary for each group. A disclosed drop does not make the
-install fail.
+Hook projection data can also include optional `hooksDropped`,
+`droppedHookSummaries`, `hookMatchersNarrowed`, and `narrowedHookSummaries`.
+Human output separates `Hooks dropped (unsupported on this target): <count>
+group(s) - see warnings` from `Hook matchers narrowed (some tool matches
+unsupported on this target): <count> matcher(s) - see warnings`. A disclosed
+drop or narrow does not make the install fail.
 
 ## Exit status
 
@@ -176,9 +190,9 @@ home or assume every snapshot is a full or transactional backup.
 ## Limitations and related commands
 
 Codex cannot project every Claude command, Hook matcher, or status-line feature.
-Review warnings after a successful install. For example, a Claude task-lifecycle
-`PostToolUse` matcher can be reported as not projected while compatible Hook
-groups and supported `Stop` and `SubagentStop` refresh boundaries remain active.
+Review warnings after a successful install. Engineer projects one fully dropped
+task-state `PostToolUse` group and two shared narrowed matchers; Marketing
+projects three narrows and no full drop. Supported matcher atoms remain active.
 On Windows, eligible Codex `.cjs` Hooks inside the Codex home can use owned
 `.cmd` shims for paths containing spaces; external, metacharacter, or unsafe
 non-ASCII paths remain limited and are reported.

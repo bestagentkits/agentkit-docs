@@ -34,7 +34,7 @@ The active graph is organized around outcomes rather than package file count:
 | `PreCompact` | Captures enough workflow orientation to continue after context compaction. |
 | `SessionStart` | Initializes project and session context for the new session. |
 | `SubagentStart` | Initializes subagent state and supplies the relevant team context. |
-| `Stop` | Refreshes session and usage state and can remind you to make a deliberate transition after planning. |
+| `Stop` | Refreshes session and usage state. When an active plan is bound, the plan reminder can return valid nonblocking JSON with `continue` and `systemMessage`; otherwise it exits silently. |
 | `SubagentStop` | Refreshes shared session state at the subagent boundary. |
 | `UserPromptSubmit` | Supplies project-development guidance, checks for secret-like output risk, applies the simplify-before-shipping gate when relevant, and refreshes usage state. |
 
@@ -50,12 +50,14 @@ The labels below describe what becomes active:
   native event model.
 - **Dropped** means the runtime cannot represent the behavior, so it is not
   active.
+- **Narrowed** means the handlers remain active only for the representable
+  subset of the original matcher.
 - **Sidecar-preserved** means package material remains available for support or
   provenance but is not an active runtime feature by itself.
 
 | Surface | Claude Code | Codex | Cursor |
 | --- | --- | --- | --- |
-| Hook event graph | **Emitted:** the declared graph uses Claude Code's native or plugin Hook surface. | **Translated:** representable events and matchers become Codex Hook registrations. **Dropped:** unsupported groups are omitted and disclosed in the install result; installation can still succeed. | **Translated:** supported groups become Cursor Hook registrations. Source support does not prove identical behavior across every provider setup. |
+| Hook event graph | **Emitted:** the declared graph uses Claude Code's native or plugin Hook surface. | **Translated:** representable events and matchers become Codex Hook registrations. **Dropped:** unsupported groups are omitted. **Narrowed:** supported matcher atoms stay active. Both outcomes are disclosed; installation can still succeed. | **Translated:** supported groups become Cursor Hook registrations. Source support does not prove identical behavior across every provider setup. |
 | Handler dependencies | Dependencies required by active handlers are emitted; remaining support material is sidecar-preserved. | Dependencies required by translated handlers are emitted; remaining support material is sidecar-preserved. | Dependencies required by translated handlers are emitted; remaining support material is sidecar-preserved. |
 | Engineer statusline | **Emitted:** active when AgentKit can install it without replacing a foreign statusline. | **Dropped:** unsupported. | **Dropped:** unsupported. |
 
@@ -64,17 +66,28 @@ statusline merely because the package contains statusline support files.
 
 ## Codex partial support
 
-Codex has a smaller event and matcher model than Claude Code. AgentKit
-translates compatible groups and drops unsupported groups instead of inventing
-an approximate trigger. In particular, Codex does not project Engineer's
-mid-session task-state refresh after task-management tool calls. Session-state
-refresh remains available at supported `Stop` and `SubagentStop` boundaries.
+Codex has a smaller event and matcher model than Claude Code. Engineer projects
+one fully dropped group and two narrowed matchers:
 
-A dropped group does not make installation fail. Human-readable output lists it
-under **Hooks dropped (unsupported on this target)**. JSON output includes
-`hooksDropped` and `droppedHookSummaries`, so automation can distinguish active
-Hook installation from unsupported groups. Treat these fields as capability
-disclosure, not as evidence that all Engineer automation is missing.
+- `PostToolUse` matcher `Agent|Task|TodoWrite|TodoRead`, handler
+  `session-state.cjs`, is fully dropped. Separate `Stop` and `SubagentStop`
+  registrations remain.
+- `Read|Write|Edit|Bash` becomes `Write|Edit|Bash`, dropping `Read` while keeping
+  `privacy-block.cjs` active for the supported atoms.
+- `Bash|Read` becomes `Bash`, dropping `Read` while keeping `scout-block.cjs`
+  active for Bash.
+
+A drop or narrow does not make installation fail. Human output lists them under
+**Hooks dropped (unsupported on this target)** and **Hook matchers narrowed
+(some tool matches unsupported on this target)**. JSON uses the optional
+`hooksDropped`, `droppedHookSummaries`, `hookMatchersNarrowed`, and
+`narrowedHookSummaries` fields. Treat them as capability disclosure, not as
+evidence that all Engineer automation is missing.
+
+The plan reminder is exported only on wildcard `Stop`, not `SubagentStop`. With
+no active plan it exits `0` with empty stdout. When relevant it emits JSON with
+only allowed success fields, shaped as
+`{"continue":true,"systemMessage":"..."}`, and remains fail-open.
 
 ### Windows Hook launch support
 
@@ -86,9 +99,10 @@ handling.
 
 This support is deliberately bounded. A spaced path outside the Codex home, a
 path with `cmd.exe` metacharacters, a non-ASCII shim name, or unsafe/non-ASCII
-baked arguments remains unsupported and produces a warning. Paths that do not
-need a shim continue to use the direct command. Do not hand-edit the generated
-shim or Hook configuration.
+baked arguments remains unsupported and produces a warning. Empty arguments get
+a distinct warning; identical same-path shims deduplicate, while conflicting
+content keeps the first shim and warns. Paths that do not need a shim continue
+to use the direct command. Do not hand-edit generated shims or Hook configuration.
 
 ## Ownership and lifecycle
 
@@ -109,9 +123,8 @@ Hooks configuration as a repair step.
 
 ## Troubleshoot safely
 
-1. **Read the installation disclosure.** Check **Hooks dropped (unsupported on
-   this target)** or the JSON drop fields before assuming the whole Hook graph
-   failed.
+1. **Read the installation disclosure.** Check both the dropped and narrowed
+   headings or their JSON fields before assuming the whole Hook graph failed.
 2. **Confirm the target and scope.** Project and user installs are separate, and
    the runtime can load a different copy than the one you expected.
 3. **Run the Codex health check.** Use `ak doctor --adapter codex --json` and

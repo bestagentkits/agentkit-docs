@@ -13,7 +13,7 @@ additional automatic behaviors.
 | Moment | What the active Hook graph does |
 | --- | --- |
 | Before tool use | Checks descriptive naming before writes, checks file and shell operations for privacy-sensitive access, and catches broad read or shell exploration that should be narrowed. |
-| After edits | Tracks `Edit`, `Write`, and `MultiEdit` activity and can remind the workflow to simplify and review substantial changes. |
+| After edits | Tracks supported edit activity and can remind the workflow to simplify and review substantial changes. Claude Code includes `MultiEdit`; Codex narrows this matcher to `Edit|Write`. |
 | When you submit a prompt | Checks for requests that could expose secrets and surfaces applicable development-rule guidance. |
 
 These behaviors can add guidance or stop an operation for review, depending on
@@ -41,19 +41,27 @@ Discord notifications automatically. Its failure paths are non-blocking.
 | Runtime | Projected behavior |
 | --- | --- |
 | Claude Code | Activates the configured event graph through native or plugin delivery. The separate Marketing statusline is also available here and can show directory, Git, model, context and usage, changed-work, configuration, and activity signals. |
-| Codex | Translates representable groups into `.codex/hooks.json`. Its tool matcher set is narrower than Claude Code's, so some trigger coverage can be removed even when the rest of a group remains active. Unsupported content is omitted with warnings. The Marketing statusline is not projected. |
+| Codex | Translates representable groups into `.codex/hooks.json`. Its tool matcher set is narrower than Claude Code's, so some trigger coverage can be removed even when the rest of a group remains active. The Marketing statusline is not projected. |
 | Cursor | Translates supported registrations into `.cursor/hooks.json`. Source-level projection does not establish identical behavior across every provider setup. The Marketing statusline is not projected. |
 
-On Windows, a Codex Hook command whose path contains spaces or `cmd.exe`
-metacharacters may not run. AgentKit reports the limitation during emission;
-an installed file alone does not prove that its Hook became active.
+## Codex behavior in this release
+
+- Marketing projects no fully dropped Codex group and three narrowed matchers. Shared `Read|Write|Edit|Bash` becomes `Write|Edit|Bash`; shared `Bash|Read` becomes `Bash`; Marketing's `Edit|Write|MultiEdit` becomes `Edit|Write`. The original handlers remain active for the supported atoms.
+- Human output reports narrowing under **Hook matchers narrowed (some tool matches unsupported on this target)**. Machine-readable output uses optional `hookMatchersNarrowed` and `narrowedHookSummaries`; full-drop fields remain absent for this projection.
+- On Windows, an eligible `.cjs` Hook under the Codex home can use a managed `.cmd` shim when an ordinary path contains spaces. A spaced `.cjs` path outside that home remains unshimmed. Paths with `cmd.exe` metacharacters, non-ASCII shim basenames, and unsafe or non-ASCII baked arguments also remain refused, so this is not a blanket compatibility guarantee.
+- Shared global Hook registration preserves user and foreign structures, supports matching ownership across Kits, and cleans up only exact stale claims. The stronger rollback and cleanup handling does not authorize deleting arbitrary content from `~/.codex/hooks.json`.
+
+These changes improve disclosure and ownership handling. They do not make Hook
+behavior identical across runtimes or turn Marketing Hooks into a security
+enforcement boundary.
 
 ## Ownership and lifecycle
 
-AgentKit records the Hook files and registrations it emits. Refresh and
-uninstall act on matching owned outputs while preserving or reporting modified,
-foreign, and sibling-Kit content. Project and user installations can coexist,
-so inspect both scopes if an automation appears twice.
+AgentKit records the Hook files, managed Windows shims, and registrations it
+emits. Refresh and uninstall act on matching owned outputs while preserving or
+reporting modified, foreign, and sibling-Kit content. Project and user
+installations can coexist, so inspect both scopes if an automation appears
+twice.
 
 Review the install summary and warnings after every install or refresh. A
 successful install can still contain a runtime-specific projection limit.

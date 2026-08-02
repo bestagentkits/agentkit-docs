@@ -35,7 +35,7 @@ package:
 | `PreCompact` | Ghi lại đủ định hướng workflow để tiếp tục sau khi compact context. |
 | `SessionStart` | Khởi tạo context của project và session cho phiên mới. |
 | `SubagentStart` | Khởi tạo trạng thái subagent và cung cấp team context liên quan. |
-| `Stop` | Làm mới trạng thái session và usage, đồng thời có thể nhắc bạn chủ động chuyển bước sau khi lập kế hoạch. |
+| `Stop` | Làm mới trạng thái session và usage. Khi có plan đang hoạt động, lời nhắc plan có thể trả JSON hợp lệ, không chặn với `continue` và `systemMessage`; nếu không, hook thoát im lặng. |
 | `SubagentStop` | Làm mới trạng thái session dùng chung tại ranh giới subagent. |
 | `UserPromptSubmit` | Cung cấp hướng dẫn phát triển theo project, kiểm tra rủi ro output giống secret, áp dụng gate đơn giản hóa trước khi ship khi phù hợp và làm mới trạng thái usage. |
 
@@ -51,13 +51,15 @@ Các nhãn dưới đây mô tả nội dung trở thành active:
   native của runtime.
 - **Dropped** nghĩa là runtime không biểu diễn được behavior nên behavior đó
   không hoạt động.
+- **Narrowed** nghĩa là handler vẫn hoạt động nhưng chỉ với tập con có thể biểu
+  diễn của matcher ban đầu.
 - **Sidecar-preserved** nghĩa là nội dung package được giữ lại để hỗ trợ hoặc
   truy vết nguồn gốc, nhưng bản thân nó không phải feature runtime đang hoạt
   động.
 
 | Bề mặt | Claude Code | Codex | Cursor |
 | --- | --- | --- | --- |
-| Event graph của Hook | **Emitted:** graph đã khai báo dùng bề mặt Hook native hoặc plugin của Claude Code. | **Translated:** event và matcher có thể biểu diễn trở thành đăng ký Hook của Codex. **Dropped:** group không được hỗ trợ bị bỏ qua kèm cảnh báo; cài đặt vẫn có thể thành công. | **Translated:** group được hỗ trợ trở thành đăng ký Hook của Cursor. Hỗ trợ trong source không chứng minh behavior giống hệt trên mọi thiết lập provider. |
+| Event graph của Hook | **Emitted:** graph đã khai báo dùng bề mặt Hook native hoặc plugin của Claude Code. | **Translated:** event và matcher có thể biểu diễn trở thành đăng ký Hook của Codex. **Dropped:** group không được hỗ trợ bị bỏ. **Narrowed:** matcher atom được hỗ trợ vẫn hoạt động. Cả hai đều được báo; cài đặt vẫn có thể thành công. | **Translated:** group được hỗ trợ trở thành đăng ký Hook của Cursor. Hỗ trợ trong source không chứng minh behavior giống hệt trên mọi thiết lập provider. |
 | Dependency của handler | Dependency cần cho handler đang hoạt động được emit; nội dung hỗ trợ còn lại được sidecar-preserved. | Dependency cần cho handler đã translate được emit; nội dung hỗ trợ còn lại được sidecar-preserved. | Dependency cần cho handler đã translate được emit; nội dung hỗ trợ còn lại được sidecar-preserved. |
 | Statusline Engineer | **Emitted:** hoạt động khi AgentKit có thể cài mà không thay thế statusline không thuộc quyền sở hữu của mình. | **Dropped:** không được hỗ trợ. | **Dropped:** không được hỗ trợ. |
 
@@ -66,21 +68,43 @@ statusline chỉ vì package chứa tệp hỗ trợ statusline.
 
 ## Hỗ trợ một phần trên Codex
 
-Codex có event model và matcher model nhỏ hơn Claude Code. AgentKit translate
-group tương thích và drop group không được hỗ trợ thay vì tự tạo trigger gần
-đúng. Cụ thể, Codex không project phần làm mới trạng thái task giữa session của
-Engineer sau các lần gọi tool quản lý task. Trạng thái session vẫn được làm mới
-tại các ranh giới `Stop` và `SubagentStop` được hỗ trợ.
+Codex có event model và matcher model nhỏ hơn Claude Code. Engineer projection
+một group bị drop hoàn toàn và hai matcher bị thu hẹp:
 
-Group bị drop tạo cảnh báo cài đặt nhưng không tự làm cài đặt thất bại. Hãy đọc
-cảnh báo như một disclosure về capability: automation được nêu không hoạt động
-trên target đó, trong khi các Hook Engineer tương thích khác vẫn có thể chạy.
+- Matcher `PostToolUse` `Agent|Task|TodoWrite|TodoRead` với handler
+  `session-state.cjs` bị drop hoàn toàn. Các đăng ký `Stop` và `SubagentStop`
+  riêng vẫn còn.
+- `Read|Write|Edit|Bash` trở thành `Write|Edit|Bash`, bỏ `Read` nhưng giữ
+  `privacy-block.cjs` hoạt động cho các atom được hỗ trợ.
+- `Bash|Read` trở thành `Bash`, bỏ `Read` nhưng giữ `scout-block.cjs` hoạt động
+  cho Bash.
 
-Trên Windows, Codex không thể chạy ổn định command Hook khi path chứa khoảng
-trắng hoặc metacharacter của `cmd.exe`. AgentKit cảnh báo thay vì emit một
-command đã biết là không chạy được. Hãy giữ Codex home và path Hook không có
-những ký tự này, đồng thời không sửa thủ công cấu hình Hook được tạo để bỏ qua
-cảnh báo.
+Drop hoặc narrow không làm cài đặt thất bại. Output cho người dùng liệt kê chúng
+dưới **Hooks dropped (unsupported on this target)** và **Hook matchers narrowed
+(some tool matches unsupported on this target)**. JSON dùng các field tùy chọn
+`hooksDropped`, `droppedHookSummaries`, `hookMatchersNarrowed` và
+`narrowedHookSummaries`. Hãy xem chúng là disclosure về capability, không phải
+bằng chứng toàn bộ automation Engineer bị thiếu.
+
+Lời nhắc plan chỉ được export trên wildcard `Stop`, không phải `SubagentStop`.
+Khi không có plan đang hoạt động, hook trả mã `0` với stdout rỗng. Khi phù hợp,
+hook emit JSON chỉ với success field hợp lệ, có dạng
+`{"continue":true,"systemMessage":"..."}`, và luôn fail-open.
+
+### Hỗ trợ chạy Hook trên Windows
+
+Trên Windows, Hook `.cjs` hợp lệ nằm trong Codex home đã resolve có thể chạy từ
+path thông thường chứa khoảng trắng. AgentKit emit một shim `.cmd` sibling được
+quản lý và tham chiếu shim đó từ cấu hình Hook đã translate. Shim là output do
+AgentKit sở hữu và tham gia lifecycle refresh cùng uninstall thông thường.
+
+Hỗ trợ này có giới hạn rõ ràng. Path có khoảng trắng nhưng nằm ngoài Codex home,
+path chứa metacharacter của `cmd.exe`, tên shim không phải ASCII hoặc argument
+được bake không an toàn hay không phải ASCII vẫn không được hỗ trợ và sẽ tạo
+cảnh báo. Argument rỗng có cảnh báo riêng; shim cùng path và cùng nội dung được
+deduplicate, còn nội dung xung đột giữ shim đầu tiên rồi cảnh báo. Path không cần
+shim tiếp tục dùng command trực tiếp. Không sửa thủ công shim hoặc cấu hình Hook
+đã được tạo.
 
 ## Ownership và lifecycle
 
@@ -89,6 +113,12 @@ Codex global dùng chung, AgentKit merge các đăng ký do nó sở hữu trong
 lại Hook của người dùng, field bên ngoài và đăng ký thuộc Kit khác. Entry đã bị
 sửa hoặc xung đột sẽ được giữ lại hay báo cáo thay vì bị ghi đè âm thầm.
 
+Metadata của Hook do AgentKit sở hữu tham gia rollback. Khi không còn Kit nào sở
+hữu một cấu trúc do AgentKit tạo, quá trình dọn dẹp sẽ loại bỏ cấu trúc rỗng đó
+nhưng giữ lại cấu trúc có sẵn hoặc từ nguồn bên ngoài. Đây là cải thiện độ tin
+cậy của lifecycle, không phải bảo đảm bảo mật hay quyền xóa nội dung tùy ý khỏi
+tệp cấu hình Hook dùng chung.
+
 Refresh và uninstall chỉ tác động lên nội dung được ghi nhận là do AgentKit sở
 hữu, không phải mọi Hook trong runtime. Hãy review preview của thao tác và
 snapshot khôi phục trước khi áp dụng thay đổi lifecycle. Không xóa runtime home
@@ -96,16 +126,16 @@ hoặc toàn bộ tệp cấu hình Hook dùng chung để sửa lỗi.
 
 ## Khắc phục sự cố an toàn
 
-1. **Đọc tóm tắt cài đặt và cảnh báo.** Cảnh báo projection một phần xác định
-   behavior không hoạt động; đây không phải lý do để thử lại với `--force`.
+1. **Đọc disclosure của cài đặt.** Kiểm tra cả heading drop và narrow hoặc các
+   field JSON tương ứng trước khi kết luận toàn bộ Hook graph thất bại.
 2. **Xác nhận target và scope.** Bản cài ở project và người dùng là riêng biệt,
    và runtime có thể nạp một bản khác với bản bạn dự kiến.
 3. **Chạy health check cho Codex.** Dùng `ak doctor --adapter codex --json` và
    kiểm tra các check được báo cáo thay vì giả định có tệp đồng nghĩa Hook đã
    được đăng ký.
-4. **Kiểm tra ranh giới path trên Windows.** Path có khoảng trắng hoặc
-   metacharacter của shell không thể được truyền an toàn qua cơ chế chạy Hook
-   này của Codex.
+4. **Kiểm tra phân loại path trên Windows.** Path `.cjs` hợp lệ trong Codex home
+   có thể dùng shim được quản lý; dạng path bên ngoài hoặc không an toàn sẽ cảnh
+   báo.
 5. **Dùng đúng route lifecycle.** Preview refresh hoặc uninstall, giữ nội dung
    đã được người dùng sửa và kiểm tra mọi snapshot khôi phục trước khi áp dụng
    thay đổi.

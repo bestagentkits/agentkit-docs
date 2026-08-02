@@ -39,8 +39,23 @@ Shared flags such as `--json`, `--no-interactive`, `--quiet`, `--verbose`, and
 ak doctor
 ```
 
-The report groups checks by subsystem, summarizes `ok`, `warn`, `fail`, and
-`skip` results, and can include suggested fix commands.
+The report groups checks by subsystem and separates actionable warnings from
+Notes. Its summary is `Summary: N ✓ N ⚠ N ✗ N ◦`; the Notes segment is omitted
+when there are none.
+
+### Expand advisory Notes
+
+```bash
+ak doctor -V
+ak doctor --check kit_integrity
+```
+
+Advisory warning bodies are collapsed by default as
+`N notes - rerun with -V for details` (or `1 note ...`). `-V`/`--verbose` and an
+explicit `--check` expand them; `--adapter` alone does not. Commands from hidden
+Notes are excluded from Quick Commands. Notes are not success or failure: they
+cover advisory states such as a missing integrity manifest, while integrity
+drift and active conflicts remain actionable.
 
 ### Gate automation on health
 
@@ -102,14 +117,16 @@ Successful JSON output uses a versioned envelope on stdout:
 schema_version: 1
 kind: doctor.report
 data.schema_version: 1
-data.checks: array of check results
+data.checks: array of check results; advisory rows include advisory: true
 data.summary: total, ok, warn, fail, and skip counts
 data.healthy: boolean
 ```
 
 Each check can report a name, status, evidence, a suggested fix command, and
-additional details. Gate on the outer `schema_version` and `kind` before reading
-`data`.
+additional details. `advisory: true` is present only on advisory rows; false is
+omitted. Advisory rows retain `status: "warn"`, and `summary.warn` includes both
+actionable warnings and Notes. There is no `summary.notes` field. Gate on the
+outer `schema_version` and `kind` before reading `data`.
 
 An execution error in JSON mode writes a structured error envelope to stderr.
 Flag-parse errors occur before the renderer and can remain plain-text usage, so
@@ -123,7 +140,8 @@ do not assume every failed invocation emits JSON.
 | `1` | The command failed, a check name was unknown, or `--exit-on-fail` found an unhealthy result. | Correct the check name, inspect the error, or act on the failing checks. |
 | `2` | Flags or arguments were invalid. | Correct the invocation before retrying. |
 
-The default unhealthy result is therefore not a process failure. Use
+The default unhealthy result is therefore not a process failure. Notes do not
+change `healthy`, `--exit-on-fail`, `--fix`, or exit classification. Use
 `--exit-on-fail` only when process status should represent health.
 
 ## Verify and recover

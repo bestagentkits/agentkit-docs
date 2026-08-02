@@ -79,11 +79,24 @@ như `portable` ngầm bật build mode khi có `--out`. Xem các cờ dùng chu
 | Claude plugin của user | `--target claude-code --global --switch-to-plugin` | `ak-<kit>` dưới user plugin root đã cấu hình. |
 | Codex trong project hoặc user | `--target codex` cùng `--global` nếu cần | Các bề mặt `.agents` và `.codex` trong project hoặc user. |
 | Cursor trong project hoặc user | `--target cursor` cùng `--global` nếu cần | Các bề mặt `.cursor` trong project hoặc user. |
+| AGY của user | `--target agy --global` | Vị trí Skill và Agent tùy chọn của Gemini/AGY global, projection từ package remote `claude-code` đã ký. |
 | Build hoặc export | `--build-only --out <dir>` hoặc `--target portable --out <dir>` | Thư mục đầu ra đã chọn. |
 
 Bản cài trong project và user có thể cùng tồn tại. Claude native và plugin là
 hai delivery mode riêng trong một scope; chuyển mode là thao tác rõ ràng, có
 snapshot bảo vệ.
+
+`portable` chỉ để export. Thiếu `--out`, `install` dùng chung early exit `1` của
+implementation init trước preview, prompt, phân giải source, lifecycle hoặc ghi
+đĩa:
+
+```text
+init: target "portable" is export-only and has no install mode; re-run with --out DIR to export a standalone build
+```
+
+`--out` ngầm chọn build mode và giữ source mặc định từ remote. Dùng rõ
+`--build-only --out` chọn source mặc định cho local development. AGY chỉ hỗ trợ
+global và không phải peer trong lifecycle refresh.
 
 ## Ví dụ
 
@@ -132,11 +145,12 @@ Hook, warning, transition, configuration và recovery tuỳ chọn. Lỗi thực
 dùng `schema_version`, `error`, `error_code` và `exit_code` trên stderr. Lỗi parse
 cờ có thể vẫn là hướng dẫn dùng plain text.
 
-Khi target không thể chiếu một nhóm Hook, `data` còn có thể chứa số đếm tuỳ chọn
-`hooksDropped` và mảng `droppedHookSummaries`. Đầu ra dành cho người dùng in
-`Hooks dropped (unsupported on this target): <count> groups - see warnings`
-cùng phần tổng hợp nêu hành động cho từng nhóm. Một nhóm bị loại đã được thông
-báo không làm quá trình cài thất bại.
+Dữ liệu projection Hook còn có thể chứa `hooksDropped`, `droppedHookSummaries`,
+`hookMatchersNarrowed` và `narrowedHookSummaries` tùy chọn. Output cho người dùng
+tách `Hooks dropped (unsupported on this target): <count> group(s) - see
+warnings` khỏi `Hook matchers narrowed (some tool matches unsupported on this
+target): <count> matcher(s) - see warnings`. Drop hoặc narrow được báo không làm
+quá trình cài thất bại.
 
 ## Mã thoát
 
@@ -176,10 +190,10 @@ runtime home hoặc giả định mọi snapshot là backup toàn phần hay có
 ## Giới hạn và lệnh liên quan
 
 Codex không thể chiếu mọi Claude command, Hook matcher hoặc status-line feature.
-Hãy xem cảnh báo sau một lần cài thành công. Ví dụ, matcher `PostToolUse` cho
-vòng đời task của Claude có thể được báo là không được chiếu, trong khi các nhóm
-Hook tương thích cùng ranh giới refresh `Stop` và `SubagentStop` được hỗ trợ vẫn
-hoạt động. Trên Windows, Hook Codex `.cjs` đủ điều kiện nằm trong Codex home có
+Hãy xem cảnh báo sau một lần cài thành công. Engineer projection một group
+task-state `PostToolUse` bị drop hoàn toàn và hai shared matcher bị narrow;
+Marketing có ba narrow và không có full drop. Matcher atom được hỗ trợ vẫn hoạt
+động. Trên Windows, Hook Codex `.cjs` đủ điều kiện nằm trong Codex home có
 thể dùng `.cmd` shim thuộc ownership của AgentKit cho đường dẫn có khoảng trắng;
 đường dẫn bên ngoài, có metacharacter hoặc non-ASCII không an toàn vẫn bị giới
 hạn và được báo rõ.

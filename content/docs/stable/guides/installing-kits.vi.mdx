@@ -28,9 +28,10 @@ cài đặt thông thường.
 
 ## Chọn runtime và phạm vi
 
-`--target` nhận `claude-code`, `codex` hoặc `cursor`. Nếu bỏ qua flag này, mặc
-định là Claude Code. Package từ registry được resolve cho từng runtime, vì vậy
-hãy chạy một lệnh cài riêng cho mỗi runtime bạn sử dụng.
+Các bản cài runtime thông thường dùng `--target claude-code`, `--target codex`
+hoặc `--target cursor`. Nếu bỏ qua flag này, mặc định là Claude Code. Package từ
+registry được resolve cho từng runtime, vì vậy hãy chạy một lệnh cài riêng cho
+mỗi runtime bạn sử dụng.
 
 Phạm vi mặc định là project hiện tại. Thêm `--global` khi bạn muốn cài Kit vào
 thư mục người dùng của runtime để dùng ngoài một project.
@@ -43,10 +44,30 @@ thư mục người dùng của runtime để dùng ngoài một project.
 | Codex cho người dùng hiện tại | `ak kit install engineer --target codex --global` |
 | Cursor trong project này | `ak kit install engineer --target cursor` |
 | Cursor cho người dùng hiện tại | `ak kit install engineer --target cursor --global` |
+| AGY cho người dùng hiện tại | `ak kit init engineer --target agy --global` |
+| Export portable | `ak kit init engineer --target portable --out DIR` |
 
 Cài đặt theo project ghi nội dung runtime và metadata vòng đời của AgentKit vào
 project hiện tại. Cài đặt global ghi vào phạm vi người dùng của runtime đã chọn.
 Hãy kiểm tra đích đến trong bản xem trước trước khi xác nhận.
+
+`portable` là target chỉ để export. `--target portable` không có `--out` trả mã
+`1` trước preview, xác nhận, phân giải registry, lifecycle preflight hoặc ghi đĩa:
+
+```text
+init: target "portable" is export-only and has no install mode; re-run with --out DIR to export a standalone build
+```
+
+`--out` ngầm chọn build mode và giữ source mặc định từ remote; dùng rõ
+`--build-only --out` vẫn hợp lệ nhưng chọn source mặc định cho local development.
+Portable export không tạo metadata lifecycle của bản cài.
+
+`agy` chỉ hỗ trợ global. Bản cài AGY từ remote phân giải và cache package
+registry `claude-code` đã ký, sau đó projection Skill tới
+`~/.gemini/config/skills/` và `~/.gemini/antigravity-cli/skills/`, Agent tùy chọn
+tới `~/.gemini/config/agents/`, cùng các tệp routing và ownership. Phần không được
+hỗ trợ sẽ cảnh báo rồi bỏ qua. AGY không phải registry runtime identity hoặc peer
+trong lifecycle refresh.
 
 Với Codex, Skill native được ghi vào `.agents/skills` trong project hoặc
 `~/.agents/skills` ở phạm vi người dùng; các tài nguyên Codex khác dùng các bề
@@ -154,17 +175,18 @@ Hãy xem bản xem trước trước khi xác nhận. Không thêm `--no-backup`
 cài lại diện rộng với `--force` như cách khôi phục thông thường. Trước tiên hãy
 xử lý sai target, phạm vi, chế độ phân phối hoặc xung đột quyền sở hữu.
 
-## Đọc cảnh báo Hook của Codex
+## Đọc thông báo về hook Codex
 
-Một lần cài Codex thành công có thể cảnh báo rằng một nhóm Hook không được hỗ
-trợ đã bị bỏ qua. Codex không biểu diễn được matcher trạng thái task
-`Agent|Task|TodoWrite|TodoRead` trong nhóm `PostToolUse` của Engineer Kit, nên
-nhóm đó không được phát sang Codex. Các nhóm Hook tương thích vẫn được cài, còn
-việc làm mới trạng thái task vẫn chạy ở các ranh giới `Stop` và `SubagentStop`
-được hỗ trợ.
+Một lần cài Codex thành công có thể báo cả **Hooks dropped (unsupported on this
+target)** và **Hook matchers narrowed (some tool matches unsupported on this
+target)**. Full drop gỡ group không được hỗ trợ. Narrow vẫn giữ handler trên tập
+matcher được hỗ trợ và chỉ báo các atom bị bỏ.
 
-Cảnh báo này mô tả giới hạn capability của runtime, không phải lỗi cài đặt; cài
-lại với `--force` không bổ sung matcher chưa được hỗ trợ.
+Trong output JSON, hãy kiểm tra các field tùy chọn `hooksDropped`,
+`droppedHookSummaries`, `hookMatchersNarrowed` và `narrowedHookSummaries`.
+Engineer hiện có một full drop và hai shared narrow; Marketing không có full drop
+và có ba narrow. Đây là giới hạn capability của runtime, không phải lỗi cài đặt;
+cài lại với `--force` không khôi phục matcher atom chưa được hỗ trợ.
 
 ## Xác minh kết quả
 

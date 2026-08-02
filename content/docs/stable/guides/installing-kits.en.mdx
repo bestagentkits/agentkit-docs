@@ -28,9 +28,10 @@ normal installation flow.
 
 ## Choose a runtime and scope
 
-`--target` accepts `claude-code`, `codex`, or `cursor`. Claude Code is the
-default when you omit the flag. Released registry packages are resolved for one
-runtime at a time, so run a separate install for each runtime you use.
+Normal runtime installs use `--target claude-code`, `--target codex`, or
+`--target cursor`. Claude Code is the default when you omit the flag. Released
+registry packages are resolved for one runtime at a time, so run a separate
+install for each runtime you use.
 
 The default scope is the current project. Add `--global` when you want the kit
 in the runtime's user directory and available beyond one project.
@@ -43,11 +44,31 @@ in the runtime's user directory and available beyond one project.
 | Codex for your user | `ak kit install engineer --target codex --global` |
 | Cursor in this project | `ak kit install engineer --target cursor` |
 | Cursor for your user | `ak kit install engineer --target cursor --global` |
+| AGY for your user | `ak kit init engineer --target agy --global` |
+| Portable export | `ak kit init engineer --target portable --out DIR` |
 
 Project-scoped installs write runtime content in the current project and keep
 AgentKit lifecycle metadata there. Global installs write into the selected
 runtime's user scope. Review the destination shown in the install preview
 before confirming.
+
+`portable` is export-only. `--target portable` without `--out` exits `1` before
+preview, confirmation, registry resolution, lifecycle preflight, or disk writes:
+
+```text
+init: target "portable" is export-only and has no install mode; re-run with --out DIR to export a standalone build
+```
+
+`--out` implies build mode and preserves the remote source default; explicit
+`--build-only --out` remains valid but selects the local-development source
+default. Portable exports create no installed-lifecycle metadata.
+
+`agy` is global-only. A remote AGY install resolves and caches the signed
+`claude-code` registry package, then projects Skills to
+`~/.gemini/config/skills/` and `~/.gemini/antigravity-cli/skills/`, optional
+Agents to `~/.gemini/config/agents/`, and its routing and ownership files.
+Unsupported parts warn and are skipped. AGY is not a registry runtime identity
+or a refresh lifecycle peer.
 
 For Codex, native skills go to `.agents/skills` in a project or
 `~/.agents/skills` at user scope; other Codex resources use the corresponding
@@ -154,16 +175,18 @@ Review the preview before confirming. Do not add `--no-backup`, and do not use a
 broad `--force` reinstall as routine recovery. First resolve an incorrect
 target, scope, delivery mode, or ownership conflict.
 
-## Read Codex Hook warnings
+## Read Codex hook disclosures
 
-A successful Codex install can warn that an unsupported Hook group was omitted.
-Codex cannot represent the Engineer Kit's `PostToolUse` task-state matcher
-`Agent|Task|TodoWrite|TodoRead`, so that group is not projected. Compatible Hook
-groups remain installed, and task-state refresh still runs at the supported
-`Stop` and `SubagentStop` boundaries.
+A successful Codex install can report both **Hooks dropped (unsupported on this
+target)** and **Hook matchers narrowed (some tool matches unsupported on this
+target)**. A full drop removes an unsupported group. A narrow keeps its handlers
+on the supported matcher subset and reports only the removed atoms.
 
-This warning describes a runtime capability limit, not an install failure;
-reinstalling with `--force` does not add the unsupported matcher.
+In JSON output, inspect the optional `hooksDropped`, `droppedHookSummaries`,
+`hookMatchersNarrowed`, and `narrowedHookSummaries` fields. Engineer currently
+has one full drop and two shared narrows; Marketing has no full drop and three
+narrows. These are runtime capability limits, not install failures; reinstalling
+with `--force` does not restore unsupported matcher atoms.
 
 ## Verify the result
 

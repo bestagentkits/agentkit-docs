@@ -84,6 +84,7 @@ kê trong [quy ước CLI](../cli-conventions).
 | Claude Code plugin | `ak-<kit>` trong project | `ak-<kit>` dưới thư mục gốc Claude plugin đã cấu hình | Thêm `--switch-to-plugin`; thêm `--global` cho user scope. |
 | Codex native | Skill trong `.agents/skills` và các bề mặt `.codex` khác của project | Skill trong `~/.agents/skills` và các bề mặt `~/.codex` khác | `--target codex`; thêm `--global` cho user scope. |
 | Cursor | Các bề mặt `.cursor` của project | Các bề mặt `.cursor` của user | `--target cursor`; thêm `--global` cho user scope. |
+| AGY | Không được hỗ trợ | Skill trong cả `~/.gemini/config/skills` và `~/.gemini/antigravity-cli/skills`, Agent tùy chọn trong `~/.gemini/config/agents` | Dùng `--target agy --global`; remote source phân giải package `claude-code` đã ký. |
 | Local build | Thư mục `--out` đã chọn | Không phải install scope | Dùng `--build-only --out <dir>`. |
 | Portable export | Thư mục `--out` đã chọn | Không phải install scope | Dùng `--target portable --out <dir>`; build mode được ngầm chọn. |
 
@@ -92,6 +93,18 @@ plugin delivery là hai mode riêng trong cùng scope; việc chuyển mode là 
 snapshot bảo vệ. Codex không có đầy đủ mức tương đương với Claude về command,
 Hook hoặc status line, vì vậy hãy xem kỹ cảnh báo thay vì giả định mọi
 component đều được chiếu sang runtime.
+
+`portable` chỉ để export. `--target portable` không có `--out` trả mã `1` trước
+preview, xác nhận, phân giải source, lifecycle preflight hoặc ghi đĩa:
+
+```text
+init: target "portable" is export-only and has no install mode; re-run with --out DIR to export a standalone build
+```
+
+Chỉ dùng `--out` sẽ giữ source mặc định từ remote và JSON báo `mode: "build"`.
+Dùng rõ `--build-only --out` vẫn hợp lệ và chọn source mặc định cho local
+development. Portable không ghi install record. AGY chỉ hỗ trợ global và không
+phải peer trong lifecycle refresh.
 
 ## Xem lại hành vi xác nhận
 
@@ -143,9 +156,9 @@ nhận các bản ghi trạng thái thô với `status=preview` trước khi ghi
 Dữ liệu thành công có thể bao gồm Kit và target đã chọn, mode, install mode,
 scope, thư mục đầu ra, số lượng tệp và Skill, tổng hợp Hook đã cài, cảnh báo,
 trạng thái cấu hình project, chuyển mode và các trường recovery snapshot có
-giới hạn. Khi target không thể chiếu một hoặc nhiều nhóm Hook, `data` còn có thể
-chứa số đếm `hooksDropped` và mảng `droppedHookSummaries`; cả hai trường đều là
-tuỳ chọn.
+giới hạn. Dữ liệu projection Hook còn có thể chứa `hooksDropped`,
+`droppedHookSummaries`, `hookMatchersNarrowed` và `narrowedHookSummaries`; giá
+trị zero hoặc nil bị lược bỏ.
 
 ## Kết quả và mã thoát
 
@@ -184,23 +197,21 @@ scope, và Claude native hay plugin mode trước khi cài lại.
 
 ## Đọc kết quả chiếu Hook
 
-Phần tổng hợp thành công báo các Hook event và script đã cài khi có. Nếu target
-không thể chiếu một nhóm Hook, đầu ra dành cho người dùng sẽ thêm:
+Phần tổng hợp thành công báo các Hook event và script đã cài khi có. Disclosure
+projection Hook dùng hai dòng riêng:
 
 ```text
-Hooks dropped (unsupported on this target): <count> groups - see warnings
+Hooks dropped (unsupported on this target): <count> group(s) - see warnings
+Hook matchers narrowed (some tool matches unsupported on this target): <count> matcher(s) - see warnings
 ```
 
-Sau đó, lệnh in phần tổng hợp nêu rõ hành động cần thực hiện cho từng nhóm bị
-loại. Thông báo này độc lập với dòng Hook đã cài, nên vẫn xuất hiện ngay cả khi
-mọi nhóm Hook đều bị loại.
+Sau đó, lệnh in phần tổng hợp nêu rõ hành động cho từng drop hoặc narrow. Full
+drop gỡ group; narrow giữ handler trên matcher atom được hỗ trợ.
 
-Với Codex, nhóm matcher `PostToolUse` cho vòng đời task của Engineer có thể được
-báo là không được chiếu vì Codex không có matcher tương đương. Các nhóm Hook
-tương thích vẫn được cài, và quá trình refresh trạng thái task vẫn chạy tại các
-ranh giới `Stop` và `SubagentStop` được hỗ trợ. Quá trình cài vẫn thành công:
-việc loại nhóm Hook đã được thông báo là giới hạn của target; điều đó không có
-nghĩa Hook đã được sửa, cũng không phải lỗi cài đặt nghiêm trọng.
+Với Codex, Engineer có một group task-state `PostToolUse` bị drop hoàn toàn và
+hai matcher dùng chung bị narrow. Marketing không có full drop và có ba narrow.
+Cài đặt vẫn thành công: đây là giới hạn target, không phải Hook đã được sửa hoặc
+lỗi cài đặt nghiêm trọng.
 
 ## Lệnh liên quan
 
