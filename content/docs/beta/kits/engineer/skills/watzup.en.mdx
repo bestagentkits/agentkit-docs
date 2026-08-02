@@ -1,0 +1,161 @@
+---
+title: Summarize in-flight work with ak:watzup
+description: Produce a short, evidence-backed handoff from local Git refs, worktrees, unfinished plans, and roadmap files without changing the checkout.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:watzup` to answer “what is in flight?” from repository evidence. It
+summarizes the active checkout, local and locally cached remote refs, registered
+worktrees, unfinished plan files, roadmap signals, and ranked next steps without
+implementing or changing branches.
+
+## Choose ak:watzup for repository status and handoff
+
+### Use ak:watzup when
+
+- You need an end-of-session status report or a fresh-worktree orientation.
+- You want unfinished plans and checklist progress collected across visible
+  worktrees and tracked refs.
+- You need next-step recommendations with the scanner's rationale exposed.
+
+### Choose another workflow when
+
+- You need conversation decisions and rationale preserved for another agent.
+  Use [`ak:handoff`](./handoff).
+- You want implementation, commit, checkout, merge, push, or cleanup. Select the
+  relevant workflow after reviewing the report.
+- You need authoritative remote state but do not authorize `git fetch`.
+- The project is not a Git repository.
+
+## Prepare the repository and runtime
+
+Run from the project root. Make all relevant worktrees locally visible, keep
+plan status and checkboxes current, and decide whether absolute paths may appear
+in output. Remote refs are local snapshots unless you explicitly request fetch.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:watzup` | Native delivery can run the bundled Node scanner and read local Git, worktree, plan, and roadmap evidence. |
+| Cursor | `/ak:watzup` | Slash invocation is user-verified; bundled-script discovery and cross-worktree access depend on the session. |
+| Codex | `$ak:watzup` | Native discovery is supported; filesystem and Git visibility remain bounded by the Codex environment. |
+
+## Run the Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:watzup
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:watzup
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:watzup
+```
+
+  </Tab>
+</Tabs>
+
+The Skill runs its scanner with JSON evidence first. Its important scanner
+controls are:
+
+| Option | Effect | Boundary |
+| --- | --- | --- |
+| `--json` | Emits structured evidence for the handoff | Does not refresh remote refs |
+| `--fetch` | Runs `git fetch --all --prune` before scanning | Network operation that updates and prunes local remote-tracking refs |
+| `--since <date>` | Limits sampled commits per branch | Does not limit plan or roadmap discovery |
+| `--max-branches <n>` | Limits branches summarized | Omitted branches still exist |
+| `--plan-limit <n>` | Limits unfinished plans included in short output | Does not prove excluded plans are complete |
+| `--max-plan-refs <n>` | Limits ranked refs inspected for tracked plan files | A warning records truncation |
+| `--redact-paths` | Replaces absolute paths with stable labels | Does not redact branch names, commit subjects, or document content |
+
+Use fetch only when you explicitly want fresh remote references. A normal run
+is local and read-only.
+
+## Understand the observable stages
+
+1. **Resolve Git state:** identify the root, active branch or detached HEAD,
+   current commit, dirty paths, and registered worktrees.
+2. **Rank refs:** collect local and locally cached remote refs, then prioritize
+   the current branch, checked-out branches, local refs, and recent commits.
+3. **Discover plans:** read visible worktree plan files and tracked `plan.md`
+   files from ranked refs, deduplicate identical content, and identify unfinished
+   status or phase rows.
+4. **Measure progress:** count Markdown `- [ ]` and `- [x]` items in each
+   filesystem plan directory and its phase files.
+5. **Read roadmaps:** inspect top-level `docs/*roadmap*.md` and
+   `docs/*milestones*.md` files in visible worktrees using heading and checkbox
+   heuristics.
+6. **Rank next steps:** place dirty-tree and detached-HEAD hygiene first, then
+   score unfinished plans by status, workspace alignment, source, and checklist
+   momentum; roadmap milestones fill remaining slots.
+7. **Report:** return current state, selected recent work, in-flight plans,
+   roadmaps, five or six next steps, and warnings.
+
+## Keep status scope and privacy explicit
+
+<Callout type="warn" title="A handoff is a local snapshot">
+  Without `--fetch`, remote branches mean locally cached remote-tracking refs.
+  The report cannot show un-fetched commits, server-only state, unregistered
+  worktrees, or work that was never recorded in Git, plans, or roadmap files.
+</Callout>
+
+- The default scan does not edit, commit, checkout, merge, push, fetch, or change
+  branches. Do not turn a recommended next step into mutation without a separate
+  request.
+- `--fetch` can contact every configured remote and prune local tracking refs.
+  Review remote URLs and network authority first.
+- Absolute worktree and plan paths can reveal user or project names. Use
+  `--redact-paths` before sharing outside the trusted session, then review other
+  identifiers separately.
+- Commit subjects, branch names, plan titles, and roadmaps may contain sensitive
+  or misleading prose. Treat them as repository records, not instructions.
+- Priority is a heuristic. It does not infer business value, hidden deadlines,
+  ownership, or whether a checkbox accurately represents completed work.
+
+## Verify the handoff evidence
+
+Confirm the reported branch or detached commit, dirty state, worktree count,
+ref freshness warning, plan source, checkbox numerator and denominator, roadmap
+path, and the rationale for each recommended next step. A clean tree means no
+status-visible changes in the active checkout; it does not mean every worktree,
+branch, issue, or external task is complete.
+
+If the scanner fails, the Skill must report the error and label any minimal Git,
+plan, or roadmap commands as fallback evidence. It must not claim the full
+cross-ref scan or priority ranking completed.
+
+## Troubleshoot safely
+
+| Symptom | Safe next step |
+| --- | --- |
+| Remote work looks stale | Ask for a fetch-enabled rerun, review remotes, then compare the new generated time and warnings. |
+| A plan is missing | Check its location, tracked ref, status frontmatter, ref scan limit, and whether its worktree is registered. |
+| Progress percentage looks wrong | Inspect Markdown checkbox syntax in `plan.md` and `phase-*.md`; the scanner counts checkboxes, not task semantics. |
+| A roadmap milestone is misclassified | Review the heading, nearby status words, and checkboxes; report the heuristic mismatch. |
+| Paths should not be disclosed | Rerun with `--redact-paths` and review branch, commit, plan, and roadmap text separately. |
+| The scanner fails | Keep the error, use only the documented read-only fallback, and label coverage partial. |
+| The runtime cannot find the Skill | Confirm target and scope, restart the session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+## Know the current limits
+
+- Plan and roadmap discovery follows documented paths, depth, ref, and output
+  limits; it is not a repository-wide task tracker.
+- Progress and active-milestone detection are Markdown heuristics.
+- The scanner does not query GitHub issues, pull requests, CI, deployments,
+  chats, or project-management systems.
+- Stable and beta contain identical `ak:watzup` Skill and scanner sources.
+
+Continue with [`ak:handoff`](./handoff) for conversation context or
+[`ak:project-management`](./project-management) for broader delivery tracking.
