@@ -1,0 +1,108 @@
+---
+title: ak data ingest
+description: Refresh local Claude Code and Codex derived session records while respecting source, privacy, and workload boundaries.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak data ingest` to run one resumable sweep across local Claude Code and
+Codex session JSONL files and refresh AgentKit's operational read model.
+
+## Usage
+
+```bash
+ak data ingest
+```
+
+The command has no command-specific flags and accepts no documented positional
+arguments. It does not prompt or read stdin. `--yes` and `--no-interactive` do
+not change its write behavior.
+
+## Source roots
+
+| Runtime | Default root | Override |
+| --- | --- | --- |
+| Claude Code | `~/.claude/projects/` | Set `AGENTKIT_CLAUDE_HOME`; the command appends `projects/`. |
+| Codex | `~/.codex/sessions/` | Set `AGENTKIT_CODEX_SESSIONS` to the sessions directory. |
+
+Discovery is recursive, includes validated regular `*.jsonl` session files,
+and refuses symlink escapes. Missing roots are treated as absent. An incomplete
+walk is recorded as incomplete rather than evidence that prior sources were
+deleted.
+
+## What is written
+
+The command takes the single-writer lease and may create or migrate
+`AGENTKIT_HOME/operational/operational.db`. It selects the first local tenant,
+records Claude Code and Codex runtime/run state, and transactionally updates:
+
+- opaque runtime-source identity and a local-only absolute locator;
+- resumable byte/record checkpoints and bounded fingerprints;
+- session start/end times and message counts;
+- token, tool, skill, and subagent counters;
+- skill invocation name, kit, status, and time;
+- closed, redacted ingestion failure codes.
+
+Raw message bodies are parsed but not stored in these operational projection
+tables. Runtime source files remain authoritative and are opened read-only; the
+command never repairs, truncates, renames, or deletes them. It does not populate
+content-search shards.
+
+## Workload boundary
+
+<Callout type="warning">
+  The current CLI constructor does not set a maximum source count or per-read
+  record, byte, or time limit. Each source is capped at 64 projection batches,
+  but a zero-limit batch can read the whole file. Treat a sweep over many or
+  large session files as potentially substantial despite the command's
+  “bounded ingest” help wording.
+</Callout>
+
+Each committed batch is transactional and advances its checkpoint only after
+the write succeeds. A replacement, truncation, or parser-version change
+replaces derived rows for that source on the first reparsed batch. A process
+interruption can leave an incomplete run that the next invocation resumes.
+
+Per-source failures are recorded and can leave a run `incomplete` without
+making the overall command fail. Consequently, `ok: true` means the engine
+returned normally, not that every discovered source was processed.
+
+## Output
+
+Human success stdout is `ingest ok`; failure first writes `ingest failed` to
+stdout and returns an error. JSON stdout is one raw object:
+
+```text
+tenantId: selected tenant UUID
+startedAt: UTC timestamp
+duration: Go duration string
+ok: boolean
+error: present only when Engine.Run returned an error
+```
+
+There are no discovered, processed, applied, incomplete, or failure counts in
+the CLI result. The object is not a versioned envelope and is not NDJSON. A
+failing JSON invocation can still emit the raw result object on stdout before
+exit `1`.
+
+## Exit and recovery
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The engine returned normally; inspect operational run state separately for incomplete sources. |
+| `1` | Home/store/tenant/root discovery or an engine-level operation failed. |
+| `2` | A shared flag value could not be parsed. |
+
+Before a large refresh, you can snapshot the operational database:
+
+```bash
+ak backups create --json
+```
+
+Ingest has no dry-run and creates no automatic backup. If it fails, preserve
+the source files, resolve the reported store or filesystem condition, and rerun;
+checkpoints make ordinary retries resumable.
+
+## Related commands
+
+- [CLI conventions](../cli-conventions)

@@ -1,0 +1,71 @@
+---
+title: ak skill
+description: Quản lý môi trường Python và Node cục bộ của một skill mà không nhầm với nội dung skill đã cài.
+---
+
+Dùng `ak skill` cho môi trường runtime phía sau một skill cục bộ. Lệnh này
+không cài hoặc xoá nội dung `SKILL.md`; hãy dùng `ak skills` cho catalog và
+vòng đời nội dung đó.
+
+## Cách dùng
+
+```bash
+ak skill <command>
+```
+
+Chạy group mà không có lệnh con sẽ in help. Bản thân group không ghi tệp.
+
+## Chọn lệnh
+
+| Mục tiêu | Lệnh | Tác động |
+| --- | --- | --- |
+| Tạo môi trường còn thiếu | `ak skill install <kit>/<skill>` | Điền hoặc tái sử dụng cache theo content hash và ghi record của skill. |
+| Kiểm tra sức khoẻ cục bộ | `ak skill verify <kit>/<skill>` | Đọc block `runtime:` hiện tại, record và các marker cache cần có. |
+| Sửa record hoặc môi trường hỏng | `ak skill repair <kit>/<skill>` | Chỉ hành động khi verify trả về `corrupt`. |
+| Áp dụng block `runtime:` đã sửa | `ak skill upgrade <kit>/<skill>` | Chọn cache hash mới và cập nhật record khi khai báo thay đổi. |
+| Xoá runtime record | `ak skill remove <kit>/<skill>` | Xoá record theo skill nhưng giữ dữ liệu cache dùng chung. |
+
+Reference chuẩn là `<kit>/<skill>`. Mỗi lệnh con nhận `--kits-dir <dir>`;
+thứ tự tìm source là cờ rõ ràng, `AGENTKIT_KITS_DIR`, rồi `./kits`.
+
+## Hiểu record và cache
+
+Runtime state mặc định nằm tại:
+
+```text
+~/.agentkit/skills/<kit>/<skill>/.manifest.json
+~/.agentkit/cache/<runtime-hash>/
+```
+
+`AGENTKIT_HOME` đổi base `~/.agentkit`. Các skill có khai báo Python và Node
+giống nhau sau chuẩn hoá sẽ dùng chung một cache entry. Vì vậy remove hoặc
+upgrade một record không garbage-collect cache cũ.
+
+Runtime manager được bật mặc định. Đặt `AGENTKIT_SKILL_RUNTIME=0` để bật kill
+switch. Khi đó các primitive có mutation trở thành no-op và verify trả về
+`unknown`; dòng completion không chứng minh tệp đã thay đổi.
+
+## Ranh giới bảo mật và mạng
+
+Install và upgrade có thể chạy `uv` hoặc `pnpm` và truy cập public registry PyPI
+hoặc npm cố định. Các biến môi trường ghi đè package source bị loại bỏ, và package
+phải dùng phiên bản chính xác. Cài Node còn dùng `--ignore-scripts`; package
+Python vẫn có thể thực hiện hành vi build và cài đặt Python thông thường. Hãy
+review block `runtime:` của Kit trước khi provision.
+
+Các lệnh này không hỏi xác nhận và không có preview, backup, rollback, `--force`
+hay bước entitlement với AgentKit registry từ xa.
+
+## Ranh giới đầu ra
+
+`verify --json` ghi một object thô nhỏ gồm `kit`, `skill` và `status` ra stdout.
+Các lệnh con thành công khác hiện ghi dòng completion `[OK]` ra stderr và không
+phát JSON success envelope, kể cả khi có `--json`. `--quiet` không ẩn các dòng
+status được ghi trực tiếp này. Lỗi thực thi ở chế độ JSON vẫn dùng error envelope
+có cấu trúc trên stderr.
+
+## Lệnh liên quan
+
+- [Duyệt và quản lý nội dung skill](../cli/ak_skills)
+- [Chạy một skill](../cli/ak_run)
+- [Quy ước CLI](../cli-conventions)

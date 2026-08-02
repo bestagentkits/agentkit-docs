@@ -1,0 +1,78 @@
+---
+title: ak agents remove
+description: Delete one exact per-agent file from the user plugin root and understand the no-backup ownership boundary.
+---
+
+Use `ak agents remove` to delete one per-agent copy from the configured user
+plugin root. It does not uninstall the containing kit or remove agent files
+from the local source catalog.
+
+## Usage
+
+```bash
+ak agents remove <kit>/<agent>
+```
+
+Exactly one canonical ref is required. The accepted short forms `ak:<agent>`,
+`ake:<agent>`, and `akm:<agent>` expand to `core`, `engineer`, and `marketing`.
+Malformed or traversal-shaped refs are rejected.
+
+There are no command-specific flags. The command never prompts; `--yes` and
+stdin do not change the operation.
+
+## Exact effect
+
+For `engineer/researcher`, the only removal target is:
+
+```text
+~/.claude/plugins/engineer/agents/researcher.md
+```
+
+`AGENTKIT_PLUGIN_DIR` replaces the root. The command removes that file when it
+exists. It leaves parent directories, sibling agents, source files under
+`./kits`, runtime environments, cache data, and other kits untouched.
+
+Removal is idempotent: an absent path or a directory at that exact path is
+reported as not installed and exits `0`.
+
+## Ownership and recovery boundary
+
+The remover does not consult a kit or project ownership manifest, compare a
+content hash, detect user modifications, create a recovery snapshot, or ask
+for confirmation. Any regular file at the resolved destination is considered
+the installed agent and is deleted.
+
+Back up the file yourself before removal if it contains edits. If the matching
+local source is still available, `ak agents install <kit>/<agent>` can copy that
+source again, but it cannot recover edits that existed only in the removed
+file.
+
+## Output
+
+Human success output is written to stdout and distinguishes `removed` from
+`nothing to remove`. JSON success uses:
+
+```text
+schema_version: 1
+kind: assets.remove
+data.ref, data.kit, data.asset
+data.removed: boolean
+data.not_installed: boolean
+```
+
+Errors go to stderr. There is no preview, dry-run, force, backup, NDJSON, or
+network activity.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The file was removed, or it was already absent. |
+| `1` | The delete failed, or the positional argument count was wrong. |
+| `2` | The ref was malformed or a flag could not be parsed. |
+
+## Related commands
+
+- [Complete `ak agents remove` command facts](../cli/ak_agents_remove)
+- [List agent state](../cli/ak_agents_list)
+- [Remove a complete kit route](../cli/ak_kit_uninstall)

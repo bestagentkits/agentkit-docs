@@ -1,0 +1,419 @@
+---
+title: Migrating from ClaudeKit
+description: Preview, apply, verify, and roll back a ClaudeKit migration while preserving custom work.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Migration discovers an existing ClaudeKit setup, classifies what ClaudeKit
+owns, preserves custom content, and moves supported kits into AgentKit's managed
+lifecycle. It is a planned transition, not a broad delete-and-reinstall.
+
+## Before you start
+
+1. Run the migration from the project whose ClaudeKit content you want AgentKit
+   to inspect.
+2. Complete the **Back up before apply** gate below. Do not rely only on version
+   control or AgentKit recovery state.
+3. Close Claude Code and Codex sessions that may be using the affected files.
+4. Confirm that `ak` is authenticated and that your account has the required kit
+   entitlements with `ak whoami` and `ak licenses`.
+
+The migration scans the current project and the standard ClaudeKit user
+locations, including `~/.claude` and `~/.claudekit`. It can discover both
+project and global content, including supported Claude Code and Codex kit
+surfaces.
+
+<Callout type="warn">
+  Do not delete `~/.claude`, `~/.codex`, `~/.agentkit`, or the project's
+  `.claude` directory before migrating. Those locations may contain custom or
+  unrelated runtime state that the migration is designed to preserve.
+</Callout>
+
+## Preview the migration
+
+`ak migrate` is a dry run by default. State the source explicitly so the intent
+is clear:
+
+```bash
+ak migrate --from=ck
+```
+
+For a machine-readable report:
+
+```bash
+ak migrate --from=ck --json
+```
+
+The preview performs discovery and prints a migration plan without writing
+files. Review:
+
+- Detected runtime and project/global scope;
+- ClaudeKit-owned content that can be archived, quarantined, or neutralized;
+- Custom or unknown content that will be preserved;
+- AgentKit kits that will be installed;
+- Conflicts that require resolution before apply.
+
+An apply is blocked while the plan contains conflicts. Resolve them and run the
+dry run again; do not bypass the review with a forced reinstall.
+
+## Choose Claude Code delivery
+
+Migration uses native Claude Code delivery unless you explicitly authorize a
+project plugin transition. If the preview and your intended install mode require
+a project plugin, use `--switch-to-plugin` in both preview and apply:
+
+```bash
+ak migrate --from=ck --switch-to-plugin
+```
+
+Do not add this flag merely because ClaudeKit used plugin-like files. Choose it
+only when the resulting AgentKit install should be a Claude Code project plugin.
+
+## Back up before apply
+
+<Callout type="warn" title="Required before apply">
+  You may run the read-only preview first. Do not run with `--dry-run=false
+  --yes` until you have created the independent backup below and verified it.
+</Callout>
+
+Apply can archive, quarantine, or neutralize authorized ClaudeKit surfaces and
+install replacement content. AgentKit intends to preserve custom work, but an
+independent copy protects you from a wrong assumption about ownership or scope,
+an interruption, and later manual recovery.
+
+Run the command for your platform from the same project directory where you ran
+the preview. It creates a new timestamped directory under
+`AgentKitMigrationBackups` in your user home, outside the default migration
+roots. It copies only existing settings and configuration files that migration
+or replacement installation can read or update; it does not copy entire runtime
+homes, kit trees, caches, sessions, or standalone credential stores. Some of the
+selected settings files can themselves contain credential-like values, so keep
+the backup private even though the list is bounded.
+
+<Tabs items={['macOS / Linux', 'Windows']}>
+  <Tab value="macOS / Linux">
+
+```bash
+set -eu
+umask 077
+
+project_root=$PWD
+backup_root="$HOME/AgentKitMigrationBackups"
+stamp=$(date -u +%Y%m%dT%H%M%SZ)
+backup_dir="$backup_root/$stamp"
+claude_home=${AGENTKIT_CLAUDE_HOME:-"$HOME/.claude"}
+codex_home=${CODEX_HOME:-"$HOME/.codex"}
+agentkit_home=${AGENTKIT_HOME:-"$HOME/.agentkit"}
+codex_skills=${AGENTKIT_CODEX_SKILLS_ROOT:-"$HOME/.agents/skills"}
+default_claude_home="$HOME/.claude"
+default_codex_home="$HOME/.codex"
+default_agentkit_home="$HOME/.agentkit"
+
+for unsafe_root in \
+  "$claude_home" "$codex_home" "$agentkit_home" "$codex_skills" \
+  "$HOME/.claudekit" "$project_root/.claude" \
+  "$project_root/.claudekit" "$project_root/.codex" \
+  "$project_root/.agentkit" "$project_root/.agents/skills"
+do
+  case "$backup_root/" in
+    "$unsafe_root/"*)
+      printf 'Choose a backup_root outside migration root: %s\n' "$unsafe_root" >&2
+      exit 1
+      ;;
+  esac
+done
+
+mkdir -m 700 -p "$backup_root"
+mkdir -m 700 "$backup_dir"
+: > "$backup_dir/files.tsv"
+
+copy_backup_file() {
+  source_path=$1
+  relative_path=$2
+  if [ -f "$source_path" ]; then
+    destination="$backup_dir/$relative_path"
+    mkdir -p "$(dirname "$destination")"
+    cp -p "$source_path" "$destination"
+    printf '%s\t%s\n' "$source_path" "$relative_path" >> "$backup_dir/files.tsv"
+  fi
+}
+
+for name in .ck.json settings.json settings.local.json; do
+  copy_backup_file "$claude_home/$name" "user/claude/$name"
+  copy_backup_file "$HOME/.claudekit/$name" "user/claudekit/$name"
+  copy_backup_file "$project_root/.claude/$name" "project/claude/$name"
+  copy_backup_file "$project_root/.claudekit/$name" "project/claudekit/$name"
+done
+copy_backup_file "$codex_home/config.toml" "user/codex/config.toml"
+copy_backup_file "$codex_home/hooks.json" "user/codex/hooks.json"
+copy_backup_file "$agentkit_home/config.yaml" "user/agentkit/config.yaml"
+copy_backup_file "$agentkit_home/ownership.json" "user/agentkit/ownership.json"
+if [ "$claude_home" != "$default_claude_home" ]; then
+  copy_backup_file "$default_claude_home/.ck.json" "user/default-claude/.ck.json"
+  copy_backup_file "$default_claude_home/settings.json" "user/default-claude/settings.json"
+  copy_backup_file "$default_claude_home/settings.local.json" "user/default-claude/settings.local.json"
+fi
+if [ "$codex_home" != "$default_codex_home" ]; then
+  copy_backup_file "$default_codex_home/config.toml" "user/default-codex/config.toml"
+  copy_backup_file "$default_codex_home/hooks.json" "user/default-codex/hooks.json"
+fi
+if [ "$agentkit_home" != "$default_agentkit_home" ]; then
+  copy_backup_file "$default_agentkit_home/config.yaml" "user/default-agentkit/config.yaml"
+  copy_backup_file "$default_agentkit_home/ownership.json" "user/default-agentkit/ownership.json"
+fi
+copy_backup_file "$project_root/.codex/config.toml" "project/codex/config.toml"
+copy_backup_file "$project_root/.codex/hooks.json" "project/codex/hooks.json"
+copy_backup_file "$project_root/.agentkit/config.yaml" "project/agentkit/config.yaml"
+copy_backup_file "$project_root/.agentkit/ownership.json" "project/agentkit/ownership.json"
+
+if [ ! -s "$backup_dir/files.tsv" ]; then
+  printf 'No recognized settings files found; inspect the preview before apply.\n' >&2
+  exit 1
+fi
+
+tab=$(printf '\t')
+while IFS="$tab" read -r source_path relative_path; do
+  test -f "$backup_dir/$relative_path"
+  cmp -s "$source_path" "$backup_dir/$relative_path"
+done < "$backup_dir/files.tsv"
+
+count=$(wc -l < "$backup_dir/files.tsv" | tr -d ' ')
+printf 'Verified %s files in %s\n' "$count" "$backup_dir"
+```
+
+  </Tab>
+  <Tab value="Windows">
+
+Run this in PowerShell. From `cmd.exe`, open PowerShell and use this procedure
+instead of translating it into a batch script.
+
+```powershell
+$ErrorActionPreference = 'Stop'
+$ProjectRoot = (Get-Location).Path
+$BackupRoot = Join-Path $HOME 'AgentKitMigrationBackups'
+$Stamp = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ')
+$BackupDir = Join-Path $BackupRoot $Stamp
+$ClaudeHome = if ($env:AGENTKIT_CLAUDE_HOME) { $env:AGENTKIT_CLAUDE_HOME } else { Join-Path $HOME '.claude' }
+$CodexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME '.codex' }
+$AgentKitHome = if ($env:AGENTKIT_HOME) { $env:AGENTKIT_HOME } else { Join-Path $HOME '.agentkit' }
+$CodexSkills = if ($env:AGENTKIT_CODEX_SKILLS_ROOT) { $env:AGENTKIT_CODEX_SKILLS_ROOT } else { Join-Path $HOME '.agents\skills' }
+$DefaultClaudeHome = Join-Path $HOME '.claude'
+$DefaultCodexHome = Join-Path $HOME '.codex'
+$DefaultAgentKitHome = Join-Path $HOME '.agentkit'
+
+$UnsafeRoots = @(
+  $ClaudeHome, $CodexHome, $AgentKitHome, $CodexSkills,
+  (Join-Path $HOME '.claudekit'),
+  (Join-Path $ProjectRoot '.claude'),
+  (Join-Path $ProjectRoot '.claudekit'),
+  (Join-Path $ProjectRoot '.codex'),
+  (Join-Path $ProjectRoot '.agentkit'),
+  (Join-Path $ProjectRoot '.agents\skills')
+)
+$BackupFull = [IO.Path]::GetFullPath($BackupRoot).TrimEnd('\') + '\'
+foreach ($Root in $UnsafeRoots) {
+  $RootFull = [IO.Path]::GetFullPath($Root).TrimEnd('\') + '\'
+  if ($BackupFull.StartsWith($RootFull, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "Choose a BackupRoot outside migration root: $Root"
+  }
+}
+
+New-Item -ItemType Directory -Path $BackupDir | Out-Null
+$Identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+& icacls.exe $BackupDir '/inheritance:r' '/grant:r' ("{0}:(OI)(CI)F" -f $Identity) | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Could not restrict backup directory access.' }
+
+$Copied = [Collections.Generic.List[object]]::new()
+function Copy-BackupFile([string]$Source, [string]$Relative) {
+  if (Test-Path -LiteralPath $Source -PathType Leaf) {
+    $Destination = Join-Path $BackupDir $Relative
+    New-Item -ItemType Directory -Force -Path (Split-Path $Destination) | Out-Null
+    Copy-Item -LiteralPath $Source -Destination $Destination
+    $Copied.Add([pscustomobject]@{ Source = $Source; Relative = $Relative })
+  }
+}
+
+foreach ($Name in '.ck.json', 'settings.json', 'settings.local.json') {
+  Copy-BackupFile (Join-Path $ClaudeHome $Name) "user\claude\$Name"
+  Copy-BackupFile (Join-Path (Join-Path $HOME '.claudekit') $Name) "user\claudekit\$Name"
+  Copy-BackupFile (Join-Path (Join-Path $ProjectRoot '.claude') $Name) "project\claude\$Name"
+  Copy-BackupFile (Join-Path (Join-Path $ProjectRoot '.claudekit') $Name) "project\claudekit\$Name"
+}
+Copy-BackupFile (Join-Path $CodexHome 'config.toml') 'user\codex\config.toml'
+Copy-BackupFile (Join-Path $CodexHome 'hooks.json') 'user\codex\hooks.json'
+Copy-BackupFile (Join-Path $AgentKitHome 'config.yaml') 'user\agentkit\config.yaml'
+Copy-BackupFile (Join-Path $AgentKitHome 'ownership.json') 'user\agentkit\ownership.json'
+if ($ClaudeHome -ne $DefaultClaudeHome) {
+  Copy-BackupFile (Join-Path $DefaultClaudeHome '.ck.json') 'user\default-claude\.ck.json'
+  Copy-BackupFile (Join-Path $DefaultClaudeHome 'settings.json') 'user\default-claude\settings.json'
+  Copy-BackupFile (Join-Path $DefaultClaudeHome 'settings.local.json') 'user\default-claude\settings.local.json'
+}
+if ($CodexHome -ne $DefaultCodexHome) {
+  Copy-BackupFile (Join-Path $DefaultCodexHome 'config.toml') 'user\default-codex\config.toml'
+  Copy-BackupFile (Join-Path $DefaultCodexHome 'hooks.json') 'user\default-codex\hooks.json'
+}
+if ($AgentKitHome -ne $DefaultAgentKitHome) {
+  Copy-BackupFile (Join-Path $DefaultAgentKitHome 'config.yaml') 'user\default-agentkit\config.yaml'
+  Copy-BackupFile (Join-Path $DefaultAgentKitHome 'ownership.json') 'user\default-agentkit\ownership.json'
+}
+Copy-BackupFile (Join-Path $ProjectRoot '.codex\config.toml') 'project\codex\config.toml'
+Copy-BackupFile (Join-Path $ProjectRoot '.codex\hooks.json') 'project\codex\hooks.json'
+Copy-BackupFile (Join-Path $ProjectRoot '.agentkit\config.yaml') 'project\agentkit\config.yaml'
+Copy-BackupFile (Join-Path $ProjectRoot '.agentkit\ownership.json') 'project\agentkit\ownership.json'
+
+if ($Copied.Count -eq 0) {
+  throw 'No recognized settings files found; inspect the preview before apply.'
+}
+
+$Copied | ForEach-Object { "{0}`t{1}" -f $_.Source, $_.Relative } |
+  Set-Content -LiteralPath (Join-Path $BackupDir 'files.tsv')
+foreach ($File in $Copied) {
+  $Destination = Join-Path $BackupDir $File.Relative
+  if (-not (Test-Path -LiteralPath $Destination -PathType Leaf)) {
+    throw "Missing backup file: $($File.Relative)"
+  }
+  if ((Get-FileHash -LiteralPath $File.Source).Hash -ne
+      (Get-FileHash -LiteralPath $Destination).Hash) {
+    throw "Backup verification failed: $($File.Relative)"
+  }
+}
+
+Write-Host "Verified $($Copied.Count) files in $BackupDir"
+```
+
+  </Tab>
+</Tabs>
+
+The last line must print `Verified` and the destination. If the command reports
+no recognized files, stop and inspect the preview rather than treating an empty
+directory as a backup. The selected files can contain sensitive provider or MCP
+values. Keep the directory local with restricted access; never upload it or
+commit it to version control.
+
+The list is deliberately bounded. Custom Codex skill roots, plugin directories,
+and kit content are selected from the runtime, scope, delivery route, and actual
+preview; they are not universal configuration roots. If the preview says an
+additional existing path will be archived, quarantined, neutralized, or
+overwritten, copy that exact path separately into the backup directory and
+verify the copy. Do not guess by copying all of `~/.claude`, `~/.codex`,
+`~/.agentkit`, or another runtime home.
+
+This user-created backup is independent of AgentKit's operation-specific
+recovery snapshot and migration journal, which AgentKit records immediately
+before its own mutations. The two layers serve different recovery paths.
+Neither is a general full-machine backup, and migration rollback restores only
+recorded state; it does not reconstruct everything or remove an installed
+replacement.
+
+## Apply the reviewed plan
+
+Apply requires both `--dry-run=false` and `--yes`:
+
+```bash
+ak migrate --from=ck --dry-run=false --yes
+```
+
+For the explicitly reviewed project-plugin route:
+
+```bash
+ak migrate --from=ck --switch-to-plugin --dry-run=false --yes
+```
+
+Before replacement installation, AgentKit preflights every requested kit
+install. The operation migrates supported preferences, archives or
+quarantines authorized ClaudeKit directories, neutralizes owned integration
+surfaces, preserves custom or unknown content, and installs the corresponding
+AgentKit kits. It records recovery state before mutation.
+
+Existing AgentKit configuration values win when preferences are migrated.
+Credential-like values in a project `.ck.json` are omitted so they do not reach
+project `.agentkit/config.yaml`. Credential-like values in a user or global
+`~/.claude/.ck.json` can migrate into the user `config.yaml` when AgentKit does
+not already define them. AgentKit writes the resulting config with mode `0600`
+on systems that enforce POSIX permissions. Review the dry-run preference plan,
+and keep its output, the source file, and the resulting config private.
+
+If an apply fails, the migration is resumable by default. Read the reported
+state before choosing whether to rerun apply or roll it back.
+
+## Migrate preferences only
+
+Use the preference-only flow when you are not ready to transition kit content:
+
+```bash
+ak migrate prefs --dry-run
+ak migrate prefs --dry-run=false --yes
+```
+
+This copies supported values, keeps existing AgentKit values, omits
+credential-like project values, and can carry credential-like user/global
+values into the private user config. It does not delete the legacy `.ck.json`
+file.
+
+## Verify the result
+
+After a successful apply:
+
+1. Read the summary and confirm the expected runtime, scope, and installed kits.
+2. Reopen the affected runtime.
+3. Invoke one important Skill from each migrated kit.
+4. Review custom project instructions and hooks you expected to keep.
+5. Keep the migration recovery information until you have completed those
+   checks.
+
+A file's presence alone does not prove that a hook is registered or executing.
+Verify the observable runtime behavior before removing any preserved legacy
+content.
+
+## Roll back
+
+<Callout type="warn" title="Rollback starts immediately">
+  `ak migrate rollback` has no dry-run, confirmation prompt, required `--yes`,
+  `--force`, or journal selector. It immediately reconciles the newest recovery
+  state and can finalize deletion of a quarantine instead of restoring it.
+</Callout>
+
+Run rollback only after checking the independent backup and copying aside
+unrelated work created after migration:
+
+```bash
+ak migrate rollback
+```
+
+For a legacy transition, behavior depends on the recorded phase. Before a
+replacement install is proven, rollback restores the recorded quarantine. At
+`installed` or `finalize_pending`, it verifies the AgentKit install receipts and
+then finalizes and deletes the quarantine; it does not restore ClaudeKit. Only
+when no pending legacy transition exists does the command restore the latest
+generic file journal. If neither state exists, it reports that there is nothing
+to roll back and exits successfully.
+
+Rollback handles only the recorded state. It is not a selective undo for later
+edits, does not reconstruct the entire pre-apply environment, and does not
+remove an installed AgentKit replacement. Preview and uninstall that
+replacement through the matching target, scope, and delivery route if you no
+longer want it.
+
+## If migration is interrupted
+
+Run the default dry run again first. If AgentKit reports a pending transition,
+choose one recovery path:
+
+- Rerun the reviewed apply so the resumable operation can recover and finish;
+- Run `ak migrate rollback` to restore the recorded pending state.
+
+A pending journal blocks a different migration transition until you resume or
+roll back the current one. A successful dry run exits `0`; invalid source or
+flags exit `2`, cancellation or missing apply confirmation exits `3`, and a
+runtime or apply failure exits `1`.
+
+Use `--force-unlock` only when the CLI specifically reports a stale migration
+lock left by a crashed process and no migration is still running. It does not
+resolve file conflicts or replace the rollback workflow.
+
+## See also
+
+- [Installing kits](./installing-kits)
+- [Updating AgentKit and kits](./updating)

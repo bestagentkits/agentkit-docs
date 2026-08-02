@@ -1,0 +1,54 @@
+---
+title: ak watch
+description: Chọn quy trình theo dõi issue GitHub và hiểu ranh giới credential, posting, state và rate limit.
+---
+
+Dùng `ak watch` để tìm các lệnh poll issue GitHub, sinh response qua AgentKit
+skill và tuỳ chọn post comment.
+
+## Cách dùng
+
+```bash
+ak watch
+```
+
+Lệnh cha không có argument theo vị trí hoặc cờ riêng. Nó hiển thị trợ giúp và
+không gọi GitHub, chạy agent, ghi state hoặc hỏi xác nhận.
+
+## Chọn subcommand
+
+| Mục tiêu | Lệnh | Mutation bên ngoài |
+| --- | --- | --- |
+| Preview issue khớp và reply được sinh | `ak watch dry-run <owner/repo>` | Không comment GitHub, nhưng vẫn liên hệ GitHub và model/provider. |
+| Poll và post một lần | `ak watch start <owner/repo>` | Post issue comment sau khi sinh response. |
+| Tiếp tục poll trong process hiện tại | `ak watch start <owner/repo> --daemon` | Có thể tiếp tục post đến khi process bị ngắt. |
+| Kiểm tra state đã lưu | `ak watch status [owner/repo]` | Không. |
+| Đặt state đã lưu thành inactive | `ak watch stop <owner/repo>` | Chỉ state cục bộ; không signal process đang chạy. |
+
+## Thông tin xác thực và quyền riêng tư
+
+Poll và post chạy `gh` CLI cục bộ, kế thừa GitHub authentication và environment
+của nó. Sinh response chạy `ak run`, do đó skill, runtime, provider credential
+và network policy của provider được áp dụng. Title, body, author, label, number,
+repository và URL của issue được đưa vào prompt agent. Xem lại quyền riêng tư
+repository và policy provider trước khi chạy `start` hoặc `dry-run`.
+
+Ceiling mặc định là 10 post đã ghi nhận trong mỗi rolling hour cho từng state
+repository. Đây là giới hạn an toàn, không phải ranh giới permission hay hàng
+đợi review. Dùng credential GitHub ít quyền nhất và preview filter trước.
+
+## Output và mã thoát
+
+Mỗi subcommand có contract JSON single-object hoặc streaming riêng. Help lệnh
+cha khai báo `1` cho lỗi runtime, `2` cho invocation sai và `3` cho rate limit
+one-shot. Implementation hiện tại xử lý lỗi rate limit, agent và posting từng
+issue thành log stderr và vẫn có thể thoát `0`; không dùng mã thoát để chứng minh
+mọi issue khớp đã được post.
+
+## Lệnh liên quan
+
+- [Preview watch](./watch-dry-run)
+- [Bắt đầu post](./watch-start)
+- [Kiểm tra watch state](./watch-status)
+- [Dừng state đã lưu](./watch-stop)
+- [Thông tin đầy đủ của lệnh `ak watch`](../cli/ak_watch)

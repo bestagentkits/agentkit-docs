@@ -1,0 +1,199 @@
+---
+title: Điều tra failure có hệ thống với ak:debugging
+description: Dùng ak:debugging để tái hiện failure, trace root cause, thêm defense phù hợp và xác minh mọi cách sửa đã duyệt.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:debugging` để điều tra có hệ thống bug, failing test, unexpected
+behavior, performance issue, build failure hoặc integration problem. Skill yêu
+cầu bằng chứng root cause trước cách sửa, trace failure ngược về trigger ban
+đầu, thêm validation layer phù hợp và yêu cầu verification mới trước mọi claim
+hoàn tất.
+
+Trong Marketing Kit, workflow này hữu ích nhất cho failure kỹ thuật trong
+website marketing, analytics path, content pipeline hoặc automation. Đây không
+phải Skill chẩn đoán campaign performance.
+
+## Chọn ak:debugging cho điều tra dựa trên bằng chứng
+
+### Dùng ak:debugging khi
+
+- Failure tái hiện được nhưng chưa biết nguồn.
+- Error xuất hiện sâu trong call stack hoặc qua nhiều component.
+- Nhiều lần sửa đã xử lý symptom mà chưa giải quyết issue.
+- Bạn cần so sánh broken path với working example trong cùng project.
+- Bạn sắp claim một cách sửa hoạt động và cần verification mới.
+
+### Chọn workflow khác khi
+
+- Bạn muốn workflow sửa có điều phối với route auto, review, quick hoặc
+  parallel rõ ràng. Dùng [`ak:fix`](./fix).
+- Bạn chỉ cần tư vấn kiến trúc kỹ thuật. Dùng [`ak:ask`](./ask).
+- Vấn đề là marketing objective chưa rõ thay vì technical failure. Dùng
+  [`ak:brainstorm`](./brainstorm) hoặc Marketing domain Skill.
+- Technical behavior đã xác định và bạn đang triển khai scope mới. Dùng
+  [`ak:cook`](./cook).
+
+`ak:debugging` có thể dùng như phương pháp chẩn đoán chỉ đọc, nhưng phase thứ tư
+đầy đủ gồm tạo failing test và triển khai cách sửa. Hãy nêu “dừng sau chẩn đoán”
+khi không cho phép workspace mutation.
+
+## Chuẩn bị reproduction và ranh giới
+
+Trước khi gọi Skill:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận target
+  cùng scope Marketing Kit.
+- Cung cấp exact error, failing assertion, log evidence, screenshot hoặc
+  behavior quan sát được.
+- Nêu reproduction step, expected behavior, actual behavior, environment và
+  thay đổi gần đây liên quan.
+- Chỉ rõ path, test, component và live service được phép kiểm tra.
+- Quyết định lần chạy chỉ diagnose hay cũng được thêm test và correction.
+- Loại trừ secret, personal data, credential, live-account mutation,
+  publication, spend và destructive action nếu chưa được cho phép riêng.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:debugging ...` | Khả dụng qua delivery native hoặc plugin rõ ràng. |
+| Cursor | `/ak:debugging ...` | Được projection thành Skill gọi bằng slash; parity rộng hơn chưa được chứng minh. |
+| Codex | `$ak:debugging ...` | Dùng discovery Skill native của Codex; tool và automation bao quanh khác nhau. |
+
+## Chạy Skill
+
+Bắt đầu bằng yêu cầu chỉ chẩn đoán khi chưa biết nguyên nhân:
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:debugging "Campaign preview làm mất UTM parameter chỉ sau khi đổi locale. Tái hiện, trace value ngược về trigger ban đầu và dừng sau diagnosis report, không sửa tệp"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:debugging "Campaign preview làm mất UTM parameter chỉ sau khi đổi locale. Tái hiện, trace value ngược về trigger ban đầu và dừng sau diagnosis report, không sửa tệp"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:debugging "Campaign preview làm mất UTM parameter chỉ sau khi đổi locale. Tái hiện, trace value ngược về trigger ban đầu và dừng sau diagnosis report, không sửa tệp"
+```
+
+  </Tab>
+</Tabs>
+
+Argument được ghi nhận là mô tả error hoặc issue. Skill này không có mode flag
+được ghi nhận. Hãy đặt ranh giới chỉ diagnose hoặc cho phép fix trong request.
+
+## Theo bốn kỹ thuật
+
+### Điều tra có hệ thống
+
+1. Đọc đầy đủ error và stack trace.
+2. Tái hiện failure ổn định; nếu gián đoạn, thu thập thêm dữ liệu.
+3. Kiểm tra thay đổi gần đây, dependency và cấu hình.
+4. Ghi bằng chứng tại từng component boundary để tìm nơi behavior bắt đầu lệch.
+5. Trace data flow liên quan trước khi đề xuất cách sửa.
+
+### So sánh pattern
+
+Tìm working example trong cùng project, đọc đầy đủ, liệt kê mọi khác biệt có ý
+nghĩa và xác định dependency cùng environment. Implementation trông tương tự
+chỉ là bằng chứng sau khi hiểu contract của nó.
+
+### Test từng hypothesis
+
+Đặt một hypothesis cụ thể, tạo thay đổi hoặc quan sát chẩn đoán nhỏ nhất có thể
+và xác minh kết quả trước khi tiếp tục. Hypothesis thất bại cần hypothesis mới,
+không phải chồng nhiều speculative change.
+
+### Chỉ implement và verify khi được phép
+
+Tạo failing test nhỏ nhất, triển khai một cách sửa phù hợp root cause, chạy lại
+reproduction cùng check bị ảnh hưởng và dừng nếu thất bại. Sau ba lần thất bại,
+hãy xem lại architecture với người dùng trước thay đổi khác.
+
+## Chỉ thêm defense khi phù hợp
+
+Sau khi tìm root cause, lập bản đồ cách bad value hoặc state đi qua hệ thống và
+xem xét bốn layer:
+
+| Layer | Mục đích |
+| --- | --- |
+| Entry validation | Từ chối input không hợp lệ tại boundary. |
+| Business-logic validation | Thực thi invariant nơi operation dùng dữ liệu. |
+| Environment guards | Ngăn behavior nguy hiểm trong context giới hạn như test. |
+| Debug instrumentation | Giữ đủ context để chẩn đoán failure tương lai. |
+
+Áp dụng layer xử lý failure path đã xác nhận. Defense in depth không cấp quyền
+thêm validation, logging, data collection hay tracking không liên quan.
+
+## Tách chẩn đoán khỏi mutation
+
+<Callout type="warn" title="Điều tra không hàm ý quyền sửa">
+  Yêu cầu chỉ chẩn đoán cho phép thu thập bằng chứng trong scope đã nêu, không
+  cho phép chỉnh workspace. Trước khi thêm test, correction, validation,
+  logging, provider call hay external effect, hãy xác nhận người dùng cho phép
+  ranh giới đó. Commit, publish, campaign change, spend và deployment luôn là
+  hành động riêng.
+</Callout>
+
+Instrumentation có thể làm lộ request content, identifier hoặc customer data.
+Chỉ thu bằng chứng tối thiểu, redact value nhạy cảm và không để verbose debug
+logging hay tracking mới trong production nếu chưa review. Network hoặc
+provider access phải hiện hành, khả dụng và được duyệt riêng.
+
+## Xác minh bằng chứng và kết quả
+
+Với công việc chỉ chẩn đoán, cần có:
+
+- Reproduction chính xác và pre-change evidence đã ghi.
+- Trace từ symptom thấy được về original trigger.
+- Một root-cause hypothesis đã xác nhận cùng bằng chứng phân biệt với option khác.
+- Scope bị ảnh hưởng và bounded correction path.
+- Uncertainty và bằng chứng thiếu được nêu rõ.
+
+Với correction đã được cho phép, cần thêm:
+
+- Failing test hoặc minimal reproduction chứng minh issue.
+- Một thay đổi phù hợp root cause, không cleanup gần kề.
+- Output mới từ reproduction ban đầu.
+- Regression và blast-radius check liên quan không có failure bị che.
+- Bằng chứng validation layer phù hợp hoạt động.
+- Không claim hoàn tất trước khi chạy verification command và đọc output.
+
+## Xử lý sự cố điều tra
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Runtime không tìm thấy `ak:debugging` | Xác nhận target và scope, khởi động lại runtime, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+| Failure gián đoạn | Ghi timestamp, input, environment, boundary data và tần suất cho đến khi cô lập được divergence; không phỏng đoán. |
+| Error xuất hiện xa source | Trace caller và value ngược từng level đến original invalid state hoặc trigger. |
+| Hypothesis thất bại | Xóa hoặc cô lập diagnostic change, ghi điều bằng chứng đã bác bỏ và tạo hypothesis đơn mới. |
+| Ba correction thất bại | Dừng đổi code và thảo luận shared state, coupling hoặc architecture có sai không. |
+| Skill bắt đầu edit trong lần chạy chỉ diagnose | Dừng và nhắc lại ranh giới không mutation. Chỉ handoff diagnosis cho `ak:fix` sau khi duyệt correction. |
+| Verification evidence một phần hoặc cũ | Chạy lại full command liên quan, đọc toàn bộ output cùng exit status và báo kết quả thực tế. |
+
+## Biết giới hạn hiện tại
+
+- Skill cung cấp framework debug kỹ thuật tổng quát, không phải campaign,
+  attribution hay conversion analysis chuyên biệt.
+- Độ tin cậy root cause phụ thuộc khả năng tái hiện và quyền truy cập code, log,
+  test, cấu hình cùng environment evidence liên quan.
+- Defense in depth giảm failure path đã biết nhưng không chứng minh mọi defect
+  hoặc operational risk là bất khả thi.
+- Helper tìm test pollution đi kèm chỉ áp dụng khi giả định shell và test layout
+  phù hợp project.
+- Workflow không đảm bảo performance, revenue, conversion, provider behavior,
+  compliance hay zero regression.
+- Stable và beta có source content cùng reference `ak:debugging` giống nhau.
+
+Tiếp tục với [`ak:fix`](./fix) cho correction đã duyệt hoặc quay lại
+[Tổng quan Marketing Kit](../../marketing) cho domain analysis.

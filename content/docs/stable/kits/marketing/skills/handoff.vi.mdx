@@ -1,0 +1,173 @@
+---
+title: Lưu trạng thái session với ak:handoff
+description: Tạo handoff ngắn gọn đã redaction để agent mới tiếp tục mà không coi memory hội thoại là trạng thái repository.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:handoff` khi kết thúc session, chuyển context hoặc giao công việc cho
+agent mới. Skill giữ goal, trạng thái hiện tại, quyết định, bằng chứng, blocker
+và dependency từ hội thoại làm việc, sau đó lưu cùng nội dung handoff ngắn gọn
+vào project.
+
+## Chọn ak:handoff để duy trì hội thoại
+
+### Dùng ak:handoff khi
+
+- Session mới cần goal hiện tại và lý do đằng sau các quyết định.
+- Công việc chưa hoàn tất và session tiếp theo nên tránh lặp lại discovery.
+- Bạn cần giữ rejected approach, trap, blocker hoặc verification còn thiếu cùng
+  trạng thái hiện tại.
+- Handoff nên trỏ tới plan, issue, commit, diff, test và tệp thay vì sao chép
+  chúng.
+
+### Chọn workflow khác khi
+
+- Bạn cần báo cáo trạng thái lấy từ repository trên branch, worktree, plan,
+  roadmap và history. Dùng `ak:watzup`.
+- Bạn cần reflection theo thời gian sau công việc đáng kể. Dùng `ak:journal`.
+- Bạn cần quyết định product bền vững hoặc policy hiện hành. Cập nhật ADR hay
+  owner tài liệu; handoff không phải authority bền vững.
+- Bạn cần implement, commit, publish hoặc deploy. Dùng workflow phù hợp và cấp
+  quyền riêng cho các tác động đó.
+
+## Chuẩn bị context handoff an toàn
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và cài Marketing
+  Kit cho runtime cùng scope hiện tại.
+- Mở project và đọc instruction, plan liên quan cùng handoff trước đó cho cùng
+  focus nếu có.
+- Xác định source artifact chứng minh trạng thái hiện tại và verification.
+- Quyết định focus cho session tiếp theo; mục này không bắt buộc nhưng giúp giữ
+  báo cáo đúng scope.
+- Loại secret, token, password, private URL, customer data và personal data
+  khỏi nội dung hội thoại cần giữ lại.
+
+Project phải có thư mục `plans` để dùng output chuẩn. Nếu không có, Skill hỏi
+một vị trí output an toàn trong project trước khi ghi.
+
+## Gọi Skill
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:handoff [next-session focus]` | Skill dùng context hội thoại và project hiện tại rồi ghi handoff sau khi resolve vị trí an toàn. |
+| Cursor | `/ak:handoff [next-session focus]` | Cách gọi bằng slash đã được người dùng xác minh cho AgentKit Skill đã cài. Mức độ nhìn thấy hội thoại và file tool có thể khác theo provider. |
+| Codex | `$ak:handoff [next-session focus]` | Codex dùng discovery native của Skill. Artifact handoff là Markdown có thể di chuyển, còn context hội thoại khả dụng phụ thuộc session. |
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:handoff "Tiếp tục review launch brief. Giữ quyết định audience đã duyệt, source pointer, legal review chưa giải quyết và trạng thái validation. Redact chi tiết customer"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:handoff "Tiếp tục review launch brief. Giữ quyết định audience đã duyệt, source pointer, legal review chưa giải quyết và trạng thái validation. Redact chi tiết customer"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:handoff "Tiếp tục review launch brief. Giữ quyết định audience đã duyệt, source pointer, legal review chưa giải quyết và trạng thái validation. Redact chi tiết customer"
+```
+
+  </Tab>
+</Tabs>
+
+Đọc [Runtime adapter](../../../concepts/runtime-adapters) trước khi giả định mỗi
+runtime cung cấp cùng lượng hội thoại trước đó hoặc context project.
+
+## Hiểu các giai đoạn
+
+1. **Load context chi phối.** Skill đọc instruction project, plan liên quan và
+   handoff trước đó cho cùng focus khi có.
+2. **Trích xuất trạng thái session.** Skill xác định goal, lý do quan trọng,
+   trạng thái hiện tại, quyết định chính cùng rationale, rejected approach,
+   blocker, verification và dependency còn mở.
+3. **Thay bản sao bằng pointer.** Skill tham chiếu source file, plan, issue,
+   ADR, commit, diff và test thay vì nhúng artifact lớn.
+4. **Redact nội dung nhạy cảm.** Skill loại secret, credential, private URL,
+   customer data và personal data. Khi credential quan trọng, Skill chỉ nêu vị
+   trí an toàn đã được duyệt.
+5. **Render đúng cấu trúc bắt buộc.** Handoff gồm chính xác các section bên dưới
+   và kết thúc bằng prompt ngắn yêu cầu agent tiếp theo đọc, xác minh các nguồn
+   đã liệt kê trước khi hành động.
+6. **Lưu một báo cáo.** Skill output một fenced Markdown block và lưu cùng nội
+   dung vào `plans/reports/handoff-YYYYMMDD-HHmm-<slug>.md`.
+
+| Section bắt buộc | Nội dung được giữ |
+| --- | --- |
+| `Goal` và `Why This Matters` | Outcome dự kiến và context của nó |
+| `Current State` | Phần đã hoàn thành, đang làm hoặc bị chặn |
+| `Key Decisions and Why` | Quyết định đã có cùng rationale |
+| `Rejected Approaches and Traps` | Hướng không nên lặp lại nếu chưa có bằng chứng mới |
+| `Verification Status` | Check đã chạy, kết quả và bằng chứng còn thiếu |
+| `Relevant Files and Pointers` | Nguồn session tiếp theo phải kiểm tra |
+| `Open Work and Dependencies` | Trạng thái và dependency còn lại, không phải danh sách lệnh chưa xác minh |
+
+## Giữ handoff riêng tư và không có thẩm quyền
+
+<Callout type="warn" title="Handoff có thể đi vào lịch sử repository">
+  Báo cáo là tệp được lưu trong project. Hãy review redaction trước khi stage
+  hoặc chia sẻ. Fact riêng tư được sao chép vào handoff sau đó có thể bị commit,
+  push, index hoặc hiển thị cho provider khác dù chính Skill không thực hiện
+  những hành động đó.
+</Callout>
+
+- Chỉ ghi trong project hoặc vị trí reports đã thống nhất.
+- Không sao chép root instruction, diff lớn, plan đầy đủ, customer record hay
+  giá trị credential vào báo cáo.
+- Ghi quyết định thực sự đã được đưa ra; không tạo quyết định mới trong handoff.
+- Mô tả phần việc mở dưới dạng trạng thái và dependency. Prompt cho agent mới
+  phải yêu cầu xác minh repository trước khi hành động.
+- Thao tác ghi tệp không cấp quyền Git staging, commit, push, publication,
+  deployment, outreach, account mutation, spend hoặc truy cập mạng bên ngoài.
+- Handoff không chứng minh branch, provider, campaign hay repository state vẫn
+  giữ nguyên sau thời điểm tạo.
+
+## Xác minh output
+
+Một lần chạy hoàn tất nên cung cấp:
+
+- Một fenced Markdown block ngắn gọn trong response.
+- Cùng nội dung tại `plans/reports/handoff-YYYYMMDD-HHmm-<slug>.md`, hoặc ở vị
+  trí an toàn được duyệt riêng khi project không có thư mục `plans`.
+- Đủ mọi section bắt buộc, trạng thái verification cụ thể và source pointer.
+- Blocker cùng dependency chưa giải quyết được nêu rõ.
+- Secret, private URL, customer data và personal data đã được redact.
+- Prompt cuối cho agent mới yêu cầu đọc tệp được liệt kê và đối chiếu handoff
+  với trạng thái repository hiện tại.
+
+Mở tệp đã lưu và so sánh với block trong response. Sau đó review diff
+repository trước khi quyết định báo cáo có nên vào version control không.
+
+## Xử lý sự cố an toàn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Runtime không nhận diện `ak:handoff` | Xác nhận target và scope Marketing, khởi động lại runtime rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+| Không có thư mục `plans` | Không tự tạo vị trí global. Chọn và duyệt path báo cáo an toàn trong project. |
+| Handoff giống báo cáo Git status | Dừng và dùng `ak:watzup`, hoặc ghi rõ claim repository là trạng thái hội thoại chưa xác minh. |
+| Báo cáo chứa secret hoặc record riêng tư | Loại chúng trước khi lưu; chỉ giữ source pointer an toàn khi cần. |
+| Tệp đã lưu khác response | Coi tệp là chưa xác minh, đối chiếu nội dung và kiểm tra lại redaction. |
+| Session tiếp theo thấy trạng thái đã cũ | Tin bằng chứng repository và provider hiện tại, sau đó cập nhật hoặc thay handoff thay vì làm theo instruction đã cũ. |
+
+Tiếp tục với [Tổng quan Marketing Kit](../../marketing) hoặc
+[Projects, artifact và checkpoint](../../../concepts/projects-artifacts-checkpoints)
+để hiểu khái niệm rộng hơn về persistence và ownership.
+
+## Biết các giới hạn hiện tại
+
+- Skill chỉ có thể giữ hội thoại và context project nhìn thấy trong session
+  hiện tại.
+- Skill không tự quét mọi branch, worktree, remote ref, roadmap hay bề mặt lịch
+  sử repository; `ak:watzup` sở hữu báo cáo đó.
+- Redaction là yêu cầu workflow, không đảm bảo dữ liệu nhạy cảm chưa từng bị lộ
+  trước đó trong session. Con người vẫn phải review.

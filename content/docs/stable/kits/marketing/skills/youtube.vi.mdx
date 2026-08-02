@@ -1,0 +1,188 @@
+---
+title: Tái sử dụng nội dung YouTube với ak:youtube
+description: Biến video YouTube được phép sử dụng thành blog post, bộ infographic hoặc bản nháp social có thể review qua workflow dùng VidCap.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:youtube` để trích xuất nội dung của video được phép sử dụng và tái sử
+dụng thành một trong ba deliverable có scope rõ ràng: blog post, bộ infographic
+hoặc tập bản nháp social. Skill route subcommand đã chọn, dùng VidCap.xyz khi
+workflow cần metadata, caption, summary, screenshot hoặc comment của video, và
+giữ URL nguồn đi cùng kết quả.
+
+## Chọn ak:youtube để tái sử dụng nội dung
+
+### Dùng ak:youtube khi
+
+- Bạn có URL YouTube và quyền sử dụng nội dung nguồn.
+- Bạn muốn output `blog`, `infographic` hoặc `social` dựa trên video đó.
+- Bạn cần caption, timestamp, screenshot hoặc comment làm bằng chứng cho bản
+  nháp.
+- Bạn có thể review quotation, claim, attribution, brand voice và mức độ phù
+  hợp với platform trước khi phát hành.
+
+### Chọn workflow khác khi
+
+- Bạn cần tạo video, script hoặc storyboard mới. Dùng `ak:video`.
+- Bạn chỉ cần thumbnail. Dùng `ak:youtube-thumbnail-design`.
+- Bạn cần chiến lược channel tổng quát, quản lý upload hoặc analytics đang hoạt
+  động. Bề mặt được route ở đây là tái sử dụng nội dung, không phải quản trị
+  channel.
+- Bạn không có quyền hoặc consent cần thiết để tải xuống, trích dẫn, biến đổi
+  hay phân phối lại nguồn.
+
+## Chuẩn bị nguồn và quyền truy cập provider
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận
+  Marketing Kit đã được cài cho runtime cùng scope hiện tại.
+- Cung cấp URL video YouTube hợp lệ và subcommand `blog`, `infographic` hoặc
+  `social` mong muốn.
+- Xác nhận video, transcript, frame, comment, nhạc, likeness và nội dung khác có
+  thể được xử lý cho mục đích dự kiến.
+- Cung cấp `VIDCAP_API_KEY` nếu dùng tuyến trích xuất qua VidCap.
+- Cho phép request mạng ra `https://vidcap.xyz/api/v1`; client đi kèm xác thực
+  bằng header `X-API-Key`.
+- Đảm bảo Python có thể chạy client đi kèm với `requests` và `python-dotenv` khi
+  workflow gọi trực tiếp.
+- Chọn project có quyền ghi, nơi các asset Markdown, HTML, PNG và JSON có thể
+  được tạo.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:youtube ...` | Phân phối native là mặc định; phân phối plugin rõ ràng cũng được hỗ trợ. Provider call vẫn cần credential cục bộ và quyền truy cập mạng. |
+| Cursor | `/ak:youtube ...` | Cách gọi bằng slash đã được người dùng xác minh. Điều này không chứng minh tool, browser hay Hook hoạt động giống nhau trên mọi thiết lập Cursor. |
+| Codex | `$ak:youtube ...` | Skill dùng discovery native của Codex. Hook chỉ được projection một phần và không làm thay đổi yêu cầu của VidCap. |
+
+Xem [Runtime adapter](../../../concepts/runtime-adapters) trước khi giả định
+parity ở mức component.
+
+## Chạy Skill
+
+Đặt subcommand trước, sau đó là URL YouTube và các constraint sáng tạo hữu ích.
+Hãy yêu cầu chỉ tạo bản nháp khi publish nằm ngoài lần chạy.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:youtube blog https://www.youtube.com/watch?v=VIDEO_ID Tạo bản nháp giáo dục có nguồn. Giữ timestamp, đánh dấu claim chưa chắc chắn và không publish
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:youtube blog https://www.youtube.com/watch?v=VIDEO_ID Tạo bản nháp giáo dục có nguồn. Giữ timestamp, đánh dấu claim chưa chắc chắn và không publish
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:youtube blog https://www.youtube.com/watch?v=VIDEO_ID Tạo bản nháp giáo dục có nguồn. Giữ timestamp, đánh dấu claim chưa chắc chắn và không publish
+```
+
+  </Tab>
+</Tabs>
+
+### Chọn output được route
+
+| Subcommand | Kết quả dự kiến | Quy ước output trong package |
+| --- | --- | --- |
+| `blog` | Bản nháp bài viết dài có attribution nguồn, metadata, heading, takeaway và CTA | `assets/articles/{date}-{slug}.md` |
+| `infographic` | Source infographic, bản export hình ảnh và dữ liệu hỗ trợ | `assets/infographic/{date}-{slug}.html`, `.png` và `.json` |
+| `social` | Bản nháp riêng theo platform cùng bộ tổng hợp tùy chọn | `assets/posts/{platform}/{date}-{slug}.md` và `assets/posts/{date}-{slug}-all-platforms.md` |
+
+Từ đầu tiên là router. Các thao tác như `caption`, `comments`, `info`,
+`summary` và `screenshot` thuộc client VidCap đi kèm được dùng bên trong
+workflow; chúng không phải subcommand cấp cao bổ sung của `ak:youtube`.
+
+## Theo các giai đoạn tái sử dụng nội dung
+
+1. **Xác nhận brief.** Skill xác định output được route, URL nguồn, audience,
+   voice, platform, attribution mong muốn và ranh giới quyền hạn.
+2. **Trích xuất bằng chứng nguồn.** Workflow có thể yêu cầu metadata, caption,
+   summary, screenshot hoặc comment qua VidCap. Tính khả dụng phụ thuộc video
+   và response của provider.
+3. **Chọn nội dung có thể dùng.** Skill sắp xếp key point, timestamp, quotation,
+   statistic, frame và phản ứng audience mà không mặc định coi chúng là claim
+   đã được xác minh.
+4. **Tạo bản nháp đã chọn.** Reference `blog`, `infographic` hoặc `social` định
+   hình artifact và path output thông thường.
+5. **Review content và visual.** Kiểm tra độ chính xác transcript, context của
+   quotation, attribution nguồn, tính nhất quán thương hiệu, bản export dễ đọc
+   và claim cần nguồn độc lập.
+6. **Dừng tại ranh giới đã duyệt.** Skill trình bày tệp và bằng chứng. Upload,
+   post, schedule hay thay đổi tài khoản vẫn là hành động riêng.
+
+## Giữ rõ quyền, phê duyệt và tác động bên ngoài
+
+<Callout type="warn" title="URL nguồn không đồng nghĩa có quyền">
+  Chỉ xử lý, tải xuống, trích dẫn, biến đổi và phân phối lại nội dung bạn được
+  phép dùng. Hãy có consent trước khi tái sử dụng likeness, giọng nói hoặc thông
+  tin riêng tư của một người, đồng thời review điều khoản platform cùng yêu cầu
+  hiện hành về copyright, publicity, privacy và quảng cáo.
+</Callout>
+
+| Nhóm công việc | Ranh giới thông thường |
+| --- | --- |
+| Hướng dẫn và soạn nháp | Skill có thể phân tích bằng chứng được cung cấp và tạo tệp nháp cục bộ. Hãy review mọi claim và quotation. |
+| Thay đổi cục bộ | Thư mục output và tệp artifact có thể được tạo hoặc thay trong project đã chọn. Xác nhận đích và giữ nguyên công việc không liên quan. |
+| Tác động provider và mạng | Request VidCap gửi URL nguồn cùng tùy chọn xử lý được yêu cầu tới dịch vụ bên ngoài. Tính khả dụng API, behavior model, quota và chi phí do provider kiểm soát. |
+| Tác động publish và tài khoản | Workflow không tự cấp quyền upload, post, schedule, đổi metadata, trả lời comment hay sửa tài khoản YouTube hoặc social. |
+
+Không đặt API key trong prompt, nội dung nguồn, frontmatter hay tệp được tạo.
+Giữ credential trong cơ chế secret đã được runtime chấp thuận.
+
+## Review output và bằng chứng
+
+Một lần chạy hữu ích nên để lại:
+
+- Các tệp Markdown, HTML, PNG hoặc JSON được yêu cầu tại path đã báo cáo.
+- URL YouTube gốc cùng đủ timestamp hoặc context transcript để truy vết phát
+  biểu quan trọng.
+- Phân tách rõ source fact, comment của người xem, summary được tạo và diễn giải
+  marketing mới.
+- Danh sách caption bị thiếu, frame không khả dụng, quotation chưa chắc chắn
+  hoặc claim cần nguồn khác.
+- Báo cáo ngắn nêu provider operation đã thực hiện, tệp đã tạo, kết quả review
+  và hành động bên ngoài còn chờ phê duyệt.
+
+Với infographic, hãy kiểm tra cả visual render trong browser và source data.
+Với output social, kiểm tra lại giới hạn platform hiện tại trước khi post. Với
+blog, xác minh direct quote bằng transcript hoặc video gốc thay vì chỉ tin bài
+viết được tạo.
+
+## Xử lý sự cố an toàn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Runtime không nhận diện `ak:youtube` | Xác nhận target cùng scope, mở session mới, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+| Skill không route được yêu cầu | Đặt chính xác một trong `blog`, `infographic` hoặc `social` trước, sau đó cung cấp URL. |
+| Xuất hiện `VIDCAP_API_KEY not set` | Thêm key qua cơ chế secret cục bộ đã duyệt; không dán vào prompt hoặc commit key. |
+| VidCap trả lỗi HTTP hoặc timeout | Giữ bằng chứng một phần, báo status rồi thử lại sau hoặc dùng source được phép đã cung cấp cục bộ. Không bịa transcript hay comment còn thiếu. |
+| Không có caption, comment hoặc screenshot | Coi input đó là không khả dụng. Yêu cầu transcript hay source asset thay vì suy diễn quotation hoặc frame chính xác. |
+| Output chứa claim không có căn cứ | Xóa hoặc qualify claim, truy vết về video và lấy nguồn độc lập khi claim cần xác minh. |
+| Tệp xuất hiện ngoài folder dự kiến | Dừng, kiểm tra diff và giữ công việc không liên quan. Xem [Projects, artifacts và checkpoints](../../../concepts/projects-artifacts-checkpoints). |
+
+Tiếp tục với [Tổng quan Marketing Kit](../../marketing), hoặc dùng
+[Cài đặt Kit](../../../guides/installing-kits) để xử lý discovery và lifecycle.
+
+## Biết các giới hạn hiện tại
+
+- Router trong package chỉ expose `blog`, `infographic` và `social`.
+- VidCap là dependency bên ngoài. Video private, đã gỡ, bị giới hạn vùng, giới
+  hạn tuổi, không có caption hoặc không được hỗ trợ theo cách khác có thể không
+  cung cấp bằng chứng mong đợi.
+- AI summary và article conversion có thể bỏ sót context hoặc tạo lỗi; comment
+  là phát biểu của audience, không phải fact đã xác minh.
+- Lựa chọn model, giới hạn provider, tính khả dụng, latency và chi phí có thể
+  thay đổi ngoài AgentKit. Skill không bảo đảm model hay kết quả cụ thể.
+- Bản nháp được tạo không đảm bảo search ranking, engagement, conversion hay
+  được platform chấp nhận.
+- Runtime projection phụ thuộc capability; browser, image generation và Skill
+  hỗ trợ có thể khác nhau ngay cả khi invocation thành công.

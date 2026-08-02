@@ -1,0 +1,151 @@
+---
+title: Build a reviewable knowledge graph with ak:graphify
+description: Turn a bounded code or document set into queryable graph artifacts while keeping extracted, inferred, and ambiguous relationships distinct.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:graphify` to turn code, documents, papers, images, or local media into a
+queryable relationship graph. It writes reusable visualization, report, JSON,
+and cache artifacts so you can explore structure before planning or editing.
+
+## Choose ak:graphify for relationship exploration
+
+### Use ak:graphify when
+
+- You need a high-level map of an unfamiliar codebase or document collection.
+- You want to explore dependencies, connected concepts, central nodes, or paths.
+- You need persistent graph artifacts that can be queried through an optional
+  MCP server.
+
+### Choose another workflow when
+
+- You need symbol-level go-to-definition or find-usages behavior. Use
+  [`ak:gkg`](./gkg).
+- You only need a bounded file map. Use [`ak:scout`](./scout).
+- You need raw context packaging instead of relationship extraction.
+- You cannot send documents or images to the configured model provider and
+  cannot exclude them from the input.
+
+## Prepare the input and runtime
+
+Install Python 3.10 or newer and the separately distributed `graphifyy` package.
+Choose the smallest input path, review ignored and generated content, estimate
+disk and provider use, and decide whether an ongoing watch process is allowed.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:graphify ...` | Native delivery can run the CLI, inspect generated artifacts, and use an explicitly configured MCP server. |
+| Cursor | `/ak:graphify ...` | Slash invocation is user-verified; CLI, provider, and MCP parity are not established. |
+| Codex | `$ak:graphify ...` | Native discovery is supported; Python packages, provider credentials, persistent processes, and MCP access depend on the session. |
+
+## Run the Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:graphify ./src --report "Map module dependencies, keep EXTRACTED and INFERRED edges separate, exclude secrets and generated files, and do not start a watch process or MCP server."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:graphify ./src --report "Map module dependencies, keep EXTRACTED and INFERRED edges separate, exclude secrets and generated files, and do not start a watch process or MCP server."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:graphify ./src --report "Map module dependencies, keep EXTRACTED and INFERRED edges separate, exclude secrets and generated files, and do not start a watch process or MCP server."
+```
+
+  </Tab>
+</Tabs>
+
+| Input or option | Effect | Boundary |
+| --- | --- | --- |
+| `<path>` | Builds a graph from the selected folder | Writes `graphify-out/` relative to the run location |
+| `--report` | Emphasizes the generated graph report | Report claims still require source review |
+| `--watch` | Rebuilds incrementally when files change | Starts ongoing observation and repeated writes |
+| `--mcp` | Makes the persistent graph available for MCP-backed queries | Server installation and configuration are separate requirements |
+| Full package extras | Add document, media, community, or database features | Can add large dependencies and provider or storage requirements |
+
+## Understand the observable stages
+
+1. **Resolve scope:** inventory selected files, exclusions, media types, and
+   repository instructions before processing.
+2. **Extract structure:** parse supported code with tree-sitter and tag direct
+   imports, calls, or inheritance as `EXTRACTED`.
+3. **Process other media:** transcribe supported audio or video locally when the
+   needed components exist.
+4. **Extract semantics:** send selected documents or images to the configured
+   model provider and tag derived relationships as `INFERRED` or `AMBIGUOUS`.
+5. **Assemble artifacts:** write the graph JSON, interactive HTML, report, and
+   incremental cache beneath `graphify-out/`.
+6. **Review or serve:** inspect surprising paths and confidence tags; start an
+   MCP server only when separately authorized.
+
+## Keep privacy and graph claims bounded
+
+<Callout type="warn" title="Input type changes the data boundary">
+  Code AST extraction and supported media transcription are described as local.
+  Selected documents and images are sent to the configured model provider for
+  semantic extraction. Exclude sensitive files or obtain approval before that
+  transfer.
+</Callout>
+
+- Do not include secret stores, credentials, private customer material, build
+  output, or unrelated archives merely because they are under the input path.
+- An `EXTRACTED` edge is parser evidence, not proof of runtime behavior or
+  architectural intent. An `INFERRED` edge is a model interpretation and needs
+  source review. `AMBIGUOUS` edges must remain visibly unresolved.
+- Installing `graphifyy` or extras changes the Python environment. The upstream
+  `graphify install` command is not needed to install the AgentKit Skill.
+- Starting watch or MCP modes does not authorize persistent background service,
+  network exposure, or edits to client configuration.
+- Review existing `graphify-out/` content before overwriting or cleaning it; the
+  cache may be evidence for how a prior graph was produced.
+
+## Verify outputs and evidence
+
+A complete run should name the input root, exclusions, file types processed,
+local versus provider-backed stages, errors or skipped files, and the exact
+artifacts created:
+
+- `graphify-out/graph.html` for interactive exploration.
+- `graphify-out/GRAPH_REPORT.md` for prominent nodes and suggested questions.
+- `graphify-out/graph.json` for persistent queries or MCP serving.
+- `graphify-out/cache/` for incremental file-hash state.
+
+Open the HTML and report, sample important nodes against source, and confirm
+that the JSON retains provenance tags. Do not report the graph as complete when
+unsupported files, provider failures, or ambiguous relationships remain.
+
+## Troubleshoot safely
+
+| Symptom | Safe next step |
+| --- | --- |
+| `graphify` is missing | Install the approved `graphifyy` distribution in the intended environment and verify the executable. |
+| The first build is slow or large | Narrow the path, exclude generated material, and record partial coverage instead of widening resources silently. |
+| Document or image extraction fails | Preserve local AST results, report the provider gap, and do not invent semantic edges. |
+| The graph contains a surprising connection | Inspect provenance and source nodes; downgrade or remove unsupported inference. |
+| Watch mode keeps writing | Stop the process, inspect changed artifacts, and rerun one-shot if continuous monitoring was not intended. |
+| MCP cannot query the graph | Confirm the selected `graph.json`, optional MCP package, process, and client configuration. |
+| The runtime cannot find the Skill | Confirm target and scope, restart the session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+## Know the current limits
+
+- Language parsing, semantic extraction, transcription, clustering, and MCP
+  features depend on separately installed package extras.
+- Model-derived graph quality depends on provider availability and the selected
+  model; graph proximity does not prove causation or ownership.
+- The release evidence describes the shipped workflow but does not establish
+  current upstream package behavior or end-to-end runtime parity.
+- Stable and beta contain identical `ak:graphify` source.
+
+Continue with [`ak:gkg`](./gkg) for symbol navigation or [`ak:plan`](./plan) to
+turn verified graph evidence into a delivery roadmap.

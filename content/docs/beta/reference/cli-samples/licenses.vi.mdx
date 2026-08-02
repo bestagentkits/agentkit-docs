@@ -1,0 +1,91 @@
+---
+title: ak licenses
+description: Query trực tiếp grant Kit AgentKit bằng phiên cục bộ hiện tại và hiểu hợp đồng đầu ra dùng chung với whoami.
+---
+
+Dùng `ak licenses` trước khi cài Kit remote trả phí để xác nhận tài khoản hiện
+tại có grant đang hoạt động.
+
+## Cách dùng
+
+```bash
+ak licenses
+```
+
+Lệnh được công bố không có argument theo vị trí. Implementation hiện tại bỏ qua
+token theo vị trí thừa; đừng dựa vào hành vi này.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--registry-url <url>` | Biến môi trường hoặc mặc định của bản phát hành | Ghi đè registry dùng cho entitlement request. |
+
+Các cờ đầu ra dùng chung được mô tả trong [quy ước CLI](../cli-conventions).
+Lệnh không bao giờ hỏi; `--yes` và `--no-interactive` không thay đổi hành vi.
+
+## Trước khi chạy
+
+`ak licenses` dùng cùng phiên và entitlement query trực tiếp như `ak whoami`.
+Lệnh đọc `~/.agentkit/auth/session.json`, trừ khi `AGENTKIT_HOME` thay đổi thư
+mục gốc. CLI slot được ưu tiên hơn App slot.
+
+```bash
+ak login --api-key ak_live_... --no-interactive
+ak licenses
+```
+
+Không có phiên đã lưu vẫn là trạng thái thành công: lệnh không gửi request qua
+mạng, in `not logged in` và thoát `0`. Khi có phiên, lệnh kiểm tra registry của
+phiên, yêu cầu grant hiện tại và có thể xoay hoặc mint lại credential CLI hết
+hạn một lần. Việc gia hạn thành công sẽ ghi lại tệp phiên.
+
+Không có grant cache offline và không thay đổi entitlement. Lệnh chỉ báo grant;
+không kích hoạt, mua, revoke hay cài Kit.
+
+## Đầu ra và luồng
+
+Stdout dành cho người dùng hiện gồm email tài khoản, rồi từng grant
+`kit (status)`. Dù phần trợ giúp tập trung vào Kit, lệnh dùng cùng view model với
+`ak whoami`.
+
+JSON cũng chủ đích dùng chung `kind=auth.whoami`, không dùng kind
+`auth.licenses` riêng:
+
+```json
+{
+  "schema_version": 1,
+  "kind": "auth.whoami",
+  "data": {
+    "authenticated": true,
+    "email": "you@example.com",
+    "authMethod": "api_key",
+    "licenses": [
+      {"kitId":"engineer","status":"active","grantType":"license","productId":"engineer"}
+    ]
+  }
+}
+```
+
+Khi chưa xác thực, các trường tài khoản và license tuỳ chọn bị lược bỏ. Lỗi
+runtime, registry và session dùng stderr cùng error envelope JSON dùng chung.
+Lỗi parse cờ có thể vẫn là plain text.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Query hoàn tất, bao gồm trạng thái chưa xác thực hoặc danh sách grant rỗng. | Kiểm tra `data.authenticated`, rồi `licenses[].kitId` và `status` tương ứng. |
+| `1` | Session store lỗi, registry mismatch, gia hạn thất bại hoặc grant request trực tiếp thất bại. | Xác thực lại với registry dự định dùng rồi thử lại. |
+| `2` | Không parse được cờ. | Sửa cách gọi. |
+
+Lệnh không có preview, apply, force, backup hay rollback. Gia hạn credential là
+thay đổi cục bộ duy nhất có thể xảy ra.
+
+## Lệnh liên quan và giới hạn
+
+- [Kiểm tra tài khoản và grant](./whoami)
+- [Đăng nhập](./login)
+- [Cài một route Kit đã được rà soát](./kit-init)
+- [Thông tin đầy đủ của lệnh `ak licenses`](../cli/ak_licenses)
+- [Xử lý sự cố cài Kit](../../troubleshooting/kit-installation)

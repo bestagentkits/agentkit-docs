@@ -1,0 +1,71 @@
+---
+title: ak projects add
+description: Register an existing directory by its canonical path or refresh the timestamp of an existing registry entry.
+---
+
+Use `ak projects add` to register a cloned, moved, or otherwise existing
+directory that AgentKit does not yet discover automatically.
+
+## Usage
+
+```bash
+ak projects add <path>
+```
+
+The path can be relative or absolute and must already exist as a directory.
+This command does not initialize the directory, inspect AgentKit ownership, or
+install project content. Use `ak init` when you need those lifecycle effects.
+
+## Examples
+
+```bash
+ak projects add ./myproj
+ak projects add . --json
+```
+
+The command resolves the path to an absolute path and follows symlinks. The
+stored name is the final component of that canonical directory, which can
+differ from the symlink name supplied on the command line.
+
+## Mutation behavior
+
+A new canonical directory creates one entry. Re-adding the same canonical
+directory is idempotent with respect to entry count: it re-derives the name and
+refreshes `updated_at` while preserving `registered_at`.
+
+The registry save is atomic under the project-registry advisory lock. The
+command does not prompt and has no preview, `--force`, backup, or rollback.
+It can register any existing directory, so verify the path before running it.
+
+If `projects.json` is malformed or uses an unsupported schema version, the
+underlying add operation starts a fresh registry and writes only the new entry.
+It does not retain an automatic backup of the old bytes.
+
+## Output and JSON
+
+Human output reports whether the entry was `registered` or `updated`, followed
+by its name and canonical path. JSON success uses `kind=projects.add` with
+`name`, `dir`, `registered_at`, `updated_at`, and `was_update` under `data`.
+`--quiet` suppresses success stdout.
+
+Canonical paths and timestamps may expose local user or workspace names.
+Review output before sharing it. The command is local and performs no network,
+auth, provider, cache, or child-process operation.
+
+## Exit status
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The directory was newly registered or its existing entry was refreshed. |
+| `1` | The path is absent or not a directory, canonicalization failed, or registry lock/read/write failed. |
+| `2` | Argument or flag parsing was invalid. |
+
+JSON command errors are written as an error envelope on stderr after renderer
+setup. Flag-parse errors can still be plain text.
+
+## Related commands
+
+- [List registered projects](./projects-list)
+- [Show the entry](./projects-show)
+- [Project registry overview](./projects)
+- [Complete `ak projects add` facts](../cli/ak_projects_add)

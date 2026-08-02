@@ -1,0 +1,198 @@
+---
+title: Cô lập Git work với ak:worktree
+description: Kiểm tra trạng thái repository, preview và tạo isolated worktree, audit health rồi chỉ cleanup sau khi review destructive effect.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:worktree` để tạo Git checkout riêng cho feature, kiểm tra worktree hiện
+có, audit branch health hoặc dọn stale metadata. Skill xử lý standalone
+repository, monorepo dựa trên submodule và công việc nằm trong superproject.
+
+## Chọn ak:worktree cho Git isolation
+
+### Dùng ak:worktree khi
+
+- Bạn muốn isolate feature hoặc fix khỏi checkout hiện tại.
+- Parallel worker cần branch cùng directory riêng.
+- Bạn cần kiểm tra worktree path, branch, dirty state hoặc divergence.
+- Stale Git worktree metadata cần preview và cleanup.
+- Monorepo hoặc submodule setup làm worktree root đúng trở nên khó xác định.
+
+### Chọn workflow khác khi
+
+- Bạn chỉ cần branch mới trong checkout hiện tại.
+- Bạn cần operating-system, container, credential hoặc network isolation.
+- Bạn muốn stash hay giữ uncommitted change từ checkout hiện tại.
+- Bạn sẵn sàng implement trong worktree đã có. Dùng `ak:cook` hoặc implementation
+  workflow có ownership tại đó.
+
+## Chuẩn bị Git và runtime
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận Kit
+  chứa `ak:worktree` đã được cài cho runtime cùng scope đang dùng.
+- Chạy từ bên trong Git repository.
+- Dùng Node.js 18 trở lên và Git 2.5 trở lên.
+- Kiểm tra current change. Worktree mới bắt đầu từ branch hoặc commit; nó không
+  copy uncommitted change từ checkout khác.
+- Biết chính xác worktree hoặc branch trước mọi removal.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:worktree ...` | Skill dùng bundled Node script cùng Git executable khả dụng trong session. |
+| Cursor | `/ak:worktree ...` | Slash invocation theo cách gọi Skill do người dùng xác minh. Shell cùng filesystem effect phụ thuộc permission Cursor đang hoạt động. |
+| Codex | `$ak:worktree ...` | Native Skill discovery được hỗ trợ. Git cùng filesystem effect vẫn theo sandbox và approval policy Codex hiện tại. |
+
+## Chạy Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:worktree "fix checkout retry handling; base on main; preview before creating"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:worktree "fix checkout retry handling; base on main; preview before creating"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:worktree "fix checkout retry handling; base on main; preview before creating"
+```
+
+  </Tab>
+</Tabs>
+
+Skill chuyển natural description thành bundled worktree script. Skill nhận diện
+`fix`, `refactor`, `docs`, `test`, `chore` và `perf`; description bình thường
+khác mặc định thành branch `feat/`.
+
+| Command hoặc tùy chọn | Hành vi |
+| --- | --- |
+| `info` | Báo repository type, detected base, project, worktree root, tên environment file và dirty-state count |
+| `create [project] <feature>` | Tạo hoặc attach branch trong worktree mới; monorepo yêu cầu project |
+| `list` | Liệt kê normalized worktree record |
+| `status` | Thêm current/main flag, dirty state, branch existence, detected base và ahead/behind count |
+| `remove <name-or-path>` | Force-remove một matched worktree, rồi thử `git branch -d` an toàn cho branch của nó |
+| `prune` | Xóa stale worktree metadata; `--dry-run` dùng để preview |
+| `--prefix <type>` | Chọn branch prefix; Skill thường suy ra từ request |
+| `--base <branch>` | Override automatic base detection sau khi validate ref tồn tại |
+| `--no-prefix` | Giữ supplied exact branch name, gồm case và safe slash segment |
+| `--worktree-root <path>` | Override worktree directory đã chọn sau path validation |
+| `--checkout-submodules` | Initialize và checkout submodule recursive sau creation |
+| `--dry-run` | Preview `create`, `remove` hoặc `prune` mà không áp dụng operation đó |
+| `--json` | Trả structured result cùng error cho workflow |
+
+## Hiểu naming và placement
+
+Khi bạn đưa normal feature description, Skill tạo lowercase kebab-case slug tối
+đa 50 ký tự và thêm derived prefix. Khi bạn đưa exact branch name có uppercase,
+issue key hoặc slash segment, Skill dùng `--no-prefix` và giữ phiên bản đã
+validate của tên đó.
+
+Base detection kiểm tra `dev`, `develop`, `main`, rồi `master`, dùng local hoặc
+`origin` branch tương ứng. Nếu không có, script fallback về `main`; dùng
+`--base` khi fallback đó không đúng.
+
+Worktree root được chọn theo thứ tự:
+
+1. **Explicit path ưu tiên cao nhất.** `--worktree-root` được validate trước.
+2. **Environment override tiếp theo.** `WORKTREE_ROOT` được dùng khi đã set và
+   hợp lệ.
+3. **Superproject sở hữu submodule worktree.** Root nằm dưới topmost
+   superproject được tìm thấy.
+4. **Monorepo giữ worktree bên trong.** Skill dùng directory `worktrees` dưới
+   monorepo root.
+5. **Standalone repository dùng sibling directory.** Cách này tránh đặt
+   worktree trong repository đang được checkout.
+
+## Hiểu điều gì thay đổi
+
+1. **Skill kiểm tra repository.** Skill báo repository type, project choice,
+   base branch, root selection và dirty state.
+2. **Skill giải quyết project và branch naming.** Ambiguous monorepo match cần
+   selection; feature, base hoặc path input không hợp lệ sẽ dừng run.
+3. **Skill preview khi được yêu cầu.** Dry-run trả branch, base, path, project
+   cùng warning mà không tạo file hay ref.
+4. **Skill tạo worktree.** Skill tạo worktree directory cùng branch mới từ base,
+   hoặc attach local hay remote branch hiện có.
+5. **Skill copy environment template.** Tệp dạng `.env*.example` được copy vào
+   worktree mới với `.example` bị bỏ. Tệp đã copy là template; content vẫn cần
+   review.
+6. **Skill xử lý submodule cùng dependency tùy chọn.** Submodule chỉ được
+   checkout với explicit option. Sau creation, workflow có thể chạy package
+   manager hoặc language setup suy ra từ project file.
+7. **Skill báo evidence.** Structured result gồm path, branch, base cùng source,
+   project, copied template và warning.
+
+## Giữ quyền phê duyệt và an toàn ở bạn
+
+<Callout type="warn" title="Remove force-delete worktree checkout">
+  Bundled `remove` operation chạy forced worktree removal. Uncommitted change
+  trong worktree đó có thể mất. Luôn kiểm tra `status`, xác định exact path và
+  chạy `remove ... --dry-run` trước khi duyệt removal.
+</Callout>
+
+Sau khi remove worktree, script chỉ xóa branch bằng safe check `-d`. Unmerged
+branch được giữ và báo rõ. `prune` dọn stale Git metadata; hãy preview trước khi
+audit repository chưa quen.
+
+Creation có thể ghi branch, directory, copied environment template, submodule
+checkout và dependency artifact. Dependency installation có thể dùng network
+và chạy package lifecycle behavior. Yêu cầu preview và nêu có cho phép
+installation không khi effect đó quan trọng.
+
+## Xác minh kết quả
+
+Create thành công nên cung cấp:
+
+- Absolute worktree path cùng cách root được chọn.
+- Exact branch cùng base branch, gồm base là explicit hay auto-detected.
+- Monorepo project đã chọn khi áp dụng.
+- Submodule có được checkout hay không.
+- Environment template đã copy cùng warning.
+- Clean `status` record hoặc giải thích rõ expected dirty artifact sau setup.
+
+Trước implementation, vào reported directory và xác nhận branch, base, project
+file, copied template cùng dependency state. Git command thành công không chứng
+minh checkout mới chứa local edit từ worktree khác.
+
+## Xử lý sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Command báo không có Git repository | Chạy từ repository hoặc intended submodule checkout. |
+| Detected base sai | Truyền ref tồn tại bằng `--base`; script reject value thiếu hoặc không an toàn. |
+| Nhiều monorepo project match | Chọn exact project thay vì partial name mơ hồ. |
+| Branch đã được checkout | Dùng lại worktree đó hoặc chọn branch khác; Git không checkout một branch trong hai worktree. |
+| Target path đã tồn tại | Kiểm tra directory cùng known worktree; không overwrite. |
+| Current checkout dirty | Giữ hoặc commit change đó riêng. Creation cảnh báo nhưng không copy chúng sang worktree mới. |
+| Submodule checkout fail sau create | Giữ worktree mới, kiểm tra reported error và chỉ chạy submodule command thủ công sau khi giải quyết access. |
+| Removal tìm thấy nhiều match | Dùng full absolute path và preview lại. |
+| Runtime không nhận diện Skill | Xác nhận target cùng scope, mở lại session, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Tiếp tục với `ak:cook` trong checkout mới, hoặc xem
+[Project, artifact và checkpoint](../../../concepts/projects-artifacts-checkpoints)
+cùng [Runtime adapter](../../../concepts/runtime-adapters).
+
+## Biết các giới hạn hiện tại
+
+- Script phát hiện monorepo từ Git submodule; workspace layout khác có thể bị
+  xem là standalone repository.
+- Worktree isolate Git checkout, không isolate process, secret, port, cache,
+  database hay external service.
+- Automatic dependency setup phụ thuộc project file nhận diện được cùng package
+  manager khả dụng trong session.
+- Test suite bao phủ command output, naming, validation, dry-run, status, prune
+  cùng nhiều path và monorepo case, nhưng một số monorepo test skip khi fixture
+  không khả dụng.
+- Stable và beta chứa Skill cùng script behavior `ak:worktree` giống nhau.

@@ -1,0 +1,185 @@
+---
+title: Chứng minh root cause với ak:debug
+description: Điều tra lỗi code và hệ thống một cách có phương pháp, giữ nguyên chuỗi bằng chứng và xác minh mọi correction trước khi tuyên bố thành công.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:debug` để biến triệu chứng lỗi thành root cause có thể tái hiện và được
+chứng minh bằng bằng chứng. Skill có thể lần theo code path, đối chiếu log cùng
+sự kiện CI, chẩn đoán vấn đề database hoặc performance và xác minh correction
+đúng nguyên nhân mà không che các hypothesis đã thất bại.
+
+## Chọn ak:debug khi chưa biết nguyên nhân
+
+### Dùng ak:debug khi
+
+- Bug, test thất bại, build error hoặc behavior bất thường cần được chẩn đoán.
+- Stack trace hiển thị triệu chứng cách xa input hoặc state sai ban đầu.
+- Cần đối chiếu CI, server log, database behavior hoặc nhiều component.
+- Latency, resource exhaustion hoặc query performance đã suy giảm.
+- Bạn cần bằng chứng mới trước khi nói một issue đã được sửa.
+
+### Chọn workflow khác khi
+
+- Root cause đã được chứng minh và bạn muốn pipeline sửa lỗi đầy đủ có guard.
+  Dùng `ak:fix`.
+- Bạn chỉ cần chạy một validation suite đã biết. Dùng `ak:test`.
+- Bạn muốn review độc lập một diff, commit hoặc pull request. Dùng
+  `ak:code-review`.
+- Behavior không bị lỗi nhưng hướng delivery chưa rõ. Dùng `ak:brainstorm` hoặc
+  `ak:plan`.
+
+## Chuẩn bị bằng chứng và runtime
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận
+  Engineer Kit đã được cài cho đúng runtime cùng scope bạn đang dùng.
+- Cung cấp error, assertion thất bại hoặc behavior quan sát được chính xác, cùng
+  behavior mong đợi và cách tái hiện nhỏ nhất đã biết.
+- Giữ project, test, thay đổi gần đây và instruction của repository liên quan ở
+  trạng thái có thể truy cập.
+- Với điều tra CI hoặc server, cung cấp log cùng time window liên quan. Cần
+  quyền `gh` đã xác thực để kiểm tra GitHub Actions.
+- Với chẩn đoán database hoặc production, chỉ cấp credential và quyền truy cập
+  environment mà bạn thực sự muốn lần chạy sử dụng.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:debug ...` | Phân phối native là mặc định; phân phối plugin rõ ràng cũng được hỗ trợ. |
+| Cursor | `/ak:debug ...` | Cách gọi bằng slash đã được người dùng xác minh. Điều này không thiết lập runtime parity đầy đủ. |
+| Codex | `$ak:debug ...` | Skill dùng discovery native của Codex; không suy ra parity rộng hơn cho Hook và statusline Engineer. |
+
+Xem [Runtime adapter](../../../concepts/runtime-adapters) để hiểu khác biệt ở
+cấp target.
+
+## Mô tả lỗi
+
+Skill nhận mô tả error hoặc issue. Skill không công bố mode flag; bằng chứng sẽ
+quyết định kỹ thuật điều tra nào được tải.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:debug "pnpm test fails in session-cache.test.ts with 'expected 1 write, received 2'. It started after the cache invalidation change. Reproduce with the single test and do not modify production data."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:debug "pnpm test fails in session-cache.test.ts with 'expected 1 write, received 2'. It started after the cache invalidation change. Reproduce with the single test and do not modify production data."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:debug "pnpm test fails in session-cache.test.ts with 'expected 1 write, received 2'. It started after the cache invalidation change. Reproduce with the single test and do not modify production data."
+```
+
+  </Tab>
+</Tabs>
+
+Input hữu ích nêu triệu chứng chính xác, lệnh tái hiện, behavior mong đợi và
+thực tế, thời điểm lỗi bắt đầu, environment bị ảnh hưởng cùng ranh giới quyền
+hạn. Với incident, hãy thêm timestamp, request hoặc run ID, impact và các hệ
+thống có thể liên quan.
+
+## Hiểu điều gì xảy ra trong một lần chạy
+
+1. **Skill thiết lập trạng thái lỗi.** Skill đọc đầy đủ error cùng stack trace,
+   tái hiện issue khi có thể, kiểm tra thay đổi gần đây và ghi baseline mà bước
+   verification sau đó phải lặp lại.
+2. **Skill thu thập bằng chứng có giới hạn.** Skill kiểm tra code, caller, test,
+   configuration, log, metric, database state hoặc browser behavior liên quan.
+   Incident nhiều component nhận timeline cùng phép kiểm tra dữ liệu qua từng
+   boundary.
+3. **Skill lần theo root cause.** Skill đi ngược bad state qua call chain, so
+   sánh pattern đang hoạt động và xác định trigger gốc thay vì dòng nơi triệu
+   chứng cuối cùng xuất hiện.
+4. **Skill kiểm tra từng hypothesis.** Mỗi hypothesis có experiment nhỏ nhất
+   hữu ích. Hypothesis bị bác bỏ vẫn được ghi lại; nhiều lần thất bại đưa
+   workflow về thu thập bằng chứng thay vì chồng thêm fix.
+5. **Skill phát triển response đúng nguyên nhân.** Khi correction thuộc scope
+   lần chạy, Skill sửa nguồn của defect, thêm validation layer phù hợp và tránh
+   cleanup không liên quan. Nếu không, Skill bàn giao diagnosis đã chứng minh
+   cho `ak:fix`.
+6. **Skill xác minh và báo cáo.** Skill lặp lại reproduction ban đầu, kiểm tra
+   bề mặt test cùng hệ thống bị ảnh hưởng và chỉ báo cáo claim được hỗ trợ bởi
+   command output, log, metric hoặc bằng chứng hình ảnh mới.
+
+Với frontend, gate cuối có thể gồm screenshot, interaction check, kiểm tra
+console và responsive verification. Trạng thái login hoặc cookie Chrome thật
+cần browser path nhận biết profile; trang generic có thể dùng browser cô lập
+hoặc test native của project.
+
+## Giữ quyền điều tra trong ranh giới
+
+<Callout type="warn" title="Bằng chứng phải có trước correction">
+  Skill không được đề xuất fix trước khi có thể tái hiện hoặc thiết lập lỗi bằng
+  cách khác và lần ra root cause. “Probably” là tín hiệu cần thu thêm bằng
+  chứng, không phải quyền sửa tệp.
+</Callout>
+
+- Đọc source cùng log local không cấp quyền truy cập private file không liên
+  quan.
+- Kiểm tra CI run khác với chạy lại run đó. CI run mới, deployment, rollback
+  hoặc mutation bên ngoài cần phê duyệt riêng.
+- Database query cần đúng credential và environment dự kiến. Đừng chạy thao tác
+  ghi, phân tích tốn kém hoặc experiment production chỉ vì có lệnh chẩn đoán.
+- Instrumentation tạm thời thay đổi workspace và phải được nhận diện, review,
+  rồi xóa hoặc giữ lại có chủ đích.
+- Sau ba correction cycle thất bại, workflow dừng và yêu cầu bạn đánh giá lại
+  architecture hoặc scope trước lần thử khác.
+- Một test hẹp pass không chứng minh blast radius an toàn. Completion vẫn cần
+  reproduction ban đầu cùng các check rộng hơn liên quan.
+
+## Xác minh kết quả
+
+Kết quả debugging hữu ích nên cung cấp:
+
+- Triệu chứng, reproduction, behavior mong đợi và behavior thực tế chính xác.
+- Timeline hoặc chuỗi bằng chứng call chain từ trigger tới lỗi hiển thị.
+- Root cause đã xác nhận, điều kiện làm lộ lỗi và blast radius.
+- Các hypothesis đã kiểm tra, gồm bằng chứng bác bỏ alternative.
+- Correction nhỏ nhất đúng nguyên nhân hoặc handoff rõ ràng cho `ak:fix`.
+- Bằng chứng verification before-and-after mới khi có correction.
+- Diagnostic report ngắn gọn với impact, finding, recommendation và câu hỏi
+  chưa giải quyết.
+- Screenshot frontend cùng phát hiện console khi visual verification áp dụng.
+
+Chỉ coi diagnosis hoàn tất khi câu root-cause nêu defect cụ thể và chuỗi bằng
+chứng giải thích cả trigger lẫn triệu chứng. Chỉ coi correction hoàn tất khi
+reproduction ban đầu cùng bề mặt liên quan rộng hơn pass verification mới.
+
+## Xử lý sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Không thể tái hiện issue | Giữ nguyên environment, input, timing và log chính xác. Thêm observation point thay vì đoán. |
+| Error xuất hiện sâu trong call stack | Lần ngược từng caller cùng value tới khi tìm thấy input hoặc state sai ban đầu. |
+| Test làm bẩn tệp hoặc shared state | Cô lập test file và chỉ dùng script tìm polluter đi kèm sau khi điều chỉnh test command cùng target path cho project. |
+| CI pass local nhưng fail remote | So sánh runtime version, environment, permission, dependency và failed step với các step trước đó. |
+| Claim performance thiếu số liệu | Ghi baseline cùng measurement hiện tại, xác định layer chậm và chỉ đổi một biến mỗi lần. |
+| Không có frontend verification | Dùng browser test native của project khi có thể và báo rõ bằng chứng hình ảnh còn thiếu. |
+| Runtime không nhận diện Skill | Xác nhận target cùng scope, mở runtime session mới, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Tiếp tục với `ak:fix` khi root cause đã được chứng minh và cần repair có guard,
+hoặc dùng `ak:test` cùng `ak:code-review` để verification độc lập.
+
+## Biết các giới hạn hiện tại
+
+- Skill chỉ có thể kiểm tra code, log, metric, tool, credential và environment
+  có trong session hiện tại.
+- Log correlation cùng performance analysis chỉ hỗ trợ claim nằm trong captured
+  window và instrumentation.
+- Bằng chứng browser, CI, database và production phụ thuộc quyền truy cập bên
+  ngoài và có thể phát sinh chi phí vận hành hoặc provider.
+- Cách gọi Cursor bằng slash là bằng chứng do người dùng xác minh, không phải
+  chứng minh runtime parity đầy đủ.
+- Package stable và beta chứa cùng workflow, reference và helper script
+  `ak:debug`.

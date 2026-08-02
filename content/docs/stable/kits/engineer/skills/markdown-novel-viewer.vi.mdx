@@ -1,0 +1,210 @@
+---
+title: Đọc Markdown trong browser với ak:markdown-novel-viewer
+description: Serve một Markdown file hoặc directory qua local reader yên tĩnh với navigation, syntax highlighting, Mermaid rendering và network boundary rõ ràng.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:markdown-novel-viewer` để đọc Markdown file dài trong browser interface
+tập trung kiểu sách hoặc browse một directory document. Skill khởi động HTTP
+server bằng Node.js, render Markdown theo request, resolve local image và thêm
+navigation, reading progress, syntax highlighting cùng Mermaid diagram.
+
+## Chọn ak:markdown-novel-viewer để đọc
+
+### Dùng ak:markdown-novel-viewer khi
+
+- Bạn muốn view ít xao nhãng cho RFC, runbook, design document, report,
+  specification, plan hoặc long-form manuscript.
+- Bạn muốn browse document directory và theo Markdown link trực quan.
+- Bạn muốn heading, table of contents, code highlighting, theme và font control,
+  reading progress hay previous và next navigation riêng cho plan.
+- Bạn muốn Mermaid block được render trong browser và có thể cho phép CDN
+  request bắt buộc.
+
+### Chọn workflow khác khi
+
+- Bạn cần self-contained HTML file thay vì server đang chạy. Dùng HTML
+  generation mode trong `ak:preview`.
+- Bạn cần edit hoặc validate Markdown content. Dùng `ak:docs` hay authoring Skill
+  phù hợp trước khi preview.
+- Bạn cần Mermaid source artifact được xác minh độc lập với viewer này. Dùng
+  `ak:mermaidjs-v11`.
+- Content không đáng tin hoặc nhạy cảm và không thể render an toàn thành HTML hay
+  expose qua local HTTP process.
+
+## Chuẩn bị Node, source và browser access
+
+Trước khi bắt đầu:
+
+- Hoàn tất [Onboarding](../../../getting-started/onboarding), rồi xác nhận
+  Engineer Kit được cài cho runtime và scope hiện tại.
+- Cung cấp một Markdown file hoặc một directory. Relative path resolve từ
+  current working directory.
+- Chuẩn bị Node.js cùng npm dependency của Skill. Package khai báo `marked`,
+  `highlight.js` và `gray-matter`; khi chưa cài, Markdown rendering trả HTTP 500.
+- Duyệt dependency installation riêng. Chạy `npm install` trong Skill directory
+  sẽ ghi dependency artifact và dùng package registry.
+- Quyết định browser có được truy cập Google Fonts, cdnjs và jsDelivr không.
+  Rendered page tải font, Highlight.js theme CSS cùng Mermaid 11 từ các public
+  CDN đó.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:markdown-novel-viewer ...` | Delivery native có thể khởi động Node server đi kèm và mở local browser khi process cùng browser tool khả dụng. |
+| Cursor | `/ak:markdown-novel-viewer ...` | Cách gọi slash đã được người dùng xác minh; lifecycle của background process và browser opening phụ thuộc Cursor. |
+| Codex | `$ak:markdown-novel-viewer ...` | Hỗ trợ native Skill discovery; browser availability, port exposure và detached-process handling phụ thuộc session đang hoạt động. |
+
+Input được khai báo là `[file-or-directory]`. Hãy nêu path, host, port policy,
+browser-opening preference, background hoặc foreground lifecycle, network access
+và stop behavior khi các ranh giới đó quan trọng.
+
+## Khởi động reader chỉ local
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:markdown-novel-viewer ./docs/system-design.md "Serve on localhost, use the first available port from 3456, do not bind to the network, do not open a browser automatically, report the URL and PID state, and stop the server when I finish reviewing."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:markdown-novel-viewer ./docs/system-design.md "Serve on localhost, use the first available port from 3456, do not bind to the network, do not open a browser automatically, report the URL and PID state, and stop the server when I finish reviewing."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:markdown-novel-viewer ./docs/system-design.md "Serve on localhost, use the first available port from 3456, do not bind to the network, do not open a browser automatically, report the URL and PID state, and stop the server when I finish reviewing."
+```
+
+  </Tab>
+</Tabs>
+
+Integration được document trong Skill cũng chỉ tới `ak:preview` để truy cập
+nhanh. Dùng invocation viewer riêng khi bạn muốn server lifecycle và security
+boundary của nó là chủ thể rõ ràng trong request.
+
+## Hiểu server control
+
+| Option | Tác động | Chi tiết quan trọng |
+| --- | --- | --- |
+| `--file <path>` | Serve Markdown file tại `/view?file=<path>` | Parent directory của file được thêm vào allowed path của server. |
+| `--dir <path>` | Browse directory tại `/browse?dir=<path>` | Non-hidden file có thể mở qua `/file/*`; entry ẩn và directory tên `deprecated` bị loại khỏi listing. |
+| `--port <number>` | Yêu cầu starting port | Mặc định `3456`; port bận được scan tăng dần tới `3500`. |
+| `--host <addr>` | Chọn bind address | Mặc định `localhost`; `0.0.0.0` expose server trên network interface khả dụng. |
+| `--no-open` | Không launch browser | Implementation thực tế mở browser theo mặc định. Dùng option này cho run deterministic hoặc headless. |
+| `--open` | Yêu cầu rõ browser launch | Nó dư thừa với implementation default dù option table của Skill ghi default là false. |
+| `--background` | Spawn detached child và trả JSON | Child ghi PID state trong system temporary directory. |
+| `--foreground` | Giữ server attached | Dành cho runtime-managed background task và phát startup JSON machine-readable. |
+| `--stop` | Dừng viewer instance được phát hiện | Lệnh dừng mọi instance được đại diện bởi PID file của viewer, không chỉ current document. |
+
+Để dùng script trực tiếp, chạy entry point `node scripts/server.cjs` đi kèm trong
+environment nơi dependency resolve. Attached start thành công báo URL, path,
+port, host cùng file hoặc directory mode. Nhánh background, foreground, child
+và command-integrated phát JSON; network URL được thêm khi bind `0.0.0.0` và tìm
+thấy local IPv4 address.
+
+## Quan sát các giai đoạn reader
+
+1. **Skill resolve input.** Skill kiểm tra current working directory, xác định
+   file hay directory mode và từ chối path thiếu hoặc không hợp lệ.
+2. **Skill chuẩn bị runtime.** npm module bắt buộc phải resolve trước lần
+   Markdown render đầu tiên.
+3. **Skill chọn port khả dụng.** Port được yêu cầu được dùng khi rảnh hoặc port
+   khả dụng tiếp theo được báo.
+4. **Skill khởi động HTTP server.** Asset, current working directory và target
+   directory trở thành allowed file root cho process đó.
+5. **Skill render document hoặc listing.** Markdown frontmatter, heading, local
+   image, code block, plan navigation và directory entry trở thành HTML.
+6. **Browser tải enhancement.** Reader JavaScript local thêm theme, font,
+   sidebar, keyboard, mobile và progress behavior; external CDN resource thêm
+   font, highlight theme và Mermaid.
+7. **Run tiếp tục active đến khi dừng.** PID file hỗ trợ discovery và shutdown;
+   final report nên xác nhận process cùng port đã không còn.
+
+## Đọc Mermaid block và plan document
+
+Fenced block `mermaid` được escape trên server, rồi render trong browser bằng
+Mermaid 11 từ jsDelivr. Diagram theo reader theme light hoặc dark, có thể mở rộng
+theo main content width và được render lại sau khi đổi theme. Lỗi render hiển
+thị inline cùng source preview.
+
+Đây là rendering evidence, không phải guarantee validation đầy đủ. Page phải
+truy cập được CDN, browser phải thực thi module và source phải hợp lệ với release
+Mermaid 11 được tải. Reader khởi tạo Mermaid bằng `securityLevel: 'loose'`; không
+dùng diagram source không đáng tin.
+
+Plan navigation được suy ra từ plan file và phase table được nhận diện. Khi
+document không được phát hiện là plan, nó vẫn có heading cùng table of contents
+chuẩn nhưng có thể không có phase badge và previous hay next navigation. Reader
+preference cùng accordion state được lưu trong `localStorage` của browser.
+
+## Kiểm soát HTTP và content boundary
+
+<Callout type="warn" title="Localhost là mặc định an toàn">
+  Bind vào `0.0.0.0` làm directory browser, rendered Markdown và allowed local
+  file có thể được truy cập từ thiết bị khác kết nối được tới máy. Chỉ dùng cho
+  directory đã review trên trusted network và dừng server ngay sau khi dùng.
+</Callout>
+
+- Markdown renderer không thêm sanitization layer cho raw HTML. Hãy coi
+  Markdown, embedded HTML, link, filename và Mermaid source là trusted input
+  trước khi mở page.
+- Directory mode liệt kê non-hidden file thuộc nhiều loại và link chúng qua
+  local file route. Không serve project directory rộng chứa secret, private
+  report, source map, export hoặc credential.
+- Local image được resolve theo Markdown file và serve qua cùng process. Remote
+  image URL vẫn là remote và có thể lộ browser network metadata cho host đó.
+- Reader liên hệ public font và script hoặc stylesheet CDN trừ khi browser chặn.
+  Đọc offline có thể mất font, highlight theme và Mermaid rendering dù plain
+  Markdown vẫn load.
+- Browser launch dùng opener của operating system. Giữ `--no-open` khi session
+  chỉ nên báo URL hoặc khi mở UI chưa được cấp quyền.
+- Stop bằng `--stop` nhắm tới mọi viewer PID được phát hiện. Kiểm tra active
+  instance trước nếu user hoặc task khác có thể đang chạy reader.
+
+## Xác minh live output
+
+Kết quả đầy đủ nên gồm:
+
+- Resolved source path, file hay directory mode, bind host, actual port, local
+  URL, optional network URL, process mode và PID-file state.
+- Xác nhận dependency đã resolve và installation có thay đổi Skill directory hay
+  không.
+- HTTP result cho target page cùng local asset, cộng browser confirmation cho
+  heading, table, code, image, navigation, theme, keyboard và mobile behavior
+  được yêu cầu.
+- Mermaid source cùng render status cho mọi diagram, giữ CDN hoặc syntax error
+  tách biệt với server-rendering failure.
+- Network request tới font hoặc CDN cùng directory chính xác khả dụng qua browse
+  hoặc file route.
+- Shutdown evidence cho thấy server process đã kết thúc, port đã đóng và stale
+  PID file được xử lý.
+
+Package chứa unit-style và server helper cho port, PID state, MIME type, path
+check, Markdown image resolution, heading, table of contents cùng plan
+navigation. Các test đó không được chạy trong batch tài liệu này. Hai release
+stable và beta được ghim chứa cùng viewer file.
+
+## Khắc phục sự cố và hiểu giới hạn
+
+| Triệu chứng | Bước an toàn tiếp theo |
+| --- | --- |
+| Page trả HTTP 500 khi render Markdown | Cài npm dependency đã khai báo trong Skill directory với approval rồi restart; đừng nhầm dependency failure với Markdown không hợp lệ. |
+| Browser mở ngoài dự kiến | Restart bằng `--no-open`; implementation default là mở dù option table của Skill nói false. |
+| Port 3456 đang bận | Dùng incremented port được báo hoặc chọn explicit port đã duyệt; scanner dừng tại 3500. |
+| Image không load | Xác minh relative path từ Markdown file, allowed directory, file tồn tại và URL encoding. |
+| Mermaid giữ dạng text hoặc báo lỗi | Kiểm tra browser network access tới jsDelivr, console error, Mermaid v11 syntax và source trong inline error panel. |
+| Font hoặc syntax color thiếu khi offline | Tiếp tục với local reader layout hoặc duyệt request Google Fonts và cdnjs đã document; các asset này không được bundle. |
+| Directory expose nhiều hơn dự kiến | Dừng server, chọn directory hẹp hơn hoặc một file, kiểm tra content rồi restart trên localhost. |
+| Process tồn tại sau review | Kiểm tra viewer PID file cùng running instance, rồi chỉ dùng packaged stop path sau khi xác nhận nó không terminate viewer của task khác. |
+| Runtime không nhận diện Skill | Xác nhận target và scope, khởi động lại session, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Dùng [`ak:preview`](./preview) cho preview workflow rộng hơn hoặc
+[`ak:mermaidjs-v11`](./mermaidjs-v11) để author và validate diagram source.

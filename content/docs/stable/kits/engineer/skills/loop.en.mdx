@@ -1,0 +1,213 @@
+---
+title: Improve a mechanical metric with ak:loop
+description: Run sequential, Git-tracked experiments against one numeric metric with guards, rollback evidence, and hard stop conditions.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:loop` to improve one mechanical repository metric through bounded,
+sequential experiments. Each iteration makes one attributable change, commits a
+rollback point, measures the result, runs a regression guard, and keeps or
+reverts the change according to the declared contract.
+
+## Choose ak:loop for measurable optimization
+
+### Use ak:loop when
+
+- A command can emit one number for coverage, errors, bytes, latency, accuracy,
+  or another objective metric.
+- You can define a narrow editable scope and a separate regression guard.
+- Repeated small experiments are more useful than a one-shot implementation.
+- The project is a Git repository with a clean working tree and named branch.
+
+### Choose another workflow when
+
+- The goal is subjective, such as “make this cleaner.” Use `ak:cook` with
+  acceptance criteria.
+- You know a bug and need root-cause work. Use `ak:fix` or `ak:debug`.
+- You only need one change. Use `ak:cook`.
+- You need external model benchmarking. Use `ak:deep-swe`.
+- The intended files cannot be isolated from guard-owned files. Redesign the
+  scope manually before running a loop.
+
+## Prepare a clean experiment branch
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Engineer Kit is installed for the current runtime and scope.
+- Start from a clean Git working tree on a named branch. Preserve unrelated
+  work elsewhere.
+- Define `Goal`, `Scope`, and `Verify`; `Verify` must exit successfully and
+  print one numeric result.
+- Add a `Guard` that detects regressions without depending on files the loop may
+  edit.
+- Choose `Iterations`, `Direction`, `Noise`, `Min-Delta`, a target, and a
+  wall-clock or resource stop condition.
+- Review every repeated command for destructive behavior, network writes,
+  credentials, elevated privileges, and expected run time.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:loop ...` | Runs as an installed Engineer Skill and uses the project’s Git and shell tools. |
+| Cursor | `/ak:loop ...` | Uses the user-verified slash spelling for Engineer Skills; broader runtime parity is not established. |
+| Codex | `$ak:loop ...` | Uses native Codex Skill discovery; command approval and Hook behavior depend on the live host. |
+
+## Run the Skill with an explicit contract
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:loop
+Goal: Reduce TypeScript errors in src/api to zero
+Scope: src/api/**/*.ts
+Verify: npx tsc --noEmit 2>&1 | grep -c '^src/api/.*error TS' || true
+Guard: npm test
+Iterations: 12
+Direction: lower
+Noise: low
+Min-Delta: 1
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:loop
+Goal: Reduce TypeScript errors in src/api to zero
+Scope: src/api/**/*.ts
+Verify: npx tsc --noEmit 2>&1 | grep -c '^src/api/.*error TS' || true
+Guard: npm test
+Iterations: 12
+Direction: lower
+Noise: low
+Min-Delta: 1
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:loop
+Goal: Reduce TypeScript errors in src/api to zero
+Scope: src/api/**/*.ts
+Verify: npx tsc --noEmit 2>&1 | grep -c '^src/api/.*error TS' || true
+Guard: npm test
+Iterations: 12
+Direction: lower
+Noise: low
+Min-Delta: 1
+```
+
+  </Tab>
+</Tabs>
+
+The required fields can be supplied in the initial request. If one is missing,
+the Skill should collect all missing fields together before any dry run.
+
+## Understand the controls
+
+| Field | Default | Effect |
+| --- | --- | --- |
+| `Goal` | Required | Human-readable outcome and target |
+| `Scope` | Required | File patterns the loop may edit |
+| `Verify` | Required | Command that returns one numeric metric |
+| `Guard` | None | Regression command; exit code `0` means pass |
+| `Iterations` | `10` | Maximum trial count |
+| `Noise` | `medium` | `low`, `medium`, or `high` measurement treatment |
+| `Min-Delta` | `0` | Minimum change that counts as progress |
+| `Direction` | `higher` | Whether a larger or smaller metric is better |
+
+For noisy measurements, define repeat count and aggregation deliberately. The
+bundled guidance recommends a worse-of-two result for medium noise and a median
+of three to five runs for high noise. Environment pinning—inputs, seeds, cache
+state, and competing processes—remains your responsibility.
+
+## Observe each iteration
+
+1. **The Skill proves preconditions.** It checks Git state, branch state, scope
+   matches, stale loop locks, baseline `Verify`, and baseline `Guard`.
+2. **The Skill records iteration zero.** The initial metric establishes the
+   comparison point in `loop-results.tsv`.
+3. **The Skill reviews memory.** Recent Git history, the previous diff, and the
+   result log inform the next experiment.
+4. **The Skill chooses one change.** The attempt must be describable in one
+   sentence and stay inside `Scope`.
+5. **The Skill creates a rollback point.** It commits the atomic change using
+   the `loop(iter-N): ...` convention before verification.
+6. **The Skill measures and guards.** `Verify` returns the metric; `Guard`
+   checks behavior the optimization must preserve.
+7. **The Skill keeps or discards.** A sufficient improvement with a passing
+   guard stays. A regression, crash, or insufficient delta is reverted while
+   preserving experiment history.
+8. **The Skill logs and decides.** It records the metric, delta, disposition,
+   and description, then checks the configured bounds and stuck conditions.
+
+After five consecutive discards, the workflow should analyze the pattern and
+shift strategy. At ten consecutive discards, it stops and returns the evidence.
+A verification timeout over the source-defined 30-second limit also aborts the
+loop rather than grinding indefinitely.
+
+## Keep Git and command authority with you
+
+<Callout type="warn" title="The loop creates commits">
+  Starting `ak:loop` authorizes repeated scoped edits and iteration commits on
+  the current branch only. It does not authorize push, merge, publication,
+  deployment, secret access, destructive recovery, or changes outside `Scope`.
+</Callout>
+
+The Skill prefers `git revert` for discarded experiments because the failed
+attempt is useful memory. If a revert conflicts, stop and present recovery
+choices instead of using a destructive reset without explicit approval.
+
+Reject verification commands that erase broad paths or fetch and execute remote
+code. Confirm unlisted outbound writes, `sudo`, ownership changes, and other
+high-impact operations. Keep guard files read-only. Mask tokens, connection
+passwords, private keys, and environment values in logs and reproduction steps.
+
+## Verify the final evidence
+
+A complete run should provide:
+
+- Baseline, best and final metric, direction, target, and total delta.
+- Configured versus completed iterations and the reason the loop stopped.
+- Kept commits with one-change descriptions.
+- Discarded, crashed, timed-out, and guard-failed trials.
+- `loop-results.tsv` with an auditable iteration record.
+- Guard commands and their results.
+- Plateau or noise warnings and a recommendation to stop, continue, or revise
+  the contract.
+- A clean statement of any push, merge, or deployment action still awaiting
+  approval.
+
+Treat a higher score or lower number as meaningful only if the metric actually
+represents the intended outcome and the guard covers relevant regressions.
+
+## Troubleshoot or stop
+
+| Symptom | Safe next step |
+| --- | --- |
+| The working tree is dirty or HEAD is detached | Preserve existing work and move to a clean named branch before retrying. |
+| `Verify` prints text or multiple numbers | Replace it with a deterministic extractor that exits correctly and emits one number. |
+| Baseline `Guard` fails | Fix the baseline outside the loop; do not weaken the guard. |
+| Measurement varies between runs | Set an appropriate noise level, repeat measurements, and use a meaningful `Min-Delta`. |
+| A revert conflicts | Stop, preserve the conflict evidence, and request a recovery decision. |
+| Five consecutive trials are discarded | Shift file or technique based on the log without widening declared scope. |
+| Ten consecutive trials are discarded | Stop and report the plateau for manual review. |
+| Verification exceeds 30 seconds | Abort or redesign a faster sampled metric before another loop. |
+| The runtime cannot find the Skill | Confirm installation and follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Use `ak:autoresearch` when you still need route selection, or continue with
+`ak:test` and `ak:code-review` for independent verification.
+
+## Know the current limits
+
+- `ak:loop` cannot optimize a subjective goal or guarantee improvement.
+- Iterations are sequential; the workflow does not parallelize experiments.
+- The loop cannot control system noise, external services, or background load.
+- Guard quality and metric validity determine the strength of the result.
+- The source-defined 30-second verification limit makes expensive evaluations a
+  poor fit unless reduced to a representative fast sample.
+- Stable and beta contain identical `ak:loop` protocol and references.

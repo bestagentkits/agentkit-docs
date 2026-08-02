@@ -1,0 +1,114 @@
+---
+title: ak config stop
+description: Gửi tín hiệu cho process dashboard được theo dõi với ranh giới PID cũ, báo thành công tức thì và giới hạn nền tảng.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak config stop` để gửi `SIGTERM` tới PID do `ak config start` ghi lại.
+Lệnh có tính idempotent khi không có tệp vòng đời, nhưng kết quả thành công có
+những ranh giới quan trọng về identity process và nền tảng.
+
+## Cách dùng
+
+```bash
+ak config stop
+```
+
+Lệnh không nhận argument theo vị trí và không có cờ riêng. Các cờ dùng chung như
+`--json`, `--no-interactive`, `--quiet`, `--verbose` và `--yes` được mô tả trong
+[quy ước CLI](../cli-conventions).
+
+## Lệnh thực hiện gì
+
+Lệnh đọc `$AGENTKIT_HOME/dashboard/state.json`, thông thường là
+`~/.agentkit/dashboard/state.json`, rồi đi theo một trong các nhánh sau:
+
+| State đã ghi | Hành động | Kết quả |
+| --- | --- | --- |
+| Không có tệp state | Không gửi tín hiệu. | Cảnh báo trên stderr và thoát `0`. |
+| State hợp lệ và `SIGTERM` được chấp nhận | Gửi tín hiệu cho PID đã lưu và báo thành công ngay. | Dashboard xoá state sau đó nếu shutdown sạch. |
+| Lookup process hoặc gửi tín hiệu thất bại | Lỗi lookup trả về lỗi lệnh. Mọi lỗi gửi tín hiệu được xem như process đã thoát: AgentKit cảnh báo, thử xoá state và thoát `0`. | Lỗi xoá state, nếu có, bị bỏ qua. |
+| State không đọc được, sai định dạng hoặc không được hỗ trợ | Không gửi tín hiệu. | Thoát `1`. |
+
+`stop` không có vòng lặp chờ hoặc timeout shutdown. Tín hiệu thành công nghĩa là
+process đã nhận tín hiệu, không có nghĩa process đã thoát hoặc tệp state đã biến
+mất.
+
+<Callout type="warning">
+  State chỉ ghi PID. `stop` không xác minh executable identity, thời gian bắt
+  đầu process hay dashboard health trước khi gửi tín hiệu. Nếu PID cũ đã được
+  tái sử dụng, lệnh có thể gửi `SIGTERM` tới process không liên quan. Hãy tự xác
+  minh PID sau crash hoặc forced kill.
+</Callout>
+
+## Hành vi theo nền tảng
+
+Trên macOS và Linux, dashboard AgentKit có thể xử lý `SIGTERM` và bắt đầu đường
+graceful shutdown. Trên Windows, cơ chế signal process của Go hỗ trợ forced
+kill nhưng không hỗ trợ một `SIGTERM` tuỳ ý; lệnh này dùng `SIGTERM`, xem lỗi
+signal phát sinh như process đã thoát, xoá state được theo dõi và có thể thoát
+`0` trong khi process dashboard vẫn chạy.
+
+Với release Windows hiện tại, hãy đóng hoặc interrupt trực tiếp process
+dashboard foreground rồi xác minh process đã thoát. Đừng chỉ dựa vào
+`ak config stop` để kết luận đã dừng.
+
+## Đầu ra cho tự động hoá
+
+Khi lời gọi signal thành công, `--json` ghi một envelope có version vào stdout:
+
+```text
+schema_version: 1
+kind: config.stop
+data.pid: integer
+```
+
+Các nhánh thành công khác không phát envelope này:
+
+- không có tệp state: thoát `0`, stdout rỗng, cảnh báo plain text trên stderr;
+- signal thất bại: thoát `0`, stdout rỗng, cảnh báo plain text trên stderr và
+  xoá state theo kiểu best-effort.
+
+Vì vậy, hãy xem trạng thái process cùng bước xác minh độc lập sau stop là
+contract. Đừng yêu cầu stdout JSON cho mọi lần gọi thoát `0`, và đừng yêu cầu
+stderr chỉ chứa JSON. Lỗi runtime đi qua JSON renderer dùng error envelope có
+cấu trúc; lỗi parse cờ có thể vẫn là hướng dẫn dùng dạng plain text.
+
+## Tác động và tương tác
+
+Lệnh có thể gửi tín hiệu cho một process cục bộ và chỉ có thể xoá tệp state của
+dashboard. Lệnh không liên hệ địa chỉ HTTP đã ghi, gọi health endpoint, dùng
+bearer token của dashboard, liên hệ provider hay đụng tới nội dung config và
+kit. Lệnh không bao giờ hiện prompt hoặc đọc stdin, vì vậy `--yes` và
+`--no-interactive` không đổi hành vi. `--quiet` không ẩn các nhánh cảnh báo trực
+tiếp.
+
+Lệnh không có chế độ preview, apply, dry-run, force hay rollback tự động.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Không có state, `SIGTERM` được chấp nhận hoặc signal thất bại và AgentKit đã thử dọn state. | Xác minh riêng process và state; đừng xem `0` là đã xác nhận termination. |
+| `1` | Không resolve/parse được AgentKit home/state, lookup process thất bại hoặc render đầu ra thất bại. | Kiểm tra state và PID mà không xoá rộng dữ liệu AgentKit. |
+| `2` | Argument hoặc cờ không hợp lệ. | Sửa cách gọi lệnh. |
+
+## Xác minh và khôi phục
+
+Sau yêu cầu stop, chỉ dùng status như phép kiểm tra tệp vòng đời:
+
+```bash
+ak config stop
+ak config status --json
+```
+
+Vì status cũng tin tệp thay vì probe PID, hãy xác minh process handle hoặc PID
+bằng công cụ hệ điều hành khi termination là quan trọng. Nếu process dự kiến
+vẫn còn, hãy dừng trực tiếp đúng process đã xác minh. Đừng bao giờ kill một PID
+chỉ vì PID đó xuất hiện trong tệp state cũ.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của lệnh `ak config stop`](../cli/ak_config_stop)
+- [Quy ước CLI](../cli-conventions)

@@ -1,0 +1,111 @@
+---
+title: ak config status
+description: Kiểm tra bản ghi vòng đời dashboard mà không nhầm state đã ghi với phép kiểm tra health trực tiếp.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak config status` để đọc bản ghi vòng đời do `ak config start` tạo. Lệnh
+báo PID, địa chỉ, URL, thời gian bắt đầu đã lưu và uptime được tính khi có tệp
+state hợp lệ.
+
+## Cách dùng
+
+```bash
+ak config status
+```
+
+Lệnh không nhận argument theo vị trí và không có cờ riêng. Các cờ dùng chung như
+`--json`, `--no-interactive`, `--quiet`, `--verbose` và `--yes` được mô tả trong
+[quy ước CLI](../cli-conventions).
+
+## Đọc kết quả
+
+```bash
+ak config status
+```
+
+Lệnh đọc `$AGENTKIT_HOME/dashboard/state.json`, thông thường là
+`~/.agentkit/dashboard/state.json`.
+
+- Nếu tệp không tồn tại, lệnh báo dashboard không chạy và thoát `0`.
+- Nếu tệp state version `1` đọc và parse được, lệnh báo `running` cùng PID,
+  port, địa chỉ bind và thời gian bắt đầu đã lưu. Uptime được tính từ thời gian
+  đó.
+- Tệp state không đọc được, sai định dạng hoặc có version không được hỗ trợ là
+  lỗi lệnh, không phải kết quả đã dừng.
+
+<Callout type="warning">
+  `status` không kiểm tra process của hệ điều hành và không gọi health endpoint
+  của dashboard. Crash hoặc forced kill có thể để lại tệp state có vẻ hợp lệ,
+  vì vậy `running: true` nghĩa là “được theo dõi là đang chạy,” không phải “đã
+  xác minh identity PID và HTTP health.”
+</Callout>
+
+Lệnh không xoá state cũ. Trước khi tự gửi tín hiệu, hãy xác minh PID được ghi
+vẫn thuộc đúng process `ak config start`; hệ điều hành có thể tái sử dụng PID.
+
+## Đầu ra cho tự động hoá
+
+```bash
+ak config status --json
+```
+
+Khi thành công, stdout nhận một envelope có version:
+
+```text
+schema_version: 1
+kind: config.status
+data.running: boolean
+```
+
+Khi `data.running` là `true`, `data` còn có:
+
+```text
+pid: integer
+port: integer
+bind_addr: string
+url: string
+started_at: RFC 3339 timestamp
+uptime: duration string
+```
+
+Chỉ rẽ nhánh theo `.data.running`. Khi trường này là `false`, hãy bỏ qua mọi
+field khác, dù encoder bỏ field hay biểu diễn zero value. Đây là một JSON
+document, không phải NDJSON.
+
+Lỗi runtime trong chế độ JSON ghi error envelope có cấu trúc vào stderr. Lỗi
+parse cờ xảy ra trước renderer của lệnh và có thể vẫn là hướng dẫn dùng dạng
+plain text.
+
+## Tác động và tương tác
+
+Lệnh chỉ đọc. Lệnh không kết nối tới địa chỉ đã ghi, kiểm tra hoặc gửi tín hiệu
+cho PID, ghi lại hay xoá state, mở trình duyệt, liên hệ provider hoặc dùng xác
+thực AgentKit. Lệnh không bao giờ hiện prompt hay đọc stdin, vì vậy `--yes` và
+`--no-interactive` không thay đổi kết quả. `--quiet` ẩn stdout dạng người đọc;
+JSON vẫn có ưu tiên cao hơn quiet.
+
+Lệnh không có chế độ preview, apply, dry-run hay force.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Đọc status thành công, kể cả kết quả đã dừng bình thường. | Rẽ nhánh theo `.data.running`, không theo mã process. |
+| `1` | Không resolve được AgentKit home, tệp state không đọc được/sai định dạng/không được hỗ trợ hoặc ghi đầu ra thất bại. | Kiểm tra riêng tệp state và process; đừng giả định đã dừng. |
+| `2` | Argument hoặc cờ không hợp lệ. | Sửa cách gọi lệnh. |
+
+## Xác minh server được theo dõi
+
+Với server do automation khởi động, hãy giữ process handle và đối chiếu PID,
+URL được báo với handle đó. Với phiên dùng thủ công, kiểm tra process bằng công
+cụ hệ điều hành hoặc mở URL loopback đã ghi trước khi xem server là healthy.
+
+Chỉ dùng `ak config stop` sau khi chấp nhận semantics gửi tín hiệu và ranh giới
+PID cũ của lệnh đó.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của lệnh `ak config status`](../cli/ak_config_status)
+- [Quy ước CLI](../cli-conventions)

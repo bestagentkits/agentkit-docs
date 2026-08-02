@@ -1,0 +1,70 @@
+---
+title: ak commands show
+description: Inspect one installed or locally available command-template record and understand flattened installed metadata.
+---
+
+Use `ak commands show` to inspect a command template before copying it or to
+confirm which metadata the installed file currently exposes.
+
+## Usage
+
+```bash
+ak commands show <kit>/<command>
+```
+
+The command component is the flattened asset name. For example, source
+`ckm/write/good.md` is addressed as `<kit>/ckm-write-good`, not as
+`<kit>/ckm:write/good`. Exactly one ref is required. The short prefixes `ak:`,
+`ake:`, and `akm:` are accepted for `core`, `engineer`, and `marketing`.
+
+There are no command-specific flags. The command is read-only and never
+prompts.
+
+## Lookup and metadata
+
+The installed flat file under
+`~/.claude/plugins/<kit>/commands/<command>.md` is checked first. If absent,
+the command recursively discovers the matching flattened source under
+`./kits/<kit>/commands/`. Environment overrides can replace both roots.
+
+When both exist, installed metadata wins; no drift comparison is made. A
+leading YAML frontmatter block can supply `description`, `keywords` as tags,
+and `argument-hint`. Available records preserve source `rel_path` and derive a
+Claude slash name from it. Installed records report `<command>.md` as
+`rel_path` and the flat command name as `slash_name`, because source nesting is
+not retained in the destination.
+
+The command does not print the Markdown body or execute the template. It does
+not contact the registry, authenticate, check entitlement, or ask a runtime to
+verify discovery.
+
+## Output
+
+Human stdout can include:
+
+```text
+ref, name, slash_name, kit, rel_path, description
+argument_hint, tags
+state: installed | available
+```
+
+JSON success uses `schema_version: 1`, `kind: assets.show`, and the corresponding
+fields under `data`, with `argument_hint` omitted when empty.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | An installed or available record was found. |
+| `1` | The positional argument count was wrong or discovery failed. |
+| `2` | The ref was malformed or a flag could not be parsed. |
+| `5` | No installed or available record matches the ref. |
+
+Errors are written to stderr. JSON execution errors use the shared error
+envelope; flag-parse errors can remain plain text.
+
+## Related commands
+
+- [Complete `ak commands show` command facts](../cli/ak_commands_show)
+- [Search commands](../cli/ak_commands_search)
+- [Install one command](../cli/ak_commands_install)

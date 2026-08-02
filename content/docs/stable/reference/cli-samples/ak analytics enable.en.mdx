@@ -1,0 +1,107 @@
+---
+title: ak analytics enable
+description: Opt into the private local analytics index after reviewing its bounded source scan and explicit confirmation boundary.
+---
+
+Use `ak analytics enable` to opt into indexed local analytics. Applying the
+operation creates or re-enables the private database, then performs a full
+refresh before reporting success.
+
+## Usage
+
+```bash
+ak analytics enable
+```
+
+The command accepts no positional arguments and has no command-specific flags.
+
+## Preview before applying
+
+Enable is the only analytics mutation whose preview scans source roots. It
+reports bounded counts for `claude-projects`, `codex-sessions`, and
+`agentkit-activity` without exposing paths or file names.
+
+The preview is read-only, has a five-second overall budget, and counts at most
+10,000 qualifying files per root. A bounded count is a floor, not a complete
+inventory. A clean preview is not a guarantee: the unbounded apply can still
+refuse a source that changes or proves unsafe.
+
+```bash
+ak analytics enable --json --no-interactive
+```
+
+Without `--yes`, that scripted invocation returns the plan with `applied=false`
+and exits `3`.
+
+## Apply intentionally
+
+```bash
+ak analytics enable --yes --json --no-interactive
+```
+
+Apply writes the enabled lifecycle marker, creates or opens
+`~/.agentkit/analytics/analytics.db`, migrates an older owned schema when
+supported, reads the allowlisted local sources, and atomically publishes a
+current generation. `AGENTKIT_HOME`, `AGENTKIT_CLAUDE_HOME`, and `CODEX_HOME`
+change their respective roots.
+
+If ingestion fails after enablement, the marker or database can remain enabled
+without a usable current generation. Run `ak analytics status`, correct the
+reported local source or storage condition, then use `refresh` or `rebuild`.
+
+## Confirmation behavior
+
+When prompting is enabled, the prompt is written to stderr. Only `y` or `yes`
+applies. Any other answer or EOF declines, prints the preview, makes no
+analytics mutation, and currently exits `0`.
+
+`--json` implies `--no-interactive`; neither flag grants consent. Without
+`--yes`, both use the explicit preview exit `3`. There is no command-specific
+dry-run or force flag.
+
+## JSON output
+
+Success and preview use `kind=analytics.plan`. `data` contains `plan`,
+`applied`, `status`, and the enable-only `scan`.
+
+The plan contains `schema_version`, `plan_id`, `operation`, the pre-operation
+`status`, and `expires_at`. The scan contains `schema_version`, `scannable`,
+`has_sources`, `bounded`, optional `reason`, and per-root `kind`, `state`,
+`source_count`, `capped`, and optional `reason`.
+
+Read `data.status` only when `data.applied=true`; an unapplied preview currently
+serializes a zero-value result status. Use `data.plan.status` for the reviewed
+pre-operation state. Plan IDs are process-local and cannot be applied by a
+later CLI invocation.
+
+## Privacy, retention, and recovery
+
+The index stores bounded aggregates and HMAC identities, not raw transcripts,
+prompts, paths, session IDs, or trace IDs. It remains local and performs no
+network, provider, auth, or entitlement operation.
+
+Enabling does not modify or prune source session files or the activity log.
+Publication is transactional and superseded index generations are removed.
+There is no user-facing rollback snapshot after success; disable to retain the
+index without serving it, or delete to remove it.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Enable applied, or an enabled prompt was declined/ended at EOF after showing the preview. |
+| `1` | Planning, source capture, migration, storage, contention, publication, or output failed; positional arguments also use `1`. |
+| `2` | A flag was invalid. |
+| `3` | `--json` or `--no-interactive` produced an unapplied preview because `--yes` was absent. |
+
+Lifecycle/service failures in JSON mode emit a structured error envelope on
+stderr. Flag-parse, argument-validation, and final output-render failures can
+fall outside that path.
+
+On macOS, the CLI-wide first-launch guard can also write
+`~/.agentkit/.first-run-darwin` and print a one-time hint to stderr before this
+command runs.
+
+## Related commands
+
+- [CLI conventions](../cli-conventions)

@@ -1,0 +1,99 @@
+---
+title: ak mcp link
+description: Preview or apply a conservative MCP mirror into Codex config with path checks, redaction, and a private backup.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak mcp link` to copy MCP command and argument definitions into Codex
+configuration. It plans by default and writes only when `--apply` is present.
+
+## Usage
+
+```bash
+ak mcp link --to <adapter> [flags]
+```
+
+The only supported target adapter is `codex`. The command accepts no
+positional arguments.
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--to <adapter>` | Required | Select `codex`. |
+| `--source <path>` | Merged MCP discovery | Read one explicit Claude-style MCP JSON source instead. |
+| `--target <path>` | Codex capability path | Select the Codex TOML file to plan or edit. |
+| `--apply` | `false` | Apply the plan. |
+| `--dry-run` | `true` | Describe preview intent; only `--apply` controls whether a write occurs. |
+| `--claude-home <dir>` | Environment or `~/.claude` | Change Claude discovery. |
+| `--cwd <dir>` | Current directory | Change project discovery. |
+
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+<Callout type="warning">
+  Passing `--dry-run=false` does not apply a plan. The current implementation
+  ignores that flag value when deciding mutation; include `--apply` explicitly
+  for a write.
+</Callout>
+
+## Preview before applying
+
+Prefer an explicit Claude JSON source so the mirror does not also ingest the
+Codex inventory discovered by default:
+
+```bash
+ak mcp link --to codex --source .mcp.json --json
+ak mcp link --to codex --source .mcp.json --apply --json
+```
+
+The plan reports adds, updates, and target-only entries. Its JSON field for
+target-only entries is named `removes`, but apply preserves those sections; the
+linker never deletes a Codex MCP server merely because it is absent from the
+source.
+
+Environment values are never copied. The plan warns when a source entry has
+environment keys or a known server requires them. Configure the corresponding
+Codex environment separately before use.
+
+## Path, ownership, and backup boundaries
+
+The target must resolve inside your user home, including through symlinks. An
+outside target is rejected. Apply preserves unrelated TOML values and
+target-only MCP sections, then adds or refreshes source-named sections.
+
+Before a changed apply, AgentKit writes a mode-`0600` copy under
+`~/.agentkit/backups/mcp-link/` (`AGENTKIT_HOME` changes the backup root). The
+result prints the backup path. A newly created target receives an empty backup.
+The target write itself is not an atomic rename and there is no concurrent
+fingerprint check, so avoid running another Codex config writer at the same
+time.
+
+There is no prompt, stdin read, `--yes` requirement, or `--force` mode.
+
+## Output
+
+Human and JSON success use stdout. JSON is one envelope with `kind=mcp.link`
+and these fields under `data`:
+
+```text
+dryRun, changed, target, backupPath, plan
+```
+
+`plan` contains `source`, `target`, `adds`, `updates`, `removes`, `warnings`,
+`backupPath`, and `changed`. Entries are redacted to environment key names,
+but commands, arguments, and paths remain visible.
+
+## Exit status
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The plan rendered, the apply completed, or the target was already current. |
+| `1` | Source discovery, adapter/target resolution, path safety, backup, parsing, or writing failed. |
+| `2` | Arguments or flags were invalid. |
+
+## Related commands
+
+- [List source inventory](../cli/ak_mcp_list)
+- [Verify linked servers](../cli/ak_mcp_verify)
+- [Complete `ak mcp link` command facts](../cli/ak_mcp_link)

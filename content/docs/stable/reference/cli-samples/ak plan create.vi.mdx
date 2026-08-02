@@ -1,0 +1,85 @@
+---
+title: ak plan create
+description: Tạo tệp plan chuẩn, sau đó xử lý warning không fatal khi lập chỉ mục và ghi current-plan pointer.
+---
+
+Dùng `ak plan create` để tạo một thư mục plan mới và giúp các lệnh dựa trên
+store sử dụng nó ngay khi lập chỉ mục cục bộ thành công.
+
+## Cách dùng
+
+```bash
+ak plan create <name> [--basedir <dir>]
+```
+
+## Tuỳ chọn của lệnh
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--basedir <dir>` | `<thư-mục-hiện-tại>/plans` | Chọn thư mục cha cho thư mục plan có timestamp. |
+
+## Tạo một plan
+
+```bash
+ak plan create "Release documentation"
+```
+
+AgentKit chuyển tên thành chữ thường và slug, thêm thời gian cục bộ theo mẫu
+`YYMMDD-HHMM`, tạo thư mục cho owner/group truy cập rồi ghi:
+
+```text
+plan.md
+phase-01-start.md
+```
+
+Các tệp là kết quả chuẩn. Sau đó lệnh cố lập chỉ mục plan trong
+`$AGENTKIT_HOME/plans/plans.db` và, khi ở trong Git worktree, cố ghi current-plan
+pointer của worktree.
+
+## Xem kỹ hành vi ghi trực tiếp
+
+Không có preview, xác nhận, đọc stdin, cờ force hoặc backup. Tránh chạy cùng
+slug trong cùng một phút: timestamp và slug xác định thư mục, còn collision đã
+tồn tại sẽ được dùng lại trong khi `plan.md` và `phase-01-start.md` bị ghi lại.
+Việc tạo tệp không transactional; lỗi I/O có thể để lại thư mục chỉ được tạo
+một phần.
+
+Nếu tệp được tạo nhưng lập chỉ mục store thất bại, lệnh chủ động thoát `0`, ghi
+warning vào stderr, để `store_id` rỗng và thêm trường `warning` trong JSON. Tệp
+vẫn dùng được với các lệnh theo thư mục và có thể được lập chỉ mục sau bằng
+`ak plan reindex --apply`. Lỗi ghi pointer cũng chỉ cảnh báo, không undo tệp hay
+store row.
+
+Thao tác chỉ diễn ra cục bộ. Lệnh có thể chạy lệnh `git` cục bộ để resolve định
+danh repository, branch và worktree. Lệnh không truy cập registry, xác thực,
+gọi provider hay điền cache từ xa.
+
+## Đầu ra
+
+Kết quả dành cho người dùng ở stdout, warning ở stderr. JSON thành công là một
+envelope có `kind=plan.create` và:
+
+```text
+data.name, data.dir, data.store_id, data.warning (tuỳ chọn)
+```
+
+`dir` là đường dẫn tuyệt đối và warning có thể chứa đường dẫn cục bộ. Hãy thu
+và loại bỏ dữ liệu nhạy cảm ở từng stream khi chia sẻ log tự động hoá.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Hai tệp đã được tạo. Vẫn có thể có warning về index hoặc pointer. | Xác minh đường dẫn, trường warning và `store_id`. |
+| `1` | Tên không tạo được slug, không đọc được thư mục hiện tại hoặc ghi thư mục/tệp thất bại. | Kiểm tra thư mục được tạo dở trước khi thử lại. |
+| `2` | Số argument hoặc cờ không hợp lệ. | Truyền một tên được quote và, nếu cần, một thư mục base. |
+
+Dùng version control hoặc khôi phục filesystem để undo scaffold ngoài ý muốn;
+snapshot plan store của close/archive không được tạo ở đây.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak plan create`](../cli/ak_plan_create)
+- [Phân tích plan vừa tạo](../cli/ak_plan_parse)
+- [Validate một thư mục plan](../cli/ak_plan_validate)
+- [Quy ước CLI](../cli-conventions)

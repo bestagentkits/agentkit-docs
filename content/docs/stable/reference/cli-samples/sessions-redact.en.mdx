@@ -1,0 +1,79 @@
+---
+title: ak sessions redact
+description: Preview or apply best-effort credential redaction to local Claude Code session JSONL files with backups.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak sessions redact` before reviewing or sharing Claude Code transcripts.
+The default is a read-only scan.
+
+## Usage
+
+```bash
+ak sessions redact
+```
+
+The command accepts no positional arguments.
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--project <name>` | `[]` | Scan only this registered project; repeatable. |
+| `--session <id>` | `[]` | Scan only this safe alphanumeric, underscore, or hyphen session ID; repeatable. |
+| `--redact-emails` | `false` | Include email-address patterns. |
+| `--apply` | `false` | Rewrite changed files after creating a backup for each affected session root. |
+
+Apply requires both `--apply` and shared `--yes`; there is no interactive
+confirmation fallback. `--apply` without `--yes` exits `2` before mutation.
+
+## Safe workflow
+
+```bash
+ak sessions redact --project myapp --json
+ak sessions redact --project myapp --session session-1 --redact-emails --json
+ak sessions redact --project myapp --apply --yes --json
+```
+
+The scan reads only registered projects and Claude Code session roots. It does
+not scan Codex sessions, contact a network service, or send transcript content.
+The default dry-run creates no backup and changes no file.
+
+<Callout type="warning">
+  Detection is best-effort and pattern-based. A successful report does not prove
+  that every secret or personal value was found. Review content before sharing.
+</Callout>
+
+On apply, each affected session root is snapshotted under the AgentKit backup
+store before any rewrite. Changed JSONL files are written through a sibling temp
+file, synced, permission-matched, and renamed. If a session changes between scan
+and replacement, that file is not overwritten and the command fails. A failure
+after another root was rewritten is not a transaction-wide rollback; use every
+reported backup as the recovery boundary.
+
+Malformed JSONL lines are counted and preserved unless their raw text matches a
+redaction pattern. Per-file scan failures appear in `skipped` and can still
+produce exit `0`; inspect that array rather than trusting the exit code alone.
+
+## Output and exit status
+
+Human stdout reports mode, files scanned and changed, replacement counts, and
+backup IDs. JSON stdout uses `kind=sessions.redact`; `data` includes its own
+`schema_version`, `dry_run`, counts, `replacements`, optional `skipped` and
+`backups`, and per-file reports. Paths in this output are local-sensitive data.
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The pass completed; review `skipped` and replacement counts. |
+| `1` | Target resolution, backup, scan orchestration, or rewrite failed. |
+| `2` | Flags were invalid or `--apply` lacked `--yes`. |
+
+To recover, use the backup ID and root path reported for the affected root, then
+reinspect the restored transcript before resuming an active writer.
+
+## Related commands
+
+- [List sessions](./sessions-list)
+- [Show a transcript page](./sessions-show)
+- [Complete `ak sessions redact` command facts](../cli/ak_sessions_redact)

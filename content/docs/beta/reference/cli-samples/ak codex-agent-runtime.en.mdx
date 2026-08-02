@@ -1,0 +1,80 @@
+---
+title: ak codex-agent-runtime
+description: Register, inspect, serve, or remove the AgentKit MCP dispatch runtime used by Codex.
+---
+
+Use `ak codex-agent-runtime` to expose installed AgentKit agents as MCP tools
+for Codex. The group command is orchestration only; it does not edit config or
+start a transport without a subcommand.
+
+## Usage
+
+```bash
+ak codex-agent-runtime
+```
+
+The group accepts no positional arguments. Running it without a subcommand
+prints help.
+
+## Runtime flow
+
+```text
+Codex MCP client
+  -> ak codex-agent-runtime serve (stdio)
+  -> agent_<slug> MCP tool
+  -> fresh codex exec subprocess
+  -> tool result returned to the MCP client
+```
+
+The runtime discovers user agents from `~/.codex/agents/*.toml` and staged kit
+agents from each `<plugin-root>/<kit>/.codex/agents/*.toml`. A user agent wins a
+same-slug conflict. Across staged kits, the lexicographically first kit wins.
+Valid slugs start with a lowercase letter and contain at most 64 lowercase
+letters, digits, underscores, or hyphens.
+
+## Choose a subcommand
+
+| Goal | Command | Effect |
+| --- | --- | --- |
+| Add the MCP stanza to Codex config | `ak codex-agent-runtime register` | Writes `config.toml`. |
+| List discovered agents without serving | `ak codex-agent-runtime serve --list-only` | Read-only plain-text report. |
+| Run the stdio MCP server | `ak codex-agent-runtime serve` | Long-running process; dispatches `codex exec`. |
+| Remove the MCP stanza | `ak codex-agent-runtime unregister` | Writes `config.toml`. |
+
+Shared flags are described in [CLI conventions](../cli-conventions), but each
+subcommand documents whether it actually uses an output flag.
+
+## Security and privacy boundary
+
+Each MCP call forwards the installed agent instructions and the caller's
+prompt to a new Codex CLI subprocess. The subprocess can contact its configured
+provider and can read or modify data allowed by its sandbox and approval
+policy. Review installed agent TOML and tool policy before registration.
+
+A named `tool` in the MCP request is checked against the agent allow/deny
+policy before spawning. An explicit allow-list also narrows the Codex sandbox
+to read-only or workspace-write; a Bash allow-list adds on-request approval.
+A deny-list without an allow-list cannot narrow the subprocess sandbox and
+relies on the named-tool check, Codex defaults, and prompt guidance.
+
+## Output and exit behavior
+
+The group help is plain text. Register/unregister use their own raw JSON result,
+not the shared JSON envelope. Serve reserves stdout for the MCP protocol; its
+startup diagnostic goes to stderr.
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Help, list-only discovery, a completed registration mutation, or a clean server shutdown. |
+| `1` | Discovery, config, transport, or process-level runtime failed. |
+| `2` | Arguments or flags were invalid. |
+
+An individual `codex exec` failure is returned as an MCP tool error and does
+not terminate the long-running server.
+
+## Related commands
+
+- [Complete runtime group facts](../cli/ak_codex-agent-runtime)
+- [Register the runtime](../cli/ak_codex-agent-runtime_register)
+- [Serve the runtime](../cli/ak_codex-agent-runtime_serve)
+- [Install a Codex-targeted Kit](../cli/ak_kit_init)

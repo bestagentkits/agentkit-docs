@@ -1,0 +1,194 @@
+---
+title: Benchmark a coding model with ak:deep-swe
+description: Run a smoke-first DeepSWE evaluation through Pier and OpenRouter with explicit spend, runtime, and submission gates.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:deep-swe` to evaluate an OpenRouter model on the external DeepSWE
+coding-agent benchmark through Pier. The Skill checks the local toolchain,
+validates one task before a larger sample, and reports reproducible run evidence
+without treating a benchmark score as a product guarantee.
+
+## Choose ak:deep-swe for external model evaluation
+
+### Use ak:deep-swe when
+
+- You want to score a specific OpenRouter model slug on DeepSWE.
+- You need an independent run to examine a vendor-reported coding result.
+- You want a one-task smoke test before approving a deterministic subset.
+- You accept Docker execution, network use, model-token spend, and local
+  benchmark artifacts within stated bounds.
+
+### Choose another workflow when
+
+- You want to improve a metric in your own repository. Use `ak:loop`.
+- You want to test the current project rather than benchmark a model. Use
+  `ak:test`.
+- You need model or provider advice without running a paid evaluation. Ask for
+  research or guidance first.
+- You cannot authorize Docker, external model requests, or local tool
+  installation. Keep the task advisory.
+
+## Prepare the benchmark environment
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Engineer Kit is installed for the current runtime and scope.
+- Install `uv`, `git`, and Docker, and start the Docker daemon.
+- Configure `OPENROUTER_API_KEY` in the environment. Confirm only that it is
+  present; never print its value.
+- Choose the exact OpenRouter model slug and set a provider-side spending limit.
+- Reserve disk space for the DeepSWE repository, Docker images, task sandboxes,
+  and Pier job artifacts.
+- Decide the first task, maximum task count, wall-clock bound, spend bound, and
+  stop conditions before the run.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:deep-swe ...` | Runs as an installed Engineer Skill; external tools and credentials remain environment-dependent. |
+| Cursor | `/ak:deep-swe ...` | Uses the user-verified slash spelling for Engineer Skills; wider execution parity is not established. |
+| Codex | `$ak:deep-swe ...` | Uses native Codex Skill discovery; the same external prerequisites and approval gates still apply. |
+
+## Run a smoke test first
+
+Ask for one named task and a stop-before-expansion boundary:
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:deep-swe <vendor/model> "Run one named DeepSWE task as a smoke test. Show the exact Pier command and estimated spend exposure before execution. Stop after the task and do not submit results."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:deep-swe <vendor/model> "Run one named DeepSWE task as a smoke test. Show the exact Pier command and estimated spend exposure before execution. Stop after the task and do not submit results."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:deep-swe <vendor/model> "Run one named DeepSWE task as a smoke test. Show the exact Pier command and estimated spend exposure before execution. Stop after the task and do not submit results."
+```
+
+  </Tab>
+</Tabs>
+
+The model slug is an external identifier, not an AgentKit-owned catalog. Verify
+it against the current OpenRouter catalog before spending tokens.
+
+## Confirm the native commands live
+
+The release-defined setup uses:
+
+```text
+git clone https://github.com/datacurve-ai/deep-swe
+uv tool install datacurve-pier
+pier --help
+pier run --help
+```
+
+Run from the directory containing the cloned `deep-swe` folder. The
+release-defined native model form for one task is:
+
+```text
+pier run -p deep-swe/tasks/<task-id> --agent mini-swe-agent \
+  --model openrouter/<vendor/model>
+```
+
+For a small deterministic subset, the release source records:
+
+```text
+pier run -p deep-swe/tasks --agent mini-swe-agent \
+  --model openrouter/<vendor/model> --n-tasks 10 --sample-seed 0
+```
+
+Treat both snippets as candidates that must pass current `pier run --help`.
+Only use a separate model-class route when the installed Pier help explicitly
+documents it; do not guess version-specific flags.
+
+## Observe the evaluation stages
+
+1. **The Skill checks prerequisites.** It confirms `uv`, `git`, Docker, the
+   daemon, and the presence—not the value—of `OPENROUTER_API_KEY`.
+2. **The Skill verifies the live command surface.** It inspects Pier help,
+   confirms the model slug, resolves task paths, and records tool versions.
+3. **The Skill presents the bounded run.** The exact command, task count,
+   timeout, expected spend exposure, artifact location, and stop condition stay
+   visible before execution.
+4. **One task runs first.** Authentication, provider mapping, agent behavior,
+   sandbox startup, and result emission are checked end to end.
+5. **Expansion requires a decision.** A subset or full corpus is a separate
+   approval after smoke evidence. A full corpus must never follow implicitly.
+6. **The Skill inspects Pier artifacts.** When supported by the installed
+   version, `pier view`, `pier analyze`, and `pier critique` help inspect the
+   job directory.
+7. **The Skill reports without submitting.** Score, reward, task count, cost
+   when available, failures, and evidence limits are summarized locally.
+
+## Keep cost, credentials, and submission under control
+
+<Callout type="warn" title="A full corpus run needs fresh approval">
+  A successful smoke task does not authorize a subset or full benchmark. Before
+  expanding, review the exact command, model slug, task count, timeout, expected
+  spend exposure, Docker and disk impact, and stop condition.
+</Callout>
+
+Never echo, persist, commit, or put `OPENROUTER_API_KEY` into a command, prompt,
+report, or benchmark artifact. Stop on authentication failure and let the user
+repair the environment. Do not switch models, providers, execution backends, or
+task counts merely to get a run to finish.
+
+Leaderboard submission or contacting an external service is separate from
+benchmark execution and needs an explicit request. The Skill must not publish a
+result automatically.
+
+## Verify the benchmark evidence
+
+A complete report should include:
+
+- The exact Pier and model command after live help validation.
+- Pier version, model slug, task IDs or count, agent, and execution environment.
+- Smoke-test result before any larger run.
+- Score or reward, pass and failure evidence, and artifact location.
+- Reported cost when Pier or the provider exposes it reliably; otherwise an
+  explicit statement that measured cost is unavailable.
+- Timeouts, authentication or provider-mapping failures, and skipped tasks.
+- Confirmation that no result was submitted unless separately requested.
+
+The benchmark is reproducible only to the extent that tool versions, task
+revision, model route, provider behavior, sandbox, and run parameters are
+recorded. A single score does not prove general software-engineering quality.
+
+## Troubleshoot safely
+
+| Symptom | Safe next step |
+| --- | --- |
+| `OPENROUTER_API_KEY` is absent | Stop and configure it outside the prompt; confirm presence without printing the value. |
+| Docker is unavailable | Start the daemon or stop; do not silently switch execution backends. |
+| The model returns HTTP 401 | Stop and repair authentication; do not include the key in diagnostics. |
+| Pier reports an unknown provider or model | Recheck the exact OpenRouter slug and current Pier help before changing the command. |
+| A flag is rejected | Inspect `pier run --help`; do not retry guessed syntax. |
+| A smoke task fails | Preserve its job artifacts and blocker; do not expand to more tasks. |
+| Cost grows faster than expected | Stop at the declared budget or provider limit and report partial evidence. |
+| The runtime cannot find the Skill | Confirm installation and follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Use `ak:loop` for repository-local metric optimization. Continue with the
+[Engineer Kit overview](../../engineer) for related testing and review Skills.
+
+## Know the current limits
+
+- Pier, DeepSWE, OpenRouter slugs, flags, task paths, and corpus size are
+  external and version-volatile; verify them at run time.
+- The release source records a 113-task corpus, but that count is not a durable
+  guarantee for later external revisions.
+- AgentKit does not guarantee model availability, benchmark score, cost,
+  throughput, sandbox compatibility, or leaderboard acceptance.
+- Cost is reportable only when the selected harness exposes it reliably.
+- Stable and beta contain identical `ak:deep-swe` source content.

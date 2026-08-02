@@ -1,0 +1,199 @@
+---
+title: Thiết kế và thay đổi database với ak:databases
+description: Thiết kế cấu trúc dữ liệu MongoDB hoặc PostgreSQL, kiểm tra query behavior, rồi chuẩn bị migration, backup hay administration sau các data-safety gate rõ ràng.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:databases` để thiết kế model MongoDB hoặc PostgreSQL, viết và giải
+thích query, phân tích index hay chuẩn bị database operation với bằng chứng
+recovery hiển thị. Skill gồm reference guidance cùng utility Python tùy chọn cho
+migration, backup, restore, cleanup và performance analysis.
+
+## Chọn ak:databases cho ranh giới dữ liệu
+
+### Dùng ak:databases khi
+
+- Schema, query, aggregation, index, migration, backup, replication, permission
+  hoặc performance database là trọng tâm.
+- Bạn cần chọn relational, document, analytical hay event-history model từ
+  workload cùng yêu cầu integrity.
+- Bạn cần guidance quản trị MongoDB hoặc PostgreSQL.
+
+### Chọn workflow khác khi
+
+- Database change chỉ là phần phụ của API implementation lớn hơn. Dùng
+  `ak:backend-development` nhưng giữ các migration gate của Skill này.
+- Task chủ yếu là cloud infrastructure hoặc deployment. Dùng `ak:devops`.
+- Bạn chỉ cần chẩn đoán root cause. Dùng `ak:fix` và giữ database access ở chế
+  độ read-only tới khi correction được duyệt.
+- Bạn cần thực thi plan đa tầng đã duyệt. Dùng `ak:cook`, đồng thời cô lập phase
+  cùng quyền database.
+
+## Chuẩn bị access và recovery
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận
+  Engineer Kit đã được cài cho runtime cùng scope hiện tại.
+- Xác định database engine cùng version, environment, owner, schema hoặc
+  collection, workload, độ nhạy dữ liệu, retention cùng consistency need.
+- Dùng account có least privilege và target non-production rõ ràng khi có thể.
+  Không để connection string trong prompt, log, shell history hay tệp commit.
+- Ghi nhận read và write đại diện, invariant, volume dự kiến, khả năng chịu lock,
+  maintenance window cùng yêu cầu compatibility.
+- Yêu cầu backup hiện hành, đường restore đã test, forward plan, rollback hoặc
+  compensating plan cùng post-change verification trước mutation production.
+
+Prerequisite của utility tùy chọn phụ thuộc operation:
+
+| Bề mặt utility | Yêu cầu local |
+| --- | --- |
+| Migration hoặc performance analysis MongoDB | Python cùng `pymongo`; database reachable và privilege phù hợp |
+| Migration hoặc performance analysis PostgreSQL | Python cùng `psycopg2`; database reachable và privilege phù hợp |
+| Backup hoặc restore MongoDB | `mongodump` và `mongorestore` |
+| Backup hoặc restore PostgreSQL | `pg_dump`, `psql` và `gzip` khi bật compression |
+| Test utility | `pytest` cùng test dependency đi kèm |
+
+Runtime requirements file đi kèm không cài `pymongo` hay `psycopg2`, dù utility
+migration cùng performance có import chúng. Hãy xác nhận dependency thay vì giả
+định utility đã sẵn sàng.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:databases ...` | Có thể dùng guidance cùng local database tool khi khả dụng; Engineer hỗ trợ phân phối native và plugin rõ ràng. |
+| Cursor | `/ak:databases ...` | Dùng slash syntax đã được người dùng xác minh; parity về database tooling và Hook chưa được thiết lập. |
+| Codex | `$ak:databases ...` | Dùng native Skill discovery; database tool và Hook được chuyển đổi tùy session. |
+
+## Chạy Skill
+
+Argument shape được khai báo là `[query or schema task]`. Skill không định nghĩa
+flag, database mặc định hay connection tự động.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:databases "Design a backward-compatible PostgreSQL migration that adds order.external_id as nullable, backfills in batches, then adds uniqueness. Produce SQL, rollback limits, lock analysis, and verification queries; do not connect or apply it."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:databases "Design a backward-compatible PostgreSQL migration that adds order.external_id as nullable, backfills in batches, then adds uniqueness. Produce SQL, rollback limits, lock analysis, and verification queries; do not connect or apply it."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:databases "Design a backward-compatible PostgreSQL migration that adds order.external_id as nullable, backfills in batches, then adds uniqueness. Produce SQL, rollback limits, lock analysis, and verification queries; do not connect or apply it."
+```
+
+  </Tab>
+</Tabs>
+
+### Hiểu mode của utility đi kèm
+
+Đây là local script riêng, không phải flag của `ak:databases`:
+
+| Utility | Mode và input bắt buộc | Mặc định cùng side effect |
+| --- | --- | --- |
+| Migration | `generate <name>` với `--db mongodb\|postgres` | Dùng `./migrations`; ghi template JSON có timestamp. `--dry-run` không ghi tệp nhưng vẫn tạo directory. |
+| Migration | `status`, `apply` hoặc `rollback <id>` với `--uri` | Kết nối database và dùng migration tracking table hoặc collection. `apply` xử lý tệp JSON đang pending theo thứ tự tên. |
+| Backup | `backup --uri ...` với `--db`; PostgreSQL còn yêu cầu `--database` | Dùng `./backups`, mặc định bật compression và basic verification. `--no-compress` cùng `--no-verify` tắt chúng. |
+| Restore | `restore <filename> --uri ...` | Restore qua `mongorestore` hoặc `psql`; `--dry-run` chỉ kiểm tra và báo local file. |
+| Cleanup | `cleanup` | Xóa tệp không phải JSON cũ hơn `--retention-days`; retention mặc định `7`. `--dry-run` liệt kê candidate. |
+| Performance | `--db`, `--uri` | Slow-query threshold mặc định `100` millisecond; `--output` ghi report JSON. |
+
+Các utility nhận connection URI qua command argument. Hãy dùng execution
+environment được bảo vệ và lưu ý argument có thể hiển thị cho local user khác
+hoặc được shell history ghi lại.
+
+## Quan sát workflow database an toàn
+
+1. **Lần chạy phân loại workload.** Skill ghi access pattern, invariant, growth,
+   retention, reporting, consistency cùng constraint dữ liệu nhạy cảm.
+2. **Lần chạy kiểm tra không mutation.** Skill đọc schema, index, query plan,
+   statistic cùng dữ liệu đại diện với privilege hẹp nhất có thể.
+3. **Lần chạy thiết kế thay đổi.** Skill nêu forward step, compatibility,
+   batching, lock, ảnh hưởng replication, backup, rollback hoặc compensation
+   cùng acceptance query.
+4. **Lần chạy rehearsal an toàn.** Skill dùng generated script, dry run, fixture
+   hoặc database cô lập gần production và ghi rõ giới hạn của từng cách.
+5. **Lần chạy xin quyền mutation.** Apply migration, restore, cleanup backup,
+   đổi role, bật profiling hay sửa production config vẫn là quyết định riêng.
+6. **Lần chạy xác minh và báo cáo.** Skill kiểm tra schema state, row hoặc
+   document count, constraint, query plan, application compatibility,
+   replication cùng recovery evidence.
+
+## Giữ destructive operation sau approval
+
+<Callout type="warn" title="Dry run không phải lúc nào cũng read-only">
+  Migration `status`, `apply --dry-run` và `rollback --dry-run` kết nối trước.
+  Với PostgreSQL, utility bảo đảm rồi commit migration tracking table trước khi
+  xử lý command. Đừng trỏ các mode này vào database nếu write đó chưa được duyệt.
+</Callout>
+
+Các ranh giới khác từ utility đi kèm:
+
+- Rollback migration MongoDB chỉ xóa migration tracking record; nó không đảo
+  ngược schema hay index operation đã ghi. Không dùng nó cho recovery nếu chưa
+  có compensating operation được xác minh riêng.
+- “Verification” của backup chỉ kiểm tra output tồn tại và không rỗng. Đây không
+  phải checksum, content validation hay test restore.
+- Cleanup xóa vĩnh viễn mọi tệp không phải JSON trong backup directory đã chọn
+  nếu cũ hơn retention cutoff. Review chính xác directory cùng dry-run listing
+  trước.
+- Performance analysis MongoDB bật database profiling theo slow-query threshold
+  đã chọn nếu profiling đang tắt. Việc này đổi database config và có thể thu
+  query content.
+- Index được gợi ý là heuristic. Phải review explain plan, write overhead,
+  storage, uniqueness, locking cùng workload evidence trước khi tạo.
+- Atlas, managed database, storage, snapshot, replica, cross-region traffic và
+  restore operation có thể phát sinh phí provider. Bản thân Skill không yêu cầu
+  paid provider.
+
+## Xác minh kết quả
+
+Kết quả design hoặc query hoàn tất nên cung cấp model hay query đề xuất,
+assumption, plan dự kiến cùng đường validation. Kết quả mutation hoàn tất còn
+nên cung cấp:
+
+- Chính xác target environment, database, schema hoặc collection cùng identity
+  đã dùng.
+- Backup artifact cùng bằng chứng restore mạnh hơn phép kiểm tra không rỗng của
+  utility.
+- Forward operation, behavior transaction cùng lock, rollback hoặc compensation
+  và compatibility window.
+- Count trước và sau, constraint, query plan, latency hoặc throughput cùng
+  application check liên quan.
+- Mọi test đã bỏ qua, rủi ro chưa giải quyết và production action vẫn chờ duyệt.
+
+## Xử lý sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Utility báo thiếu Python driver | Cài hoặc cung cấp driver tương ứng trong environment đã duyệt; runtime requirements đi kèm không cung cấp driver đó. |
+| Migration dry-run cần production access | Generate và inspect local, rồi rehearsal trên bản sao cô lập trước khi duyệt production connection. |
+| Rollback MongoDB báo thành công | Xác minh schema cùng index thực tế; rollback đi kèm chỉ xóa migration history. |
+| Backup được đánh dấu verified | Chạy checksum cùng test restore vào target cô lập trước khi coi là recoverable. |
+| Index recommendation nêu placeholder field | Phân tích query predicate và plan thật; đừng chạy command được in ra. |
+| Runtime không nhận diện Skill | Xác nhận target cùng scope, mở session mới, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Xem [Project, artifact và checkpoint](../../../concepts/projects-artifacts-checkpoints)
+trước recovery hoặc tiếp tục với [Engineer Kit](../../engineer).
+
+## Biết các giới hạn hiện tại
+
+- Test utility bao phủ class ở mức parser cùng database hoặc subprocess được
+  mock; chúng không chứng minh an toàn trên hệ thống MongoDB hay PostgreSQL thật.
+- Quick example trong source không khớp mọi parser option của utility. Các bảng
+  trên theo executable argument definition.
+- Runtime duration không được định nghĩa. Query advice có thể mất vài phút;
+  backup, restore, migration, reindex và performance sampling phụ thuộc data
+  size, lock, network, storage cùng provider limit.
+- Stable và beta chứa reference, utility cùng test giống nhau trong cặp release
+  này.

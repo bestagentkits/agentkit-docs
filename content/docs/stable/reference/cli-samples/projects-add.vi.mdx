@@ -1,0 +1,72 @@
+---
+title: ak projects add
+description: Đăng ký thư mục hiện có bằng canonical path hoặc refresh timestamp của registry entry đã tồn tại.
+---
+
+Dùng `ak projects add` để đăng ký thư mục đã clone, di chuyển hoặc đã tồn tại
+nhưng AgentKit chưa tự discover.
+
+## Cách dùng
+
+```bash
+ak projects add <path>
+```
+
+Path có thể tương đối hoặc tuyệt đối và phải tồn tại dưới dạng directory. Lệnh
+không initialize thư mục, không kiểm tra ownership AgentKit và không cài nội
+dung project. Dùng `ak init` khi cần các tác động vòng đời đó.
+
+## Ví dụ
+
+```bash
+ak projects add ./myproj
+ak projects add . --json
+```
+
+Lệnh resolve path thành absolute path và theo symlink. Name lưu trong registry
+là thành phần cuối của directory canonical, có thể khác tên symlink truyền trên
+command line.
+
+## Hành vi mutation
+
+Canonical directory mới tạo một entry. Thêm lại cùng canonical directory là
+idempotent về số lượng entry: lệnh tạo lại name và refresh `updated_at` trong
+khi giữ nguyên `registered_at`.
+
+Registry được save atomically dưới advisory lock của project registry. Lệnh
+không hỏi xác nhận và không có preview, `--force`, backup hay rollback. Nó có
+thể đăng ký bất kỳ directory hiện có nào, vì vậy hãy kiểm tra path trước khi
+chạy.
+
+Nếu `projects.json` malformed hoặc dùng schema version không được hỗ trợ, add
+operation bên dưới bắt đầu registry mới và chỉ ghi entry mới. Không có backup
+tự động cho byte cũ.
+
+## Đầu ra và JSON
+
+Đầu ra dành cho người dùng báo entry được `registered` hay `updated`, kèm name
+và canonical path. JSON thành công dùng `kind=projects.add` với `name`, `dir`,
+`registered_at`, `updated_at` và `was_update` trong `data`. `--quiet` ẩn stdout
+thành công.
+
+Canonical path và timestamp có thể làm lộ tên user hoặc workspace cục bộ. Hãy
+kiểm tra đầu ra trước khi chia sẻ. Lệnh chỉ hoạt động cục bộ, không dùng mạng,
+auth, provider, cache hay child process.
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Directory được đăng ký mới hoặc entry hiện có được refresh. |
+| `1` | Path không tồn tại/không phải directory, canonicalization thất bại hoặc lock/read/write registry lỗi. |
+| `2` | Parse argument hoặc cờ không hợp lệ. |
+
+Lỗi command JSON được ghi thành error envelope trên stderr sau khi renderer
+khởi tạo. Lỗi parse cờ vẫn có thể là plain text.
+
+## Lệnh liên quan
+
+- [Liệt kê project đã đăng ký](./projects-list)
+- [Hiển thị entry](./projects-show)
+- [Tổng quan project registry](./projects)
+- [Thông tin đầy đủ của `ak projects add`](../cli/ak_projects_add)

@@ -1,0 +1,194 @@
+---
+title: Ship a completed branch to a pull request with ak:ship
+description: Merge the target branch, run release gates, update release artifacts, commit every intended change, push, and create or update an evidence-rich PR.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:ship` when implementation on a feature branch is complete and you want
+one workflow to prepare it for review. The Skill synchronizes the target branch,
+runs test and review gates, updates applicable release artifacts, commits and
+pushes the branch, then creates or updates an evidence-rich GitHub pull request.
+It does not merge or deploy that pull request.
+
+## Choose ak:ship for PR preparation
+
+### Use ak:ship when
+
+- The branch is complete enough to enter official or beta review.
+- You want tests, pre-landing review, versioning, changelog, documentation, Git,
+  issue linkage, and PR creation coordinated in one pipeline.
+- The repository uses GitHub and the branch can be pushed normally.
+- You are ready for every current worktree change to be considered for the ship
+  commit.
+
+### Choose another workflow when
+
+- You still need implementation. Use `ak:cook`.
+- You only need local verification or review. Use `ak:test` or
+  `ak:code-review`.
+- The pull request already exists and only needs review, repair, reply, or merge.
+  Use `ak:review-pr`.
+- You want to publish a built application. Use `ak:deploy` after the release
+  gates and repository policy allow it.
+
+## Prepare the branch and GitHub access
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Engineer Kit is installed for the current runtime and scope.
+- Run from a feature branch, never the intended target branch.
+- Inspect `git status`, including untracked files. Move unrelated work out of
+  the worktree because the pipeline intentionally includes all changes.
+- Ensure the target remote branch and the project's test command are available.
+- Install and authenticate `gh` with issue and pull-request permissions, and
+  confirm normal Git push access to the feature branch.
+- Decide whether version, changelog, journal, docs, issue creation, plan state,
+  commit, push, and PR writes are all intended.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:ship ...` | Native execution can coordinate Git, GitHub CLI, file writes, tests, review, and background journal or docs tasks. |
+| Cursor | `/ak:ship ...` | Slash invocation is user-verified; equivalent delegation, background tasks, prompts, and long-running GitHub behavior depend on Cursor. |
+| Codex | `$ak:ship ...` | Native discovery is supported; broader parity for delegated Agents, background work, GitHub credentials, and approval prompts is not implied. |
+
+## Select the release path and gates
+
+| Input or option | Effect | Important boundary |
+| --- | --- | --- |
+| No mode | Infers official for `feature/*`, `hotfix/*`, or `bugfix/*`; beta for `dev/*`, `beta/*`, or `experiment/*` | Asks when branch naming is unclear |
+| `official` | Targets the detected default branch and includes docs plus journal behavior | Does not merge the resulting PR |
+| `beta` | Targets the first detected `dev`, `beta`, or `develop` branch | Automatically skips the docs-update stage |
+| `--skip-tests` | Omits the test gate | Use only when equivalent evidence already exists and record that evidence in the PR |
+| `--skip-review` | Omits pre-landing review | Leaves review risk explicit; it does not imply approval |
+| `--skip-journal` | Omits the background technical journal | No effect on code or PR evidence gates |
+| `--skip-docs` | Omits the docs-update task | Confirm the change has no required documentation impact |
+| `--dry-run` | Reads pre-flight state, prints the proposed pipeline, then stops | Does not fetch, merge, edit, commit, push, create issues, or create a PR |
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:ship official
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:ship official
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:ship official
+```
+
+  </Tab>
+</Tabs>
+
+Run `--dry-run` first when target detection or included files are uncertain. A
+strong request states the intended target branch, existing test evidence,
+version policy, related issue, files that must not ship, and whether creating a
+new issue is acceptable.
+
+## Follow the observable pipeline
+
+1. **Pre-flight resolves the release.** The Skill checks the current branch,
+   target mode, status, diff, and commits. Running on the target branch aborts.
+2. **Issue linkage is established.** Existing issues are found from branch and
+   commit evidence; when none is found, the workflow can create a structured
+   GitHub issue for traceability.
+3. **The target is merged locally.** It fetches and merges `origin/<target>` so
+   later checks exercise the combined state. Complex conflicts stop the run.
+4. **Tests and review run.** The detected test runner executes unless skipped,
+   followed by a two-pass critical and informational review unless skipped.
+   Test failures block shipping. Critical findings require a fix, explicit risk
+   acceptance, or false-positive decision.
+5. **Release artifacts are updated.** A detected version source receives a
+   patch bump by default; significant changes require a minor-or-patch decision.
+   Existing changelogs receive a generated entry.
+6. **Journal, docs, and plan state are handled.** Journal and official docs
+   tasks run in the background unless skipped. A resolved plan is checked and
+   marked completed only when evidence supports it; its index stays active until
+   merge.
+7. **Everything intended is committed and pushed.** `git add -A` stages all
+   current changes, scans the staged diff for secrets, creates a conventional
+   commit, and performs a regular push without force.
+8. **The PR is created or updated.** The body records end-to-end work,
+   delegation, decisions, plan deviations, evidence, checklist, human actions,
+   linked issues, and ship mode in the configured writing language. The title
+   remains an English conventional commit.
+9. **Plan linkage is recorded.** When a plan was finalized, its index records
+   the PR number so the later merge workflow can close it safely.
+
+## Understand the write boundary
+
+<Callout type="warn" title="Uncommitted changes are included automatically">
+  `ak:ship` intentionally stages with `git add -A`. Clean or isolate the
+  worktree before running it. An unrelated untracked file can otherwise be
+  committed and pushed with the release.
+</Callout>
+
+The pipeline can create or modify all of the following:
+
+- Local merge state, conflict resolutions, source fixes, version files,
+  changelog, journal, docs, and plan files.
+- One or more local commits, including review fixes and the final ship commit.
+- The remote feature branch through a normal push.
+- A GitHub issue when no related issue is found.
+- A new pull request or the title and body of an existing pull request.
+
+Safety gates remain:
+
+- Staged secret detection stops the commit. Never add a credential merely to
+  keep the pipeline moving.
+- Push is never forced. A rejected push can use one deliberate rebase retry;
+  destructive history rewriting is outside the workflow.
+- Missing `gh` stops after the push, so a pushed branch is not evidence that a
+  PR exists.
+- Background journal or docs work can finish after later steps have started;
+  verify its files are present before accepting the final commit evidence.
+- `ak:ship` does not merge the PR, close the plan index, publish a release, or
+  deploy an application. Those require later workflows and separate authority.
+
+## Verify the handoff
+
+A complete result should include:
+
+- Mode, source branch, target branch, commit count, and diff summary.
+- Linked or created issue numbers.
+- Target-merge result, test command and counts, and review findings or explicit
+  skip evidence.
+- Version change, changelog, journal, docs, and plan results when applicable.
+- Final commit SHA, pushed remote branch, and a validated PR URL.
+- An evidence-rich PR body with honest `None`, `Not run`, or `Unavailable`
+  markers instead of invented activity.
+- Any human action, accepted critical risk, missing screenshot, pending CI, or
+  unresolved question.
+
+Release tests directly cover writing-language resolution and the EN/VI PR-body
+section contract. They do not exercise the full fetch, merge, test, background
+task, commit, push, issue, and PR pipeline against a live repository. Stable and
+beta package the same `ak:ship` workflow.
+
+## Troubleshoot without bypassing gates
+
+| Symptom | Safe next step |
+| --- | --- |
+| Mode or target is wrong | Stop and rerun with `official` or `beta`; do not push while target intent is ambiguous. |
+| No test runner is detected | Provide the project command or explicitly skip with prior evidence; do not claim tests passed. |
+| Target merge conflicts | Resolve the shown conflicts with repository context, rerun the relevant checks, then continue. |
+| A critical review finding appears | Fix it and rerun tests, explicitly accept the concrete risk, or document why it is a false positive. |
+| A secret is detected in the staged diff | Remove it, rotate if exposed, update ignore rules, and rescan before committing. |
+| Push is rejected | Inspect remote history, use a non-destructive rebase when appropriate, and retry once without force. |
+| `gh` is missing or unauthenticated | The branch may already be pushed; install or authenticate `gh`, then create or update the PR with the required body contract. |
+| The runtime does not recognize the Skill | Confirm target and scope, restart the runtime session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+After the PR exists, use [`ak:review-pr`](./review-pr) for review and merge
+readiness. Use [`ak:deploy`](./deploy) only after the repository's release gates
+permit publication.

@@ -1,0 +1,101 @@
+---
+title: ak whoami
+description: Resolve the current AgentKit account and live kit entitlements, including unauthenticated and renewable-session behavior.
+---
+
+Use `ak whoami` to verify which account the CLI will use and which kit grants
+the registry currently returns.
+
+## Usage
+
+```bash
+ak whoami
+```
+
+The documented command has no positional arguments. The current implementation
+ignores extra positional tokens; do not rely on that behavior.
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--registry-url <url>` | Environment or release default | Override the registry used for the entitlement request. |
+
+Shared output flags are described in [CLI conventions](../cli-conventions).
+`--yes` and `--no-interactive` do not change the query, and the command never
+prompts.
+
+## Before you run
+
+The command first reads the preferred session from
+`~/.agentkit/auth/session.json` (`AGENTKIT_HOME` changes the base directory).
+The CLI slot takes precedence over the App slot.
+
+- With no stored session, it performs no registry request, reports
+  unauthenticated state, and exits `0`.
+- With a stored session, it rejects a registry mismatch before making a request.
+- With a matching session, it requests live entitlements. There is no
+  entitlement-cache-only mode.
+- If the CLI access token is rejected as unauthenticated, an email session can
+  rotate its refresh credential and an API-key session can re-mint once. A
+  successful renewal atomically rewrites the local session before one retry.
+
+The query is therefore not always disk-read-only.
+
+## Examples
+
+```bash
+ak whoami
+ak whoami --json
+ak whoami --registry-url https://registry.example.com
+```
+
+Use the same registry that created the stored session. To change registries,
+log out and log in against the intended registry rather than bypassing the
+mismatch check.
+
+## Output and streams
+
+Human output on stdout reports either `not logged in` or the account email plus
+one `kit (status)` line per grant.
+
+JSON success uses `kind=auth.whoami`:
+
+```json
+{
+  "schema_version": 1,
+  "kind": "auth.whoami",
+  "data": {
+    "authenticated": true,
+    "email": "you@example.com",
+    "authMethod": "email_otp",
+    "licenses": [
+      {"kitId":"engineer","status":"active","grantType":"license","productId":"engineer"}
+    ]
+  }
+}
+```
+
+When unauthenticated, `data` contains only `authenticated: false`; optional
+account and license fields are omitted. Runtime, registry, and session errors
+use stderr and the shared JSON error envelope. Flag-parse errors can remain
+plain text.
+
+## Exit status
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | The query completed, including the unauthenticated state. | Inspect `data.authenticated`; do not treat exit `0` alone as proof of login. |
+| `1` | The session store failed, registries mismatched, renewal failed, or the live entitlement request failed. | Correct the registry or run a fresh `ak login`, then retry. |
+| `2` | A flag could not be parsed. | Correct the invocation. |
+
+The command has no preview, apply, force, backup, or rollback path. Its only
+possible mutation is credential renewal.
+
+## Related commands and limitations
+
+- [Log in](./login)
+- [Inspect grants with kit-focused wording](./licenses)
+- [Log out](./logout)
+- [Complete `ak whoami` command facts](../cli/ak_whoami)
+- [Authentication troubleshooting](../../troubleshooting/authentication)

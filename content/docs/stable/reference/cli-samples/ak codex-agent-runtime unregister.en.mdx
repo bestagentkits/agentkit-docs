@@ -1,0 +1,87 @@
+---
+title: ak codex-agent-runtime unregister
+description: Idempotently remove only the AgentKit MCP runtime stanza from Codex config and understand what remains.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use this command to stop future Codex sessions from auto-loading the AgentKit
+agent runtime. It removes only `[mcp_servers.ak-agent-runtime]`.
+
+## Usage
+
+```bash
+ak codex-agent-runtime unregister [flags]
+```
+
+The command accepts no positional arguments.
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--codex-home <dir>` | `CODEX_HOME` or `~/.codex` | Select the directory containing `config.toml`. |
+
+Shared flags are described in [CLI conventions](../cli-conventions). There is
+no prompt, preview, dry-run, force, or `--yes` requirement.
+
+## Mutation boundary
+
+If present, the AgentKit stanza is deleted and every other MCP server and
+unmodeled config value is preserved by value. If absent, the command returns
+`changed=false` without rewriting the file.
+
+<Callout type="warning">
+  Unregister does not remove installed agent TOML files, stop an already
+  running server, restore earlier TOML formatting, or reset
+  `features.hooks = true` written during registration. It creates no backup or
+  rollback record.
+</Callout>
+
+A changed file is re-encoded and atomically replaced with mode `0600`; comments,
+ordering, and whitespace can normalize. The operation uses the same five-second
+config lock as registration and can continue with a warning when locking is
+unsupported.
+
+## Output and streams
+
+Human success is one line on stdout; lock-degradation warnings use stderr.
+
+`--json` success is a raw object rather than the shared envelope:
+
+```json
+{
+  "config_path": "/home/user/.codex/config.toml",
+  "changed": true,
+  "server_name": "ak-agent-runtime",
+  "warnings": [],
+  "op": "unregister"
+}
+```
+
+Warnings are embedded in JSON success. Flag-parse failures can remain plain
+text.
+
+<Callout type="warning">
+  Tagged help declares exit `5` for config failure, but the current command
+  returns exit `1`. In `--json` mode, a runtime failure does not emit a
+  structured error object; rely on process status and stderr, which may be
+  empty.
+</Callout>
+
+## Exit status
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The stanza was removed or already absent. |
+| `1` | Home resolution, lock, TOML read/parse, or atomic write failed. |
+| `2` | Arguments or flags were invalid. |
+
+Restart Codex after a changed result. If exact config recovery is required,
+restore a copy you created before registration or unregistration.
+
+## Related commands
+
+- [Register again](../cli/ak_codex-agent-runtime_register)
+- [Complete unregister facts](../cli/ak_codex-agent-runtime_unregister)
+- [Serve or inspect agents](../cli/ak_codex-agent-runtime_serve)

@@ -1,0 +1,86 @@
+---
+title: ak journal list
+description: Liệt kê summary journal của một project đã đăng ký theo thứ tự mới nhất, với bộ lọc ngày và văn bản có phạm vi rõ ràng.
+---
+
+Dùng `ak journal list` để tìm bản ghi công việc lịch sử trước khi mở toàn bộ
+entry hoặc viết entry mới.
+
+## Cách dùng
+
+```bash
+ak journal list
+```
+
+Lệnh không nhận positional argument.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--from <YYYY-MM-DD>` | Rỗng | Bao gồm entry vào hoặc sau giá trị này. |
+| `--to <YYYY-MM-DD>` | Rỗng | Bao gồm entry vào hoặc trước giá trị này. |
+| `--query <text>` | Rỗng | Khớp substring không phân biệt hoa thường trong title, summary, slug hoặc project ID. |
+| `--project <name>` | Project đã đăng ký khớp cwd | Giới hạn lookup vào một tên project đã đăng ký khớp chính xác. |
+
+Hãy dùng ngày chuẩn `YYYY-MM-DD`. Implementation chuẩn hoá ngày hợp lệ nhưng
+không từ chối mọi filter sai định dạng; một chuỗi sai có thể trở thành bộ lọc
+theo thứ tự từ điển thay vì argument error.
+
+Giới hạn ngày chỉ áp dụng khi entry có date đã resolve. Entry không có date vẫn
+nằm trong kết quả dù đã đặt `--from` hoặc `--to`.
+
+## Hành vi discovery
+
+Lệnh đọc file `.md` trực tiếp trong `plans/journals/` của project đã chọn, bỏ
+qua thư mục và `README.md`. Lệnh không duyệt folder lồng nhau. Thiếu thư mục
+journal, entry không đọc được và `--project` không tồn tại degrade thành kết
+quả rỗng thay vì thất bại. Từ cwd chưa đăng ký, lookup dùng basename của thư
+mục và vì thế có thể chọn project đã đăng ký khác có cùng tên. Hãy ưu tiên
+registration hoặc `--project` tường minh.
+
+Entry được sắp xếp theo ngày giảm dần, sau đó theo thời gian tạo suy ra. Ngày
+lấy từ frontmatter khi hợp lệ, nếu không thì từ prefix filename được hỗ trợ.
+Title fallback từ frontmatter sang H1 đầu tiên rồi sang slug. Summary còn thiếu
+fallback sang paragraph đầu tiên của body.
+
+## Ví dụ
+
+```bash
+ak journal list
+ak journal list --query install --from 2026-07-01 --to 2026-07-31
+ak journal list --project myproj --json
+```
+
+## Đầu ra và quyền riêng tư
+
+Đầu ra dành cho người dùng in date, slug và title. Plain output in date, project
+ID, slug và title, phân cách bằng tab. File không đọc được nhưng vẫn stat được
+sẽ được đánh dấu malformed.
+
+JSON thành công dùng `kind=journal.list`; `data` là một array. Mỗi item có thể
+chứa `project_id`, `slug`, `filename`, `title`, `summary`, `date`, `created_at`
+và `malformed`. Kết quả rỗng dùng array rỗng. `--quiet` ẩn stdout.
+
+Đây là lệnh cục bộ, chỉ đọc. Lệnh không dùng mạng, auth, process, prompt,
+preview hay cache. Title, summary, project ID, filename và path được suy ra ở
+lệnh tiếp theo có thể nhạy cảm; hãy kiểm tra JSON trước khi chia sẻ.
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Listing hoàn tất, kể cả kết quả rỗng hoặc degraded. |
+| `1` | Resolve AgentKit home hoặc I/O cấp command khác thất bại. |
+| `2` | Không parse được argument hoặc cờ. |
+
+Vì discovery cố ý chuyển một số lỗi đọc thành kết quả rỗng, mã `0` không chứng
+minh mọi file journal đều đọc được. Với `--json`, lỗi cấp command có thể thoát
+mà không có JSON error object.
+
+## Lệnh liên quan
+
+- [Hiển thị entry](./journal-show)
+- [Tạo entry](./journal-create)
+- [Validate entry](./journal-validate)
+- [Liệt kê project đã đăng ký](./projects-list)

@@ -1,0 +1,79 @@
+---
+title: ak agents list
+description: Compare installed agent files with agents available in the configured local kits tree.
+---
+
+Use `ak agents list` to inspect the merged local agent inventory before
+installing or removing one file. Despite the short help text, the result is not
+limited to installed agents: locally available records are appended too.
+
+## Usage
+
+```bash
+ak agents list
+```
+
+The command accepts no positional arguments and never prompts.
+
+## Command flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--kit <name>` | Empty | Keep records from one exact kit directory name. |
+| `--tag <tag>` | Empty list `[]` | Accepted as a repeatable string-slice flag. In these releases, the agent lister does not apply this filter. |
+
+Do not rely on `--tag` for selection in either release. Use JSON filtering in
+your caller if a tag gate is required. Shared flags are described in
+[CLI conventions](../cli-conventions).
+
+## Inventory rules
+
+The command scans available files at
+`./kits/<kit>/agents/<agent>.md` and installed files at
+`~/.claude/plugins/<kit>/agents/<agent>.md`. The roots can be replaced with
+`AGENTKIT_KITS_DIR` and `AGENTKIT_PLUGIN_DIR`.
+
+Only direct `.md` files are considered. Hidden and underscore-prefixed names,
+directories, invalid ref segments, and other extensions are skipped. An
+unreadable agent file can still appear as a bare record derived from its
+filename.
+
+Records are unique by canonical `<kit>/<agent>`. If both copies exist, the
+installed copy wins and its metadata is returned. Results are sorted by the
+canonical ref. This is a local filesystem catalog: the command does not contact
+the registry, check entitlements, or read the verified package cache.
+
+## Output
+
+Human output is a table on stdout with `NAME`, `DESCRIPTION`, `SOURCE`, and
+`STATUS`. Status is `installed` or `available`; `SOURCE` is the kit name.
+
+JSON success uses:
+
+```text
+schema_version: 1
+kind: assets.list
+data.agents[]:
+  kit, name, description, installed
+  optional tools, model, memory, tags
+```
+
+An empty inventory is a successful empty array in JSON. Human mode prints an
+empty-state notice. No NDJSON or stderr status stream is produced.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The scan completed, including an empty inventory. |
+| `1` | A root directory could not be read, or positional arguments were supplied. |
+| `2` | A flag could not be parsed. |
+
+Errors are written to stderr. Flag-parse errors can remain plain text even with
+`--json`.
+
+## Related commands
+
+- [Complete `ak agents list` command facts](../cli/ak_agents_list)
+- [Search agents](../cli/ak_agents_search)
+- [Install one agent](../cli/ak_agents_install)

@@ -1,0 +1,168 @@
+---
+title: Lưu convention cục bộ với ak:folder-context
+description: Tạo CLAUDE.md ngắn gọn cho subfolder và AGENTS.md được liên kết mà không đổi instruction ở root project.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:folder-context` khi một subfolder trong project có convention hoặc
+quyết định bền vững mà session agent sau không thể suy ra đáng tin cậy. Skill
+kiểm tra thư mục, đề xuất outline ngắn gọn, chờ xác nhận rồi tạo context cục bộ
+`CLAUDE.md` và `AGENTS.md` mà không sửa các tệp tương ứng ở root.
+
+## Chọn ak:folder-context cho context cục bộ
+
+### Dùng ak:folder-context khi
+
+- Subfolder campaign, content, asset hoặc analysis có rule cục bộ về naming,
+  validation, approval hay xử lý dữ liệu.
+- Thư mục chứa công việc đang tiếp diễn với quyết định đã khóa cần tồn tại qua
+  nhiều session.
+- Instruction root có chủ đích giữ mức tổng quát và không nên nhận chi tiết chỉ
+  áp dụng cho một subtree.
+- Bạn muốn tệp context ngắn dựa trên bằng chứng, không phải tài liệu tổng quát.
+
+### Chọn workflow khác khi
+
+- Bạn cần instruction ở root project. Hãy dùng `ak:docs agent-context` cho
+  `CLAUDE.md` của Claude Code hoặc `AGENTS.md` của Codex tại repository root.
+- Thư mục là tài liệu tham khảo tĩnh hoặc context có thể dễ dàng tìm lại từ tệp
+  hiện tại. Không thêm một authority surface khác.
+- Bạn cần onboarding project marketing. Dùng `ak:init`.
+- Bạn cần tài liệu project tổng quát trong `docs`. Dùng workflow tài liệu của
+  project.
+
+## Chuẩn bị target đã xác nhận
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và cài Marketing
+  Kit cho runtime cùng scope đang hoạt động.
+- Cung cấp một subfolder hiện có, không phải root repository.
+- Đọc instruction ở root và instruction kế thừa đang chi phối thư mục đó.
+- Quyết định fact cục bộ nào đủ bền vững để lưu lại.
+- Loại credential, customer data, private URL, personal data và task note tạm
+  thời khỏi context được đề xuất.
+
+Skill đọc source, configuration, Markdown và tệp context cục bộ liên quan trong
+scope đã xác nhận. Skill không nên quét vùng project không liên quan hay tự tạo
+constraint chỉ từ tên tệp.
+
+## Gọi Skill
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:folder-context <target-folder>` | Skill có thể tạo context cục bộ cho Claude và `AGENTS.md` được liên kết sau khi outline được duyệt. |
+| Cursor | `/ak:folder-context <target-folder>` | Cách gọi bằng slash đã được người dùng xác minh cho AgentKit Skill đã cài; behavior tệp và symlink vẫn phụ thuộc environment. |
+| Codex | `$ak:folder-context <target-folder>` | Codex tìm Skill bằng discovery native. Các tệp tạo ra vẫn là artifact của repository, không phụ thuộc Hook parity. |
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:folder-context ./campaigns/product-launch "Chỉ ghi naming cục bộ, review gate, nguồn asset đã duyệt và MUST NOT rule. Không đưa customer record vào hoặc sửa instruction ở root"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:folder-context ./campaigns/product-launch "Chỉ ghi naming cục bộ, review gate, nguồn asset đã duyệt và MUST NOT rule. Không đưa customer record vào hoặc sửa instruction ở root"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:folder-context ./campaigns/product-launch "Chỉ ghi naming cục bộ, review gate, nguồn asset đã duyệt và MUST NOT rule. Không đưa customer record vào hoặc sửa instruction ở root"
+```
+
+  </Tab>
+</Tabs>
+
+Dùng [Runtime adapter](../../../concepts/runtime-adapters) để hiểu khác biệt
+chung về discovery và projection. Contract tệp cốt lõi của Skill này giống nhau
+trong các package hiện tại.
+
+## Hiểu các giai đoạn
+
+1. **Xác nhận ranh giới.** Skill kiểm tra target là subfolder và đọc instruction
+   project được kế thừa.
+2. **Kiểm tra bằng chứng cục bộ.** Skill chỉ xem tệp chính cần thiết để xác định
+   mục đích, path thiết yếu, constraint, convention và quyết định đã khóa.
+3. **Áp dụng sanity gate.** Skill dừng khi thư mục là tài liệu tham khảo tĩnh
+   hoặc khám phá theo nhu cầu đã đủ.
+4. **Đề xuất outline.** Skill nhóm các fact và chờ bạn xác nhận trước mọi thao
+   tác ghi.
+5. **Ghi context cục bộ.** Skill tạo hoặc cập nhật `CLAUDE.md` trong thư mục
+   target, bỏ section trống hoặc chung chung.
+6. **Liên kết bề mặt runtime thay thế.** Skill tạo `AGENTS.md` trong target dưới
+   dạng symlink tới `CLAUDE.md`. Nếu symlink không khả dụng, Skill ghi pointer
+   một dòng và báo fallback.
+7. **Đối chiếu chỉnh sửa của người dùng.** Nếu bạn sửa context trong lần chạy,
+   Skill đọc lại và báo mâu thuẫn thay vì revert công việc của bạn.
+
+Nội dung hữu ích gồm mục đích thư mục, tệp thiết yếu với vai trò một dòng,
+constraint `MUST NOT` rõ ràng, naming convention, quyết định đã khóa có ngày và
+context cần qua nhiều session. Hãy giữ nội dung ngắn gọn và cục bộ.
+
+## Giữ ranh giới tệp và quyền riêng tư rõ ràng
+
+<Callout type="warn" title="Context cục bộ trở thành nội dung repository bền vững">
+  Review từng dòng trước khi ghi. Instruction trong subfolder có thể được agent
+  sau đọc và có thể đi vào lịch sử repository nếu được commit. Không lưu secret,
+  customer data, private URL, personal data hay claim chưa được hỗ trợ.
+</Callout>
+
+- Mutation được duyệt chỉ giới hạn ở `CLAUDE.md` và `AGENTS.md` trong subfolder
+  đã xác nhận.
+- Skill không bao giờ sửa `CLAUDE.md` hoặc `AGENTS.md` ở root.
+- Symlink là mutation filesystem và có thể hoạt động khác trên Windows,
+  filesystem hạn chế, archive hoặc workspace do provider quản lý. Fallback bằng
+  pointer phải được báo.
+- Instruction hiện có vẫn có thẩm quyền. Không lặp lại hoặc tạo override cục bộ
+  mâu thuẫn.
+- Skill không cấp quyền Git staging, commit, push, publication, deployment,
+  outreach, thay đổi tài khoản, spend hoặc truy cập mạng.
+
+## Xác minh output
+
+Một lần chạy hoàn tất nên cung cấp:
+
+- `<target-folder>/CLAUDE.md` ngắn gọn chỉ dựa trên bằng chứng đã kiểm tra và
+  quyết định rõ ràng của người dùng.
+- `<target-folder>/AGENTS.md` là symlink tới `CLAUDE.md`, hoặc fallback bằng
+  pointer một dòng đã được báo.
+- Không thay đổi tệp instruction ở root hoặc thư mục không liên quan.
+- Báo cáo ngắn nêu target, tệp đã đọc, tệp đã đổi, fallback đã dùng, mâu thuẫn
+  được tìm thấy và câu hỏi chưa giải quyết.
+
+Hãy kiểm tra diff và, khi yêu cầu symlink, xác minh target của link. Đọc thư mục
+như một session tương lai: context cục bộ nên bổ sung fact cần thiết mà không
+thay thế authority toàn project.
+
+## Xử lý sự cố an toàn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Runtime không nhận diện `ak:folder-context` | Xác nhận target và scope, khởi động lại runtime rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+| Target resolve thành root repository | Dừng và dùng `ak:docs agent-context`; Skill này tiếp tục chỉ dành cho thư mục con. |
+| Tệp đề xuất lặp lại hướng dẫn ở root | Loại nội dung lặp lại và chỉ giữ fact riêng của thư mục. |
+| Tạo symlink thất bại | Dùng fallback `AGENTS.md` một dòng trỏ tới `CLAUDE.md` và ghi rõ đó không phải symlink. |
+| Instruction cục bộ hiện có mâu thuẫn | Không overwrite. Hiển thị chính xác conflict và hỏi authority nào nên thay đổi. |
+| Nội dung nhạy cảm xuất hiện trong outline | Loại nội dung đó trước khi ghi và chỉ giữ tham chiếu an toàn tới vị trí đã duyệt khi cần. |
+
+Tiếp tục với [Tổng quan Marketing Kit](../../marketing) hoặc
+[Projects, artifact và checkpoint](../../../concepts/projects-artifacts-checkpoints)
+để hiểu hướng dẫn ownership và khôi phục rộng hơn.
+
+## Biết các giới hạn hiện tại
+
+- Skill tạo context cho agent, không phải inventory đầy đủ của thư mục, README,
+  strategy, brand guide hay nguồn sự thật hiện tại của campaign.
+- Skill phụ thuộc khả năng hỗ trợ symlink của filesystem hiện tại và khả năng
+  tạo hoặc kiểm tra link của runtime.
+- Skill không thể chứng minh mọi runtime tương lai sẽ load cả hai filename theo
+  cùng một cách; các tệp bảo toàn nội dung, còn runtime discovery vẫn phụ thuộc
+  capability.

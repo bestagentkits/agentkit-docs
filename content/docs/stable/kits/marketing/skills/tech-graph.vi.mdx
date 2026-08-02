@@ -1,0 +1,144 @@
+---
+title: Tạo technical diagram để publish với ak:tech-graph
+description: Tạo, validate, export và review trực quan technical diagram SVG cùng PNG từ mô tả system hoặc flow đã duyệt.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:tech-graph` khi technical relationship cần SVG được thiết kế cùng PNG
+độ phân giải cao thay vì diagram source inline. Skill phân loại diagram, lập
+layout cùng semantic arrow, áp dụng một trong bảy visual style đóng package,
+validate SVG, export PNG qua `rsvg-convert` và báo file path.
+
+## Chọn ak:tech-graph cho technical artifact được thiết kế
+
+### Dùng ak:tech-graph khi
+
+- Architecture, data flow, sequence, process, agent, memory, UML, network,
+  timeline, comparison hoặc concept relationship cần graphic riêng.
+- Blog, deck, product page hoặc technical document cần SVG có thể sửa cùng PNG.
+- Ý nghĩa arrow, grouping component, label placement và visual style cần kiểm
+  soát có chủ đích.
+- Bạn có thể review image đã render trước khi publish.
+
+### Chọn workflow khác khi
+
+- Diagram cần ở dạng source gọn, diff được bên trong Markdown. Dùng
+  `ak:mermaidjs-v11`.
+- Bạn cần HTML presentation hoàn chỉnh. Dùng `ak:slides`.
+- System fact còn chưa chắc chắn. Xác minh trước; visual polish không làm
+  inferred architecture thành đúng.
+
+## Chuẩn bị structure, style và renderer
+
+Cung cấp audience, diagram type, node đã xác minh, layer hoặc group, edge có
+label, primary direction, style mong muốn, title, nhu cầu legend và output path.
+Style 1, **Flat Icon**, là mặc định khi không nêu style.
+
+Runtime phải cung cấp `rsvg-convert`. Skill đóng package xác định đây là
+prerequisite phải được xác minh trước khi dùng. Cài `librsvg` bằng system package
+manager có thể thay máy và dùng network; hãy duyệt riêng nếu thiếu executable.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:tech-graph ...` | Phân phối native là mặc định; plugin rõ ràng cũng được hỗ trợ. |
+| Cursor | `/ak:tech-graph ...` | Cách gọi bằng slash đã được người dùng xác minh; image inspection và renderer availability phụ thuộc local setup. |
+| Codex | `$ak:tech-graph ...` | Native Skill discovery được hỗ trợ; supporting Hook chỉ được projection một phần. |
+
+## Tạo artifact
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:tech-graph Vẽ lead-review architecture đã duyệt thành data-flow diagram theo style 1. Tách draft creation, human approval và manual publishing; đặt label cho mọi data edge; output to ./docs/diagrams/
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:tech-graph Vẽ lead-review architecture đã duyệt thành data-flow diagram theo style 1. Tách draft creation, human approval và manual publishing; đặt label cho mọi data edge; output to ./docs/diagrams/
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:tech-graph Vẽ lead-review architecture đã duyệt thành data-flow diagram theo style 1. Tách draft creation, human approval và manual publishing; đặt label cho mọi data edge; output to ./docs/diagrams/
+```
+
+  </Tab>
+</Tabs>
+
+Skill cũng nhận `--output /path/` trong artifact contract. Khi không có custom
+path, Skill ghi `./[derived-name].svg` và `./[derived-name].png` trong thư mục
+hiện tại. Xác nhận destination trước khi tạo.
+
+## Theo các giai đoạn tạo và review
+
+1. **Phân loại.** Chọn diagram type và layout rule của nó.
+2. **Trích structure.** Xác định layer, node, edge, flow, semantic group và label
+   dựa trên source.
+3. **Lập layout.** Dành component spacing, arrow corridor, label, legend và
+   viewBox đủ lớn cho content.
+4. **Load style.** Dùng style 1 mặc định hoặc numbered style được yêu cầu; áp
+   exact token cùng SVG pattern của style.
+5. **Map shape và arrow.** Cho node semantic shape nhất quán và encode ý nghĩa
+   data, control, read, write, async hoặc feedback vào arrow.
+6. **Viết và validate SVG.** Dùng generator hoặc validation helper đóng package
+   cho output phức tạp, rồi chạy `rsvg-convert file.svg -o /dev/null`.
+7. **Export PNG.** Chạy `rsvg-convert -w 1920 file.svg -o file.png` sau khi SVG
+   hợp lệ.
+8. **Kiểm tra render.** Xem crossing, collision, text bị cắt, label khó đọc,
+   legend và factual accuracy. Sửa và export lại tới khi sạch.
+9. **Báo bằng chứng.** Nêu cả hai output path, renderer result, visual review và
+   uncertainty chưa giải quyết.
+
+## Giữ quyền kiểm soát file write và publication
+
+<Callout type="warn" title="Generation ghi artifact; publication vẫn tách riêng">
+  Mặc định Skill ghi SVG và PNG vào thư mục hiện tại. Xác nhận custom destination
+  trước khi dùng `--output`. Tạo file không phê duyệt commit, upload, embed,
+  publish, deploy hay thay brand asset hiện có.
+</Callout>
+
+Đừng embed secret, private endpoint, customer identifier hay provider
+architecture chưa duyệt trong label. Tên style đóng package là visual reference,
+không phải endorsement hay quyền ngụ ý quan hệ chính thức. Tránh external font
+import vì `rsvg-convert` không fetch được; dùng inline SVG và local asset đã duyệt.
+
+## Xác minh output và source evidence
+
+Một lần chạy hoàn tất nên cung cấp:
+
+- exact path `.svg` và `.png`;
+- diagram type, style number cùng name và intended audience;
+- evidence source cho mọi component và relationship có label;
+- SVG validation cùng PNG export thành công ở width được yêu cầu;
+- visual-review note về overlap, arrow routing, label, contrast và legend
+  placement; và
+- bước publication hay distribution vẫn chờ phê duyệt.
+
+Chỉ validate SVG syntax là chưa đủ. Nếu runtime không thể inspect image, Skill
+phải nói visual self-review đã bỏ qua thay vì đoán layout sạch.
+
+## Khắc phục và hiểu giới hạn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Runtime không nhận diện `ak:tech-graph` | Xác nhận target cùng scope, mở lại runtime, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+| Thiếu `rsvg-convert` | Dừng trước khi claim PNG output; hỏi trước khi cài `librsvg`, rồi xác minh executable. |
+| SVG validation thất bại | Kiểm tra lỗi XML, marker, attribute hoặc path đầu tiên và áp dụng một targeted fix. |
+| Arrow cắt component hoặc nhau | Route orthogonal qua corridor trống; dùng offset khác nhau hoặc jump-over arc, rồi render lại. |
+| Text bị cắt hoặc overlap | Rút ngắn label hay tăng node/viewBox; không thu text xuống dưới kích thước dễ đọc. |
+| File xuất hiện sai thư mục | Dừng, báo cả hai path và chỉ move hay regenerate sau khi xác nhận destination. |
+| Diagram sai fact | Sửa source model trước; đừng coi visual revision là evidence gathering. |
+
+Skill không thể bảo đảm diagram chưa review đã sẵn sàng publish, mọi brand cho
+phép visual style đóng package hay renderer behavior giống nhau trên mọi máy.
+Tiếp tục với `ak:docs` để đặt artifact đã duyệt vào route tài liệu lâu dài.
+
+Xem [Tổng quan Marketing Kit](../../marketing) và
+[Projects, artifacts và checkpoints](../../../concepts/projects-artifacts-checkpoints).

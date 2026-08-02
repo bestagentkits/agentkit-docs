@@ -1,0 +1,62 @@
+---
+title: ak plan close
+description: Close one indexed plan with a whole-store recovery snapshot while leaving its plan files untouched.
+---
+
+Use `ak plan close` when work should leave the active plan listing but is not
+yet being moved into long-term archived retention.
+
+## Usage
+
+```bash
+ak plan close <id>
+```
+
+Supply one full plan-store ID. The command has no command-specific flags.
+
+## Close one plan
+
+```bash
+ak plan close my-project/260722-1200
+```
+
+The command directly changes the store row's lifecycle `state` to `closed` and
+updates its timestamp. A plan's workflow `status` and lifecycle `state` are
+separate: recording a completed status does not close it, and closing it does
+not rewrite `plan.md`.
+
+There is no preview, prompt, stdin read, or `--yes` gate. Repository plan files
+are not edited, moved, or deleted. Closed rows remain indexed and can be listed
+with `ak plan list --include-closed`.
+
+Before the transition, AgentKit creates a SQLite-consistent snapshot of the
+whole plan store under `$AGENTKIT_HOME/plans/plans-recovery/`. It is retained
+after success, is separate from `ak backups`, and does not contain repository
+plan files. The command does not print the snapshot path.
+
+## Output and privacy
+
+Human success is written to stdout. JSON success uses `kind=plan.close` and a
+plan summary under `data`, including `id`, `status`, `state`, and `updated_at`.
+Optional fields can include the repository URL and absolute project/worktree
+paths, so redact captured output before sharing it.
+
+Errors use stderr. JSON execution errors use the structured error envelope;
+flag-parse errors can remain plain text. The command does not emit NDJSON.
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | The store row is closed and a recovery database was retained. | Verify with `ak plan list --all --include-closed`. |
+| `1` | The ID was not found, the store was unavailable, or snapshot/state I/O failed. | Confirm the ID and preserve recovery data before retrying. |
+| `2` | Arguments or flags were invalid. | Supply exactly one plan ID. |
+
+There is no public `ak plan` restore command. Treat a retained recovery file as
+whole-store material and do not manually replace the live database while other
+AgentKit processes are using it.
+
+## Related commands
+
+- [Complete `ak plan` command facts](../cli/ak_plan)
+- [CLI conventions](../cli-conventions)

@@ -1,0 +1,68 @@
+---
+title: ak journal
+description: Tạo và đọc nhật ký công việc kỹ thuật cục bộ mà không xem chúng là nguồn thẩm quyền bền vững của project.
+---
+
+Dùng `ak journal` để quản lý bản ghi công việc Markdown theo thời gian trong
+thư mục `plans/journals/` của project. Journal có thể giải thích công việc đã
+hoàn tất hoặc một incident, nhưng chỉ là ghi chép lịch sử, không thay thế spec,
+ADR hay nguồn thẩm quyền hiện hành khác.
+
+## Chọn subcommand
+
+| Mục tiêu | Lệnh | Tác động |
+| --- | --- | --- |
+| Viết entry mới | `ak journal create <title>` | Tạo một file Markdown mới, tránh va chạm tên. |
+| Tìm entry | `ak journal list` | Đọc phần tóm tắt và áp dụng bộ lọc project, ngày hoặc văn bản. |
+| Đọc một entry | `ak journal show <id-or-slug>` | In entry Markdown đã chọn. |
+| Kiểm tra một entry | `ak journal validate <path-or-id>` | Kiểm tra title, date, khả năng đọc và đuôi `.md`. |
+
+Chạy `ak journal` mà không có subcommand chỉ hiển thị trợ giúp, không đọc hoặc
+ghi file journal.
+
+## Hiểu cách chọn project
+
+`create`, `show` và `validate` nhận `--project <name>`. Giá trị này là tên
+project đã đăng ký khớp chính xác, không phải đường dẫn filesystem. Khi bỏ cờ,
+AgentKit trước tiên tìm project đã đăng ký chứa thư mục làm việc hiện tại.
+
+Nếu không có registration chứa thư mục hiện tại, `create` và `validate` fallback
+sang chính thư mục đó. `list` và `show` lại tiếp tục dùng basename của nó như
+tên registry; chúng thường trả về rỗng/not found nhưng có thể chọn một thư mục
+đã đăng ký khác có cùng tên. Hãy đăng ký thư mục hoặc truyền `--project` tường
+minh trước khi dựa vào discovery theo tên hay ID.
+
+## An toàn và quyền riêng tư
+
+Family lệnh này chỉ hoạt động cục bộ: không gọi registry, provider hay dịch vụ
+mạng khác và không khởi chạy process khác. Chỉ `create` thay đổi nội dung
+journal. Lệnh không hỏi xác nhận, không preview, không tạo backup và không có
+`--force`; khi trùng tên, nó cấp tên file mới thay vì ghi đè entry.
+
+Body, summary, filename và đường dẫn tuyệt đối của journal có thể xuất hiện
+trên stdout hoặc trong JSON. Hãy xem đầu ra đó là nội dung project trước khi
+ghi log hoặc chia sẻ. Không pipe credential hay secret khác vào
+`create --stdin`.
+
+## Đầu ra và mã thoát
+
+Subcommand thành công ghi kết quả dành cho người dùng hoặc JSON có version lên
+stdout. `--quiet` ẩn stdout thành công. Các JSON kind là `journal.create`,
+`journal.list`, `journal.show` và `journal.validate`.
+
+Lỗi runtime của family này không đi qua JSON error renderer dùng chung. Với
+`--json`, lookup hoặc I/O thất bại vì thế có thể thoát khác `0` mà không có JSON
+trên stderr. Lỗi parse cờ vẫn là plain text. Luôn kiểm tra process exit code.
+
+Ý nghĩa mã thoát phụ thuộc subcommand: `1` là thiếu entry hoặc lỗi I/O, `2` là
+input hay project selection không hợp lệ, và `3` là validation đã chạy xong
+nhưng kết quả không hợp lệ.
+
+## Lệnh liên quan
+
+- [Tạo journal entry](./journal-create)
+- [Liệt kê journal entry](./journal-list)
+- [Hiển thị journal entry](./journal-show)
+- [Validate journal entry](./journal-validate)
+- [Quản lý project registry](./projects)
+- [Quy ước CLI](../cli-conventions)

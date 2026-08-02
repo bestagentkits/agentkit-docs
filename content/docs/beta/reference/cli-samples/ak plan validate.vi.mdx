@@ -1,0 +1,76 @@
+---
+title: ak plan validate
+description: Gate cấu trúc thư mục plan trong CI bằng report rõ ràng và mã thoát 3 cho nội dung không hợp lệ.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak plan validate` để kiểm tra format tệp của một thư mục plan mà không mở
+plan store cục bộ.
+
+## Cách dùng
+
+```bash
+ak plan validate <path>
+```
+
+Lệnh nhận đúng một path thư mục và không có cờ riêng.
+
+## Nội dung được validate
+
+Thư mục hợp lệ phải:
+
+- có `plan.md` đọc được;
+- có `title` không rỗng trong front matter đầu tệp dạng đơn giản mà lệnh parse;
+- có ít nhất một tệp `phase-<number>-<slug>.md` parse được.
+
+Title của phase có thể đến từ front matter, H1 đầu tiên hoặc slug trong tên
+tệp. Checkbox quyết định phase status khi có mặt. Phép kiểm tra không yêu cầu
+mọi task hoàn tất, không validate plan-store synchronization, không resolve
+current plan và không áp schema cho YAML lồng nhau tuỳ ý.
+
+Đây là lệnh cục bộ, read-only. Nó không mở/tạo/migrate plan store, spawn Git,
+dùng mạng/auth/provider, đọc stdin hay prompt. Không có preview, apply, force,
+backup hoặc mutation cần recovery.
+
+## Hợp đồng đầu ra
+
+Human output hợp lệ bắt đầu bằng `[OK]`. Output không hợp lệ bắt đầu bằng `[X]`
+và liệt kê lỗi validation. JSON dùng `kind=plan.validate` với:
+
+```text
+data.valid: boolean
+data.dir: the supplied path
+data.errors: array of validation messages
+```
+
+<Callout type="info">
+  Plan không hợp lệ vẫn phát report bình thường ra stdout, gồm JSON envelope có
+  hình dạng success với `data.valid=false`, rồi thoát `3`. Lệnh không phát thêm
+  JSON error envelope. Hãy capture stdout cả khi process status khác không.
+</Callout>
+
+## Ví dụ CI
+
+```bash
+code=0
+ak plan validate ./plans/my-plan --json >plan-validation.json || code=$?
+# Read data.errors; code 3 means the plan content is invalid.
+```
+
+Hãy giữ status trực tiếp của lệnh khi cần phân biệt mã `3` với lỗi khác.
+
+## Kết quả, mã thoát và khôi phục
+
+| Mã | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Format plan hợp lệ. | Tiếp tục workflow. |
+| `3` | Thư mục hoặc nội dung plan không hợp lệ, gồm cả thiếu `plan.md`. | Đọc lỗi trên stdout, sửa tệp và chạy lại. |
+| `2` | Argument hoặc cờ không hợp lệ. | Sửa cách gọi. |
+| `1` | Render hoặc runtime failure chưa phân loại. | Xem stderr và sửa môi trường trước khi thử lại. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak plan validate`](../cli/ak_plan_validate)
+- [Đọc status từ tệp](../cli/ak_plan_status)
+- [Parse structured plan view](../cli/ak_plan_parse)

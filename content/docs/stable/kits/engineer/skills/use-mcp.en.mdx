@@ -1,0 +1,147 @@
+---
+title: Discover and run MCP tools with ak:use-mcp
+description: Choose runtime-native MCP or the bundled client, inspect schemas, and control external effects with ak:use-mcp.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:use-mcp` to discover an existing MCP server's tools, prompts, or
+resources and call the smallest tool that completes a bounded task. It prefers
+the active runtime's registered MCP surface and provides a deterministic local
+client for stdio servers declared in project configuration.
+
+## Choose ak:use-mcp for existing servers
+
+### Use ak:use-mcp when
+
+- A registered MCP tool can read or change an external service for your task.
+- You need to inspect tool names and input schemas before calling one.
+- A project stdio server is configured but not visible in the current runtime.
+- You need a persisted local catalog for a reproducible scripted workflow.
+
+### Choose another workflow when
+
+- You need to design and implement a new server. Use [`ak:mcp-builder`](./mcp-builder).
+- You need the user's real Chrome cookies or exact profile. Establish that
+  browser context before using a profile-blind DevTools server.
+- The task does not require MCP. Use the narrower native tool or project command.
+- You would need to copy credentials into another runtime's global config. Stop
+  and configure the intended runtime explicitly instead.
+
+## Prepare access and choose a path
+
+For runtime-native MCP, confirm the server and tool are visible in the current
+session. For the direct client, you need Node.js, npm, the bundled scripts, and a
+valid `.claude/.mcp.json` containing stdio `command`, `args`, and optional `env`
+for each server. Keep credentials in approved environment or secret stores.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:use-mcp ...` | Prefer MCP tools registered in the Claude session; direct scripts cover project stdio configuration not registered there. |
+| Cursor | `/ak:use-mcp ...` | Slash invocation can load the Skill, but the released evidence does not establish a native Cursor MCP path; use only capabilities visible in that session or the direct client. |
+| Codex | `$ak:use-mcp ...` | Prefer MCP tools registered or found through deferred discovery in the Codex session; tool names can differ from Claude. |
+
+## Run the Skill
+
+The Skill accepts a task and defines no mode flags. Name the server when known,
+state whether discovery must remain read-only, and identify any external write
+you are willing to approve.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:use-mcp "List the issue tools available from the registered project server; do not call a mutating tool"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:use-mcp "List the issue tools available from the registered project server; do not call a mutating tool"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:use-mcp "List the issue tools available from the registered project server; do not call a mutating tool"
+```
+
+  </Tab>
+</Tabs>
+
+### Use the bundled direct client only when needed
+
+From the Skill's `scripts/` directory:
+
+```bash
+npm install
+npx tsx cli.ts list-tools
+npx tsx cli.ts list-prompts
+npx tsx cli.ts list-resources
+npx tsx cli.ts call-tool <server> <tool> '<json-args>'
+```
+
+`list-tools` writes the discovered schemas to `assets/tools.json`. The client
+connects configured servers sequentially, continues when one server fails,
+uses a 120-second global CLI timeout by default through `MCP_TIMEOUT`, allows up
+to 300 seconds for individual list or call operations, and closes clients and
+transports when it finishes.
+
+## Understand the observable workflow
+
+1. **Inventory native capabilities.** Search the current runtime before deciding
+   a server is unavailable.
+2. **Choose the narrowest path.** Use a native tool when visible; use the direct
+   client only for a configured stdio server or deterministic CLI need.
+3. **Inspect the schema.** Validate required arguments and constraints from the
+   live tool definition or persisted catalog.
+4. **Classify effects.** Distinguish discovery, read-only access, external writes,
+   destructive actions, and calls that can incur provider cost.
+5. **Request approval when needed.** Confirm the exact external mutation,
+   destination, data, and expected cost before execution.
+6. **Call and report.** Return the server/tool name, bounded arguments, result or
+   error, and evidence of any changed external state.
+
+## Keep external effects explicit
+
+<Callout type="warn" title="MCP discovery is not blanket authorization">
+  A tool description or annotation is guidance, not a security guarantee.
+  Inspect arguments and obtain explicit approval before writes, deletes,
+  messages, purchases, uploads, credential use, or other consequential calls.
+</Callout>
+
+Even list commands start configured server subprocesses, which may initialize
+network connections or provider clients. `npm install` downloads dependencies
+and creates local disk state. Tool calls may transmit inputs to external
+services, change remote data, consume quotas, or create charges according to the
+server and provider. Do not place secrets in command output or the catalog.
+
+## Verify outputs and evidence
+
+A complete run identifies the selected path, discovered server and tool,
+validated argument schema, effect classification, approval record when needed,
+and returned result. For direct discovery, verify that `assets/tools.json` is
+valid JSON with server names and full input schemas. The bundled smoke test
+checks dependency availability, TypeScript compilation, CLI help, an empty
+configuration round trip, and restoration of the prior catalog; it does not
+exercise a live server.
+
+## Troubleshoot and limits
+
+| Symptom | Safe next step |
+| --- | --- |
+| A native tool is missing | Search deferred capabilities, confirm runtime registration, then restart the session if configuration changed. |
+| Direct scripts cannot find configuration | Run them from a project with a valid `.claude/.mcp.json`; the bundled client uses that default path. |
+| One server fails during discovery | Read its connection error; other configured servers may still be listed successfully. |
+| The tool or arguments are uncertain | Regenerate and inspect `assets/tools.json`; do not guess a mutating call. |
+| The CLI reaches its timeout | Narrow server scope or diagnose the slow server; do not disable lifecycle cleanup. |
+
+The direct client supports stdio configuration only, even though the MCP
+protocol and other clients can support remote transports. Its configuration
+reference describes environment loading more broadly than the bundled client
+implements, so rely on the actual process environment and server `env` mapping.
+The persisted catalog is a snapshot, not proof that tools remain available.
+The two release snapshots used for this page contain the same Skill and client.

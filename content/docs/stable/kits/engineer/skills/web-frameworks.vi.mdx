@@ -1,0 +1,202 @@
+---
+title: Xây dựng project Next.js và Turborepo với ak:web-frameworks
+description: Thiết kế, scaffold, migrate và tối ưu project Next.js hoặc Turborepo trong khi giữ rõ version framework, cache input, thay đổi package và quyền deploy.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:web-frameworks` cho Next.js App Router, React Server Components, SSR,
+static generation, ISR, data caching, Turborepo pipeline và tích hợp RemixIcon.
+Đây là hướng dẫn có khả năng triển khai, kèm hai utility local tùy chọn để
+scaffold project hoặc chuẩn bị migration monorepo.
+
+## Chọn ak:web-frameworks cho kiến trúc framework
+
+### Dùng ak:web-frameworks khi
+
+- Bạn cần thay đổi route, layout, ranh giới Server hoặc Client Component, loading
+  hay error state, data-fetching policy, metadata, image, font hoặc bundle của
+  Next.js.
+- Bạn cần tạo hoặc migrate monorepo JavaScript hay TypeScript và định nghĩa task
+  dependency, output, filter, concurrency hoặc caching của Turborepo.
+- Bạn cần thêm RemixIcon qua webfont, framework package hoặc SVG riêng trong khi
+  giữ constraint accessibility và bundle.
+
+### Chọn quy trình khác khi
+
+- Framework chỉ là phần phụ của UI state hoặc hành vi component. Dùng
+  `ak:frontend-development` và tham khảo Skill này cho ranh giới framework.
+- Visual direction là kết quả chính. Dùng `ak:frontend-design`.
+- Deployment, cấu hình provider, credential CI hoặc vận hành production là trọng
+  tâm. Dùng `ak:devops`; Skill này có thể chuẩn bị artifact nhưng không cấp quyền
+  deploy.
+- Bạn dùng framework ngoài Next.js và Turborepo. Dùng tài liệu chính thức hiện
+  tại của framework đó hoặc Skill phù hợp thay vì khái quát các reference này.
+
+## Chuẩn bị bối cảnh framework
+
+Trước khi bắt đầu:
+
+- Hoàn tất [Onboarding](../../../getting-started/onboarding), rồi xác nhận
+  Engineer Kit được cài cho runtime và scope hiện tại.
+- Xác định version Node.js và package manager, lockfile, version framework và
+  React, loại router, constraint rendering và hosting, workspace layout, lệnh
+  build và file được phép đổi.
+- Kiểm tra tài liệu framework hiện tại cho version đã pin. Next.js cache, request
+  API, dạng cấu hình, tính năng experimental và schema Turborepo đã thay đổi giữa
+  các release; ví dụ đi kèm là theo thời điểm.
+- Với server rendering, xác định server runtime, secret, quyền database và API,
+  ranh giới authentication, độ mới cache, invalidation và dữ liệu tuyệt đối
+  không được vào client bundle.
+- Với monorepo, kiểm kê mọi workspace pattern, package graph, task, output,
+  environment input, generated artifact, process chạy lâu và owner remote cache
+  trước khi đổi cấu hình root.
+
+Utility tùy chọn cần Python 3.10 trở lên và chỉ dùng standard library khi chạy.
+Việc cài framework, build, test và dev server vẫn cần Node.js cùng package manager
+của repository. Remote caching của Turborepo còn cần cache service được duyệt,
+quyền mạng và credential như giá trị team và token của dịch vụ.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:web-frameworks ...` | Có thể dùng hướng dẫn và công cụ project sẵn có; Engineer hỗ trợ delivery native và plugin tường minh. |
+| Cursor | `/ak:web-frameworks ...` | Dùng cú pháp slash đã được người dùng xác minh; chưa xác lập mức tương đương về công cụ framework và Hook. |
+| Codex | `$ak:web-frameworks ...` | Dùng cơ chế tìm Skill native; package, browser và Hook dự kiến phụ thuộc session. |
+
+## Chạy Skill
+
+Dạng đối số được khai báo là `[framework] [feature]`. Skill không định nghĩa
+framework, version framework, package manager, hosting provider hay chế độ deploy
+mặc định.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:web-frameworks nextjs "Thêm trang product App Router trong version Next.js đã pin. Giữ dữ liệu ở server, định nghĩa độ mới cache và invalidation, thêm loading, error và not-found state, chạy kiểm tra tập trung, rồi dừng trước khi nâng dependency hoặc deploy."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:web-frameworks nextjs "Thêm trang product App Router trong version Next.js đã pin. Giữ dữ liệu ở server, định nghĩa độ mới cache và invalidation, thêm loading, error và not-found state, chạy kiểm tra tập trung, rồi dừng trước khi nâng dependency hoặc deploy."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:web-frameworks nextjs "Thêm trang product App Router trong version Next.js đã pin. Giữ dữ liệu ở server, định nghĩa độ mới cache và invalidation, thêm loading, error và not-found state, chạy kiểm tra tập trung, rồi dừng trước khi nâng dependency hoặc deploy."
+```
+
+  </Tab>
+</Tabs>
+
+### Hiểu các chế độ utility đi kèm
+
+Đây là script Python riêng, không phải flag của `ak:web-frameworks`:
+
+| Utility | Input và mặc định | Tác động |
+| --- | --- | --- |
+| Next.js initializer | `name` project dạng positional; target mặc định là `./<name>`. TypeScript, App Router và ESLint bật; `src/` và Tailwind tắt; import alias mặc định `@/*`. | Tạo thư mục mới và ghi cây app hoặc pages, `package.json`, cấu hình Next.js, cấu hình TypeScript, ESLint và Tailwind tùy chọn, `.gitignore` và README. Nó từ chối target đã tồn tại và không cài dependency. |
+| Tùy chọn Next.js initializer | `--directory`, `--no-typescript`, `--pages-router`, `--src-dir`, `--tailwind`, `--no-eslint`, `--import-alias` | Chỉ đổi file được tạo. Manifest sinh ra dùng một số khai báo dependency theo thời điểm hoặc `latest` cần rà soát trước khi cài. |
+| Turborepo migrator | `--path` mặc định là thư mục hiện tại; `--package-manager` nhận `npm`, `yarn`, `pnpm` hoặc `bun` và mặc định `npm`; `--dry-run` để preview. | Đọc workspace manifest và package script. Lượt chạy thật ghi `turbo.json` và ghi đè root `package.json` bằng script suy ra cùng `turbo: latest`; nó không cài package hay chạy build. |
+
+Ví dụ initializer nhanh trong Skill dùng tùy chọn `--name`, nhưng executable parser
+yêu cầu tên project là positional argument. Hãy theo định nghĩa executable ở
+trên.
+
+## Quan sát workflow framework dựa trên bằng chứng
+
+1. **Lượt chạy phân giải version và kiến trúc.** Nó ghi framework, router,
+   rendering target, package manager, workspace graph và hình dạng deploy.
+2. **Lượt chạy phân loại từng ranh giới.** Nó giữ phần không tương tác trong
+   Server Component, đưa browser API và interaction vào Client Component hẹp và
+   giữ secret cùng dữ liệu đặc quyền ở server.
+3. **Lượt chạy định nghĩa hành vi dữ liệu.** Nó nêu hành vi static, dynamic,
+   streamed hay revalidated, giới hạn freshness, cache key và environment input,
+   invalidation sau mutation, error handling và fallback state.
+4. **Lượt chạy đề xuất diff file và task.** Route, layout, cạnh package,
+   pipeline dependency, output, cache behavior và cách phân phối icon được nêu rõ.
+5. **Lượt chạy triển khai và xác minh.** Nó chỉ ghi khi được duyệt, rồi chạy kiểm
+   tra type, lint, test, build, bundle, cache dry run hoặc accessibility tập trung
+   mà project hỗ trợ.
+6. **Lượt chạy báo ranh giới delivery.** Nó ghi artifact, hoạt động cache hoặc
+   mạng, kiểm tra bỏ qua và thao tác provider còn chờ phê duyệt.
+
+## Tách biệt ghi file, cache và deployment
+
+<Callout type="warn" title="Scaffold và migration ghi file project">
+  Chỉ chạy initializer tại đường dẫn mới đã rà soát. Chạy Turborepo migrator với
+  `--dry-run` trước, giữ bản root manifest và rà soát mọi task cùng output được
+  tạo trước lượt thật. Không utility nào deploy, nhưng cả hai có thể chuẩn bị file
+  mà lệnh sau đó sẽ thực thi.
+</Callout>
+
+- `npx create-next-app`, `npx create-turbo`, lệnh cài của package manager và việc
+  dùng CDN hay font sẽ truy cập mạng, tải và thực thi mã package, sửa manifest và
+  lockfile, ghi dependency store và có thể chạy lifecycle script. Pin và rà soát
+  version trước khi cho phép.
+- Next.js build có thể thực thi module code và data fetching phía server, dùng
+  API, database, CPU, memory và disk, đồng thời nhúng environment value public
+  vào client asset. Dùng build credential cô lập và tránh ghi live ngoài ý muốn.
+- Server Action, Route Handler, truy cập database trực tiếp và cache revalidation
+  có thể thay đổi hệ thống ngoài. Vị trí trong framework không phải quyền cho
+  thao tác ghi bên dưới.
+- Turborepo task có thể chạy đồng thời trên nhiều package. `--dry-run` preview
+  task graph; nó không làm lượt chạy sau an toàn. Rà soát persistent task, script
+  `clean` phá hủy, database task, environment variable và output declaration.
+- Local cache ghi build output và log xuống disk. Remote cache upload và download
+  artifact cùng log tới bên thứ ba; không đưa secret hay build product nhạy cảm
+  vào đó và tính chi phí storage cùng transfer của provider.
+- Deployment platform, image optimization, remote asset, analytics script, phút
+  CI, remote cache, bandwidth và compute có thể phát sinh phí. Skill không định
+  nghĩa provider, giá, budget hay quyền production.
+
+## Xác minh kết quả
+
+Một kết quả đầy đủ nên cung cấp:
+
+- Version chính xác của framework, React, Node.js, package manager, router,
+  workspace và cấu hình đã dùng.
+- File và khai báo dependency đã đổi, cùng lý do về Server và Client Component,
+  cache, revalidation, environment và security.
+- Bằng chứng type, lint, test, build, route, loading, error, accessibility, bundle
+  hoặc cache tập trung phù hợp với thay đổi.
+- Với Turborepo, task graph, package filter, dependency, input, output, persistent
+  task, cache hit hay miss và ranh giới remote cache đã rà soát.
+- Mọi network call, external write, generated artifact, kiểm tra bỏ qua, version
+  mismatch chưa giải quyết và bước deploy còn chờ phê duyệt.
+
+## Khắc phục sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước an toàn tiếp theo |
+| --- | --- |
+| Ví dụ Next.js đi kèm lỗi trên version đã pin | Kiểm tra API và migration note chính thức của version đó; điều chỉnh pattern thay vì âm thầm nâng version. |
+| Initializer báo thư mục tồn tại | Chọn target mới hoặc kiểm tra và sửa project hiện có bằng tay; utility không merge. |
+| Migration dry run bỏ sót task hoặc output | Thêm có chủ ý sau khi rà từng package; inference chỉ lấy script có ở ít nhất hai package và thư mục output đã tồn tại. |
+| Cache hit chứa dữ liệu cũ hoặc sai | Kiểm tra input, environment variable, output, framework cache rule và scope remote cache đã khai báo trước khi force hoặc xóa cache. |
+| Server Component cần browser state | Chuyển interactive leaf nhỏ nhất qua ranh giới Client Component thay vì đổi cả cây. |
+| Runtime không nhận diện Skill | Xác nhận target và scope, khởi động lại session, rồi xem [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Xem [Project, artifact và checkpoint](../../../concepts/projects-artifacts-checkpoints)
+trước scaffold hoặc migration hay tiếp tục với [Engineer Kit](../../engineer).
+
+## Biết các giới hạn hiện tại
+
+- Reference chứa ví dụ Next.js, Turborepo, Node.js, RemixIcon, hosting và tính năng
+  experimental theo thời điểm. Chúng không xác lập khả năng tương thích với
+  version đã pin của project hay hành vi provider hiện tại.
+- Test utility dùng project local tạm và báo line coverage cao, nhưng không cài
+  dependency Node, chạy build Next.js hay Turborepo thật, xác minh security
+  framework, dùng remote cache hoặc deploy.
+- Lựa chọn package manager của migrator chỉ được ghi trong report, không điều
+  chỉnh cấu hình sinh ra hay lệnh cài. Parser pnpm đơn giản và việc suy ra output
+  từ thư mục hiện có cần được rà soát thủ công.
+- Thời lượng runtime không được định nghĩa. Scaffold là local và thường ngắn;
+  install, build, static generation, test, cache upload và deployment thay đổi
+  theo dependency graph, data access, trạng thái cache, kích thước artifact và mạng.
+- Stable và beta có cùng Skill reference, utility và test cho cặp bản phát hành
+  này.

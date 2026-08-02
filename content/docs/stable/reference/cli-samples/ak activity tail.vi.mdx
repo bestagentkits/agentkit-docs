@@ -1,0 +1,86 @@
+---
+title: ak activity tail
+description: Theo dõi riêng các activity event mới được ghi nối tiếp và đọc stream JSON dưới dạng NDJSON.
+---
+
+Dùng `ak activity tail` trong khi process khác tạo activity AgentKit. Lệnh bắt
+đầu ở cuối log hiện tại nên không phát lại lịch sử có sẵn.
+
+## Cách dùng
+
+```bash
+ak activity tail
+```
+
+Lệnh không nhận argument theo vị trí và không có cờ riêng.
+
+## Hành vi stream
+
+```bash
+ak activity tail
+ak activity tail --json
+```
+
+Lệnh poll log cục bộ để tìm các dòng hoàn chỉnh mới ghi nối tiếp. Log chưa tồn
+tại không phải lỗi; process chờ tệp xuất hiện. Dòng rỗng hoặc sai định dạng bị
+bỏ qua.
+
+Stream hoạt động theo best effort. Event có thể bị bỏ khi buffer nội bộ có giới
+hạn bị backpressure; lỗi mở/đọc tạm thời được retry thay vì báo. Dùng
+`ak activity list --since <last-id>` sau khi kết nối lại nếu cần bù khoảng trống.
+
+## Output cho người dùng và JSON
+
+Chế độ cho người dùng ghi một dòng cho mỗi event gồm `id`, `kind`, `skill` và
+timestamp. Không có header ban đầu hay snapshot lịch sử.
+
+`--json` phát JSON phân tách bởi newline, không phải một document hữu hạn. Mỗi
+dòng là một envelope riêng:
+
+```text
+schema_version: 1
+kind: activity.event
+data.id, data.ts, data.kind
+data.skill, data.runtime, data.duration_ms, data.exit_code: optional
+```
+
+Giữ stdout mở và decode từng object JSON theo dòng. Đừng chờ dấu đóng array.
+
+## TTY, stdin và hủy
+
+Hành vi tail giống nhau trên TTY và trong pipe. Lệnh không prompt và không đọc
+stdin. `--yes` cùng `--no-interactive` không đổi stream.
+
+Implementation ghi event trực tiếp thay vì qua quiet renderer thông thường, nên
+`--quiet` không ẩn các dòng event đang stream. Dừng bằng Ctrl-C, SIGTERM hoặc
+context cancellation; đường hủy nhận signal bình thường thoát `0` và không in
+terminal JSON record.
+
+## Tác động cục bộ và quyền riêng tư
+
+Lệnh chỉ đọc `~/.agentkit/activity/events.ndjson`; `AGENTKIT_HOME` đổi phần gốc.
+Nó không tạo, cắt ngắn, rotate hay prune log và không gọi mạng hoặc provider.
+
+Event chứa metadata lần chạy có giới hạn, không có prompt hay argument skill.
+Hãy bảo vệ stream như dữ liệu vận hành cục bộ vì tên skill/runtime, thời lượng
+và exit code vẫn có thể thể hiện thói quen làm việc.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Stream kết thúc qua hủy bình thường hoặc worker kết thúc sạch. |
+| `1` | Resolve home hoặc encode/ghi stdout thất bại, hay có argument theo vị trí. |
+| `2` | Cờ không hợp lệ. |
+
+Lỗi runtime trong `--json` có thể không có error envelope. Hủy sạch cũng không
+có envelope cuối, nên trạng thái process phân biệt hai trường hợp.
+
+Trên macOS, guard first-launch dùng chung của CLI cũng có thể ghi
+`~/.agentkit/.first-run-darwin` và in hint một lần lên stderr trước khi lệnh
+này chạy.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak activity tail`](../cli/ak_activity_tail)
+- [Quy ước CLI](../cli-conventions)

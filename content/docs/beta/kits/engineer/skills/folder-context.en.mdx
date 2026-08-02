@@ -1,0 +1,168 @@
+---
+title: Preserve subfolder conventions with ak:folder-context
+description: Create compact local instructions for a meaningful subfolder while protecting root guidance and user edits.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:folder-context` when a subfolder has durable decisions or conventions
+that a future agent cannot reliably infer. The Skill proposes a concise local
+instruction file, waits for your approval, then creates `CLAUDE.md` and a linked
+`AGENTS.md` inside the confirmed folder.
+
+## Choose ak:folder-context for durable local guidance
+
+### Use ak:folder-context when
+
+- A subfolder has naming, architecture, workflow, or safety rules that differ
+  from the project root.
+- Locked decisions or ongoing work must survive across sessions.
+- A future agent needs a short map of essential local files and their roles.
+- You want Claude-compatible and AGENTS-compatible guidance to share one source.
+
+### Choose another workflow when
+
+- You need root-level project instructions. Use `ak:docs agent-context`; this
+  Skill never edits root `CLAUDE.md` or root `AGENTS.md`.
+- The folder contains only static reference material or its context is easy to
+  discover on demand.
+- You are writing published project documentation under `docs/`; use the
+  project documentation workflow instead.
+- You only need temporary session notes rather than durable agent guidance.
+
+## Prepare the target folder
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Engineer Kit is installed for the runtime and scope you are using.
+- Name one existing subfolder as the target.
+- Preserve its current instructions and any unrelated work.
+- Be ready to confirm the proposed outline before files are written.
+- Remove credentials and other secrets from any context you provide.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:folder-context <target-folder>` | Native delivery is the default; explicit plugin delivery is also supported. |
+| Cursor | `/ak:folder-context <target-folder>` | Slash invocation is user-verified. This does not establish broader runtime parity. |
+| Codex | `$ak:folder-context <target-folder>` | The Skill uses native Codex discovery. Filesystem and symlink behavior still depends on the current environment. |
+
+See [Runtime adapters](../../../concepts/runtime-adapters) for delivery and
+component-level differences.
+
+## Request the local context
+
+The Skill accepts one target-folder argument. It has no published mode flags or
+automatic-write mode: outline approval is part of the workflow.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:folder-context packages/payments
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:folder-context packages/payments
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:folder-context packages/payments
+```
+
+  </Tab>
+</Tabs>
+
+A useful request can add evidence such as “capture the provider naming rules,
+the no-network unit-test constraint, and the decision to keep currency values
+as integer minor units.” The target remains the positional folder argument;
+these details guide inspection and the proposed outline.
+
+## Understand what happens during a run
+
+1. **The Skill validates the target.** It confirms the path is a subfolder, not
+   the project root, and reads existing local instructions first.
+2. **The Skill inspects local evidence.** It reviews key source, configuration,
+   Markdown, and context files needed to understand the folder.
+3. **The Skill applies a sanity gate.** It skips folders whose context is static
+   or readily discoverable instead of creating unnecessary files.
+4. **The Skill proposes an outline.** It groups only useful sections and waits
+   for your confirmation before writing.
+5. **The Skill writes the durable source.** It creates a compact local
+   `CLAUDE.md` from folder evidence and explicit user decisions, omitting empty
+   sections.
+6. **The Skill links the companion file.** It creates `AGENTS.md` as a symlink
+   to `CLAUDE.md`; where symlinks are unavailable, it writes a one-line pointer
+   and reports the fallback.
+7. **The Skill respects later edits.** If you edit the context, it re-reads the
+   file and flags contradictions without reverting your work.
+
+Useful content includes the folder purpose, essential files with one-line
+roles, local constraints, naming conventions, and dated locked decisions. The
+Skill favors focused bullets over generic prose or a copied file tree.
+
+## Keep file authority with you
+
+<Callout type="warn" title="The outline requires your approval">
+  Inspection does not authorize a write. Confirm the target and proposed
+  outline before the Skill creates or replaces local instruction paths.
+</Callout>
+
+- The Skill writes only inside the confirmed subfolder.
+- It does not duplicate root instructions or invent constraints that local
+  evidence does not support.
+- It does not put credentials in the context file.
+- Existing local instructions and user edits remain authoritative.
+- A symlink changes how two paths resolve to one source; review this effect
+  before approval, especially on platforms with limited symlink support.
+- The workflow specifies local reads and writes, not network access, external
+  providers, paid services, commits, pushes, publication, or deployment.
+  Approve any such follow-up separately if your runtime proposes it.
+
+## Verify the result
+
+A complete run should give you:
+
+- A concise `CLAUDE.md` inside the requested subfolder.
+- An `AGENTS.md` symlink that resolves to it, or a disclosed one-line pointer
+  fallback.
+- Content grounded in inspected files or decisions you explicitly supplied.
+- No edits to root instructions or files outside the confirmed target.
+- A report of the created paths, fallback behavior, and any contradiction that
+  still needs resolution.
+
+Inspect both paths and verify the link or pointer before relying on the context
+in a later session. This Skill defines no dedicated automated test suite; the
+observable evidence is the file content, path boundary, and link behavior.
+
+## Troubleshoot or continue
+
+| Symptom | Safe next step |
+| --- | --- |
+| The Skill refuses the project root | Choose a meaningful subfolder, or use `ak:docs agent-context` for Claude Code `CLAUDE.md` or Codex `AGENTS.md` at the root. |
+| The Skill recommends creating nothing | Accept the sanity gate unless you can name durable context that cannot be inferred. |
+| The outline contains generic or duplicated rules | Remove them and keep only evidence-backed local guidance. |
+| `AGENTS.md` is a pointer instead of a symlink | Confirm symlinks are unavailable, then inspect the disclosed one-line fallback. |
+| Existing instructions conflict with the proposal | Keep the conflict visible and decide which local rule is authoritative before writing. |
+| A user edit disappeared | Stop and restore the user-authored version; the Skill must not revert it without instruction. |
+| The runtime does not recognize the Skill | Confirm target and scope, restart the runtime session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Continue with [Projects, artifacts, and checkpoints](../../../concepts/projects-artifacts-checkpoints)
+when you need a broader durable-work model.
+
+## Know the current limits
+
+- Quality depends on useful local evidence and explicit decisions; the Skill
+  cannot infer undocumented policy reliably.
+- The output is intentionally compact and does not replace project docs or root
+  governance.
+- Symlink creation depends on filesystem and platform capabilities.
+- Root context has a separate confirmation-based workflow in
+  `ak:docs agent-context`; this Skill remains subfolder-only.

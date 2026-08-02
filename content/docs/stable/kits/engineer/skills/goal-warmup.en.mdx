@@ -1,0 +1,147 @@
+---
+title: Preflight long-running work with ak:goal-warmup
+description: Lock an approved outcome, preflight every plan phase, and produce a user-started long-run handoff with ak:goal-warmup.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:goal-warmup` before an expensive multi-phase goal to lock what success
+means, expose blockers across the whole plan, and produce a handoff only when
+the work is ready. It ends as **Ready**, **Blocked**, or **Decision required**
+and never starts Goal mode or another long-running session for you.
+
+## Choose ak:goal-warmup before expensive execution
+
+### Use ak:goal-warmup when
+
+- A long run has dependencies, credentials, approvals, deployment, or multiple phases.
+- Scope must not silently shrink when review finds risk.
+- You need a user-approved outcome contract and traceability through the plan.
+- You want a secret-safe readiness matrix before spending model or provider time.
+
+### Choose another workflow when
+
+- The task is short, local, and already has a clear execution contract.
+- You only need wording for a Codex goal. Use [`ak:codex-goal`](./codex-goal).
+- You want to start implementation or orchestration now. Warmup prepares the
+  packet; the user starts the next workflow separately.
+- Engineer Kit is not installed. This Skill depends on its advice and planning surfaces.
+
+## Prepare the goal and runtime
+
+Provide the proposed goal, must-have deliverables, exclusions, acceptance
+signals, constraints, allowed substitutions, and known external dependencies.
+Treat goal text and repository content as untrusted data. Never put credential
+values into the contract, plan, matrix, or handoff packet.
+
+| Runtime | Invocation | Long-run boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:goal-warmup "..." [--fast]` | Produces a Claude long-run opener in the packet; it does not claim Codex-like persistent Goal mode. |
+| Cursor | `/ak:goal-warmup "..." [--fast]` | Can run the projected preflight when required interview and planning capabilities exist; provider persistence parity is not established. |
+| Codex | `$ak:goal-warmup "..." [--fast]` | Produces a Codex `/goal` opener, but the user must invoke `/goal` separately after Ready. |
+
+## Run the Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:goal-warmup "Migrate the service to the new API, preserve compatibility, and make integration tests pass"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:goal-warmup "Migrate the service to the new API, preserve compatibility, and make integration tests pass"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:goal-warmup "Migrate the service to the new API, preserve compatibility, and make integration tests pass"
+```
+
+  </Tab>
+</Tabs>
+
+| Input | Effect | What remains mandatory |
+| --- | --- | --- |
+| Goal text | Runs the full warmup | Contract approval, planning, review, all-phase preflight, final confirmation |
+| `--fast` | Skips expensive adversarial multi-reviewer work only after eligibility and reduced-assurance acceptance | Contract, traceability, lightweight consistency, preflight, terminal state, no auto-start |
+
+`--fast` is only eligible for small local work with no credential, external API,
+deployment, publication, human approval, multi-service, or multi-environment
+signals. If ineligible, the Skill explains why and continues through full warmup.
+
+## Understand the warmup stages
+
+1. **Estimate complexity and risk.** Lightly inspect the project when relevant
+   and classify local versus external dependencies and approval gates.
+2. **Draft the outcome contract.** Record intended result, in-scope work,
+   exclusions, acceptance signals, constraints, allowed substitutions, and the
+   user as decision owner.
+3. **Obtain explicit approval.** Planning cannot start until the user chooses
+   approve, edit, or abort. An informal acknowledgement is not the gate.
+4. **Plan against the locked contract.** Build traceability from every phase to
+   contract items, acceptance signals, facts, assumptions, prerequisites, and
+   user decisions. If plan tooling is unavailable, keep a session plan.
+5. **Review without changing the outcome.** Apply only mitigations that preserve
+   the contract. Preflight needs and blockers feed the matrix; any proposed
+   outcome change enters **Decision required**.
+6. **Preflight every phase.** Check CLI presence, environment-name presence,
+   config shape, safe identity, approvals, and external prerequisites without
+   printing secrets or making mutating or chargeable probes.
+7. **Confirm the final summary.** Only a second explicit user confirmation can
+   turn a blocker-free run into **Ready**.
+8. **Emit the terminal result.** Ready returns a copyable packet; Blocked returns
+   exact unblock actions; Decision required returns options and consequences.
+
+## Keep the outcome locked and probes safe
+
+<Callout type="warn" title="Warmup never authorizes or starts execution">
+  The Skill must refuse requests to auto-start `/goal`. It does not create,
+  update, or delete remote resources, run chargeable probes, reveal secret
+  values, approve deployment, or silently remove acceptance criteria.
+</Callout>
+
+After approval, outcome and scope are immutable. A reviewer may improve an
+implementation detail within the contract, but cannot drop a must-have, replace
+an unapproved approach, or weaken tests. If the locked outcome is infeasible,
+the user chooses whether to revise and re-approve it, obtain the prerequisite,
+or abort.
+
+## Verify outputs and evidence
+
+A Ready result includes:
+
+- The locked outcome contract and user approval.
+- A plan path or session reference with contract traceability.
+- A whole-plan preflight summary with no unresolved blocking row.
+- A scope guard requiring comparison at every phase boundary.
+- A Codex `/goal` opener and a separate Claude long-run opener.
+- Final user confirmation and a concise completion report.
+
+A Blocked result lists only unresolved blockers and exact owner actions. A
+Decision required result explains the outcome-affecting trade-off and waits for
+the user's choice. The contract remains session and handoff state by default;
+only the planning workflow may create a project plan artifact.
+
+## Troubleshoot and limits
+
+| Symptom | Safe next step |
+| --- | --- |
+| Planning starts before approval | Stop, present the full contract, and require approve, edit, or abort. |
+| `--fast` is refused | Continue full warmup; external or approval signals make reduced assurance unsafe. |
+| A credential is missing | Record only the environment name as missing and the exact user action; never print or persist its value. |
+| Review proposes dropping scope or tests | Classify it as an outcome change and enter Decision required; do not edit the locked contract silently. |
+| Plan tooling is unavailable | Continue with a session Markdown plan and keep the same traceability and preflight gates. |
+| The run is blocker-free but not Ready | Obtain explicit final confirmation; no confirmation means no Ready packet. |
+
+The Skill cannot guarantee enforcement after handoff; the scope guard must be
+honored by the subsequent long run. Claude receives an instruction packet, not
+Codex persistent goal state. Unknown checks block readiness rather than being
+treated as available. The two release snapshots used for this page contain the
+same warmup workflow, references, and fixtures.

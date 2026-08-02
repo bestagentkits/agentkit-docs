@@ -1,0 +1,183 @@
+---
+title: Operate paid media safely with ak:ads-management
+description: Plan, inspect, and optimize paid ads while separating drafts and reports from credentialed account, budget, tracking, and activation changes.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:ads-management` for paid-media setup, copy, targeting, creative briefs,
+measurement, account reporting, and controlled optimization. The Skill covers
+Google Ads, Meta Ads, LinkedIn Ads, and TikTok Ads at the planning layer. It also
+ships direct Google and Meta API scripts whose write actions can change live
+accounts, budgets, assets, and delivery state.
+
+## Choose ak:ads-management for paid-media operations
+
+### Use ak:ads-management when
+
+- You need a platform-specific campaign structure, bidding proposal, audience
+  plan, ad-copy variants, creative requirements, or test design.
+- You need to read Google or Meta account reports with approved credentials.
+- You need a controlled plan for budget pacing, negative keywords, pauses,
+  activation, or other account changes.
+- You want to generate draft image or video assets after separately approving
+  the generation provider, inputs, output location, and possible cost.
+
+### Choose another workflow when
+
+- You need a paid-ad strategy and creative package without account operations.
+  Use [`ak:paid-ads`](./paid-ads).
+- You need a coordinated multi-channel campaign that includes email, content,
+  or organic work. Use [`ak:campaign`](./campaign).
+- You need organic social, SEO, email marketing, or website development. Those
+  are explicitly outside this Skill's scope.
+- You do not have current platform policy, account access, tracking consent, or
+  an approved spend boundary. Prepare those before any API mutation.
+
+## Prepare the account and credential boundary
+
+Provide the platform, campaign type, objective, approved account identifier,
+audience evidence, offer and claims, geography, exclusions, daily and total
+budget ceilings, tracking definitions, date range, and desired output. Mark the
+request as planning, reporting, or mutation; never leave that choice implicit.
+
+The Google script accepts `google-ads.yaml` or these environment variables:
+`GOOGLE_ADS_DEVELOPER_TOKEN`, `GOOGLE_ADS_CLIENT_ID`,
+`GOOGLE_ADS_CLIENT_SECRET`, `GOOGLE_ADS_REFRESH_TOKEN`,
+`GOOGLE_ADS_CUSTOMER_ID`, and `GOOGLE_ADS_LOGIN_CUSTOMER_ID`. The Meta script
+uses `META_APP_ID`, `META_APP_SECRET`, `META_ACCESS_TOKEN`, and
+`META_AD_ACCOUNT_ID`. Keep values out of prompts, output, source control, and
+screenshots. Use only the intended ad account and least-privilege provider role.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:ads-management ...` | Native delivery is the default; plugin delivery is explicit. Provider tools and credentials remain separately configured. |
+| Cursor | `/ak:ads-management ...` | Slash invocation is user-verified. This does not prove equivalent provider, Agent, or Hook behavior. |
+| Codex | `$ak:ads-management ...` | Native Skill discovery is supported. Hook projection is partial and there is no Marketing statusline. |
+
+See [Runtime adapters](../../../concepts/runtime-adapters) for component-level
+differences.
+
+## Invoke a bounded paid-media task
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:ads-management "Google Search campaign for approved brand terms. Inspect the supplied export, draft structure and copy, and propose a $150/day ceiling. Do not use credentials or change the account"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:ads-management "Google Search campaign for approved brand terms. Inspect the supplied export, draft structure and copy, and propose a $150/day ceiling. Do not use credentials or change the account"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:ads-management "Google Search campaign for approved brand terms. Inspect the supplied export, draft structure and copy, and propose a $150/day ceiling. Do not use credentials or change the account"
+```
+
+  </Tab>
+</Tabs>
+
+The Skill argument hint is `[platform] [campaign-type]`, but a safe request also
+states the evidence, account, budget, authority, and stopping point.
+
+## Follow the paid-media stages
+
+1. **Define the contract.** Confirm objective, platform, account, campaign type,
+   audience, exclusions, claims, landing destination, budget ceiling, success
+   measures, and whether the run is draft-only, read-only, or authorized to
+   mutate.
+2. **Research and structure.** Review supplied keyword, competitor, account, and
+   audience evidence; propose campaign, ad-group or ad-set, bidding, placement,
+   and exclusion structure.
+3. **Create reviewable assets.** Draft ad copy, creative briefs, variants, and
+   measurement requirements. Generated images or videos are separate network
+   actions and require provider access plus content review.
+4. **Validate tracking.** Define conversions, values, attribution assumptions,
+   naming, and report fields. Pixel, CAPI, GTM, customer-list, or similar setup
+   changes data collection and must be approved independently.
+5. **Operate only within approval.** Read reports first. Preview exact IDs,
+   fields, amounts, and expected state before any create, upload, pause, enable,
+   keyword, or budget call.
+6. **Measure and document.** Record the provider response, account and object IDs,
+   time range, spend units, before/after state, and next review point. Treat
+   recommendations as hypotheses, not guaranteed outcomes.
+
+## Separate reads from live mutations
+
+The installed Skill includes `scripts/google-ads-manager.py` and
+`scripts/meta-ads-manager.py`. Run them only from a trusted installation after
+reviewing the current provider API and script source.
+
+| Script surface | Effect |
+| --- | --- |
+| Google `report --days <n> [--customer-id <id>]` | Reads campaign performance and prints JSON. It still makes an authenticated network request and exposes account data to the local process. |
+| Google `create-campaign --name <name> --budget <amount>` | Creates a budget resource and a paused Search campaign. The amount is a daily USD budget in the shipped script. |
+| Google `pause` / `enable --campaign-id <id>` | Changes campaign delivery state. `enable` can begin delivery and spend. |
+| Google `add-negative-keyword --campaign-id <id> --keyword <text>` | Creates a campaign-level broad negative keyword. |
+| Google `update-budget --budget-id <id> --amount <amount>` | Changes the referenced daily budget in USD. |
+| Meta `report --preset <value> --level <campaign\|adset\|ad>` / `list-campaigns [--status <value>]` | Reads account data and prints JSON. |
+| Meta `create-campaign --name <name> --objective <value>` | Creates a paused campaign. The shipped common objective values are `traffic`, `awareness`, `engagement`, `leads`, `sales`, and `app_promotion`. |
+| Meta `create-adset --campaign-id <id> --name <name> --budget <amount> --countries <codes>` | Creates a paused ad set; the amount is converted to a daily USD value in cents. Optional age fields are `--age-min` and `--age-max`. |
+| Meta `create-ad --adset-id <id> --name <name> --page-id <id> --image <path> --link <url> --message <text>` | Uploads the image, creates a creative, and creates a paused ad. These are durable account mutations even before activation. |
+| Meta `pause` / `enable --id <id> --type <campaign\|adset\|ad>` | Changes delivery state. `enable` can activate spend. |
+| Meta `update-budget --adset-id <id> --budget <amount>` | Changes the referenced ad-set daily budget in USD. |
+
+<Callout type="warn" title="Enabling is a spend decision">
+  A paused object is still a live account mutation, and an enabled object can
+  deliver immediately. Before any write, verify the provider account, object
+  IDs, currency and units, total and daily ceilings, targeting, destination,
+  creative rights, tracking consent, policy status, and rollback owner. Require
+  a fresh approval for `enable` and every budget increase.
+</Callout>
+
+Creative generation examples in the package use external commands and can
+download packages, send prompts or assets to a provider, consume quota, and
+write image or video files. Approve those effects separately; review brand,
+rights, disclosure, likeness, claims, and platform specifications before use.
+
+## Review outputs and evidence
+
+A complete run should provide the campaign structure, copy and creative
+variants, targeting and exclusions, bidding and budget proposal, tracking map,
+test design, and an operation log. For API work, keep the exact command, account
+and object IDs, before/after state, returned JSON, timestamp, approver, and any
+provider warning or partial failure.
+
+Do not record credential values. Do not call a predicted CTR, CPA, ROAS,
+conversion rate, or scaling result an outcome. Historical thresholds and
+platform specifications bundled with the Skill require current validation.
+
+## Troubleshoot safely
+
+| Symptom | Safe next step |
+| --- | --- |
+| The runtime cannot find `ak:ads-management` | Confirm Marketing Kit target and scope, restart the runtime, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+| A dependency or provider SDK is missing | Stop before mutation. Review the installed Skill and provider's current official setup; do not install or download packages without approval. |
+| Credentials or account ID are missing | Keep the run draft-only. Ask the account owner to configure least-privilege access outside the prompt. |
+| The report is empty or metrics disagree | Verify account, date range, level, currency, conversion definitions, attribution window, and provider reporting delay. Preserve the raw response. |
+| The wrong object or amount appears in the preview | Stop. Resolve IDs and units from read-only account data; do not use a guessed identifier or corrective live write. |
+| A write partly succeeds | Do not rerun blindly. Capture returned IDs and provider state, inspect read-only, then prepare a bounded recovery action for approval. |
+| Current platform rules differ from the bundled reference | Follow current official provider documentation and policy; treat the packaged material as historical workflow guidance. |
+
+## Know the current limits
+
+- The direct scripts cover Google and Meta only; LinkedIn and TikTok material is
+  planning guidance, not a shipped direct API manager.
+- Provider APIs, policies, objectives, formats, attribution, pricing, and SDKs
+  can change independently of AgentKit.
+- The Skill cannot guarantee approval, delivery, reach, conversion, revenue,
+  CPA, ROAS, or creative performance.
+- Runtime installation does not grant provider credentials, account authority,
+  tracking consent, media rights, or budget approval.
+
+Continue with the [Marketing Kit overview](../../marketing) and
+[Projects, artifacts, and checkpoints](../../../concepts/projects-artifacts-checkpoints)
+for runtime ownership and recovery boundaries.

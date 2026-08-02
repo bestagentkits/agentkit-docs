@@ -1,0 +1,104 @@
+---
+title: ak login
+description: Authenticate to the AgentKit registry with a license key, email OTP, or user API key while keeping credential storage boundaries explicit.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak login` before installing or updating a licensed remote kit. You must
+select one authentication method; bare `ak login` is not an interactive method
+picker.
+
+## Usage
+
+```bash
+ak login [flags]
+```
+
+The documented command has no positional arguments. The current implementation
+ignores extra positional tokens, so do not use that behavior in scripts.
+
+## Before you run
+
+Choose one method:
+
+```bash
+ak login --api-key ak_live_... --no-interactive
+ak login --email you@example.com
+ak login --license-key ak_license_... --no-interactive
+```
+
+Use placeholders in saved scripts and support output. A successful result never
+prints the API key, license key, OTP, access token, or refresh credential.
+
+<Callout type="warning">
+  Email login always reads the OTP from stdin after printing `Enter OTP code:`
+  to stdout. `--json` and `--no-interactive` do not suppress that prompt. The
+  prompt therefore precedes the JSON object on stdout in email JSON mode.
+</Callout>
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--api-key <key>` | Empty | Authenticate with a user API key from your web profile. |
+| `--device-name <name>` | Hostname | Name the device created by `--license-key`. |
+| `--email <address>` | Empty | Start email OTP login, then read the code from stdin. |
+| `--license-key <key>` | Empty | Activate a license-key App device session. |
+| `--registry-url <url>` | Environment or release default | Override the registry used for authentication and later session checks. |
+
+Shared flags are described in [CLI conventions](../cli-conventions). `--yes`
+has no effect on this command. If several method flags are supplied, the
+current precedence is license key, then API key, then email; pass exactly one.
+
+## Credential storage
+
+After the registry accepts the credential, AgentKit writes private files under
+`~/.agentkit/auth/` (`AGENTKIT_HOME` changes the base directory):
+
+| Method | Stored slot | Renewable secret retained locally |
+| --- | --- | --- |
+| API key | CLI slot in `session.json` | The API key in the sibling `api-key` file, for session re-minting. |
+| Email OTP | CLI slot in `session.json` | A rotating refresh credential; the one-time OTP is not stored. |
+| License key | App slot in `session.json` | The returned device session; the license key is not stored. |
+
+Credential writes are atomic, use private path protection, and refuse to write
+through a credential-file symlink. CLI and App slots can coexist; logging in to
+the CLI slot does not replace an existing App device session.
+
+## Output and streams
+
+Human success output is written to stdout:
+
+```text
+[OK] logged in as you@example.com
+```
+
+JSON success is one versioned envelope on stdout:
+
+```json
+{"schema_version":1,"kind":"auth.login","data":{"email":"you@example.com","authMethod":"api_key","success":true}}
+```
+
+Runtime and authentication errors use stderr; JSON mode emits the shared error
+envelope. Flag-parse errors happen earlier and can remain plain-text usage.
+
+## Exit status
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | Registry authentication succeeded and the selected local slot was saved. | Run `ak whoami` and `ak licenses`. |
+| `1` | No method was selected, OTP input ended, the registry rejected the request, the response was incomplete, or private storage failed. | Correct the method or credential, then retry; do not publish the secret in logs. |
+| `2` | A flag could not be parsed. | Correct the invocation. |
+
+There is no preview, dry-run, confirmation, or decline path. Storage occurs
+only after the remote login response validates. Re-running login replaces the
+selected slot; use `ak logout` to clear the CLI slot.
+
+## Related commands and limitations
+
+- [Inspect the current account](./whoami)
+- [Inspect licensed kits](./licenses)
+- [Clear CLI credentials](./logout)
+- [Complete `ak login` command facts](../cli/ak_login)
+- [Authentication troubleshooting](../../troubleshooting/authentication)

@@ -1,0 +1,179 @@
+---
+title: Tạo visual asset với ak:design
+description: Định tuyến yêu cầu thiết kế, tạo đúng artifact và xác minh tệp trước khi bàn giao.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:design` để biến mục tiêu hình ảnh đã xác định thành brand asset, logo,
+mockup bộ nhận diện, slide deck, banner, ảnh mạng xã hội, icon hoặc prompt poster.
+Skill định tuyến yêu cầu tới tri thức đóng gói hoặc Skill liên quan, rồi để lại
+tệp cùng bằng chứng trực quan để bạn review.
+
+## Chọn ak:design cho visual artifact
+
+### Dùng ak:design khi
+
+- Bạn cần logo, icon, poster, banner, ảnh mạng xã hội, presentation hoặc
+  deliverable bộ nhận diện.
+- Bạn muốn một brand package kết nối logo, mockup nhận diện và slide.
+- Bạn cần design brief hoặc muốn tìm trong dữ liệu style, palette, industry,
+  layout hay deliverable đã đóng gói trước khi generate.
+- Bạn cần hướng design system và có thể chuyển phần implementation sang Skill
+  brand, design-system hoặc UI styling liên quan khi chúng khả dụng.
+
+### Chọn workflow khác khi
+
+- Bạn đang implementation component ứng dụng, Tailwind class hoặc shadcn/ui.
+  Dùng `ak:ui-styling`.
+- Bạn cần product UX reasoning, interaction rule hoặc accessibility review. Dùng
+  `ak:ui-ux-pro-max`.
+- Bạn cần audit tệp web hiện có theo guideline bên ngoài hiện tại. Dùng
+  `ak:web-design-guidelines`.
+- Bạn cần code video lập trình hoặc 3D scene. Dùng `ak:remotion` hoặc
+  `ak:threejs`.
+
+## Chuẩn bị brief và tool
+
+Trước khi bắt đầu:
+
+- Nêu loại artifact, audience, platform hoặc định dạng vật lý, copy bắt buộc,
+  brand asset, số lượng, kích thước và định dạng bàn giao.
+- Xác định nguồn chuẩn thương hiệu và cung cấp logo, font, màu cùng quyền sử dụng
+  hình ảnh đã duyệt. Đừng yêu cầu Skill đoán official asset.
+- Xác nhận nơi được phép ghi tệp và có giữ HTML trung gian, report hay prompt hay
+  không.
+- Cài Python cho script tìm kiếm đóng gói. Generate logo, CIP và icon còn cần
+  `google-genai` cùng provider key; xử lý ảnh CIP cần Pillow.
+- Chuẩn bị browser capture tool cho workflow HTML-to-PNG của banner hoặc social
+  image. Preview slide có thể tải Chart.js, font hoặc ảnh qua mạng.
+
+| Runtime | Cách gọi | Ranh giới bằng chứng |
+| --- | --- | --- |
+| Claude Code | `/ak:design ...` | Phân phối native hỗ trợ bề mặt Claude Hook đầy đủ khi đã cài. Skill liên quan và provider tool vẫn phụ thuộc session. |
+| Cursor | `/ak:design ...` | Cách gọi bằng slash đã được người dùng xác minh. Điều này không chứng minh mọi Skill liên quan, browser tool hay provider integration đều hiện diện. |
+| Codex | `$ak:design ...` | Hỗ trợ native Skill discovery. Hook projection chỉ một phần; generator bên ngoài vẫn cần credential và tool riêng. |
+
+Xem [Runtime adapter](../../../concepts/runtime-adapters) để biết ranh giới phân
+phối theo target.
+
+## Chạy Skill
+
+Skill không có mode flag cấp cao nhất. Đặt loại thiết kế cùng context trong yêu
+cầu; script built-in được chọn có thể có option riêng.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:design "Create three SVG settings-icon directions for a finance dashboard, inherit currentColor, include accessible titles, and save only approved files under ./assets/icons"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:design "Create three SVG settings-icon directions for a finance dashboard, inherit currentColor, include accessible titles, and save only approved files under ./assets/icons"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:design "Create three SVG settings-icon directions for a finance dashboard, inherit currentColor, include accessible titles, and save only approved files under ./assets/icons"
+```
+
+  </Tab>
+</Tabs>
+
+### Biết path nào đang được bắt đầu
+
+| Path | Input thường dùng | Output và runtime effect |
+| --- | --- | --- |
+| Logo | Brand, industry, style, prompt tùy chọn | Tệp PNG do provider generate; Skill yêu cầu nền trắng. Batch generation tạo nhiều API call. |
+| CIP | Brand, logo đã duyệt, deliverable, industry, model | Mockup PNG do provider generate; HTML presentation tùy chọn nhúng ảnh vào một tệp. `flash` là default được khai báo, còn `pro` yêu cầu model provider chất lượng cao hơn. |
+| Icon | Mô tả, style, category, color, size | SVG text do provider generate, được ghi thành một tệp, batch hoặc biến thể kích thước. Kiểm tra XML trước khi dùng. |
+| Poster | Topic, style hoặc query, aspect, seed tùy chọn | Tìm kiếm local trên dữ liệu đóng gói và xuất prompt text. Không tạo ảnh cho đến khi prompt được gửi tới image provider. |
+| Banner hoặc social image | Platform, kích thước, copy, brand, concept | HTML/CSS source cộng PNG được screenshot; browser rendering, font và ảnh có thể dùng mạng và ổ đĩa. |
+| Slides | Audience, mục tiêu deck, content, data | HTML presentation dùng layout và copy guidance đóng gói; Chart.js hoặc remote asset có thể cần mạng. |
+| Brand, token, UI | Yêu cầu identity hoặc implementation | Định tuyến sang Skill liên quan. Khả dụng phụ thuộc session và không được `ak:design` tự bảo đảm. |
+
+Các lệnh search-only cho logo, CIP và poster đọc CSV đóng gói rồi in recommendation
+hoặc prompt. Lệnh generation có thể tạo thư mục và tệp. Tên mặc định có thể được
+tạo tự động, vì vậy hãy truyền output directory rõ ràng khi ownership quan trọng.
+
+## Theo dõi các stage có thể quan sát
+
+1. **Skill xác nhận artifact contract.** Skill ghi nhận audience, format,
+   dimensions, copy, brand constraint, source asset và ranh giới tệp.
+2. **Skill định tuyến công việc.** Path đã chọn có thể dùng reference đóng gói,
+   local search script, Skill liên quan, image provider hoặc browser capture.
+3. **Skill đề xuất hướng trước công việc tốn chi phí.** Brief, search hoặc concept
+   option phải làm rõ style, palette, composition và điều cần loại trừ.
+4. **Skill tạo source và export.** Tùy path, workflow có thể ghi SVG, PNG, HTML,
+   Markdown hoặc prompt text và thực hiện một hay nhiều provider call.
+5. **Skill xác minh artifact.** Kiểm tra dimension, crop và safe zone,
+   typography, brand fidelity, contrast, độ rõ ở kích thước nhỏ và khả năng mở tệp.
+6. **Skill báo cáo bằng chứng.** Report cuối phải liệt kê tệp đã tạo, provider
+   hoặc renderer, check đã làm, lỗi và approval còn lại.
+
+## Giữ approval provider và tệp rõ ràng
+
+<Callout type="warn" title="Duyệt design brief không phải duyệt provider">
+  Duyệt concept không cấp quyền gửi brand asset tới model bên ngoài, phát sinh
+  API charge, duyệt site bên thứ ba, overwrite tệp hay publish kết quả. Hãy duyệt
+  riêng từng hành động đó.
+</Callout>
+
+- Path logo, CIP và icon dùng provider sẽ truyền prompt, và có thể cả input image,
+  tới provider đã cấu hình; chúng chịu billing, quota, retention, safety và mức
+  khả dụng của preview model từ provider.
+- Research banner và social image có thể liên hệ site bên ngoài; remote font, ảnh
+  và Chart.js cũng có thể tạo network request khi render.
+- Giữ nguyên source logo và tệp project không liên quan. Review output directory
+  đã resolve trước batch hoặc full-set generation.
+- Coi chữ, logo và brand mark được generate là draft. Kiểm tra chính tả, xung đột
+  nhãn hiệu, license và quyền dùng logo trước publication.
+- Screenshot HTML là bằng chứng raster RGB, không chứng minh CMYK, bleed, DPI,
+  color profile hay production tolerance đã sẵn sàng cho in ấn.
+
+## Xác minh output và bằng chứng
+
+Một completion report hữu ích gồm:
+
+- Brief và visual direction đã chọn, kể cả constraint bị loại.
+- Exact artifact path, format, dimension và số biến thể.
+- Nguồn design guidance: dữ liệu đóng gói, brand file của project, Skill liên
+  quan hay live research.
+- Provider/model và số generation call khi dùng model bên ngoài, không để lộ
+  credential.
+- Visual QA cho clipping, alignment, hierarchy, contrast, ý nghĩa chỉ dựa trên
+  màu, độ chính xác của text, safe zone và độ rõ ở kích thước đích.
+- Rủi ro còn lại như chưa có print proof, chỉ render trên browser, license chưa
+  xác minh hoặc thiếu Skill liên quan.
+
+Với SVG icon, xác minh `viewBox` hợp lệ, path co giãn, `currentColor` khi được yêu
+cầu, accessible title và độ rõ ở mọi size. Với HTML artifact, render đúng viewport
+đích rồi kiểm tra ảnh export, không chỉ đọc source.
+
+## Xử lý sự cố và giới hạn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Runtime không tìm thấy `ak:design` | Xác nhận installation target cùng scope, restart runtime, rồi dùng [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+| Skill liên quan không khả dụng | Tiếp tục bằng path đóng gói nếu đủ scope, hoặc cài capability còn thiếu trước khi tuyên bố workflow định tuyến đã hoàn tất. |
+| Generator báo thiếu package hoặc key | Chỉ cài dependency được nêu, cấu hình provider key ngoài tệp commit, rồi retry một output giới hạn. |
+| Text hoặc logo output bị méo | Giữ artifact lỗi, tinh chỉnh brief và regenerate một tập biến thể nhỏ. Không âm thầm publish draft. |
+| HTML và PNG khác nhau | Chờ font cùng ảnh, capture đúng dimension, kiểm tra overflow và fallback font, rồi re-export. |
+| Poster prompt đúng nhưng chưa có poster | Poster path chỉ xuất text. Xin approval dùng image provider, generate bitmap và ghi provider riêng. |
+
+Bảng style và platform đóng gói là tri thức tại một thời điểm, không phải platform
+specification trực tiếp. Kiểm tra lại ad size, brand rule, provider model và yêu
+cầu production hiện tại khi độ mới quan trọng. Stable và beta chứa cùng
+`ak:design` Skill cùng resource đóng gói trong các release được tài liệu hóa.
+
+Tiếp tục với [Tổng quan Engineer Kit](../../engineer), so sánh
+[Runtime adapter](../../../concepts/runtime-adapters), hoặc dùng
+[Project, artifact và checkpoint](../../../concepts/projects-artifacts-checkpoints)
+để lập ownership tệp và phương án khôi phục.

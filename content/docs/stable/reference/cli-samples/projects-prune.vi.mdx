@@ -1,0 +1,110 @@
+---
+title: ak projects prune
+description: Preview hoặc apply dọn orphan, hoặc xoá tường minh toàn bộ project-registry entry mà không chạm vào file project.
+---
+
+Dùng `ak projects prune` để dọn metadata registry sau khi project directory đã
+di chuyển hoặc bị xoá. Lệnh ưu tiên preview và không bao giờ xoá project
+directory.
+
+## Cách dùng
+
+```bash
+ak projects prune
+```
+
+Bạn phải chọn `--orphans` hoặc `--all`.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--orphans` | `false` | Chọn entry có directory đã đăng ký được xác nhận không còn tồn tại. |
+| `--all` | `false` | Chọn mọi registry entry; yêu cầu `--force`. |
+| `--dry-run` | `false` | Buộc preview kể cả khi có `--yes`. |
+| `--force` | `false` | Safety gate bắt buộc cho `--all`; không có tác động đặc biệt với orphan selection. |
+
+`--yes` là switch apply. Lệnh không bao giờ mở TTY confirmation prompt. Khi
+không có `--yes`, effective dry-run là `true` dù default hiển thị của
+`--dry-run` là `false`.
+
+## Preview dọn orphan
+
+```bash
+ak projects prune --orphans
+ak projects prune --orphans --json
+```
+
+Lệnh stat từng directory đã đăng ký. Chỉ kết quả chắc chắn not-found mới là
+orphan; lỗi permission và stat khác được giữ lại. Preview đọc registry và
+filesystem metadata nhưng không ghi lại `projects.json`.
+
+Preview hoàn tất ghi candidate result lên stdout và thoát `3`, kể cả khi không
+có orphan. Trong JSON mode, stdout chứa một envelope dạng thành công
+`kind=projects.prune` với `dry_run: true`, `removed_count` và array candidate
+path tên `removed`. Không có JSON error object theo sau mã `3`. Script phải
+kiểm tra cả envelope lẫn process status.
+
+Trong human mode, preview vẫn nằm trên stdout và CLI cấp cao nhất còn ghi
+dry-run error box cuối cùng lên stderr trước khi thoát `3`.
+
+## Apply dọn orphan
+
+```bash
+ak projects prune --orphans --yes
+ak projects prune --orphans --yes --json
+```
+
+Nhánh này kiểm tra lại directory trong registry operation và chỉ xoá entry chắc
+chắn không tồn tại. Registry được giữ lại được save một lần atomically dưới
+advisory lock. Nếu không thiếu directory nào, lệnh thoát `0` mà không ghi lại
+registry.
+
+## Preview hoặc apply xoá toàn bộ registry
+
+`--all` có phạm vi rộng hơn đáng kể so với dọn orphan và yêu cầu `--force`:
+
+```bash
+# Preview every entry; exits 3.
+ak projects prune --all --force
+
+# Remove every registry entry.
+ak projects prune --all --force --yes
+```
+
+Bỏ `--force` với `--all` sẽ thoát `2`. `--dry-run` luôn thắng `--yes`, vì vậy
+`--all --force --yes --dry-run` vẫn là preview.
+
+Full wipe xoá từng entry qua các lần save registry atomic riêng biệt. Toàn bộ
+wipe không transactional: lock hoặc write lỗi ở bước sau có thể để các entry
+trước đó đã bị xoá. Không có backup hay rollback registry tự động.
+
+## Tác động, đầu ra và khôi phục
+
+Đầu ra apply báo số path đã xoá. JSON dùng `kind=projects.prune` với `dry_run`,
+`removed_count` và `removed`. `--quiet` ẩn đầu ra thành công nhưng không thay đổi
+selection hoặc exit behavior.
+
+Không mode nào xoá, mở hoặc sửa project directory, journal, plan, config hay
+ownership file đã đăng ký. Lệnh chỉ hoạt động cục bộ, không dùng mạng, auth,
+provider, cache hay child process. Absolute candidate path có thể nhạy cảm; hãy
+kiểm tra trước khi chia sẻ.
+
+Để recovery entry đã xoá khi directory còn tồn tại, chạy
+`ak projects add <path>`. Lệnh này tạo registration timestamp mới.
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Apply đã chọn hoàn tất, kể cả apply no-op. |
+| `1` | List, lock hoặc write registry lỗi; full-wipe có thể dở dang. |
+| `2` | Thiếu selection, `--all` thiếu `--force` hoặc argument không hợp lệ. |
+| `3` | Preview hoàn tất mà không thay đổi registry. |
+
+## Lệnh liên quan
+
+- [Liệt kê registry trước](./projects-list)
+- [Xoá idempotently một entry](./projects-remove)
+- [Thêm entry](./projects-add)
+- [Thông tin đầy đủ của `ak projects prune`](../cli/ak_projects_prune)

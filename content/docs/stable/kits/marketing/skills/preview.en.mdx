@@ -1,0 +1,216 @@
+---
+title: Preview files and generate visuals with ak:preview
+description: View project content or create Markdown and HTML explanations while controlling file writes, browser launches, local servers, network exposure, and Git reads.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:preview` to view an existing file or directory, or to generate a visual
+explanation, slide deck, diagram, diff review, plan review, or project recap.
+The selected mode determines whether the Skill only reads content, writes a new
+visual, opens a browser, starts a local HTTP process, reads Git history, or
+contacts a CDN or GitHub.
+
+## Choose the smallest preview mode
+
+### Use ak:preview when
+
+- You need a visual explanation of an approved marketing workflow or review
+  path.
+- You want a focused diagram, terminal-friendly ASCII view, or HTML slide deck.
+- You need to inspect an existing Markdown file or browse a directory in a
+  reader UI.
+- You want an evidence-backed visual diff, plan comparison, or recent project
+  recap.
+
+### Choose another workflow when
+
+- You need to change the underlying marketing plan, content, code, or campaign.
+  Preview the evidence first, then use the owning workflow.
+- You need a publish-grade SVG or PNG architecture artifact. Use the specialized
+  technical-graph workflow when available.
+- You need generated imagery or multimodal analysis rather than an HTML,
+  Markdown, Mermaid, or ASCII visual.
+- You need to publish, deploy, contact an audience, change an account, or spend.
+  `ak:preview` does not authorize those effects.
+
+## Prepare the input and effect boundary
+
+Before starting:
+
+- Complete [Onboarding](../../../getting-started/onboarding) and install
+  Marketing Kit for the active runtime and scope.
+- Choose an existing path or a narrowly defined topic.
+- For `--diff`, confirm the Git ref, commit, range, working tree, or pull request
+  that may be read.
+- For `--plan-review`, provide the approved plan or confirm the active plan.
+- For `--recap`, choose a time window; the default source workflow uses two
+  weeks.
+- Remove secrets and private customer data from anything that may be rendered,
+  served, opened in a browser, or embedded in a generated file.
+- Decide whether local-server, browser-launch, CDN, GitHub CLI, and file-write
+  effects are acceptable.
+
+## Invoke the Skill
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:preview ...` | The source includes Claude-specific background-task and `${CLAUDE_PLUGIN_ROOT}` server instructions. Server-backed view and Markdown modes also depend on a separate viewer Skill that the current Marketing manifest does not export. |
+| Cursor | `/ak:preview ...` | Slash invocation is user-verified for installed AgentKit Skills. The Claude-specific server process contract is not evidence of Cursor parity; file-only generation depends on available tools. |
+| Codex | `$ak:preview ...` | Codex discovers the Skill natively, but the source server instructions are not a native Codex process contract. File-only generation and browser actions depend on the current session. |
+
+For the most portable starting point, explicitly request a file-only HTML
+visual and decline the default browser launch until you review its external
+resource references:
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:preview --html --diagram "Approved launch review flow from draft to brand, legal, and publish approval. Use no customer data. Write the HTML file but do not open or publish it; report external URLs"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:preview --html --diagram "Approved launch review flow from draft to brand, legal, and publish approval. Use no customer data. Write the HTML file but do not open or publish it; report external URLs"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:preview --html --diagram "Approved launch review flow from draft to brand, legal, and publish approval. Use no customer data. Write the HTML file but do not open or publish it; report external URLs"
+```
+
+  </Tab>
+</Tabs>
+
+Read [Runtime adapters](../../../concepts/runtime-adapters) before assuming
+server, background-task, browser, Agent, or Hook parity.
+
+## Select a mode deliberately
+
+| Input or flag | Reads | Writes or process effects |
+| --- | --- | --- |
+| No arguments | Nothing until you choose an operation | Opens the runtime’s question flow when available |
+| `<file.md>` or `<directory/>` | The resolved file or browsable directory | Starts the viewer server and opens a browser in the source workflow |
+| `--stop` | Viewer PID records | Stops all running Markdown Novel Viewer processes found through its shared PID prefix |
+| `--explain <topic>` | Topic and relevant project evidence | Writes Markdown under a plan-aware `visuals/` directory, then starts the viewer server |
+| `--slides <topic>` | Topic and relevant evidence | Writes Markdown slides, then starts the viewer server |
+| `--diagram <topic>` | Topic and relevant evidence | Writes ASCII and Mermaid Markdown, renders and visually inspects the diagram, then starts the viewer server |
+| `--ascii <topic>` | Topic and relevant evidence | Produces terminal-friendly ASCII; `--html --ascii` is unsupported |
+| `--html --explain`, `--html --diagram`, or `--html --slides` | Topic, mode references, and relevant evidence | Writes one `.html` file and opens it with the platform browser command; no HTTP server is required |
+| `--html --diff [ref]` | Git diff statistics, changed files, nearby context, public API signals, and relevant docs; a PR number uses `gh pr diff` | Writes and opens an HTML review |
+| `--html --plan-review [plan-file]` | The plan, every referenced file, dependencies, tests, config, and public API impact | Writes and opens an HTML comparison |
+| `--html --recap [timeframe]` | Project identity, Git log and status, plans, ADRs, and architecture context | Writes and opens an HTML recap |
+
+Argument resolution gives `--stop` highest priority. `--html` changes the output
+type, generation flags select the workflow, and an existing path selects view
+mode. If a path cannot be resolved, the Skill should ask rather than guess.
+
+## Understand file and process stages
+
+1. **Resolve the request.** The Skill selects view or generation mode, validates
+   the topic or path, and turns topics into slugs of at most 80 characters.
+2. **Gather bounded evidence.** It reads only the sources required by the mode.
+   Git-heavy HTML modes have the wider read boundaries shown above.
+3. **Choose the output path.** With an active plan, output goes to
+   `{plan_dir}/visuals/{slug}.md` or `.html`; otherwise it goes to
+   `plans/visuals/{slug}.md` or `.html`. Missing directories are created.
+4. **Generate and review.** Diagrams must be rendered and visually inspected;
+   syntax validation alone is insufficient.
+5. **Open the result.** HTML uses `open`, `xdg-open`, or `start` and needs no
+   server. Markdown and view modes attempt to start the separate Markdown Novel
+   Viewer process.
+6. **Report evidence.** The Skill reports the output path, applicable URL,
+   browser result, and any unavailable dependency or failed check.
+
+An existing output at the selected generated path is overwritten without a
+prompt in the source workflow. Inspect the target path before generation when
+prior work may exist.
+
+## Control server, network, and privacy effects
+
+<Callout type="warn" title="Viewer mode can expose local content on the network">
+  The source view workflow starts an unauthenticated HTTP server with
+  `--host 0.0.0.0`, making its URL reachable through local network interfaces.
+  The server restricts file routes to configured directories, but anyone who
+  can reach the process may request permitted content. Do not serve folders or
+  files containing secrets, customer data, private plans, or personal data.
+</Callout>
+
+- The viewer defaults to port `3456` and searches through `3500` when a port is
+  busy. It writes PID records under `/tmp` and remains active until stopped or
+  its background task ends.
+- `--stop` stops all viewer instances found through the shared
+  `md-novel-viewer-*.pid` records, not just the most recently opened file.
+- The current Marketing export includes `ak:preview` but not the separate
+  `ak:markdown-novel-viewer` dependency named by the source instructions.
+  Server-backed modes therefore cannot be promised from Marketing Kit alone.
+- Even when the separate viewer is present, its source declares npm
+  dependencies for Markdown rendering. Do not assume the server is
+  zero-dependency or repair it with an unreviewed manual install.
+- HTML output can contain CDN references for Google Fonts, Mermaid, Chart.js,
+  ELK layout, or anime.js. Opening such a file can contact those providers and
+  disclose request metadata; offline rendering may be incomplete.
+- A PR-number diff requires `gh` and GitHub access. Other Git reads use local
+  state unless a separate command refreshes remotes.
+- Browser open commands and generated files are local effects. They do not
+  authorize upload, publication, deployment, account changes, outreach, or
+  spend.
+
+## Verify the output
+
+A complete run should provide:
+
+- The selected mode, resolved input, and exact output path.
+- A Markdown or HTML artifact under the active plan’s `visuals/` directory, or
+  under `plans/visuals/` when no plan is active.
+- Render-and-inspect evidence for diagrams, including correction of overlap,
+  unreadable labels, or broken layout.
+- A local and network URL only when a viewer process actually started.
+- Disclosure of the host, port, running process, and how to stop it.
+- Disclosure of CDN or GitHub access when the selected mode needs it.
+- Clear separation between generated review material and any still-unapproved
+  mutation, publication, account action, or spend.
+
+For HTML, inspect the file source for external URLs, open both light and dark
+themes, resize the page, and verify that charts or Mermaid content actually
+loaded. For Git-based reviews, compare the stated ref and current status with
+the repository before accepting conclusions.
+
+## Troubleshoot safely
+
+| Symptom | Safe next step |
+| --- | --- |
+| The runtime does not recognize `ak:preview` | Confirm Marketing target and scope, restart the runtime, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+| View or Markdown mode cannot find the viewer server | Treat it as the current Marketing dependency gap. Use file-only HTML or ASCII output, or stop and install only through a separately approved supported route. |
+| A port is busy | Let the viewer select the next port and report the full URL. Do not assume `3456`. |
+| Sensitive content was served on `0.0.0.0` | Stop all viewer instances with the runtime-specific `ak:preview --stop` invocation, remove the content from the served scope, and review exposure before restarting. |
+| HTML opens without diagrams or fonts | Check network access and CDN references, or regenerate without external libraries when possible. |
+| `--diff` has no Git context | Run inside the intended repository and state the exact ref. A PR number additionally needs `gh`. |
+| `--plan-review` cannot find a plan | Provide the explicit plan path or establish an active plan; do not compare against a guessed file. |
+| The output path already contains valued work | Stop and move or rename the prior artifact before generating; the source workflow overwrites without prompting. |
+
+Continue with the [Marketing Kit overview](../../marketing) or
+[Projects, artifacts, and checkpoints](../../../concepts/projects-artifacts-checkpoints)
+before recovering from an unintended write.
+
+## Know the current limits
+
+- The same Skill source is packaged for all three runtimes, but its viewer
+  instructions are explicitly Claude-oriented and do not prove portable server
+  behavior.
+- Marketing Kit currently omits the viewer Skill referenced by server-backed
+  modes. This page does not claim those modes complete from the Marketing
+  package alone.
+- The separate viewer source also requires its own Markdown-rendering npm
+  dependencies; their availability is not established by `ak:preview` alone.
+- “Single HTML file” does not necessarily mean offline or network-free because
+  optional fonts and JavaScript libraries can remain CDN imports.
+- Visual review can explain evidence but cannot prove campaign performance,
+  conversion, revenue, current provider state, or the correctness of source
+  data.

@@ -1,0 +1,114 @@
+---
+title: ak config stop
+description: Signal the tracked dashboard process while accounting for stale PIDs, immediate success reporting, and platform limits.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak config stop` to send `SIGTERM` to the PID recorded by `ak config start`.
+The command is idempotent when no lifecycle file exists, but its success result
+has important process-identity and platform boundaries.
+
+## Usage
+
+```bash
+ak config stop
+```
+
+The command accepts no positional arguments and has no command-specific flags.
+Shared flags such as `--json`, `--no-interactive`, `--quiet`, `--verbose`, and
+`--yes` are described in [CLI conventions](../cli-conventions).
+
+## What the command does
+
+The command reads `$AGENTKIT_HOME/dashboard/state.json`, normally
+`~/.agentkit/dashboard/state.json`, then follows one of these paths:
+
+| Recorded state | Action | Result |
+| --- | --- | --- |
+| No state file | Send no signal. | Warn on stderr and exit `0`. |
+| Valid state and `SIGTERM` accepted | Signal the stored PID and report success immediately. | The dashboard removes state later if it shuts down cleanly. |
+| Process lookup or signal fails | A lookup failure returns an error. Any signal failure is treated as already exited: AgentKit warns, attempts to remove state, and exits `0`. | The state-removal error, if any, is ignored. |
+| Unreadable, malformed, or unsupported state | Send no signal. | Exit `1`. |
+
+There is no wait loop or shutdown timeout in `stop`. A successful signal means
+the signal was accepted, not that the process has already exited or that the
+state file has already disappeared.
+
+<Callout type="warning">
+  The state records only a PID. `stop` does not verify executable identity,
+  process start time, or dashboard health before signaling it. If a stale PID
+  has been reused, the command can send `SIGTERM` to an unrelated process.
+  Verify the PID independently after a crash or forced kill.
+</Callout>
+
+## Platform behavior
+
+On macOS and Linux, an AgentKit dashboard can handle `SIGTERM` and begin its
+graceful shutdown path. On Windows, Go process signaling supports forced kill
+but not an arbitrary `SIGTERM`; this command uses `SIGTERM`, treats the resulting
+signal error as an already-exited process, removes tracked state, and can exit
+`0` while the dashboard process continues running.
+
+For the current Windows release, close or interrupt the foreground dashboard
+process directly and verify it has exited. Do not interpret `ak config stop`
+alone as proof that it stopped.
+
+## Output for automation
+
+When the signal call succeeds, `--json` writes one versioned envelope to stdout:
+
+```text
+schema_version: 1
+kind: config.stop
+data.pid: integer
+```
+
+The other successful paths do not emit that envelope:
+
+- no state file: exit `0`, empty stdout, plain warning on stderr;
+- signal failure: exit `0`, empty stdout, plain warning on stderr, with a
+  best-effort state-file removal.
+
+Therefore, treat process status plus independent post-stop verification as the
+contract. Do not require JSON stdout on every exit-`0` invocation, and do not
+require stderr to contain only JSON. Runtime errors that go through the JSON
+renderer use a structured error envelope; flag-parse errors can remain
+plain-text usage.
+
+## Effects and interaction
+
+The command can signal a local process and can remove only the dashboard state
+file. It does not contact the recorded HTTP address, call a health endpoint,
+use the dashboard bearer token, contact a provider, or touch config and kit
+content. It never prompts or reads stdin, so `--yes` and `--no-interactive` do
+not change its behavior. `--quiet` does not suppress the direct warning paths.
+
+There is no preview, apply, dry-run, force, or automatic rollback mode.
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | No state existed, `SIGTERM` was accepted, or signaling failed and state cleanup was attempted. | Verify the process and state independently; do not equate `0` with confirmed termination. |
+| `1` | AgentKit home/state could not be resolved or parsed, process lookup failed, or rendering failed. | Inspect the state and PID without deleting broad AgentKit data. |
+| `2` | Arguments or flags were invalid. | Correct the invocation. |
+
+## Verify and recover
+
+After a stop request, poll status only as a lifecycle-file check:
+
+```bash
+ak config stop
+ak config status --json
+```
+
+Because status also trusts the file rather than probing the PID, verify the
+process handle or PID with operating-system tools when termination matters. If
+the intended process remains alive, stop that verified process directly. Never
+kill a PID solely because it appears in an old state file.
+
+## Related commands
+
+- [Complete `ak config stop` command facts](../cli/ak_config_stop)
+- [CLI conventions](../cli-conventions)

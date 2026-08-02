@@ -1,0 +1,136 @@
+---
+title: ak config
+description: Open the AgentKit dashboard through its native-window or foreground HTTP path with explicit fallback, auth, state, and mutation boundaries.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak config` to open AgentKit's visual dashboard. Depending on the binary,
+terminal, and flags, the command either opens a native Wails window or runs the
+HTTP dashboard in the foreground.
+
+## Usage
+
+```bash
+ak config
+```
+
+The command accepts no positional arguments.
+
+## Command flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--auth-token <token>` | Empty | Require `Authorization: Bearer <token>` on every HTTP request; falls back to `AK_DASHBOARD_TOKEN`. |
+| `--bind <host>` | `127.0.0.1` | Select the HTTP listener host. Non-loopback requires a token. |
+| `--no-open` | `false` | Skip best-effort browser launch on the HTTP path. |
+| `--no-window` | `false` | Force the HTTP dashboard instead of the native window. |
+| `--port <port>` | `8766` | Select the HTTP port. `0` asks the operating system to assign one. |
+
+Shared flags are described in [CLI conventions](../cli-conventions). `--yes`
+does not approve dashboard mutations; each UI operation has its own API
+contract.
+
+## Understand native and HTTP selection
+
+Bare `ak config` opens a native window only when all of these are true:
+
+- the binary was built with the `wails` build tag;
+- stdout is a TTY;
+- `--no-window` is absent;
+- `--port` was not explicitly supplied;
+- effective `--no-interactive` is false.
+
+The standard CLI-only binary is not Wails-enabled, so it uses the HTTP path.
+`--json` implies `--no-interactive` and therefore also selects HTTP. An
+explicit `--port 8766` selects HTTP even though it equals the default.
+
+<Callout type="info">
+  On a Wails-enabled TTY, `--bind`, `--auth-token`, and `--no-open` alone do not
+  force HTTP and are ignored by the native-window path. Add `--no-window` when
+  you intend those HTTP flags to apply.
+</Callout>
+
+For a predictable headless invocation:
+
+```bash
+ak config --no-window --no-open --no-interactive --json
+```
+
+## Treat the dashboard as a mutating surface
+
+Opening the dashboard is not equivalent to reading `config.yaml`. The native
+and HTTP surfaces expose operations for account access, config and settings,
+projects, kits, analytics, updates, migrations, MCP, content, and session
+redaction. Actions you choose in the UI can write user and project files, make
+network requests, run tools, or apply lifecycle operations.
+
+The dashboard host also runs automatic analytics reconciliation while open,
+which can read local coding-agent sources and update the private analytics
+index. Review the confirmation and recovery information shown by each action;
+launching the dashboard does not create one blanket snapshot for later rollback.
+
+## HTTP security and browser boundary
+
+The HTTP server listens on `127.0.0.1:8766` by default. Its token is resolved
+from `--auth-token` first, then `AK_DASHBOARD_TOKEN`. Unlike `ak api start`, it
+does not read a token from `config.yaml` or support `@file` syntax, and a raw
+flag token can be visible in process listings.
+
+<Callout type="warning">
+  Keep the browser dashboard on loopback. Although a non-loopback listener is
+  allowed when a token is set, the server rejects every non-loopback `Host` and
+  `Origin`. It also requires the bearer header for the page shell and assets,
+  which a normal browser launch does not add. A token-protected or LAN-bound
+  listener therefore needs a client that can supply the header and still obey
+  the loopback host guard; it is not a public dashboard mode.
+</Callout>
+
+Mutation requests additionally require `Content-Type: application/json` and
+reject cross-site fetch metadata or an origin that does not match the request
+host.
+
+## Process state and browser fallback
+
+The HTTP path writes `~/.agentkit/dashboard/state.json` atomically with the PID,
+port, bind address, and start time. State-write failure is logged but does not
+stop the listener. Clean shutdown removes the file after a graceful drain of up
+to 30 seconds.
+
+Unless `--no-open`, `--no-interactive`, `--json`, or `--quiet` is set, the HTTP
+path starts the operating system's default browser. Browser-launch failure is a
+nonfatal warning. The command then remains in the foreground; it has no daemon
+flag. Use `ak config start`, `status`, and `stop` for the explicit HTTP
+lifecycle, while remembering that status and stop trust the recorded PID.
+
+The native path writes no dashboard state file. Closing the window ends the
+command; `ak config status` and `ak config stop` do not manage that window.
+
+## Human and JSON output
+
+The native path has no standard CLI success envelope; Wails owns the window
+lifecycle and can log to stderr.
+
+The HTTP path writes startup success to stdout. JSON mode emits one line and
+then stays attached to the server:
+
+```json
+{"schema_version":1,"kind":"config.start","data":{"status":"running","bind_addr":"127.0.0.1:8766","url":"http://127.0.0.1:8766","pid":12345}}
+```
+
+Server logs remain plain text on stderr in JSON mode, so consume streams
+separately. Runtime JSON errors use `schema_version`, `error`, `error_code`, and
+`exit_code`; flag-parse errors can remain plain-text usage.
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | The native window closed normally or the HTTP server shut down cleanly. Browser-open warnings remain success. | Verify the intended UI action separately. |
+| `1` | An unexpected positional argument, window initialization, home resolution, server construction, bind, serving, or another runtime step failed. | Correct any extra argument; otherwise inspect stderr and confirm which path was selected. |
+| `2` | Flag parsing failed. | Correct the flags. |
+| `7` | The HTTP path selected a non-loopback bind without a token. | Return to loopback or configure a token for a non-browser client. |
+
+## Related commands
+
+- [CLI conventions](../cli-conventions)

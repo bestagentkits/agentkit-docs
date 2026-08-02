@@ -1,0 +1,141 @@
+---
+title: ak setup
+description: Configure AgentKit runtimes and preferences through the first-run wizard or a scripted input file.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak setup` to detect locally available runtimes and save AgentKit adapter,
+default-kit, and telemetry preferences. Basic setup does not sign in to the
+AgentKit registry or install kit content.
+
+## Syntax
+
+```bash
+ak setup [options]
+```
+
+## Arguments
+
+The command accepts no positional arguments and has no aliases.
+
+## Before you run
+
+Interactive setup needs terminal input and output. In automation, select
+adapters explicitly or provide a YAML answers file:
+
+```bash
+ak setup --adapter claude-code,codex --no-interactive
+ak setup --config setup.yaml --no-interactive
+```
+
+Basic setup detects native runtime login state but never copies runtime
+credentials. `--advanced` can store provider keys in
+`~/.agentkit/config.yaml`; the file is written with mode `0600`, but the keys
+remain plaintext and must be protected as secrets.
+
+## Options
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `--adapter <ids>` | Detected runtimes | Configure a comma-separated set of registered adapters. |
+| `--no-adapter <ids>` | Empty | Exclude a comma-separated set of registered adapters. |
+| `--advanced` | `false` | Include provider keys, provider/model preferences, and Codex overrides. |
+| `--config <path>` | Empty | Read scripted answers from a YAML file whose keys are setup step IDs. |
+| `--step <id>` | Empty | Update one setup field instead of processing the complete step set. |
+
+Unknown step IDs and conflicting adapter selections fail before configuration
+is written. See [CLI conventions](../cli-conventions) for shared flags such as
+`--json`, `--no-interactive`, and `--quiet`.
+
+## Examples
+
+Run the terminal wizard:
+
+```bash
+ak setup
+```
+
+Update only the enabled adapters:
+
+```bash
+ak setup --step enabled_adapters
+```
+
+Apply a scripted file and return structured output:
+
+```bash
+ak setup --json --no-interactive --config setup.yaml
+```
+
+## Terminal and scripted behavior
+
+When stdin and stdout are terminals, the default command opens a wizard.
+Pressing Esc or Ctrl-C cancels before saving and exits `3`. `--json`,
+`--no-interactive`, or non-terminal output selects the scripted path instead;
+missing required values then exit `2` rather than opening a prompt.
+
+The command has no dry-run, apply, force, or confirmation flag of its own. A
+successful scripted invocation writes immediately. Re-running is idempotent and
+keeps existing values for steps you do not change.
+
+## Output and streams
+
+Human success output goes to stdout. It reports native runtime and AgentKit
+session state, the saved config path, and applied step IDs. The interactive
+wizard and cancellation/error messages use the terminal and stderr as needed.
+
+JSON success is one envelope on stdout:
+
+```text
+schema_version: 1
+kind: setup
+data.config_path: string
+data.steps_applied: array of setup step IDs
+data.partial: boolean, present for --step
+data.auth.agentkit: session_present, not_authenticated, or unknown
+data.auth.kit_entitlement: not_checked or login_required
+data.auth.runtimes: array of adapter, state, and optional action
+```
+
+Execution errors in JSON mode use the structured error envelope on stderr.
+Flag-parse errors happen before rendering and can remain plain-text usage.
+
+## Exit status
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | Configuration was saved. | Review the reported path, then install a kit separately if needed. |
+| `1` | Config read/write or adapter-config writing failed. | Inspect the error and current files before rerunning the same step. |
+| `2` | Arguments, adapter selection, step ID, or required scripted input were invalid. | Correct the input; no validated setup result was produced. |
+| `3` | The terminal wizard was cancelled. | Rerun when ready; cancellation does not save the form. |
+
+## Effects, safety, and recovery
+
+The command reads the existing AgentKit config and local AgentKit session. It
+may start `claude auth status --json` and `codex login status` probes with short
+timeouts to classify native login state. It does not contact the AgentKit
+registry, validate paid-kit entitlement, populate the kit cache, or install a
+kit.
+
+Basic setup atomically creates or updates `~/.agentkit/config.yaml`, preserving
+unmodelled YAML fields. Advanced steps can additionally write selected native
+adapter configuration atomically. Setup does not create a recovery snapshot.
+
+<Callout type="warning">
+  The AgentKit config is saved before advanced adapter writes. If a later
+  adapter write fails, exit `1` can leave the AgentKit config updated while the
+  runtime config is unchanged. Inspect both files, correct the reported cause,
+  and rerun the same `--step`; do not delete either runtime home.
+</Callout>
+
+## Related commands and limitations
+
+- [Install a kit after setup](./kit-init)
+- [Register an existing project](./init)
+- [Create a new project](./new)
+- [Check installation health](./doctor)
+- [CLI conventions](../cli-conventions)
+
+Setup reports local login state only. Use `ak login`, `ak whoami`, and
+`ak licenses` for AgentKit account and entitlement workflows.

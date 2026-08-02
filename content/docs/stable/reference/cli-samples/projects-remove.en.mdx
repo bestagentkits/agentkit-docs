@@ -1,0 +1,75 @@
+---
+title: ak projects remove
+description: Idempotently remove one project-registry entry without deleting or changing the project directory.
+---
+
+Use `ak projects remove` to forget one moved, deleted, or intentionally
+unregistered project.
+
+## Usage
+
+```bash
+ak projects remove <name|path>
+```
+
+Provide exactly one exact name or path. Lookup follows the same rules as
+`projects show`: path-like input matches canonical directory candidates first;
+plain input matches an exact, case-sensitive name. Use a path when duplicate
+names are ambiguous.
+
+## Examples
+
+```bash
+ak projects remove myproj
+ak projects remove ./myproj
+ak projects remove /workspace/myproj --json
+```
+
+## Mutation and idempotency
+
+When an entry matches, the command removes it from `projects.json` with an
+atomic registry save under the advisory lock. It never deletes, moves, opens,
+or edits the registered project directory or any journal, plan, config, or
+ownership file inside it.
+
+When no entry matches, the command is deliberately idempotent: it reports that
+nothing was found and exits `0` without rewriting the registry. There is no
+prompt, preview, `--yes` requirement, `--force`, backup, or rollback.
+
+An ambiguous name is not treated as already absent. It fails so you can retry
+with an explicit path.
+
+## Output and JSON
+
+Human output reports either removal or `not found in registry (nothing to
+remove)`. JSON success uses `kind=projects.remove` with `name_or_dir`,
+`removed`, and `not_found` under `data`. For an absent entry, `removed` is
+`false`, `not_found` is `true`, and the exit remains `0`.
+
+`--quiet` suppresses success stdout. Paths in output may expose local workspace
+details. The command performs no network, auth, provider, cache, or process
+operation.
+
+## Exit status
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | One entry was removed, or it was already absent. |
+| `1` | Registry lock/read/write failed, or a name matched multiple entries. |
+| `2` | Argument or flag parsing was invalid. |
+
+In JSON mode, command-level failures use an error envelope on stderr.
+Flag-parse errors can remain plain text.
+
+## Recovery
+
+Because removal affects only registry metadata and creates no backup, recover
+by running `ak projects add <path>` while the directory still exists. That
+creates fresh registration timestamps; it does not restore the original ones.
+
+## Related commands
+
+- [Show an entry before removal](./projects-show)
+- [Add a directory](./projects-add)
+- [Prune stale entries](./projects-prune)
+- [Complete `ak projects remove` facts](../cli/ak_projects_remove)

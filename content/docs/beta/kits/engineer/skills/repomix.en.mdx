@@ -1,0 +1,173 @@
+---
+title: Build a reviewable codebase bundle with ak:repomix
+description: Select repository evidence, exclude sensitive files, create a bounded Repomix artifact, and verify it before sharing.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:repomix` to turn selected repository files into one AI-friendly XML,
+Markdown, JSON, or plain-text artifact. The result can support onboarding,
+review, planning, documentation, or audit work, while preserving a visible file
+structure and token summary.
+
+## Choose ak:repomix when a bundle is the deliverable
+
+### Use ak:repomix when
+
+- You need a stable snapshot of relevant code and documentation for analysis.
+- A focused module spans enough files that reading them one by one is awkward.
+- You need a reviewable input artifact for another model or audit workflow.
+- You need to compare bounded source sets across repositories or revisions.
+
+### Choose another workflow when
+
+- You only need a few repository facts. Use `ak:scout` without generating a
+  bundle.
+- You need current library documentation rather than source. Use
+  `ak:docs-seeker`.
+- You need a relationship graph rather than concatenated source. Use
+  `ak:tech-graph`.
+- You need an answer synthesized from external sources. Use `ak:research`.
+
+## Prepare the source and destination
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Engineer Kit is installed for the runtime and scope you use.
+- Name the local path or remote repository, exact revision when reproducibility
+  matters, include set, exclusions, output format, and destination.
+- Check `.gitignore`, `.repomixignore`, and repository instructions. Explicitly
+  exclude `.env*`, keys, credentials, private data, generated dependencies,
+  archives, media, and unrelated build output.
+- Confirm Repomix is already available or approve installing or downloading it.
+- Reserve disk for the output and context space for the instructions, tools,
+  conversation, and response in addition to the reported bundle token count.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:repomix ...` | Runs Repomix through the local shell and available filesystem or network access. |
+| Cursor | `/ak:repomix ...` | Uses the user-verified slash spelling; shell, clipboard, and remote-access capability depend on the Cursor session. |
+| Codex | `$ak:repomix ...` | Uses native Codex discovery and the filesystem, process, clipboard, and network authority available in the session. |
+
+## Run the Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:repomix "Pack ./packages/auth as markdown into ./artifacts/auth-context.md. Include src, tests, package manifests, and README; exclude fixtures with customer data; keep security checks enabled."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:repomix "Pack ./packages/auth as markdown into ./artifacts/auth-context.md. Include src, tests, package manifests, and README; exclude fixtures with customer data; keep security checks enabled."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:repomix "Pack ./packages/auth as markdown into ./artifacts/auth-context.md. Include src, tests, package manifests, and README; exclude fixtures with customer data; keep security checks enabled."
+```
+
+  </Tab>
+</Tabs>
+
+The Skill's published argument shape is `[path] [--style xml|markdown|plain|json]`.
+Repomix itself also supports include and ignore patterns, explicit output paths,
+comment removal, token trees, configuration files, clipboard output, and remote
+repositories.
+
+### Choose the output deliberately
+
+| Input or option | Effect |
+| --- | --- |
+| No output option | Writes `repomix-output.xml` in the active working directory |
+| `--style xml|markdown|json|plain` | Selects structured XML, readable Markdown, programmatic JSON, or minimal plain text |
+| `--include` and `-i` | Narrows included paths and adds ignore patterns |
+| `--remove-comments` | Removes supported-language comments and can reduce context, but may remove rationale or directives |
+| `--copy` | Places the generated result on the system clipboard in addition to normal processing |
+| `--remote` through `npx repomix` | Downloads and processes a public remote repository or revision using network access |
+| `--no-security-check` | Disables Secretlint-based scanning; use only after an explicit risk decision |
+| `--init` | Creates `repomix.config.json` in the project |
+
+The bundled batch utility accepts multiple local paths, remote repositories, or
+a JSON repository list. It creates an output directory, defaults to
+`repomix-output`, writes one file per repository, processes entries sequentially,
+and applies a five-minute timeout to each Repomix subprocess.
+
+## Understand what happens during a run
+
+1. **The Skill confirms the evidence boundary.** It identifies the repository,
+   revision, relevant paths, sensitive exclusions, format, and consumer.
+2. **It checks the tool and configuration.** Existing Repomix configuration,
+   ignore rules, Git ignore behavior, and security scanning remain visible.
+3. **It previews scope.** Include and ignore patterns are narrowed before a
+   broad pack, especially for monorepos and dependency trees.
+4. **It generates the artifact.** Repomix reads the selected files and writes
+   the chosen output; remote mode also contacts the repository provider.
+5. **It reviews the result.** The run checks included files, security warnings,
+   output size, token distribution, revision identity, and accidental omissions.
+6. **It delivers without silently sharing.** A local bundle stays local unless
+   you separately approve clipboard use, upload, provider submission, or another
+   external transfer.
+
+## Protect source and generated context
+
+<Callout type="warn" title="A security scan is not a disclosure guarantee">
+  Repomix can detect common secret patterns, but the output may still contain
+  private code, personal data, proprietary identifiers, or credentials the
+  scanner misses. Review the generated artifact before sharing it.
+</Callout>
+
+- Do not disable `.gitignore`, default ignores, or security checks merely to
+  make missing files appear. Confirm each expanded path first.
+- Local packing reads source and writes a bundle; remote packing adds network
+  access and may download an `npx` package. Global npm or Homebrew installation
+  changes the machine and requires separate approval.
+- The batch script loads environment values from runtime, Skill, and shared
+  `.env` locations and forwards them to subprocesses. Never include those files
+  in the bundle or expose their values in verbose logs.
+- Comment removal and line-number removal trade evidence for size. Keep comments
+  that carry licenses, security constraints, generated-file notices, or design
+  rationale.
+- Repomix itself does not require a paid model. Sending the output to an LLM or
+  external analysis service can consume quota and disclose its full contents.
+
+## Verify the artifact
+
+A complete run should report the source and revision, include and ignore rules,
+format and exact output path, file and token summary, security-scan result,
+bundle size, command status, and any excluded evidence. Open the artifact and
+sample its beginning, middle, and end before treating it as a reliable snapshot.
+
+The bundled batch tests cover configuration defaults, environment precedence,
+command construction, local and remote modes, output naming, timeouts, batch
+success and failure, and JSON-list loading. They mock Repomix execution; they do
+not prove a real bundle is complete or free of sensitive data.
+
+## Troubleshoot or continue
+
+| Symptom | Safe next step |
+| --- | --- |
+| Repomix is unavailable | Ask before installing globally; where appropriate, use an approved one-shot `npx` download. |
+| The output is too large | Inspect the token tree, narrow `--include`, add ignores, and pack one package or concern at a time. |
+| Expected files are missing | Review ignore precedence and verbose output before disabling any protection. |
+| A secret warning appears | Stop, remove or exclude the sensitive source, regenerate, and inspect the new artifact. |
+| Remote processing fails | Verify the repository and revision; for private code, use an authorized local clone instead of placing credentials in a URL. |
+| The runtime does not recognize the Skill | Confirm target and scope, restart the runtime, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+## Know the current limits
+
+- A bundle is a point-in-time projection, not the repository itself or proof of
+  runtime behavior.
+- Token counts help plan context use but do not include the surrounding session
+  and may differ from the target model's tokenizer.
+- Generated output can be as large as the selected source; runtime depends on
+  repository size, filters, storage, and network. Batch mode stops each
+  repository after five minutes.
+- Stable and beta package identical `ak:repomix` guidance and batch utilities.

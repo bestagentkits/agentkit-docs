@@ -1,0 +1,82 @@
+---
+title: ak content-search search
+description: Run a local, owner-authorized, bounded token query against one opted-in plaintext shard.
+---
+
+Use `ak content-search search` to query one enabled, healthy project shard. The
+search is local and read-only; result snippets can contain plaintext excerpts
+from indexed project content.
+
+## Usage
+
+```bash
+ak content-search search --project <uuid> --query <tokens>
+```
+
+The command accepts no documented positional arguments.
+
+## Command flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--project <uuid>` | Empty, required | Canonical lowercase UUIDv7 for a project owned by the current actor. |
+| `--query <tokens>` | Empty, required | Space-separated literal search tokens. |
+| `--limit <n>` | `20` | Requested maximum hits; values outside `1..50` are normalized to `50`. |
+
+Queries are limited to 512 Unicode runes and 32 tokens. Letters, digits,
+whitespace, `-`, and `_` are accepted. Phrase quotes, wildcards, `^`, `:`,
+parentheses, and other punctuation are rejected. Tokens are bound into the FTS
+query rather than concatenated into SQL.
+
+```bash
+ak content-search search --project <uuid> --query 'release token' --limit 20
+ak content-search search --project <uuid> --query token --json
+```
+
+The shell quotes in the first example group two tokens; quote characters passed
+as query content would be rejected.
+
+## Authorization and effects
+
+The command re-resolves the local actor and searches only after confirming the
+project `owner` role. It reads the shard and does not update its lifecycle,
+documents, checkpoints, or runtime sources. It contacts no network, registry,
+provider, authentication, or entitlement service.
+
+The content-store package does not log snippets. Your terminal, shell history,
+CI logs, and downstream JSON consumer remain separate disclosure surfaces.
+
+## Output
+
+Human stdout is `hits=<n>`. JSON stdout is a raw page object:
+
+```text
+hits: array
+hits[].projectId: project UUID
+hits[].documentId: source document identifier
+hits[].title: optional title
+hits[].snippet: optional FTS excerpt
+hits[].rank: FTS rank number
+nextCursor: optional cursor
+partial: optional true when a selected shard could not be searched completely
+```
+
+The command currently exposes no cursor flag, so `nextCursor` is informational
+for this CLI surface. JSON is not wrapped in `schema_version` / `kind` and is
+not NDJSON.
+
+An unavailable, disabled, or unhealthy authorized shard can yield an empty
+successful page with `partial: true`; it is not proof of zero matching source
+content. Invalid query syntax returns a runtime error.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The query ran and a page was emitted, including a possibly partial page. |
+| `1` | A required flag was absent, UUID/owner/store validation failed, or the query was empty, oversized, or syntactically rejected. |
+| `2` | A flag value such as `--limit` could not be parsed. |
+
+## Related commands
+
+- [CLI conventions](../cli-conventions)

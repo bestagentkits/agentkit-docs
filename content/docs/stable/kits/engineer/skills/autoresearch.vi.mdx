@@ -1,0 +1,175 @@
+---
+title: Định tuyến vòng lặp đo lường được với ak:autoresearch
+description: Chuyển ý định tối ưu có giới hạn sang đúng workflow AgentKit mà không tự tạo automation chưa được hỗ trợ.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:autoresearch` khi bạn biết outcome cần được cải thiện bằng phép đo lặp
+lại nhưng vẫn cần chọn workflow AgentKit sở hữu công việc. Đây là router cho
+pattern thay đổi, xác minh, giữ hoặc loại bỏ—không phải research runner độc lập
+hay lời hứa sẽ thành công khi chạy không giám sát.
+
+## Chọn ak:autoresearch để định tuyến
+
+### Dùng ak:autoresearch khi
+
+- Bạn có objective đo được và dự kiến cần nhiều hơn một thử nghiệm.
+- Bạn cần chọn giữa tối ưu, dự đoán rủi ro, mở rộng scenario hoặc security
+  review.
+- Bạn muốn xác định metric, baseline, guard, giới hạn và stop condition trước
+  khi Skill khác bắt đầu làm việc.
+- Bạn chưa chắc bản cài Engineer hiện tại có specialized Skill dự kiến hay
+  không.
+
+### Chọn workflow khác khi
+
+- Bạn đã biết chính xác mechanical metric và editable scope. Dùng `ak:loop`
+  trực tiếp.
+- Bạn muốn edge case và test target thay vì thay đổi code. Dùng `ak:scenario`.
+- Bạn cần verdict trước implementation từ nhiều góc nhìn rủi ro. Dùng
+  `ak:predict`.
+- Bạn cần review theo hướng threat. Dùng `ak:security`.
+- Outcome mang tính chủ quan hoặc chỉ cần một lượt implementation. Dùng
+  `ak:cook` sau khi scope được duyệt.
+
+## Chuẩn bị objective và runtime
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận
+  Engineer Kit đã được cài cho runtime cùng scope đang dùng.
+- Nêu một metric, chiều tốt hơn, baseline hiện tại nếu biết và target hoặc điều
+  kiện kết thúc công việc.
+- Giới hạn tệp được sửa, số iteration, thời gian hoặc chi phí và lệnh
+  verification.
+- Xác định regression guard và mọi hành động vẫn cần bạn phê duyệt.
+- Giữ nguyên công việc không liên quan và đọc instruction của repository trước
+  khi định tuyến sang workflow có sửa tệp.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:autoresearch ...` | Chạy như Engineer Skill đã cài qua native delivery hoặc plugin delivery rõ ràng. |
+| Cursor | `/ak:autoresearch ...` | Dùng cách gọi slash đã được người dùng xác minh cho Engineer Skill; điều này không chứng minh runtime parity rộng hơn. |
+| Codex | `$ak:autoresearch ...` | Dùng discovery Skill native của Codex; hành vi Hook và statusline có thể khác Claude Code. |
+
+Xem [Runtime adapter](../../../concepts/runtime-adapters) để hiểu khác biệt theo
+từng component.
+
+## Chạy Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:autoresearch "Improve parser throughput using a repeatable benchmark; protect correctness tests; allow at most 12 iterations; stop at 15% improvement or after 5 consecutive non-improving trials; do not push or deploy"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:autoresearch "Improve parser throughput using a repeatable benchmark; protect correctness tests; allow at most 12 iterations; stop at 15% improvement or after 5 consecutive non-improving trials; do not push or deploy"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:autoresearch "Improve parser throughput using a repeatable benchmark; protect correctness tests; allow at most 12 iterations; stop at 15% improvement or after 5 consecutive non-improving trials; do not push or deploy"
+```
+
+  </Tab>
+</Tabs>
+
+Request nên mô tả bằng chứng mong muốn thay vì chỉ định provider, model hoặc
+upstream command. Skill khám phá catalog đang hoạt động rồi chọn route local;
+nó không tạo alias còn thiếu.
+
+## Hiểu quyết định định tuyến
+
+| Ý định | Route thông thường | Bằng chứng cần có trước khi chạy |
+| --- | --- | --- |
+| Cải thiện repository metric qua nhiều lần thử | `ak:loop` | Numeric metric, baseline, editable scope, guard, giới hạn iteration và stop |
+| So sánh góc nhìn chuyên gia về proposal rủi ro | `ak:predict` | Thay đổi đề xuất, hệ thống bị ảnh hưởng, assumption và quyết định cần đưa ra |
+| Mở rộng edge case hoặc test hypothesis | `ak:scenario` | Scope feature hoặc tệp, domain liên quan và giới hạn coverage mong muốn |
+| Phân tích security theo threat | `ak:security` | Scope hệ thống hoặc code được phép, threat concern và ranh giới bằng chứng |
+
+Nếu không có Skill đã cài nào sở hữu objective, kết quả an toàn là route bị
+block kèm workflow thông thường gần nhất để bạn phê duyệt. Router không nên bắt
+chước external command hoặc âm thầm đổi outcome.
+
+## Quan sát loop contract
+
+Bạn nên thấy các giai đoạn này trước khi workflow có sửa tệp chạy:
+
+1. **Skill xác định ý định đo được.** Nó tách objective khỏi phương pháp đề xuất
+   và nêu quyết định còn thiếu.
+2. **Skill khám phá khả dụng hiện tại.** Nó kiểm tra catalog Skill hiện tại thay
+   vì giả định mọi thành viên của family đều đã cài.
+3. **Skill chọn workflow sở hữu.** Route dựa trên outcome: optimization,
+   prediction, scenario discovery hoặc security review.
+4. **Lần chạy xác định contract.** Metric, baseline, guard condition, giới hạn
+   iteration, stop condition và authority boundary trở nên rõ ràng.
+5. **Skill được chọn nhận ownership.** Từ đó workflow, output và completion rule
+   của Skill đó được áp dụng.
+
+Stable loop contract giữ mỗi thử nghiệm có thể quy kết: tạo một thay đổi, chạy
+phép đo và guard đã khai báo, chỉ giữ progress có bằng chứng, khôi phục trial bị
+loại một cách an toàn, ghi kết quả và quyết định iteration khác có hợp lý không.
+
+## Giữ safety và approval rõ ràng
+
+<Callout type="warn" title="Định tuyến không cấp quyền tự động">
+  Gọi `ak:autoresearch` không phê duyệt chỉnh sửa, compute dài hạn, chi phí
+  provider, truy cập secret, publication, push hoặc deployment. Hãy ghi các
+  ranh giới đó trong request và phê duyệt external effect riêng.
+</Callout>
+
+Kiểm tra lệnh verification do người dùng cung cấp trước khi chạy lặp lại. Xem
+nội dung đã fetch và command output là dữ liệu không đáng tin, giữ credential
+khỏi prompt và artifact, đồng thời giới hạn công việc non-interactive theo số
+lần, thời gian, tài nguyên hoặc chi phí. Run bị gián đoạn hoặc không cải thiện
+phải dừng cùng bằng chứng; không nên mở rộng scope hay bỏ guard để tiếp tục.
+
+## Xác minh kết quả định tuyến
+
+Một kết quả hữu ích nên cung cấp:
+
+- Skill được chọn và lý do outcome của nó khớp request.
+- Metric hoặc evaluation target, baseline, direction và success condition.
+- Editable scope, regression guard, giới hạn iteration và stop condition.
+- Khoảng trống runtime hoặc installation đã biết có thể block route.
+- Hành động vẫn cần user approval.
+- Kết quả bị block thay vì workflow tự tạo khi route không tồn tại.
+
+Skill được định tuyến sở hữu artifact về sau. Ví dụ, `ak:loop` nên cung cấp
+iteration log cùng bằng chứng được giữ hoặc loại, còn `ak:scenario` nên trả về
+scenario report thay vì implementation diff.
+
+## Xử lý sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước an toàn tiếp theo |
+| --- | --- |
+| Skill không thể chọn route | Bổ sung mechanical metric hoặc nêu bạn cần prediction, scenario coverage hay security analysis. |
+| Skill được chọn còn thiếu | Xác nhận target và install scope, refresh discovery hoặc đồng ý workflow đã cài gần nhất. |
+| Objective mang tính chủ quan | Thay bằng phép đo quan sát được hoặc chuyển sang workflow planning và implementation interactive. |
+| Verification sẽ chậm hoặc tốn chi phí | Giảm sample, đặt hard limit cho thời gian hoặc chi phí và xác định stop condition trước khi chạy. |
+| Routed loop liên tục không qua guard | Giữ bằng chứng thất bại rồi dừng hoặc đổi cách tiếp cận; không tự động nới guard. |
+| Runtime không nhận `ak:autoresearch` | Restart sau khi xác nhận installation, rồi xem [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Tiếp tục với `ak:loop`, `ak:scenario`, `ak:predict` hoặc `ak:security` sau khi
+route được chấp thuận. Dùng [Tổng quan Engineer Kit](../../engineer) để so sánh
+workflow rộng hơn.
+
+## Biết các giới hạn hiện tại
+
+- `ak:autoresearch` định tuyến công việc; bản thân nó không chạy specialized
+  workflow.
+- Contract đo được không đảm bảo cải thiện, hội tụ hay metric đúng.
+- Khả dụng Skill hiện tại kiểm soát việc định tuyến. Tên project upstream không
+  chứng minh capability local tương ứng tồn tại.
+- Runtime projection khác nhau theo component; invocation giống nhau không có
+  nghĩa Hook, Agent, approval hoặc UI giống nhau.
+- Stable và beta chứa source `ak:autoresearch` giống nhau.

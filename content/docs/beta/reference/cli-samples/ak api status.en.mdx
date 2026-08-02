@@ -1,0 +1,96 @@
+---
+title: ak api status
+description: Read the recorded AgentKit API process state without mistaking a state file for a live-process or health check.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak api status` to inspect the state recorded by `ak api start`. The command
+is a local file read; it does not contact the HTTP server or an upstream
+provider.
+
+## Usage
+
+```bash
+ak api status
+```
+
+The command accepts no positional arguments and has no command-specific flags.
+Shared flags are described in [CLI conventions](../cli-conventions). It never
+prompts; `--yes` and `--no-interactive` do not change the query.
+
+## What the command checks
+
+The command reads `~/.agentkit/api/state.json` (`AGENTKIT_HOME` changes the
+base directory) and validates only its JSON shape and state-schema version.
+
+- A missing state file produces `running: false` and exit `0`.
+- A readable, supported state file produces `running: true` and exit `0`.
+- An unreadable, malformed, or unsupported-version state file is an error.
+
+<Callout type="warning">
+  `running: true` means a state record exists. The command does not probe the
+  PID, call `/health`, or verify that the PID still belongs to AgentKit. A
+  stale file can therefore produce a false running result.
+</Callout>
+
+For a live health check, use the recorded address to call `/health`. Include
+the bearer token if the server was started with one:
+
+```bash
+curl http://127.0.0.1:8765/health
+```
+
+## Human and JSON output
+
+When no state file exists, human stdout is:
+
+```text
+[i] api: server is not running
+```
+
+When a record exists, stdout reports PID, address, local-formatted start time,
+computed uptime, and the request count stored in the file.
+
+JSON success uses `kind=api.status`. For a recorded process, `data` can contain:
+
+```text
+running, pid, port, bind_addr, started_at, request_count, uptime
+```
+
+Zero-valued numeric and empty string fields are omitted. Because `started_at`
+is a time value, the not-running payload still includes its zero timestamp:
+
+```json
+{"schema_version":1,"kind":"api.status","data":{"running":false,"started_at":"0001-01-01T00:00:00Z"}}
+```
+
+<Callout type="info">
+  The live server does not update the state file after startup. Its initial
+  request count is zero, and clean shutdown removes the file. Therefore the CLI
+  status command does not provide a live request counter; call the server's
+  `/status` endpoint for the in-memory instrumentation count. That counter
+  increases once for a local route and twice for an accepted proxy route.
+</Callout>
+
+Runtime JSON errors are written to stderr with `schema_version`, `error`,
+`error_code`, and `exit_code`. Flag-parse errors can remain plain-text usage.
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | State was read successfully, or no state file exists. | Branch on `data.running`, then probe `/health` when liveness matters. |
+| `1` | An unexpected positional argument was supplied, or AgentKit home or the state file could not be resolved, read, parsed, or versioned. | Correct any extra argument; otherwise inspect only the reported state path. |
+| `2` | Flag parsing failed. | Correct the flags. |
+
+The command is read-only and has no preview, apply, force, backup, or rollback.
+If a stale state file is confirmed against the operating system's process
+listing, remove only `~/.agentkit/api/state.json`.
+
+## Related commands
+
+- [Complete `ak api status` command facts](../cli/ak_api_status)
+- [Start the API server](../cli/ak_api_start)
+- [Stop the recorded API process](../cli/ak_api_stop)
+- [CLI conventions](../cli-conventions)

@@ -1,0 +1,145 @@
+---
+title: Điều phối công việc với ak:agentkit
+description: Phân loại task, chọn capability đã cài và giữ verification tương xứng bằng ak:agentkit.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:agentkit` khi task trải qua nhiều bước hoặc domain và bạn cần route
+ngắn nhất có thể bảo vệ được qua các capability thực sự đã cài. Skill phân loại
+công việc, chọn một owner cho mỗi bước, bổ sung verification theo rủi ro và báo
+cáo khoảng trống thay vì giả định tool hoặc Agent không tồn tại.
+
+## Chọn ak:agentkit cho quyết định điều phối
+
+### Dùng ak:agentkit khi
+
+- Task mơ hồ, nhiều bước, nhiều domain hoặc có rủi ro cao.
+- Nhiều Skill đã cài có thể phù hợp và thứ tự của chúng quan trọng.
+- Bạn cần quyết định Agent với context mới có mang lại chuyên môn, isolation
+  hoặc parallelism hữu ích hay không.
+- Bạn muốn thấy route và contract verification trước khi execution bắt đầu.
+
+### Chọn workflow khác khi
+
+- Bạn đã nêu Skill muốn dùng. Hãy gọi Skill đó trực tiếp.
+- Một Skill đã cài rõ ràng sở hữu task nhỏ, một bước.
+- Bạn chỉ cần hội thoại, ý kiến hoặc câu trả lời factual.
+- Công việc phải chạy headless qua nhiều CLI hoặc worktree. Dùng `ak:orchestrate`.
+- Bạn cần nhiều session phối hợp. Dùng `ak:team`.
+- Cần tìm hoặc cài capability còn thiếu. Dùng `ak:find-skills`.
+
+## Chuẩn bị task và runtime
+
+Hoàn thành [Làm quen](../../../getting-started/onboarding) và cài Kit trong scope
+bạn sẽ làm việc. Cung cấp outcome, constraint, domain liên quan và mọi ranh giới
+quyền hạn đối với tệp, Git, dịch vụ, chi phí hoặc publication. Router kiểm kê
+runtime đang chạy; tên trong ví dụ không chứng minh capability đã được cài.
+
+| Runtime | Cách gọi | Ranh giới bằng chứng |
+| --- | --- | --- |
+| Claude Code | `/ak:agentkit ...` | Dùng Skill và loại Agent hiển thị trong Claude session hiện tại. |
+| Cursor | `/ak:agentkit ...` | Slash invocation có thể tải Skill đã projection, nhưng workflow phát hành không chứng minh Agent dispatch hoặc tool discovery tương đương. |
+| Codex | `$ak:agentkit ...` | Dùng native Skill discovery. Agent dispatch còn phụ thuộc cấu hình Codex Agent hoặc Agent runtime server đã cài. |
+
+Xem [Runtime adapter](../../../concepts/runtime-adapters) trước khi giả định bề
+mặt delegation hoặc automation giống nhau giữa các provider.
+
+## Chạy Skill
+
+Skill nhận task cần route và không định nghĩa cờ mode.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:agentkit "Add subscription billing and a settings page; require tests and stop before deployment"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:agentkit "Add subscription billing and a settings page; require tests and stop before deployment"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:agentkit "Add subscription billing and a settings page; require tests and stop before deployment"
+```
+
+  </Tab>
+</Tabs>
+
+Kết quả quan sát đầu tiên nên là route record gồm workflow class, size, risk và
+số domain. Yêu cầu trivial hoặc đã có owner rõ nên rút gọn thẳng tới owner thay
+vì tạo chain dài.
+
+## Hiểu các giai đoạn điều phối
+
+1. **Áp dụng proportionality gate.** Yêu cầu trực tiếp và task rõ một Skill bỏ
+   qua orchestration.
+2. **Phân loại công việc.** Router chọn class theo deliverable cuối và đánh giá
+   size, rủi ro cao nhất trong link cùng số domain.
+3. **Kiểm kê capability đã cài.** Router kiểm tra runtime hiện tại thay vì route
+   theo trí nhớ.
+4. **Tạo chain ngắn nhất.** Link theo khung understand, decide, execute, verify,
+   deliver nhưng được rút gọn nếu không tạo artifact hoặc bằng chứng cần thiết.
+5. **Chỉ delegate tại trigger.** Investigation lớn, implementation phase không
+   chồng lấn, implementation vừa xong, delivery rủi ro cao hoặc lỗi lặp lại có
+   thể cần Agent chuyên biệt.
+6. **Verify theo rủi ro.** Công việc low-risk dùng check của owner; elevated thêm
+   verification và self-review; high-risk thêm independent review cùng quyết
+   định của user trước bước không thể đảo ngược.
+
+Chain dài nên truyền artifact bền vững bằng path. Mỗi link cần entry criteria đã
+nêu, exit có thể xác minh và một owner.
+
+## Giữ quyền hạn ở người dùng
+
+<Callout type="warn" title="Routing không cấp quyền execution">
+  Việc chọn Skill, tool hoặc Agent không phê duyệt truy cập secret, API trả phí,
+  mutation bên ngoài, thao tác phá hủy, publication, deployment hay Git delivery.
+  Hãy phê duyệt riêng khi owner được route đi tới hành động đó.
+</Callout>
+
+Bản thân router là lớp quyết định. External effect đến từ Skill, Agent, provider
+và command được kích hoạt. Delegation có thể tăng runtime cùng chi phí model;
+công việc song song cũng có thể xung đột nếu ownership tệp không tách biệt. Hành
+động high-risk vẫn cần xác nhận rõ ràng.
+
+## Xác minh route và kết quả
+
+Một lần chạy hữu ích tạo ra:
+
+- Route classification và chain ngắn gọn theo thứ tự.
+- Owner đã xác nhận từ inventory cài đặt, kèm capability còn thiếu.
+- Entry và exit evidence cho mỗi link đã chạy.
+- Agent đã dùng, trách nhiệm giới hạn và phát hiện của chúng.
+- Verification tương xứng với risk cùng final report outcome-first.
+- Khoảng trống, blocker hoặc hành động còn chờ authorization.
+
+Không chấp nhận route giao hai owner cho một link, giả định capability chưa cài,
+bỏ verification bắt buộc hoặc tiếp tục qua cùng link thất bại mà không có bằng
+chứng mới.
+
+## Xử lý sự cố và giới hạn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Runtime không tìm thấy Skill | Xác nhận installation scope, khởi động lại session rồi dùng [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+| Capability được route còn thiếu | Cài bằng `ak:find-skills` khi có, hoặc tiếp tục inline và ghi rõ khoảng trống. |
+| Chain dài hơn task | Áp dụng lại proportionality và collapse rule; chỉ giữ link tạo artifact hoặc bằng chứng cần thiết. |
+| Agent dispatch không khả dụng | Tiếp tục trong session hiện tại và báo thiếu bằng chứng delegation độc lập. |
+| Một link thất bại hai lần | Dừng, báo cả hai lần thử cùng input nhỏ nhất còn thiếu, rồi yêu cầu đổi scope, context hoặc cách tiếp cận. |
+
+Router không thực thi job headless xuyên runtime, quản lý team nhiều session hay
+tự cài capability. Runtime projection phụ thuộc từng capability và tên Agent
+được resolve từ installation đang hoạt động. Hai release snapshot dùng cho trang
+này chứa cùng workflow router.
+
+Tiếp tục với [Tổng quan Engineer Kit](../../engineer) hoặc xem
+[Cài đặt Kit](../../../guides/installing-kits).

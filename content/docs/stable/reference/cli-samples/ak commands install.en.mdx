@@ -1,0 +1,93 @@
+---
+title: ak commands install
+description: Flatten and copy one trusted local slash-command template into the user plugin root with explicit overwrite limits.
+---
+
+Use `ak commands install` to copy one locally available command template into
+the flat per-kit command inventory. It does not download a package, activate a
+plugin, or project the command into another runtime.
+
+## Usage
+
+```bash
+ak commands install <kit>/<command>
+```
+
+The command component is the flattened source path. For example,
+`marketing/commands/ckm/email.md` is installed with ref
+`marketing/ckm-email`, while its available slash name is `ckm:email`.
+
+Exactly one valid ref is required. `ak:<command>`, `ake:<command>`, and
+`akm:<command>` are accepted short forms, but canonical refs are safer in
+automation.
+
+## Command flag
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--force` | `false` | Remove the exact flat destination entry first when it exists, then copy the source. |
+
+The command never prompts. `--yes` is not a second approval requirement, and
+`--no-interactive` only affects output presentation.
+
+## Source and destination
+
+For `marketing/ckm-email`, the resolved paths are:
+
+```text
+source:      ./kits/marketing/commands/ckm/email.md
+destination: ~/.claude/plugins/marketing/commands/ckm-email.md
+```
+
+Nested source names are discovered recursively and flattened with `-`. If two
+source paths flatten to the same asset name, the alphabetically first relative
+path is selected. A symlinked or non-regular source file is not installable.
+
+`AGENTKIT_KITS_DIR` and `AGENTKIT_PLUGIN_DIR` replace the roots. The destination
+directory is created with mode `0750`; a new destination file uses mode `0600`.
+No registry, authentication, entitlement, cache, subprocess, runtime env,
+ownership manifest, or backup is involved.
+
+## Force and recovery boundary
+
+Without `--force`, an existing destination entry exits `6` unchanged. With
+force, that exact entry is deleted before the new copy is opened; an empty
+directory can be removed, while a non-empty directory makes the operation
+fail. There is no drift
+classification, hash check, snapshot, atomic swap, or rollback. A failed copy
+after deletion can leave the destination missing.
+
+Preserve manual edits before forcing. Do not use a source or plugin root that an
+untrusted process can replace or manipulate with links.
+
+## Output
+
+Human success stdout reports the ref and one written file. JSON success uses:
+
+```text
+schema_version: 1
+kind: assets.install
+data.ref, data.kit, data.asset
+data.files_written: 1
+data.env_installed: false
+data.success: true
+```
+
+The output does not promise the runtime has discovered or activated the copied
+template. Verify that separately in the intended Claude environment.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | One flat command file was copied. |
+| `1` | Discovery or filesystem work failed, or the positional argument count was wrong. |
+| `2` | The ref was malformed or a flag could not be parsed. |
+| `5` | No installable local source matches the ref. |
+| `6` | The destination exists without `--force`. |
+
+## Related commands
+
+- [Complete `ak commands install` command facts](../cli/ak_commands_install)
+- [Inspect a command](../cli/ak_commands_show)
+- [Install a complete kit route](./kit-init)

@@ -1,0 +1,159 @@
+---
+title: Map project context with ak:scout
+description: Find relevant repository files and relationships through bounded local search, optional approved delegation, or a separately permitted read-only external probe.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:scout` to answer a focused question about where Marketing-related code,
+content, configuration, tests, or assets live. It starts with native local search
+and returns a concise file map. Delegated Explore work and external OpenCode
+probes are optional routes with separate permission gates.
+
+## Choose ak:scout for bounded reconnaissance
+
+### Use ak:scout when
+
+- You need to locate files before changing a campaign site, tracking flow,
+  content system, dashboard, or automation.
+- A task spans several directories and you need relationships, conventions, and
+  likely tests before planning.
+- You are starting a diagnosis and need evidence about where behavior is
+  implemented.
+- You want read-only discovery with paths and relevance notes rather than edits.
+
+### Choose another workflow when
+
+- You already know the exact files and only need a small scoped read.
+- You need external market, competitor, audience, or web research. Use a
+  Marketing research workflow or the `scout-external` Agent, not repository
+  scouting.
+- You want implementation, debugging, review, or test execution. Scout first,
+  then hand its evidence to the appropriate workflow.
+- You want subagents only for speed but have not authorized delegation. The main
+  agent can scout locally without them.
+
+## Prepare a searchable question
+
+Before you start:
+
+- Confirm Marketing Kit is installed for the active runtime and scope.
+- Name the feature, symbol, behavior, file type, or directory boundary to find.
+- State exclusions such as generated directories, vendor code, large assets,
+  secrets, customer data, or unrelated packages.
+- Decide whether local read-only search is sufficient.
+- If you want delegation or an external probe, grant that route explicitly and
+  define non-overlapping directories.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:scout ...` | Uses native search and may use Explore only when delegation is permitted and the runtime exposes it. |
+| Cursor | `/ak:scout ...` | Uses slash invocation; local search is preferred and delegated capability depends on the active setup. |
+| Codex | `$ak:scout ...` | Uses native Skill discovery; Codex Desktop requires an explicit user request before multi-agent scouting. |
+
+## Run the Skill
+
+The default route stays local and read-only:
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:scout "Find the pricing-page source, analytics events, related tests, and content schema. Read only; exclude generated and vendor directories"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:scout "Find the pricing-page source, analytics events, related tests, and content schema. Read only; exclude generated and vendor directories"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:scout "Find the pricing-page source, analytics events, related tests, and content schema. Read only; exclude generated and vendor directories"
+```
+
+  </Tab>
+</Tabs>
+
+### Select the search route deliberately
+
+| Route | When it applies | Boundary |
+| --- | --- | --- |
+| Default local route | Native file search, scoped reads, `rg`, `wc`, or `sed` can answer the question | Read-only and handled by the main agent unless delegation was explicitly requested. |
+| Internal Explore route | The user explicitly requests subagents, the runtime exposes delegation, and each Agent has distinct useful scope | No spawn for overlapping directories or merely because the Skill mentions Explore. |
+| `ext` route | Local search is insufficient and the user permits an OpenCode probe | Check `command -v opencode`; keep prompts read-only and scoped. Do not install a tool automatically. |
+
+The external reference uses `opencode run ... --model opencode/grok-code`. That
+is a provider-specific probe, not a required model or a guarantee that OpenCode
+is installed, authenticated, available, or acceptable for private source.
+
+## Understand the stages
+
+1. **Parse the question.** The Skill identifies search targets, directories,
+   patterns, file types, relationships, exclusions, and completion criteria.
+2. **Estimate scale locally.** It searches filenames and content first to avoid
+   broad reads and unnecessary delegation.
+3. **Choose the route.** Local main-agent scouting is the default. Internal or
+   external parallelism is selected only when its permission and utility gates
+   are satisfied.
+4. **Divide without overlap when approved.** Each delegated scope names exact
+   directories or files and a concise report contract.
+5. **Read bounded content.** Files under 500 lines can be read directly; larger
+   files are split into roughly 500-line chunks instead of being sent wholesale
+   to an external tool.
+6. **Collect available results.** Delegated scopes use a three-minute timeout;
+   non-responders are skipped and recorded rather than restarted indefinitely.
+7. **Aggregate the map.** Paths are deduplicated, relationships are summarized,
+   gaps are named, and unresolved questions appear last.
+
+## Keep delegation and external access controlled
+
+<Callout type="warn" title="Scouting is read-only authority">
+  Permission to search a repository does not authorize edits, generated output,
+  dependency installation, network access, sending private files to a provider,
+  subagent delegation, commits, or publication. Approve delegation and the
+  `ext` route separately. External prompts must remain bounded and read-only.
+</Callout>
+
+Do not use an external CLI to bypass local context limits. Do not send whole
+private files when local chunking is enough. A non-zero external exit is a
+failure; after two external failures, return to local search and report the gap.
+
+`ak:scout` is a Skill workflow, not the same component as the packaged `scout`
+Agent listed in [Marketing Kit Agents](../agents). A Skill invocation does not
+guarantee that a standalone Agent route exists in every runtime.
+
+## Verify outputs and evidence
+
+A useful Scout report should include:
+
+- Relevant repository-relative file paths with one-line relevance notes.
+- Key symbols, imports, configuration links, tests, and data flow needed for the
+  stated question.
+- Search scopes and exclusions, including any directory not covered.
+- Which route was used and any delegated timeout or external failure.
+- A concise set of patterns or risks for the next plan.
+- Unresolved questions last.
+
+Treat the report as sufficient only when another person can identify where to
+continue without repeating the same broad search.
+
+## Troubleshoot and respect limits
+
+| Symptom | Safe next step |
+| --- | --- |
+| Results are too broad | Narrow the behavior, directory, symbol, extension, and exclusions. |
+| Delegation is not permitted or unavailable | Continue in the main agent with local search; do not force a spawn. |
+| OpenCode is absent | Stay local; installation needs a separate request and approval. |
+| An external probe fails twice | Stop retrying, return to local search, and report incomplete coverage. |
+| A large file would dominate context | Count lines and read bounded chunks around relevant matches. |
+
+The Skill locates evidence; it does not prove runtime behavior, execute tests,
+or make changes. Search completeness is limited by the scopes, tools,
+permissions, ignored files, and time available. Continue with [Marketing
+Kit](../../marketing) once the file map is accepted.

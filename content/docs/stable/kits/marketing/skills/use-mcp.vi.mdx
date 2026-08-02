@@ -1,0 +1,145 @@
+---
+title: Khám phá và gọi integration với ak:use-mcp
+description: Dùng ak:use-mcp để kiểm tra MCP tool native của runtime hoặc gọi server đã cấu hình qua client xác định đi kèm.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:use-mcp` khi task cần capability do Model Context Protocol server
+cung cấp. Skill ưu tiên MCP tool đã đăng ký với runtime hiện tại, sau đó cung
+cấp direct client đi kèm cho server chỉ được khai báo trong
+`.claude/.mcp.json`. Skill tách discovery khỏi execution để bạn review server,
+tool, schema và effect trước một call.
+
+## Chọn ak:use-mcp cho integration hiện có
+
+### Dùng ak:use-mcp khi
+
+- Claude Code hoặc Codex đã expose MCP server cần thiết, hoặc cơ chế deferred
+  discovery có thể tìm thấy.
+- Project có stdio server đã duyệt trong `.claude/.mcp.json` và bạn cần tool
+  name cùng JSON argument shape xác định.
+- Bạn muốn liệt kê tool, prompt hoặc resource trước khi chọn operation.
+
+### Chọn workflow khác khi
+
+- Bạn cần tạo MCP server mới thay vì dùng server hiện có.
+- Task có thể hoàn tất an toàn mà không cần external integration.
+- Tuyến browser duy nhất phụ thuộc cookie hoặc profile Chrome thật; hãy bind
+  browser session nhận biết profile trước khi dùng DevTools tooling không biết
+  profile.
+- Server, credential, data được phép hoặc quyền mutation chưa được duyệt.
+
+## Chuẩn bị ranh giới MCP
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và cài Marketing Kit
+  cho runtime cùng scope hiện tại.
+- Kiểm kê tool và resource thực sự hiển thị trong session. Không giả định Claude
+  Code và Codex dùng cùng native tool name.
+- Với tuyến direct, review `.claude/.mcp.json`, mọi server command, argument,
+  environment entry và phạm vi filesystem hoặc network.
+- Giữ token cùng connection string trong cơ chế environment đã duyệt. Không copy
+  credential vào global configuration của runtime khác.
+- Direct client đi kèm cần npm dependency local. Cài chúng làm thay đổi thư mục
+  scripts của Skill và cần truy cập package registry.
+- Xác định task chỉ discovery, read-only hay có mutation.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:use-mcp ...` | Ưu tiên MCP tool đăng ký với Claude Code. Chỉ dùng direct client đi kèm cho project config đã duyệt mà native discovery không thấy. |
+| Cursor | `/ak:use-mcp ...` | Cách gọi bằng slash đã được người dùng xác minh, nhưng Skill không thiết lập contract MCP discovery native của Cursor. Chỉ dùng capability hiển thị trong session hoặc tuyến direct đã review. |
+| Codex | `$ak:use-mcp ...` | Ưu tiên native tool hiển thị hoặc deferred. Tool name và permission prompt phụ thuộc runtime; direct script vẫn là local process riêng. |
+
+Xem [Runtime adapter](../../../concepts/runtime-adapters) để hiểu ranh giới
+projection.
+
+## Khám phá trước execution
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:use-mcp Liệt kê MCP tool hiển thị trong session cho analytics server đã duyệt, xác định tool read-only hẹp nhất để lấy tổng campaign, hiển thị argument bắt buộc và chưa gọi tool
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:use-mcp Liệt kê MCP tool hiển thị trong session cho analytics server đã duyệt, xác định tool read-only hẹp nhất để lấy tổng campaign, hiển thị argument bắt buộc và chưa gọi tool
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:use-mcp Liệt kê MCP tool hiển thị trong session cho analytics server đã duyệt, xác định tool read-only hẹp nhất để lấy tổng campaign, hiển thị argument bắt buộc và chưa gọi tool
+```
+
+  </Tab>
+</Tabs>
+
+Sau review, cấp quyền cho đúng một server, tool và JSON argument object. Tránh
+blanket approval cho server expose cả read và write.
+
+## Theo các giai đoạn MCP
+
+1. **Nêu outcome dự kiến.** Nêu data hoặc action cần thiết và mutation, network
+   access hay external account use có được phép không.
+2. **Kiểm kê capability trực tiếp.** Tìm tool cùng resource đã đăng ký trước khi
+   kết luận thiếu server.
+3. **Chọn tuyến hẹp nhất.** Ưu tiên một runtime-native tool. Chỉ dùng direct
+   client khi server đã duyệt chỉ có trong project config hoặc cần scripted call
+   xác định.
+4. **Xác minh schema.** Kiểm tra argument bắt buộc cùng server identity. Ở tuyến
+   direct, `list-tools` lưu full schema vào `assets/tools.json`.
+5. **Review effect và gọi một lần.** Xác nhận data scope, external mutation,
+   account và retry behavior trước khi execute tool.
+6. **Thu result và cleanup.** Ghi tool result hoặc error, đóng direct client
+   transport và tránh lặp non-idempotent call khi chưa biết call đầu có thành
+   công không.
+
+## Phân biệt discovery và mutation
+
+<Callout type="warn" title="MCP call có thể thay đổi external system">
+  Tool có thể đọc sensitive data, ghi file, đổi database, gửi message, publish
+  content hoặc dùng provider quota. Tool discovery không phải quyền gọi tool.
+  Review server, schema, target account và effect dự kiến trước.
+</Callout>
+
+Direct command `list-tools` kết nối tuần tự tới mọi server trong
+`.claude/.mcp.json` và ghi lại catalog `assets/tools.json` đi kèm. Đây là
+local write cùng server process và có thể có network activity. Operation
+`call-tool` có thể có thêm provider effect do server đã chọn định nghĩa. Giữ
+provider error đầy đủ nhưng che secret.
+
+## Xác minh bằng chứng
+
+Một lần chạy hoàn tất nên báo cáo:
+
+- Tuyến đã dùng: runtime-native hoặc direct client đi kèm.
+- Chính xác server cùng tool name và argument shape đã review.
+- Operation chỉ discovery, read-only hay có mutation.
+- Content trả về hoặc structured error đã bỏ secret.
+- Mọi local catalog write, server process, network request hoặc external
+  mutation.
+- Cleanup đã hoàn tất chưa và retry có thể lặp effect hay không.
+
+## Xử lý sự cố và hiểu giới hạn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Không thấy native tool | Dùng deferred discovery nếu được hỗ trợ, rồi xác minh runtime registration trước khi đổi sang direct script. |
+| Direct client không tìm thấy config | Chạy từ project có `.claude/.mcp.json` đã duyệt định nghĩa server. |
+| Thiếu npm dependency | Chỉ cài trong thư mục scripts đi kèm sau khi review package access và local write. |
+| Một server đã cấu hình không kết nối | Giữ error; server khác vẫn có thể kết nối. Không coi partial catalog là đầy đủ. |
+| Tool name hoặc argument bị từ chối | Tạo lại và review `assets/tools.json`; không suy schema từ trí nhớ. |
+| Call timeout | Xác định server có thể đã hoàn tất action hay chưa trước retry. |
+
+Runtime-native visibility chỉ gồm server đã đăng ký. Direct client hỗ trợ stdio
+configuration đi kèm và không đảm bảo mọi transport hoặc provider. Tuyến Gemini
+CLI đã retire không được hỗ trợ. Dùng [Marketing Hook](../hooks) để hiểu
+guardrail nền.

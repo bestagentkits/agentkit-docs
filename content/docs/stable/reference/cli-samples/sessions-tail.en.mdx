@@ -1,0 +1,64 @@
+---
+title: ak sessions tail
+description: Follow new displayable messages appended to one Claude Code session, with explicit streaming and loss limits.
+---
+
+Use `ak sessions tail` while Claude Code is actively appending to a known local
+session file.
+
+## Usage
+
+```bash
+ak sessions tail <project> <session-id>
+```
+
+The command requires a registered project and a safe session ID containing only
+letters, digits, `_`, or `-`. It has no command-specific flags.
+
+## Stream behavior
+
+```bash
+ak sessions tail myapp session-abc
+ak sessions tail myapp session-abc --json
+```
+
+The tail seeks to the current end before polling every 500 ms. It never emits
+historical backfill; use [sessions show](./sessions-show) first when you need the
+existing transcript. Stop with Ctrl-C or process cancellation, which normally
+exits `0`.
+
+Only complete, parseable, displayable lines are emitted. Malformed and
+non-displayable events are skipped without a counter. The internal stream buffer
+holds 32 events; a slow consumer can lose later events instead of blocking the
+writer. Tailing is therefore observational, not a lossless audit log.
+
+This command follows Claude Code session files only. It does not tail Codex
+sessions even though `list` and `show` can discover them. It reads locally,
+never prompts, writes no state, and makes no network request.
+
+## Output and privacy
+
+Human stdout prints timestamp, message type, and the first text or tool name.
+With `--json`, stdout is NDJSON: each appended message is a separate
+`kind=sessions.event` envelope. Do not parse it as one JSON document.
+
+Events can contain private prompts, thinking, tool inputs, and tool output.
+Content blocks are subject to the session parser's 256 KiB truncation, but that
+is a size bound, not redaction. Keep the stream local unless reviewed.
+
+## Exit status
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The stream ended through cancellation or source-channel closure. |
+| `1` | Home, project, path, subscription setup, or stdout encoding failed. |
+| `2` | Arguments or flags were invalid. |
+
+A missing file can close the stream without an error after subscription setup;
+verify the session with `show` before relying on a long-running tail.
+
+## Related commands
+
+- [Show historical messages](./sessions-show)
+- [Redact Claude Code session files](./sessions-redact)
+- [Complete `ak sessions tail` command facts](../cli/ak_sessions_tail)

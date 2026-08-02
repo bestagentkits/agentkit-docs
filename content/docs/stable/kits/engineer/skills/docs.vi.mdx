@@ -1,0 +1,194 @@
+---
+title: Duy trì tri thức project với ak:docs
+description: Tạo, đối chiếu hoặc tóm tắt tuyến tài liệu nhỏ nhất dựa trên bằng chứng cho project mà không áp đặt template cố định.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:docs` để thiết lập, cập nhật hoặc tóm tắt tài liệu project trong khi
+vẫn giữ code và artifact thực thi làm chủ sở hữu hành vi hiện tại. Skill khám
+phá các bề mặt thẩm quyền thật của repo, giữ lại lý do và ràng buộc bền vững,
+đồng thời loại bỏ tài liệu chỉ lặp lại chi tiết triển khai.
+
+## Chọn ak:docs cho tài liệu project
+
+### Dùng ak:docs khi
+
+- Project cần tuyến tài liệu mạch lạc đầu tiên.
+- Hành vi hướng người dùng, kiến trúc, cấu hình hoặc hướng dẫn vận hành đã đổi và
+  tài liệu bị ảnh hưởng cần được đối chiếu.
+- Bạn cần bản tóm tắt project dựa trên bằng chứng mà không bắt buộc tạo tệp mới.
+- Tài liệu hiện có chứa path cũ, hướng dẫn trùng lặp hoặc inventory được sao chép.
+
+### Chọn workflow khác khi
+
+- Bạn cần tài liệu hiện tại cho thư viện bên ngoài. Dùng workflow khám phá tài
+  liệu.
+- Bạn cần visual được tạo nhưng không đổi tài liệu. Dùng `ak:preview`.
+- Bạn cần sửa product code. Dùng workflow lập kế hoạch hoặc triển khai phù hợp;
+  `ak:docs` không được triển khai product code.
+- Bạn chỉ cần biết Skill nào phù hợp. Dùng `ak:help`.
+
+## Chuẩn bị project và runtime
+
+Trước khi bắt đầu:
+
+- Hoàn tất [Làm quen](../../../getting-started/onboarding), và xác nhận Engineer
+  Kit đã được cài cho runtime và scope bạn đang dùng.
+- Mở project và cung cấp chỉ dẫn repo, README gốc cùng navigation tài liệu hiện có.
+- Nêu audience, kết quả, quyết định bị ảnh hưởng, bằng chứng và tiêu chí chấp
+  nhận cho thao tác tài liệu.
+- Tách hướng dẫn evergreen khỏi plan, audit, bằng chứng phát hành và record có
+  trạng thái khác.
+- Xác định tài liệu được tạo hoặc do máy sở hữu cần thay đổi qua owner thay vì
+  sửa thủ công.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:docs ...` | Workflow có thể dùng `docs-manager` đã cài qua cơ chế delegation của runtime khi khả dụng. |
+| Cursor | `/ak:docs ...` | Dùng cách viết slash đã được người dùng xác minh; chưa xác lập tính tương đương về delegation và tool sơ đồ. |
+| Codex | `$ak:docs ...` | Dùng cơ chế khám phá native của Codex và thực hiện cục bộ khi không có delegation tương thích. |
+
+## Chạy Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:docs update "Reconcile onboarding docs with the current authentication flow. Preserve generated CLI pages, remove duplicated command lists, and verify links."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:docs update "Reconcile onboarding docs with the current authentication flow. Preserve generated CLI pages, remove duplicated command lists, and verify links."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:docs update "Reconcile onboarding docs with the current authentication flow. Preserve generated CLI pages, remove duplicated command lists, and verify links."
+```
+
+  </Tab>
+</Tabs>
+
+Đối số đầu tiên chọn thao tác:
+
+| Input | Kết quả | Hành vi mặc định |
+| --- | --- | --- |
+| `init` | Thiết lập tuyến tài liệu nhỏ nhất dành riêng cho project | Tái sử dụng tuyến hiện có mạch lạc và tránh tệp template trống |
+| `update` | Đối chiếu tài liệu bị ảnh hưởng với ý định và bằng chứng hiện tại | Chỉ chạm vào bề mặt thẩm quyền bị ảnh hưởng và loại bỏ phần trùng lặp đã cũ |
+| `summarize` | Tạo bản tóm tắt dựa trên bằng chứng | Trả lời trong cuộc trò chuyện trừ khi project đã chỉ định summary hoặc bạn yêu cầu rõ output bền vững |
+| `agent-context` | Author, audit hoặc tối ưu process memory tại repository root | Nhắm tới `CLAUDE.md` của Claude Code hoặc `AGENTS.md` của Codex; hỏi trước mọi lần ghi |
+| Trống hoặc không rõ | Không tự giả định thao tác | Hỏi bạn chọn thao tác |
+
+## Quản lý agent context ở root
+
+Dùng `agent-context` cho instruction tại repository root; giữ
+`ak:folder-context` cho thư mục con.
+
+```text
+/ak:docs agent-context --advice
+/ak:docs agent-context --audit
+```
+
+Trong Codex, dùng cách viết `$ak:docs`. `--advice` hỏi `kongming` trước khi trình
+bày thay đổi đề xuất. `--audit` lấy một audit, sau đó hỏi từng quyết định keep,
+cut, fix hoặc migrate và chỉ áp dụng thay đổi đã xác nhận. Skill xác minh hành
+vi runtime hiện tại, loại secret và chỉ khuyến nghị—không sửa—setting cùng cấu
+hình Hook mang tính deterministic. Bản phát hành này không định nghĩa filename
+root context cho Cursor.
+
+## Xác định contract tài liệu
+
+Trước khi viết, Skill thiết lập:
+
+- **Audience:** Xác định con người, AI collaborator hoặc cả hai sẽ dùng tuyến này.
+- **Kết quả:** Nêu các quyết định hoặc tác vụ tài liệu phải hỗ trợ.
+- **Thẩm quyền:** Xác định bề mặt repo sở hữu hướng dẫn bền vững.
+- **Bằng chứng:** Nêu source, test, script, manifest, artifact được tạo hoặc live
+  state chứng minh hành vi hiện tại.
+- **Ranh giới trạng thái:** Tách ý định evergreen khỏi plan, report, audit và
+  record phát hành tạm thời.
+- **Tiêu chí chấp nhận:** Xác định path, link, ví dụ hoặc quyết định phải xác minh
+  được sau đó.
+
+Skill tái sử dụng plan đã chấp nhận hoặc contract tài liệu trước đó khi các nội
+dung này đã được quyết định.
+
+## Hiểu những gì diễn ra trong một lần chạy
+
+1. **Skill xác nhận contract.** Skill chạy một lượt brainstorm tài liệu có giới
+   hạn và chỉ mở lại quyết định quan trọng còn thiếu.
+2. **Skill khám phá tuyến.** Skill đọc chỉ dẫn repo, README gốc, docs index hiện
+   tại, tài liệu được liên kết và bằng chứng liên quan.
+3. **Skill ánh xạ quyền sở hữu.** Skill phân biệt hướng dẫn bền vững về lý do và
+   vị trí với chi tiết có thể thực thi về nội dung và cách làm.
+4. **Skill chọn thay đổi nhỏ nhất.** `init` thiết kế tuyến tối thiểu; `update` ánh
+   xạ claim đã đổi tới owner; `summarize` giới hạn lượt đọc bằng chứng.
+5. **Skill trình bày thay đổi thẩm quyền quan trọng.** Skill đưa ra tuyến đề xuất
+   trước khi thay thế tài liệu hoặc đổi thẩm quyền của chúng.
+6. **Skill viết hoặc tóm tắt.** Skill có thể dùng delegate `docs-manager` khi khả
+   dụng hoặc tự thực hiện cùng workflow evidence-first.
+7. **Skill xác minh kết quả.** Skill kiểm tra link, path, ví dụ, config key, lệnh
+   và generator hoặc contract script sở hữu nội dung.
+
+## Giữ tài liệu an toàn và dễ bảo trì
+
+<Callout type="warn" title="Thay đổi tài liệu có thể xóa tệp đã cũ">
+  `ak:docs` có thể tạo, sửa hoặc xóa tài liệu trong contract đã chấp nhận. Hãy
+  xem tuyến hoặc thay đổi thẩm quyền được đề xuất trước khi Skill thay thế tài
+  liệu hiện có. Skill không được sửa product code.
+</Callout>
+
+Các ranh giới quan trọng:
+
+- Tài liệu sở hữu lý do, quyết định, thuật ngữ, ràng buộc và navigation bền vững.
+  Tài liệu nên trỏ tới owner thực thi cho hành vi hiện tại.
+- Inventory do máy sở hữu và reference được tạo phải thay đổi qua manifest,
+  generator hoặc source layer của chúng.
+- Skill không được tạo bộ ADR, roadmap, generator, bot hoặc CI gate chỉ cho docs
+  trừ khi bạn yêu cầu rõ bề mặt vận hành đó.
+- Chỉ thêm sơ đồ khi visual giúp hiểu tốt hơn đáng kể và phải review sau khi tạo.
+- Workflow trong source không yêu cầu provider bên ngoài, xuất bản, credential
+  hay dịch vụ trả phí.
+
+## Xác minh kết quả
+
+Bằng chứng phụ thuộc thao tác đã chọn:
+
+| Thao tác | Bằng chứng mong đợi |
+| --- | --- |
+| `init` | Các bề mặt thẩm quyền được tạo, giữ lại, thay thế và xóa; navigation hoạt động; claim và link được xác minh |
+| `update` | Claim đã đổi được ánh xạ tới bằng chứng hiện tại; diff tối thiểu; phần trùng lặp đã cũ được xóa; validator hoặc generator hiện có được chạy khi phù hợp |
+| `summarize` | Bản tóm tắt tập trung tách hành vi hiện tại, hướng dự kiến và bằng chứng có trạng thái; chỉ tạo tệp khi được yêu cầu hoặc đã được chỉ định |
+
+Kết quả đầy đủ cũng liệt kê câu hỏi chưa giải quyết ở cuối. Tài liệu ngắn là hợp
+lệ khi project có ít lý do bền vững mà code không thể biểu đạt.
+
+## Khắc phục sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Skill đề xuất cây tệp chuẩn | Trỏ Skill về chỉ dẫn repo và navigation hiện có; từ chối placeholder theo template. |
+| Một lần update chạm mọi tài liệu | Thu hẹp contract đã đổi và ánh xạ từng claim bị ảnh hưởng tới owner hiện tại. |
+| Prose lặp lại code hoặc lệnh | Thay prose bằng pointer ổn định tới source, test, manifest hoặc reference được tạo. |
+| Summary tạo tệp không mong muốn | Dùng `summarize` mà không yêu cầu output bền vững; output trong cuộc trò chuyện là mặc định. |
+| Tài liệu generated sắp bị sửa tay | Dừng lại và tìm generator hoặc source do máy sở hữu trước khi tiếp tục. |
+| Runtime không nhận ra Skill | Xác nhận target và scope, khởi động lại phiên runtime, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+## Biết giới hạn hiện tại
+
+- Skill không thể phục hồi lý do chưa được ghi lại và không có trong repo hay
+  ngữ cảnh project khả dụng.
+- Claim về live state vẫn bị giới hạn bởi tool, credential và bằng chứng có thể
+  truy cập.
+- Công việc tài liệu được delegate phụ thuộc khả năng runtime và phải nhận cùng
+  quy tắc ownership và chống drift.
+- Cách gọi slash trên Cursor là bằng chứng do người dùng xác minh, không chứng
+  minh tính tương đương về delegation hay tool sơ đồ.
+- Stable và beta đóng gói cùng mode và quy tắc tài liệu của `ak:docs`.

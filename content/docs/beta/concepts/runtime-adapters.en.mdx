@@ -1,0 +1,106 @@
+---
+title: Runtime adapters
+description: Compare how AgentKit delivers supported capabilities to Claude Code, Codex, and Cursor.
+---
+
+Coding assistants do not share one file layout, tool set, or lifecycle event
+model. A runtime adapter converts a Kit into the surfaces the selected assistant
+can actually discover and use.
+
+An adapter is a compatibility boundary, not a promise of identical behavior.
+If a runtime has no equivalent for a component, AgentKit may preserve it as
+inactive supporting content, drop it with a warning, or report it as unsupported.
+
+## Project and user scope
+
+Scope answers **where the installation is available**:
+
+| Scope | Availability | Use it when |
+| --- | --- | --- |
+| Project | The current workspace | The Kit should travel with or apply only to one project. This is the default. |
+| User | The runtime's user directories | You want the Kit available across projects for your user account. The CLI selects this with `--global`. |
+
+Scope does not determine ownership of your repository. A project-scoped install
+lets AgentKit manage its recorded installation files in that project; it does
+not make every project file AgentKit-owned.
+
+Project and user copies can coexist. The runtime may then shadow or duplicate a
+command or Hook, and updating or removing one scope does not automatically
+delete the other. Inspect both scopes when behavior appears twice or a runtime
+loads a different copy than expected.
+
+## Native and plugin delivery
+
+Delivery answers **how the runtime loads the installation**:
+
+- **Native delivery** writes supported components to the runtime's normal
+  project or user locations. It is the default install mode.
+- **Plugin delivery** packages and activates the Kit through a runtime's plugin
+  mechanism. In the current supported model, this is an explicit Claude Code
+  choice made with `--switch-to-plugin`, at either project or user scope.
+
+Scope and delivery are independent. Claude Code can therefore use project-native,
+user-native, project-plugin, or user-plugin delivery. Codex and Cursor installs
+use their native project or user layouts; `--switch-to-plugin` does not select
+plugin delivery for them.
+
+Within one scope, native and plugin delivery for the same Claude Code Kit are
+mutually exclusive. Selecting the other mode starts an explicit transition; it
+does not leave both AgentKit-owned copies active in that scope.
+
+Switching delivery mode is a lifecycle transition. Review the preview because
+AgentKit may need to withdraw its old registration and create a new one while
+preserving foreign or modified content.
+
+## Capability differences
+
+The supported adapters share core file and tool workflows, but their active
+surfaces differ:
+
+| Runtime | What to expect |
+| --- | --- |
+| Claude Code | Native or explicit plugin delivery. Skills, agents, slash commands, rules, hooks, and the AgentKit status line can be active at project or user scope. |
+| Codex | Native Skill discovery, rules, and Agent dispatch through the local AgentKit runtime. Hook support is partial; unsupported groups are not projected, and task-state refresh occurs at supported turn and subagent boundaries rather than after every task tool call. Kit command files remain inactive supporting content, and Codex has no AgentKit status-line surface. |
+| Cursor | The adapter projects Skills, agents, rules, and hooks at project or user scope. Kit command files remain inactive supporting content, there is no AgentKit status-line surface, and the adapter does not expose a dedicated plan-management tool. Live install, update, and invocation coverage is not complete across provider setups, so do not infer full parity from source support alone. |
+
+A Codex projection limit does not fail the installation. A fully unsupported
+group is omitted and listed under **Hooks dropped (unsupported on this
+target)**; JSON can include `hooksDropped` and `droppedHookSummaries`. A partial
+matcher keeps its handlers on the supported atoms and is listed under **Hook
+matchers narrowed (some tool matches unsupported on this target)**; JSON can
+include `hookMatchersNarrowed` and `narrowedHookSummaries`. All four fields are
+optional and omitted at zero.
+
+For Engineer, the unsupported task-state `PostToolUse` group is fully dropped,
+while two shared matchers are narrowed. For Marketing, three matchers are
+narrowed and no group is fully dropped. These are capability disclosures, not
+new failure classes. Claude Code and Cursor adapter destinations and inventories
+are unchanged; do not infer new Cursor parity from shared package changes.
+
+On Windows, AgentKit can make an eligible `.cjs` Hook inside the resolved Codex
+home work from an ordinary path containing spaces by creating a managed
+sibling `.cmd` shim. This does not cover a spaced external path, a path with
+`cmd.exe` metacharacters, a non-ASCII shim name, or unsafe/non-ASCII baked
+arguments; those cases remain unsupported on Windows and warn. Empty arguments
+are rejected distinctly, identical same-path shims deduplicate, and a conflicting
+same-path shim keeps the first emitted content and warns. Paths that do not need
+a shim continue to use the direct command.
+
+Do not infer runtime support from a file name or from another runtime's behavior.
+Use the install summary and the relevant Skill documentation as the authority
+for what became active. A warning about preserved or omitted content is a
+capability result, not necessarily a failed installation.
+
+## Choosing an adapter
+
+1. Choose the assistant where you will run the workflow.
+2. Choose project or user scope based on where it should be available.
+3. For Claude Code, keep native delivery unless you deliberately want plugin
+   activation and lifecycle.
+4. Review adapter warnings after installation, especially for Hooks and
+   runtime-only UI surfaces.
+5. Start a fresh runtime session if the assistant has not reloaded newly
+   installed content.
+
+For installation commands, see [Installing kits](../guides/installing-kits).
+For the component model, see [Kits, Skills, Agents, and Hooks](./building-blocks).

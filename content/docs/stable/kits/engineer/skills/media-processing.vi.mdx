@@ -1,0 +1,174 @@
+---
+title: Biến đổi media local với ak:media-processing
+description: Kiểm tra, convert, resize, encode, stream hoặc xóa background với source preservation và resource limit rõ ràng.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:media-processing` cho biến đổi image, audio và video local bằng FFmpeg,
+ImageMagick cùng RMBG. Skill bao phủ format conversion, encoding, filter,
+thumbnail, batch image, background removal, HLS hoặc DASH packaging và live
+streaming đã được cấp quyền rõ ràng.
+
+## Chọn media tooling xác định
+
+### Dùng ak:media-processing khi
+
+- Bạn cần conversion, resize, crop, compositing, filtering, audio extraction,
+  thumbnail, GIF hoặc codec work local có thể lặp lại.
+- Một batch cần naming, output directory, success count và failure rõ ràng.
+- Bạn cần tệp HLS hay DASH từ source local.
+- Bạn cần AI background removal local và chấp nhận tải model.
+- Bạn muốn inspect media property trước khi chọn output setting.
+
+### Chọn workflow khác khi
+
+- Bạn cần semantic OCR, transcription, scene understanding hoặc provider media
+  generation. Dùng [`ak:ai-multimodal`](./ai-multimodal).
+- Bạn cần visual prompt tuyển chọn và AI image mới. Dùng
+  [`ak:ai-artist`](./ai-artist).
+- Bạn cần HTML scene được render thành scripted animation. Dùng
+  [`ak:html-video`](./html-video).
+- Bạn không có quyền transform, xóa metadata, watermark, broadcast hoặc phân
+  phối lại source.
+
+## Chuẩn bị source, target và tool
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận
+  Engineer Kit đã được cài cho runtime cùng scope hiện tại.
+- Chỉ cài local tool cần thiết: FFmpeg và `ffprobe` cho video hoặc audio,
+  ImageMagick cho still image và `rmbg-cli` cho background removal. Xác minh
+  bằng `ffmpeg -version`, `ffprobe -version`, `magick -version` hoặc
+  `rmbg --version` tùy task.
+- Giữ original ở vị trí riêng và chọn output path mới. Tránh lệnh `mogrify`
+  in-place trừ khi overwrite là chủ đích và có thể khôi phục.
+- Inspect codec, stream, dimension, frame rate, duration, color space, metadata,
+  file size và yêu cầu playback target trước conversion.
+- Ước lượng output count cùng free disk. Encode dài, image độ phân giải cao,
+  batch concurrency và model local có thể dùng nhiều CPU, GPU, memory, temporary
+  storage và thời gian.
+- Với live streaming, nêu endpoint, account, cách xử lý stream key, thời gian
+  start/stop, audience và quyền publish chính xác.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:media-processing ...` | Skill có thể chạy binary local khả dụng và ghi output đã duyệt; codec build, hardware device và process approval phụ thuộc môi trường. |
+| Cursor | `/ak:media-processing ...` | Cách gọi bằng slash đã được người dùng xác minh; shell tool, resource control và output access phụ thuộc Cursor session. |
+| Codex | `$ak:media-processing ...` | Native discovery được hỗ trợ; FFmpeg build, ImageMagick policy, hardware encoder và shell authority tương đương không được ngầm định. |
+
+## Chạy transformation có thể khôi phục
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:media-processing "Inspect ./media/demo.mov, create ./artifacts/demo-web.mp4 as H.264/AAC with fast-start and a maximum width of 1920, preserve the source, test settings on a 15-second sample first, and report size, duration, streams, and visual quality"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:media-processing "Inspect ./media/demo.mov, create ./artifacts/demo-web.mp4 as H.264/AAC with fast-start and a maximum width of 1920, preserve the source, test settings on a 15-second sample first, and report size, duration, streams, and visual quality"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:media-processing "Inspect ./media/demo.mov, create ./artifacts/demo-web.mp4 as H.264/AAC with fast-start and a maximum width of 1920, preserve the source, test settings on a 15-second sample first, and report size, duration, streams, and visual quality"
+```
+
+  </Tab>
+</Tabs>
+
+### Khớp tool với effect
+
+| Task | Tool hoặc helper | Effect quan trọng |
+| --- | --- | --- |
+| Convert video hoặc audio | FFmpeg hoặc `media_convert.py` đi kèm | Re-encoding đổi quality; stream copy chỉ hợp lệ khi container cùng codec tương thích |
+| Optimize kích thước video | `video_optimize.py` đi kèm | Có thể giảm resolution, frame rate, audio bitrate hoặc video bitrate và ghi FFmpeg pass log tạm thời |
+| Resize hoặc convert image | ImageMagick hoặc `batch_resize.py` đi kèm | Crop, forced dimension, quality, color conversion và `-strip` có thể xóa thông tin |
+| Batch image in-place | `mogrify` | Overwrite source file khớp trừ khi `-path` trỏ tới directory khác |
+| Xóa background | RMBG hoặc shell cùng Node helper đi kèm | Tải local model trong lần dùng đầu và ghi PNG trong suốt |
+| HLS hoặc DASH packaging | FFmpeg | Tạo playlist, manifest cùng nhiều segment file; encryption thêm key material cần bảo vệ riêng |
+| RTMP, UDP hoặc RTP stream | FFmpeg | Khởi động network process và có thể publish liên tục đến khi dừng |
+
+Các Python helper đi kèm hỗ trợ `--dry-run`; hãy inspect command thực tế trước
+batch lớn. `batch_resize.py` còn hỗ trợ số parallel worker có giới hạn, còn
+`media_convert.py` cung cấp preset `web`, `archive` và `mobile`.
+
+## Quan sát các giai đoạn xử lý
+
+1. **Skill xác nhận ownership và outcome.** Skill ghi input scope, output path,
+   target device hay service, quality goal và destructive boundary.
+2. **Skill tạo inventory source.** `ffprobe`, `identify` hay check riêng của tool
+   ghi stream, codec, dimension, duration, metadata và file size.
+3. **Skill kiểm tra capability local.** Encoder, decoder, delegate, policy,
+   model, hardware acceleration và writable storage được xác minh.
+4. **Skill lập sample.** Codec, quality, scale, crop, filter order, audio,
+   metadata và naming được nêu rõ, thử trên input đại diện nhỏ.
+5. **Skill ghi output mới.** Transformation chạy với thread hay batch concurrency
+   có giới hạn và giữ log hoặc failure cần cho chẩn đoán.
+6. **Skill xác minh tệp.** Output probe, playback hay visual inspection,
+   dimension, duration, stream, file size, transparency và quality được so với contract.
+7. **Skill báo cáo cleanup.** Output, temporary file, model download, item skip,
+   failure và việc source có giữ nguyên hay không được tóm tắt.
+
+## Kiểm soát overwrite, publication và resource local
+
+<Callout type="warn" title="Một số media command overwrite hoặc publish ngay">
+  `mogrify` có thể thay mọi image khớp, FFmpeg `-y` có thể thay output và live
+  stream command có thể publish ra external audience ngay khi process chạy. Hãy
+  preview exact target và xin quyền riêng trước.
+</Callout>
+
+- Không truyền glob rộng trước khi review danh sách file khớp cùng output
+  collision behavior. Giữ batch output ngoài input directory khi có thể.
+- Metadata stripping có thể tăng privacy nhưng cũng xóa attribution,
+  orientation, color profile, timestamp hay evidence. Hãy chọn điều cần giữ.
+- Stream key và encryption key là secret. Không để chúng trong command history,
+  log, report, playlist hay source control.
+- RMBG xử lý local, nhưng cài đặt và lần đầu dùng model cần network download.
+  Shell helper đi kèm có thể cài global `rmbg-cli` khi thiếu; không chạy nếu
+  chưa duyệt package-manager mutation đó.
+- Hardware acceleration cùng concurrency cao có thể chiếm GPU, CPU, memory và
+  I/O dùng chung. Đặt resource boundary và dừng nếu host không ổn định.
+- Codec, container, browser, device, social-platform và broadcast support thay
+  đổi theo build đã cài cùng target. Xác minh destination thực tế thay vì coi
+  encode thành công là universal compatibility.
+
+## Xác minh output
+
+Kết quả hoàn tất nên gồm:
+
+- Source inventory, tool version, command hay helper đã dùng và exact target setting.
+- Output path, count, dimension, duration, codec, stream, file size cùng metadata
+  hay transparency state.
+- Sample review cùng final visual hoặc playback check, gồm quality loss, crop,
+  sync, color, audio và compatibility finding.
+- Source preservation, overwrite decision, temporary-file cleanup và item batch
+  lỗi hay skip.
+- CPU hay GPU path, concurrency, elapsed time, model download, network endpoint
+  cùng external publication effect.
+
+Stable và beta đóng package cùng source và helper `ak:media-processing`. Release
+không chứng minh mọi FFmpeg build, ImageMagick delegate, RMBG download, hardware
+encoder, target device hay streaming service hoạt động giống nhau.
+
+## Xử lý sự cố và hiểu giới hạn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Encoder, decoder hoặc format không khả dụng | Kiểm tra `ffmpeg -encoders`, `ffmpeg -formats` hoặc `magick identify -list format`; chỉ cài support khi được duyệt. |
+| Stream copy lỗi hoặc output không chạy | Kiểm tra lại container cùng codec compatibility, rồi re-encode sample ngắn thay vì force copy. |
+| ImageMagick từ chối PDF hoặc delegate khác | Giữ policy error; đổi system policy mở rộng attack surface và cần administration approval rõ ràng. |
+| Batch sẽ overwrite original | Dừng, tạo output directory mới, dùng `--dry-run` và liệt kê collision trước retry. |
+| Job dùng hết memory hoặc quá chậm | Giảm resolution, thread, parallel worker hay sample duration; chỉ dùng hardware acceleration khi được hỗ trợ và duyệt. |
+| RMBG model download hoặc memory lỗi | Dùng model hay resolution nhỏ hơn đã duyệt, báo download và giữ source. |
+| Output nhỏ hơn nhưng giảm chất lượng thấy rõ | Xem lại codec, CRF hay bitrate, preset, scaling và filter order; so sample ngắn trước full rerun. |
+| Live stream rớt hoặc nhắm sai service | Dừng process, bảo vệ stream key, kiểm tra endpoint cùng platform requirement và xin quyền mới trước reconnect. |
+| Runtime không nhận diện Skill | Xác nhận target cùng scope, mở lại runtime session, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |

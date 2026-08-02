@@ -1,0 +1,205 @@
+---
+title: Review production risk with ak:code-review
+description: Resolve a diff, pull request, commit, pending workspace, or codebase into an evidence-backed review with blocking findings and fresh verification.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:code-review` to evaluate whether code matches its requested behavior and
+is ready to proceed. The Skill resolves the review target, reads the full
+evidence, scouts edge cases and affected consumers, separates spec compliance
+from code quality, and treats unverified confidence as a review gap.
+
+## Choose ak:code-review when code already exists
+
+### Use ak:code-review when
+
+- You need to review pending changes, a pull request, or one commit.
+- Completed work must be checked against a plan, specification, or acceptance
+  criteria.
+- A shared refactor or multi-file feature needs edge-case and regression
+  scouting.
+- You want a full-codebase scan or a parallel audit of independent areas.
+- A pre-landing or security-sensitive change needs structured checklists.
+
+### Choose another workflow when
+
+- You need to implement the requested change. Use `ak:cook`.
+- A concrete failure needs root-cause diagnosis and repair. Use `ak:debug` and
+  `ak:fix`.
+- You only need to execute tests or browser validation. Use `ak:test`.
+- You are asking for general technical advice with no reviewable code target.
+  Use an advisory workflow.
+
+## Prepare the target and evidence
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Engineer Kit is installed for the runtime and scope you are using.
+- Open the repository and preserve the exact pending state or commit range to
+  review.
+- Provide the implementation intent, plan, specification, or acceptance
+  criteria when one exists.
+- Make project instructions and relevant test commands available.
+- For pull-request mode, install and authenticate `gh`, and ensure the current
+  repository can access the target pull request.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:code-review ...` | Native delivery is the default; explicit plugin delivery is also supported. |
+| Cursor | `/ak:code-review ...` | Slash invocation is user-verified. This does not establish full runtime parity. |
+| Codex | `$ak:code-review ...` | The Skill uses native Codex discovery; broader Engineer Hook and statusline parity is not implied. |
+
+## Select the review target
+
+The Skill detects its mode from the first matching input. With no arguments, it
+uses recent changes already in context; if none exist, it asks you to choose a
+target.
+
+| Input | Mode | Reviewed evidence |
+| --- | --- | --- |
+| `#123` or a pull-request URL | Pull request | Metadata, changed files, and the full diff fetched with `gh` |
+| `abc1234` or a longer hexadecimal SHA | Commit | Commit metadata, parent context, changed files, and the full `git show` diff |
+| `--pending` | Pending workspace | Staged and unstaged changes against `HEAD`, plus repository status |
+| No argument with recent context | Default | The recent change already established in the session |
+| `codebase` | Codebase | A full-codebase scan with research, review, verification, and an improvement plan |
+| `codebase parallel` | Parallel codebase audit | Edge cases grouped into independent reviewer scopes, then aggregated and verified |
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:code-review --pending
+```
+
+```text
+/ak:code-review #184
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:code-review --pending
+```
+
+```text
+/ak:code-review #184
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:code-review --pending
+```
+
+```text
+$ak:code-review #184
+```
+
+  </Tab>
+</Tabs>
+
+For a spec-driven review, include the plan or requirement source and the
+intended base. For a codebase audit, name the business-critical surfaces,
+security boundaries, and time or file limits so the scan remains actionable.
+
+## Understand what happens during a run
+
+1. **The Skill resolves the target.** It validates the pull request, commit,
+   pending diff, or codebase mode before reviewing anything.
+2. **The Skill reads the full evidence.** It loads the complete diff and project
+   rules so a later line cannot invalidate an earlier finding.
+3. **The Skill scouts edge cases.** It traces consumers, data flows, error
+   paths, boundary values, concurrency, state mutations, compatibility, and
+   affected files outside the diff.
+4. **The Skill checks spec compliance first.** When a plan or specification
+   exists, every requirement is marked Pass, Missing, or Extra. Missing work
+   blocks the quality pass; unjustified extras remain visible.
+5. **The Skill reviews code quality.** It checks correctness, security,
+   reliability, performance, maintainability, tests, and existing project
+   patterns without rubber-stamping polished code.
+6. **The Skill adds checklists when warranted.** Significant, pre-landing, or
+   security-sensitive work receives the base checklist plus web or API overlays
+   detected from the project.
+7. **The Skill resolves accepted findings and verifies.** A fix cycle begins
+   only after findings are accepted. Relevant tests, builds, lint, or the
+   original reproduction run again before any completion claim.
+
+Multi-file work can track the dependency chain `scout → review → fix → verify`.
+Parallel codebase mode first lists candidate edge cases, assigns independent
+areas, joins every result, and re-checks blocking findings against the complete
+scope.
+
+## Keep review authority explicit
+
+<Callout type="warn" title="Review evidence is not merge approval">
+  A clean-looking diff, passing happy-path tests, or a reviewer score does not
+  prove production readiness. Critical findings block progress until they are
+  fixed and re-verified or you make an explicit risk decision.
+</Callout>
+
+- Pull-request inspection uses authenticated network access but does not itself
+  authorize comments, commits, pushes, merges, or CI re-runs.
+- Pending and commit modes are read-only until you accept a finding for repair.
+- Checklist findings must cite a concrete file and line, describe the risk, and
+  suggest a bounded fix. Style preferences and already-resolved issues are
+  suppressed.
+- Review feedback is verified against this codebase before implementation.
+  Unclear or technically incorrect feedback is questioned, not accepted
+  performatively.
+- Re-review loops are limited to three cycles before escalation.
+- Codebase modes may write an improvement plan; Git and publication actions
+  remain separate approvals.
+- Parallel review depends on available runtime coordination and independent
+  ownership. It does not make overlapping reviews authoritative.
+
+## Verify the result
+
+A useful review should give you:
+
+- The resolved target, base context, changed files, and implementation intent.
+- Edge-case findings and affected consumers discovered outside the direct diff.
+- A requirement-by-requirement spec-compliance result when a spec exists.
+- Findings ordered by severity, each with a location, production impact,
+  evidence, and concrete repair direction.
+- Separate Critical blocking findings and informational checklist issues.
+- The disposition of every accepted, rejected, or deferred finding.
+- Fresh tests, build, lint, or reproduction evidence after accepted fixes.
+- Remaining verification gaps and unresolved questions.
+
+“No findings” means no actionable issue was found in the inspected evidence. It
+does not prove the code is correct outside that scope. Completion requires both
+the review gates and the relevant fresh verification commands.
+
+## Troubleshoot or continue
+
+| Symptom | Safe next step |
+| --- | --- |
+| No target can be inferred | Choose pending changes, a pull request, a commit, `codebase`, or `codebase parallel`. |
+| The pull request cannot be fetched | Confirm repository context, `gh` authentication, and pull-request visibility. |
+| The commit is not found | Verify the SHA exists locally and fetch it only with appropriate network authority. |
+| Pending mode reports no changes | Check repository status and select a commit or pull request instead. |
+| Findings are generic | Add intent, acceptance criteria, project rules, and the exact base; require file, line, impact, and evidence. |
+| A reviewer suggestion conflicts with working behavior | Verify the current contract and tests, then accept, reject, or request clarification with technical evidence. |
+| Fixes introduce new findings | Add a re-review cycle, verify again, and escalate after three cycles. |
+| The runtime does not recognize the Skill | Confirm target and scope, restart the runtime session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Use `ak:test` for additional execution evidence, or hand an accepted defect to
+`ak:fix` when root-cause repair is required.
+
+## Know the current limits
+
+- Review quality is bounded by the diff, specification, project context, and
+  tests the Skill can actually inspect.
+- Static review cannot prove runtime behavior, load limits, exploitability, or
+  external-system correctness without corresponding evidence.
+- Pull-request and external verification paths require network access and may
+  have provider or CI cost.
+- Cursor slash invocation is user-verified evidence, not proof of full runtime
+  parity.
+- Stable and beta package the same `ak:code-review` input modes, review gates,
+  and checklists.

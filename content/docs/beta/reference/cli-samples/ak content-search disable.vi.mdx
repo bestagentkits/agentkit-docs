@@ -1,0 +1,67 @@
+---
+title: ak content-search disable
+description: Dừng index và tìm kiếm cho một project nhưng vẫn giữ shard plaintext cục bộ.
+---
+
+Dùng `ak content-search disable` để tạm dừng theo cách có thể đảo ngược. Lệnh
+đổi lifecycle marker thành `disabled` nhưng giữ database và sidecar trên đĩa.
+
+## Cách dùng
+
+```bash
+ak content-search disable --project <uuid>
+```
+
+Lệnh không nhận đối số theo vị trí trong cú pháp được công bố.
+
+## Cờ của lệnh
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--project <uuid>` | Trống, bắt buộc | UUIDv7 chữ thường chuẩn của project do actor hiện tại sở hữu. |
+
+Không có preview, prompt, đọc stdin, dry-run hay yêu cầu `--yes`. `--json` và
+`--no-interactive` chỉ tác động cách trình bày dùng chung, không thêm safety
+gate. Lệnh ghi ngay sau khi xác thực owner.
+
+## Tác động
+
+Disable đóng shard đang mở, ghi lifecycle marker riêng tư và cập nhật cùng giá
+trị trong shard. Lệnh không xoá title, body, snippet, checkpoint hay SQLite
+sidecar đã index. Vì vậy dữ liệu plaintext vẫn ở trên đĩa cho tới khi apply
+`delete`.
+
+Lệnh chỉ chạy cục bộ, không gọi registry, provider hoặc network. Nó không sửa
+tệp runtime nguồn hay `operational.db`.
+
+## Đầu ra
+
+Human stdout là `disabled`. JSON stdout là object thô, không phải envelope có
+phiên bản:
+
+```json
+{"projectId":"<uuid>","lifecycle":"disabled"}
+```
+
+Lỗi có thể thoát mà không có error body JSON có cấu trúc.
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Shard đang tồn tại đã được disable. |
+| `1` | Thiếu flag bắt buộc, actor không phải owner, không phân giải được project/store, shard chưa opt in hoặc ghi marker/database thất bại. |
+| `2` | Giá trị flag không phân tích được. |
+
+## Tiếp tục hoặc xoá
+
+```bash
+ak content-search enable --project <uuid> --yes
+```
+
+Bật lại sẽ giữ index hiện có. Nếu cần xoá plaintext khỏi đĩa, hãy preview và
+apply `ak content-search delete`. Disable không tạo backup vì không xoá shard.
+
+## Lệnh liên quan
+
+- [Quy ước CLI](../cli-conventions)

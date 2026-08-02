@@ -1,0 +1,77 @@
+---
+title: ak commands
+description: Duyệt và quản lý từng template slash command kiểu Claude cục bộ mà không xem chúng là bản cài Kit trung lập với runtime.
+---
+
+Dùng `ak commands` làm điểm vào để liệt kê, tìm kiếm, xem, cài hoặc gỡ một
+template lệnh Markdown. Chạy riêng lệnh nhóm sẽ in help và thoát `0`; lệnh không
+scan hoặc thay đổi inventory.
+
+## Mô hình catalog
+
+Nhóm này so sánh hai inventory trên filesystem cục bộ:
+
+| Inventory | Vị trí mặc định | Cấu trúc |
+| --- | --- | --- |
+| Available | `./kits/<kit>/commands/**/*.md` | Cây source đệ quy; cấu trúc lồng nhau quyết định slash name kiểu Claude. |
+| Installed | `~/.claude/plugins/<kit>/commands/<flat-name>.md` | Bản sao phẳng theo Kit trong user plugin root. |
+
+`AGENTKIT_KITS_DIR` thay `./kits`, còn `AGENTKIT_PLUGIN_DIR` thay
+`~/.claude/plugins`. Không subcommand nào truy vấn remote catalog, account,
+entitlement service hoặc verified cache.
+
+Source path như `ckm/write/good.md` có slash name `ckm:write/good` và asset name
+chuẩn `ckm-write-good`. Vì vậy ref của nhóm lệnh này là `<kit>/<flat-name>`,
+không phải slash invocation text.
+
+## Cách dùng
+
+```bash
+ak commands
+```
+
+Lệnh nhóm không nhận argument theo vị trí. `--json` không chuyển help của nhóm
+thành JSON; hãy dùng lệnh lá có thể chạy để nhận đầu ra có cấu trúc.
+
+## Subcommand
+
+| Lệnh | Kết quả | Tác động lên đĩa |
+| --- | --- | --- |
+| `ak commands list` | Gộp template installed và available cục bộ. | Chỉ đọc. |
+| `ak commands search <query>` | Xếp hạng inventory theo metadata và slash name. | Chỉ đọc. |
+| `ak commands show <kit>/<command>` | Hiển thị một record installed hoặc available. | Chỉ đọc. |
+| `ak commands install <kit>/<command>` | Làm phẳng và sao chép một template source cục bộ. | Ghi một tệp. |
+| `ak commands remove <kit>/<command>` | Xoá đúng tệp installed dạng phẳng. | Xoá một tệp nếu có. |
+
+Nhóm này không có Cobra command alias. Ref chấp nhận `ak:<command>`,
+`ake:<command>` và `akm:<command>` làm dạng rút gọn cho `core`, `engineer` và
+`marketing`. Nên dùng ref chuẩn trong script.
+
+## Giới hạn runtime và ownership
+
+Các lệnh này quản lý từng tệp dưới Claude plugin root. Chúng không emit route
+Kit hoàn chỉnh cho project hoặc user, activate plugin, adapt command cho runtime
+khác, cập nhật lifecycle ownership hay tạo recovery snapshot. Codex không có
+native equivalent cho command kiểu Claude này; cài tệp ở đây không tạo ra một
+command như vậy cho Codex.
+
+Dùng `ak kit init` để cài theo runtime đã được xem xét. Hãy xem source root và
+destination root là dữ liệu cục bộ đáng tin cậy, nhất là khi environment
+variable chuyển hướng chúng.
+
+## Đầu ra và mã thoát
+
+Lệnh lá thành công ghi đầu ra cho người dùng hoặc một JSON envelope vào stdout.
+Lỗi vào stderr; lỗi thực thi JSON dùng shared error envelope, còn lỗi phân tích
+cờ có thể vẫn là plain text. Nhóm không có prompt, giao thức stdin, NDJSON,
+network, auth hay entitlement.
+
+Đường help của nhóm thoát `0`. Lệnh lá dùng mã thoát riêng gồm `2` cho ref sai
+dạng, `5` cho record hoặc source không tồn tại và `6` cho destination đã có mà
+không truyền `--force`.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak commands`](../cli/ak_commands)
+- [Cài một route Kit hoàn chỉnh](./kit-init)
+- [Quy ước CLI](../cli-conventions)

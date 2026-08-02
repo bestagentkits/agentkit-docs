@@ -1,0 +1,159 @@
+---
+title: Hiểu giới hạn định danh của integration ak:storage
+description: Review client tương thích S3 được ak-storage cung cấp mà không coi tên canonical bị trùng là invocation được hỗ trợ.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Export `ak-storage` cung cấp JavaScript client cho object storage tương thích
+S3. Client có thể upload, download, list, remove, kiểm tra và sync object khi
+được workflow tương thích gọi. `SKILL.md` của export cũng khai báo `ak:storage`,
+trùng với router `ak-ckm-storage` riêng biệt.
+
+<Callout type="warn" title="Đây không phải trang invocation thông thường">
+  Package giữ cả hai thư mục export nhưng cho hai tệp Skill cùng tên canonical.
+  Không có runtime selector đã được tài liệu hóa để chọn integration definition
+  thay vì router definition. Không dùng `/ak:storage` hoặc `$ak:storage` làm
+  entry point đáng tin cậy.
+</Callout>
+
+## Dùng trang này để review ranh giới integration
+
+### Scope integration dự kiến
+
+- Upload một tệp local tới object key đã chọn.
+- Download một object tới local path.
+- List object theo prefix tùy chọn, hiện tối đa `1000` object mỗi request.
+- Remove một object hoặc kiểm tra object có tồn tại không.
+- Tạo URL hoặc sync một folder local tới các remote key.
+
+### Chọn workflow khác khi
+
+- Bạn cần invocation storage dành cho người dùng đã được hỗ trợ. Collision định
+  danh đang chặn contract đó.
+- Bạn cần tạo bucket, bucket policy, signed URL, pagination vượt list call hiện
+  tại, versioning, lifecycle rule hoặc điều phối migration.
+- Bạn cần bảo đảm hỗ trợ theo provider. Source nêu provider ví dụ, nhưng package
+  không xác minh behavior dịch vụ hiện tại.
+
+## Chuẩn bị client có chủ đích
+
+| Variable | Yêu cầu |
+| --- | --- |
+| `S3_ENDPOINT` | Endpoint bắt buộc |
+| `S3_ACCESS_KEY_ID` | Access-key identifier bắt buộc |
+| `S3_SECRET_ACCESS_KEY` | Secret access key bắt buộc |
+| `S3_BUCKET` | Bucket bắt buộc |
+| `S3_REGION` | Tùy chọn; mặc định `auto` |
+| `S3_PUBLIC_URL` | Base URL tùy chọn cho object URL trả về |
+
+Module JavaScript lazy-load `@aws-sdk/client-s3`. Thêm package đó bằng
+`npm install @aws-sdk/client-s3` sẽ đổi dependency và lockfile của project hiện
+tại, vì vậy hãy review và duyệt mutation này riêng. Nếu thiếu SDK hoặc cấu hình
+bắt buộc, bước tạo client sẽ fail closed và thao tác trả error thay vì liên hệ
+storage.
+
+## Trạng thái định danh theo runtime
+
+| Runtime | Cách gọi được quảng bá | Ranh giới hiện tại |
+| --- | --- | --- |
+| Claude Code | `/ak:storage ...` | Không được hỗ trợ làm selector: router export khai báo cùng tên. |
+| Cursor | `/ak:storage ...` | Không được hỗ trợ làm selector: các thư mục projection riêng không gỡ mơ hồ canonical discovery. |
+| Codex | `$ak:storage ...` | Không được hỗ trợ làm selector: cả hai tệp Skill đã project vẫn giữ `ak:storage`. |
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+Không dựa vào `/ak:storage` để tải integration definition này. Hãy review lỗi
+định danh trước khi cấp quyền thêm dependency, credential hoặc ghi object.
+
+  </Tab>
+  <Tab value="Cursor">
+
+Không dựa vào `/ak:storage` để tải integration definition này. Hãy review lỗi
+định danh trước khi cấp quyền thêm dependency, credential hoặc ghi object.
+
+  </Tab>
+  <Tab value="Codex">
+
+Không dựa vào `$ak:storage` để tải integration definition này. Hãy review lỗi
+định danh trước khi cấp quyền thêm dependency, credential hoặc ghi object.
+
+  </Tab>
+</Tabs>
+
+Xem [Runtime adapter](../../../concepts/runtime-adapters) để hiểu ranh giới
+projection và [Cài đặt Kit](../../../guides/installing-kits) cho các option
+lifecycle. Đổi runtime hay cài lại đều không giải quyết tên bị trùng.
+
+## Hiểu các thao tác của client
+
+| Thao tác client | Tác động local | Tác động provider |
+| --- | --- | --- |
+| `upload(localPath, remotePath, options)` | Đọc toàn bộ tệp local | Gửi `PutObject` với content type được suy ra hoặc cung cấp cùng metadata tùy chọn |
+| `download(remotePath, localPath)` | Tạo parent directory và ghi byte đã download | Gửi `GetObject` |
+| `list(prefix, maxKeys)` | Không có | Gửi `ListObjectsV2`; `maxKeys` mặc định là `1000` và chưa có pagination |
+| `remove(remotePath)` | Không có | Gửi `DeleteObject` cho một key |
+| `exists(remotePath)` | Không có | Gửi `HeadObject` |
+| `getPublicUrl(remotePath)` | Không có | Không gửi request; tạo chuỗi từ cấu hình |
+| `sync(localFolder, remotePrefix, options)` | Scan đệ quy folder local | Upload tuần tự các tệp phù hợp trừ khi `dryRun` là true |
+
+Đây là function module được integration cung cấp, không phải subcommand runtime
+canonical.
+
+## Hiểu các giai đoạn integration
+
+1. Client đọc cấu hình từ environment variable mà không log giá trị secret.
+2. Client lazy-load AWS S3 SDK và tạo path-style client cho endpoint đã chọn.
+3. Mỗi thao tác xác minh đủ trạng thái local để tiếp tục, rồi gửi request tương
+   ứng tới provider.
+4. Upload và sync suy ra content type từ extension phổ biến; extension không
+   biết dùng `application/octet-stream`.
+5. Thao tác trả về giá trị success hoặc error có cấu trúc. Client không cung cấp
+   retry, transaction, rollback hay atomicity xuyên nhiều tệp.
+
+## Giữ approval và an toàn ở bạn
+
+- Duyệt việc cài dependency riêng với quyền truy cập storage.
+- Duyệt từng provider, bucket, prefix và loại dữ liệu trước thao tác đọc hay ghi.
+- Coi destination download và source folder sync là ranh giới mutation workspace
+  hoặc disclosure dữ liệu.
+- Coi `remove` là thao tác phá hủy, yêu cầu object key chính xác và approval rõ
+  ràng. Client không có bước recovery tích hợp.
+- URL từ `getPublicUrl` không chứng minh object tồn tại hay truy cập public được.
+- Request storage có thể tạo dữ liệu phía provider, network traffic và chi phí.
+  Việc credential tồn tại không tự cấp quyền cho các tác động này.
+
+## Bằng chứng dự kiến
+
+Một integration call đã review nên báo:
+
+- Thao tác, bucket, endpoint host, local path và object key mà không lộ credential.
+- Mapping preview trước recursive sync.
+- Success hay failure có cấu trúc theo từng object.
+- Tệp local chính xác được download hoặc remote key chính xác đã remove.
+- Partial failure còn lại và cách recovery thủ công.
+
+## Xử lý sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Runtime hoạt động khác nhau giữa các lần chạy | Ngừng dùng tên canonical; định danh export bị trùng vẫn chưa được giải quyết. |
+| Mọi thao tác báo `S3 not configured` | Kiểm tra variable bắt buộc và SDK mà không in secret. Không giả định message này phân biệt thiếu SDK với thiếu cấu hình. |
+| List thiếu object dự kiến | Kiểm tra prefix và giới hạn `1000` object; client được ship không theo continuation token. |
+| URL trả về thất bại | Xác minh object tồn tại, dạng endpoint, bucket policy và `S3_PUBLIC_URL`; bước tạo URL không gửi request. |
+| Sync thất bại một phần | Giữ kết quả theo từng tệp. Thao tác không atomic và không rollback upload đã thành công. |
+
+Tiếp tục với [Tổng quan Marketing Kit](../../marketing),
+[Lỗi cài Kit](../../../troubleshooting/kit-installation) hoặc
+[Tham chiếu CLI](../../../reference/cli).
+
+## Biết các giới hạn hiện tại
+
+- `ak-storage` vừa là Skill export vừa là backing library, nhưng source không
+  định nghĩa argument contract riêng cho người dùng.
+- `ak-ckm-storage` phụ thuộc client của export này trong khi khai báo cùng tên
+  canonical; chỉ xóa một export không phải cách sửa đã được tài liệu hóa.
+- Provider được nêu tên chỉ là intent tương thích, không phải bảo đảm hiện tại
+  về support, giá, public access hay availability.

@@ -1,0 +1,74 @@
+---
+title: ak sessions stats
+description: Aggregate privacy-bounded local session metrics with explicit source, quality, window, and cache behavior.
+---
+
+Use `ak sessions stats` for local aggregate comparisons without returning
+transcript text.
+
+## Usage
+
+```bash
+ak sessions stats
+```
+
+The command accepts no positional arguments.
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--project <name>` | `[]` | Include only this registered project; repeatable. |
+| `--runtime <name>` | `""` | Filter by source, normally `claude-code` or `codex`. |
+| `--metric <name>` | `tokens` | Aggregate `tokens`, `tool_calls`, `skills_used`, `sessions`, `projects`, `duration`, `messages`, `subagent_spawns`, or `loc`. |
+| `--by <dimension>` | `runtime` | Group by `runtime`, `model`, `provider`, `project`, or `date`. |
+| `--window <duration>` | `720h0m0s` | Lookback duration. Non-positive durations normalize to 30 days. |
+| `--refresh` | `false` | Bypass usable index and memoized-cache reads, then recompute. |
+
+Use the canonical metric and dimension tokens above. Unknown tokens are not
+rejected consistently and can fall back to token/runtime calculations while
+retaining the supplied label.
+
+## Sources, privacy, and cache
+
+With registered projects, the collector reads their local Claude Code and Codex
+session summaries. With no registered project and no explicit filter, it falls
+back to a bounded discovery of Claude Code project transcript directories and
+sets `source_scope` to `discovered`; it does not register those projects.
+
+Results contain derived counts, timestamps, model/provider buckets, provenance,
+and source coverage—not titles, previews, prompts, or transcript bodies.
+Provider grouping is heuristic. Rows carry `exact`, `estimated`, `partial`, or
+`unavailable` quality; `loc` is unavailable in this release.
+
+Despite the command help's read-only wording, a live computation best-effort
+writes a mode-`0600` disposable JSON cache below
+`~/.agentkit/cache/analytics`. `AGENTKIT_HOME` moves it. `--refresh` bypasses
+cache reads but still writes the recomputed cache. The command performs no
+network request and never prompts.
+
+## Examples and output
+
+```bash
+ak sessions stats --json
+ak sessions stats --metric tokens --by model --window 168h --json
+ak sessions stats --project myapp --runtime codex --by date --refresh --json
+```
+
+Human stdout prints totals and rows. JSON stdout uses `kind=sessions.stats`;
+`data` contains `rows`, `total`, `metric`, `dimension`, `provenance`, `coverage`,
+`schema_version`, and `source_scope`.
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Aggregation completed, including zero rows. |
+| `1` | Home, registry, duration, source, or aggregation processing failed. |
+| `2` | Arguments or flags could not be parsed. |
+
+The cache is disposable; remove it through the analytics lifecycle if you need
+to clear derived local state. There is no apply, force, backup, or rollback.
+
+## Related commands
+
+- [List session files](./sessions-list)
+- [Complete `ak sessions stats` command facts](../cli/ak_sessions_stats)

@@ -1,0 +1,105 @@
+---
+title: ak analytics enable
+description: Opt in vào index analytics cục bộ riêng tư sau khi xem source scan có giới hạn và ranh giới xác nhận rõ ràng.
+---
+
+Dùng `ak analytics enable` để opt in vào analytics cục bộ có index. Khi apply,
+lệnh tạo hoặc enable lại database riêng tư rồi chạy full refresh trước khi báo
+thành công.
+
+## Cách dùng
+
+```bash
+ak analytics enable
+```
+
+Lệnh không nhận argument theo vị trí và không có cờ riêng.
+
+## Preview trước khi apply
+
+Enable là mutation analytics duy nhất có preview quét source root. Nó báo count
+có giới hạn cho `claude-projects`, `codex-sessions` và `agentkit-activity` mà
+không lộ path hoặc tên tệp.
+
+Preview chỉ đọc, có ngân sách tổng năm giây và đếm tối đa 10.000 tệp nguồn phù
+hợp trên mỗi root. Count bị giới hạn là cận dưới, không phải inventory đầy đủ.
+Preview sạch không phải bảo đảm: lúc apply không giới hạn vẫn có thể từ chối
+nguồn đã đổi hoặc không an toàn.
+
+```bash
+ak analytics enable --json --no-interactive
+```
+
+Thiếu `--yes`, lần gọi scripted này trả plan với `applied=false` rồi thoát `3`.
+
+## Chủ động apply
+
+```bash
+ak analytics enable --yes --json --no-interactive
+```
+
+Apply ghi lifecycle marker enabled, tạo hoặc mở
+`~/.agentkit/analytics/analytics.db`, migrate schema cũ thuộc sở hữu khi được hỗ
+trợ, đọc các nguồn cục bộ trong allowlist và publish current generation theo
+cách nguyên tử. `AGENTKIT_HOME`, `AGENTKIT_CLAUDE_HOME` và `CODEX_HOME` đổi các
+root tương ứng.
+
+Nếu ingest lỗi sau khi enable, marker hoặc database có thể vẫn ở state enabled
+nhưng chưa có current generation dùng được. Chạy `ak analytics status`, sửa
+điều kiện nguồn hoặc storage được báo, rồi dùng `refresh` hoặc `rebuild`.
+
+## Hành vi xác nhận
+
+Khi prompt được bật, prompt ghi lên stderr. Chỉ `y` hoặc `yes` mới apply. Mọi
+câu trả lời khác hoặc EOF đều từ chối, in preview, không mutate analytics và
+hiện thoát `0`.
+
+`--json` ngầm bật `--no-interactive`; cả hai đều không cấp consent. Khi thiếu
+`--yes`, chúng dùng preview exit `3`. Lệnh không có cờ dry-run hay force riêng.
+
+## Output JSON
+
+Thành công và preview dùng `kind=analytics.plan`. `data` chứa `plan`, `applied`,
+`status` và `scan` chỉ có ở enable.
+
+Plan chứa `schema_version`, `plan_id`, `operation`, `status` trước thao tác và
+`expires_at`. Scan chứa `schema_version`, `scannable`, `has_sources`, `bounded`,
+`reason` tuỳ chọn và cho mỗi root có `kind`, `state`, `source_count`, `capped`,
+`reason` tuỳ chọn.
+
+Chỉ đọc `data.status` khi `data.applied=true`; preview chưa apply hiện serialize
+result status có giá trị zero. Dùng `data.plan.status` cho state đã review trước
+thao tác. Plan ID chỉ tồn tại trong process và không thể apply bằng lần gọi CLI
+sau.
+
+## Quyền riêng tư, retention và recovery
+
+Index lưu aggregate có giới hạn và HMAC identity, không lưu raw transcript,
+prompt, path, session ID hay trace ID. Mọi việc ở cục bộ, không dùng mạng,
+provider, auth hoặc entitlement.
+
+Enable không đổi hoặc prune tệp session nguồn hay activity log. Publication
+theo transaction và generation cũ bị xoá. Không có rollback snapshot cho người
+dùng sau thành công; disable để giữ index nhưng không phục vụ, hoặc delete để
+xoá.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Enable đã apply, hoặc prompt được bật đã bị từ chối/kết thúc tại EOF sau khi in preview. |
+| `1` | Plan, source capture, migration, storage, contention, publication hoặc output thất bại; argument theo vị trí cũng dùng `1`. |
+| `2` | Cờ không hợp lệ. |
+| `3` | `--json` hoặc `--no-interactive` tạo preview chưa apply vì thiếu `--yes`. |
+
+Lỗi lifecycle/service trong chế độ JSON phát structured error envelope trên
+stderr. Lỗi parse cờ, xác minh argument và render output cuối có thể nằm ngoài
+đường này.
+
+Trên macOS, guard first-launch dùng chung của CLI cũng có thể ghi
+`~/.agentkit/.first-run-darwin` và in hint một lần lên stderr trước khi lệnh
+này chạy.
+
+## Lệnh liên quan
+
+- [Quy ước CLI](../cli-conventions)

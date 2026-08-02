@@ -1,0 +1,89 @@
+---
+title: ak update
+description: Xem trước hoặc áp dụng cập nhật dự án và kit toàn cục với backup nhận biết drift.
+---
+
+`ak update` làm mới tệp dự án thuộc quyền sở hữu của AgentKit hoặc bản cài kit toàn cục, đồng thời giữ nguyên nội dung do người dùng sở hữu.
+
+## Cú pháp
+
+```bash
+ak update [project-dir] [options]
+ak update --global [options]
+```
+
+## Trước khi chạy
+
+- Lần xem trước ngầm định không tương tác thoát với mã `3`. Thêm `--dry-run` để xem trước tường minh và thoát `0`, hoặc `--yes` để áp dụng.
+- Lệnh trần trong TTY mở trình hướng dẫn hợp nhất. Mỗi cập nhật CLI, kit toàn cục và kit dự án mặc định là không; `--yes` chấp nhận các bước phù hợp.
+- Lần xem trước từ xa vẫn có thể xác thực, kiểm tra quyền sử dụng, tải nội dung kit và cập nhật cache trước khi tính kế hoạch.
+- `--force` chỉ cho phép thay thế sau snapshot. Tùy chọn này không biến cài đặt toàn cục thành ghi đè vô điều kiện.
+- `--json`, `--quiet`, `--no-interactive` hoặc môi trường không phải TTY chọn hành vi cho script. Trong lần chạy dự án hoặc toàn cục có tương tác, từ chối mọi lời nhắc sẽ thoát `0`.
+
+## Đối số
+
+`[project-dir]` chọn một dự án. Nếu bỏ qua, chế độ dự án tìm dự án hiện tại trừ khi đặt `--global`. Lệnh không có alias.
+
+## Tùy chọn
+
+| Tùy chọn | Mặc định | Mục đích |
+| --- | --- | --- |
+| `--beta` | `false` | Bao gồm hành vi tự cập nhật CLI beta. |
+| `--channel <channel>` | `stable` | Chọn kênh kit. |
+| `--dry-run` | `false` | Xem trước mà không ghi bản cài dự án hoặc toàn cục. |
+| `--force` | `false` | Cho phép thay thế drift sau backup. |
+| `-g, --global` | `false` | Cập nhật bản cài kit toàn cục. |
+| `--kits <names>` | Trống | Giới hạn danh sách kit phân tách bằng dấu phẩy. |
+| `--kits-dir <path>` | Trống | Đọc kit từ thư mục cục bộ. |
+| `--local` | `false` | Dùng nguồn kit cục bộ. |
+| `--registry-url <url>` | Trống | Ghi đè URL registry. |
+| `--remote` | `true` | Dùng registry từ xa. |
+| `--runtime <runtime>` | `claude-code` | Chọn runtime toàn cục. |
+| `--show-diff` | `false` | Bao gồm diff tệp trong kế hoạch. |
+| `--target <target>` | Trống | Chọn mục tiêu cập nhật. |
+| `--version <version>` | Trống | Ghim phiên bản kit. |
+
+## Ví dụ
+
+Xem trước cập nhật dự án với trạng thái xem trước thành công:
+
+```bash
+ak update . --dry-run --show-diff
+```
+
+Áp dụng cập nhật dự án mà không hỏi:
+
+```bash
+ak update . --yes
+```
+
+Xem trước cập nhật toàn cục:
+
+```bash
+ak update --global --dry-run --kits core --runtime claude-code
+```
+
+## Đầu ra và luồng
+
+Với `--json`, stdout dùng envelope chung có `"kind": "update"`. `data` của dự án gồm `project_dir`, `files_updated`, `files_skipped`, `files_new` và `dry_run`; nó cũng có thể gồm các trường snapshot, `skipped`, `diffs`, `project_config`, `project_config_created` và `scope`.
+
+Đầu ra toàn cục còn có `locations`, `kits` và `skipped_targets`. Mỗi kết quả kit có thể báo cáo `kit`, `runtime`, `status`, `channel`, `reason`, `error`, `why`, `next`, các trường snapshot, `locations` và `warnings`. Lần xem trước JSON ngầm định in envelope thành công ra stdout rồi thoát `3`. Lỗi lệnh có cấu trúc đi tới stderr; lỗi phân tích vẫn là văn bản thuần.
+
+## Trạng thái thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Đã áp dụng cập nhật, hoàn tất dry-run tường minh hoặc từ chối lời nhắc tương tác. |
+| `1` | Runtime, vòng đời, nguồn, snapshot, ghi hoặc cập nhật toàn cục một phần thất bại. |
+| `2` | Cờ, phạm vi, mục tiêu hoặc lựa chọn bản cài toàn cục đủ điều kiện không hợp lệ. |
+| `3` | Lần xem trước ngầm định không tương tác cần `--yes` để áp dụng. |
+
+## Tác động, an toàn và khôi phục
+
+Cập nhật dự án phân loại tệp thuộc quyền sở hữu. Tệp sạch có thể được thay thế; tệp đã sửa hoặc vị trí mới bị chiếm được bỏ qua trừ khi dùng `--force`. Chế độ áp dụng tạo snapshot dự án bắt buộc trước khi ghi cập nhật. Một số tệp ngoài phạm vi khôi phục cần được phục hồi thủ công; làm theo `snapshot_data_dir` khi được báo cáo. Cấu hình dự án còn thiếu có thể được tạo trước bước phân loại và snapshot, ngay cả khi bước sau thất bại.
+
+Các tệp được ghi tuần tự nên lỗi có thể để lại cập nhật một phần. Cập nhật toàn cục tiếp tục qua các kit, báo cáo lỗi theo kit và có thể tạo gói hỗ trợ trong `~/.agentkit/support`. Chế độ force toàn cục có thể lưu trữ kỹ năng Codex cũ được cho phép, nhưng vẫn giữ nguyên sửa đổi của người dùng.
+
+## Lệnh liên quan và giới hạn
+
+Dùng [`ak new`](./new) cho dự án mới, [`ak uninstall`](./uninstall) để xóa tệp thuộc quyền sở hữu và [`ak doctor`](./doctor) sau lỗi một phần. Xem [quy ước CLI](../cli-conventions) về cờ dùng chung.

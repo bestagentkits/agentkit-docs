@@ -1,0 +1,91 @@
+---
+title: ak content-search delete
+description: Preview and irreversibly remove one AgentKit-owned plaintext content-search shard.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak content-search delete` when a project owner wants to remove one
+project's derived search shard permanently. Runtime source files and
+`operational.db` remain outside the deletion boundary.
+
+## Usage
+
+```bash
+ak content-search delete --project <uuid>
+```
+
+The command accepts no documented positional arguments.
+
+## Flags and confirmation
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--project <uuid>` | Empty, required | Canonical lowercase project UUIDv7. |
+| `--yes` | `false` | Apply the plan built during this invocation. |
+
+There is no TTY prompt and stdin is not read. `--no-interactive` does not
+authorize deletion. Without `--yes`, the command prints a preview and exits
+`2`.
+
+```bash
+# Preview only; expected exit 2.
+ak content-search delete --project <uuid> --json
+
+# Apply intentionally.
+ak content-search delete --project <uuid> --yes --no-interactive --json
+```
+
+## Read the preview
+
+JSON preview output is a raw object on stdout:
+
+```text
+planId: random plan token for this process
+projectId: canonical project UUID
+documentCount: indexed document count
+logicalBytes: title-plus-body length counter reported by SQLite
+generation: shard generation checked again before delete
+createdAt: UTC timestamp
+```
+
+The preview token is held only for the current process. With `--yes`, the same
+invocation revalidates the generation and removes the project's `.db`, WAL,
+SHM, journal, and lifecycle marker. JSON apply output is
+`{"projectId":"<uuid>","deleted":"true"}`; `deleted` is a string, not a
+boolean. Human output is `deleted`.
+
+<Callout type="warning">
+  Apply creates no backup or recovery snapshot. A stale generation refuses the
+  operation, but a successful delete is irreversible from AgentKit's
+  content-search lifecycle commands.
+</Callout>
+
+The operation is local and owner-authorized. It performs no registry, provider,
+authentication, entitlement, or network request.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The shard files were removed or were already absent as sidecars during the applied removal. |
+| `1` | Owner resolution, project validation, operational-store access, shard inspection, generation revalidation, or file removal failed. |
+| `2` | Preview only because `--yes` was absent, or a flag value could not be parsed. |
+
+A missing required `--project` currently exits `1`. JSON preview output can be
+valid even though the intentional preview exit is `2`; check both streams and
+the process status.
+
+## Verify and recover
+
+```bash
+ak content-search status --project <uuid> --json
+```
+
+A successful delete should report `lifecycle=absent` and `health=absent`.
+Re-enable to create an empty shard; the original runtime sources are still
+present, but repopulation requires an indexing path.
+
+## Related commands
+
+- [CLI conventions](../cli-conventions)

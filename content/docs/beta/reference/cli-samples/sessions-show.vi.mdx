@@ -1,0 +1,66 @@
+---
+title: ak sessions show
+description: Đọc một trang có giới hạn theo line cursor từ transcript session cục bộ mà không redact.
+---
+
+Dùng `ak sessions show` sau khi liệt kê để kiểm tra một trang transcript Claude
+Code hoặc Codex.
+
+## Cách dùng
+
+```bash
+ak sessions show <project> <session-id>
+```
+
+`<project>` phải là AgentKit project đã đăng ký. Session ID chỉ nhận chữ, số,
+`_` và `-`; path separator và ký tự khác bị từ chối.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--cursor <line>` | `0` | Bắt đầu tại raw JSONL line đánh số từ 0. Giá trị âm được đưa về `0`. |
+| `--limit <count>` | `200` | Kích thước cửa sổ raw line. Giá trị không dương dùng `200`; trên `1000` bị giới hạn ở `1000`. |
+
+## Phân trang và giới hạn
+
+```bash
+ak sessions show myapp session-abc --json
+ak sessions show myapp session-abc --cursor 200 --limit 50 --json
+```
+
+Pagination tính theo raw JSONL line, không theo số message hiển thị. Dòng lỗi hoặc
+không displayable vẫn làm cursor tăng nên một trang có thể ít message hơn
+`--limit`. JSON báo `cursor.next`, `cursor.total` và `parse_errors`. Mỗi lần gọi
+chỉ đọc 10 MiB đầu của file; content block trên 256 KiB bị cắt và đánh dấu
+`truncated`; line trên 8 MiB được tính là parse error.
+
+Lệnh chỉ đọc registry và transcript cục bộ. Nó không ghi cache, hỏi xác nhận,
+gọi network hoặc redact output.
+
+## Quyền riêng tư và output
+
+Human stdout in text đầu tiên hoặc tên tool của mỗi message. JSON stdout dùng
+`kind=sessions.show` và có thể chứa prompt, thinking, input/output tool, tên
+model, đường dẫn file và output lệnh. Tool output dạng binary có thể được mã hoá
+base64 với `encoding=base64`.
+
+Xem stdout là dữ liệu nhạy cảm. Khi phù hợp, hãy chạy
+[credential redaction](./sessions-redact) trên nguồn Claude Code rồi xem lại
+trang đã chọn trước khi chia sẻ. Redaction hiện không bao phủ transcript Codex.
+
+## Mã thoát
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Đã đọc trang có giới hạn. |
+| `1` | Không tìm thấy project/session, path không an toàn hoặc đọc cục bộ lỗi. |
+| `2` | Hai argument hoặc cờ không hợp lệ. |
+
+Lệnh không có preview, apply, force, backup hoặc recovery.
+
+## Lệnh liên quan
+
+- [Liệt kê session](./sessions-list)
+- [Theo dõi message Claude Code mới](./sessions-tail)
+- [Thông tin đầy đủ của lệnh `ak sessions show`](../cli/ak_sessions_show)

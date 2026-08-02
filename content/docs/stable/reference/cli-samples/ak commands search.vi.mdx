@@ -1,0 +1,71 @@
+---
+title: ak commands search
+description: Tìm trong inventory template command cục bộ đã gộp theo flat name, slash name, mô tả và tag.
+---
+
+Dùng `ak commands search` để tìm template command kiểu Claude cục bộ khi biết
+từ khoá hoặc slash fragment nhưng chưa biết ref dạng phẳng chính xác.
+
+## Cách dùng
+
+```bash
+ak commands search <query>
+```
+
+Một hoặc nhiều positional token được nối bằng dấu cách. Thiếu argument đi qua
+đường lỗi số lượng argument hiện tại của Cobra; query đã truyền nhưng chỉ có
+whitespace bị từ chối vì rỗng.
+
+Không có cờ riêng cho lệnh. Lệnh chỉ đọc, không prompt và không lookup remote
+hoặc runtime.
+
+## Tìm kiếm và xếp hạng
+
+Search dùng inventory đã gộp từ `ak commands list`, trong đó record installed
+thay record available có cùng ref. Query được chuyển thành chữ thường và tách
+theo whitespace. Mỗi token cộng:
+
+| Trường khớp | Điểm |
+| --- | --- |
+| Flat command name | `3` |
+| Slash name | `2` |
+| Mỗi tag khớp | `2` |
+| Description | `1` |
+
+Record được đưa vào khi ít nhất một token có điểm. Kết quả sắp theo tổng điểm
+giảm dần, sau đó theo `<kit>/<flat-name>` chuẩn tăng dần.
+
+```bash
+ak commands search email
+ak commands search 'write good' --json
+```
+
+Record installed đã mất cấu trúc source lồng nhau, nên slash name dùng để tìm
+là flat installed name. Search không đọc Markdown body, argument hint hoặc tên
+Kit như trường riêng.
+
+## Đầu ra
+
+Đầu ra cho người dùng là cùng bảng với list. Không có kết quả vẫn là empty state
+thành công.
+
+JSON dùng chung `kind: assets.list` với list và trả `data.commands[]` chứa
+`kit`, `name`, `slash_name`, `rel_path`, `description`, `tags`, `installed` và
+`argument_hint` nếu có.
+
+Không phát NDJSON hoặc status stream thứ hai. Lỗi dùng stderr; lỗi thực thi JSON
+dùng shared error envelope.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Search hoàn tất, kể cả không có kết quả. |
+| `1` | Inventory discovery thất bại hoặc không truyền positional query argument. |
+| `2` | Query đã truyền chỉ có whitespace hoặc không phân tích được cờ. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak commands search`](../cli/ak_commands_search)
+- [Liệt kê command](../cli/ak_commands_list)
+- [Xem một command](../cli/ak_commands_show)

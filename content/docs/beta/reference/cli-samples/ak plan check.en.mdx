@@ -1,0 +1,79 @@
+---
+title: ak plan check
+description: Mark every Markdown task in one file done and handle best-effort plan-store synchronization.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak plan check` when every task checkbox in one phase file should be marked
+done. The file is canonical; the plan store is refreshed only after the file
+write succeeds.
+
+## Usage
+
+```bash
+ak plan check <phase-file>
+```
+
+The command accepts exactly one path and has no command-specific flags.
+
+## Mark a phase complete
+
+```bash
+ak plan check ./plans/260802-1030-release-docs/phase-01-audit.md
+```
+
+Every Markdown task item that starts with `- [ ]` becomes `- [x]`.
+Already-checked `[x]` and `[X]` items remain checked, and other lines are
+preserved. Repeating the command is idempotent with respect to checkbox state.
+
+The rewrite uses a temporary file and rename, so readers do not see a partial
+file. The replacement file uses owner-only temporary-file permissions. The
+command does not change phase front matter, create a backup, or offer preview,
+apply, force, or confirmation modes.
+
+<Callout type="warning">
+  The command trusts the supplied path before rewriting it; it does not require
+  the basename to match `phase-NN-*.md`. Verify the target file first. Use
+  version control or filesystem recovery for rollback.
+</Callout>
+
+## Store synchronization
+
+After the atomic rewrite, AgentKit tries to find the store row linked to the
+file's parent directory and reindex that plan and phase. If the store is
+missing, ambiguous, unwritable, or otherwise unavailable, the file remains
+changed, stderr receives a warning, and the command exits successfully. A
+legacy file-only plan does not cause a new store row to be invented.
+
+The operation is local. Store synchronization can run local `git` commands to
+resolve repository identity, but it never contacts a network or provider. It
+does not prompt or read stdin; `--yes` has no additional effect.
+
+## Output
+
+Human success is written to stdout. JSON success is one envelope with
+`kind=plan.check` and:
+
+```text
+data.phase: the supplied path
+data.action: "checked"
+```
+
+Store-sync warnings remain plain text on stderr in JSON mode. Execution errors
+use the JSON error envelope on stderr; flag-parse errors can remain plain text.
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | The file rewrite completed, including when no unchecked boxes existed. | Inspect stderr for a store-sync warning and verify the file. |
+| `1` | The path could not be resolved, read, or atomically replaced. | Check the exact file and directory permissions. |
+| `2` | Arguments or flags were invalid. | Supply exactly one phase-file path. |
+
+## Related commands
+
+- [Complete `ak plan check` command facts](../cli/ak_plan_check)
+- [Parse plan progress](../cli/ak_plan_parse)
+- [Show plan status](../cli/ak_plan_status)
+- [CLI conventions](../cli-conventions)

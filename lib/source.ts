@@ -1,14 +1,52 @@
 import { docs } from 'collections/server';
-import { loader } from 'fumadocs-core/source';
+import { loader, type LoaderPlugin } from 'fumadocs-core/source';
+import { rewriteCliReferenceLinks } from './cli-reference-links';
+import {
+  nestCliReferencePageTree,
+  transformCliReferenceStorage,
+} from './cli-reference-routes.mjs';
+import { resolveDocsRelativeHref } from './relative-href';
 import { i18n } from './i18n';
 import { docsContentRoute, docsImageRoute, docsRoute } from './shared';
+
+function canonicalCliReference(): LoaderPlugin {
+  return {
+    name: 'agentkit:canonical-cli-reference',
+    enforce: 'post',
+    transformStorage({ storage }) {
+      transformCliReferenceStorage(storage);
+    },
+    transformPageTree: {
+      folder(node, folderPath) {
+        return /^(?:stable|beta)\/reference\/cli-samples$/.test(folderPath)
+          ? nestCliReferencePageTree(node)
+          : node;
+      },
+    },
+  };
+}
+
+function hideUnapprovedGeneratedContent(): LoaderPlugin {
+  return {
+    name: 'agentkit:hide-unapproved-generated-content',
+    enforce: 'post',
+    transformStorage({ storage }) {
+      storage.delete('stable/changelog', true);
+      storage.delete('beta/changelog', true);
+      storage.delete('stable/reference/release-notes.mdx');
+      storage.delete('stable/reference/release-notes.vi.mdx');
+      storage.delete('beta/reference/release-notes.mdx');
+      storage.delete('beta/reference/release-notes.vi.mdx');
+    },
+  };
+}
 
 // See https://fumadocs.dev/docs/headless/source-api for more info
 export const source = loader({
   baseUrl: docsRoute,
   i18n,
   source: docs.toFumadocsSource(),
-  plugins: [],
+  plugins: [canonicalCliReference(), hideUnapprovedGeneratedContent()],
 });
 
 // The OG-image and raw-markdown route handlers live under the `[lang]` segment,
@@ -33,8 +71,19 @@ export function getPageMarkdownUrl(page: (typeof source)['$inferPage']) {
 
 export async function getLLMText(page: (typeof source)['$inferPage']) {
   const processed = await page.data.getText('processed');
+  const markdown = rewriteCliReferenceLinks(
+    processed,
+    source.getPages(page.locale),
+    page.path,
+    (href) =>
+      resolveDocsRelativeHref(
+        { resolveHref: (candidate) => source.resolveHref(candidate, page) },
+        page,
+        href,
+      ),
+  );
 
   return `# ${page.data.title} (${page.url})
 
-${processed}`;
+${markdown}`;
 }

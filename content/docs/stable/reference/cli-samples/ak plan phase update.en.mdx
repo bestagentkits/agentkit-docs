@@ -1,0 +1,71 @@
+---
+title: ak plan phase update
+description: Update index-owned phase bookkeeping without overwriting file-owned title, status, or content.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak plan phase update` to write phase bookkeeping that belongs in the
+local plan index. It never edits the phase Markdown file.
+
+## Usage
+
+```bash
+ak plan phase update <plan-id> <n> [flags]
+```
+
+`<n>` must be a positive integer and `<plan-id>` must exist in the store.
+
+## Command flags
+
+| Flag | Default | Ownership and behavior |
+| --- | --- | --- |
+| `--acceptance <text>` | Empty | Index-owned acceptance text. |
+| `--comment-id <id>` | `0` | Index-owned GitHub tracking comment ID. |
+| `--evidence <text>` | Empty | Index-owned evidence or links. |
+| `--notes <text>` | Empty | Index-owned free-form notes. |
+| `--title <text>` | Empty | File-owned and rejected with exit `2`; edit the phase heading. |
+| `--status <status>` | Empty | File-owned and rejected with exit `2`; use check, uncheck, or phase close. |
+| `--content <text>` | Empty | File-owned and rejected with exit `2`; edit the phase body. |
+
+Only flags explicitly passed replace their corresponding index-owned values;
+passing an empty string clears that text field. Shared flags are described in
+[CLI conventions](../cli-conventions).
+
+## Mutation behavior
+
+If phase `<n>` is absent, the command creates an index row with revision `0`;
+its file-owned fields are initially empty and status defaults to `todo`. If the
+row exists, every invocation upserts it and increments `rev`, including an
+invocation with no changed bookkeeping flag.
+
+<Callout type="warning">
+  Do not use `--title`, `--status`, or `--content` as compatibility aliases.
+  They are deliberately rejected so a later reindex cannot silently undo an
+  index-only value. Edit the phase file, then reindex; use `ak plan uncheck`,
+  `ak plan check`, or `ak plan phase close` for checkbox-owned status.
+</Callout>
+
+The write updates the phase row and its full-text-search entry in one SQLite
+transaction. It does not validate that a matching phase file exists. There is
+no network, auth, provider call, prompt, stdin read, preview, force, snapshot,
+or rollback. Opening the store can create or forward-migrate it.
+
+## Output
+
+JSON success uses `kind=plan.phase-update` with `plan_id`, `n`, `title`,
+`status`, and `rev`. The accepted notes, evidence, acceptance, and comment ID
+are not echoed in this result, so treat the revision as the write receipt.
+Human/plain output also shows only phase identity, title, status, and revision.
+
+## Exit behavior and recovery
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | The phase row was inserted or updated. | Check the returned revision; use search where appropriate for indexed text. |
+| `1` | The plan was missing or the plan store failed. | Fix store access or reindex the plan before retrying. |
+| `2` | Arguments were invalid, the phase number was not positive, or a file-owned flag was passed. | Edit the canonical file or correct the invocation. |
+
+JSON runtime errors use stderr; flag-parse errors can remain plain text.
+
+## Related commands

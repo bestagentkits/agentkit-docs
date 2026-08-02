@@ -1,0 +1,90 @@
+---
+title: ak content-search enable
+description: Explicitly accept plaintext-at-rest storage and create or re-enable one owner-authorized project shard.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak content-search enable` to opt one project into local full-text search.
+The operation is never implicit: the current project owner must pass `--yes`.
+
+## Usage
+
+```bash
+ak content-search enable --project <uuid> --yes
+```
+
+The command accepts no documented positional arguments.
+
+## Required authority and flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--project <uuid>` | Empty, required | Canonical lowercase UUIDv7 for a project in `operational.db`. |
+| `--yes` | `false`, required by runtime | Accept the plaintext-at-rest disclosure and authorize creation or re-enable. |
+
+The current local actor must resolve to the project's `owner` membership on
+every call. AgentKit registry login and kit entitlement are unrelated.
+
+<Callout type="warning">
+  The shard stores searchable content as plaintext SQLite data unless the OS
+  disk is encrypted. Private filesystem permissions restrict access but do not
+  encrypt titles, bodies, or snippets.
+</Callout>
+
+There is no interactive fallback. A TTY, piped `y`, `--json`, and
+`--no-interactive` do not replace `--yes`; missing it exits `2` before the shard
+service opens.
+
+## Disk effects
+
+For a first opt-in, the command creates private directories under
+`AGENTKIT_HOME/operational/content/` and an AKC1 SQLite database plus lifecycle
+sidecars. With the default home, `AGENTKIT_HOME` is `~/.agentkit`.
+
+If the shard already exists, enable changes its lifecycle to `enabled` and
+preserves existing indexed documents. Use `rebuild`, not repeated enable, to
+replace a corrupt or stale shard with an empty one.
+
+The command is local-only. It does not sync the shard, copy it into
+`operational.db`, contact the network, index runtime sources by itself, or make
+a recovery snapshot.
+
+## Output
+
+Human stdout starts with `enabled:` followed by the exact plaintext disclosure.
+JSON stdout is the raw status object:
+
+```text
+projectId: canonical UUID
+lifecycle: enabled
+health: ready
+documentCount: omitted when zero
+logicalBytes: omitted when zero
+disclosure: plaintext-at-rest notice
+```
+
+This is not a shared JSON envelope or NDJSON stream. Runtime failures may have
+no structured JSON error object.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The shard is enabled and its status was emitted. |
+| `1` | The required project flag was absent, UUID/store/owner validation failed, or safe private storage could not be created or opened. |
+| `2` | `--yes` was absent or a flag value could not be parsed. |
+
+## Verify or reverse
+
+```bash
+ak content-search status --project <uuid> --json
+ak content-search disable --project <uuid>
+```
+
+Disable preserves the data. To remove plaintext shard files, use the separate
+preview/apply delete flow.
+
+## Related commands
+
+- [CLI conventions](../cli-conventions)

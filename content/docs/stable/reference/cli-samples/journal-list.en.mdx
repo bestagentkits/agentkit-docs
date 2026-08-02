@@ -1,0 +1,88 @@
+---
+title: ak journal list
+description: List one registered project's journal summaries newest first with bounded date and text filters.
+---
+
+Use `ak journal list` to find historical work records before opening a complete
+entry or writing another one.
+
+## Usage
+
+```bash
+ak journal list
+```
+
+The command accepts no positional arguments.
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--from <YYYY-MM-DD>` | Empty | Include entries on or after the value. |
+| `--to <YYYY-MM-DD>` | Empty | Include entries on or before the value. |
+| `--query <text>` | Empty | Match a case-insensitive substring in title, summary, slug, or project ID. |
+| `--project <name>` | Current registered project match | Limit lookup to one exact registered project name. |
+
+Use canonical `YYYY-MM-DD` dates. The implementation normalizes valid dates
+but does not reject every malformed filter; an invalid string can produce a
+lexical filter instead of an argument error.
+
+Date bounds apply only when an entry has a resolved date. Entries with no date
+remain in the result even when `--from` or `--to` is set.
+
+## Discovery behavior
+
+The command reads `.md` files directly under the selected project's
+`plans/journals/` directory and skips directories and `README.md`. It does not
+walk nested folders. Missing journal directories, unreadable entries, and an
+unknown `--project` degrade to an empty result instead of failing. From an
+unregistered current directory, lookup uses the directory's base name and can
+therefore select a different registered project with that same name. Prefer
+registration or an explicit `--project`.
+
+Entries are sorted by date descending, then by derived creation time. The date
+comes from frontmatter when valid, otherwise from supported filename prefixes.
+The title falls back from frontmatter to the first H1 and then to the slug. A
+missing summary falls back to the first body paragraph.
+
+## Examples
+
+```bash
+ak journal list
+ak journal list --query install --from 2026-07-01 --to 2026-07-31
+ak journal list --project myproj --json
+```
+
+## Output and privacy
+
+Human output prints date, slug, and title. Plain output prints tab-separated
+date, project ID, slug, and title. An unreadable file that can still be stated
+is marked malformed.
+
+JSON success uses `kind=journal.list`; `data` is an array. Each item can include
+`project_id`, `slug`, `filename`, `title`, `summary`, `date`, `created_at`, and
+`malformed`. Empty results use an empty array. `--quiet` suppresses stdout.
+
+This is a local, read-only command. It performs no network, auth, process,
+prompt, preview, or cache operation. Titles, summaries, project IDs, filenames,
+and paths inferred by follow-up commands can be sensitive; review JSON before
+sharing it.
+
+## Exit status
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Listing completed, including an empty or degraded result. |
+| `1` | Resolving AgentKit home or another command-level I/O operation failed. |
+| `2` | Arguments or flags could not be parsed. |
+
+Because discovery deliberately converts several read failures to an empty
+result, exit `0` does not prove every journal file was readable. With `--json`,
+a command-level failure can exit without a JSON error object.
+
+## Related commands
+
+- [Show an entry](./journal-show)
+- [Create an entry](./journal-create)
+- [Validate an entry](./journal-validate)
+- [List registered projects](./projects-list)

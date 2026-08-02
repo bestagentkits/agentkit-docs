@@ -1,0 +1,102 @@
+---
+title: ak journal create
+description: Create one atomic, collision-safe Markdown work record under a project's plans/journals directory.
+---
+
+Use `ak journal create` after meaningful implementation, review, or incident
+work when a chronological record is useful.
+
+## Usage
+
+```bash
+ak journal create <title>
+```
+
+The command requires exactly one non-empty title.
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--summary <text>` | Empty | Store a short summary in frontmatter. It also becomes the body when no non-empty stdin body is supplied. |
+| `--date <YYYY-MM-DD>` | Current UTC date | Set the entry date. Other values fail before a journal file is committed. |
+| `--project <name>` | Current registered project match, then cwd | Select an exact registered project name. |
+| `--stdin` | `false` | Read the complete body from stdin until EOF. |
+
+Shared output flags are described in [CLI conventions](../cli-conventions).
+
+## Examples
+
+Create an entry with a short body derived from its summary:
+
+```bash
+ak journal create "Fix install race" --summary "Root cause and fix"
+```
+
+Provide a longer body explicitly:
+
+```bash
+printf '%s\n' 'Validated the lock ordering and added a regression test.' |
+  ak journal create "Fix install race" --stdin --date 2026-07-27
+```
+
+Use `--stdin` only when a producer will close the stream. The command reads the
+entire stream into memory and writes its text verbatim after trimming leading
+and trailing whitespace.
+
+## File and ownership behavior
+
+The destination is `<project>/plans/journals/`. AgentKit creates that directory
+with owner/group access when needed, then writes through a temporary file and
+renames it into place. A completed entry is owner-readable and owner-writable.
+
+The filename starts with the selected date and an ASCII slug derived from the
+title, for example `2026-07-27-fix-install-race.md`. If it already exists, the
+command appends `-2`, `-3`, and so on. It never overwrites an existing journal.
+
+The generated file contains YAML frontmatter, an H1 title, the body, and a note
+that the entry is historical rather than durable authority. With neither a
+body nor summary, the body is `_No body provided._`.
+
+There is no preview, confirmation, `--force`, backup, or rollback. A failed
+temporary write is cleaned up, so no partial `.md` file is committed.
+
+## Output and JSON
+
+Human output writes the created absolute path to stdout. Plain output is only
+the path. JSON success uses `kind=journal.create`; its current `data` fields
+retain capitalized Go names:
+
+```json
+{
+  "schema_version": 1,
+  "kind": "journal.create",
+  "data": {
+    "Filename": "2026-07-27-fix-install-race.md",
+    "Path": "/project/plans/journals/2026-07-27-fix-install-race.md",
+    "Slug": "fix-install-race",
+    "Date": "2026-07-27"
+  }
+}
+```
+
+Do not publish the path or journal content without reviewing it for project
+names, internal details, or secrets. This command performs no network or auth
+operation.
+
+## Exit status
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | One new journal file was committed. |
+| `1` | Home, stdin, directory, temporary-write, or rename I/O failed. |
+| `2` | The title, date, project name, or argument count was invalid. |
+
+With `--json`, a command error can exit without a JSON error envelope. Check
+the exit code in addition to parsing stdout.
+
+## Related commands
+
+- [List entries](./journal-list)
+- [Validate the new entry](./journal-validate)
+- [Journal command group](./journal)

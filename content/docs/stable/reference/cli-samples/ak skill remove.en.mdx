@@ -1,0 +1,66 @@
+---
+title: ak skill remove
+description: Remove one per-skill runtime record while preserving the shared package cache and documenting orphan limits.
+---
+
+Use `ak skill remove` to detach one skill from its local runtime cache without
+deleting cache data that other skills may share.
+
+## Usage
+
+```bash
+ak skill remove <kit>/<skill>
+```
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--kits-dir <dir>` | `AGENTKIT_KITS_DIR` or `./kits` | Select the local source used to validate the skill and its `runtime:` block. |
+
+The command first resolves the source `skill.yaml`. It therefore cannot clean an
+orphan record after the source skill disappears or loses its runtime block; those
+states return `5` or `4` before deletion.
+
+## Disk and recovery behavior
+
+The deletion is idempotent and limited to:
+
+```text
+~/.agentkit/skills/<kit>/<skill>/
+```
+
+It does not remove `~/.agentkit/cache/<runtime-hash>/`, skill content, or kit
+files. There is no prompt, preview, backup, or rollback. With
+`AGENTKIT_SKILL_RUNTIME=0`, the runtime deletion is skipped but the command still
+reports completion.
+
+To recover a removed record, reinstall from the unchanged local declaration:
+
+```bash
+ak skill install <kit>/<skill>
+ak skill verify <kit>/<skill>
+```
+
+The install can reuse the preserved cache.
+
+## Output and exits
+
+Success writes `[OK] <kit>/<skill> record removed` to stderr and leaves stdout
+empty, including with `--json` or `--quiet`. JSON failures use a structured
+error envelope on stderr.
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The record was removed or already absent; kill-switch no-op also returns `0`. |
+| `1` | Parsing or filesystem work failed. |
+| `2` | The reference or flags were invalid. |
+| `4` | The source skill has no runtime block. |
+| `5` | The source kit or skill was not found. |
+
+A missing or extra positional argument is rejected by Cobra before the
+classified path and currently exits `1`.
+
+## Related commands
+
+- [Complete `ak skill remove` facts](../cli/ak_skill_remove)
+- [Remove installed skill content](../cli/ak_skills_remove)
+- [Verify a runtime environment](../cli/ak_skill_verify)

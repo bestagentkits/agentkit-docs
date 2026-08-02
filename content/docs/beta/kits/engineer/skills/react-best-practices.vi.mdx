@@ -1,0 +1,192 @@
+---
+title: Cải thiện hiệu năng React với ak:react-best-practices
+description: Audit và tinh chỉnh code React hoặc Next.js bằng rule nhận biết version, baseline đo được, test tập trung cùng ranh giới mutation rõ ràng.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:react-best-practices` để review hoặc cải thiện hiệu năng React và
+Next.js. Bộ rule tháng 1 năm 2026 đi kèm chứa 45 pattern về async waterfall,
+bundle size, server work, client fetching, re-render, rendering, JavaScript hot
+path cùng callback pattern nâng cao.
+
+## Chọn ak:react-best-practices cho tối ưu có đo lường
+
+### Dùng ak:react-best-practices khi
+
+- React component, Next.js route, server function hoặc bundle có performance
+  problem hay budget đã xác định.
+- Bạn muốn performance audit tập trung với finding được xếp hạng trước mutation.
+- Bạn cần loại waterfall, giảm code được ship, thu hẹp re-render hoặc cải thiện
+  hot path đã đo.
+- Bạn muốn implementation guidance bám version React, Next.js, browser cùng
+  deployment thực tế của project.
+
+### Chọn workflow khác khi
+
+- Bạn cần triển khai feature React tổng quát thay vì performance work. Dùng
+  `ak:frontend-development`.
+- Visual hoặc interaction design chưa rõ. Dùng `ak:frontend-design`.
+- Bạn đang chẩn đoán failure chưa giải thích. Dùng `ak:debug` hoặc `ak:fix`
+  trước khi tối ưu.
+- Bạn chỉ muốn verification độc lập cho patch hiện có. Dùng `ak:code-review`
+  hoặc `ak:test`.
+
+## Chuẩn bị baseline và compatibility map
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận
+  Engineer Kit đã được cài cho runtime cùng scope hiện tại.
+- Đọc version React, Next.js, bundler, server runtime, browser target, package
+  manager, data library cùng deployment model đã cài từ project.
+- Cung cấp route/component bị ảnh hưởng, user-visible symptom, performance
+  budget, workload đại diện cùng measurement hiện tại.
+- Xác định generated file, server/client boundary, caching semantic, CSP,
+  hydration policy, analytics cùng test requirement.
+- Nêu rõ có cho phép cài dependency, đổi config, bundle analysis, browser
+  profiling, local server, remote telemetry hay deployment không.
+
+| Ưu tiên | Nhóm rule | Áp dụng khi bằng chứng cho thấy |
+| --- | --- | --- |
+| Critical | Async waterfall và bundle size | Serial latency có thể tránh hoặc initial code không cần thiết |
+| High | Server performance | Work bị lặp, RSC payload quá lớn hoặc server-side fetch bị tuần tự hóa |
+| Medium-high | Client data fetching | Request lặp hoặc global subscription trùng |
+| Medium | Re-render và rendering | Computation thừa, layout work, hydration issue hoặc jank |
+| Low-medium | JavaScript hot path | Profiling cho thấy lookup, allocation, storage hay iteration cost lặp |
+| Low | Advanced callback pattern | Cần stable subscription và framework hỗ trợ pattern |
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:react-best-practices ...` | Có thể kiểm tra và sửa bằng project/browser tool khả dụng; measurement tùy session. |
+| Cursor | `/ak:react-best-practices ...` | Dùng slash syntax đã được người dùng xác minh; parity rộng hơn về Agent, Hook, browser cùng profiling chưa được thiết lập. |
+| Codex | `$ak:react-best-practices ...` | Dùng native Skill discovery; Hook được chuyển đổi một phần và browser/profiling tool tùy session. |
+
+Xem [Runtime adapter](../../../concepts/runtime-adapters) để hiểu khác biệt theo
+từng component.
+
+## Chạy Skill
+
+Argument shape được khai báo là `[component or pattern]`. Yêu cầu audit-only khi
+bạn không muốn đổi code; nếu không, nêu tệp được phép cùng measurement cần có.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:react-best-practices "Audit the existing Next.js product route for server waterfalls and client bundle cost. Use the installed versions and current profiler/build output, propose ranked changes first, implement only the top approved change, preserve behavior, add focused tests, and do not install packages or deploy."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:react-best-practices "Audit the existing Next.js product route for server waterfalls and client bundle cost. Use the installed versions and current profiler/build output, propose ranked changes first, implement only the top approved change, preserve behavior, add focused tests, and do not install packages or deploy."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:react-best-practices "Audit the existing Next.js product route for server waterfalls and client bundle cost. Use the installed versions and current profiler/build output, propose ranked changes first, implement only the top approved change, preserve behavior, add focused tests, and do not install packages or deploy."
+```
+
+  </Tab>
+</Tabs>
+
+| Input | Cần gồm |
+| --- | --- |
+| Outcome | User interaction, route, render, request hoặc build nào cần cải thiện |
+| Baseline | Timing, bundle, request waterfall, render count, memory, CPU, Web Vital hoặc profiler evidence |
+| Compatibility | Version React/Next.js, server host, browser range, CSP, caching cùng data library |
+| Ranh giới mutation | Audit only hoặc component, config, import, dependency, generated file cùng deployment được phép |
+| Acceptance | Behavioral test cùng measurement và regression threshold định nghĩa thành công |
+
+## Quan sát tối ưu dựa trên bằng chứng
+
+1. **Lần chạy thiết lập baseline.** Skill tái hiện workload mục tiêu và ghi
+   performance cùng behavior hiện tại trước khi sửa.
+2. **Lần chạy lập compatibility map.** Skill kiểm tra API được tham chiếu như
+   `Activity`, `useEffectEvent`, Next.js `after`, `next/dynamic`,
+   `optimizePackageImports`, React `cache` hoặc `toSorted` có tồn tại trong
+   version project hỗ trợ không.
+3. **Lần chạy xếp hạng finding theo impact và confidence.** Network và bundle
+   issue critical đứng trước micro-optimization suy đoán.
+4. **Lần chạy triển khai thay đổi có giới hạn.** Skill giữ data dependency,
+   error behavior, accessibility, hydration, cache invalidation cùng server hay
+   client ownership.
+5. **Lần chạy xác minh behavior và performance.** Test tập trung cùng quy trình
+   baseline tương tự chạy lại; regression hoặc measurement chưa kết luận vẫn
+   hiển thị.
+6. **Lần chạy báo cáo bằng chứng.** Tệp đổi, rule áp dụng, kết quả before/after,
+   dependency, environment limit cùng finding bị từ chối hoặc trì hoãn được
+   liệt kê.
+
+## Giữ side effect của tối ưu rõ ràng
+
+<Callout type="warn" title="Ví dụ nhanh hơn có thể đổi behavior">
+  Parallelize work, chuyển code qua server/client boundary, thêm cache, defer
+  side effect hoặc inject pre-hydration script có thể đổi ordering, freshness,
+  error handling, CSP, privacy cùng recovery behavior. Hãy duyệt semantic
+  change, không chỉ speedup dự kiến.
+</Callout>
+
+- Chỉ dùng `Promise.all` cho operation độc lập. Giữ dependency và failure
+  semantic.
+- Cross-request in-memory cache hoạt động khác nhau trên long-lived server,
+  serverless isolate và multi-instance deployment. Xác định key, TTL,
+  invalidation, tenant isolation cùng fallback behavior.
+- Direct import, dynamic import, SWR, LRU cache hoặc helper cho partial
+  dependency có thể cần package và configuration tương thích. Đừng cài chúng
+  chỉ để khớp reference example.
+- Inline hydration script phải tuân CSP, escaping, privacy cùng server-rendering
+  contract của project.
+- Bundle analysis, profiling, build cùng browser run có thể dùng nhiều CPU,
+  memory, storage, port và thời gian. Remote telemetry có thể gửi project hay
+  user data.
+- Commit, publication, rollout cùng deployment vẫn cần phê duyệt riêng.
+
+## Xác minh kết quả
+
+Kết quả hoàn tất nên cung cấp:
+
+- Phương pháp cùng kết quả baseline, user path, environment và dataset bị ảnh
+  hưởng.
+- Finding được xếp hạng với rule identity, evidence, compatibility, expected
+  impact, confidence cùng behavior risk.
+- Chính xác tệp đổi, import, config, dependency, generated output cùng thay đổi
+  server/client boundary.
+- Kết quả typecheck và behavioral test tập trung cùng bằng chứng performance
+  before/after có thể so sánh.
+- Cache, hydration, error, accessibility cùng fallback behavior khi thay đổi
+  chạm tới chúng.
+- Disposition rõ ràng cho measurement chưa kết luận và finding bị trì hoãn.
+
+## Xử lý sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| API được tham chiếu không tồn tại | Giữ version đã cài và dùng equivalent được hỗ trợ, hoặc đề xuất upgrade riêng với migration evidence. |
+| Benchmark nhiễu | Cố định dataset, build mode, device, network, cache state cùng số lần chạy trước khi kết luận. |
+| Parallel work đổi error hoặc ordering | Khôi phục dependency boundary, thêm failure test và chỉ parallelize operation đã chứng minh độc lập. |
+| Cache trả stale hoặc cross-user data | Tắt cache, kiểm tra key cùng lifetime, thêm tenant/freshness test rồi chỉ bật lại với invalidation contract rõ ràng. |
+| Bundle size tốt hơn nhưng UX regress | Kiểm tra lại loading, prefetch, error, offline cùng interaction behavior; đặt user outcome cao hơn một bundle metric. |
+| Runtime không nhận diện Skill | Xác nhận target cùng scope, mở session mới, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Tiếp tục với `ak:frontend-development` cho implementation, `ak:web-testing`
+cho browser evidence hoặc [Tổng quan Engineer Kit](../../engineer) cho delivery
+được điều phối.
+
+## Biết các giới hạn hiện tại
+
+- Skill là bộ guideline tĩnh tháng 1 năm 2026, không phải compatibility database
+  trực tiếp cho React, Next.js, browser, package hay host.
+- Impact label cùng example metric dùng để ưu tiên investigation; chúng không
+  chứng minh cùng mức cải thiện trong application của bạn.
+- Skill được ship chứa rule document, không có project-specific profiler,
+  benchmark suite, visual-regression harness hay deployment monitor.
+- Skill không thay correctness, accessibility, security, privacy,
+  cross-browser hay production load testing.
+- Stable và beta chứa nội dung Skill cùng resource giống nhau trong cặp release
+  này. Diagnostic Codex Hook của beta không thay đổi workflow này.

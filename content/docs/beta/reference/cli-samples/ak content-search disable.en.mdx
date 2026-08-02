@@ -1,0 +1,75 @@
+---
+title: ak content-search disable
+description: Stop indexing and search for one project while preserving its local plaintext shard.
+---
+
+Use `ak content-search disable` for a reversible pause. It changes the shard's
+lifecycle marker to `disabled` but keeps the database and sidecars on disk.
+
+## Usage
+
+```bash
+ak content-search disable --project <uuid>
+```
+
+The command accepts no documented positional arguments.
+
+## Command flag
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--project <uuid>` | Empty, required | Canonical lowercase UUIDv7 for a project owned by the current actor. |
+
+There is no preview, prompt, stdin read, dry-run, or `--yes` requirement.
+`--json` and `--no-interactive` change shared presentation behavior but do not
+add a safety gate. The command writes immediately after owner authorization.
+
+## Effects
+
+Disable closes the open shard, writes a private lifecycle marker, and updates
+the same lifecycle value inside the shard. It does not delete indexed titles,
+bodies, snippets, checkpoints, or SQLite sidecars. Plaintext data therefore
+remains at rest until `delete` is applied.
+
+The operation is local-only and does not contact a registry, provider, or
+network service. It does not alter runtime source files or `operational.db`.
+
+## Output
+
+Human stdout is:
+
+```text
+disabled
+```
+
+JSON stdout is a raw object, not a versioned envelope:
+
+```json
+{"projectId":"<uuid>","lifecycle":"disabled"}
+```
+
+Errors can exit without a structured JSON error body.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The existing shard was disabled. |
+| `1` | A required flag was absent, the actor was not an owner, the project/store could not be resolved, no shard was opted in, or the marker/database write failed. |
+| `2` | A flag value could not be parsed. |
+
+## Resume or remove
+
+Re-enable without losing the existing index:
+
+```bash
+ak content-search enable --project <uuid> --yes
+```
+
+If plaintext derived data must leave disk, preview and apply
+`ak content-search delete` instead. Disable itself creates no backup because it
+does not remove the shard.
+
+## Related commands
+
+- [CLI conventions](../cli-conventions)

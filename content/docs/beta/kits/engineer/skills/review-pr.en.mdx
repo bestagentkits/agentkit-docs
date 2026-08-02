@@ -1,0 +1,177 @@
+---
+title: Review, repair, or merge a pull request with ak:review-pr
+description: Inspect a GitHub pull request, optionally fix findings, publish the review, and merge only after explicit readiness gates pass.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:review-pr` to evaluate a GitHub pull request against its stated scope,
+the surrounding code, repository rules, tests, security boundaries, and merge
+readiness. The default mode is read-only. Optional flags deliberately expand
+the workflow to repair the branch, post a formal review, or merge and watch
+post-merge CI.
+
+## Choose ak:review-pr for an existing GitHub pull request
+
+### Use ak:review-pr when
+
+- You need a verdict backed by the complete diff and relevant full files.
+- You want correctness, security, breaking-change, testing, and code-quality
+  findings in one review.
+- You want a bounded fix and re-review loop on the pull request branch.
+- You explicitly want the final review posted or a ready pull request merged.
+
+### Choose another workflow when
+
+- You only need to review local, unsubmitted changes. Use `ak:code-review`.
+- You already know the defect and need a root-cause repair outside a pull
+  request workflow. Use `ak:fix`.
+- You need to prepare commits and open or update a pull request. Use `ak:ship`.
+- The repository is not hosted on GitHub or the session cannot use GitHub CLI.
+
+## Prepare GitHub and the repository
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm the
+  installed Kit is available in the current runtime.
+- Run from the pull request's repository and provide its number or URL.
+- Install and authenticate `gh` with permission to read the repository and
+  pull request.
+- For `--fix`, start with a clean, correct pull request head branch and preserve
+  unrelated user changes.
+- Grant write, review, merge, and Actions permissions only for the modes you
+  intend to use.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:review-pr ...` | Native delivery can use the Skill's declared GitHub, Git, file, and delegated workflow tools. |
+| Cursor | `/ak:review-pr ...` | Slash invocation is user-verified; equivalent tool approval and background CI behavior depends on the Cursor session. |
+| Codex | `$ak:review-pr ...` | Native discovery is supported; the available GitHub, Git, editing, and waiting tools still govern what can run. |
+
+## Select the authority deliberately
+
+Flags can appear in any order and compose. With no flag, the Skill only prints
+the review locally.
+
+| Input | Behavior | External or local effects |
+| --- | --- | --- |
+| `<PR number or URL>` | Reviews and returns a local verdict | Reads GitHub metadata, diff, checks, linked context, and relevant repository files |
+| `--fix` | Fixes actionable findings, verifies, commits, pushes, and re-reviews | Mutates the worktree and pull request branch; may repeat until converged or blocked |
+| `--reply` | Posts the final result as a formal GitHub review | Creates a review event using approve, request-changes, or comment semantics |
+| `--merge` | Merges only after readiness gates pass, then watches target-branch CI | Can merge, enable auto-merge for pending required checks, and ship follow-up CI fixes |
+
+`--fix --reply` posts only the final re-review. Adding `--merge` runs the merge
+stage last, after repair and reply behavior completes.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:review-pr 482 --fix --reply
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:review-pr 482 --fix --reply
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:review-pr 482 --fix --reply
+```
+
+  </Tab>
+</Tabs>
+
+For a read-only review, omit every flag. To authorize the full path, use a
+request such as `482 --fix --reply --merge`; the flags authorize their named
+stages but do not waive readiness, verification, or repository protection.
+
+## Understand the review workflow
+
+1. **The Skill resolves context.** It reads pull request metadata, description,
+   changed-file counts, the full diff, and current checks.
+2. **It validates the stated work.** The title, body, linked issues, claimed
+   scope, and completion evidence are compared with the actual change.
+3. **It inspects implementation context.** Every changed file and the relevant
+   surrounding source are checked against current project instructions and
+   established patterns.
+4. **It classifies findings.** Correctness, security, breaking changes, tests,
+   and maintainability findings become Critical, Important, or Suggestion
+   items with concrete evidence.
+5. **It returns a verdict.** Approve means no Critical or Important finding;
+   Request changes means blockers remain; Comment means only minor suggestions.
+6. **Optional stages run in order.** The fix loop repairs and re-reviews, reply
+   posts the final review, and merge runs only after every readiness condition
+   passes.
+
+Human-facing review prose follows the configured writing language when it can
+be resolved. Commands, paths, identifiers, GitHub keywords, and quoted evidence
+stay unchanged.
+
+## Keep write and merge authority explicit
+
+<Callout type="warn" title="The default is read-only; each flag adds authority">
+  `--fix` authorizes edits, commits, and pushes to the pull request branch.
+  `--reply` authorizes a GitHub review. `--merge` authorizes merging a ready
+  pull request and handling post-merge CI. Use only the stages you intend.
+</Callout>
+
+Important boundaries:
+
+- A failed `gh` installation or authentication check in reply mode falls back
+  to local output; it does not silently claim that a review was posted.
+- GitHub does not allow you to approve your own pull request. The Skill retries
+  an otherwise approving self-review as a neutral comment and reports that
+  downgrade.
+- The merge gate requires an Approve verdict, no fix-loop blocker, an open and
+  mergeable pull request, no outstanding changes request, and passing or only
+  pending checks. It does not force conflicts or branch protection.
+- `--fix` must not commit or push when verification fails, secrets are found,
+  or unrelated user changes would be included.
+- Re-running `--reply` posts another review; the current workflow does not
+  deduplicate prior replies.
+- `gh` uses the session's existing credentials and network access. Repository
+  policy, hosted CI minutes, and third-party checks can add external effects or
+  cost; the Skill defines no separate provider charge.
+
+## Verify the evidence
+
+A complete result should include:
+
+- Summary, risk level, findings by severity, and final verdict.
+- File and line or function evidence for every actionable finding.
+- Fix-loop iteration count, commits pushed, and remaining blockers when
+  `--fix` runs.
+- Whether `--reply` posted, downgraded a self-approval, or fell back to local
+  output.
+- For `--merge`, the merge result, merge commit, watched CI conclusions, and
+  any follow-up fixes.
+- Explicit unresolved questions instead of unsupported completion claims.
+
+Release evidence covers portable Skill projection and the stable and beta
+packages contain the same `ak:review-pr` workflow. It does not guarantee live
+GitHub permissions, repository-specific merge rules, CI duration, or identical
+approval prompts across runtimes.
+
+## Troubleshoot safely
+
+| Symptom | Safe next step |
+| --- | --- |
+| The pull request cannot be loaded | Confirm the repository, PR number or URL, network access, and `gh auth status`. |
+| The diff is too broad to judge confidently | Split the review by domain while still reading every changed file; do not infer correctness from the summary. |
+| The fix loop repeats the same finding | Stop after three unsuccessful attempts and report the unresolved evidence for human handoff. |
+| Reply did not reach GitHub | Use the complete local review, repair `gh` installation or authentication, then rerun only with deliberate posting authority. |
+| Merge is refused | Resolve the named verdict, conflict, review-decision, check, or branch-protection gate; do not add force flags. |
+| Post-merge CI stays red | Preserve failing run links and attempted fixes; the merge workflow stops after its bounded retries or an external blocker. |
+| The runtime does not recognize the Skill | Confirm target and scope, restart the runtime session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Continue with [`ak:code-review`](./code-review) for local review,
+[`ak:ship`](./ship) for pull request preparation, or [`ak:git`](./git) for a
+more focused Git workflow.

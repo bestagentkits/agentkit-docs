@@ -1,0 +1,70 @@
+---
+title: Marketing Hooks and runtime behavior
+description: Understand the Marketing Kit automation that runs around tool use, how supporting files differ from active Hooks, and what each runtime can project.
+---
+
+Marketing Kit adds background checks and reminders around normal work. A Hook
+becomes active when the runtime connects an event to an entrypoint. Manifests,
+libraries, and utilities shipped beside that entrypoint are artifacts, not
+additional automatic behaviors.
+
+## Active outcomes
+
+| Moment | What the active Hook graph does |
+| --- | --- |
+| Before tool use | Checks descriptive naming before writes, checks file and shell operations for privacy-sensitive access, and catches broad read or shell exploration that should be narrowed. |
+| After edits | Tracks supported edit activity and can remind the workflow to simplify and review substantial changes. Claude Code includes `MultiEdit`; Codex narrows this matcher to `Edit|Write`. |
+| When you submit a prompt | Checks for requests that could expose secrets and surfaces applicable development-rule guidance. |
+
+These behaviors can add guidance or stop an operation for review, depending on
+the event and runtime. They are workflow guardrails, not a general security
+boundary or a replacement for the runtime's own permission controls.
+
+## Artifact entries are not behavior counts
+
+The Marketing manifest declares eight Hook file exports:
+
+- One Marketing-specific automatic entrypoint provides the post-edit reminder.
+- One manual Discord sender is shipped as a utility.
+- Six libraries support configuration and bounded runtime state.
+
+The separate `hooks.json` manifest wires the Marketing entrypoint together with
+five reused core entrypoints. Support libraries do not run independently, and
+none of these entries is a Marketing command.
+
+`notifications/send-discord` is not referenced by `hooks.json`. It runs only
+when a caller deliberately invokes it; installing Marketing Kit does not enable
+Discord notifications automatically. Its failure paths are non-blocking.
+
+## Runtime projection
+
+| Runtime | Projected behavior |
+| --- | --- |
+| Claude Code | Activates the configured event graph through native or plugin delivery. The separate Marketing statusline is also available here and can show directory, Git, model, context and usage, changed-work, configuration, and activity signals. |
+| Codex | Translates representable groups into `.codex/hooks.json`. Its tool matcher set is narrower than Claude Code's, so some trigger coverage can be removed even when the rest of a group remains active. The Marketing statusline is not projected. |
+| Cursor | Translates supported registrations into `.cursor/hooks.json`. Source-level projection does not establish identical behavior across every provider setup. The Marketing statusline is not projected. |
+
+## Codex behavior in this release
+
+- Marketing projects no fully dropped Codex group and three narrowed matchers. Shared `Read|Write|Edit|Bash` becomes `Write|Edit|Bash`; shared `Bash|Read` becomes `Bash`; Marketing's `Edit|Write|MultiEdit` becomes `Edit|Write`. The original handlers remain active for the supported atoms.
+- Human output reports narrowing under **Hook matchers narrowed (some tool matches unsupported on this target)**. Machine-readable output uses optional `hookMatchersNarrowed` and `narrowedHookSummaries`; full-drop fields remain absent for this projection.
+- On Windows, an eligible `.cjs` Hook under the Codex home can use a managed `.cmd` shim when an ordinary path contains spaces. A spaced `.cjs` path outside that home remains unshimmed. Paths with `cmd.exe` metacharacters, non-ASCII shim basenames, and unsafe or non-ASCII baked arguments also remain refused, so this is not a blanket compatibility guarantee.
+- Shared global Hook registration preserves user and foreign structures, supports matching ownership across Kits, and cleans up only exact stale claims. The stronger rollback and cleanup handling does not authorize deleting arbitrary content from `~/.codex/hooks.json`.
+
+These changes improve disclosure and ownership handling. They do not make Hook
+behavior identical across runtimes or turn Marketing Hooks into a security
+enforcement boundary.
+
+## Ownership and lifecycle
+
+AgentKit records the Hook files, managed Windows shims, and registrations it
+emits. Refresh and uninstall act on matching owned outputs while preserving or
+reporting modified, foreign, and sibling-Kit content. Project and user
+installations can coexist, so inspect both scopes if an automation appears
+twice.
+
+Review the install summary and warnings after every install or refresh. A
+successful install can still contain a runtime-specific projection limit.
+
+For the wider compatibility model, see [Runtime adapters](../../../concepts/runtime-adapters).
+For lifecycle commands, see [Installing kits](../../../guides/installing-kits).

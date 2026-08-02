@@ -1,0 +1,65 @@
+---
+title: ak skill verify
+description: Phân loại môi trường skill cục bộ thành ok, missing, corrupt hoặc unknown và đọc đúng JSON thô.
+---
+
+Dùng `ak skill verify` để so sánh declaration `runtime:` hiện tại của skill cục
+bộ với record theo skill và các marker cache cần có.
+
+## Cách dùng
+
+```bash
+ak skill verify <kit>/<skill>
+```
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--kits-dir <dir>` | `AGENTKIT_KITS_DIR` hoặc `./kits` | Chọn source declaration cục bộ. |
+
+Lệnh chỉ đọc, không gửi request mạng, không chạy package tool và không hỏi xác
+nhận.
+
+## Diễn giải status
+
+| Status | Mã thoát | Ý nghĩa | Bước tiếp theo |
+| --- | --- | --- | --- |
+| `ok` | `0` | Manifest hash và environment kind khớp, đồng thời có marker `pyvenv.cfg` hoặc `node_modules` cần thiết. | Dùng skill. |
+| `missing` | `1` | Chưa có manifest theo skill. | Chạy `ak skill install <kit>/<skill>`. |
+| `corrupt` | `1` | Manifest không đọc được, hash/kind drift hoặc thiếu marker cache cần có. | Chạy `ak skill repair <kit>/<skill>`, rồi verify lại. |
+| `unknown` | `0` | Runtime management đang opt out hoặc runtime type đã load không được quản lý. | Kiểm tra `AGENTKIT_SKILL_RUNTIME`; đừng xem đây là healthy. |
+
+Verify chỉ kiểm tra sức khoẻ cấu trúc. Lệnh không hash từng byte package đã cài,
+không truy cập registry, không quét vulnerability và không thực thi skill.
+
+## JSON và stream
+
+`--json` ghi object thô ra stdout, không phải shared success envelope:
+
+```json
+{"kit":"engineer","skill":"web-testing","status":"ok"}
+```
+
+Với `missing` và `corrupt`, object vẫn được ghi trước khi process thoát `1`;
+không có JSON error envelope thứ hai. Lỗi resolve và I/O xảy ra trước khi có
+status dùng error envelope có cấu trúc trên stderr.
+
+Status dành cho người dùng được ghi ra stderr. `--quiet` không ẩn dòng status
+được ghi trực tiếp.
+
+## Các mã thoát khác
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `1` | Status là `missing` hoặc `corrupt`, hay I/O verify bất thường thất bại. |
+| `2` | Reference đơn hoặc cờ không hợp lệ. |
+| `4` | Source skill không có block runtime. |
+| `5` | Không tìm thấy source kit hoặc skill. |
+
+Argument theo vị trí bị thiếu hoặc thừa hiện thoát `1` qua đường pre-command
+validation của Cobra.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skill verify`](../cli/ak_skill_verify)
+- [Cài môi trường còn thiếu](../cli/ak_skill_install)
+- [Sửa môi trường corrupt](../cli/ak_skill_repair)

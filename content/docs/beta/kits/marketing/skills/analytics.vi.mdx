@@ -1,0 +1,151 @@
+---
+title: Đo lường hiệu quả marketing với ak:analytics
+description: Biến dữ liệu marketing đã duyệt thành báo cáo KPI, attribution, experiment, funnel hoặc hiệu suất định kỳ mà không coi ước tính là sự thật.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:analytics` để xác định phép đo, phân tích dữ liệu đã duyệt và tạo báo
+cáo marketing dựa trên bằng chứng. Workflow bao phủ phân tích campaign, KPI,
+attribution, A/B test, funnel, cohort và báo cáo định kỳ. Skill có thể dùng bản
+export được cung cấp hoặc helper GA4 trong package khi dependency, credential,
+quyền property và hành vi provider hiện tại đều khả dụng.
+
+## Chọn ak:analytics cho câu hỏi đo lường đã xác định
+
+### Dùng ak:analytics khi
+
+- Bạn cần review campaign, funnel, cohort, experiment, attribution hoặc KPI.
+- Bạn có kỳ báo cáo, định nghĩa metric, mục tiêu và dữ liệu nguồn dùng được.
+- Bạn muốn tách phát hiện khỏi giả định và ưu tiên recommendation.
+- Bạn cần báo cáo có bảng, biểu đồ Mermaid, owner và bước tiếp theo.
+
+### Chọn workflow khác khi
+
+- Bạn chỉ cần dispatcher Marketing phạm vi rộng hoặc tóm tắt đa kênh định kỳ.
+  Dùng `ak:analyze` và chọn loại phân tích hoặc kỳ `report`.
+- Bạn muốn duyệt tệp brand và asset cục bộ. Dùng `ak:marketing-dashboard`.
+- Bạn cần triển khai tracking event hoặc cấu hình tài khoản. Trước hết hãy xác
+  định tracking spec; coi mọi thay đổi code hay GA Admin là mutation riêng cần
+  review.
+- Bạn chưa có dữ liệu đáng tin cậy. Skill có thể xác định kế hoạch thu thập,
+  nhưng không thể tái tạo event bị thiếu hoặc chứng minh attribution lịch sử.
+
+## Chuẩn bị dữ liệu, định nghĩa và quyền truy cập
+
+Trước khi bắt đầu, hãy cung cấp câu hỏi kinh doanh, khoảng ngày, timezone,
+currency, định nghĩa conversion, kỳ so sánh và mục tiêu đã duyệt. Nêu từng
+nguồn và khoảng trống đã biết. Input workflow có thể gồm GA4, bản export quảng
+cáo, dữ liệu CRM, metric email và tệp project; đây không phải cam kết connector.
+
+Ưu tiên dữ liệu tổng hợp. Property, account, campaign, UTM, transaction,
+geography, device và user dimension có thể nhận diện tài khoản hoặc cá nhân khi
+kết hợp. Loại secret cùng dữ liệu cá nhân không cần thiết, ghi lại việc redaction
+hoặc sampling và không chép credential thô vào prompt hay báo cáo.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:analytics ...` | Phân phối native hoặc plugin rõ ràng có thể cung cấp Skill cùng tệp trong package. Dữ liệu bên ngoài vẫn cần dependency cục bộ và credential được cấp quyền. |
+| Cursor | `/ak:analytics ...` | Cách gọi bằng slash đã được người dùng xác minh. Điều này không chứng minh connector, Hook hay provider parity. |
+| Codex | `$ak:analytics ...` | Native Skill discovery được hỗ trợ. Tool bên ngoài và Marketing Hook vẫn phụ thuộc từng capability. |
+
+Xem [Runtime adapter](../../../concepts/runtime-adapters) để hiểu khác biệt về
+phân phối và component.
+
+## Chạy Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:analytics "Phân tích bản export campaign Q2 đã duyệt. So sánh spend, clicks, conversions, revenue, CVR, CPL, CAC và ROAS với mục tiêu đã duyệt. Không dùng dữ liệu cá nhân, đánh dấu trường bị thiếu và chỉ đưa ra recommendation"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:analytics "Phân tích bản export campaign Q2 đã duyệt. So sánh spend, clicks, conversions, revenue, CVR, CPL, CAC và ROAS với mục tiêu đã duyệt. Không dùng dữ liệu cá nhân, đánh dấu trường bị thiếu và chỉ đưa ra recommendation"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:analytics "Phân tích bản export campaign Q2 đã duyệt. So sánh spend, clicks, conversions, revenue, CVR, CPL, CAC và ROAS với mục tiêu đã duyệt. Không dùng dữ liệu cá nhân, đánh dấu trường bị thiếu và chỉ đưa ra recommendation"
+```
+
+  </Tab>
+</Tabs>
+
+Với báo cáo GA4, helper trong package nhận input chính xác như
+`--property=PROPERTY_ID`, `--start=DATE`, `--end=DATE`,
+`--dimensions=LIST`, `--metrics=LIST`, `--limit=N`, `--realtime` và `--json`.
+Chỉ chạy từ thư mục Skill đã cài được runtime resolve:
+
+```bash
+node scripts/ga-run-report.cjs --property=PROPERTY_ID --start=7daysAgo --end=today --dimensions=country --metrics=activeUsers,sessions --limit=100 --json
+```
+
+Helper cần `@google-analytics/data`; việc tìm account còn dùng
+`@google-analytics/admin` và `googleapis`. Credential có thể đến từ
+`GOOGLE_APPLICATION_CREDENTIALS` hoặc các tệp `.claude/secrets/` ở scope
+project/người dùng có tên `ga_service_account.json`,
+`google_client_secret.json` và `ga_token.json`. Helper thiết lập OAuth yêu cầu
+cả `analytics.readonly` lẫn `analytics.edit`. Với công việc chỉ đọc báo cáo,
+hãy ưu tiên quyền tối thiểu mà tổ chức hỗ trợ.
+
+## Hiểu các giai đoạn phân tích
+
+1. **Xác nhận câu hỏi.** Xác định quyết định, công thức KPI, mục tiêu thành công,
+   ngày, segment và bằng chứng chấp nhận được.
+2. **Kiểm kê nguồn.** Ghi provenance, quyền, identifier, trường bị thiếu,
+   sampling và định nghĩa không thống nhất trước khi ghép dữ liệu.
+3. **Tính metric có thể so sánh.** Căn chỉnh timeframe và tính ratio đã chọn.
+   Coi khoảng benchmark trong package là gợi ý cần xác minh, không phải sự thật
+   về thị trường của bạn.
+4. **Kiểm tra cách diễn giải.** Kiểm tra sample size và uncertainty cho
+   experiment, so sánh attribution model khi hữu ích và tách attribution khỏi
+   quan hệ nhân quả.
+5. **Báo cáo phát hiện.** Tách kết quả quan sát được, anomaly, giới hạn và
+   hypothesis; sau đó ưu tiên bước tiếp theo có phạm vi cùng owner.
+
+## Tách riêng phê duyệt và thay đổi tài khoản
+
+<Callout type="warn" title="Phân tích không cấp quyền instrumentation hoặc chi tiêu">
+  Báo cáo có thể đề xuất thay đổi event, GA4 property, campaign, budget,
+  audience hoặc experiment. Đây là các mutation riêng có ảnh hưởng tới tài
+  khoản, provider, quyền riêng tư, chi phí và publication. Hãy review và cấp
+  quyền từng việc; yêu cầu báo cáo chỉ cấp scope đọc và phân tích.
+</Callout>
+
+Không để lộ credential, identifier khách hàng thô hoặc segment quá nhỏ trong
+báo cáo. Xác minh quy tắc consent, retention và sharing trước khi dùng dữ liệu
+cross-device, demographic, CRM hay offline. Kết quả provider có thể bị sample,
+trễ, giới hạn quota hoặc đổi định nghĩa; hãy giữ lại các giới hạn đó.
+
+## Xác minh output và bằng chứng
+
+Template analytics của Skill ghi vào
+`assets/reports/analytics/{date}-{report-type}.md`. Kết quả hữu ích gồm nguồn,
+kỳ và filter, công thức, so sánh mục tiêu, biểu đồ hoặc bảng, phát hiện, giới
+hạn, recommendation ưu tiên và owner. Đối chiếu tổng với nguồn, căn chỉnh
+currency cùng timezone và tính lại độc lập các phép tính quan trọng trước khi
+hành động.
+
+## Xử lý sự cố và biết giới hạn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Không có dữ liệu hoặc bị từ chối | Xác nhận property ID, vị trí credential, grant của account và scope báo cáo. Không mở rộng quyền khi chưa được duyệt. |
+| Dimension hoặc metric không hợp lệ | Dùng metadata hay compatibility check GA4 hiện tại; không âm thầm thay bằng phép đo khác. |
+| Quota hoặc provider lỗi | Giữ lại kỳ dữ liệu một phần cùng lỗi, rồi retry bằng query có giới hạn hoặc ở thời điểm khác. |
+| Các nguồn không khớp | Đối chiếu định nghĩa, timezone, attribution window, deduplication và currency trước khi ghép. |
+| Kết quả có vẻ là quan hệ nhân quả | Viết lại thành association hoặc hypothesis trừ khi thiết kế nghiên cứu hỗ trợ nhân quả. |
+| Runtime không tìm thấy Skill | Làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Skill không bảo đảm dữ liệu đầy đủ, statistical power, attribution đúng, hiệu
+suất tăng, revenue hay ROI. Tiếp tục với [tổng quan Marketing Kit](../../marketing)
+hoặc dùng [Cài đặt Kit](../../../guides/installing-kits) để xử lý discovery và
+lifecycle.

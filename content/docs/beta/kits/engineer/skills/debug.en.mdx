@@ -1,0 +1,187 @@
+---
+title: Prove the root cause with ak:debug
+description: Investigate code and system failures systematically, preserve the evidence chain, and verify any correction before claiming success.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:debug` to turn a failure symptom into a reproducible, evidence-backed
+root cause. The Skill can trace code paths, correlate logs and CI events,
+diagnose database or performance problems, and verify a cause-aligned
+correction without hiding failed hypotheses.
+
+## Choose ak:debug when the cause is unknown
+
+### Use ak:debug when
+
+- A bug, failing test, build error, or unexpected behavior needs diagnosis.
+- A stack trace shows the symptom far from the original bad input or state.
+- CI, server logs, database behavior, or several components must be correlated.
+- Latency, resource exhaustion, or query performance has degraded.
+- You need fresh evidence before saying an issue is fixed.
+
+### Choose another workflow when
+
+- The root cause is already proven and you want the complete guarded repair
+  pipeline. Use `ak:fix`.
+- You only need to execute a known validation suite. Use `ak:test`.
+- You want an independent review of a diff, commit, or pull request. Use
+  `ak:code-review`.
+- The behavior is not failing, but the delivery direction is unclear. Use
+  `ak:brainstorm` or `ak:plan`.
+
+## Prepare the evidence and runtime
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Engineer Kit is installed for the runtime and scope you are using.
+- Provide the exact error, failing assertion, or observed behavior, plus the
+  expected behavior and the smallest known reproduction.
+- Keep the relevant project, tests, recent changes, and repository instructions
+  available.
+- For CI or server investigations, make the relevant logs and time window
+  available. Authenticated `gh` access is needed to inspect GitHub Actions.
+- For database or production diagnostics, grant only the credentials and
+  environment access you intend the run to use.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:debug ...` | Native delivery is the default; explicit plugin delivery is also supported. |
+| Cursor | `/ak:debug ...` | Slash invocation is user-verified. This does not establish full runtime parity. |
+| Codex | `$ak:debug ...` | The Skill uses native Codex discovery; broader Engineer Hook and statusline parity is not implied. |
+
+See [Runtime adapters](../../../concepts/runtime-adapters) for target-level
+differences.
+
+## Describe the failure
+
+The Skill accepts an error or issue description. It does not publish a mode
+flag; the evidence determines which investigation technique is loaded.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:debug "pnpm test fails in session-cache.test.ts with 'expected 1 write, received 2'. It started after the cache invalidation change. Reproduce with the single test and do not modify production data."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:debug "pnpm test fails in session-cache.test.ts with 'expected 1 write, received 2'. It started after the cache invalidation change. Reproduce with the single test and do not modify production data."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:debug "pnpm test fails in session-cache.test.ts with 'expected 1 write, received 2'. It started after the cache invalidation change. Reproduce with the single test and do not modify production data."
+```
+
+  </Tab>
+</Tabs>
+
+A useful input names the exact symptom, reproduction command, expected and
+actual behavior, when the failure began, affected environment, and authority
+boundary. For an incident, also include timestamps, request or run IDs, impact,
+and the systems that may be involved.
+
+## Understand what happens during a run
+
+1. **The Skill establishes the failing state.** It reads complete errors and
+   stack traces, reproduces the issue when possible, checks recent changes, and
+   records the baseline that later verification must repeat.
+2. **The Skill gathers bounded evidence.** It inspects relevant code, callers,
+   tests, configuration, logs, metrics, database state, or browser behavior.
+   Multi-component incidents receive a timeline and boundary-by-boundary data
+   checks.
+3. **The Skill traces the root cause.** It follows bad state backward through
+   the call chain, compares working patterns, and identifies the original
+   trigger rather than the line where the symptom finally appears.
+4. **The Skill tests one hypothesis at a time.** Each hypothesis gets the
+   smallest useful experiment. Refuted hypotheses remain recorded; several
+   failed attempts trigger a return to evidence gathering, not stacked fixes.
+5. **The Skill develops a cause-aligned response.** When correction belongs in
+   the run, it changes the source of the defect, adds relevant validation layers,
+   and avoids unrelated cleanup. Otherwise, it hands the proven diagnosis to
+   `ak:fix`.
+6. **The Skill verifies and reports.** It repeats the original reproduction,
+   checks the affected test and system surface, and reports only claims backed
+   by fresh command output, logs, metrics, or visual evidence.
+
+For frontend work, the final gate can include a screenshot, interaction check,
+console inspection, and responsive verification. Real Chrome login or cookie
+state requires the profile-aware browser path; generic pages can use an
+isolated browser or project-native tests.
+
+## Keep investigation authority bounded
+
+<Callout type="warn" title="Evidence must come before correction">
+  The Skill must not propose a fix before it can reproduce or otherwise
+  establish the failure and trace its root cause. “Probably” is a signal to
+  gather more evidence, not permission to edit.
+</Callout>
+
+- Reading local source and logs does not authorize unrelated private-file
+  access.
+- Inspecting a CI run is different from re-running it. A new CI run, deployment,
+  rollback, or external mutation needs separate approval.
+- Database queries require the intended credentials and environment. Do not run
+  a write, expensive analysis, or production experiment merely because a
+  diagnostic command is available.
+- Temporary instrumentation changes the workspace and must be identified,
+  reviewed, and removed or retained deliberately.
+- After three failed correction cycles, the workflow stops and asks you to
+  reassess the architecture or scope before another attempt.
+- A passing narrow test does not prove the blast radius is safe. Completion
+  still requires the original reproduction and relevant broader checks.
+
+## Verify the result
+
+A useful debugging result should give you:
+
+- The exact symptom, reproduction, expected behavior, and actual behavior.
+- A timeline or call-chain evidence trail from trigger to visible failure.
+- The confirmed root cause, the condition that exposed it, and the blast radius.
+- Hypotheses tested, including evidence that rejected alternatives.
+- The smallest cause-aligned correction or a clear handoff to `ak:fix`.
+- Fresh before-and-after verification evidence when a correction was made.
+- A concise diagnostic report with impact, findings, recommendations, and
+  unresolved questions.
+- Frontend screenshots and console findings when visual verification applies.
+
+Treat the diagnosis as complete only when the root-cause statement names a
+specific defect and the evidence chain explains both the trigger and the
+symptom. Treat a correction as complete only when the original reproduction and
+the affected wider surface pass fresh verification.
+
+## Troubleshoot or continue
+
+| Symptom | Safe next step |
+| --- | --- |
+| The issue cannot be reproduced | Preserve the exact environment, inputs, timing, and logs. Add observation points instead of guessing. |
+| The error appears deep in a call stack | Trace each caller and value backward until the original invalid input or state is found. |
+| Tests pollute files or shared state | Isolate test files and use the included polluter-finding script only after adapting its test command and target path to the project. |
+| CI passes locally but fails remotely | Compare runtime versions, environment, permissions, dependencies, and the failed step with the preceding steps. |
+| Performance claims lack numbers | Capture baseline and current measurements, identify the slow layer, and change one variable at a time. |
+| Frontend verification is unavailable | Use project-native browser tests when possible and report the missing visual evidence explicitly. |
+| The runtime does not recognize the Skill | Confirm target and scope, restart the runtime session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Continue with `ak:fix` when the root cause is proven and a guarded repair is
+needed, or use `ak:test` and `ak:code-review` for independent verification.
+
+## Know the current limits
+
+- The Skill can only inspect the code, logs, metrics, tools, credentials, and
+  environments available in the current session.
+- Log correlation and performance analysis show only what the captured window
+  and instrumentation can support.
+- Browser, CI, database, and production evidence depend on external access and
+  may have operational or provider cost.
+- Cursor slash invocation is user-verified evidence, not proof of full runtime
+  parity.
+- Stable and beta package the same `ak:debug` workflow, references, and helper
+  script.

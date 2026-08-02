@@ -1,0 +1,177 @@
+---
+title: Build evidence-based retrospectives with ak:retro
+description: Analyze a bounded Git history, compute transparent engineering indicators, and save an actionable Markdown or HTML retrospective.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:retro` to turn a defined period of repository history into a factual
+engineering retrospective. The Skill gathers Git evidence, shows formulas for
+derived indicators, checks recent plan files, and saves recommendations tied to
+observed data rather than invented narrative.
+
+## Choose ak:retro for historical evidence
+
+### Use ak:retro when
+
+- You need a sprint, monthly, or quarterly engineering review.
+- You want commit cadence, file hotspots, change volume, or test-change proxies.
+- You need an optional preceding-period comparison or per-author breakdown.
+- You want plan-checkbox evidence alongside repository activity.
+
+### Choose another workflow when
+
+- You need live project status rather than a historical review. Use
+  `ak:project-management`.
+- You need to diagnose why a specific change failed. Use `ak:debug`.
+- You need productivity, quality, or individual performance conclusions that
+  Git activity cannot support. Add appropriate product and team evidence first.
+- You want the workflow to change source code, commit, push, or deploy.
+
+## Prepare the evidence source
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Engineer Kit is installed for the runtime and scope you are using.
+- Open a Git repository with the history you intend to analyze.
+- Choose a supported timeframe and confirm repository-local time boundaries.
+- Ensure common shell tools and `git` are available.
+- Make `gh` available and authenticated only if you want optional issue data.
+- Review author-email privacy before requesting `--team` output.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:retro ...` | Native delivery is the default; the workflow runs local Git and shell commands. |
+| Cursor | `/ak:retro ...` | Slash invocation is user-verified. This does not prove identical shell permissions. |
+| Codex | `$ak:retro ...` | The Skill uses native Codex discovery; command and file-write approvals depend on the session. |
+
+## Select timeframe and report shape
+
+| Input | Default | Effect |
+| --- | --- | --- |
+| `timeframe` | `7d` | Accepts `7d`, `2w`, `1m`, `sprint`, or `YYYY-MM-DD:YYYY-MM-DD` |
+| `--compare` | Off | Adds the preceding equal-length period and delta columns |
+| `--team` | Off | Adds a per-author breakdown |
+| `--format` | `md` | Accepts `html` or `md`; writes Markdown or a self-contained HTML report with inline CSS |
+
+For `sprint`, the Skill asks for a start date when it cannot infer one from Git
+tags. An explicit date pair is preferable when calendar boundaries matter.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:retro 2026-07-15:2026-07-28 --compare --team --format md
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:retro 2026-07-15:2026-07-28 --compare --team --format md
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:retro 2026-07-15:2026-07-28 --compare --team --format md
+```
+
+  </Tab>
+</Tabs>
+
+## Understand what happens during a run
+
+1. **The Skill resolves dates.** It converts the timeframe to `SINCE` and
+   `UNTIL`; comparison mode also creates the equal-length preceding window.
+2. **It gathers raw Git metrics.** Commands count commits, active dates, LOC
+   added and removed, changed files, hotspots, commit-subject types, authors,
+   and test-file changes. Empty results become `0` or `N/A`.
+3. **It computes derived indicators.** The report shows commit frequency,
+   active-day ratio, test-to-code change ratio, and churn formulas rather than
+   presenting them as opaque scores.
+4. **It checks optional issue evidence.** When `gh` is available, it may query
+   closed issues for the period; otherwise issue metrics remain `N/A`.
+5. **It scans recent plan files.** It creates a temporary period sentinel and
+   inspects up to twenty matching Markdown files under `plans/`, counting checked
+   and unchecked tasks.
+6. **It writes the report.** Markdown goes to
+   `plans/reports/retro-{YYMMDD}-{slug}.md`; HTML uses the same name with
+   `.html` and contains no external assets.
+7. **It explains findings.** The result includes two to four factual highlights
+   and three to five recommendations grounded in named metrics.
+
+The requested report stays under 200 lines; if the evidence requires more, the
+Skill may split it into multiple report files.
+
+## Interpret indicators cautiously
+
+<Callout type="warn" title="Git activity is evidence, not a performance score">
+  Commit count, LOC, churn, and test-file changes are limited proxies. Use them
+  to prompt investigation, not to rank contributors or claim product quality.
+</Callout>
+
+- Binary files and non-numeric `git --numstat` rows are excluded from LOC sums.
+- Test-to-code ratio measures changed filenames matching test patterns, not test
+  coverage or test quality.
+- Conventional-commit distribution is only meaningful when subjects follow
+  that convention.
+- Churn uses `(added + removed) / max(net, 1)`; negative or near-zero net change
+  can make the value hard to interpret.
+- Author grouping uses Git email addresses and may split one person across
+  identities or expose personal data in the report.
+- Issue data requires an authenticated `gh` command and may make a read-only
+  network request to GitHub. If unavailable, record `N/A` rather than prompting
+  for secrets or fabricating a number.
+
+## Keep effects and approvals bounded
+
+- Source files remain read-only, but the workflow does write retrospective
+  artifacts under `plans/reports/` and a temporary sentinel under `/tmp`.
+- Shell and Git processes run locally and may scan substantial history; large
+  repositories or long periods can take longer than the default seven-day run.
+- HTML output uses inline CSS and does not fetch external dependencies.
+- The Skill specifies no paid provider. Any GitHub access inherits the user's
+  existing account, permissions, and service terms.
+- Commit, push, issue mutation, publication, sharing, and deployment need
+  separate approval.
+
+## Verify the result
+
+A complete run should give you:
+
+- Exact period dates, generation date, repository identity, and active-author
+  count.
+- Raw velocity and code-health values with formulas for derived metrics.
+- Optional deltas only when `--compare` was selected.
+- Optional author rows only when `--team` was selected.
+- Hotspots and plan evidence traceable to repository paths and checkboxes.
+- `N/A` wherever a required source was unavailable.
+- A saved artifact path plus recommendations that cite actual findings.
+
+Re-run one or two underlying Git counts for spot checks, inspect the report diff,
+and confirm no source files changed before sharing the retrospective.
+
+## Troubleshoot or continue
+
+| Symptom | Safe next step |
+| --- | --- |
+| The period is ambiguous | Use an explicit `YYYY-MM-DD:YYYY-MM-DD` range. |
+| `sprint` has no inferable start | Provide the sprint start date rather than guessing from activity. |
+| Issue metrics are unavailable | Leave them `N/A` or authenticate `gh` only if GitHub evidence is needed. |
+| Test ratio looks surprising | Inspect filename matches; the metric is a change proxy, not coverage. |
+| Churn is extreme with negative net LOC | Show raw added and removed values and avoid a strong conclusion from the ratio. |
+| Plan completion disagrees with current status | Treat checkbox counts as period evidence and reconcile durable plan state separately. |
+| The report contains invented praise or numbers | Remove it and regenerate only from captured evidence. |
+| The runtime does not recognize the Skill | Confirm target and scope, restart the runtime session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+## Know the current limits
+
+- The report does not include product outcomes, review quality, incident data,
+  deployment frequency, or uncommitted work unless you provide separate evidence.
+- The issue completion formula described by the Skill requires opened and closed
+  counts, while its example query gathers closed issues only; report the rate as
+  `N/A` unless both sides are verified.
+- The current stable and beta packages contain identical `ak:retro` instructions,
+  templates, metric guidance, and invocation behavior.

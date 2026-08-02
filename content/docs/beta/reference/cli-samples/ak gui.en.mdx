@@ -1,0 +1,134 @@
+---
+title: ak gui
+description: Launch the Wails desktop artifact with accurate packaging, update-completion, output, and platform boundaries.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak gui` only when the executable you are running was built with the Wails
+desktop runtime. The standard `ak` CLI release is a GUI stub; it does not search
+for or spawn a separately installed `ak-gui` artifact.
+
+## Usage
+
+```bash
+ak gui
+```
+
+The documented command has no positional arguments and no command-specific
+flags. The current Cobra implementation does not install an argument validator,
+so extra positional tokens are accepted and ignored. Do not rely on that
+accidental behavior.
+
+Universal flags are registered, but this command does not read them. In
+particular, `--no-interactive`, `--json`, `--quiet`, `--yes`, and `--verbose`
+do not change GUI launch or command output in this release.
+
+## CLI artifact versus desktop artifact
+
+AgentKit ships two different executable builds:
+
+| Build | Runtime | `gui` result |
+| --- | --- | --- |
+| Standard `ak` CLI | No Wails code linked | Writes a plain-text download hint to stderr and exits `1`. |
+| `ak-gui` desktop artifact | Wails and the frontend are embedded | Opens the native window and blocks until the window closes. |
+
+The desktop artifact recognizes its `ak-gui` executable name. Launching it with
+no arguments, including by double-clicking it, automatically selects the `gui`
+command. You normally run the desktop artifact directly instead of typing
+`ak gui` in the separate CLI binary.
+
+<Callout type="warning">
+  Tagged help declares exit `4` when Wails is not linked and says
+  `--no-interactive` fails fast. The current runtime does neither: the stub
+  falls through to generic exit `1`, and a Wails-enabled build still opens and
+  waits for the window when `--no-interactive` is present.
+</Callout>
+
+## Release packaging matrix
+
+The release source declares these desktop packages:
+
+| Platform | Declared artifact | Launch |
+| --- | --- | --- |
+| macOS arm64 | `ak-gui_<ver>_darwin_arm64.zip` | Extract `agentkit.app`, then open it. |
+| macOS amd64 | `ak-gui_<ver>_darwin_amd64.zip` | Extract `agentkit.app`, then open it. |
+| Linux amd64 | `ak-gui_<ver>_linux_amd64.AppImage` | Mark executable, then run the AppImage. |
+| Linux arm64 | No desktop package | `ak gui` prints an availability warning and exits `0`. |
+| Windows amd64 | `ak-gui_<ver>_windows_amd64.zip` | Extract and run `ak-gui.exe`. |
+| Windows arm64 | No desktop package | `ak gui` prints an availability warning and exits `0`. |
+
+The inspected release revisions use the same command implementation and
+packaging matrix. Confirm that the matching artifact and `.sha256` sidecar are
+present for the exact release you intend to run; source inspection does not
+prove a live release upload completed.
+
+Verify the downloaded artifact against its sidecar before opening it. macOS may
+require a Gatekeeper allow-once action, Linux AppImage execution may require
+FUSE compatibility, and the Windows package can trigger SmartScreen. Keep
+platform security controls enabled.
+
+## Launch lifecycle and effects
+
+On a Wails-enabled build, the command first checks
+`$AGENTKIT_HOME/updater/pending-binary-update.json`. If a staged desktop
+transaction exists, AgentKit rechecks each staged artifact's declared size and
+SHA-256 and attempts to complete the pending CLI/desktop replacement before
+opening the window.
+
+That completion can replace the current CLI, the app bundle, or the AppImage;
+it uses temporary backup paths during the transaction and removes them after a
+successful commit. A failed completion is reported on stderr but does not stop
+the GUI launch. The pending transaction remains available for retry when the
+replacement is rolled back successfully.
+
+<Callout type="warning">
+  GUI launch is therefore not strictly read-only, despite the command help. A
+  previously staged update can mutate installed binaries before the window
+  opens. Do not remove staging or pending files manually; use the signed update
+  workflow and keep any recovery path reported after a failure.
+</Callout>
+
+After startup, the desktop begins automatic local analytics reconciliation for
+the lifetime of the window. Depending on your settings, it can read local
+coding-session sources and refresh the private local index. Actions inside the
+UI can read or mutate AgentKit and runtime files and can contact release,
+registry, authentication, or provider services. Launch alone does not grant an
+entitlement or authenticate an unsigned-in user.
+
+The Wails path does not start the HTTP dashboard server and does not write
+`dashboard/state.json`. Closing the window or cancelling the parent process
+stops the desktop APIs and analytics reconciler.
+
+## Output and automation boundary
+
+`ak gui` has no success JSON contract and writes no versioned envelope. A
+Wails-enabled launch blocks until the window closes; the process then exits.
+Desktop runtime logs, pending-update messages, and launch timing diagnostics
+can appear as plain text on stderr.
+
+`--json` does not make those streams structured, `--quiet` does not suppress
+them, and `--no-interactive` does not prevent the window. Do not use this command
+as a headless automation surface. Use the corresponding CLI command for a
+scripted operation.
+
+Flag-parse errors still occur before command execution and exit `2`. Extra
+positional arguments are not currently parse errors.
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | The Wails window closed normally, or the platform is explicitly unpackaged (`linux/arm64`, `windows/arm64`). | Distinguish normal GUI completion from the plain availability warning on stderr. |
+| `1` | The executable is the standard non-Wails CLI, or desktop initialization/runtime failed. | Run the verified platform desktop artifact directly; inspect stderr for a launch failure. |
+| `2` | A flag could not be parsed. | Correct the invocation. |
+
+The current implementation does not emit exit `4`, even though help declares
+it. A pending-update completion failure alone is non-fatal and can still be
+followed by a successful GUI session and exit `0`.
+
+## Related commands
+
+- [Complete `ak gui` command facts](../cli/ak_gui)
+- [Check or stage signed desktop updates](./self-update)
+- [CLI conventions](../cli-conventions)

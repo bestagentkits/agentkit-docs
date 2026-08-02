@@ -24,7 +24,7 @@ function initOrama() {
 }
 
 export default function DefaultSearchDialog(props: SharedProps) {
-  const { locale } = useI18n(); // (optional) for i18n
+  const { locale } = useI18n();
   const { search, setSearch, query } = useDocsSearch({
     client: oramaStaticClient({
       initOrama,
@@ -33,12 +33,20 @@ export default function DefaultSearchDialog(props: SharedProps) {
   });
 
   return (
-    <SearchDialog search={search} onSearchChange={setSearch} isLoading={query.isLoading} {...props}>
+    <SearchDialog
+      search={search}
+      onSearchChange={setSearch}
+      isLoading={query.isLoading}
+      {...props}
+    >
       <SearchDialogOverlay />
       <SearchDialogContent>
         <SearchDialogHeader>
           <SearchDialogIcon />
-          <SearchDialogInput />
+          <SearchDialogInput
+            aria-label={locale === 'vi' ? 'Tìm kiếm tài liệu' : 'Search documentation'}
+            autoComplete="off"
+          />
           <SearchDialogClose />
         </SearchDialogHeader>
         <SearchDialogList items={query.data !== 'empty' ? query.data : null} />

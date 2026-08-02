@@ -1,0 +1,195 @@
+---
+title: Chẩn đoán và sửa defect kỹ thuật với ak:fix
+description: Dùng workflow ak:fix của package Marketing để sửa defect kỹ thuật theo root cause, xác minh và review.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:fix` cho defect kỹ thuật cụ thể trong website marketing, automation,
+integration, test suite hoặc CI workflow. Skill ghi nhận behavior cần khôi phục,
+scout code bị ảnh hưởng, chứng minh root cause, chọn cách sửa phù hợp với nguyên
+nhân, thay đổi workspace rồi xác minh reproduction ban đầu cùng blast radius.
+
+Đây là workflow sửa code trong Marketing Kit. Nó không chẩn đoán campaign kém
+hiệu quả, sửa positioning hay tối ưu funnel nếu vấn đề không phải defect kỹ
+thuật tái hiện được trong project.
+
+## Chọn ak:fix cho defect tái hiện được
+
+### Dùng ak:fix khi
+
+- Bạn có exact error, failing test, type hoặc lint failure, UI defect, log
+  failure hay CI run bị lỗi.
+- Bạn có thể cung cấp hoặc thu thập reproduction step và behavior expected so
+  với actual.
+- Bạn cho phép sửa workspace tối thiểu sau chẩn đoán.
+- Bạn cần verification mới, regression coverage, side-effect sweep và code review.
+
+### Chọn workflow khác khi
+
+- Bạn chỉ cần chẩn đoán, không mutation. Dùng [`ak:debugging`](./debugging) với
+  ranh giới dừng sau chẩn đoán rõ ràng.
+- Vấn đề là câu hỏi strategy hoặc performance không có technical failure tái
+  hiện được. Dùng Marketing analysis hoặc optimization Skill phù hợp.
+- Sau chẩn đoán còn nhiều hướng product hoặc marketing khả thi. Dùng
+  [`ak:brainstorm`](./brainstorm) trước khi chọn cách sửa.
+- Bạn đang triển khai feature scope đã biết thay vì sửa defect. Dùng
+  [`ak:cook`](./cook).
+- Bạn chỉ cần tư vấn kỹ thuật. Dùng [`ak:ask`](./ask).
+
+## Chuẩn bị bằng chứng failure
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận target
+  cùng scope của Marketing Kit.
+- Cung cấp exact error message, failing assertion, log excerpt, screenshot hoặc
+  behavior quan sát được mà không lộ secret hay personal data.
+- Nêu minimal reproduction step, expected behavior, actual behavior và môi
+  trường xảy ra lỗi.
+- Giữ công việc không liên quan và chỉ rõ sensitive path, live service cùng
+  public contract không được đổi.
+- Quyết định assistant có thể sửa tệp, thêm test và chạy validation command liên
+  quan hay không.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:fix ...` | Khả dụng qua delivery native hoặc plugin rõ ràng; Skill và Agent phụ thuộc cũng phải resolve. |
+| Cursor | `/ak:fix ...` | Được projection thành Skill gọi bằng slash; dependency parity rộng hơn chưa được chứng minh. |
+| Codex | `$ak:fix ...` | Dùng discovery Skill native của Codex; delegation và Hook có thể khác. |
+
+## Chạy Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:fix "Signup gửi lead event hai lần sau request đầu thất bại. Tái hiện bằng integration test hiện có, giữ consent behavior, sửa root cause, không commit hay deploy" --review
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:fix "Signup gửi lead event hai lần sau request đầu thất bại. Tái hiện bằng integration test hiện có, giữ consent behavior, sửa root cause, không commit hay deploy" --review
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:fix "Signup gửi lead event hai lần sau request đầu thất bại. Tái hiện bằng integration test hiện có, giữ consent behavior, sửa root cause, không commit hay deploy" --review
+```
+
+  </Tab>
+</Tabs>
+
+### Chọn fix mode
+
+| Flag | Trường hợp phù hợp | Review behavior |
+| --- | --- | --- |
+| `--auto` | Issue đơn giản hoặc vừa; đây là mặc định được ghi nhận | Có thể auto-approve review điểm cao không có critical finding nhưng phải escalate critical issue chưa xử lý |
+| `--review` | Code critical, production, security-sensitive hoặc ảnh hưởng architecture | Dừng cho human review ở bước chính |
+| `--quick` | Type, lint, syntax hoặc issue một tệp đã xác nhận là đơn giản | Dùng chu trình scout, diagnose, fix, verify và review rút gọn |
+| `--parallel` | Hai issue độc lập trở lên | Gán scope riêng và yêu cầu ownership không chồng lấn |
+| `--advice` | Thêm giám sát tư vấn `kongming` | Advice không duyệt gate, sửa code hay mở rộng quyền hạn |
+
+`--advice` kết hợp với base mode đã chọn. Đừng chọn `--quick` chỉ vì triệu chứng
+có vẻ hiển nhiên; root cause vẫn phải được xác nhận.
+
+## Yêu cầu bằng chứng root cause chính xác
+
+Trước khi đề xuất cách sửa, workflow cần câu trả lời cụ thể cho:
+
+1. Triệu chứng hoặc error chính xác.
+2. Minimal reproduction step.
+3. Expected so với actual behavior.
+4. Root cause tại code hoặc contract boundary cụ thể.
+5. Thay đổi hoặc điều kiện làm lỗi xuất hiện lúc này.
+6. Mọi path trong blast radius cùng chia sẻ nguyên nhân hoặc behavior hỏng.
+
+Nếu câu trả lời còn mang tính phỏng đoán, hãy thu thập thêm log, test, source
+evidence hoặc environment detail. Ba lần sửa thất bại là stop condition:
+workflow nên đặt lại câu hỏi về architecture và thảo luận với bạn trước khi thử
+tiếp.
+
+## Hiểu các giai đoạn fix
+
+1. **Định khung intent.** Ghi outcome, constraint, non-goal và acceptance
+   criteria mà chưa chọn cách sửa.
+2. **Scout.** Lập bản đồ tệp bị ảnh hưởng, caller và dependent trực tiếp, test
+   liên quan, thay đổi gần đây cùng pattern hiện có.
+3. **Diagnose.** Giữ pre-fix output, trace data và call path, test hypothesis và
+   chứng minh root cause.
+4. **Đánh giá độ phức tạp.** Chỉ route workflow simple, moderate, complex hoặc
+   multi-issue độc lập sau chẩn đoán.
+5. **Chọn cách sửa theo nguyên nhân.** Dùng direct minimal repair khi có một
+   option an toàn; chỉ brainstorm và plan khi còn phương án thực sự khác nhau.
+6. **Implement.** Đổi scope nhỏ nhất xử lý nguyên nhân đã xác nhận.
+7. **Verify và ngăn tái diễn.** Chạy lại reproduction, thêm hoặc cập nhật
+   regression test, quét blast radius, xác nhận public contract và chạy type,
+   lint, build, test liên quan.
+8. **Review và finalize.** Review correctness cùng side effect, đối chiếu plan
+   và docs impact, báo bằng chứng và hỏi trước Git workflow.
+
+## Kiểm soát mutation và hiệu ứng bên ngoài
+
+<Callout type="warn" title="Yêu cầu fix chỉ cho phép sửa workspace đúng scope">
+  `--auto` không cấp quyền truy cập secret, thay live provider, sửa campaign,
+  publication, liên hệ audience, spend, commit, push, pull request, deployment,
+  destructive action, breaking public contract hay chấp nhận regression. Cấp
+  riêng các quyền đó.
+</Callout>
+
+Với chẩn đoán CI, có thể cần `gh` access và network để đọc GitHub Actions log.
+Đọc run không cấp quyền push cách sửa hoặc rerun workflow bên ngoài. Với UI
+defect, browser hay screenshot access là thu thập bằng chứng, không cấp quyền
+publish trang.
+
+Nếu verification phát hiện side effect, hãy dừng và chọn revert, thu hẹp cách
+sửa, cập nhật dependent rõ ràng, giữ compatibility hoặc chấp nhận contract
+change có tài liệu. Skill không được âm thầm patch quanh lỗi.
+
+## Xác minh kết quả và bằng chứng
+
+Báo cáo fix hoàn tất nên có:
+
+- Root cause chính xác và evidence chain.
+- Tệp đã đổi cùng lý do mỗi thay đổi phù hợp nguyên nhân.
+- Before-and-after output từ reproduction ban đầu.
+- Regression test bao phủ defect cùng blast-radius check.
+- Bằng chứng type, lint, build và test mới liên quan tới project.
+- Review finding, side-effect assessment, trạng thái public contract và rủi ro.
+- Plan cùng docs impact và hành động vẫn chờ phê duyệt.
+
+Không chấp nhận “có vẻ đã sửa”. Failure ban đầu phải không còn tái hiện và
+behavior rộng hơn bị ảnh hưởng vẫn hợp lệ.
+
+## Xử lý sự cố fix
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Runtime không tìm thấy `ak:fix` | Xác nhận target và scope, khởi động lại runtime, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+| Skill đề xuất sửa trước khi chứng minh nguyên nhân | Dừng và yêu cầu sáu dữ kiện root cause. Dùng `ak:debugging` để thu thập bằng chứng có hệ thống. |
+| Không tái hiện được failure | Thu thập thêm log, environment detail, input, timing và component-boundary evidence; không phỏng đoán. |
+| Surface `ak:debug`, `ak:sequential-thinking`, `ak:problem-solving` hoặc Engineer project-management được tham chiếu không khả dụng | Báo dependency chưa resolve và chỉ tiếp tục với bước local tương đương về bằng chứng mà bạn có thể xác minh. Resolved Marketing export list không tự đảm bảo các tên đó đã cài. |
+| Verification thất bại sau khi sửa | Quay lại chẩn đoán. Sau ba lần thất bại, dừng và xem lại architecture với người dùng. |
+| Xuất hiện side effect hoặc contract change | Giữ hiển thị và yêu cầu người dùng chọn recovery hoặc compatibility path có scope. |
+| Không lấy được CI log | Xác minh `gh`, authentication, repository access, run identity và network. Không suy diễn nguyên nhân từ log thiếu. |
+
+## Biết giới hạn hiện tại
+
+- `ak:fix` hướng đến kỹ thuật và code; không sửa marketing strategy hay đảm bảo
+  campaign performance.
+- Source tham chiếu một số tên workflow Engineer hoặc shared không phải export
+  Marketing riêng. Phải kiểm tra runtime availability thay vì giả định.
+- Verification bị giới hạn bởi khả năng tái hiện, project check, tool, test data
+  và environment access trong session.
+- Workflow không đảm bảo zero risk, provider behavior, conversion, revenue,
+  deployment success hay compliance.
+- Stable và beta có source content cùng flag `ak:fix` giống nhau.
+
+Tiếp tục với [`ak:debugging`](./debugging) để điều tra, [`ak:cook`](./cook) cho
+feature scope đã biết hoặc [Tổng quan Marketing Kit](../../marketing) cho domain
+workflow.

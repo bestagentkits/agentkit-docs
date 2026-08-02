@@ -1,0 +1,74 @@
+---
+title: ak content queue run-pending
+description: Thử mọi pending post đã đến hạn một lần, với ranh giới retry, locking, output và giao trùng chính xác.
+---
+
+Dùng `ak content queue run-pending` cho một scheduler pass từ timer, cron job
+hoặc lần gọi thủ công.
+
+## Cách dùng
+
+```bash
+ak content queue run-pending
+```
+
+Lệnh không có positional argument được tài liệu hoá hay cờ riêng. Positional
+token thừa hiện bị bỏ qua.
+
+## Giao nội dung và retry
+
+Lệnh chọn ngay entry có `status=pending`, `scheduled_at <= now` và ít hơn ba
+attempt. Lệnh gọi channel adapter đã lưu cho từng entry rồi atomically lưu trạng
+thái đã cập nhật.
+
+- Thành công chuyển entry sang `published` và tăng `attempts`.
+- Thất bại ghi `last_error`, tăng `attempts` nhưng không làm command thất bại.
+  Sau attempt thất bại thứ ba, status thành `failed` và scheduler không retry.
+- Không có delay hay exponential backoff ngoài lần gọi hoặc poll kế tiếp.
+- Entry tương lai, `published` và `failed` bị bỏ qua.
+
+Lệnh thực hiện webhook write ra ngoài ngay. Không có prompt, `--dry-run`, cờ
+apply, force hay rollback. `--yes`, `--no-interactive`, TTY và stdin không đổi
+hành vi giao nội dung.
+
+## Lock và ranh giới recovery
+
+Tệp tạm `queue.json.lock` serialize scheduler pass. Lock contention ghi log bỏ
+qua và vẫn thoát thành công. Crash có thể để lại stale lock; sau khi xác minh
+không có scheduler đang chạy, chỉ xoá lock file đó để tiếp tục.
+
+Lock ngăn hai scheduler pass publish cùng một row đã load, nhưng không thể biến
+network post và queue update thành transaction. Nếu Discord nhận post rồi
+process crash hoặc queue save sau đó thất bại, entry có thể vẫn `pending` và
+pass sau có thể gửi trùng. Hãy kiểm tra channel trước khi retry delivery không
+chắc chắn.
+
+## Đầu ra và luồng
+
+Progress và lỗi từng entry là human text trên stderr, kể cả với `--json`;
+`--quiet` không suppress các log line trực tiếp đó. Summary cuối ở stdout và bị
+suppress bởi `--quiet`. JSON success là:
+
+```json
+{"schema_version":1,"kind":"content.queue_run_pending","data":{"fired":1}}
+```
+
+`fired` được tính bằng số row rời trạng thái `pending`. Nó có thể gồm entry vừa
+chuyển sang `failed` ở attempt thứ ba, nên không phải số message chắc chắn đã
+publish. Lỗi publish lần một hoặc hai có thể trả `fired=0` và thoát `0`.
+
+## Mã thoát
+
+| Mã | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Pass hoàn tất hoặc bỏ qua do lock contention, kể cả khi từng post thất bại. | Đọc stderr và liệt kê lại mọi entry liên quan. |
+| `1` | Home, lock setup, initial load hoặc final reload thất bại. | Giữ queue state và kiểm tra destination trước khi retry. |
+| `2` | Không parse được cờ. | Sửa invocation. |
+
+Lỗi update một entry bên trong pass chỉ được log và không đổi exit `0`.
+
+## Lệnh liên quan
+
+- [Xem attempts và status](<./ak content queue list>)
+- [Chạy liên tục](<./ak content schedule daemon>)
+- [Help đầy đủ của `ak content queue run-pending`](../cli/ak_content_queue_run-pending)

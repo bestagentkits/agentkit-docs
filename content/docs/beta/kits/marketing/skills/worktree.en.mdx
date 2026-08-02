@@ -1,0 +1,161 @@
+---
+title: Isolate repository work with ak:worktree
+description: Inspect, preview, create, audit, and clean Git worktrees while keeping branch, file, dependency, network, and destructive cleanup effects separately approved.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:worktree` to place a Marketing implementation or validation task in an
+isolated Git checkout. The Skill can inspect repository shape, choose a branch
+and worktree location, preview creation, report health, and perform explicitly
+approved cleanup through its packaged Node.js helper.
+
+## Choose ak:worktree for repository isolation
+
+### Use ak:worktree when
+
+- A campaign site, dashboard, automation, or documentation change should be
+  isolated from current repository work.
+- Independent tasks need separate branches and checkouts.
+- You need to list worktrees or inspect dirty state, base-branch divergence,
+  normalized paths, and stale metadata.
+- You want a dry run before creating, removing, or pruning worktree state.
+
+### Choose another workflow when
+
+- You only need a branch in the current checkout.
+- The task does not change repository files and isolation adds no value.
+- You want to implement the feature itself. Create the worktree first, then use
+  the relevant implementation Skill inside it.
+- You cannot approve the exact removal target. Do not run cleanup from an
+  ambiguous name or partial match.
+
+## Prepare Git and the target
+
+Before you start:
+
+- Run from a Git repository with worktree support and Node.js 18 or newer.
+- Preserve unrelated work and inspect staged, modified, and untracked files.
+- Decide whether the repository is standalone, a monorepo, or part of a
+  superproject; select a project when the monorepo match is not unique.
+- Name the intended base branch when auto-detection is unsuitable.
+- Decide whether dependency installation, remote fetches, submodule checkout,
+  and environment-template copying are allowed.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:worktree ...` | Uses the packaged helper and can run the follow-on Claude workflow in the new checkout. |
+| Cursor | `/ak:worktree ...` | Uses slash invocation; repository and helper behavior remain the same, while later runtime behavior may differ. |
+| Codex | `$ak:worktree ...` | Uses native Skill discovery; worktree mutation still occurs through Git and the packaged helper. |
+
+## Run the Skill
+
+Ask for a dry run and state the cleanup boundary directly:
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:worktree "Create an isolated docs worktree for launch-brief validation. Use a docs branch, preview first, and do not install dependencies or remove any worktree"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:worktree "Create an isolated docs worktree for launch-brief validation. Use a docs branch, preview first, and do not install dependencies or remove any worktree"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:worktree "Create an isolated docs worktree for launch-brief validation. Use a docs branch, preview first, and do not install dependencies or remove any worktree"
+```
+
+  </Tab>
+</Tabs>
+
+### Know the helper surface
+
+| Command | Effect | Safe review point |
+| --- | --- | --- |
+| `info` | Reports repository type, projects, base branch, worktree root, and dirty state | Read-only; inspect before choosing a target. |
+| `list` | Lists known worktrees and branches | Read-only; use before removal. |
+| `status` | Reports health, dirty state, base branch, and ahead/behind counts | Read-only; use before handoff or cleanup. |
+| `create [project] <feature>` | Creates a branch and worktree; may fetch a remote branch and copy environment templates | Run with `--dry-run` first and approve the exact path and branch. |
+| `remove <name-or-path>` | Force-removes the matched worktree, then tries `git branch -d` | Destructive; approve one exact non-main worktree and inspect dirty state first. |
+| `prune` | Removes stale Git worktree metadata | Run `prune --dry-run` before applying. |
+
+Creation options are `--prefix <type>`, `--base <branch>`,
+`--checkout-submodules`, `--no-prefix`, `--worktree-root <path>`, `--json`,
+`--dry-run`, and the legacy `--env <files>`. Standard prefixes are `feat`,
+`fix`, `refactor`, `docs`, `test`, `chore`, and `perf`. `--no-prefix` preserves
+an approved exact branch name, including case and slash segments.
+
+## Understand the stages
+
+1. **Inspect the repository.** The helper reports `repoType`, `baseBranch`,
+   `projects`, `worktreeRoot`, `worktreeRootSource`, `dirtyState`, and
+   `dirtyDetails`.
+2. **Choose branch semantics.** The Skill preserves an explicitly exact branch
+   with `--no-prefix`; otherwise it selects a type and creates a kebab-case slug.
+3. **Resolve project and location.** It handles standalone, monorepo, and
+   superproject layouts, asking when a project selection is ambiguous.
+4. **Preview the mutation.** A `--dry-run --json` result shows the path, branch,
+   base, location source, submodule choice, and existing-branch state.
+5. **Create only after review.** Git adds the worktree and branch or attaches an
+   existing branch. `.env*.example` templates are copied with `.example`
+   removed; explicitly named legacy environment files may also be copied.
+6. **Handle setup separately.** Dependency installation inferred from lockfiles
+   and submodule checkout can use storage, compute, package registries, and the
+   network; they need their own approval.
+7. **Report and hand off.** The result records the worktree path, branch, base,
+   copied templates, warnings, and next action.
+
+## Keep destructive and external effects controlled
+
+<Callout type="warn" title="Creation and cleanup have different authority">
+  Permission to create one isolated worktree does not authorize dependency
+  installation, a remote fetch, submodule checkout, copying a real secret file,
+  force-removing another worktree, deleting a branch, pruning metadata,
+  committing, pushing, or opening a pull request. Approve each required effect
+  and exact target separately.
+</Callout>
+
+The helper warns about a dirty source checkout but does not make that work safe
+automatically. `remove` uses forced worktree removal; uncommitted work in the
+target can be lost. Never select removal from a broad or ambiguous match.
+
+## Verify outputs and evidence
+
+A successful creation should report:
+
+- `worktreePath`, `worktreeRootSource`, `branch`, `baseBranch`, and
+  `baseBranchSource`.
+- Whether `checkoutSubmodules` was selected and whether an existing branch was
+  reused.
+- Any `envTemplatesCopied`, legacy `envFilesCopied`, and warnings.
+- The current repository status and a clean ownership boundary for the next
+  task.
+
+For audits, review `currentWorktree`, normalized `worktrees`, dirty details,
+and ahead/behind values. For prune, review `entries`. For removal, confirm the
+reported path and whether the branch was deleted or kept.
+
+## Troubleshoot and respect limits
+
+| Symptom | Safe next step |
+| --- | --- |
+| The base branch is wrong | Re-run the preview with exact `--base <branch>`; the normal order is `dev`, `develop`, `main`, then `master`. |
+| A branch or worktree already exists | Use `list` and `status`; reuse only when the exact branch and checkout are intended. |
+| The monorepo project is ambiguous | Select one reported project by exact name or path. |
+| Submodule checkout or dependency setup fails | Keep the created worktree, report the partial state, and request approval before retrying network or package operations. |
+| Removal reports multiple matches | Stop and use the exact full path. |
+
+The Skill does not implement the feature, merge, push, publish, or deploy. Its
+automatic location and base choices are heuristics, and copied environment
+templates still need review before use. See [Projects, artifacts, and
+checkpoints](../../../concepts/projects-artifacts-checkpoints) and continue with
+[Marketing Kit](../../marketing) after isolation is verified.

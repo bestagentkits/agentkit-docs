@@ -1,0 +1,84 @@
+---
+title: ak analytics disable
+description: Dừng indexed analytics read trong khi giữ lại database riêng tư và các nguồn cục bộ có thẩm quyền.
+---
+
+Dùng `ak analytics disable` khi bạn muốn các view analytics dùng collector trực
+tiếp có thẩm quyền mà không xoá index dẫn xuất hiện có.
+
+## Cách dùng
+
+```bash
+ak analytics disable
+```
+
+Lệnh không nhận argument theo vị trí và không có cờ riêng.
+
+## Preview và apply
+
+```bash
+ak analytics disable --json --no-interactive
+ak analytics disable --yes --json --no-interactive
+```
+
+Lần gọi đầu trả plan chưa apply và thoát `3`. Lần gọi thứ hai ghi disabled
+intent vào `~/.agentkit/analytics-state.json` và giữ
+`~/.agentkit/analytics/analytics.db`. `AGENTKIT_HOME` đổi phần gốc.
+
+Disable được phép khi analytics là uninitialized, enabled hoặc đã disabled, nên
+có thể lặp lại an toàn. Lệnh từ chối state deleted; dùng `enable` khi muốn opt in
+lại.
+
+Thao tác không quét nội dung nguồn, refresh fact, xoá generation hay sửa tệp
+nguồn Claude, Codex hoặc activity AgentKit. Nó không khởi động scheduler và
+không dùng mạng, provider, auth hay entitlement.
+
+## Hành vi xác nhận
+
+Khi prompt được bật, chỉ `y` hoặc `yes` mới apply. Mọi câu trả lời khác hoặc EOF
+in preview, giữ nguyên state và hiện thoát `0`.
+
+Với `--json` hoặc `--no-interactive`, lệnh không đọc prompt. Thiếu `--yes`, lệnh
+in preview rồi thoát `3`. Không có cờ dry-run hay force.
+
+## Output
+
+Preview hoặc thành công cho người dùng nằm trên stdout; prompt tương tác nằm
+trên stderr. JSON dùng một envelope `kind=analytics.plan` trên stdout:
+
+```text
+data.plan: schema_version, plan_id, operation, status, expires_at
+data.applied: boolean
+data.status: post-operation status when applied
+```
+
+Disable không có `scan`. Với preview chưa apply, dùng `data.plan.status`;
+`data.status` hiện là object có giá trị zero.
+
+## Ranh giới recovery
+
+Disable có thể đảo ngược mà không cần xoá database: chạy
+`ak analytics enable --yes` để enable lại store đã giữ và refresh trước khi báo
+thành công. Nếu storage đổi trong lúc prompt đang mở, apply thất bại thay vì tác
+động lên state chưa được review.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Disable đã apply, hoặc prompt được bật bị từ chối/kết thúc tại EOF. |
+| `1` | Plan, xác minh state, storage, contention hoặc output thất bại; argument theo vị trí cũng dùng `1`. |
+| `2` | Cờ không hợp lệ. |
+| `3` | Preview noninteractive hoàn tất mà không có `--yes`. |
+
+Lỗi lifecycle/service trong chế độ JSON phát structured error envelope trên
+stderr. Lỗi parse cờ, xác minh argument và render output cuối có thể nằm ngoài
+đường này.
+
+Trên macOS, guard first-launch dùng chung của CLI cũng có thể ghi
+`~/.agentkit/.first-run-darwin` và in hint một lần lên stderr trước khi lệnh
+này chạy.
+
+## Lệnh liên quan
+
+- [Quy ước CLI](../cli-conventions)

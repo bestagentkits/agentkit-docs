@@ -1,0 +1,67 @@
+---
+title: ak sessions show
+description: Read a bounded, line-cursor page from one local session transcript without redaction.
+---
+
+Use `ak sessions show` after listing sessions to inspect one Claude Code or Codex
+transcript page.
+
+## Usage
+
+```bash
+ak sessions show <project> <session-id>
+```
+
+`<project>` must name a registered AgentKit project. Session IDs accept letters,
+digits, `_`, and `-`; path separators and other characters are rejected.
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--cursor <line>` | `0` | Start at this zero-based raw JSONL line. Negative values clamp to `0`. |
+| `--limit <count>` | `200` | Raw-line window size. Non-positive values use `200`; values above `1000` cap at `1000`. |
+
+## Pagination and limits
+
+```bash
+ak sessions show myapp session-abc --json
+ak sessions show myapp session-abc --cursor 200 --limit 50 --json
+```
+
+Pagination uses raw JSONL lines, not the count of displayed messages. Malformed
+or non-displayable lines still advance the cursor, so a page can contain fewer
+messages than `--limit`. JSON reports `cursor.next`, `cursor.total`, and
+`parse_errors`. The reader is bounded to the first 10 MiB of the file per call;
+content blocks above 256 KiB are truncated and marked `truncated`, and a line
+above 8 MiB is counted as a parse error.
+
+The command reads local registry and transcript files only. It does not write a
+cache, prompt, contact the network, or redact output.
+
+## Privacy and output
+
+Human stdout prints the first text or tool name for each displayed message.
+JSON stdout uses `kind=sessions.show` and can include prompt text, thinking,
+tool inputs, tool results, model names, file paths, and command output. Binary
+tool output can be base64-encoded with `encoding=base64`.
+
+Treat stdout as sensitive. Run [credential redaction](./sessions-redact) on the
+Claude Code source first when appropriate, then review the selected page before
+sharing it. Redaction does not currently cover Codex transcripts.
+
+## Exit status
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The bounded page was read. |
+| `1` | The project or session was not found, the path was unsafe, or a local read failed. |
+| `2` | The two arguments or a flag were invalid. |
+
+There is no preview, apply, force, backup, or recovery behavior.
+
+## Related commands
+
+- [List sessions](./sessions-list)
+- [Tail appended Claude Code messages](./sessions-tail)
+- [Complete `ak sessions show` command facts](../cli/ak_sessions_show)

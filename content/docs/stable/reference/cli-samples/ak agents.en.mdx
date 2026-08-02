@@ -1,0 +1,80 @@
+---
+title: ak agents
+description: Browse and manage individual local agent persona files without confusing the asset inventory with a full kit install.
+---
+
+Use `ak agents` as the entry point for listing, searching, inspecting,
+installing, or removing one agent persona. Running the group command itself
+prints help and exits `0`; it does not read or change the catalog.
+
+## Catalog model
+
+This command family compares two local filesystem inventories:
+
+| Inventory | Default location | Meaning |
+| --- | --- | --- |
+| Available | `./kits/<kit>/agents/<agent>.md` | Agent source files found below the current working directory's `kits` tree. |
+| Installed | `~/.claude/plugins/<kit>/agents/<agent>.md` | Per-agent copies in the user plugin root. |
+
+`AGENTKIT_KITS_DIR` replaces `./kits`. `AGENTKIT_PLUGIN_DIR` replaces
+`~/.claude/plugins`. These commands do not query the remote kit registry,
+verified cache, account session, or entitlements. A missing source or install
+root is treated as an empty inventory.
+
+An installed record wins when the same `<kit>/<agent>` exists in both places.
+The installed file's metadata is therefore what `list`, `search`, and `show`
+return for that ref.
+
+## Usage
+
+```bash
+ak agents
+```
+
+The group accepts no positional arguments. `--json` does not turn group help
+into JSON; select a runnable subcommand for structured output.
+
+## Subcommands
+
+| Command | Outcome | Disk effect |
+| --- | --- | --- |
+| `ak agents list` | Merge installed and locally available agents. | Read-only. |
+| `ak agents search <query>` | Rank the merged inventory by local metadata. | Read-only. |
+| `ak agents show <kit>/<agent>` | Show one installed or available record. | Read-only. |
+| `ak agents install <kit>/<agent>` | Copy one local source Markdown file into the user plugin root. | Writes one file. |
+| `ak agents remove <kit>/<agent>` | Delete that exact installed Markdown file. | Removes one file when present. |
+
+There are no Cobra command aliases in this group. The canonical ref is
+`<kit>/<agent>`. The accepted ref short forms are
+`ak:<agent>` for `core/<agent>`, `ake:<agent>` for `engineer/<agent>`, and
+`akm:<agent>` for `marketing/<agent>`. Prefer the canonical form in scripts and
+logs.
+
+## Scope and safety
+
+These are per-file local operations, not aliases for `ak kit init`, `ak kit
+refresh`, or `ak kit uninstall`. They do not emit a runtime-specific route,
+activate a kit, update an ownership manifest, create a recovery snapshot, or
+manage an agent runtime environment.
+
+Treat both configured roots as trusted local directories. In particular, the
+agent installer reads the expected source path as a normal file and can follow
+a source symlink. Review local kit content before copying it, and do not point
+the roots at directories another user or process can rewrite.
+
+## Output and exits
+
+Leaf-command successes write human output or one JSON success envelope to
+stdout. Runtime errors go to stderr; JSON errors use the shared error envelope.
+Flag-parse errors can remain plain-text usage on stderr. No command in this
+family emits NDJSON or prompts for stdin.
+
+The group help path exits `0`. Leaf commands add command-local exits such as
+`2` for a malformed ref, `5` for a missing source or record, and `6` for an
+existing install without `--force`. See each leaf page before scripting exits.
+
+## Related commands
+
+- [Complete `ak agents` command facts](../cli/ak_agents)
+- [Install a complete kit route](./kit-init)
+- [CLI conventions](../cli-conventions)

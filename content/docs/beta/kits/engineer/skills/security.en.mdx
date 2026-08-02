@@ -1,0 +1,165 @@
+---
+title: Threat-model and remediate code with ak:security
+description: Run a STRIDE and OWASP audit, optionally add red-team discovery, and apply bounded fixes with explicit local commit authority.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:security` when you need a threat-led audit rather than a fast pattern
+scan. It reads the selected code, traces attack surfaces through STRIDE and the
+OWASP Top 10, audits dependencies, detects secrets, and ranks evidence by
+severity. Optional red-team and fix modes add deeper discovery and local code
+changes.
+
+## Choose ak:security for threat-modelled review
+
+### Use ak:security when
+
+- Authentication, authorization, payments, personal data, or sensitive system
+  boundaries have changed.
+- You want findings connected to attacker scenarios and source locations.
+- You need external, supply-chain, insider, and infrastructure perspectives.
+- You are preparing for a release or a focused compliance review.
+
+### Choose another workflow when
+
+- You only need a fast secret and dependency scan. Use `ak:security-scan`.
+- The change is cosmetic and does not affect data or user-facing behavior.
+- You need a real penetration test against a running service; this Skill is a
+  source-led audit and does not claim exploit execution.
+- You already have a confirmed defect and only need implementation. Use
+  `ak:fix` with the evidence and acceptance boundary.
+
+## Prepare a bounded audit surface
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Engineer Kit is installed for the current runtime and scope.
+- Provide a file glob, directory, or the exact keyword `full`.
+- Make the relevant source, manifests, lockfiles, CI configuration, deployment
+  files, and repository instructions available.
+- Install the stack's audit tool if you expect dependency evidence: `npm audit`,
+  `pip-audit`, `govulncheck`, or `bundle audit` for the documented stacks.
+- Decide whether network-backed advisory lookups and local fix commits are
+  allowed before selecting their modes.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:security ...` | Native execution can use the available file, shell, testing, and editing tools. |
+| Cursor | `/ak:security ...` | Slash invocation is user-verified; shell access, approvals, and tool availability depend on the Cursor session. |
+| Codex | `$ak:security ...` | Native discovery is supported; equivalent audit binaries, approvals, and write tools are not implied. |
+
+## Select depth and mutation separately
+
+| Input or option | Result | Effects and limits |
+| --- | --- | --- |
+| `<scope>` | One-shot STRIDE, OWASP, dependency, and secret audit | Reads in-scope files; dependency tools may use network and caches |
+| `full` | Expands the audit to the project | Higher disk, context, process, and dependency-audit cost |
+| `--red-team` | Adds four attacker-persona phases before the final sweep | Appends discovery evidence to `security-audit-results.tsv` |
+| `--iterations N` | Caps red-team discovery or fix iterations for the selected mode | `N` must be chosen by the user; no default numeric cap is documented |
+| `--fix` | Applies targeted fixes, runs a guard, and commits successful iterations | Mutates source and Git history; stops when a guard fails |
+| `--red-team --fix` | Discovers broadly, then fixes confirmed Critical and High findings | Still requires scoped authority and usable verification commands |
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:security src/auth/ --red-team --iterations 12
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:security src/auth/ --red-team --iterations 12
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:security src/auth/ --red-team --iterations 12
+```
+
+  </Tab>
+</Tabs>
+
+Start without `--fix` when you need to calibrate findings or obtain approval
+for risky remediations. A realistic request also names trusted test commands,
+files that must not change, and whether local commits are acceptable.
+
+## Understand the observable stages
+
+1. **The Skill resolves scope.** It expands the glob, directory, or `full` and
+   reads every selected file before analysis.
+2. **It maps threats.** STRIDE covers spoofing, tampering, repudiation,
+   information disclosure, denial of service, and elevation of privilege.
+3. **It checks OWASP categories.** Access control, cryptography, injection,
+   design, configuration, components, authentication, integrity, logging, and
+   SSRF receive an explicit pass.
+4. **It audits dependencies and secrets.** The detected stack selects a package
+   auditor, while source is checked for credential patterns.
+5. **Red-team mode iterates personas.** External adversary, supply-chain,
+   insider, and infrastructure phases select vectors, trace flows, validate
+   evidence, and chain relevant findings.
+6. **It consolidates evidence.** Findings are deduplicated, assigned Critical,
+   High, Medium, Low, or Info severity, and written into the report.
+7. **Fix mode remediates iteratively.** Each targeted change runs a test or lint
+   guard and creates a `security(fix-N): ...` commit only after the guard passes.
+
+## Protect credentials and repository state
+
+<Callout type="warn" title="An audit can expose sensitive evidence">
+  Keep the scope away from unrelated secret stores. Findings must redact token,
+  password, connection-string, and private-key values before they are logged or
+  returned. Report the variable name or a masked value, never the credential.
+</Callout>
+
+- Dependency audit commands can contact advisory registries and update local
+  caches. Their availability, data transfer, rate limits, and provider cost are
+  properties of the selected tool and environment.
+- Static inspection does not authorize requests against production systems,
+  credential use, exploit execution, data exfiltration, or destructive testing.
+- `--fix` authorizes local edits and one commit per successful fix iteration. It
+  does not authorize push, pull request creation, merge, release, or deployment.
+- A failing guard stops the fix loop and remains visible; the Skill does not
+  skip or weaken verification to continue.
+- Review generated changes before accepting broad security hardening. Some
+  findings require a product, compliance, or compatibility decision that
+  automation cannot make.
+
+## Verify the report and fixes
+
+A complete audit should provide:
+
+- Number of files scanned and finding counts by severity.
+- Category, source location, description, attack scenario, impact, confidence,
+  and a bounded fix recommendation for each finding.
+- Red-team persona and iteration evidence when that mode runs.
+- Dependency-audit command and result, or an explicit unavailable reason.
+- Redacted secret evidence with no raw credential value.
+- For fix mode, changed files, guard commands and results, commits created,
+  stopped iterations, and unresolved findings.
+
+The packaged evidence confirms installation coverage for the Skill; it does
+not provide an end-to-end test of the full audit, live advisory services, or
+fix quality. Stable and beta contain the same `ak:security` source and
+references.
+
+## Troubleshoot and interpret limits
+
+| Symptom | Safe next step |
+| --- | --- |
+| The scope matches too much | Replace `full` or a broad glob with the smallest trust boundary that contains the relevant flow. |
+| A dependency auditor is missing | Install the documented tool deliberately or mark dependency evidence unavailable; do not claim the dependency tree is clean. |
+| The dependency audit cannot reach its registry | Preserve the command and network error, then rerun in an approved connected environment. |
+| A secret-like match is a fixture | Confirm it is a non-live placeholder, keep the value redacted, and record why it is not exploitable. |
+| Red-team iterations stop before all personas finish | Report partial persona, STRIDE, and OWASP coverage; do not present it as a full audit. |
+| A fix guard fails | Stop at that commit boundary, inspect the regression, and hand the evidence to `ak:fix` or a human reviewer. |
+| The runtime does not recognize the Skill | Confirm target and scope, restart the runtime session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Compare [`ak:security-scan`](./security-scan) for a faster scanner or continue
+with [`ak:plan`](./plan) to schedule findings that should not be fixed
+immediately.

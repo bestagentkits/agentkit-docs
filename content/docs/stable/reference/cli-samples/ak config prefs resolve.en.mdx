@@ -1,0 +1,121 @@
+---
+title: ak config prefs resolve
+description: Resolve authored user and current-project preferences with exact merge, spelling, source, privacy, and raw-JSON behavior.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak config prefs resolve` to see the preference values that Kit Hooks read
+for the current working directory. The command is read-only and works without
+network access.
+
+## Usage
+
+```bash
+ak config prefs resolve
+```
+
+The command accepts no positional arguments and has no command-specific flags.
+Shared flags are described in [CLI conventions](../cli-conventions). Only
+`--json` changes this command's payload format; `--yes` and
+`--no-interactive` do not change resolution.
+
+## Source order and merge rules
+
+The command considers exactly two paths:
+
+1. `~/.agentkit/config.yaml`, or `$AGENTKIT_HOME/config.yaml`, as `user`;
+2. `<current-working-directory>/.agentkit/config.yaml` as `project`.
+
+A missing file is recorded as absent and is not an error. An unreadable or
+malformed file fails the whole resolution so Hooks do not silently fall back
+when an authored config is broken.
+
+User values are loaded first, then project values are deep-merged over them.
+Nested project mappings replace only the leaves they name; a scalar or
+non-mapping project value replaces the corresponding user value. Legacy
+camel-case and config snake-case spellings are treated as the same field. When
+both spellings occur in one preference section, the config spelling wins.
+
+## Authored values, not defaults
+
+`prefs` contains only values present in the two files. The command does not
+insert binary or Hook defaults. A missing key remains absent, and the consuming
+Hook applies its own `DEFAULT_CONFIG` value.
+
+This distinction matters when comparing CLI and Hook versions: a newer Hook can
+own a default unknown to an older CLI without the CLI overwriting it.
+
+## Included sections and spelling
+
+The resolver emits these preference sections when authored:
+
+```text
+assertions, codingLevel, content, docs, gemini, hooks, locale, paths,
+plan, privacyBlock, project, simplify, skills, statusline,
+statuslineColors, statuslineLayout, statuslineQuota, trust, watch,
+workflowArtifactGate, extensions
+```
+
+Config field names are converted from snake_case to the legacy camel-case
+spelling consumed by Hooks. Immediate Hook names under `hooks` and Skill IDs
+under `skills` remain literal identifiers. Everything below `extensions` is
+passed through without renaming.
+
+<Callout type="warning">
+  Setup-owned sections such as `keys`, `api`, `provider`, `updates`, and
+  `backups` are excluded, preventing the normal provider keys and dashboard
+  token from reaching Hook output. `extensions` is user-authored and passed
+  through verbatim, however. Review it before publishing output. The `sources`
+  array also reveals local user and project paths.
+</Callout>
+
+## Human output
+
+Human stdout first prints both source paths with `present` or `absent`. It then
+prints the resolved preference object as indented JSON. When no preferences are
+authored, it instead prints:
+
+```text
+No preferences are set; hooks use their built-in defaults.
+```
+
+`--quiet` does not suppress this command-specific stdout.
+
+## JSON output
+
+`--json` writes exactly one raw JSON document to stdout, with no shared outer
+`kind` or `data` envelope:
+
+```json
+{
+  "schema_version": 1,
+  "prefs": {"hooks":{"simplify-gate":false}},
+  "sources": [
+    {"scope":"user","path":"/home/user/.agentkit/config.yaml","present":true},
+    {"scope":"project","path":"/work/project/.agentkit/config.yaml","present":false}
+  ]
+}
+```
+
+`prefs` is always an object, and `sources` always contains the `user` then
+`project` entries. Value types are preserved from YAML.
+
+Runtime failures do not emit the shared JSON error envelope and can be silent
+under `--json`; use the process exit status and require all three top-level
+fields before consuming output. Flag-parse errors can remain plain-text usage.
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | Both candidate sources resolved, including when one or both were absent. | Inspect `sources[].present` and then `prefs`. |
+| `1` | An unexpected positional argument, home or working-directory resolution, or reading or parsing a present config failed. | Correct any extra argument; otherwise fix the reported file. |
+| `2` | Flag parsing failed. | Correct the flags. |
+
+The command writes no file, starts no process, creates no backup, and has no
+preview, apply, force, or rollback path.
+
+## Related commands
+
+- [CLI conventions](../cli-conventions)

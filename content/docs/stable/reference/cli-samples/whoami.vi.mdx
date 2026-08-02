@@ -1,0 +1,97 @@
+---
+title: ak whoami
+description: Resolve tài khoản AgentKit hiện tại và entitlement Kit trực tiếp, bao gồm trạng thái chưa xác thực và phiên có thể gia hạn.
+---
+
+Dùng `ak whoami` để xác minh CLI sẽ dùng tài khoản nào và registry hiện trả về
+những grant Kit nào.
+
+## Cách dùng
+
+```bash
+ak whoami
+```
+
+Lệnh được công bố không có argument theo vị trí. Implementation hiện tại bỏ qua
+token theo vị trí thừa; đừng dựa vào hành vi này.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--registry-url <url>` | Biến môi trường hoặc mặc định của bản phát hành | Ghi đè registry dùng cho entitlement request. |
+
+Các cờ đầu ra dùng chung được mô tả trong [quy ước CLI](../cli-conventions).
+`--yes` và `--no-interactive` không thay đổi query; lệnh không bao giờ hỏi.
+
+## Trước khi chạy
+
+Lệnh đọc phiên ưu tiên từ `~/.agentkit/auth/session.json` trước
+(`AGENTKIT_HOME` thay đổi thư mục gốc). CLI slot được ưu tiên hơn App slot.
+
+- Khi không có phiên đã lưu, lệnh không gửi request đến registry, báo trạng
+  thái chưa xác thực và thoát `0`.
+- Khi có phiên đã lưu, registry mismatch bị từ chối trước khi gửi request.
+- Với phiên khớp, lệnh yêu cầu entitlement trực tiếp. Không có chế độ chỉ đọc
+  entitlement cache.
+- Nếu CLI access token bị từ chối là chưa xác thực, phiên email có thể xoay
+  refresh credential và phiên API key có thể mint lại một lần. Việc gia hạn
+  thành công atomically ghi lại phiên cục bộ trước một lần thử lại.
+
+Vì vậy, query không phải lúc nào cũng chỉ đọc trên đĩa.
+
+## Ví dụ
+
+```bash
+ak whoami
+ak whoami --json
+ak whoami --registry-url https://registry.example.com
+```
+
+Hãy dùng cùng registry đã tạo phiên. Để đổi registry, hãy logout rồi login với
+registry dự định dùng thay vì tìm cách bỏ qua kiểm tra mismatch.
+
+## Đầu ra và luồng
+
+Đầu ra dành cho người dùng trên stdout báo `not logged in`, hoặc email tài khoản
+cùng một dòng `kit (status)` cho mỗi grant.
+
+JSON thành công dùng `kind=auth.whoami`:
+
+```json
+{
+  "schema_version": 1,
+  "kind": "auth.whoami",
+  "data": {
+    "authenticated": true,
+    "email": "you@example.com",
+    "authMethod": "email_otp",
+    "licenses": [
+      {"kitId":"engineer","status":"active","grantType":"license","productId":"engineer"}
+    ]
+  }
+}
+```
+
+Khi chưa xác thực, `data` chỉ có `authenticated: false`; các trường tài khoản
+và license tuỳ chọn bị lược bỏ. Lỗi runtime, registry và session dùng stderr
+cùng error envelope JSON dùng chung. Lỗi parse cờ có thể vẫn là plain text.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Query hoàn tất, bao gồm trạng thái chưa xác thực. | Kiểm tra `data.authenticated`; chỉ mã thoát `0` không chứng minh đã login. |
+| `1` | Session store lỗi, registry mismatch, gia hạn thất bại hoặc entitlement request trực tiếp thất bại. | Sửa registry hoặc chạy `ak login` mới rồi thử lại. |
+| `2` | Không parse được cờ. | Sửa cách gọi. |
+
+Lệnh không có preview, apply, force, backup hay rollback. Thay đổi duy nhất có
+thể xảy ra là gia hạn credential.
+
+## Lệnh liên quan và giới hạn
+
+- [Đăng nhập](./login)
+- [Kiểm tra grant với nội dung tập trung vào Kit](./licenses)
+- [Đăng xuất](./logout)
+- [Thông tin đầy đủ của lệnh `ak whoami`](../cli/ak_whoami)
+- [Xử lý sự cố xác thực](../../troubleshooting/authentication)

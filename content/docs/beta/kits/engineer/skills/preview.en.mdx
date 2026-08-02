@@ -1,0 +1,226 @@
+---
+title: View or explain a project visually with ak:preview
+description: Open existing content or generate Markdown and HTML explanations, diagrams, slides, diff reviews, plan reviews, and project recaps.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:preview` to open an existing file or directory in a reader, or turn a
+topic and current project evidence into a saved visual artifact. The Skill
+supports concise Markdown visuals, single-file HTML pages, slide decks, diagrams,
+diff reviews, plan reviews, and recent-project recaps.
+
+## Choose ak:preview when a visual improves understanding
+
+### Use ak:preview when
+
+- You want to browse an existing Markdown file or directory in a reader.
+- A code path, architecture, or data flow is easier to understand visually.
+- You need an ASCII or Mermaid diagram for a technical discussion.
+- You explicitly want an HTML explanation or slide deck.
+- You want a visual review of a diff, implementation plan, or recent project
+  context.
+
+### Choose another workflow when
+
+- Plain prose or a short table already explains the relationship clearly.
+- You need a publish-grade SVG or PNG architecture diagram. Use
+  `ak:tech-graph`.
+- You need to update durable project documentation after creating a visual. Use
+  `ak:docs update`.
+- You need code review findings without a visual artifact. Use
+  `ak:code-review`.
+
+## Prepare the project and runtime
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Engineer Kit is installed for the runtime and scope you are using.
+- Provide an existing path for view mode or a specific topic for generation.
+- Open the relevant project when the visual depends on source, Git history, a
+  diff, or an implementation plan.
+- Review the active plan location because generated artifacts are saved inside
+  its `visuals/` directory when one exists.
+- Decide whether opening a browser, starting a local network listener, reading a
+  broad diff, or loading CDN resources is acceptable.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:preview ...` | The source-defined view mode uses the bundled Markdown viewer as a Claude Code background task. |
+| Cursor | `/ak:preview ...` | Uses the user-verified slash spelling; equivalent background-viewer and browser tooling is not established. |
+| Codex | `$ak:preview ...` | Uses native Codex discovery; the source does not establish a Codex equivalent for the Claude-specific viewer server. |
+
+## Run the Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:preview --html --diagram "Request flow from API gateway through authentication, rate limiting, and the order service"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:preview --html --diagram "Request flow from API gateway through authentication, rate limiting, and the order service"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:preview --html --diagram "Request flow from API gateway through authentication, rate limiting, and the order service"
+```
+
+  </Tab>
+</Tabs>
+
+With no argument, the Skill presents a preview-operation chooser. Argument
+resolution gives `--stop` highest priority, then HTML and generation flags, then
+an explicit or conversation-resolved path.
+
+## Choose a mode deliberately
+
+| Input | Result | Evidence or prerequisite |
+| --- | --- | --- |
+| `<path>` | Opens an existing file or directory in the Markdown viewer | The path must resolve; the source-defined server path is Claude Code-specific |
+| `--stop` | Stops the running Markdown viewer server | A viewer instance must exist |
+| `--explain <topic>` | Creates a Markdown explanation with ASCII, Mermaid, prose, and optional code | A non-empty topic |
+| `--slides <topic>` | Creates a Markdown slide-format artifact | Use only when slides are explicitly wanted |
+| `--diagram <topic>` | Creates focused ASCII and Mermaid diagrams | The rendered result must be visually inspected |
+| `--ascii <topic>` | Creates an ASCII-only terminal-friendly diagram | `--html --ascii` is unsupported |
+| `--html --explain <topic>` | Creates and opens a single-file HTML explanation | Browser access; multi-section navigation rules apply |
+| `--html --slides <topic>` | Creates and opens an HTML slide deck | Slides must be explicitly requested |
+| `--html --diagram <topic>` | Creates and opens an HTML diagram with zoom controls | Mermaid validation plus rendered visual review |
+| `--html --diff [ref]` | Creates a visual diff review | A Git repository; no ref compares against `main`; a PR ref requires `gh` |
+| `--html --plan-review [plan-file]` | Compares a plan with current code | An explicit plan or active plan context |
+| `--html --recap [timeframe]` | Creates a recent-project context snapshot | Git history; timeframe defaults to `2w` |
+
+HTML-only flags imply `--html`. If several generation flags are supplied, the
+first selects the mode and the rest become part of the topic.
+
+## Understand output locations and file effects
+
+Generated Markdown and HTML use a topic slug of at most 80 characters:
+
+- **With an active plan:** The output goes to
+  `<plan-directory>/visuals/<topic-slug>.md` or `.html`.
+- **Without an active plan:** The output goes to
+  `plans/visuals/<topic-slug>.md` or `.html`.
+- **Missing directories:** The Skill creates the required `visuals/` path.
+- **Existing output:** The Skill overwrites the same output path without an
+  additional prompt.
+
+Markdown generation starts the viewer after writing and reports its full local
+and network URLs. HTML generation opens the file directly in the platform
+browser command and does not need that viewer server.
+
+## Understand what happens during generation
+
+1. **The Skill resolves the operation.** It selects view, stop, Markdown
+   generation, or HTML generation from the ordered arguments.
+2. **The Skill gathers evidence.** Topic modes inspect relevant project context;
+   diff, plan-review, and recap modes collect their defined Git, plan, and source
+   evidence.
+3. **The Skill selects a visual form.** Mermaid handles topology; tables handle
+   data; CSS grids handle text-heavy architecture; charts handle real metrics;
+   complex systems use a hybrid overview and detail layout.
+4. **The Skill generates the artifact.** Markdown uses the mode template. HTML
+   writes one page with its page CSS and JavaScript inline, a light/dark toggle,
+   responsive layout, and mode-appropriate interactions.
+5. **The Skill validates diagrams.** Mermaid syntax is checked, then rendered
+   output is inspected for overlaps, collisions, routing, and readability.
+6. **The Skill opens the result.** Markdown uses the viewer server; HTML opens
+   directly in a browser.
+7. **The Skill reports evidence.** It returns the output path and the full viewer
+   URL or browser-open result.
+
+## Understand the review modes
+
+### Visual diff review
+
+`--html --diff` detects a branch, commit, range, `HEAD`, pull request, or the
+default comparison with `main`. It reads diff statistics, status, changed files
+and surrounding context, public API changes, relevant changelog and README
+updates, and available decision context.
+
+### Plan review
+
+`--html --plan-review` reads the plan in full, follows its referenced files and
+dependencies, maps the blast radius, and compares plan assumptions with current
+code. Its output distinguishes current, planned, concern, and gap states.
+
+### Project recap
+
+`--html --recap` reads project identity, recent Git activity, current status,
+decision context, and architecture. The default window is two weeks; shorthand
+such as `30d` or `3m` changes it.
+
+## Keep previews safe
+
+<Callout type="warn" title="Preview can expose or overwrite local content">
+  View mode binds the source-defined server to `0.0.0.0` and reports a network
+  URL. Generated files overwrite an existing artifact at the resolved output
+  path without prompting. Review the path, served directory, and network before
+  starting.
+</Callout>
+
+Important boundaries:
+
+- Stop the viewer with `--stop` when it is no longer needed.
+- Keep view and review scopes away from secrets, unrelated private files, and
+  content that should not be reachable through a local network listener.
+- A pull-request diff uses GitHub CLI and therefore depends on network access,
+  authentication, and repository permission.
+- Generated HTML keeps page code in one file but may load Google Fonts,
+  Mermaid, Chart.js, or anime.js from approved CDNs. Offline rendering can lose
+  those resources.
+- The workflow creates local artifacts and opens them. It does not publish,
+  deploy, commit, or push them.
+- The source defines no provider charge. Optional specialist Skills and image
+  generation remain separate capability and authority boundaries.
+
+## Verify the result
+
+A complete run should provide:
+
+- The exact generated or viewed path.
+- The full local and network URL for viewer mode, including its path and query.
+- A browser-open confirmation for HTML output.
+- A theme toggle and intentional light and dark rendering for every HTML page.
+- Responsive content without unintended horizontal overflow.
+- Zoom controls and readable labels for Mermaid diagrams.
+- A rendered visual review for diagram modes, not only valid syntax.
+- Evidence boundaries and missing inputs for diff, plan-review, or recap modes.
+
+## Troubleshoot safely
+
+| Symptom | Safe next step |
+| --- | --- |
+| The path cannot be resolved | Provide an explicit existing file or directory path. |
+| A generation flag has no topic | Add a non-empty topic containing letters or numbers. |
+| The server fails to start | Check whether a viewer is already running, use `--stop`, and inspect port availability. |
+| The browser opens an incomplete HTML page | Check CDN access, console errors, theme initialization, and required library imports. |
+| A diagram is valid but unreadable | Inspect the render, reduce nodes, increase spacing, reroute edges, and regenerate. |
+| `--html --ascii` is rejected | Use `--ascii` for terminal output or `--html --diagram` for HTML. |
+| A PR diff fails | Confirm the project is a Git repository and `gh` is installed and authenticated. |
+| Plan review cannot find a plan | Pass an explicit plan file or run from an active plan context. |
+| Recap cannot find history | Run inside a Git repository with commits. |
+| The runtime does not recognize the Skill | Confirm target and scope, restart the runtime session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+## Know the current limits
+
+- The Markdown viewer execution contract is explicitly Claude Code-specific;
+  equivalent Cursor or Codex background-server behavior is not established.
+- HTML artifacts are single files but are not necessarily offline-complete when
+  they use CDN fonts or libraries.
+- Diff, plan-review, and recap quality is limited to the repository evidence and
+  history they can read.
+- Visual self-review improves layout quality but does not prove architectural or
+  code-review conclusions.
+- Cursor slash invocation is user-verified evidence, not proof of browser,
+  server, or specialist-tool parity.
+- Stable and beta package the same `ak:preview` modes and reference templates.

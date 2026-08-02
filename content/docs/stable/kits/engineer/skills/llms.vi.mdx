@@ -1,0 +1,192 @@
+---
+title: Biên tập documentation index thân thiện với LLM bằng ak:llms
+description: Scan tài liệu Markdown local, tạo artifact llms.txt cùng llms-full.txt tùy chọn, rồi review title, description, URL, mức độ chọn lọc và an toàn publication.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:llms` để tạo Markdown index cho consumer tài liệu theo convention
+llms.txt. Generator được bundle scan tệp `.md` cùng `.mdx` local, trích title và
+description ngắn, nhóm page bằng heuristic rồi ghi `llms.txt`. Generator còn có
+thể ghi `llms-full.txt` mở rộng chứa nội dung document được inline.
+
+## Chọn ak:llms cho documentation index có chọn lọc
+
+### Dùng ak:llms khi
+
+- Documentation site cần Markdown index ngắn gọn, có category với canonical link
+  cùng description.
+- Bạn muốn first draft được tạo từ docs directory local rồi được con người biên
+  tập.
+- Bạn cần expanded context artifact tùy chọn cho tập public document có giới hạn
+  rõ ràng.
+- Bạn muốn local generation step lặp lại được và chỉ dùng Python standard library.
+
+### Chọn workflow khác khi
+
+- Bạn cần SEO metadata, `robots.txt`, sitemap, hosting hay deployment. Chúng nằm
+  ngoài scope được khai báo của Skill.
+- Bạn cần audit hoặc viết lại tài liệu nói chung. Dùng `ak:docs`.
+- Source chỉ là live website hoặc một tệp. Script được bundle nhận directory
+  local; hãy kiểm tra hoặc stage source đã duyệt trước, hoặc xây workflow được
+  cấp quyền riêng.
+- Bạn kỳ vọng chỉ riêng tệp sẽ đảm bảo indexing, retrieval, model support hay
+  discoverability. Hãy xác minh từng consumer riêng.
+
+## Chuẩn bị source và publication contract
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận Engineer
+  Kit đã được cài cho runtime cùng scope hiện tại.
+- Xác định documentation directory local, public base URL, canonical route
+  mapping, project name cùng description, output directory và có cần full
+  artifact hay không.
+- Loại nội dung private, generated, duplicate, draft, translated fallback,
+  internal hoặc machine-owned không nên được publish.
+- Quyết định topic nào là primary và topic nào thuộc section `## Optional` cuối
+  cho context window ngắn hơn.
+- Cung cấp Python 3 cùng quyền ghi output directory đã chọn.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:llms ...` | Có thể kiểm tra docs local và chạy Python generator được bundle khi xác định được đường dẫn Skill đã cài. Web-source discovery cần network tool được duyệt riêng. |
+| Cursor | `/ak:llms ...` | Cách gọi bằng slash đã được người dùng xác minh. Local file access, script execution và route verification phụ thuộc session Cursor. |
+| Codex | `$ak:llms ...` | Dùng native Skill discovery. Local generation phụ thuộc Python cùng workspace access; khác biệt Hook projection không làm đổi file format. |
+
+Xem [Runtime adapter](../../../concepts/runtime-adapters) để hiểu delivery
+behavior riêng của target.
+
+## Chạy Skill
+
+Truyền source, output, public URL, curation constraint cùng lựa chọn full bằng
+ngôn ngữ tự nhiên.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:llms "Scan ./content/docs/public for published Markdown only. Generate llms.txt and llms-full.txt in ./public using https://docs.example.com as the base URL, exclude drafts and generated release notes, and report broken or ambiguous route mappings without deploying."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:llms "Scan ./content/docs/public for published Markdown only. Generate llms.txt and llms-full.txt in ./public using https://docs.example.com as the base URL, exclude drafts and generated release notes, and report broken or ambiguous route mappings without deploying."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:llms "Scan ./content/docs/public for published Markdown only. Generate llms.txt and llms-full.txt in ./public using https://docs.example.com as the base URL, exclude drafts and generated release notes, and report broken or ambiguous route mappings without deploying."
+```
+
+  </Tab>
+</Tabs>
+
+Frontmatter của Skill gợi ý input `--url`, nhưng flag chính xác của Python script
+được bundle là `--base-url`. Khi chạy script trực tiếp, interface là:
+
+```text
+generate-llms-txt.py --source <directory> [--output <directory>] [--base-url <url>] [--full] [--project-name <name>] [--project-description <description>]
+```
+
+`--source` phải resolve tới directory. Không có `--base-url`, link được tạo vẫn
+là path tương đối kiểu filesystem; chúng có thể không phù hợp cho tệp được
+publish ở website root.
+
+## Hiểu output contract
+
+| Artifact | Nội dung | Trọng tâm review |
+| --- | --- | --- |
+| `llms.txt` | Một H1, blockquote summary tùy chọn, H2 section theo category cùng Markdown link có description | Curation, canonical URL, ý nghĩa section, description ngắn gọn |
+| `llms-full.txt` | Project heading cùng source document body được inline dưới heading theo category | Kích thước, duplication, private content, frontmatter leakage, giá trị context |
+
+Convention tại tag yêu cầu H1. Convention khuyên dùng blockquote summary ngắn,
+link list được nhóm và section `## Optional` ở cuối cho material ưu tiên thấp.
+Các structural check này không chứng minh model hay crawler sẽ dùng tệp.
+
+## Quan sát generation workflow
+
+1. **Lần chạy xác định public corpus.** Skill xác nhận source local, exclusion,
+   canonical site route, output location và expanded content có an toàn để
+   publish không.
+2. **Lần chạy scan Markdown.** Script được bundle đọc đệ quy `.md` cùng `.mdx`,
+   bỏ hidden path cùng `node_modules` và bỏ qua tệp không đọc được.
+3. **Lần chạy trích metadata.** Script dùng H1 đầu tiên hoặc filename fallback
+   cho title và meaningful paragraph đầu cho description bị truncate.
+4. **Lần chạy phân category page.** Path cùng filename heuristic đặt page vào
+   getting started, guides, API reference, configuration, deployment,
+   architecture, documentation hoặc optional.
+5. **Lần chạy tạo artifact.** Script ghi `llms.txt` và, khi được duyệt,
+   `llms-full.txt` vào directory đã chọn.
+6. **Lần chạy biên tập và xác minh.** Skill kiểm tra heading, description,
+   category order, duplicate, URL mapping, public-content boundary, artifact
+   size cùng link bằng route thật của project.
+
+## Giữ source content và publication an toàn
+
+<Callout type="warn" title="Full artifact tái xuất bản document body">
+  `llms-full.txt` có thể copy public corpus lớn vào một tệp. Source document chứa
+  internal note, secret, personal data, licensed text hay private URL vì thế có
+  thể trở nên dễ lộ hơn. Review chính xác generated file trước publication.
+</Callout>
+
+- Generate vào workspace path có thể review trước khi thay published file.
+- Không đưa absolute local path, repository-only reference, credential,
+  unpublished draft hay private endpoint vào artifact.
+- Coi source frontmatter cùng MDX là dữ liệu cần kiểm tra. Full generator chỉ bỏ
+  một dạng leading frontmatter đơn giản và có thể giữ import, component hay syntax
+  không hữu ích dưới dạng plain context.
+- `llms-full.txt` lớn tiêu storage, bandwidth cùng consumer context. Dùng public
+  corpus nhỏ nhất phục vụ reader dự kiến.
+- Hỏi riêng trước khi fetch live site, ghi ngoài directory đã duyệt, commit,
+  publish, host hay deploy.
+
+## Xác minh generated evidence
+
+Một lần chạy hoàn tất nên cung cấp:
+
+- Source directory, exclusion, public base URL, route transformation cùng project
+  metadata đã dùng.
+- Đường dẫn cùng kích thước chính xác cho `llms.txt` và mọi output
+  `llms-full.txt`.
+- Số page scanned, included, excluded, unreadable, duplicate và ambiguous khi
+  workflow khả dụng có thể xác định.
+- Bằng chứng H1 tồn tại, description hữu ích, `## Optional` đứng cuối và mỗi
+  published link khớp canonical route thật.
+- Review full-file content cho secret, private path, import, component,
+  duplication, kích thước quá lớn cùng licensing concern.
+- Link hoặc consumer test bị bỏ qua và publication decision còn lại.
+
+Script được bundle không chạy HTTP link check hay kiểm thử nhiều LLM. Đây là các
+validation step riêng và không được báo cáo hoàn tất nếu chưa thực sự chạy.
+
+## Xử lý sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Script từ chối file path | Truyền directory cho `--source`, hoặc stage tệp đã duyệt trong source directory có giới hạn. |
+| Live URL được đưa làm source | Chỉ fetch hoặc map với network access đã duyệt; script được bundle không crawl URL. |
+| Link được tạo kết thúc bằng `.md` hoặc `.mdx` | Cung cấp `--base-url` đúng và xác minh source path map tới published route ra sao; đừng giả định chỉ bỏ extension là đủ. |
+| Title hoặc description kém | Thêm hoặc sửa public H1 cùng introductory prose, hoặc biên tập generated entry thủ công. |
+| Page vào sai section | Phân loại lại output theo user intent; generator chỉ dùng path cùng filename heuristic. |
+| `llms-full.txt` quá lớn hoặc nhiều nhiễu | Thu hẹp source corpus, bỏ `--full` hoặc tạo subset được review thay vì publish mọi thứ. |
+| Runtime không nhận diện Skill | Xác nhận target cùng scope, khởi động lại session, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Tiếp tục với [Documentation](./docs) để cải thiện source, hoặc xem
+[Projects, artifacts và checkpoints](../../../concepts/projects-artifacts-checkpoints)
+trước khi thay published file.
+
+## Biết các giới hạn hiện tại
+
+- Generator được bundle chỉ scan directory local. Generator không crawl site,
+  validate HTTP status, hiểu framework routing, deploy tệp hay đo model adoption.
+- Metadata extraction cùng categorization dựa trên heuristic; MDX, localized
+  tree, generated page, index route và custom frontmatter cần con người review.
+- Convention llms.txt có thể phát triển và consumer support khác nhau. Kiểm tra
+  requirement hiện tại trước khi dựa vào nó như integration contract.
+- Stable và beta chứa tệp Skill `ak:llms` giống nhau trong cặp release này.

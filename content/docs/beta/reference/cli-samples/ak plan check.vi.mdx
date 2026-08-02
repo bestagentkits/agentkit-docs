@@ -1,0 +1,78 @@
+---
+title: ak plan check
+description: Đánh dấu hoàn tất mọi Markdown task trong một tệp và xử lý đồng bộ plan store theo kiểu best-effort.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak plan check` khi mọi task checkbox trong một tệp phase cần được đánh
+dấu hoàn tất. Tệp là nguồn chuẩn; plan store chỉ được làm mới sau khi ghi tệp
+thành công.
+
+## Cách dùng
+
+```bash
+ak plan check <phase-file>
+```
+
+Lệnh nhận đúng một đường dẫn và không có cờ riêng.
+
+## Đánh dấu hoàn tất một phase
+
+```bash
+ak plan check ./plans/260802-1030-release-docs/phase-01-audit.md
+```
+
+Mọi Markdown task item bắt đầu bằng `- [ ]` được đổi thành `- [x]`. Các item
+đã check `[x]` hoặc `[X]` vẫn được check và dòng khác được giữ nguyên. Chạy lại
+lệnh không thay đổi thêm trạng thái checkbox.
+
+Lệnh ghi qua tệp tạm rồi rename, vì vậy reader không thấy tệp dở dang. Tệp thay
+thế dùng quyền owner-only mặc định của tệp tạm. Lệnh không đổi front matter của
+phase, tạo backup hay cung cấp preview, apply, force hoặc xác nhận.
+
+<Callout type="warning">
+  Lệnh tin vào đường dẫn được truyền trước khi ghi lại; basename không bắt buộc
+  phải khớp `phase-NN-*.md`. Hãy kiểm tra đúng tệp đích. Dùng version control
+  hoặc khôi phục filesystem để rollback.
+</Callout>
+
+## Đồng bộ store
+
+Sau khi ghi nguyên tử, AgentKit cố tìm store row liên kết với thư mục cha của
+tệp rồi lập chỉ mục lại plan và phase đó. Nếu store bị thiếu, mơ hồ, không ghi
+được hoặc không khả dụng, tệp vẫn đã thay đổi, stderr nhận warning và lệnh thoát
+thành công. Plan cũ chỉ có tệp không làm phát sinh store row mới.
+
+Thao tác chỉ diễn ra cục bộ. Đồng bộ store có thể chạy lệnh `git` cục bộ để
+resolve định danh repository, nhưng không truy cập mạng hay provider. Lệnh
+không prompt hoặc đọc stdin; `--yes` không có thêm tác dụng.
+
+## Đầu ra
+
+Kết quả dành cho người dùng được ghi vào stdout. JSON thành công là một envelope
+có `kind=plan.check` và:
+
+```text
+data.phase: đường dẫn được truyền
+data.action: "checked"
+```
+
+Warning đồng bộ store vẫn là plain text trên stderr trong chế độ JSON. Lỗi thực
+thi dùng error envelope JSON trên stderr; lỗi phân tích cờ có thể vẫn là plain
+text.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Tệp đã được ghi lại, kể cả khi không có ô chưa check. | Kiểm tra stderr để tìm warning đồng bộ store và xác minh tệp. |
+| `1` | Không resolve, đọc hoặc thay thế nguyên tử được đường dẫn. | Kiểm tra đúng tệp và quyền của thư mục. |
+| `2` | Argument hoặc cờ không hợp lệ. | Truyền đúng một đường dẫn tệp phase. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak plan check`](../cli/ak_plan_check)
+- [Phân tích tiến độ plan](../cli/ak_plan_parse)
+- [Hiển thị trạng thái plan](../cli/ak_plan_status)
+- [Quy ước CLI](../cli-conventions)

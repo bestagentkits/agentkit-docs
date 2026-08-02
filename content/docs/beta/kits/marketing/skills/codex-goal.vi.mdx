@@ -1,0 +1,168 @@
+---
+title: Xác định công việc Codex dài hạn với ak:codex-goal
+description: Biến objective dài và có tính cơ học thành Codex goal contract có thể xác minh, đồng thời kiểm soát persisted state, automatic continuation, quyền và product decision.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:codex-goal` để quyết định công việc có phù hợp với Codex Goal mode hay
+không và soạn objective có giới hạn cùng stop condition xác minh được. Skill cung
+cấp hướng dẫn; Codex `/goal` mới là feature gắn persisted goal state vào active
+chat và tiếp tục làm việc hướng tới mục tiêu.
+
+## Chọn ak:codex-goal cho công việc cơ học dài hạn
+
+### Dùng ak:codex-goal khi mọi điều sau đều đúng
+
+- Task dài hơn một turn thông thường và chủ yếu có tính cơ học.
+- Completion có thể được chứng minh bằng test, eval, build hay artifact rõ ràng
+  khác.
+- Scope cùng constraint đủ rõ để Codex không cần product hay architecture
+  decision tại mọi checkpoint.
+- Bạn có thể giữ workspace liên quan và active chat khả dụng trong lần chạy.
+
+### Chọn workflow khác khi
+
+- Outcome còn exploratory, mơ hồ hay vẫn cần product direction. Hãy lập plan
+  hoặc làm rõ trước.
+- Công việc là backlog không liên quan thay vì một objective.
+- Task đổi production credential, shared infrastructure mang tính phá hủy,
+  budget, publication, provider state hay live account mà không có quyết định
+  lặp lại của con người.
+- Bạn cần generic iteration hay dispatch qua nhiều coding-agent CLI. Goal mode là
+  một Codex objective, không phải multi-provider orchestrator.
+
+## Chuẩn bị Codex và goal contract
+
+Trước khi bắt đầu:
+
+- Xác nhận Marketing Kit đã được cài tại nơi bạn sẽ gọi helper Skill.
+- Xác nhận `/goal` xuất hiện trong danh sách slash command của Codex app, CLI hay
+  IDE chat thực tế sẽ sở hữu persisted state.
+- Cung cấp một outcome, tệp cần đọc trước, constraint, validation sau từng
+  checkpoint và stop condition xác minh được.
+- Giữ thay đổi không liên quan và xác định ranh giới Git, network, secret,
+  provider, publication, deployment cùng destructive action.
+- Yêu cầu giữ nguyên test; không làm yếu, thu hẹp, skip hay xóa test để khiến goal
+  có vẻ hoàn tất.
+
+| Runtime | Cách gọi Skill | Ranh giới persisted goal |
+| --- | --- | --- |
+| Claude Code | `/ak:codex-goal ...` | Có thể soạn và review Codex goal contract; Claude Code không trở thành owner của Codex `/goal` state. |
+| Cursor | `/ak:codex-goal ...` | Có thể soạn contract qua slash invocation; persistent goal vẫn phải được bắt đầu trong Codex surface được hỗ trợ. |
+| Codex | `$ak:codex-goal ...` | Dùng native Skill discovery để chuẩn bị contract; nhập riêng `/goal <objective>` để đặt persisted state trong active Codex chat. |
+
+## Chạy Skill
+
+Dùng cách gọi AgentKit để soạn contract mà không ngầm bắt đầu Goal mode:
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:codex-goal "Draft a Codex goal to migrate the approved campaign schema. Preserve public fields, validate focused tests after each checkpoint, do not commit or deploy, and stop for any product decision"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:codex-goal "Draft a Codex goal to migrate the approved campaign schema. Preserve public fields, validate focused tests after each checkpoint, do not commit or deploy, and stop for any product decision"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:codex-goal "Draft a Codex goal to migrate the approved campaign schema. Preserve public fields, validate focused tests after each checkpoint, do not commit or deploy, and stop for any product decision"
+```
+
+  </Tab>
+</Tabs>
+
+Review contract được trả về, rồi bắt đầu trong Codex chat dự kiến bằng:
+
+```text
+/goal Complete <objective>. Read first: <files>. Constraints: <boundaries>. Validate after each checkpoint: <command>. Stop when <verifiable end state>, or when further work needs human input.
+```
+
+### Điều khiển persisted goal rõ ràng
+
+| Codex command | Tác động |
+| --- | --- |
+| `/goal <objective>` | Đặt goal cho active chat và bắt đầu làm việc hướng tới completion criteria. |
+| `/goal` | Hiển thị goal cùng trạng thái hiện tại. |
+| `/goal pause` | Tạm dừng automatic continuation mà không coi objective đã hoàn tất. |
+| `/goal resume` | Tiếp tục goal đã pause trong cùng chat. |
+| `/goal clear` | Xóa persisted goal state hiện tại. |
+
+Nếu `/goal` vắng mặt, Skill trong package hướng dẫn kiểm tra `[features]` với
+`goals = true` trong `config.toml` hoặc chạy `codex features enable goals`.
+Codex release hiện tại có thể đã bật stable feature này theo mặc định. Đổi
+configuration là user-level mutation riêng: kiểm tra active config và phê duyệt
+trước khi ghi.
+
+## Hiểu các giai đoạn
+
+1. **Áp dụng use test.** Skill loại vague exploration, unbounded backlog và công
+   việc mà bước tiếp theo liên tục cần quyết định của con người.
+2. **Soạn một contract.** Contract nêu outcome, first read, constraint,
+   validation loop, kỳ vọng progress log và stop condition.
+3. **Review quyền.** Bạn quyết định objective cùng mọi mutation class có chấp
+   nhận được không trước khi đặt persisted state.
+4. **Bắt đầu Goal mode trong Codex.** `/goal <objective>` gắn target vào active
+   chat; riêng AgentKit Skill invocation không làm việc đó.
+5. **Validate tại checkpoint.** Codex ghi progress và chạy verification đã nêu mà
+   không làm yếu acceptance evidence.
+6. **Steer hoặc pause.** Bổ sung context, kiểm tra status, pause khi mơ hồ hoặc
+   clear state khi objective không nên tiếp tục.
+7. **Dừng theo bằng chứng hay human input.** Completion cần đạt end state đã nêu;
+   product, safety, credential hay architecture decision bị block quay về một
+   người.
+8. **Review trạng thái cuối.** Kiểm tra diff cùng validation trước workflow
+   commit, push, merge, publication hay deployment riêng.
+
+## Giữ phê duyệt và automatic continuation trong giới hạn
+
+<Callout type="warn" title="Persisted goal không mở rộng quyền">
+  Goal mode giữ sandbox cùng approval policy đang hoạt động. Nó không cấp quyền
+  secret, network access, spending, đổi provider hay account, destructive
+  operation, publication, deployment, làm yếu test hay chấp nhận regression.
+  Pause khi quyết định mới nằm ngoài contract đã duyệt.
+</Callout>
+
+Với goal chạy đồng thời, dùng chat riêng và worktree riêng khi tệp có thể đổi.
+Không cho hai active goal quyền ghi vào cùng checkout. Goal persistent không làm
+assumption của nó tự cập nhật hay output tự chính xác.
+
+## Xác minh output và bằng chứng
+
+Phần chuẩn bị hoàn chỉnh nên cung cấp:
+
+- Một objective với completion criteria đo được.
+- Tệp first-read chính xác, scope boundary, non-goal và tác động bị cấm.
+- Validation command hay artifact cho từng checkpoint có ý nghĩa.
+- Rule pause thay vì tự tạo product hay architecture decision.
+- Phân biệt rõ drafted Skill output với active Codex `/goal` state.
+
+Goal hoàn tất nên để lại progress log ngắn gọn, diff hay artifact cuối,
+validation result, rủi ro chưa xử lý và final goal state. Review toàn bộ trước
+khi clear goal hay cho phép downstream Git hoặc release action.
+
+## Xử lý sự cố và tôn trọng giới hạn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| `/goal` không được liệt kê | Xác minh Codex surface cùng version hiện tại, rồi kiểm tra feature setting được tài liệu hóa trước khi đổi user config. |
+| Objective liên tục hỏi product question | Pause, thu hẹp goal và giải quyết các quyết định đó với một người. |
+| Validation không thể chứng minh completion | Thêm test, eval, build hay artifact quan sát được trước khi resume. |
+| Goal đổi tệp không liên quan | Pause ngay, kiểm tra diff và khôi phục ranh giới worktree dự kiến. |
+| Active chat hay workspace sắp không khả dụng | Pause goal và chỉ resume khi cùng context đã sẵn sàng. |
+
+Skill không thể làm vague work an toàn, bảo đảm unattended completion hay giữ
+state ngoài Codex surface được hỗ trợ. Availability cùng control có thể đổi theo
+Codex, vì vậy hãy xác minh live slash-command list trước khi dựa vào chúng. Xem
+[Runtime adapter](../../../concepts/runtime-adapters), [Projects, artifacts và
+checkpoints](../../../concepts/projects-artifacts-checkpoints) cùng [Marketing
+Kit](../../marketing) để hiểu ranh giới xung quanh.

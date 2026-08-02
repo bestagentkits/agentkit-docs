@@ -1,0 +1,137 @@
+---
+title: ak feedback
+description: Review, export, or submit redacted product feedback with explicit network and file boundaries.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak feedback` to prepare a bug, feature, or enhancement report. You can
+export the rendered Markdown for review or submit its redacted JSON payload to
+the configured AgentKit registry.
+
+## Usage
+
+```bash
+ak feedback
+```
+
+The command accepts no positional arguments. On a TTY it can prompt for missing
+fields. In scripts, provide `--type`, `--title`, and at least one detail field.
+
+## Command flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--type <type>` | Empty | Set `bug`, `feature`, or `enhancement`. |
+| `--title <text>` | Empty | Set the short title. |
+| `--body <text>` | Empty | Add general details. |
+| `--repro <text>` | Empty | Add bug reproduction steps. |
+| `--expected <text>` | Empty | Add expected behavior. |
+| `--actual <text>` | Empty | Add actual behavior. |
+| `--outcome <text>` | Empty | Add the desired outcome. |
+| `--motivation <text>` | Empty | Explain why the request matters. |
+| `--area <text>` | Empty | Identify a product area, command, page, or workflow. |
+| `--attach-diagnostics` | `false` | Include a redacted diagnostics summary. |
+| `--diagnostics-offline` | `true` | Skip network doctor checks while building that summary. |
+| `--export <path>` | Empty | Write rendered Markdown instead of submitting. Use `-` for process stdout. |
+| `--registry-url <url>` | Environment or release default | Override the submission registry. |
+
+`--area` alone is not a detail field. At least one of `--body`, `--repro`,
+`--expected`, `--actual`, `--outcome`, or `--motivation` must be non-empty.
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+## Review locally before submission
+
+`--export` skips authentication and the feedback POST:
+
+```bash
+ak feedback --type bug --title "Update failed" \
+  --body "The command stopped before changing files" \
+  --repro "Run ak update --dry-run" \
+  --export feedback.md --no-interactive
+```
+
+A newly created export requests mode `0600`. An existing file is overwritten
+without confirmation or backup and keeps the operating system's existing-file
+permission behavior. Use a new path when you need to preserve an earlier draft.
+
+`--export -` prints Markdown directly to process stdout and then prints the
+command result. Do not combine that form with `--json` when you need a single
+parseable JSON stream.
+
+## Submit intentionally
+
+Submission loads the local AgentKit session, checks that its registry matches
+the selected registry, and sends a bearer-authenticated JSON POST. It requires
+network access and a valid session; it does not purchase or change kit
+entitlements.
+
+```bash
+ak feedback --type bug --title "Update failed" \
+  --body "What happened" --repro "Run ak update" --yes
+```
+
+On an interactive terminal, the command confirms before submitting unless you
+pass `--yes`. The confirmation starts on `Submit`, so choose `Cancel` explicitly
+to stop. `--json`, `--no-interactive`, and non-TTY execution can skip the
+confirmation and submit immediately once required fields are present.
+
+<Callout type="warning">
+  The command has no dry-run or remote preview. Use `--export <path>` to inspect
+  exactly the rendered report before making a network submission.
+</Callout>
+
+If submission fails for authentication, registry, rate-limit, response, or
+network reasons, the command tries to save a timestamped
+`agentkit-feedback-YYYYMMDD-HHMMSS.md` fallback in the current directory, then
+still exits `4`. Check stderr for the exact path. This fallback write can happen
+even when you did not pass `--export`.
+
+## Diagnostics and privacy
+
+`--attach-diagnostics` embeds the same redacted report used by
+`ak diagnostics export`. Its default `--diagnostics-offline=true` avoids doctor
+network checks; set `--diagnostics-offline=false` only when those checks are
+intentional.
+
+User fields and diagnostics pass through known secret, email, and local-path
+redactors before export or submission. Limits are applied at 160 runes for the
+title, 80 for area, 24,000 for body, 12,000 for each other detail, 40,000 for
+diagnostics, and 60,000 for rendered Markdown. The final JSON payload is capped
+at 256 KiB. The result lists redactions and truncated fields.
+
+Pattern-based redaction is not a confidentiality guarantee. Review an export,
+avoid pasting unnecessary secrets, and remember that submitted content can
+become an issue managed by the service.
+
+## Output and streams
+
+Human stdout reports the submitted issue target or export path. JSON success
+uses `kind=feedback` with these fields under `data`:
+
+```text
+submitted, exported, export_path, issue_url, issue_number
+payload_bytes, redactions, truncated, schema_version
+diagnostics_attached, rendered_body
+```
+
+`rendered_body` is included for JSON export, not successful submission. Runtime
+errors emitted by this command use the structured JSON error envelope; Cobra
+flag-parse errors can remain plain text.
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | Export or submission completed. | Inspect the exported path or returned issue target. |
+| `1` | Export or result output could not be written, or a positional argument was supplied. | Choose a writable new path or correct the invocation while preserving any earlier file. |
+| `2` | The type or flags were invalid, draft prompting failed, or submission was cancelled. | Correct the type or stop without retrying. |
+| `3` | The title/details were missing, or diagnostics collection, feedback validation, rendering, or payload limits failed. | Complete or reduce the report, or resolve diagnostics locally. |
+| `4` | Authentication or registry validation failed, or the registry/network rejected submission. | Inspect the fallback export before reauthenticating or retrying. |
+
+## Related commands
+
+- [Export redacted diagnostics](<./ak diagnostics export>)
+- [Check the current session](./whoami)
+- [Log in](./login)
+- [Complete `ak feedback` command facts](../cli/ak_feedback)

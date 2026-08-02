@@ -1,0 +1,96 @@
+---
+title: ak backups
+description: Inspect, verify, prune, and restore the bounded rollback snapshots managed by AgentKit.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak backups` as the entry point for AgentKit recovery snapshots. The group
+itself is read-only: running it without a subcommand prints help and exits `0`.
+
+## Usage
+
+```bash
+ak backups <subcommand>
+```
+
+`ak backups --json` still prints group help; it does not produce a JSON result.
+Use `--json` on a runnable subcommand. Shared flags are described in
+[CLI conventions](../cli-conventions), but each backup operation has its own
+confirmation, output, and exit contract.
+
+## Choose an operation
+
+| Goal | Command | Mutation behavior |
+| --- | --- | --- |
+| List rollback snapshots newest first | `ak backups list` | Read-only. |
+| Inspect one manifest | `ak backups show <id>` | Read-only. |
+| Recompute file hashes | `ak backups verify <id>` | Read-only; reports `ok` or `corrupt`. |
+| Preview or restore captured state | `ak backups restore <id>` | `--dry-run` previews; apply can replace or remove paths authorized by the manifest. |
+| Restore the newest snapshot | `ak backups restore --latest` | Same restore engine and safety rules. |
+| Delete snapshots by retention policy | `ak backups prune` | Deletes by default; add `--dry-run` to preview. |
+| Stage a consistent operational database copy | `ak backups create` | Replaces the operational staging directory and writes a verified `operational.db` copy. |
+
+The top-level `ak recover [id]` command is another entry point to the restore
+engine. It is not a Cobra alias of `ak backups restore`.
+
+## Understand snapshot boundaries
+
+Rollback snapshots live under `~/.agentkit/backups/`, or under
+`$AGENTKIT_HOME/backups/` when that environment variable is set. Every snapshot
+has an ID shaped like `YYYYMMDDTHHMMSSZ-<8-hex>`, a manifest, captured data, and
+hash metadata.
+
+The creating lifecycle operation decides which exact files or authorized roots
+are captured. A snapshot is not a whole-machine backup, and different snapshot
+kinds can have different restore scopes. Inspect the manifest before recovery:
+
+```bash
+ak backups show <id>
+ak backups verify <id>
+ak backups restore <id> --dry-run
+```
+
+<Callout type="warning">
+  Manifest hashes detect accidental or partial changes; they do not authenticate
+  a snapshot against an attacker who can rewrite the snapshot and its metadata.
+  Protect your AgentKit home with normal user-level filesystem permissions.
+</Callout>
+
+`ak backups create` is separate from the ID-based rollback store. The current
+implementation stages and verifies `operational.db` in the system temporary
+directory; it does not mint an ID that appears in `ak backups list`.
+
+## Apply the command-specific safety rules
+
+- `prune` does not ask for confirmation. Preview the exact remove set first.
+- `restore` asks on an interactive TTY, but JSON, `--no-interactive`, or non-TTY
+  stdin can proceed without `--yes`. Use `--yes` to make automation intentional.
+- Backup restore and prune operations use cross-process locks. Lock contention
+  fails instead of waiting indefinitely.
+- A restore dry-run preflights the live paths without changing them. An applied
+  restore can overwrite captured files and remove paths that were absent at
+  snapshot time.
+
+Applied restore success is an output exception: even with `--json`, stdout is
+empty and stderr prints a plain completion line. Only
+`ak backups restore --dry-run --json` emits the
+`kind=backups.restore_plan` success envelope.
+
+## Recovery workflow
+
+1. List snapshots and select the one created before the unwanted change.
+2. Show and verify it.
+3. Run a restore dry-run and review every restore and removal path.
+4. Apply only after confirming that the manifest owns the intended scope.
+
+If verification reports corruption, do not restore that snapshot. A pruned
+snapshot has no built-in undelete path; recover it from an independent
+filesystem backup if one exists.
+
+## Related commands
+
+- [Complete `ak backups` command facts](../cli/ak_backups)
+- [Complete `ak backups restore` command facts](../cli/ak_backups_restore)
+- [Complete `ak backups verify` command facts](../cli/ak_backups_verify)
+- [Complete `ak recover` command facts](../cli/ak_recover)

@@ -1,0 +1,159 @@
+---
+title: Tailor explanation depth with ak:coding-level
+description: Persist a coding-experience preference from level 0 to 5 and understand where automatic session injection is supported.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:coding-level` to persist how much explanation, teaching structure, and
+strategic context you want in future responses. The selected level is stored as
+`codingLevel` in `.claude/.ck.json`; it changes communication style, not the
+project's code standards or safety rules.
+
+## Choose ak:coding-level for a durable preference
+
+### Use ak:coding-level when
+
+- Explanations are consistently too basic or too terse for you.
+- You want beginner teaching, professional design context, or lead-level risk
+  framing to carry into later sessions.
+- You want a project-scoped preference instead of repeating response-format
+  instructions in every prompt.
+
+### Choose another workflow when
+
+- You need a one-response tone adjustment; state it in the request instead.
+- You need to change linting, language, architecture, or review requirements.
+  Coding level does not override repository instructions.
+- You need a runtime-independent guarantee. Automatic injection is evidenced by
+  the Engineer session-start Hook, whose full support is Claude-specific.
+
+## Prepare the preference
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Engineer Kit is installed in the intended project scope.
+- Choose an explicit integer from `0` through `5`.
+- Preserve unrelated keys in `.claude/.ck.json`.
+- Start a fresh supported session after changing the value when you want to
+  verify automatic injection.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:coding-level 0-5` | Native delivery is the default. The Engineer session-start Hook reads the saved value and injects matching guidance. |
+| Cursor | `/ak:coding-level 0-5` | Slash invocation is user-verified, but the source does not establish automatic session-start injection or manual output-style parity. |
+| Codex | `$ak:coding-level 0-5` | Native Skill discovery is supported. Codex Hook projection is partial, so persisted automatic injection is not established by this evidence. |
+
+See [Runtime adapters](../../../concepts/runtime-adapters) before relying on a
+Hook-backed behavior outside Claude Code.
+
+## Set the level
+
+The Skill accepts one level. Its metadata disables automatic model invocation,
+so select it explicitly rather than expecting the assistant to change your
+preference on its own.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:coding-level 2
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:coding-level 2
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:coding-level 2
+```
+
+  </Tab>
+</Tabs>
+
+| Level | Profile | Expected emphasis |
+| --- | --- | --- |
+| `0` | ELI5 | Analogies, defined terms, very small steps, fully explained code |
+| `1` | Junior | Why before how, common mistakes, guided professional habits |
+| `2` | Mid-level | Patterns, system thinking, testability, explicit trade-offs |
+| `3` | Senior | Concise architecture, operations, security, recovery, team impact |
+| `4` | Tech lead | Risk, business impact, strategy, dependencies, stakeholder decisions |
+| `5` | God mode | Maximum efficiency with minimal explanation; this is the documented default |
+
+No behavior for an omitted or out-of-range argument is specified. Provide a
+valid level or ask the runtime to clarify instead of guessing.
+
+## Understand what happens during a run
+
+1. **You select the level.** The Skill receives an explicit value from `0` to
+   `5`.
+2. **The preference is persisted.** It updates `codingLevel` in
+   `.claude/.ck.json` while preserving the rest of the project configuration.
+3. **A supported session starts.** The Engineer session-start Hook loads the
+   config and defaults to level `5` when `codingLevel` is absent.
+4. **The Hook maps the level to guidance.** It exposes the selected style name
+   and injects the corresponding communication rules into session context.
+5. **Responses follow the profile.** Explanation depth, code-example shape, and
+   response sections change; repository constraints and approval boundaries do
+   not.
+
+Claude Code also exposes the six named manual output styles through its
+`/output-style` surface. The source does not establish that command on Cursor or
+Codex, so treat manual style selection there as unsupported unless the live
+runtime shows it.
+
+## Keep the change scoped
+
+<Callout type="warn" title="Communication style is not authority">
+  A higher expertise level does not authorize edits, commands, secret access,
+  external calls, Git actions, publication, or deployment. A lower level does
+  not weaken project rules or verification requirements.
+</Callout>
+
+- Review the `.claude/.ck.json` diff because the preference persists across
+  sessions in that project.
+- Do not replace the whole config file to change one key.
+- The Skill itself specifies no provider, network call, subprocess, paid
+  service, or large disk effect beyond the small config edit.
+- Manual output-style selection can affect the current response shape without
+  proving that the persisted preference was loaded.
+
+## Verify the result
+
+A complete run should give you:
+
+- A valid `codingLevel` value in `.claude/.ck.json`.
+- No unrelated config changes.
+- On a supported fresh session, guidance that visibly matches the selected
+  profile.
+- At level `1`, for example, explanations that lead with why, identify common
+  pitfalls, and include key takeaways for significant work.
+
+The Skill defines no standalone tests. Verify the persisted JSON, restart the
+supported runtime, and compare an observable response with the selected level.
+
+## Troubleshoot or continue
+
+| Symptom | Safe next step |
+| --- | --- |
+| The level is ignored | Confirm `.claude/.ck.json` is in the active project and start a fresh session. |
+| The config becomes invalid JSON | Restore valid JSON while preserving unrelated keys, then set one integer value. |
+| Responses still look like level `5` | Check whether the runtime projects the Engineer session-start Hook; absence defaults to efficient behavior. |
+| Cursor or Codex does not auto-apply the preference | Treat automatic injection as unavailable and state the desired depth in the request. |
+| The assistant changed project standards | Reassert repository instructions; coding level controls presentation only. |
+| The runtime does not recognize the Skill | Confirm target and scope, restart the runtime session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+## Know the current limits
+
+- Automatic injection depends on the Engineer session-start Hook; the exact
+  sources provide full evidence for Claude Code, not equivalent Cursor or Codex
+  behavior.
+- The six profiles are broad defaults, not a measurement of ability.
+- The current stable and beta packages contain identical `ak:coding-level`,
+  output-style, and relevant session-injection content.

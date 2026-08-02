@@ -1,0 +1,76 @@
+---
+title: ak plan reindex
+description: Preview hoặc build lại plan index riêng tư từ các tệp plan chuẩn trong repository mà không xoá các tệp đó.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak plan reindex` sau khi sửa tay `plan.md` hoặc tệp phase, hay khi SQLite
+index cục bộ đã lệch khỏi tệp trong repository.
+
+## Cách dùng và tuỳ chọn
+
+```bash
+ak plan reindex [--path <root>] [--apply]
+```
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--path <root>` | Trống | Scan `<root>/plans/`; giá trị trống dùng thư mục hiện tại làm `<root>`. |
+| `--apply` | `false` | Ghi plan hợp lệ vào index. Khi thiếu cờ này, lệnh chỉ phân loại. |
+
+Lệnh không nhận argument theo vị trí. Xem cờ dùng chung trong
+[quy ước CLI](../cli-conventions).
+
+## Preview và apply
+
+Lần chạy mặc định parse từng thư mục candidate và báo nội dung sẽ được reindex.
+`--apply` insert plan chưa từng thấy và đồng bộ lại plan đã liên kết, kể cả thư
+mục từng được migrate.
+
+Tệp sở hữu title, body và status được suy ra từ tệp của plan/phase. Reindex
+build lại các trường này cùng FTS row. Nó giữ nguyên lifecycle/publishing field
+do index sở hữu: state, issue/PR link, current phase, phase revision, notes,
+evidence, acceptance và comment ID. Reindex không làm plan đã close hoạt động
+trở lại chỉ vì `plan.md` ghi completed.
+
+Không tệp plan nào bị ghi hay xoá. Tệp thường trong `plans/` bị bỏ qua; thư mục
+không nhận diện được sẽ được báo. Candidate là symlink hoặc thoát khỏi root bị
+skip mà không được đọc.
+
+<Callout type="warning">
+  Dry-run không đổi row plan, nhưng mở plan store có thể tạo
+  `$AGENTKIT_HOME/plans/plans.db` hoặc áp dụng forward schema migration. Lỗi
+  đồng bộ từng thư mục được báo bằng outcome `skipped` và không nhất thiết làm
+  process thoát khác không. Automation phải kiểm tra mọi outcome.
+</Callout>
+
+Lệnh chỉ hoạt động cục bộ và không prompt. Nó chạy Git context probe nhưng
+không liên hệ remote. Không có `--force`, xác nhận, snapshot hay rollback tự động.
+
+## Đầu ra
+
+JSON thành công dùng `kind=plan.reindex`:
+
+```text
+data.applied, data.root, data.plans_dir
+data.outcomes[]: slug, status, optional reason, optional store_id, optional phases
+```
+
+Human output nêu mode dry-run/applied và từng classification. Plain output phân
+tách bằng tab. Kết quả dùng stdout; lỗi runtime JSON dùng stderr.
+
+## Kết quả, mã thoát và khôi phục
+
+| Mã | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Scan hoàn tất, có thể vẫn có outcome unrecognized hoặc skipped. | Kiểm tra mọi outcome; chỉ chạy `--apply` khi preview đúng. |
+| `1` | Root, thư mục plans, Git context, store hoặc thao tác filesystem cấp cao lỗi. | Sửa path/store rồi chạy lại preview. |
+| `2` | Argument hoặc cờ không hợp lệ. | Sửa cách gọi. |
+
+Reindex không có backup riêng. Tệp repository vẫn là nguồn chuẩn; giữ chúng
+trong version control, sửa tại đó và preview lại trước apply.
+
+## Lệnh liên quan
+
+- [Validate thư mục plan](../cli/ak_plan_validate)

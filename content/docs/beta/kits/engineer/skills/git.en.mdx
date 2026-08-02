@@ -1,0 +1,209 @@
+---
+title: Run guarded Git workflows with ak:git
+description: Stage and split commits, push branches, open pull requests, merge branches, or merge a GitHub PR through explicit safety gates.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:git` when you want AgentKit to perform a defined Git delivery operation
+with conventional commits, a staged secret scan, remote-aware comparisons, and
+explicit merge gates. The Skill can change local history and remote repository
+state, so choose the operation deliberately and review its scope first.
+
+## Choose ak:git for delivery operations
+
+### Use ak:git when
+
+- You want current changes staged and committed.
+- You explicitly want commits pushed to the current remote branch.
+- You want a pull request created from a remote branch diff.
+- You want one remote branch merged into another and pushed.
+- You want a GitHub pull request merged only after readiness checks, then its
+  target-branch CI watched to completion.
+
+### Choose another workflow when
+
+- You only need status or a diff. Use ordinary read-only Git commands or the
+  relevant project-status workflow.
+- You need code review before delivery. Use `ak:code-review`.
+- You need implementation or a bug fix. Use `ak:cook` or the fix workflow before
+  invoking Git delivery.
+- You are unsure which files belong in the change. Resolve ownership and scope
+  before staging everything.
+
+## Prepare the project and runtime
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Engineer Kit is installed for the runtime and scope you are using.
+- Open the intended Git repository and read its branch, commit, review, and
+  merge conventions.
+- Review `git status`, unrelated work, the active branch, remotes, and the
+  operation's exact source and target branches.
+- Confirm `gh` authentication and repository permission before `pr` or
+  `merge-pr`.
+- Decide whether push, pull-request creation, merge, auto-merge, or follow-up
+  fixes are authorized. A commit request alone does not authorize them.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:git ...` | The Skill delegates verbose Git execution to the installed `git-manager` agent. |
+| Cursor | `/ak:git ...` | Uses the user-verified slash spelling; agent delegation and interactive chooser parity are not established. |
+| Codex | `$ak:git ...` | Uses native Codex discovery; execution still depends on exposed Git, GitHub, and agent capabilities. |
+
+## Run the Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:git cm
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:git cm
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:git cm
+```
+
+  </Tab>
+</Tabs>
+
+With no argument, the Skill presents an operation chooser. Explicit operations
+are:
+
+| Operation | Local effect | Remote or external effect |
+| --- | --- | --- |
+| `cm` | Runs `git add -A`, analyzes staged changes, and creates one or more commits | None by default |
+| `cp` | Performs the commit workflow | Pushes the current branch after committing |
+| `pr [to-branch] [from-branch]` | Analyzes the remote branch comparison | Pushes the source branch when needed and creates a GitHub pull request; target defaults to `main`, source to the current branch |
+| `merge [to-branch] [from-branch]` | Checks out and updates the target, then merges `origin/<from-branch>` with a merge commit | Pushes the target branch; target defaults to `main`, source to the current branch |
+| `merge-pr <pr-ref>` | Inspects PR state and repository conventions | Merges the GitHub PR, can enable auto-merge for pending checks, and watches post-merge CI |
+
+`merge-pr` requires a PR number or URL. The other branch arguments use the
+documented defaults when omitted.
+
+## Understand commit and push behavior
+
+1. **The Skill stages the working tree.** `cm` and `cp` use `git add -A`, so
+   tracked, untracked, and deleted paths in the repository can enter the staged
+   set.
+2. **The Skill summarizes the staged diff.** It reports file and line changes
+   and classifies paths by code, tests, documentation, configuration, or
+   dependencies.
+3. **The Skill scans staged content.** A keyword and credential-pattern scan
+   blocks the commit when it detects a possible secret.
+4. **The Skill decides commit boundaries.** Mixed types or scopes are split;
+   small changes with one type and scope can remain a single commit.
+5. **The Skill writes conventional commits.** Messages use
+   `type(scope): description`, imperative wording, and no AI attribution.
+6. **The Skill pushes only in the selected workflow.** `cp` pushes after the
+   commit. A rejected push is reported rather than silently rewritten.
+
+## Understand pull-request and merge behavior
+
+### Pull request
+
+The `pr` workflow fetches the remote, ensures the source branch is available on
+the remote, and builds the PR from `origin/<target>...origin/<source>`. It
+creates a conventional title under 72 characters plus summary and test-plan
+sections through `gh pr create`.
+
+### Branch merge
+
+The `merge` workflow updates the target branch, merges only the committed and
+pushed remote source branch with `--no-ff`, and pushes the target. Conflicts or
+rejected pushes remain visible for manual resolution.
+
+### GitHub PR merge
+
+The `merge-pr` workflow:
+
+1. **Checks readiness.** The PR must be open, mergeable, free of requested
+   changes, allowed by branch policy, and not have red CI.
+2. **Selects a merge method.** It follows project instructions, recent merged
+   PRs, repository settings, then defaults to a merge commit.
+3. **Merges or enables auto-merge.** Pending checks can use `--auto`; red checks
+   and conflicts stop the workflow.
+4. **Waits for the actual merge.** Auto-merge is polled before post-merge work
+   begins; a wait beyond 30 minutes is reported as a blocker.
+5. **Watches target-branch CI.** Runs for the merge commit are watched to a
+   conclusion.
+6. **Handles deterministic failures.** A repository-fixable post-merge failure
+   can start a separate follow-up fix branch and normal PR flow. External
+   blockers or the same failure after three attempts stop the workflow.
+7. **Verifies completion.** It reports the PR, merge SHA, method, CI results,
+   follow-up fixes, and closes a uniquely matched plan record when applicable.
+
+## Keep authority and safety with you
+
+<Callout type="warn" title="Choose the operation before you invoke it">
+  `cm` stages the entire repository with `git add -A`. `cp`, `pr`, `merge`, and
+  `merge-pr` can mutate remote state. Review unrelated work, branch targets, and
+  repository policy before proceeding.
+</Callout>
+
+Important gates:
+
+- A possible secret blocks commit creation. Remove or ignore the material and
+  rerun the scan; do not bypass the warning.
+- Push requires an explicit push-capable operation. A plain commit does not
+  authorize push.
+- Force push is never allowed to `main`, `master`, production, or release
+  branches. A feature-branch force push still requires an explicit request and
+  warning because it rewrites history.
+- Destructive recovery or branch deletion requires confirmation.
+- Protected-branch rules, required review, and red CI are not bypassed.
+- GitHub operations require network access, `gh` authentication, and repository
+  permission. The source defines no separate service price.
+
+The built-in pattern scan is a commit gate, not proof that staged content is
+secret-free. Apply the repository's dedicated security tooling when required.
+
+## Verify the result
+
+Expected evidence includes:
+
+- The staged file count and added and removed lines.
+- The security-scan result and any blocked paths.
+- Each commit SHA and conventional message.
+- The branch and commit hashes pushed, when requested.
+- The pull-request URL and remote comparison for `pr`.
+- The source, target, and resulting merge commit for `merge`.
+- The PR URL, merge method and SHA, watched CI conclusions, and any follow-up
+  fixes for `merge-pr`.
+
+## Troubleshoot safely
+
+| Symptom | Safe next step |
+| --- | --- |
+| Unrelated files are staged | Stop before committing, review the staged set, and define the intended ownership groups. |
+| A secret pattern is detected | Inspect the matching staged lines, unstage the path, move the value to an approved secret store, and update ignore rules when appropriate. |
+| There are no changes | Exit cleanly; do not create an empty commit. |
+| A push is rejected | Fetch and reconcile the remote according to repository policy; do not force push a protected branch. |
+| A pull request has an empty diff | Verify the remote source and target branches and whether local commits were pushed. |
+| A merge has conflicts | Stop, report the conflicts, and resolve them in the approved branch workflow. |
+| `gh` is unavailable or unauthenticated | Install or authenticate GitHub CLI, then retry only the external operation. |
+| Post-merge CI is stuck | Report the run URL after the documented timeout instead of claiming completion. |
+
+## Know the current limits
+
+- Commit splitting uses path and size heuristics; review the proposed boundaries
+  for semantic correctness.
+- Remote comparisons exclude unpushed work by design.
+- The secret scan can flag harmless text or miss secrets outside its patterns.
+- `merge-pr` can observe and react to repository CI but cannot bypass external
+  outages, missing permissions, required review, or branch protection.
+- Cursor slash invocation is user-verified evidence, not proof of agent or
+  GitHub-tool parity.
+- Stable and beta package the same `ak:git` operations and gates.

@@ -1,0 +1,190 @@
+---
+title: Tạo bằng chứng validation với ak:test
+description: Chạy validation cho code hoặc UI, giữ mọi failure, đo coverage khi hữu ích và nhận QA report có cấu trúc mà không bắt đầu sửa lỗi.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:test` để biến một thay đổi hoặc câu hỏi quality thành bằng chứng
+validation mới. Skill có thể chạy unit, integration, end-to-end, build,
+coverage và browser-based UI check, rồi báo cáo command, kết quả, failure cùng
+gap mà không che output bất tiện.
+
+## Chọn ak:test khi validation là outcome
+
+### Dùng ak:test khi
+
+- Bạn cần bằng chứng test tập trung hoặc rộng sau implementation hay bug repair.
+- Project cần type, lint, build hoặc coverage validation trước handoff.
+- Website cần kiểm tra visual, responsive, accessibility, form hoặc console.
+- Bạn cần QA report có cấu trúc thay vì implementation mới.
+
+### Chọn workflow khác khi
+
+- Test thất bại cần diagnosis root cause và repair. Dùng `ak:debug`, sau đó
+  `ak:fix`.
+- Bạn muốn finding về production risk và maintainability từ diff. Dùng
+  `ak:code-review`.
+- Bạn muốn implementation cùng testing và review stage mặc định. Dùng
+  `ak:cook`.
+- Bạn cần thiết kế delivery plan thay vì chạy validation. Dùng `ak:plan`.
+
+## Chuẩn bị bề mặt test
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận
+  Engineer Kit đã được cài cho đúng runtime cùng scope bạn đang dùng.
+- Mở project và cung cấp thay đổi, requirement, khu vực lỗi hoặc test scope sẽ
+  quyết định command.
+- Bảo đảm test runner, dependency, fixture, environment variable và build
+  tooling của project khả dụng.
+- Với UI testing, cung cấp URL và tự khởi động application cần thiết hoặc cấp
+  quyền rõ cho workflow khởi động application.
+- Với protected UI route, chọn test authentication native của project hoặc
+  duyệt dùng Chrome profile thật và hoàn tất manual login cần thiết.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:test ...` | Phân phối native là mặc định; phân phối plugin rõ ràng cũng được hỗ trợ. |
+| Cursor | `/ak:test ...` | Cách gọi bằng slash đã được người dùng xác minh. Điều này không thiết lập runtime parity đầy đủ. |
+| Codex | `$ak:test ...` | Skill dùng discovery native của Codex; không suy ra parity rộng hơn cho Hook và statusline Engineer. |
+
+## Chọn kiểm thử code hoặc UI
+
+Nếu bạn cung cấp scope, Skill tiếp tục với code validation liên quan. Khi không
+có argument, Skill hỏi bạn muốn chạy code test hay UI test. Dùng `ui <url>` để
+chọn trực tiếp browser workflow.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:test "Validate the session expiry change: run typecheck, the focused session tests, affected integration tests, and coverage for the changed module."
+```
+
+```text
+/ak:test ui http://localhost:3000/settings
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:test "Validate the session expiry change: run typecheck, the focused session tests, affected integration tests, and coverage for the changed module."
+```
+
+```text
+/ak:test ui http://localhost:3000/settings
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:test "Validate the session expiry change: run typecheck, the focused session tests, affected integration tests, and coverage for the changed module."
+```
+
+```text
+$ak:test ui http://localhost:3000/settings
+```
+
+  </Tab>
+</Tabs>
+
+| Operation | Nội dung bao phủ | Input hữu ích |
+| --- | --- | --- |
+| Kiểm thử code | Type hoặc syntax check, unit, integration, end-to-end, coverage và production build | Behavior đã đổi, module bị ảnh hưởng, command bắt buộc, threshold project và giới hạn thời gian |
+| `ui <url>` | Page discovery, screenshot, responsive behavior, accessibility, form, console error và user flow đã chọn | URL, state mong đợi, viewport, cách auth, ranh giới data safety và browser availability |
+
+Command và threshold do project định nghĩa được ưu tiên. Khi project không có
+coverage policy, reference guidance của Skill dùng 80% line và 70% branch
+coverage làm target chung, đồng thời chú ý đặc biệt tới critical path.
+
+## Hiểu điều gì xảy ra trong một lần chạy
+
+1. **Skill xác định scope.** Skill nối thay đổi gần đây hoặc requirement với bề
+   mặt validation nhỏ nhất hữu ích, rồi xác định critical path cùng error
+   scenario.
+2. **Skill chạy pre-flight check.** Type, syntax, lint hoặc analysis riêng của
+   ngôn ngữ chạy trước behavioral test để compilation failure hiển thị sớm.
+3. **Skill chạy suite đã chọn.** Skill bắt đầu tập trung, mở rộng sang
+   integration hoặc end-to-end khi blast radius yêu cầu và giữ lại test bị
+   skip, flaky, chậm hoặc thất bại.
+4. **Skill đo coverage khi liên quan.** Skill báo line, branch và function
+   coverage, rồi chỉ ra tệp, error handler cùng edge-case branch chưa được phủ
+   thay vì dựa vào một phần trăm.
+5. **Skill xác minh build.** Skill chạy production build phù hợp project khi
+   build compatibility thuộc scope được yêu cầu.
+6. **Skill kiểm tra UI khi được chọn.** Skill chọn browser cô lập, Chrome path
+   nhận biết profile hoặc browser test native của project; chụp screenshot; và
+   kiểm tra interaction, responsive, accessibility cùng console output.
+7. **Skill tạo report.** Skill sắp xếp kết quả, failure, coverage, build status,
+   critical issue, recommendation cùng câu hỏi chưa giải quyết trong report
+   location được cấu hình.
+
+## Kiểm soát effect của test
+
+<Callout type="warn" title="Test thất bại vẫn phải được giữ là thất bại">
+  Skill không nới assertion, thêm mock không trung thực, skip failure hoặc thao
+  túng coverage để build trông xanh. Skill báo lỗi và chuyển root-cause work sang
+  debugging cùng fixing.
+</Callout>
+
+- Test command có thể tạo coverage file, screenshot, build output, temporary
+  data hoặc browser state. Hãy nêu artifact location và yêu cầu cleanup được
+  phép.
+- Chạy suite trên test environment an toàn. UI flow và end-to-end test có thể
+  submit form hoặc mutate data nếu application hoạt động như vậy.
+- Test bằng Chrome profile thật có thể truy cập authenticated session của người
+  dùng. Chỉ dùng khi state đó cần thiết và bind đúng tab nhận biết profile.
+- URL bên ngoài, hosted browser, performance service hoặc environment giống
+  production có thể phát sinh chi phí provider hay vận hành và cần quyền riêng.
+- `ak:test` báo defect; Skill không bắt đầu triển khai fix. Dùng `ak:debug` và
+  `ak:fix` để chuyển sang bước đó.
+
+## Xác minh report
+
+Kết quả test hoàn chỉnh nên cung cấp:
+
+- Scope chính xác cùng mọi command đã chạy.
+- Tổng số test pass, fail và skip cùng duration.
+- Tên đầy đủ của test thất bại, error output thiết yếu và stack trace liên quan.
+- Giá trị coverage cùng gap cụ thể khi coverage được yêu cầu.
+- Build status, warning và dependency issue khi build verification áp dụng.
+- Trang cùng flow UI đã test, đường dẫn screenshot, console finding, viewport và
+  browser check bị skip.
+- Critical issue cùng recommendation được ưu tiên.
+- Giới hạn environment, authentication hoặc bằng chứng được liệt kê rõ.
+
+Chỉ coi lần chạy pass khi các check được yêu cầu báo zero failure, build exit
+thành công khi nằm trong scope và threshold project được đáp ứng. Check một phần
+hoặc bị skip chỉ chứng minh đúng bề mặt thực sự đã chạy.
+
+## Xử lý sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Không cung cấp test scope | Chọn code testing hoặc `ui`, rồi nêu thay đổi, requirement hoặc URL. |
+| Typecheck fail trước test | Giữ compiler output và chuyển lỗi sang diagnosis; đừng skip pre-flight để tới test sau. |
+| Test flaky | Lặp suite bị ảnh hưởng nhỏ nhất, kiểm tra timing cùng shared state và báo nondeterminism thay vì lấy trung bình. |
+| Coverage không đạt target | Xác định critical path chưa phủ và thêm test qua implementation workflow; đừng test dòng không liên quan chỉ để lấy phần trăm. |
+| Protected route chuyển tới login | Dùng auth setup native của project hoặc Chrome path nhận biết profile sau phê duyệt rõ và manual login. |
+| Browser tool không khả dụng | Chạy UI test native của project nếu có và báo screenshot, interaction hoặc accessibility check còn chưa xác minh. |
+| Runtime không nhận diện Skill | Xác nhận target cùng scope, mở runtime session mới, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Bàn giao failure cho `ak:debug` và `ak:fix`, hoặc tiếp tục với
+`ak:code-review` sau khi validation được yêu cầu pass.
+
+## Biết các giới hạn hiện tại
+
+- Skill bị giới hạn bởi test runner, browser, credential, URL và environment có
+  trong session hiện tại.
+- Phần trăm coverage không chứng minh behavior ngoài assertion hoặc runtime
+  condition đã chạy.
+- Visual screenshot không thay interaction, accessibility, console hoặc test
+  native có thể lặp lại của project.
+- Cách gọi Cursor bằng slash là bằng chứng do người dùng xác minh, không phải
+  chứng minh runtime parity đầy đủ.
+- Package stable và beta chứa cùng operation và report workflow `ak:test`.

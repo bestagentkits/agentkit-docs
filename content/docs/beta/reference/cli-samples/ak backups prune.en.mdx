@@ -1,0 +1,121 @@
+---
+title: ak backups prune
+description: Preview or delete rollback snapshots with explicit age and count retention rules.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak backups prune` to reclaim space in the AgentKit rollback store. The
+command is destructive by default and never asks for confirmation.
+
+## Usage
+
+```bash
+ak backups prune [flags]
+```
+
+The command accepts no positional arguments.
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--older-than <duration>` | Empty | Delete snapshots older than a Go duration such as `168h`, or a day suffix such as `30d`. |
+| `--keep-last <n>` | `0` | Retain the `n` newest snapshots. |
+| `--dry-run` | `false` | Print the same deletion plan without removing snapshots. |
+
+Shared output flags are described in [CLI conventions](../cli-conventions).
+There is no `--apply` or `--force` flag: omitting `--dry-run` applies the plan.
+
+## Understand the retention policy
+
+A snapshot is retained when any applicable protection keeps it:
+
+- it is marked protected;
+- it is among the `--keep-last` newest snapshots; or
+- it is younger than the `--older-than` window.
+
+When both positive rules are present, the union is retained—the more protective
+result wins. With neither rule set, or with both resolving to zero, the command
+is a no-op.
+
+```bash
+ak backups prune --older-than 30d --keep-last 5 --dry-run
+```
+
+This preview keeps every protected snapshot, every snapshot from the last 30
+days, and the five newest snapshots even if they are older.
+
+<Callout type="warning">
+  Pass only non-negative retention values. The current implementation does not
+  reject a negative `--keep-last` or negative `--older-than`; that value adds no
+  count or age protection and can select every unprotected snapshot for deletion.
+</Callout>
+
+`d` and `D` are accepted as day suffixes and may be fractional. Other values
+follow Go duration syntax and require units. A bare value such as `30` is
+invalid.
+
+## Review destructive effects
+
+Prune reads manifests under `~/.agentkit/backups/` (or
+`$AGENTKIT_HOME/backups/`) and removes only snapshot directories outside the
+retained set. It performs no network, authentication, entitlement, provider, or
+cache operation.
+
+Deletion uses a non-blocking prune lock so concurrent manual and automatic
+prunes cannot select the same snapshot. Candidate directories are renamed to
+hidden tombstones under a brief registry lock, then removed. A later prune
+reconciles tombstones left by an interrupted process. Lock contention exits `4`.
+
+The command does not verify snapshot hashes before deletion. Use a dry-run and
+inspect important survivors first:
+
+```bash
+ak backups prune --keep-last 5 --dry-run
+ak backups verify <id-to-keep>
+ak backups prune --keep-last 5
+```
+
+## Output and streams
+
+Human stdout shows `Keep` and `Remove` ID lists. A dry-run adds
+`dry-run only; no backups removed`. There is no prompt or stdin read.
+
+JSON stdout uses one success envelope:
+
+```json
+{
+  "schema_version": 1,
+  "kind": "backups.prune",
+  "data": {
+    "deleted": ["20260426T123005Z-deadbeef"],
+    "dry_run": true
+  }
+}
+```
+
+During a dry-run, `data.deleted` means “would delete.” The JSON payload omits
+the retained list. `--quiet` suppresses successful human output, while
+`--json` takes precedence over `--quiet`. Runtime JSON errors are written to
+stderr as error envelopes; argument and flag parsing can fail before that
+renderer is active.
+
+## Exit status
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | The plan completed, including a no-op or dry-run. | Review the output; for a dry-run, rerun without `--dry-run` only when the remove set is correct. |
+| `1` | Listing, reconciliation, rename, or deletion failed; Cobra also uses this path for an unexpected positional argument. Some candidates may already be gone. | List snapshots again and inspect the store before retrying. |
+| `2` | A flag could not be parsed or `--older-than` was not a valid duration. | Correct the invocation; include an explicit duration unit. |
+| `4` | Another backup prune or lifecycle operation holds the relevant lock. | Let it finish, then list snapshots and retry. |
+
+Deletion is attempted independently per candidate, so exit `1` can accompany a
+partial prune. There is no built-in undo after a snapshot directory is removed.
+
+## Related commands
+
+- [Backup family overview](../cli/ak_backups)
+- [Complete `ak backups prune` command facts](../cli/ak_backups_prune)
+- [Inspect a snapshot](../cli/ak_backups_show)
+- [Verify a snapshot](../cli/ak_backups_verify)

@@ -1,0 +1,65 @@
+---
+title: ak data
+description: Inspect derived-data defaults, refresh the local operational read model, and preview retention boundaries.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak data` for the local derived operational-data surfaces. These commands
+do not manage content-search shards even though `content_shard` appears as a
+retention data class.
+
+## Usage
+
+```bash
+ak data
+```
+
+The group accepts no documented positional arguments and shows its subcommands.
+
+## Choose a command
+
+| Goal | Command | Effect |
+| --- | --- | --- |
+| Inspect compiled defaults | `ak data status --json` | Reports seven known classes with the default `forever` posture; it does not inspect the database. |
+| Refresh derived runtime facts | `ak data ingest --json` | Reads local Claude Code and Codex JSONL sources and writes `operational.db`. |
+| Preview one policy | `ak data retention --class ingestion_runs --days 30 --json` | Counts eligible rows for supported fixed classes and emits a one-use preview. |
+| Request apply | `ak data retention --class ingestion_runs --days 30 --apply` | Intended to prune at most 500 rows, but the current release cannot complete this apply path; read the retention page first. |
+
+## Storage and privacy
+
+With the default home, the operational database is
+`~/.agentkit/operational/operational.db`; `AGENTKIT_HOME` changes the base. The
+store uses private current-user paths and refuses unsafe symlinks, foreign
+databases, corrupt stores, and newer schemas rather than rebuilding them.
+
+Ingest stores derived session metadata, token/tool/skill counters, opaque source
+identity and checkpoints, redacted failure codes, and a local-only absolute
+source locator. It does not store raw message bodies in the operational tables,
+but it reads local session files to derive those records.
+
+No `ak data` subcommand contacts the AgentKit registry, a provider, or the
+network, and none requires registry authentication or kit entitlement.
+
+## Safety boundaries
+
+<Callout type="warning">
+  `--json`, `--no-interactive`, and `--yes` are not confirmation controls for
+  this family. There are no prompts. Omitting `--apply` is the retention
+  preview control; ingest writes immediately.
+</Callout>
+
+Runtime-owned Claude Code and Codex source files are never deleted or modified
+by ingest or retention. Retention targets only a closed allowlist of local,
+non-syncable, prunable tables. Content-search deletion uses the separate
+`ak content-search delete` lifecycle.
+
+## Automation output and exits
+
+`ak data` subcommands emit raw command-specific JSON on stdout, not a shared
+versioned envelope and not NDJSON. Runtime errors generally exit `1`; malformed
+flag values exit `2`. JSON errors are not guaranteed to be structured.
+
+## Related commands
+
+- [CLI conventions](../cli-conventions)

@@ -1,0 +1,79 @@
+---
+title: ak plan add-phase
+description: Thêm tệp phase, hiểu cơ chế đồng bộ store best-effort và tránh ghi tệp khi chưa kiểm tra.
+---
+
+Dùng `ak plan add-phase` để thêm tệp Markdown cho phase có số thứ tự tiếp theo
+vào một thư mục plan hiện có. Lệnh thay đổi tệp ngay; không có preview, xác
+nhận, backup hay chế độ force.
+
+## Cách dùng
+
+```bash
+ak plan add-phase <plan-dir> <name>
+```
+
+Truyền đúng hai argument. Lệnh không có cờ riêng. Các cờ dùng chung được mô tả
+trong [quy ước CLI](../cli-conventions).
+
+## Tạo phase an toàn
+
+```bash
+ak plan add-phase ./plans/260802-1030-release-docs "Deploy"
+```
+
+Lệnh quét `phase-NN-*.md`, chọn số lớn nhất hiện có cộng một, slugify tên để
+làm tên tệp rồi ghi template khởi đầu như `phase-03-deploy.md`. Nếu tên không
+tạo ra ký tự hợp lệ cho filename, slug fallback thành `phase`.
+
+Hãy dùng tên đơn giản trên một dòng. Tên được chèn vào Markdown và YAML front
+matter, còn lệnh không validate plan sau khi ghi. Lệnh cũng không thêm phase
+mới vào bảng phase do bạn viết trong `plan.md`.
+
+## Quyền sở hữu tệp và store
+
+Tệp phase mới là kết quả chính. Sau khi ghi, AgentKit cố gắng làm mới store row
+đã liên kết và chỉ mục tìm kiếm toàn văn.
+
+- Nếu không có store row sở hữu thư mục, lệnh không tạo trạng thái store mới.
+- Nếu đồng bộ store thất bại, tệp vẫn là nguồn chuẩn, stderr nhận warning và
+  lệnh vẫn thành công.
+- Sau đó có thể dùng `ak plan reindex --apply` để dựng lại index từ tệp.
+
+Thao tác chỉ diễn ra cục bộ. Lần đồng bộ store best-effort có thể chạy lệnh
+`git` cục bộ để resolve định danh repository. Lệnh không đọc stdin, hiển thị
+prompt TTY, truy cập mạng, xác thực hay gọi provider. `--yes` không có thêm tác
+dụng.
+
+## Đầu ra
+
+Kết quả dành cho người dùng được ghi vào stdout. Với `--json`, stdout chứa một
+envelope có `kind=plan.add_phase` và các trường sau trong `data`:
+
+```text
+plan_dir, phase_name, file
+```
+
+`file` là đường dẫn đã tạo và có thể là đường dẫn tuyệt đối. Warning đồng bộ
+store best-effort vẫn là plain text trên stderr trong chế độ JSON, vì vậy hãy
+thu hai stream riêng. Lỗi thực thi JSON dùng error envelope trên stderr; lỗi
+phân tích cờ có thể vẫn là plain text.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Tệp phase đã được tạo. Đồng bộ store vẫn có thể đã cảnh báo. | Kiểm tra tệp và cập nhật bảng phase trong `plan.md` nếu có. |
+| `1` | Không đọc được thư mục hoặc không ghi được tệp phase. | Kiểm tra thư mục và quyền trước khi thử lại. |
+| `2` | Số argument hoặc cờ không hợp lệ. | Truyền một thư mục plan và một tên phase được quote. |
+
+Vì không có snapshot được giữ lại, hãy khôi phục thao tác thêm nhầm bằng hệ
+thống quản lý phiên bản hoặc khôi phục tệp. Đừng chạy đồng thời trên cùng thư
+mục: hai process có thể chọn cùng số tiếp theo.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak plan add-phase`](../cli/ak_plan_add-phase)
+- [Phân tích plan sau khi cập nhật](../cli/ak_plan_parse)
+- [Validate một thư mục plan](../cli/ak_plan_validate)
+- [Quy ước CLI](../cli-conventions)

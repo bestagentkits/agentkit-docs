@@ -1,0 +1,64 @@
+---
+title: ak skills search
+description: Search local installed and available skill metadata with deterministic weighted ranking and a versioned list envelope.
+---
+
+Use `ak skills search` when you know a capability keyword but not its exact
+`<kit>/<skill>` reference.
+
+## Usage
+
+```bash
+ak skills search <query>
+```
+
+One or more query tokens are joined with spaces. The command has no
+command-specific flags.
+
+## Matching and ranking
+
+Search runs over the same deduplicated installed-plus-available set as
+`ak skills list`. Matching is case-insensitive substring matching:
+
+| Field | Score per matching token |
+| --- | --- |
+| Skill name | `3` |
+| Each tag | `2` |
+| Description | `1` |
+
+Scores are summed. Results sort by score descending, then canonical reference
+ascending. Installed metadata wins when the same reference also exists in the
+local kits source.
+
+The command reads `AGENTKIT_PLUGIN_DIR` or `~/.claude/plugins` and
+`AGENTKIT_KITS_DIR` or `./kits`. It performs no remote registry search, auth, or
+entitlement request.
+
+## Output
+
+Human stdout uses the same table as list. JSON success uses
+`kind=assets.list`, not a distinct search kind, with results under
+`data.skills[]`. Each record contains `kit`, `name`, `version`, `description`,
+`tags`, `runtime`, and `installed`.
+
+No matches is a successful empty result.
+
+## Effects and exits
+
+The command is read-only and noninteractive. It has no cache mutation, preview,
+backup, or force behavior.
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Search completed, including zero matches. |
+| `1` | A local source could not be read. Omitting the query entirely is rejected by Cobra and currently also exits `1`. |
+| `2` | The supplied query joined to whitespace only, or a flag was invalid. |
+
+For the whitespace-only query path, the current JSON error envelope can report
+`exit_code: 1` while the process exits `2`.
+
+## Related commands
+
+- [Complete `ak skills search` facts](../cli/ak_skills_search)
+- [List local skills](../cli/ak_skills_list)
+- [Show a result](../cli/ak_skills_show)

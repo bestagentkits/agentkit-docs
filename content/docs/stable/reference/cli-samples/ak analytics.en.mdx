@@ -1,0 +1,84 @@
+---
+title: ak analytics
+description: Inspect and explicitly control AgentKit's private, disposable local analytics index without changing authoritative source data.
+---
+
+Use `ak analytics` to inspect or change the lifecycle of AgentKit's local
+SQLite analytics index. The index is an optional derived cache; local session
+and activity files remain authoritative.
+
+## Usage
+
+```bash
+ak analytics
+```
+
+The group accepts no positional arguments and has no command-specific flags.
+Running it without a subcommand prints help and exits `0`.
+
+## Choose a lifecycle command
+
+| Goal | Command | Result |
+| --- | --- | --- |
+| Inspect without creating state | `ak analytics status` | Reports lifecycle, serving mode, health, freshness, and fact count. |
+| Opt in and build | `ak analytics enable` | Marks the index enabled and performs a full source refresh. |
+| Stop indexed reads but keep data | `ak analytics disable` | Retains the database and records disabled intent. |
+| Update efficiently | `ak analytics refresh` | Reuses unchanged-source facts and republishes one current generation. |
+| Re-derive every fact | `ak analytics rebuild` | Reparses all sources and republishes one current generation. |
+| Remove derived analytics data | `ak analytics delete` | Removes the database and recovery residue, retaining only deleted intent. |
+
+## Local storage and privacy
+
+By default, analytics state lives under `~/.agentkit`:
+
+```text
+analytics/analytics.db       private SQLite index
+analytics-state.json         lifecycle marker and lease target
+analytics-recovery/          transient rollback files during bounded maintenance
+```
+
+`AGENTKIT_HOME` changes that base. Directories and files owned by analytics are
+protected as owner-only where supported, and unsafe symlink, ownership, or
+permission layouts are refused.
+
+The index reads allowlisted local sources: Claude Code project sessions, Codex
+sessions, and AgentKit activity events. `AGENTKIT_CLAUDE_HOME` changes the
+Claude home; `CODEX_HOME` changes the Codex home. Stored facts are bounded
+aggregates and HMAC identities, not prompts, raw transcript text, source paths,
+session IDs, trace IDs, or raw errors.
+
+No analytics lifecycle command sends telemetry, contacts a provider, uses the
+network, requires authentication, or checks entitlement. Deleting or disabling
+the index does not delete any authoritative session or activity source.
+
+## Retention and generation lifecycle
+
+The database keeps one current complete generation. A successful refresh or
+rebuild atomically publishes the replacement and removes superseded
+generations. This is index lifecycle, not source-data retention: these commands
+do not prune the append-only activity log or runtime session files.
+
+The one-shot CLI never starts a background analytics scheduler. A status value
+of `will_auto_sync=true` means a dashboard or desktop host that runs the
+reconciler is allowed to sync that state; it does not mean this CLI process
+leaves a daemon running.
+
+## Confirmation and output
+
+All mutations create an in-process, state-bound preview before applying.
+`--yes` applies it. With `--json` or `--no-interactive` and no `--yes`, the
+command emits the preview and exits `3` without mutation. When prompting is
+enabled, it writes the prompt to stderr; any answer except `y` or `yes`,
+including EOF, declines, prints the preview, and currently exits `0`.
+
+Mutation JSON uses `kind=analytics.plan`; status uses
+`kind=analytics.status`. See the command pages for exact fields and recovery
+boundaries.
+
+On macOS, the CLI-wide first-launch guard can also write
+`~/.agentkit/.first-run-darwin` and print a one-time hint to stderr before this
+command runs.
+
+## Related commands
+
+- [CLI conventions](../cli-conventions)

@@ -1,0 +1,106 @@
+---
+title: ak content publish
+description: Validate, preview, publish hoặc lưu bền vững Discord webhook post với ranh giới credential và lịch rõ ràng.
+---
+
+Dùng `ak content publish` để gửi ngay một Discord webhook post, preview body
+hoặc lưu để giao sau.
+
+## Cách dùng
+
+```bash
+ak content publish --channel discord --body "Release ready" --webhook-url https://discord.com/api/webhooks/...
+```
+
+Lệnh được tài liệu hoá không có positional argument. Implementation bỏ qua
+positional token thừa; đừng phụ thuộc vào hành vi đó. Lệnh không có alias.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--channel <id>` | Trống | Adapter ID bắt buộc. Chỉ triển khai `discord`. |
+| `--body <text>` | Trống | Body trực tiếp; xung đột với `--template`. |
+| `--title <text>` | Trống | Với Discord giao ngay, thêm title Markdown in đậm phía trước. |
+| `--webhook-url <url>` | Trống | Discord credential và endpoint cho lần gọi này. |
+| `--template <path>` | Trống | Đọc và thực thi tệp Go text-template. |
+| `--vars <json\|@path>` | Trống | JSON object inline hoặc tệp JSON cho template. |
+| `--dry-run` | `false` | Preview post giao ngay sau validation. |
+| `--at <RFC3339>` | Trống | Enqueue để giao tại hoặc sau timestamp này. |
+
+Các cờ dùng chung ở [quy ước CLI](../cli-conventions). Lệnh không hỏi xác
+nhận; `--yes`, TTY và stdin không chặn publish.
+
+## Credential và validation
+
+Lệnh đăng ký Discord adapter không có config và không load
+`channels.discord.webhook_url` từ `config.yaml`, dù error của adapter có nhắc
+đến config đó. Hãy truyền `--webhook-url` cho preview, enqueue và publish. Dry
+run thiếu cờ này sẽ thất bại validation.
+
+Body trực tiếp phải khác rỗng và tối đa 2.000 ký tự Unicode. Template dùng
+`missingkey=error`; output dài hơn 2.000 ký tự bị cắt thành 1.999 ký tự cộng
+`…`. Với giao ngay, `--title` được thêm sau lượt validation đầu và tổng title
+cộng body vẫn phải vừa giới hạn.
+
+`--webhook-url` là secret: có thể lộ trong process arguments. Khi dùng với
+`--at`, URL còn được lưu không redaction trong metadata của queue. Hạn chế quyền
+đọc AgentKit home và không đưa queue JSON vào log hay ticket.
+
+## Preview, enqueue và publish
+
+```bash
+ak content publish --channel discord --body "Release ready" \
+  --webhook-url https://discord.com/api/webhooks/... --dry-run
+
+ak content publish --channel discord --body "Release ready" \
+  --webhook-url https://discord.com/api/webhooks/... \
+  --at 2026-08-03T02:00:00Z
+```
+
+- `--dry-run` giao ngay vẫn validate adapter, in body, không gửi network request
+  và không ghi queue.
+- `--at` ưu tiên hơn `--dry-run`. Kết hợp hai cờ vẫn thêm entry vào
+  `~/.agentkit/content/queue.json` (hoặc dưới `AGENTKIT_HOME`) và thoát `0`.
+- Enqueue lưu body đã render và webhook metadata nhưng không gọi Discord.
+  `--title` theo lịch không được lưu và sẽ không được publish.
+- Publish ngay gửi một HTTP `POST` với `?wait=true`. Transport error có thể xảy
+  ra sau khi Discord đã nhận request, nên retry có thể tạo post trùng. Adapter
+  không xoá post; hãy recovery trong Discord.
+
+Queue write dùng thư mục `0700` và atomic replacement qua tệp tạm `0600`. Không
+giữ rollback copy.
+
+## Đầu ra và luồng
+
+Human success và preview đi ra stdout. JSON success là một envelope:
+
+```text
+kind=content.publish
+data={dry_run, channel, post_id?, url?, body}
+```
+
+Enqueue dùng:
+
+```text
+kind=content.publish_enqueued
+data={id, channel, scheduled_at, body}
+```
+
+Lỗi validation, queue và network là plain text trên stderr kể cả khi có
+`--json`; lỗi parse cờ cũng là plain text.
+
+## Mã thoát
+
+| Mã | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Preview, enqueue hoặc publish hoàn tất. | Với enqueue, lưu `data.id`; với publish, kiểm tra destination. |
+| `1` | Validation cờ `--channel` bắt buộc, home/queue I/O, enqueue hoặc network publishing thất bại. | Đọc stderr và kiểm tra destination trước khi retry. |
+| `2` | Tổ hợp body/template, channel, timestamp hoặc flag syntax không hợp lệ. | Sửa invocation. |
+| `3` | Render template hoặc adapter validation thất bại, gồm thiếu webhook hay body không hợp lệ. | Sửa nội dung và credential rồi preview lại. |
+
+## Lệnh liên quan
+
+- [Xem queue](<./ak content queue list>)
+- [Cancel entry](<./ak content queue cancel>)
+- [Help đầy đủ của `ak content publish`](../cli/ak_content_publish)

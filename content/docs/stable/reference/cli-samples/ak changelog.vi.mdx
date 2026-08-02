@@ -1,0 +1,124 @@
+---
+title: ak changelog
+description: Đọc lịch sử phát hành CLI, app và Kit công khai đã xác minh chữ ký với ngữ nghĩa range và cache chính xác.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak changelog` để xem tóm tắt phát hành công khai trước khi cập nhật hoặc so
+sánh các bản phát hành mới hơn CLI đã cài. Lệnh xác minh metadata catalog có chữ
+ký và xác minh body đầy đủ bằng digest trước khi hiển thị.
+
+## Cách dùng
+
+```bash
+ak changelog
+```
+
+Lệnh không nhận argument theo vị trí và không hiển thị prompt.
+
+## Tuỳ chọn của lệnh
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--channel <channel>` | Trống (`beta`) | Chọn `beta`, `stable` hoặc `staging`. |
+| `--target <target>` | `[]` (mọi target công khai) | Lọc `cli`, `app`, `kits`, `engineer` hoặc `marketing`; lặp cờ hay dùng giá trị phân tách bằng dấu phẩy. `all`, `kit`, `kit-engineer` và `kit-marketing` cũng được chấp nhận. |
+| `--kit <kit>` | Trống | Lọc Kit công khai được tài liệu hoá là `engineer` hoặc `marketing`. |
+| `--version <version>` | Trống | Chọn đúng một semantic version. |
+| `--from <version>` | Trống | Đặt cận dưới loại trừ; yêu cầu `--to`. |
+| `--to <version>` | Trống | Đặt cận trên bao gồm; yêu cầu `--from`. |
+| `--since-current` | `false` | Chọn các phiên bản mới hơn phiên bản `ak` đang chạy. |
+| `--full` | `false` | Tải và in body component đã xác minh thay vì chỉ tóm tắt. |
+| `--registry-url <url>` | Trống | Ghi đè catalog root; nếu không sẽ dùng `AGENTKIT_CHANGELOG_CATALOG_URL` hoặc mặc định phát hành. |
+
+Các cờ dùng chung được mô tả trong [quy ước CLI](../cli-conventions). `--yes` và
+`--no-interactive` không thay đổi read path này.
+
+## Lọc chính xác bản phát hành
+
+```bash
+ak changelog --target cli
+ak changelog --kit engineer
+ak changelog --version 2.6.0
+ak changelog --from 2.5.0 --to 2.6.0 --json
+ak changelog --since-current
+```
+
+Không thể kết hợp `--version` với `--from`, `--to` hoặc `--since-current`. Hai cờ
+range phải đi cùng nhau và `--from` không được mới hơn `--to`.
+Nếu kết hợp `--kit` với `--target`, lựa chọn target phải gồm `kits`, `kit` hoặc
+`all`.
+
+Implementation `--kit` hiện tại dùng lại generic target normalizer và có thể
+chấp nhận alias target khác. Hãy xem đó là chi tiết triển khai: dùng `--target`
+cho filter không phải Kit và chỉ dùng `engineer` hoặc `marketing` với `--kit`.
+
+<Callout type="warning">
+  Dù help dùng từ “from”, runtime hiện tại loại phiên bản đúng bằng `--from` và
+  bao gồm phiên bản đúng bằng `--to`. Hãy xem khoảng này là `(--from, --to]`.
+</Callout>
+
+Nếu phiên bản binary đang chạy không có hoặc không còn được giữ trong catalog,
+`--since-current` có thể trả kết quả `partial` kèm lý do thay vì tập mới-hơn
+chính xác. Hãy kiểm tra completeness trong JSON hoặc cảnh báo trong đầu ra cho
+người dùng.
+
+## Xác minh, mạng và cache
+
+Request mặc định tới release domain là HTTPS không cần authentication; lệnh
+không dùng phiên AgentKit hay entitlement Kit. `--registry-url` tuỳ chỉnh kiểm
+soát catalog origin, vì vậy chỉ dùng endpoint HTTPS đáng tin cậy. URL của
+component body phải là HTTPS, ngoại trừ loopback HTTP cho mục đích cục bộ.
+Catalog được chọn phải vượt qua schema validation và xác minh chữ ký Ed25519.
+Với `--full`, từng component body cũng phải khớp SHA-256 digest đã ghi trong
+catalog có chữ ký.
+
+Truy vấn signed catalog chính chạy ở read-only cache mode. Khi mạng hoặc catalog
+mới không có, AgentKit có thể đọc và xác minh lại metadata/body trong cache.
+Compatibility fallback cho release catalog cũ có thể ghi catalog hoặc body đã
+xác minh vào changelog cache của AgentKit, vì vậy đừng xem mọi lần chạy thành
+công là hoàn toàn không ghi byte lên đĩa.
+
+Lệnh không thay đổi phiên bản đã cài, update state, credential hay entitlement.
+Lệnh không có preview, apply, force, confirmation, backup hoặc rollback.
+
+## Đầu ra cho người dùng và JSON
+
+Đầu ra cho người dùng liệt kê version và ngày phát hành, sau đó là tóm tắt theo
+target; `--full` thêm body đã xác minh. Không có mục khớp vẫn là kết quả thành
+công.
+
+JSON stdout là một envelope với `kind=changelog` và các trường sau trong `data`:
+
+```text
+status, reason, channel, fetchedAt, stale, source, completeness
+releases[].version, channel, publishedAt
+releases[].components[].target, summary, bodyUrl, body
+```
+
+`body` chỉ có khi được yêu cầu và có sẵn. `completeness` là `complete`, `partial`
+hoặc `unavailable`; `stale` xác định dữ liệu lấy từ cache.
+
+Khi `--full` để lại `reason=changelog_body_unavailable`, lệnh thoát `1`. Nếu một
+lý do partial trước đó đã chiếm `reason`, body bị thiếu có thể vẫn là kết quả
+partial thoát `0`. Hãy kiểm tra `completeness`, `reason` và `body` của từng
+component được yêu cầu; đừng chỉ dùng mã thoát làm gate cho độ đầy đủ của body.
+
+Lỗi validation và availability xảy ra trước renderer. Với `--json`, chúng không
+được bảo đảm phát JSON error envelope, vì vậy hãy kiểm soát cả mã thoát process
+lẫn đầu ra đã parse. Lỗi phân tích cờ có thể vẫn là plain text.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước an toàn tiếp theo |
+| --- | --- | --- |
+| `0` | Đã tạo đầu ra khớp và xác minh, kết quả rỗng hoặc kết quả partial được phép. | Kiểm tra `completeness`, `reason` và `stale` trước khi dựa vào kết quả. |
+| `1` | Metadata catalog có chữ ký không có sẵn, resolve AgentKit home thất bại, `reason` là `changelog_body_unavailable` trong full mode hoặc có argument theo vị trí. | Khôi phục mạng đáng tin cậy, sửa cách gọi hoặc thử lại với cache đã xác minh; đừng bỏ qua verification. |
+| `2` | Filter, channel, target, semantic version, cờ hoặc argument không hợp lệ. | Sửa truy vấn. |
+
+## Lệnh liên quan
+
+- [Kiểm tra hoặc áp dụng cập nhật CLI có chữ ký](./self-update)
+- [Liệt kê phiên bản cục bộ và từ xa](./versions)
+- [Thông tin đầy đủ của lệnh `ak changelog`](../cli/ak_changelog)
+- [Quy ước CLI](../cli-conventions)

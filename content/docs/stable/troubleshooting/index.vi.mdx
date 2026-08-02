@@ -1,0 +1,72 @@
+---
+title: Xử lý sự cố AgentKit
+description: Bắt đầu từ triệu chứng, kiểm tra phạm vi an toàn nhỏ nhất và thu thập bằng chứng đã che dữ liệu nhạy cảm khi cần hỗ trợ.
+---
+
+Bắt đầu từ triệu chứng bạn quan sát được. Kiểm tra danh tính, phạm vi và trạng
+thái đã ghi nhận trước khi cài lại hoặc thay đổi tệp.
+
+## Chọn triệu chứng
+
+- **Trình cài đặt thất bại hoặc shell không tìm thấy `ak`:** [Lỗi cài
+  đặt](./installation)
+- **Không đăng nhập được hoặc Kit không khả dụng:** [Đăng nhập và quyền sử dụng
+  Kit](./authentication)
+- **Tải, xác minh hoặc cài Kit thất bại:** [Lỗi cài Kit](./kit-installation)
+- **Cài đặt thành công nhưng runtime không tìm thấy Skill hoặc Agent:** [Runtime
+  không tìm thấy Skill hoặc Agent](./runtime-cannot-find-skill-or-agent)
+- **Cập nhật thất bại hoặc để lại kết quả ngoài dự kiến:** [Cập nhật và khôi
+  phục](./updates)
+- **Thiết lập không hợp lệ, bị bỏ qua hoặc đến từ sai phạm vi:** [Lỗi cấu
+  hình](./configuration)
+
+## Thứ tự chẩn đoán an toàn
+
+Chạy các kiểm tra chỉ đọc trước khi dùng lệnh khôi phục:
+
+```bash
+ak --version
+ak doctor --json
+```
+
+`ak doctor` kiểm tra tình trạng cài đặt và runtime. Mặc định lệnh vẫn thoát `0`
+khi báo cáo không khỏe; hãy đọc `data.healthy` trong JSON envelope. Chỉ dùng
+`ak doctor --exit-on-fail` khi script cần mã thoát `1` cho kiểm tra thất bại.
+
+Với Claude Code, chọn dạng audit khớp delivery route:
+
+```bash
+ak audit --json
+ak audit --project-dir . --json
+ak audit --plugin-mode --project-dir ./ak-engineer --json
+```
+
+Ba lệnh lần lượt audit user plugin, nội dung project-native và project plugin
+root được nêu. Audit thoát `0` khi mọi Kit đã chọn khớp manifest và thoát `1`
+khi có drift hoặc lỗi lệnh. Kit argument không hợp lệ thoát `2`; thêm `--strict`
+khi manifest bị thiếu hoặc không đọc được cũng phải làm audit thất bại.
+
+## Chia sẻ chẩn đoán an toàn
+
+Tạo gói hỗ trợ đã che dữ liệu nhạy cảm thay vì gửi cấu hình hoặc tệp môi trường
+thô:
+
+```bash
+ak diagnostics export --json > agentkit-diagnostics.json
+```
+
+Lệnh export chạy `ak doctor --json`, che các secret đã biết, địa chỉ email và
+tiền tố đường dẫn cục bộ, rồi ghi JSON ra standard output. Mã thoát `1` nghĩa là
+doctor, redaction hoặc bước encode thất bại; flag không hợp lệ thoát `2`.
+
+Hãy xem lại tệp export trước khi chia sẻ. Không bao giờ gửi API key, license key,
+cấu hình provider, private key, tệp môi trường thô hoặc session transcript.
+
+## Giữ phạm vi khôi phục hẹp
+
+Không xóa `~/.agentkit`, `~/.claude`, `~/.codex` hoặc thư mục runtime của project
+để xử lý sự cố. Không dùng `--force` như một cách thử lại thông thường. Trước
+tiên, ghi lại lệnh lỗi, mã thoát, thư mục hiện tại, runtime đích và cài đặt thuộc
+phạm vi project hay global.
+
+Xem [tham chiếu CLI](../reference/cli) để biết đầy đủ lệnh và flag.

@@ -7,6 +7,8 @@ const config = {
   // Static export → Cloudflare Workers (static assets). No server runtime; all routes prerender.
   output: 'export',
   reactStrictMode: true,
+  // Allow the shared local-review URL to connect to Next.js development HMR.
+  allowedDevOrigins: ['127.0.0.1'],
   // Required by `output: 'export'` — the static build cannot use the Image
   // Optimization server.
   images: { unoptimized: true },

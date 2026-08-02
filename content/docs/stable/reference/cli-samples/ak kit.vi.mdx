@@ -1,0 +1,122 @@
+---
+title: ak kit
+description: Chọn đúng thao tác discovery, validation, install, refresh, path, repair hoặc uninstall cho Kit.
+---
+
+Dùng `ak kit` làm điểm vào cho các lệnh vòng đời content Kit. Bản thân nhóm lệnh
+chỉ đọc: chạy mà không có subcommand sẽ in help và thoát `0`.
+
+## Cách dùng
+
+```bash
+ak kit <subcommand>
+```
+
+`ak kit --json` in help của nhóm thay vì kết quả JSON. Hãy đặt cờ dùng chung trên
+leaf command có thể chạy và tuân theo hợp đồng đầu ra của lệnh đó. Các cờ dùng
+chung nằm trong [quy ước CLI](../cli-conventions).
+
+## Chọn subcommand
+
+| Mục tiêu | Lệnh | Nguồn và tác động |
+| --- | --- | --- |
+| Duyệt manifest Kit cục bộ | `ak kit list-kits` | Đọc `$AGENTKIT_KITS_DIR` hoặc `./kits`; `--kits-dir` ghi đè. |
+| Validate manifest cục bộ | `ak kit validate [kits-dir]` | Đọc `kit.yaml` và báo violation. |
+| Resolve và tạo đầu ra của Kit | `ak kit init <kit-name>` | Mặc định dùng remote registry; có thể cài vào runtime route hoặc thư mục build/export. |
+| Dùng entry point mang nghĩa install | `ak kit install <kit-name>` | Cùng implementation và cờ với `ak kit init`. |
+| Đồng bộ route đã cài | `ak kit refresh <kit-name>` | Tạo lại route và xoá đầu ra cũ còn thuộc AgentKit theo quy tắc vòng đời. |
+| Resolve path Claude plugin của user | `ak kit install-path <kit-name>` | Tính path chỉ đọc; không bao phủ mọi target hoặc scope. |
+| Preview hoặc gỡ Kit đã cài | `ak kit uninstall <kit-name>` | `--dry-run` preview; apply xoá path được chọn và có ownership sau xác nhận/yes. |
+| Sửa trạng thái Claude mode hỗn hợp | `ak kit repair-install-mode` | Yêu cầu chọn mode và xác nhận rõ; ghi recovery snapshot. |
+
+`init` và `install` là hai entry point tương đương, không phải delivery mode khác
+nhau. Dùng `refresh` khi route đã được cài. Dùng `ak init` để đăng ký project
+hiện có và `ak new` để tạo project mới; cả hai không thay thế việc chọn route
+Kit.
+
+## Tách source, target, scope và delivery
+
+Với thao tác install và refresh, hãy quyết định bốn chiều độc lập:
+
+1. **Source:** mặc định là remote release có xác thực, hoặc
+   `--local --kits-dir <dir>` rõ ràng cho development và CI.
+2. **Target:** `claude-code`, `codex` hoặc `cursor` cho bản cài thông thường;
+   `agy` chỉ ở global; hoặc `portable` chỉ để export với `--out DIR`.
+3. **Scope:** project hiện tại theo mặc định, hoặc user scope với `--global`.
+4. **Delivery:** đầu ra native của runtime, Claude plugin mode với
+   `--switch-to-plugin`, hoặc đầu ra build/export.
+
+Cùng một Kit có thể có cả route project và user. Route Claude native và plugin
+là riêng biệt. `ak kit install-path` chỉ báo user-scoped Claude plugin path;
+đừng dùng nó để suy ra đích project, Codex, Cursor, native hoặc build.
+
+`portable` không có install mode. Thiếu `--out` trả mã `1` trước preview, prompt,
+phân giải mạng, lifecycle hoặc ghi đĩa. `--out` ngầm chọn build mode và giữ source
+mặc định từ remote. `agy` từ remote phân giải package `claude-code` đã ký trước
+khi projection tới vị trí AGY global; target này không phải peer trong lifecycle
+refresh.
+
+## Hành vi mạng, xác thực và cache
+
+`list-kits`, `validate`, `install-path`, `uninstall` và
+`repair-install-mode` hoạt động trên trạng thái cục bộ. `init`, `install` và
+`refresh` dùng remote có thể liên hệ registry, gia hạn phiên CLI, kiểm tra
+entitlement, tải artifact theo target và ghi verified cache trước khi tạo tệp.
+Kit trả phí yêu cầu phiên CLI hợp lệ và grant đang hoạt động.
+
+```bash
+ak whoami
+ak licenses
+```
+
+Cờ nguồn local là route development chủ động, không phải fallback cho lỗi xác
+thực hoặc entitlement.
+
+## Xử lý từng hợp đồng thay đổi dữ liệu riêng biệt
+
+- `init`, `install` và `refresh` hiển thị preview destination trên TTY, nhưng
+  JSON, `--no-interactive` hoặc stdin không phải TTY có thể tiếp tục mà không
+  cần `--yes`. Hãy dùng `--yes` trong automation có chủ đích.
+- `uninstall` preview trước và không thay đổi khi thiếu xác nhận.
+- `repair-install-mode` yêu cầu chính xác lựa chọn keep và xác nhận.
+- Cờ force và backup phụ thuộc từng lệnh. Chúng không cho phép xoá tuỳ ý tệp
+  chưa biết.
+- Thao tác vòng đời phối hợp bằng lock và có thể tạo recovery snapshot có phạm
+  vi giới hạn trước thay đổi phá huỷ.
+
+Đừng suy mã thoát hoặc JSON của leaf command này từ lệnh khác. Ví dụ, route
+install dùng success envelope `kind=kit.init` và có thể ghi status record vào
+stderr, còn `install-path` dùng `kind=kit.install_path` và không có mutation
+status stream.
+
+## Xem disclosure Hook không được hỗ trợ
+
+`init`, `install` và `refresh` phân biệt Hook group hoàn toàn không được hỗ trợ
+với matcher chỉ bị thu hẹp một phần. Output cho người dùng in **Hooks dropped
+(unsupported on this target)** hoặc **Hook matchers narrowed (some tool matches
+unsupported on this target)**. Dữ liệu JSON thành công có thể chứa
+`hooksDropped`, `droppedHookSummaries`, `hookMatchersNarrowed` và
+`narrowedHookSummaries` tùy chọn.
+
+Drop hoặc narrow được công bố không làm lần cài thất bại. Full drop không được
+cài; narrow giữ handler hoạt động trên matcher atom được hỗ trợ. Hãy xem cảnh báo
+trước khi coi route đích tương đương hành vi với runtime nguồn.
+
+## Xác minh thao tác
+
+Sau install hoặc refresh, hãy xem cảnh báo target, mở lại runtime và gọi một
+Skill đã cài. Sau uninstall hoặc repair, hãy kiểm tra snapshot được báo trước
+khi thay đổi thêm tệp:
+
+```bash
+ak backups show <id>
+ak backups verify <id>
+```
+
+## Lệnh liên quan
+
+- [Cài/build Kit an toàn](./kit-init)
+- [Thông tin đầy đủ của `ak kit`](../cli/ak_kit)
+- [Đăng ký project hiện có](../cli/ak_init)
+- [Tạo project mới](../cli/ak_new)
+- [Xử lý sự cố cài Kit](../../troubleshooting/kit-installation)

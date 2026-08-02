@@ -1,0 +1,81 @@
+---
+title: ak content-search rebuild
+description: Thay vĩnh viễn một shard content-search stale hoặc corrupt bằng shard rỗng ở trạng thái enabled.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Chỉ dùng `ak content-search rebuild` khi shard của một project bị stale,
+corrupt hoặc incompatible. Lệnh xoá shard đó rồi tạo database AKC1 mới, rỗng và
+enabled. Nó không rebuild `operational.db`.
+
+## Cách dùng
+
+```bash
+ak content-search rebuild --project <uuid> --yes
+```
+
+Lệnh không nhận đối số theo vị trí trong cú pháp được công bố.
+
+## Cờ bắt buộc
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--project <uuid>` | Trống, bắt buộc | UUIDv7 chữ thường chuẩn của project đã xác thực owner. |
+| `--yes` | `false`, runtime yêu cầu | Cho phép xoá và chấp nhận shard thay thế rỗng. |
+
+Không có preview hoặc prompt tương tác. Input TTY, xác nhận qua pipe, `--json`
+và `--no-interactive` không thay thế `--yes`.
+
+## Ranh giới phá huỷ dữ liệu
+
+<Callout type="warning">
+  Rebuild không tạo backup. Lệnh xoá database, WAL, SHM, journal và lifecycle
+  marker của project đã chọn trước khi tạo bản thay thế rỗng. Document và
+  checkpoint đã index không được khôi phục.
+</Callout>
+
+Lệnh đóng shard đã chọn và không xoá tệp runtime nguồn hay core operational
+database. Nó không gọi network, registry, provider, xác thực hay entitlement.
+Quyền owner được kiểm tra lại trước thao tác.
+
+Rebuild không ingest nội dung vào shard thay thế. Một đường indexing khác của
+AgentKit phải nạp lại; `ak data ingest` chỉ refresh `operational.db`, không ghi
+content-search shard.
+
+## Đầu ra
+
+Human stdout là `rebuilt`. JSON stdout là status object thô:
+
+```text
+projectId: UUID chuẩn
+lifecycle: enabled
+health: ready
+documentCount: bỏ qua khi bằng 0
+logicalBytes: bỏ qua khi bằng 0
+disclosure: thông báo plaintext at rest
+```
+
+Đầu ra không phải envelope có phiên bản hay NDJSON. Lỗi runtime có thể không
+phát error object JSON có cấu trúc.
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Shard rỗng, enabled đã được tạo và status được phát. |
+| `1` | Thiếu project flag, kiểm tra owner/store/path thất bại hoặc không xoá hay tạo lại được shard. |
+| `2` | Thiếu `--yes` hoặc giá trị flag không phân tích được. |
+
+## Xác minh
+
+```bash
+ak content-search status --project <uuid> --json
+```
+
+Kỳ vọng `lifecycle=enabled`, `health=ready` và chưa có document cho đến khi
+indexing nạp lại. Nếu chỉ cần tạm dừng, dùng `disable` thay vì rebuild.
+
+## Lệnh liên quan
+
+- [Quy ước CLI](../cli-conventions)

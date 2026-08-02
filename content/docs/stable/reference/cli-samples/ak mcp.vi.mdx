@@ -1,0 +1,85 @@
+---
+title: ak mcp
+description: Khám phá cấu hình MCP server cục bộ của Claude và Codex mà không để lộ giá trị môi trường.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak mcp` để kiểm tra, chỉnh sửa, mirror hoặc xác minh cấu hình MCP server
+cục bộ. Lệnh nhóm không tự thay đổi tệp hay khởi động server; hãy chọn
+subcommand cho thao tác cần chạy.
+
+## Cách dùng
+
+```bash
+ak mcp
+```
+
+Lệnh nhóm không nhận argument theo vị trí. Chạy không có subcommand sẽ in trợ
+giúp.
+
+## Nguồn khám phá
+
+Discovery đọc các tệp hiện có theo thứ tự sau:
+
+| Nguồn | Đường dẫn mặc định | Cách merge |
+| --- | --- | --- |
+| Claude user settings | `~/.claude/settings.json` | Mức ưu tiên Claude thấp nhất. |
+| Claude user MCP config | `~/.claude/.mcp.json` | Thay entry Claude cùng tên từ user settings. |
+| Project MCP config | `./.mcp.json` | Thay entry Claude cùng tên ở user scope. |
+| Codex config | `~/.codex/config.toml` | Giữ thành inventory Codex riêng, không merge vào Claude. |
+
+`AGENTKIT_CLAUDE_HOME` và `CODEX_HOME` thay đổi hai user root. Các cờ MCP sau
+chỉ ghi đè Claude home và thư mục project:
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--claude-home <dir>` | `AGENTKIT_CLAUDE_HOME` hoặc `~/.claude` | Chọn root cấu hình Claude. |
+| `--cwd <dir>` | Thư mục làm việc hiện tại | Chọn thư mục chứa project `.mcp.json`. |
+
+Tệp nguồn không tồn tại được bỏ qua. Một nguồn hiện có nhưng không đọc được
+hoặc sai định dạng làm thao tác discovery thất bại thay vì trả inventory thiếu.
+
+<Callout type="warning">
+  Discovery bỏ giá trị môi trường ngay khi parse, nhưng output vẫn lộ tên
+  server, command, argument, tên environment key, đường dẫn nguồn và trạng thái
+  enabled. Hãy redaction thêm trước khi chia sẻ nếu các trường này tiết lộ đường
+  dẫn riêng tư hoặc hạ tầng.
+</Callout>
+
+Claude và Codex có thể cùng chứa một tên server. `show <name>` và
+`verify <name>` không có harness selector và hiện chọn entry khớp đầu tiên,
+tức entry Claude. Dùng tên duy nhất khi cần thao tác một server không mơ hồ.
+
+## Chọn subcommand
+
+| Mục tiêu | Lệnh | Hiệu ứng |
+| --- | --- | --- |
+| Liệt kê inventory đã redaction | `ak mcp list` | Chỉ đọc. |
+| Xem một entry đã khám phá | `ak mcp show <name>` | Chỉ đọc. |
+| Thêm hoặc thay một entry kiểu Claude | `ak mcp add <name>` | Ghi JSON config đã chọn. |
+| Xoá một entry kiểu Claude | `ak mcp remove <name>` | Ghi JSON config đã chọn. |
+| Preview hoặc áp dụng mirror Codex | `ak mcp link --to codex` | Dry-run trừ khi có `--apply`. |
+| Khởi động server và test initialize | `ak mcp verify [name]` | Chạy subprocess đã cấu hình. |
+
+Các cờ dùng chung được mô tả trong [quy ước CLI](../cli-conventions).
+
+## Output và mã thoát
+
+Trợ giúp của lệnh nhóm là plain text trên stdout. Mỗi subcommand có hợp đồng
+human/JSON riêng. Thao tác chỉ discovery không prompt hay liên hệ server.
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Trợ giúp hoặc thao tác đã chọn hoàn tất. |
+| `1` | Không resolve, đọc, parse được nguồn hiện có hoặc thao tác thất bại. |
+| `2` | Argument hoặc cờ không hợp lệ. |
+
+Các mã riêng khác gồm `3` khi từ chối catalog add và `5` khi `show` hoặc
+`verify` không tìm thấy server.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak mcp`](../cli/ak_mcp)
+- [Quy ước CLI](../cli-conventions)
+- [Thông tin đăng ký Codex runtime](../cli/ak_codex-agent-runtime_register)

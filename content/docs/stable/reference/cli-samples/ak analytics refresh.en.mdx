@@ -1,0 +1,87 @@
+---
+title: ak analytics refresh
+description: Incrementally refresh an already enabled local analytics index while preserving authoritative source files.
+---
+
+Use `ak analytics refresh` to bring an enabled index up to date while reusing
+facts from unchanged source files.
+
+## Usage
+
+```bash
+ak analytics refresh
+```
+
+The command accepts no positional arguments and has no command-specific flags.
+
+## Preview and apply
+
+```bash
+ak analytics refresh --json --no-interactive
+ak analytics refresh --yes --json --no-interactive
+```
+
+The preview reads lifecycle and current status but does not scan session roots
+and does not write. Applying can migrate an older owned store, enumerate the
+allowlisted local sources, reuse unchanged-source facts, parse changed sources,
+and atomically publish a replacement generation.
+
+Refresh is available only while lifecycle state is enabled. It will not create
+an uninitialized store or re-enable disabled or deleted analytics. Use `enable`
+for those transitions.
+
+## Confirmation behavior
+
+When prompts are enabled, only `y` or `yes` applies. Any other answer or EOF
+prints the preview and currently exits `0`. With `--json` or
+`--no-interactive`, the missing `--yes` path prints the preview and exits `3`.
+There is no dry-run or force flag.
+
+## Output and status
+
+Human output goes to stdout and the prompt to stderr. JSON uses
+`kind=analytics.plan` with `data.plan`, `data.applied`, and `data.status`; it
+does not include `scan`.
+
+The plan's `status` is the reviewed pre-operation state. When applied,
+`data.status` reports the post-refresh state, including serving mode, health,
+fact count, optional staleness reason, and last successful timestamp. For an
+unapplied preview, ignore the zero-value `data.status` and read
+`data.plan.status`.
+
+## Data, retention, and recovery
+
+Refresh reads Claude Code sessions, Codex sessions, and AgentKit activity
+events from their configured local roots. It stores only validated aggregates
+and HMAC identities in `~/.agentkit/analytics/analytics.db`. It never uploads
+data or requires auth, entitlement, or a provider.
+
+Publication occurs in one database transaction, and previous generations are
+removed after the new generation becomes current. Source files and the
+append-only activity log are not pruned. Refresh does not retain a user-facing
+rollback copy after success; a failed publication leaves the previous committed
+generation selected.
+
+Refresh cannot repair incorrect facts carried forward from an unchanged
+source. Use `rebuild` when you need every source reparsed.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Refresh applied, or an enabled prompt was declined/ended at EOF. |
+| `1` | Analytics was not enabled, or planning, migration, source capture, contention, publication, or output failed; positional arguments also use `1`. |
+| `2` | A flag was invalid. |
+| `3` | A noninteractive preview completed without `--yes`. |
+
+Lifecycle/service failures in JSON mode emit a versioned error envelope on
+stderr. Flag-parse, argument-validation, and final output-render failures can
+fall outside that path.
+
+On macOS, the CLI-wide first-launch guard can also write
+`~/.agentkit/.first-run-darwin` and print a one-time hint to stderr before this
+command runs.
+
+## Related commands
+
+- [CLI conventions](../cli-conventions)

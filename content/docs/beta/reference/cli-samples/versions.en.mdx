@@ -1,0 +1,101 @@
+---
+title: ak versions
+description: Inspect the local ak, kit, and Claude-plugin skill inventory while treating cached latest-version data and source coverage precisely.
+---
+
+Use `ak versions` to inspect the running CLI build, kit source directories, and
+skills discovered under the Claude plugin install root. It is an inventory
+command, not an updater.
+
+## Usage
+
+```bash
+ak versions
+```
+
+The command accepts no positional arguments.
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--cache-ttl <duration>` | `1h0m0s` | Decide when existing registry cache data is stale. Nonpositive values reset to one hour. |
+| `--local-only` | `false` | Enumerate local data without reading registry cache or attempting a registry fetch. |
+| `--remote-only` | `false` | Skip local kit and skill enumeration; the live versions endpoint is not configured in this release. |
+
+`--local-only` and `--remote-only` are mutually exclusive. Shared output flags
+are described in [CLI conventions](../cli-conventions). The command never
+prompts, and `--yes` has no effect.
+
+## Before you run
+
+Local enumeration reads:
+
+- binary version, commit, and build date compiled into `ak`;
+- kit directories under `AGENTKIT_KITS_DIR`, or `./kits` by default;
+- skill manifests under `AGENTKIT_PLUGIN_DIR/<kit>/skills/`, or
+  `~/.claude/plugins/<kit>/skills/` by default.
+
+This does not enumerate every runtime-native route. In particular, Codex-native
+skills and project-native Claude installs are outside the skill collector used
+by this command.
+
+The live latest-version endpoint is disabled in the shipped command. Default
+mode can read `~/.agentkit/cache/registry/index.json`; a fresh cache is used,
+and a stale cache is retained as an offline fallback. Missing, corrupt, or
+unreadable cache data is treated as a miss. `--local-only` skips the cache.
+
+`--remote-only` currently returns binary identity, empty `kits` and `skills`
+arrays, and any usable cached binary `latest` value. It does not make a live
+remote request in this release.
+
+## Examples
+
+```bash
+ak versions
+ak versions --local-only
+ak versions --json
+ak versions --cache-ttl 30m
+```
+
+## Output and streams
+
+Human stdout is a table with `TYPE`, `NAME`, `CURRENT`, `LATEST`, and `STATUS`.
+When latest data is unavailable, the informational status label is not proof
+that an installed item is a development build.
+
+JSON success uses an outer `kind=versions` envelope. `data` contains its own
+inventory `schema_version`:
+
+```text
+schema_version: 1
+kind: versions
+data.schema_version: 1
+data.binary: version, commit, date, latest
+data.kits[]: name, version, latest
+data.skills[]: kit, name, version
+data.registry: cached_at, stale, optional stale_age
+```
+
+The arrays are present even when empty, and unavailable version fields are
+empty strings. Errors use stderr and the shared JSON error envelope. Flag-parse
+errors can remain plain text.
+
+## Exit status
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | Inventory completed. Cache miss, corruption, staleness, or disabled remote lookup is nonfatal. | Read coverage and `registry.stale` before interpreting `latest`. |
+| `1` | Local kit or install-root enumeration failed, such as an unreadable directory. | Fix access to the reported root or use the appropriate source override. |
+| `2` | Flags were invalid, durations could not be parsed, both source flags were set, or an argument was supplied. | Correct the invocation. |
+
+The command does not apply, replace, or remove anything. With the shipped live
+endpoint disabled, it does not write the cache either. Use an update command
+only after reviewing the relevant lifecycle.
+
+## Related commands and limitations
+
+- [Check or apply a CLI update](./self-update)
+- [Refresh a kit route](../cli/ak_kit_refresh)
+- [Complete `ak versions` command facts](../cli/ak_versions)
+- [Update troubleshooting](../../troubleshooting/updates)

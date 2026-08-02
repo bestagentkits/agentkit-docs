@@ -1,0 +1,160 @@
+---
+title: Soạn brief sẵn sàng hỗ trợ quyết định với ak:research-prompt
+description: Biến project context cùng một decision thành research assignment self-contained mà không chạy research.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:research-prompt` để chuẩn bị một research brief self-contained cho
+human hoặc AI researcher. Skill gói project context, một decision, source
+standard, sub-question, evidence format và completion bar trong đúng một đoạn.
+Skill viết assignment; không search, cite finding hay đưa ra decision.
+
+## Chọn ak:research-prompt cho handoff
+
+### Dùng ak:research-prompt khi
+
+- Bạn muốn research prompt hoặc brief để người hay tool khác thực thi.
+- Researcher sẽ không có quyền truy cập conversation hiện tại.
+- Một decision cần nhiều evidence question được điều phối.
+- Bạn muốn cố định source hierarchy, conflict handling và yêu cầu citation cho
+  từng finding trước khi research bắt đầu.
+
+### Chọn workflow khác khi
+
+- Bạn muốn thực hiện research và lưu cited report. Dùng `ak:research`.
+- Bạn chỉ cần current library documentation. Dùng `ak:docs-seeker`.
+- Bạn cần thu repository evidence trước khi định scope brief. Dùng `ak:scout`
+  trước.
+- Bạn có nhiều decision không liên quan. Tạo một brief cho mỗi decision thay vì
+  gộp chúng.
+
+## Chuẩn bị decision context
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận Skill đã
+  được cài cho đúng runtime cùng scope.
+- Nêu project và tình huống hiện tại bằng ngôn ngữ một researcher không có prior
+  context vẫn hiểu được.
+- Cung cấp decision, audience, deadline, known fact, constraint, intended use và
+  non-goal quan trọng.
+- Xác định primary source researcher nên ưu tiên và weak source chỉ được dùng làm
+  signal.
+- Loại secret, personal data, private URL, internal identifier và confidential
+  detail mà downstream researcher không được phép nhận.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:research-prompt ...` | Trả brief qua Skill đã cài và có thể xem approved local project context khi cần. |
+| Cursor | `/ak:research-prompt ...` | Dùng cách gọi slash đã được người dùng xác minh; local-context access phụ thuộc session Cursor. |
+| Codex | `$ak:research-prompt ...` | Dùng native discovery của Codex và chỉ approved conversation hoặc project context có trong session. |
+
+## Chạy Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:research-prompt "Decision: chọn authorization model cho multi-tenant API. Audience: architecture review. Deadline: thứ Sáu. So sánh database RLS và service-layer check; yêu cầu current primary source, security failure mode, migration cost và unresolved gap."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:research-prompt "Decision: chọn authorization model cho multi-tenant API. Audience: architecture review. Deadline: thứ Sáu. So sánh database RLS và service-layer check; yêu cầu current primary source, security failure mode, migration cost và unresolved gap."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:research-prompt "Decision: chọn authorization model cho multi-tenant API. Audience: architecture review. Deadline: thứ Sáu. So sánh database RLS và service-layer check; yêu cầu current primary source, security failure mode, migration cost và unresolved gap."
+```
+
+  </Tab>
+</Tabs>
+
+Skill nhận research topic hoặc decision dưới dạng free-form input và không công
+bố mode flag. Source contract yêu cầu đúng một đoạn, không heading, preface,
+explanation hay deliverable thứ hai.
+
+### Nội dung đoạn brief bắt buộc có
+
+| Thành phần brief | Yêu cầu |
+| --- | --- |
+| Context và goal | Giải thích project, situation, research goal và decision cho reader không có prior context |
+| Research question | Xác định một câu hỏi trực tiếp hỗ trợ decision |
+| Sub-question | Gồm ba đến sáu câu hỏi đánh số inline bao phủ decision mà không thêm mission không liên quan |
+| Scope | Nêu nội dung include, avoid, version hoặc date liên quan, audience, deadline và constraint |
+| Source hierarchy | Ưu tiên official docs, repository, paper, filing, changelog và primary source khác |
+| Conflict handling | Tách confirmed fact, inference và unresolved uncertainty; xem lại contradiction cùng single-source claim trong gap round |
+| Evidence cho từng finding | Yêu cầu source URL, specific supported claim và một dòng decision relevance cho mọi finding |
+| Completion bar | Yêu cầu một detailed Markdown research result đủ để hỗ trợ decision đã nêu |
+
+## Hiểu các giai đoạn của lần chạy
+
+1. **Skill thu context.** Nó dùng conversation và chỉ relevant approved project
+   file cần để giải thích tình huống.
+2. **Skill cô lập một decision.** Câu hỏi gần kề bị loại hoặc chuyển sang brief
+   riêng.
+3. **Skill chọn coverage.** Ba đến sáu numbered sub-question bao phủ evidence,
+   trade-off, risk, compatibility và implementation implication khi cần.
+4. **Skill định nghĩa evidence quality.** Primary source dẫn đầu; forum và social
+   post chỉ là weak signal thay vì proof.
+5. **Skill định nghĩa verification.** Downstream researcher phải xem lại conflict
+   cùng single-source claim và ghi nhãn fact, inference, uncertainty.
+6. **Skill trả một đoạn.** Brief mặc định xuất hiện trong conversation, sẵn sàng
+   chuyển cho `ak:research` hoặc research runner khác.
+
+## Giữ handoff riêng tư và có giới hạn
+
+<Callout type="warn" title="Brief có thể được gửi tới người hoặc provider khác">
+  Chỉ đưa context downstream researcher được phép nhận. Sanitize final report về
+  sau không đảo ngược disclosure trong assignment.
+</Callout>
+
+- Workflow theo source không thực hiện web search, provider call, repository
+  clone, package install hay research execution.
+- Mặc định Skill không tạo tệp. Ghi đoạn văn vào path, gửi cho người khác hoặc
+  submit tới research provider là action riêng.
+- Đọc relevant local project file có thể làm lộ private context cho runtime hiện
+  hành. Giới hạn inspection vào phần cần để brief self-contained.
+- Bản thân Skill không thêm external cost. Research runner được chọn có thể dùng
+  paid model, search quota, private repository hoặc subscription source; ghi các
+  approval đó trong brief khi dự định dùng.
+- Không điền trước expected conclusion hoặc viết câu hỏi như marketing copy.
+
+## Xác minh brief
+
+Kết quả hoàn chỉnh là đúng một đoạn và hiểu được khi không có conversation gốc.
+Nó nêu một decision, chứa ba đến sáu numbered sub-question inline, xác định
+include cùng avoid boundary, ưu tiên primary source, yêu cầu gap handling, nêu
+URL cùng relevance cho mỗi finding và yêu cầu một detailed Markdown result.
+
+Skill không đóng gói script hay test. Verification là contract check với đoạn
+văn: một paragraph, một mission, context đầy đủ, không fabricated fact, không
+sensitive material và không trình bày research claim như đã được xác minh.
+
+## Khắc phục sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Brief cần giải thích bổ sung | Thêm project context, decision criteria, known fact hoặc intended use còn thiếu vào một đoạn. |
+| Brief chứa nhiều decision | Chia output thành các lần chạy Skill riêng, một decision cho mỗi brief. |
+| Brief yêu cầu source nhưng không map claim | Yêu cầu URL, supported claim và một dòng decision relevance cho mọi finding. |
+| Brief có expected answer | Thay conclusion bằng neutral criteria và evidence question. |
+| Bạn mong đợi research report | Chạy đoạn đã hoàn tất với `ak:research`; Skill này chỉ viết assignment. |
+| Runtime không nhận ra Skill | Xác nhận target và scope, khởi động lại runtime rồi xem [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+## Biết các giới hạn hiện tại
+
+- Skill không thể biến missing project fact thành đúng; unknown phải trở thành
+  sub-question hoặc explicit assumption.
+- Một đoạn ưu tiên decision tập trung hơn program of work toàn diện.
+- Brief thực thi source cùng output contract, nhưng downstream research runner
+  quyết định coverage, cost và evidence quality thực tế.
+- Stable và beta đóng package behavior cùng output rule `ak:research-prompt`
+  giống nhau.

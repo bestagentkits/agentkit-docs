@@ -1,0 +1,91 @@
+---
+title: ak licenses
+description: Query live AgentKit kit grants using the current local session and understand the shared whoami output contract.
+---
+
+Use `ak licenses` before installing a paid remote kit to confirm that the
+current account has an active grant.
+
+## Usage
+
+```bash
+ak licenses
+```
+
+The documented command has no positional arguments. The current implementation
+ignores extra positional tokens; do not rely on that behavior.
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--registry-url <url>` | Environment or release default | Override the registry used for the entitlement request. |
+
+Shared output flags are described in [CLI conventions](../cli-conventions).
+The command never prompts; `--yes` and `--no-interactive` do not alter it.
+
+## Before you run
+
+`ak licenses` uses the same session and live entitlement query as `ak whoami`.
+It reads `~/.agentkit/auth/session.json` unless `AGENTKIT_HOME` changes the base
+directory. The CLI slot is preferred over the App slot.
+
+```bash
+ak login --api-key ak_live_... --no-interactive
+ak licenses
+```
+
+No stored session is a successful state: the command performs no network
+request, prints `not logged in`, and exits `0`. With a stored session, it checks
+the session registry, requests current grants, and can rotate or re-mint an
+expired CLI credential once. A successful renewal rewrites the session file.
+
+There is no offline grant cache and no entitlement mutation. This command
+reports grants; it does not activate, purchase, revoke, or install a kit.
+
+## Output and streams
+
+Human stdout currently includes the account email followed by each
+`kit (status)` grant. Despite the command's kit-focused help, it uses the same
+view model as `ak whoami`.
+
+JSON also intentionally shares `kind=auth.whoami` rather than a distinct
+`auth.licenses` kind:
+
+```json
+{
+  "schema_version": 1,
+  "kind": "auth.whoami",
+  "data": {
+    "authenticated": true,
+    "email": "you@example.com",
+    "authMethod": "api_key",
+    "licenses": [
+      {"kitId":"engineer","status":"active","grantType":"license","productId":"engineer"}
+    ]
+  }
+}
+```
+
+When unauthenticated, optional account and license fields are omitted. Runtime,
+registry, and session errors use stderr and the shared JSON error envelope.
+Flag-parse errors can remain plain text.
+
+## Exit status
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | The query completed, including unauthenticated state or an empty grant list. | Inspect `data.authenticated` and the matching `licenses[].kitId` and `status`. |
+| `1` | The session store failed, registries mismatched, renewal failed, or the live grant request failed. | Reauthenticate against the intended registry, then retry. |
+| `2` | A flag could not be parsed. | Correct the invocation. |
+
+The command has no preview, apply, force, backup, or rollback. Credential
+renewal is its only possible local write.
+
+## Related commands and limitations
+
+- [Inspect the account and grants](./whoami)
+- [Log in](./login)
+- [Install a reviewed kit route](./kit-init)
+- [Complete `ak licenses` command facts](../cli/ak_licenses)
+- [Kit installation troubleshooting](../../troubleshooting/kit-installation)

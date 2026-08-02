@@ -1,0 +1,82 @@
+---
+title: ak data status
+description: Read the seven compiled derived-data retention defaults without opening the operational database.
+---
+
+Use `ak data status` to inspect the compiled default posture for every known
+derived data class. It is a policy inventory, not live database status or disk
+usage.
+
+## Usage
+
+```bash
+ak data status
+```
+
+The command has no command-specific flags and accepts no documented positional
+arguments. It does not prompt, read stdin, contact the network, or require
+authentication or entitlement.
+
+## Default posture
+
+The command always reports these seven classes:
+
+```text
+session_metrics
+skill_invocations
+ingestion_runs
+ingestion_failures
+change_log
+outbox
+content_shard
+```
+
+Each resolves to `mode=forever`, meaning no automatic deletion until an
+explicit positive fixed policy is evaluated. This command does not read stored
+policy rows, count records, inspect content shards, or verify that
+`operational.db` exists.
+
+## Output
+
+Human stdout is:
+
+```text
+classes=7 default=forever
+```
+
+JSON stdout is a raw array with one object per class:
+
+```text
+dataClass: exact class token
+mode: forever
+forecast.oneMonthBytes: 0
+forecast.threeMonthBytes: 0
+forecast.twelveMonthBytes: 0
+forecast.assumptions: linear-extrapolation caveat
+forecast.confidence: low
+forecast.policyMode: forever
+note: default is forever until an explicit fixed policy is set
+```
+
+The zero forecast comes from zero synthetic growth inputs, not measured disk
+usage. JSON is not wrapped in a versioned envelope and is not NDJSON.
+
+## Disk and exit behavior
+
+The command computes its result in memory. It does not create, open, migrate, or
+write `operational.db`, and it does not inspect or change the plaintext
+content-search directory.
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | All seven compiled class defaults were emitted. |
+| `1` | An internal policy-resolution or output-write error occurred. |
+| `2` | A shared flag value could not be parsed. |
+
+To evaluate one positive fixed window, use `ak data retention` without
+`--apply`. Do not interpret this status page as confirmation that a persisted
+custom policy is active.
+
+## Related commands
+
+- [CLI conventions](../cli-conventions)

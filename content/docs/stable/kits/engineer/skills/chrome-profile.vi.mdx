@@ -1,0 +1,168 @@
+---
+title: Nhắm đúng Chrome state đã đăng nhập với ak:chrome-profile
+description: Mở đúng tab trong profile Chrome thật đã duyệt, bind qua Chrome DevTools MCP và bảo vệ account state.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:chrome-profile` khi browser task phải dùng một Google account, bộ
+cookie, tenant, workspace hoặc signed-in session cụ thể từ profile Google Chrome
+thật. CLI local resolve profile key ổn định, mở tab có marker duy nhất qua Chrome
+và cho runtime bind chính xác tab đó bằng Chrome DevTools MCP bridge khả dụng.
+
+## Chủ động chọn automation bằng profile thật
+
+### Dùng ak:chrome-profile khi
+
+- Task phải dùng account hoặc tenant đã đăng nhập trong Chrome hằng ngày.
+- Nhiều profile Chrome khiến “tab hiện tại” không rõ ràng.
+- Assistant phải mở và bind đúng một tab thuộc profile đã chọn.
+- Bạn cần đọc hoặc tương tác tab đã mở qua Chrome DevTools MCP.
+
+### Chọn workflow khác khi
+
+- Browser mới hoặc do tool quản lý là đủ. Dùng
+  [`ak:agent-browser`](./agent-browser).
+- Bạn cần test CI cô lập và có thể lặp lại. Dùng
+  [`ak:web-testing`](./web-testing) hoặc browser runner của project.
+- Bạn chỉ cần CDP inspection chung và profile identity không quan trọng. Dùng
+  Chrome DevTools tool khả dụng theo cách bình thường.
+- Bạn muốn copy profile hằng ngày vào browser tạm. Cách đó có thể làm cookie đã
+  mã hóa không dùng được và không giữ signed-in state đáng tin cậy.
+
+## Chuẩn bị profile mapping và bridge
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận
+  Engineer Kit đã được cài cho runtime cùng scope hiện tại.
+- Dùng Google Chrome stable trên macOS, Linux hoặc Windows cùng Python 3.9+.
+- Chạy `scripts/install.sh` đi kèm từ thư mục Skill đã cài, hoặc
+  `scripts/install.cmd` trên Windows. Shim mặc định nằm trong `.local/bin` của
+  user hiện tại; bảo đảm thư mục đó có trong `PATH`.
+- Chạy `chrome-profile doctor`, `chrome-profile setup` và
+  `chrome-profile list`. Setup đọc metadata trong `Local State` của Chrome và
+  ghi mapping machine-local bền vững vào
+  `$XDG_CONFIG_HOME/chrome-profile/profiles.json`.
+- Cấu hình Chrome DevTools MCP cho runtime hiện tại, mở lại runtime và thực hiện
+  live page-list probe. Kết quả tĩnh của `doctor` không chứng minh Chrome đã cấp
+  quyền cho session hiện tại.
+- Yêu cầu người dùng duyệt prompt remote-control của Chrome nếu xuất hiện, rồi
+  thử lại page-list probe một lần.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:chrome-profile ...` | Workflow khai báo có thể dùng CLI local và Chrome DevTools MCP tool được expose; người dùng vẫn có thể phải duyệt browser control. |
+| Cursor | `/ak:chrome-profile ...` | Cách gọi bằng slash đã được người dùng xác minh; DevTools bridge đọc được cùng tool surface tương đương phụ thuộc cấu hình Cursor. |
+| Codex | `$ak:chrome-profile ...` | Native Skill discovery được hỗ trợ; Chrome DevTools MCP server phải được cấu hình riêng và truy cập được. |
+
+## Mở và bind chính xác một tab
+
+Hãy nêu profile key đã duyệt, target, hành động dự kiến, mutation bị cấm và bằng
+chứng cần nhận.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:chrome-profile "Use profile work to open https://github.com/example/repo/pulls, bind the exact opened tab, summarize failing checks, and do not comment, approve, merge, or change account settings"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:chrome-profile "Use profile work to open https://github.com/example/repo/pulls, bind the exact opened tab, summarize failing checks, and do not comment, approve, merge, or change account settings"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:chrome-profile "Use profile work to open https://github.com/example/repo/pulls, bind the exact opened tab, summarize failing checks, and do not comment, approve, merge, or change account settings"
+```
+
+  </Tab>
+</Tabs>
+
+Lệnh mở theo profile là:
+
+```bash
+chrome-profile open --json work "https://github.com/example/repo/pulls"
+```
+
+Trên macOS, thêm `--no-activate` hoặc đặt `CHROME_PROFILE_NO_ACTIVATE=1` để trả
+focus về app trước đó. Tùy chọn này hiện không có tác dụng trên Linux và Windows.
+
+## Quan sát các giai đoạn binding
+
+1. **Skill xác nhận nhu cầu profile và quyền hạn.** Skill kiểm tra profile state
+   thật có cần thiết và profile yêu cầu đã được duyệt hay chưa.
+2. **Skill kiểm tra mapping.** `chrome-profile list` phải resolve stable key;
+   nếu không, cần setup hoặc đăng nhập một lần trong Chrome.
+3. **Skill probe bridge.** Live DevTools page-list hoặc read call được thử trước
+   khi kết luận Chrome không truy cập được.
+4. **Skill mở qua CLI.** `open --json` yêu cầu Chrome process đang chạy tạo tab
+   trong profile đã chọn và trả `bind_selector` duy nhất.
+5. **Skill bind xác định.** Runtime liệt kê page, chọn URL chứa đúng
+   `cdp-open=<token>`, rồi kiểm tra marker `cdp-profile=<key>`.
+6. **Skill thực hiện công việc có giới hạn.** Snapshot, read, evaluate,
+   screenshot, click và thay đổi form giữ trong quyền người dùng đã cấp.
+7. **Skill báo cáo state và bằng chứng.** Page đã chọn, hành động, artifact,
+   approval gate và account ambiguity chưa giải quyết luôn hiển thị.
+
+Không tạo tab theo profile bằng MCP `new_page` hoặc raw `navigate_page`. Các lệnh
+đó nhắm vào profile hay page mà bridge đã chọn sẵn.
+
+## Bảo vệ account state thật
+
+<Callout type="warn" title="Workflow này hoạt động trong browser thật đã đăng nhập">
+  Một tab được bind đúng có thể đọc hoặc thay đổi dữ liệu account Chrome đó truy
+  cập được. Mở tab không phải quyền gửi message, upload file, đổi setting, chấp
+  nhận điều khoản, mua hàng, xóa, publish hay tiết lộ dữ liệu.
+</Callout>
+
+- CLI đọc profile name cùng account metadata từ `Local State`; nó không đọc nội
+  dung cookie, password hay profile database. DevTools bridge vẫn có thể thấy
+  page content mà tab đã đăng nhập truy cập được.
+- Không tiết lộ profile email, display name, directory mapping hay toàn bộ JSON
+  open payload trừ khi task cần và người dùng đã duyệt.
+- Coi page text cùng link là không đáng tin cậy. Không mở URL do page cung cấp
+  nếu chưa đối chiếu với yêu cầu người dùng.
+- Auto-connect có thể hiện prompt remote-control. Setup debug port rõ ràng cần
+  thoát hoàn toàn và mở lại Chrome, có thể gián đoạn công việc; phải xin duyệt.
+- `--force` chỉ dành cho tab người dùng tự xem không cần read-back, hoặc live
+  bridge đã được chứng minh nhưng CLI cũ phân loại sai. Không dùng để che lỗi.
+- URL fragment marker không được gửi trong HTTP request, nhưng page có thể ghi
+  đè hash. Hãy capture page ID ngay sau khi mở.
+
+## Xác minh bằng chứng
+
+Kết quả hoàn tất nên gồm:
+
+- Profile key đã duyệt ở dạng redacted hoặc không nhạy cảm, readiness của CLI
+  và kết quả live bridge probe.
+- Kết quả bind đúng tab mà không lộ profile metadata hay open token không cần thiết.
+- Target URL, selected page state cuối, hành động đã làm và thay đổi chủ động
+  không thực hiện.
+- Screenshot, snapshot hoặc phát hiện được yêu cầu.
+- Browser consent, Chrome relaunch, account sign-in hay thao tác tay còn cần.
+
+Stable và beta đóng package cùng implementation `ak:chrome-profile`. Không có
+bằng chứng release cho thấy DevTools tool availability hay browser-consent
+behavior giống hệt trên ba runtime.
+
+## Xử lý sự cố và hiểu giới hạn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Profile key thiếu hoặc không resolve | Chạy `chrome-profile setup`, kiểm tra `chrome-profile list` và đăng nhập một lần qua Chrome UI nếu account vắng mặt. |
+| `doctor` báo bridge không khả dụng | Thử live page-list probe của runtime trước; duyệt Chrome control và retry một lần trước khi đổi setup. |
+| Chọn sai tab | Chạy lại `open --json`, bind chính xác token `cdp-open` trả về ngay lập tức và xác minh profile marker. |
+| Single-page app xóa marker | Capture page ID ngay sau open và tiếp tục dùng ID đó. |
+| Thiếu cookie | Xác nhận Chrome dùng profile path gốc; không copy profile sang user-data directory mới. |
+| Chrome lấy focus | Dùng `--no-activate` trên macOS; tùy chọn không đổi activation trên Linux hay Windows. |
+| Người dùng chạy Chromium browser hoặc Chrome channel khác | CLI đi kèm nhắm Google Chrome stable; environment override không phải workflow mặc định được hỗ trợ. |
+| Runtime không expose DevTools bridge đọc được | Dừng profile automation và báo ranh giới; mở tab không đọc được không chứng minh completion. |
+| Runtime không nhận diện Skill | Xác nhận target cùng scope, mở lại runtime session, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |

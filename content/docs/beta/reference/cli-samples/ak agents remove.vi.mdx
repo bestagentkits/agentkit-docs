@@ -1,0 +1,77 @@
+---
+title: ak agents remove
+description: Xoá đúng một tệp agent khỏi user plugin root và hiểu rõ giới hạn ownership không có backup.
+---
+
+Dùng `ak agents remove` để xoá một bản sao agent khỏi user plugin root đã cấu
+hình. Lệnh không uninstall Kit chứa nó và không xoá tệp agent khỏi catalog
+source cục bộ.
+
+## Cách dùng
+
+```bash
+ak agents remove <kit>/<agent>
+```
+
+Phải có đúng một ref chuẩn. Các dạng `ak:<agent>`, `ake:<agent>` và
+`akm:<agent>` lần lượt mở rộng thành `core`, `engineer` và `marketing`. Ref sai
+dạng hoặc có traversal bị từ chối.
+
+Không có cờ riêng cho lệnh. Lệnh không prompt; `--yes` và stdin không thay đổi
+thao tác.
+
+## Tác động chính xác
+
+Với `engineer/researcher`, target duy nhất là:
+
+```text
+~/.claude/plugins/engineer/agents/researcher.md
+```
+
+`AGENTKIT_PLUGIN_DIR` thay root. Lệnh xoá tệp nếu tồn tại, nhưng giữ parent
+directory, agent cùng cấp, source dưới `./kits`, runtime environment, cache và
+Kit khác.
+
+Remove là idempotent: path vắng mặt hoặc directory tại đúng path đó được báo là
+not installed và thoát `0`.
+
+## Giới hạn ownership và recovery
+
+Remover không đọc ownership manifest của Kit hoặc project, không so sánh
+content hash, phát hiện chỉnh sửa của user, tạo recovery snapshot hay hỏi xác
+nhận. Mọi regular file tại destination đã resolve đều được xem là agent
+installed và bị xoá.
+
+Hãy tự backup tệp trước khi remove nếu có chỉnh sửa. Nếu source cục bộ tương
+ứng vẫn available, `ak agents install <kit>/<agent>` có thể sao chép lại source,
+nhưng không thể khôi phục chỉnh sửa chỉ có trong tệp đã xoá.
+
+## Đầu ra
+
+Đầu ra thành công cho người dùng trên stdout phân biệt `removed` và
+`nothing to remove`. JSON thành công dùng:
+
+```text
+schema_version: 1
+kind: assets.remove
+data.ref, data.kit, data.asset
+data.removed: boolean
+data.not_installed: boolean
+```
+
+Lỗi vào stderr. Không có preview, dry-run, force, backup, NDJSON hay hoạt động
+mạng.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Tệp đã được xoá hoặc vốn đã vắng mặt. |
+| `1` | Xoá thất bại hoặc sai số lượng argument theo vị trí. |
+| `2` | Ref sai dạng hoặc không phân tích được cờ. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak agents remove`](../cli/ak_agents_remove)
+- [Liệt kê trạng thái agent](../cli/ak_agents_list)
+- [Gỡ một route Kit hoàn chỉnh](../cli/ak_kit_uninstall)

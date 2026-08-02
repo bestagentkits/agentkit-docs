@@ -1,0 +1,56 @@
+---
+title: ak watch status
+description: Đọc watcher state, post count, rate limit, PID metadata và log path đã lưu mà không gọi network.
+---
+
+Dùng `ak watch status` để kiểm tra watch record cục bộ. Nó báo state đã lưu,
+không tự xác minh process còn sống.
+
+## Cách dùng
+
+```bash
+ak watch status [owner/repo]
+```
+
+Lệnh không có cờ riêng và không hỏi xác nhận.
+
+## Phạm vi và hành vi
+
+```bash
+ak watch status
+ak watch status owner/repo
+ak watch status --json
+```
+
+Không có argument, lệnh duyệt `~/.agentkit/watch/*/state.json`. Không có state
+là kết quả rỗng thành công. State file hỏng hoặc không đọc được bị bỏ qua im
+lặng trong view toàn repository. Khi truyền `owner/repo`, state thiếu, hỏng hoặc
+không được hỗ trợ là lỗi.
+
+Lệnh cũng đọc các trường tuỳ chọn từ `cli-meta.json` như PID, filter, agent và
+log path. Nó không gọi GitHub, signal process, ghi state/cache hoặc gọi provider.
+
+Row `active: true` không chứng minh PID tồn tại hay watcher còn sống vì lệnh
+không kiểm tra liveness. Ngược lại, xoá active bằng `ak watch stop` không dừng
+loop đang chạy. Khi cần kiểm soát mutation bên ngoài, hãy xác minh PID bằng công
+cụ process của hệ điều hành.
+
+## Output và mã thoát
+
+Human stdout hiển thị running state, repository, label, agent, sent count,
+hourly ceiling, lần poll cuối, PID và log path nếu có. JSON stdout dùng
+`kind=watch.status` với `data.watches[]`; timestamp là giá trị time có cấu trúc.
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Render status hoàn tất, gồm không có watch hoặc bỏ qua entry hỏng trong all view. |
+| `1` | Không đọc được watch root, hoặc state repository yêu cầu bị thiếu/sai. |
+| `2` | Truyền hơn một argument hoặc cờ không hợp lệ. |
+
+Lệnh không có preview, apply, force, backup hoặc recovery vì không mutate state.
+
+## Lệnh liên quan
+
+- [Bắt đầu watcher](./watch-start)
+- [Đặt state thành inactive](./watch-stop)
+- [Thông tin đầy đủ của lệnh `ak watch status`](../cli/ak_watch_status)

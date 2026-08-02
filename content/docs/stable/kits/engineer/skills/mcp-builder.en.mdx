@@ -1,0 +1,146 @@
+---
+title: Build an MCP server with ak:mcp-builder
+description: Research an external API, design agent-centered tools, implement a server, and verify it with ak:mcp-builder.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:mcp-builder` to turn an external service or API into an MCP server whose
+tools support complete agent workflows. The Skill guides research, tool and
+schema design, Python or TypeScript implementation, build checks, and a
+read-only evaluation suite.
+
+## Choose ak:mcp-builder for a new tool surface
+
+### Use ak:mcp-builder when
+
+- You are creating a new MCP server or extending its tool or resource surface.
+- An API needs agent-friendly workflows rather than one wrapper per endpoint.
+- You need bounded responses, pagination, actionable errors, and accurate tool
+  effect annotations.
+- You want realistic evaluations that test whether an LLM can use the server.
+
+### Choose another workflow when
+
+- The server already exists and you only need discovery or execution. Use
+  [`ak:use-mcp`](./use-mcp).
+- You need to expose an existing codebase through a CLI or MCP surface. Consider
+  `ak:agentize` before starting a new integration.
+- You lack official API documentation, test access, or a safe way to verify
+  authentication and rate limits. Resolve those prerequisites first.
+
+## Prepare the integration
+
+Provide the service or API, intended user workflows, preferred implementation
+language, transport, authentication model, permissions, rate limits, expected
+data volume, and allowed external effects. Expect network research against the
+current MCP specification, SDK documentation, and the service's complete API
+documentation.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:mcp-builder ...` | Uses the web, file, shell, and project tools available in the Claude session. |
+| Cursor | `/ak:mcp-builder ...` | Slash invocation can load the projected guidance; exact research, process, and testing tools depend on the Cursor session. |
+| Codex | `$ak:mcp-builder ...` | Uses native Skill discovery and the Codex session's available web, shell, and MCP capabilities. |
+
+## Run the Skill
+
+The Skill accepts the service or API to integrate and defines no mode flags.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:mcp-builder "Build a TypeScript MCP server for the Acme tickets API with read-only search first, cursor pagination, and stdio transport"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:mcp-builder "Build a TypeScript MCP server for the Acme tickets API with read-only search first, cursor pagination, and stdio transport"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:mcp-builder "Build a TypeScript MCP server for the Acme tickets API with read-only search first, cursor pagination, and stdio transport"
+```
+
+  </Tab>
+</Tabs>
+
+Python implementations use FastMCP, Pydantic validation, type hints, and async
+I/O. TypeScript implementations use the MCP SDK, strict TypeScript, Zod schemas,
+explicit descriptions, and a build that emits runnable JavaScript. Stdio fits
+local subprocess use; remote HTTP or SSE needs separate server lifecycle,
+network security, and deployment decisions.
+
+## Understand the build stages
+
+1. **Research the protocol and service.** Read current official MCP and SDK
+   guidance plus authentication, endpoints, schemas, pagination, errors, and
+   rate limits for the target API.
+2. **Plan agent workflows.** Select high-value tasks, shared API utilities,
+   response formats, truncation behavior, and failure handling.
+3. **Implement infrastructure and tools.** Centralize authentication, requests,
+   pagination, formatting, cleanup, and input validation before adding tools.
+4. **Annotate effects accurately.** Set read-only, destructive, idempotent, and
+   open-world hints from behavior, while treating them as UX hints rather than
+   security enforcement.
+5. **Build and test.** Compile or type-check, verify imports, exercise sample
+   calls through a client, and avoid launching a long-running stdio server as a
+   blocking foreground command.
+6. **Create evaluations.** Produce ten independent, stable, complex questions
+   solvable with read-only, non-destructive operations, verify their answers,
+   and run the harness when authorized.
+
+## Keep credentials, costs, and writes controlled
+
+<Callout type="warn" title="Research and evaluation can reach external systems">
+  Obtain approval before using credentials, calling live or chargeable APIs,
+  creating remote resources, running mutating tools, deploying a remote server,
+  or sending project data to an evaluation model. Tool annotations never replace
+  authorization checks.
+</Callout>
+
+Package installation writes dependencies to disk and can download from package
+registries. API research and integration tests use network access. The bundled
+evaluation harness requires `ANTHROPIC_API_KEY`, calls a selected Claude model
+for every question and tool turn, connects to the target MCP server, and can
+therefore consume model tokens, API quotas, time, and provider charges. Keep
+evaluation tasks read-only and use safe fixtures where possible.
+
+## Verify outputs and evidence
+
+A complete implementation should provide:
+
+- Server code, dependency and compiler configuration, and a documented startup path.
+- Focused workflow tools with strict schemas, descriptions, examples, and
+  accurate effect annotations.
+- Shared request, pagination, formatting, timeout, error, and cleanup utilities.
+- Build or syntax-check results plus client-observed sample calls.
+- Ten verified evaluation pairs in XML when evaluation scope is requested.
+- An optional Markdown evaluation report with accuracy, duration, tool-call
+  counts, per-task answers, summaries, and tool feedback.
+- Remaining authentication, rate-limit, deployment, or permission risks.
+
+Do not treat a server process merely waiting on stdio as a successful test.
+Verify it through a managed client or evaluation harness and confirm cleanup.
+
+## Troubleshoot and limits
+
+| Symptom | Safe next step |
+| --- | --- |
+| The server appears to hang | It may be correctly waiting for protocol input; stop the foreground run and test through a managed client or bounded timeout. |
+| Responses overwhelm context | Add filtering, pagination, reasonable defaults, a character limit, and explicit truncation guidance. |
+| A tool fails authentication | Verify credential presence and audience without printing secrets; do not bypass authorization. |
+| Evaluation accuracy is low | Inspect tool names, schemas, descriptions, errors, pagination, and the per-task feedback before adding more tools. |
+| Remote transport fails | Confirm the separately running server, URL, headers, certificates, and network access. |
+
+The Skill is guidance, not a fixed generator: exact project files depend on the
+chosen language, API, and existing repository. Live documentation can evolve,
+so implementation details must be verified during the run. The two release
+snapshots used for this page contain the same builder workflow and harness.

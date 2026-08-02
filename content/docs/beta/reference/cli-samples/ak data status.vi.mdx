@@ -1,0 +1,80 @@
+---
+title: ak data status
+description: Đọc bảy mặc định retention đã compile của dữ liệu dẫn xuất mà không mở operational database.
+---
+
+Dùng `ak data status` để kiểm tra tư thế mặc định đã compile cho mọi derived data
+class đã biết. Đây là inventory policy, không phải trạng thái database trực tiếp
+hay mức dùng đĩa.
+
+## Cách dùng
+
+```bash
+ak data status
+```
+
+Lệnh không có cờ riêng và không nhận đối số theo vị trí trong cú pháp được công
+bố. Nó không prompt, đọc stdin, gọi network hay yêu cầu xác thực/entitlement.
+
+## Tư thế mặc định
+
+Lệnh luôn báo bảy class:
+
+```text
+session_metrics
+skill_invocations
+ingestion_runs
+ingestion_failures
+change_log
+outbox
+content_shard
+```
+
+Mỗi class phân giải thành `mode=forever`, nghĩa là không tự động xoá cho tới khi
+đánh giá một fixed policy dương. Lệnh không đọc policy row đã lưu, đếm record,
+kiểm tra content shard hay xác minh `operational.db` tồn tại.
+
+## Đầu ra
+
+Human stdout là:
+
+```text
+classes=7 default=forever
+```
+
+JSON stdout là array thô, mỗi class có một object:
+
+```text
+dataClass: token class chính xác
+mode: forever
+forecast.oneMonthBytes: 0
+forecast.threeMonthBytes: 0
+forecast.twelveMonthBytes: 0
+forecast.assumptions: lưu ý linear extrapolation
+forecast.confidence: low
+forecast.policyMode: forever
+note: default is forever until an explicit fixed policy is set
+```
+
+Forecast bằng zero đến từ input tăng trưởng giả lập bằng zero, không phải mức
+dùng đĩa đã đo. JSON không có envelope phiên bản và không phải NDJSON.
+
+## Tác động lên đĩa và mã thoát
+
+Lệnh tính kết quả trong bộ nhớ. Nó không tạo, mở, migrate hay ghi
+`operational.db`, cũng không kiểm tra hoặc thay đổi thư mục content-search
+plaintext.
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Mặc định của cả bảy class đã được phát. |
+| `1` | Lỗi phân giải policy nội bộ hoặc ghi đầu ra. |
+| `2` | Giá trị cờ dùng chung không phân tích được. |
+
+Để đánh giá một fixed window dương, dùng `ak data retention` mà không có
+`--apply`. Không xem trang status này là xác nhận một custom policy persisted
+đang hoạt động.
+
+## Lệnh liên quan
+
+- [Quy ước CLI](../cli-conventions)

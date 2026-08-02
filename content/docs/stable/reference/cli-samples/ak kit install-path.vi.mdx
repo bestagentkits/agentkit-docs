@@ -1,0 +1,117 @@
+---
+title: ak kit install-path
+description: Resolve lexical path của Claude Code plugin cấp user cho một Kit mà không cài đặt.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak kit install-path` để kiểm tra path của route Claude Code plugin cấp
+user. Lệnh tính và validate path; không cài, tải hoặc xác minh Kit.
+
+## Cách dùng
+
+```bash
+ak kit install-path <kit-name>
+```
+
+Phải có chính xác một argument theo vị trí. Lệnh không có cờ riêng. Các cờ đầu
+ra dùng chung nằm trong [quy ước CLI](../cli-conventions).
+
+## Hiểu path đại diện cho điều gì
+
+Khi không có override, kết quả là:
+
+| Nền tảng | Kết quả cho `engineer` |
+| --- | --- |
+| macOS/Linux | `$HOME/.claude/plugins/ak-engineer` |
+| Windows | `%USERPROFILE%\.claude\plugins\ak-engineer` |
+
+Prefix `ak-` được thêm vào tên Kit dành cho người dùng.
+
+Đây chỉ là đích Claude Code plugin của user. Nó không phải path cho:
+
+- Claude plugin ở project scope;
+- Claude native delivery;
+- đầu ra Codex hoặc Cursor;
+- metadata vòng đời AgentKit; hoặc
+- thư mục build/export.
+
+Với các route đó, hãy xem preview của lệnh cài.
+
+## Hành vi override và validation
+
+Nếu đặt `AGENTKIT_PLUGIN_DIR`, giá trị này thay plugin root và phải là absolute
+path. Resolver:
+
+- từ chối override tương đối và drive-relative;
+- từ chối override chứa path component `..`;
+- từ chối override đã tồn tại nếu chính nó là symlink hoặc junction;
+- từ chối root đã tồn tại nhưng không phải thư mục;
+- resolve link ở ancestor đã tồn tại để validation; và
+- trả về lexical override đã clean cộng `ak-<kit-name>`.
+
+Root chưa cần tồn tại nếu có ancestor hợp lệ đã tồn tại. Lệnh chỉ kiểm tra
+filesystem metadata của root hoặc ancestor; không tạo thư mục.
+
+<Callout type="warning">
+  Lệnh không validate argument bằng kit ID trong registry và không kiểm tra Kit
+  có tồn tại. Hãy truyền cùng canonical kit ID bạn sẽ dùng với `ak kit init`;
+  đừng xem input tuỳ ý là path đáng tin cậy.
+</Callout>
+
+## Tác động mạng và đĩa
+
+Lệnh không dùng mạng, xác thực, entitlement, provider, cache, tiến trình ngoài,
+stdin hoặc xác nhận. Lệnh đọc filesystem metadata cần cho validation plugin root
+và không ghi gì.
+
+## Chế độ đầu ra
+
+Trên TTY tương tác có hỗ trợ màu, stdout human có nhãn:
+
+```text
+engineer install path: /home/you/.claude/plugins/ak-engineer
+```
+
+Trong pipe, CI, `NO_COLOR` hoặc chế độ `--no-interactive`, stdout chỉ là raw path
+kèm một newline. Sau khi thoát thành công, có thể dùng an toàn trong command
+substitution:
+
+```bash
+plugin_path="$(ak kit install-path engineer --no-interactive)"
+```
+
+`--quiet` ẩn đầu ra human thành công. `--json` ưu tiên hơn `--quiet` và tạo:
+
+```json
+{
+  "schema_version": 1,
+  "kind": "kit.install_path",
+  "data": {
+    "kit": "engineer",
+    "path": "/home/you/.claude/plugins/ak-engineer"
+  }
+}
+```
+
+Trong chế độ JSON, lỗi resolve path dùng shared JSON error envelope trên stderr.
+Argument theo vị trí bị thiếu hoặc thừa thất bại trước khi renderer được tạo nên
+không nhận envelope đó. Lỗi parse cờ cũng vẫn dùng đường lỗi plain toàn CLI.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Path đã được resolve và render. | Chỉ dùng nó cho user Claude plugin route. |
+| `1` | Số lượng/tên argument hoặc quá trình resolve plugin root thất bại. | Cung cấp một canonical kit ID và sửa home hoặc override path. |
+| `2` | Không parse được cờ. | Sửa cách gọi. |
+
+Lệnh không có chu trình preview/apply/force/backup/rollback vì không thay đổi
+trạng thái.
+
+## Lệnh liên quan
+
+- [Tổng quan lệnh Kit](../cli/ak_kit)
+- [Cài/build Kit an toàn](./kit-init)
+- [Thông tin đầy đủ của `ak kit install-path`](../cli/ak_kit_install-path)
+- [Thông tin đầy đủ của `ak kit init`](../cli/ak_kit_init)

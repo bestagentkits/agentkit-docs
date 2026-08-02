@@ -1,0 +1,65 @@
+---
+title: ak plan phase close
+description: Hoàn tất một phase do tệp sở hữu, chiếu lại vào index cục bộ và xử lý an toàn lỗi một phần giữa tệp và store.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak plan phase close` khi plan đã được theo dõi trong plan store cục bộ và
+bạn muốn tệp phase chuẩn ghi nhận việc hoàn tất.
+
+## Cách dùng
+
+```bash
+ak plan phase close <plan-id> <n>
+```
+
+`<n>` phải là số nguyên dương. Plan phải có thư mục liên kết và thư mục đó phải
+có đúng một tệp `phase-NN-*.md` mang số được yêu cầu. Lệnh không dùng current-plan
+pointer và không suy ra plan từ branch hiện tại.
+
+Lệnh không có cờ riêng. Xem các cờ dùng chung trong
+[quy ước CLI](../cli-conventions).
+
+## Ownership của tệp và index
+
+Trạng thái hoàn tất phase do tệp sở hữu:
+
+- Nếu phase có checkbox, mọi `- [ ]` còn lại được đổi thành `- [x]` bằng thao
+  tác thay tệp atomic.
+- Nếu không có checkbox, lệnh ghi `status: done` vào front matter đầu tệp.
+  Front matter thiếu hoặc chưa đóng sẽ gây lỗi.
+- Sau khi ghi tệp, AgentKit chiếu lại thư mục plan vào SQLite plan store để lần
+  `ak plan reindex` sau vẫn giữ kết quả.
+
+Khi có checkbox thay đổi, chế độ không quiet ghi số checkbox vừa hoàn tất vào
+stderr.
+
+<Callout type="warning">
+  Tệp được ghi trước khi index refresh. Nếu không mở hoặc refresh được store,
+  lệnh có thể thoát `1` dù tệp phase đã hoàn tất. Hãy kiểm tra tệp trước khi
+  thử lại; tệp là nguồn chuẩn và thao tác checkbox có tính idempotent.
+</Callout>
+
+Lệnh chỉ hoạt động cục bộ, không dùng mạng, xác thực, provider, stdin hay TTY
+prompt. Không có preview, force, xác nhận, snapshot hoặc rollback tự động. Việc
+mở store có thể tạo hoặc forward-migrate `$AGENTKIT_HOME/plans/plans.db`.
+
+## Đầu ra
+
+Kết quả human/plain ghi ra stdout. JSON thành công dùng
+`kind=plan.phase-close`; `data` gồm `plan_id`, `n`, `title`, `status` và `rev`.
+Warning và ghi chú checkbox dùng stderr. Lỗi runtime JSON dùng error envelope
+chung; lỗi parse cờ có thể vẫn là plain text.
+
+## Kết quả, mã thoát và khôi phục
+
+| Mã | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Tệp phase đã hoàn tất và lệnh đọc lại được phase trong index. | Xác minh tệp và `data.status=done`. |
+| `1` | Không có plan, thư mục liên kết, tệp phase hay store; hoặc thao tác tệp/store lỗi. Tệp có thể đã đổi. | Kiểm tra tệp, sửa quyền store rồi chạy `ak plan reindex --apply` nếu cần. |
+| `2` | Số argument hoặc số phase không hợp lệ. | Truyền một plan ID và số phase dương. |
+
+## Lệnh liên quan
+
+- [Đánh dấu tệp phase là todo](../cli/ak_plan_uncheck)

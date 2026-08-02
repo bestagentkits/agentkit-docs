@@ -1,0 +1,205 @@
+---
+title: Preserve technical history with ak:journal
+description: Turn a meaningful session into a concise chronological record, persist it safely under plans/journals, and keep current authority in docs or ADRs.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:journal` to preserve what happened during meaningful implementation,
+review, incident, or repair work. The Skill extracts the root cause, changes,
+impacts, decisions, and next steps, then persists one collision-safe Markdown
+entry through the `ak journal` CLI without opening an editor.
+
+## Choose ak:journal for chronological work history
+
+### Use ak:journal when
+
+- A session contains technical decisions, failed approaches, or recovery steps
+  worth preserving.
+- A bug repair or incident needs a concise record of cause, evidence, and
+  prevention.
+- Shipped or reviewed work needs a handoff-oriented timeline and next steps.
+- You want a local project record that can be listed, shown, and validated by
+  the CLI.
+
+### Choose another workflow when
+
+- You need current setup, behavior, architecture, or operational guidance.
+  Update the owning docs or ADR instead.
+- You need a project status snapshot rather than a chronological narrative. Use
+  `ak:project-management`.
+- You need to diagnose, implement, test, or review the work itself. Use the
+  corresponding Engineer workflow before journaling it.
+- You want to publish or share the entry externally. That action is not part of
+  this Skill.
+
+## Prepare the entry and project
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Engineer Kit and the `ak` CLI are available for the runtime and scope you are
+  using.
+- Open the project whose `plans/journals/` directory should own the entry, or
+  know its registered project name.
+- Gather concrete errors, relevant paths, outcomes, decisions, and remaining
+  work from the current session.
+- Remove secrets, credentials, private payloads, or unnecessary personal data
+  from the material to be recorded.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:journal ...` | Native delivery is the default; explicit plugin delivery is also supported. |
+| Cursor | `/ak:journal ...` | Slash invocation is user-verified. This does not establish full runtime parity. |
+| Codex | `$ak:journal ...` | The Skill uses native Codex discovery; persistence still runs through the local `ak journal` CLI. |
+
+## Describe the reflection
+
+The Skill accepts a topic or reflection. It has no published mode flag.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:journal "Record today's session-cache repair: duplicate invalidation root cause, rejected timer workaround, affected API behavior, regression evidence, and follow-up monitoring."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:journal "Record today's session-cache repair: duplicate invalidation root cause, rejected timer workaround, affected API behavior, regression evidence, and follow-up monitoring."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:journal "Record today's session-cache repair: duplicate invalidation root cause, rejected timer workaround, affected API behavior, regression evidence, and follow-up monitoring."
+```
+
+  </Tab>
+</Tabs>
+
+The Skill drafts a short title, one-line summary, and Markdown body, then uses
+the scriptable CLI form:
+
+```bash
+ak journal create "Fix duplicate session invalidation" \
+  --summary "Root cause, repair, verification, and follow-up" \
+  --stdin <<'EOF'
+## What happened
+...
+
+## Decision
+...
+
+## Next steps
+...
+EOF
+```
+
+| CLI option | Behavior |
+| --- | --- |
+| `--summary <text>` | Stores a short summary in frontmatter; when no body is supplied, the summary also becomes the body |
+| `--stdin` | Reads the Markdown body from standard input, so no `$EDITOR` is required |
+| `--date YYYY-MM-DD` | Overrides the default entry date; the default is today in UTC |
+| `--project <registered-name>` | Selects a registered project instead of resolving the current working directory |
+
+If neither body nor summary is supplied, the CLI writes a visible placeholder
+instead of an empty entry.
+
+## Understand what happens during a run
+
+1. **The Skill gathers the session history.** It selects the important root
+   cause, changes, impacts, decisions, failed directions, evidence, and next
+   steps.
+2. **The Skill drafts a concise record.** Concrete errors, paths, and outcomes
+   take priority over vague reflection. The entry distinguishes what happened
+   from what is currently authoritative.
+3. **The Skill resolves the project.** An explicit registered project wins;
+   otherwise the CLI matches the current directory to a registered project and
+   falls back to the current directory for local creation.
+4. **The Skill persists atomically.** The CLI creates `plans/journals/` when
+   needed, writes a temporary file, and renames it into one new Markdown entry.
+   Existing entries are never overwritten.
+5. **The Skill validates when needed.** `ak journal validate` checks readable
+   Markdown, title, date, and file extension. Validation is read-only.
+6. **The Skill reports the local result.** It returns the created path and notes
+   that external publishing was skipped.
+
+Created files use `YYYY-MM-DD-<slug>.md`. If the same date and title already
+exist, the CLI adds `-2`, `-3`, and later collision suffixes. Titles that cannot
+produce an ASCII slug fall back to `journal`.
+
+## Keep historical records in their role
+
+<Callout type="warn" title="A journal is not durable authority">
+  Journals record what happened. They do not replace current product docs,
+  specifications, runbooks, or architecture decision records. Put lasting
+  decisions in the owning authority surface and link the history when useful.
+</Callout>
+
+- Creation writes one new local Markdown file and never overwrites an existing
+  journal.
+- Filename allocation and path resolution reject traversal outside the journal
+  directory for ID-based operations.
+- `list`, `show`, and `validate` are read-only. Creation is the only required
+  disk mutation.
+- AgentWiki publishing is deferred. The Skill reports
+  `AgentWiki publish skipped` and keeps the local file as the source of truth.
+- No network provider, credential, or paid service is required by the defined
+  workflow.
+- Commit, push, publication, upload, or sharing of the journal needs separate
+  approval.
+
+## Verify the result
+
+A complete run should give you:
+
+- One created path under the selected project's `plans/journals/` directory.
+- Frontmatter with title, date, and the supplied summary.
+- A concise body covering what happened, the decision, and next steps.
+- A collision-safe filename and no modified older entry.
+- Successful validation when validation was requested.
+- An explicit note that AgentWiki publishing was skipped.
+
+You can inspect the local history with:
+
+```bash
+ak journal list
+ak journal list --query session --json
+ak journal show 2026-08-02-fix-duplicate-session-invalidation
+ak journal validate 2026-08-02-fix-duplicate-session-invalidation
+```
+
+`list` returns newest entries first and can filter by inclusive date range or
+title, summary, slug, and project text.
+
+## Troubleshoot or continue
+
+| Symptom | Safe next step |
+| --- | --- |
+| `ak` is unavailable | Install or expose the CLI before retrying; the Skill's persistence contract requires `ak journal create`. |
+| The wrong project is selected | Run from the intended project or pass its registered name with `--project`. |
+| The date is rejected | Use an exact `YYYY-MM-DD` value; omitted dates default to today in UTC. |
+| A slug matches several entries | Use the full filename stem or `.md` filename to identify one entry. |
+| Validation exits with failure | Fix the missing title, invalid date, unreadable file, or non-Markdown extension; validation failure uses exit code 3. |
+| A duplicate title creates another file | This is intentional collision protection. Review the suffixed entry instead of overwriting history. |
+| The journal contains a lasting decision | Update the owning docs, specification, runbook, or ADR and keep the journal as history. |
+| The runtime does not recognize the Skill | Confirm target and scope, restart the runtime session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Use `ak:project-management` when the next step is current status and plan
+sync-back. `ak:journal` is a terminal workflow for the recorded session.
+
+## Know the current limits
+
+- The entry is only as accurate as the session evidence supplied and reviewed.
+- Automatic slugging keeps ASCII letters and digits; other titles may use the
+  fallback slug.
+- Browse and show operations depend on project registry resolution; use the
+  registered project name when current-directory matching is insufficient.
+- Cursor slash invocation is user-verified evidence, not proof of full runtime
+  parity.
+- Stable and beta package the same `ak:journal` workflow and CLI behavior.

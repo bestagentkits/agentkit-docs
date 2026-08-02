@@ -1,0 +1,192 @@
+---
+title: Generate governed audio with ak:elevenlabs
+description: Create speech, an authorized instant voice clone, or a sound effect through ElevenLabs while reviewing consent, account changes, provider cost, and audio files.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:elevenlabs` for three direct audio actions: turn text into speech, create
+an authorized instant voice clone, or generate a sound effect. The Skill uses
+the ElevenLabs API and bundled Python helpers, so a run can create local audio,
+consume provider quota, and, for cloning, add a persistent voice to the
+connected ElevenLabs account.
+
+## Choose a bounded audio action
+
+### Use ak:elevenlabs when
+
+- You need text-to-speech from supplied text or a local text file.
+- You have explicit authority to create an instant voice clone from clean audio
+  samples.
+- You need a described sound effect of up to 30 seconds.
+- You can review pronunciation, identity, audio quality, rights, provider cost,
+  and the intended distribution before using the result.
+
+### Choose another workflow when
+
+- You need a complete video production with scripts, storyboards, mixing, and
+  exports. Use `ak:video`.
+- You need audio editing, normalization, transcoding, or mixing without an
+  ElevenLabs generation request. Use an approved media-processing workflow.
+- You want to clone a person without their informed consent or authorization.
+- You need a conversational agent or music-composition integration. Those
+  topics exist in the packaged knowledge base, but the direct invocation hint
+  exposes `speak`, `clone`, and `sfx` rather than a dedicated route for them.
+
+## Prepare the provider and source material
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Marketing Kit is installed for the current runtime and scope.
+- Install Python and the packaged requirement `elevenlabs>=1.0.0` in the
+  approved environment.
+- Make `ELEVENLABS_API_KEY` available through the approved secret mechanism and
+  allow outbound requests to ElevenLabs.
+- Confirm the account has the required feature access, quota, billing, and
+  licensing for the selected operation.
+- For speech, supply approved text or a local text-file path and an output path.
+- For cloning, supply a voice name and one or more authorized audio files. The
+  helper accepts MP3, WAV, M4A, OGG, FLAC, and WebM paths and recommends one to
+  two minutes of clear source audio.
+- For sound effects, provide a descriptive prompt and an optional duration no
+  greater than 30 seconds.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:elevenlabs ...` | Native delivery is the default; explicit plugin delivery is also supported. The provider key and account remain external requirements. |
+| Cursor | `/ak:elevenlabs ...` | Slash invocation is user-verified. Audio preview and supporting tool behavior can vary by setup. |
+| Codex | `$ak:elevenlabs ...` | The Skill uses native Codex discovery. Partial Hook projection does not change provider, consent, or billing boundaries. |
+
+See [Runtime adapters](../../../concepts/runtime-adapters) for broader delivery
+differences.
+
+## Run the Skill
+
+Name one direct action and state the output boundary. This speech example asks
+for a local draft only.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:elevenlabs speak "Your data stays under your control." Use the approved Rachel voice, model eleven_multilingual_v2, save to assets/audio/privacy-intro.mp3, review pronunciation, and do not publish
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:elevenlabs speak "Your data stays under your control." Use the approved Rachel voice, model eleven_multilingual_v2, save to assets/audio/privacy-intro.mp3, review pronunciation, and do not publish
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:elevenlabs speak "Your data stays under your control." Use the approved Rachel voice, model eleven_multilingual_v2, save to assets/audio/privacy-intro.mp3, review pronunciation, and do not publish
+```
+
+  </Tab>
+</Tabs>
+
+### Understand the direct actions and helper controls
+
+| Action | Input | Important helper controls | Effect |
+| --- | --- | --- | --- |
+| `speak` | Text or a file | `-f`/`--file`, `-o`/`--output`, `-v`/`--voice`, `-m`/`--model`, `--stability`, `--similarity`, `--speed`, `--stream` | Writes audio; the helper default output is `output.mp3` |
+| `clone` | Voice name and sample files | `-d`/`--description`, `--labels` with JSON | Uploads samples and creates a voice in the provider account; returns its voice ID |
+| `sfx` | Sound description | `-o`/`--output`, `-d`/`--duration`, `--loop`, `--influence` | Writes a sound-effect file; the helper default is `sound_effect.mp3` |
+
+The text-to-speech helper defaults to voice `Rachel`, model
+`eleven_multilingual_v2`, stability `0.5`, similarity `0.75`, and speed `1.0`.
+Treat these as bundled defaults, not a promise that the voice or model remains
+available on the connected account.
+
+## Follow the audio stages
+
+1. **Confirm the action.** The Skill resolves `speak`, `clone`, or `sfx`, input
+   paths, output path, provider authority, consent, and publication boundary.
+2. **Validate local input.** It checks text or files before sending data. A
+   missing or unsupported sample should stop cloning.
+3. **Confirm the account effect.** Speech and sound effects generate audio;
+   cloning additionally creates a reusable voice in the ElevenLabs account.
+4. **Call the provider.** The helper authenticates with
+   `ELEVENLABS_API_KEY`, sends the request, and reports provider errors rather
+   than fabricating audio.
+5. **Write or report the result.** Speech and sound-effect chunks are written to
+   the chosen output. Cloning reports the created name and voice ID.
+6. **Review before use.** Listen for pronunciation, artifacts, unintended
+   identity cues, misleading tone, silence, clipping, and rights concerns.
+
+## Keep consent, account mutation, and spend explicit
+
+<Callout type="warn" title="Voice cloning changes the provider account">
+  `clone` uploads biometric-like voice samples and creates a persistent voice
+  identity in ElevenLabs. Proceed only with documented authority and informed
+  consent for the exact intended uses. Record the returned voice ID and the
+  owner responsible for later retention or deletion.
+</Callout>
+
+| Work category | Normal boundary |
+| --- | --- |
+| Guidance and drafting | The Skill can prepare text, prompts, and settings before a provider request. |
+| Local mutations | `speak` and `sfx` write audio to the selected path. Confirm the parent directory and preserve existing files. |
+| Provider and cost effects | Requests send text, prompts, or audio samples to ElevenLabs, consume quota, and may incur charges under the connected plan. |
+| Account mutations | `clone` adds a voice. The bundled voice manager can also delete a voice, but deletion is a separate destructive action with its own confirmation and is not implied by an ordinary Skill run. |
+| Publishing effects | The Skill does not authorize distributing audio, attaching it to a campaign, making calls, creating a live conversational agent, or publishing to any platform. |
+
+Never expose the API key in a prompt, generated file, log excerpt, or commit.
+Do not use generated or cloned audio for impersonation, deception, unauthorized
+endorsement, evasion of disclosure rules, or misleading testimony.
+
+## Review outputs and evidence
+
+A complete run should report:
+
+- The action, source text or sample paths, provider settings, and exact output
+  path or returned voice ID.
+- The provider response or a clear failure without a fabricated artifact.
+- A listening review covering pronunciation, pacing, identity, artifacts,
+  duration, and suitability for the approved context.
+- Consent and rights status for source voices, scripts, music, and sound design.
+- Quota or charge-relevant requests and any account or publication step still
+  pending.
+
+For cloning, retain the consent record and voice ID separately from public
+content. For TTS, compare names, dates, prices, and legal or medical wording
+against the approved script after listening; correct text does not guarantee
+correct pronunciation.
+
+## Troubleshoot safely
+
+| Symptom | Safe next step |
+| --- | --- |
+| Runtime cannot find `ak:elevenlabs` | Confirm target and scope, start a fresh session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+| `ELEVENLABS_API_KEY not found` appears | Configure the key through the approved secret mechanism; do not paste or commit it. |
+| `elevenlabs package not installed` appears | Install the packaged Python requirement in the approved environment, then rerun only the intended action. |
+| The requested voice is not found | List voices for the connected account or choose an authorized available voice. Do not silently substitute an identity. |
+| A clone sample is missing or noisy | Stop, replace it with an authorized clear recording, and reconfirm consent before upload. |
+| Labels fail to parse | Pass valid JSON to `--labels`; do not discard identity or consent metadata merely to bypass the error. |
+| Sound-effect duration exceeds 30 seconds | Reduce `--duration` to 30 seconds or less, or plan a separate editing workflow. |
+| The output sounds wrong | Preserve the settings and provider result, revise one variable deliberately, and generate again only if quota and cost remain approved. |
+
+Continue with the [Marketing Kit overview](../../marketing) or
+[Projects, artifacts, and checkpoints](../../../concepts/projects-artifacts-checkpoints).
+
+## Know the current limits
+
+- The direct argument hint is `[action: speak|clone|sfx] [text-or-file]`.
+  Broader ElevenLabs references do not create additional routed actions.
+- The current sound-effect helper accepts `--loop` and `--influence`, but its
+  SDK request forwards only the prompt and optional duration. Do not claim the
+  saved file is seamless or that prompt influence was applied without separate
+  evidence.
+- The cloning helper implements instant voice creation through `voices.add`;
+  it does not perform the documented professional-cloning training workflow.
+- Provider models, voices, language coverage, quotas, latency, prices, plan
+  requirements, output formats, and licensing can change independently of the
+  packaged Skill.
+- Audio generation does not guarantee naturalness, identity fidelity,
+  intelligibility, conversion, platform acceptance, or legal permission.

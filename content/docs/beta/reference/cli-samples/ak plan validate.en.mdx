@@ -1,0 +1,81 @@
+---
+title: ak plan validate
+description: Gate plan-directory structure in CI with an explicit valid report and exit 3 for invalid content.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak plan validate` to check the file format of one plan directory without
+opening the local plan store.
+
+## Usage
+
+```bash
+ak plan validate <path>
+```
+
+The command accepts exactly one directory path and has no command-specific
+flags.
+
+## What is validated
+
+A valid directory must:
+
+- contain a readable `plan.md`;
+- provide a non-empty `title` in the simple leading front matter parsed by the
+  command;
+- contain at least one file named `phase-<number>-<slug>.md` that can be
+  parsed.
+
+Phase titles can come from front matter, the first H1, or the filename slug.
+Checkboxes determine phase status when present. The check does not require all
+tasks to be complete, validate plan-store synchronization, resolve a current
+plan, or enforce arbitrary nested YAML fields.
+
+This is a local, read-only command. It does not open/create/migrate the plan
+store, spawn Git, use network/auth/providers, read stdin, or prompt. It has no
+preview, apply, force, backup, or mutation recovery.
+
+## Output contract
+
+Valid human output starts with `[OK]`. Invalid human output starts with `[X]`
+and lists validation messages. JSON uses `kind=plan.validate` with:
+
+```text
+data.valid: boolean
+data.dir: the supplied path
+data.errors: array of validation messages
+```
+
+<Callout type="info">
+  An invalid plan still emits this normal report to stdout, including a JSON
+  success-shaped envelope with `data.valid=false`, and then exits `3`. It does
+  not emit a second JSON error envelope. Capture stdout even when the process
+  status is non-zero.
+</Callout>
+
+## CI example
+
+```bash
+code=0
+ak plan validate ./plans/my-plan --json >plan-validation.json || code=$?
+# Read data.errors; code 3 means the plan content is invalid.
+```
+
+Preserve the command's status directly when you need to distinguish exit `3`
+from other failures.
+
+## Exit behavior and recovery
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | The plan format is valid. | Continue with the workflow. |
+| `3` | The directory or its plan content failed validation, including a missing `plan.md`. | Read stdout errors, correct the files, and rerun. |
+| `2` | Arguments or flags were invalid. | Correct the invocation. |
+| `1` | Rendering or another unclassified runtime failure occurred. | Inspect stderr and retry after fixing the environment. |
+
+## Related commands
+
+- [Complete `ak plan validate` facts](../cli/ak_plan_validate)
+- [Read file-derived status](../cli/ak_plan_status)
+- [Parse a structured plan view](../cli/ak_plan_parse)

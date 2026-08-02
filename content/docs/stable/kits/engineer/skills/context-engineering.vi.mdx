@@ -1,0 +1,168 @@
+---
+title: Thiết kế context đáng tin cậy với ak:context-engineering
+description: Chẩn đoán áp lực context, chọn cách tối ưu có giới hạn và xác minh thông tin được giữ lại.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:context-engineering` để phân tích context budget, suy giảm, nén, memory,
+tool và điều phối agent. Mặc định Skill đưa ra hướng dẫn: chọn tài liệu nguồn phù
+hợp và đề xuất thay đổi đo được. Skill chỉ tạo artifact cục bộ khi bạn yêu cầu
+chạy analyzer đi kèm hoặc ghi design, summary hay memory file.
+
+## Chọn ak:context-engineering cho vấn đề context
+
+### Dùng ak:context-engineering khi
+
+- Session dài làm mất fact quan trọng, trộn task hoặc gần chạm context limit.
+- Bạn cần giảm token nhưng vẫn giữ decision, lịch sử tệp và next step.
+- Bạn đang thiết kế retrieval, memory, mô tả tool hoặc context isolation cho hệ
+  thống agent.
+- Bạn muốn so sánh context gốc với summary đã nén bằng probe.
+
+### Chọn workflow khác khi
+
+- Bạn cần fact hoặc vị trí tệp trong repository. Dùng `ak:scout` trước.
+- Bạn cần tài liệu bên ngoài hiện hành. Dùng `ak:docs-seeker`.
+- Bạn cần implementation thay vì context design. Chuyển sang planning hoặc
+  `ak:cook` sau khi proposal có acceptance criteria đo được.
+- Bạn chỉ cần quota chính thức của runtime. Xem status và account control của
+  runtime; Skill không thể tạo usage data không có sẵn.
+
+## Chuẩn bị bằng chứng và runtime
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận Engineer
+  Kit đã được cài cho đúng runtime cùng scope.
+- Nêu failure quan sát được, model hoặc runtime limit nếu biết, và evidence phải
+  sống sót sau khi nén.
+- Xác định message, tool output, credential hoặc dữ liệu khách hàng nhạy cảm
+  không được sao chép vào summary, tệp hay dịch vụ bên ngoài.
+- Để phân tích bằng script, chuẩn bị JSON UTF-8 là mảng message hoặc object có
+  mảng `messages`.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:context-engineering ...` | Có thể dùng bằng chứng usage awareness riêng của Claude khi Hook và statusline đã cài cung cấp dữ liệu đó. |
+| Cursor | `/ak:context-engineering ...` | Dùng cách gọi slash đã được người dùng xác minh; không suy ra Hook, statusline hay quota behavior của Claude. |
+| Codex | `$ak:context-engineering ...` | Dùng native discovery của Codex; usage injection riêng của Claude không phải capability Codex chung. |
+
+Xem [Runtime adapter](../../../concepts/runtime-adapters) trước khi coi usage
+signal riêng của một runtime là bằng chứng có thể chuyển đổi.
+
+## Chạy Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:context-engineering "Tool output chiếm phần lớn một debugging session dài. Hãy thiết kế policy nén giữ lại error, decision, tệp đã đổi và next step; không ghi tệp."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:context-engineering "Tool output chiếm phần lớn một debugging session dài. Hãy thiết kế policy nén giữ lại error, decision, tệp đã đổi và next step; không ghi tệp."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:context-engineering "Tool output chiếm phần lớn một debugging session dài. Hãy thiết kế policy nén giữ lại error, decision, tệp đã đổi và next step; không ghi tệp."
+```
+
+  </Tab>
+</Tabs>
+
+Skill nhận một topic hoặc câu hỏi và không công bố mode flag. Hãy yêu cầu output
+cụ thể như diagnosis, budget, compression policy, memory design, tool review
+hoặc evaluation plan.
+
+### Analyzer cục bộ tùy chọn
+
+| Thao tác | Input | Output quan sát được |
+| --- | --- | --- |
+| Phân tích context | Context JSON UTF-8, token limit và critical keyword tùy chọn | JSON trên standard output với token ước tính, utilization, health signal và recommendation |
+| Tính budget | Token allocation cho system, tool, docs và history; buffer tùy chọn | JSON trên standard output với allocation, tổng budget và threshold |
+| Đánh giá nén | Context JSON gốc và tệp text đã nén | JSON trên standard output với compression ratio heuristic, quality score, dimension score và recommendation |
+| Tạo probe | Context JSON UTF-8 | Danh sách probe JSON trên standard output cho recall, artifact, continuation và decision |
+
+Các utility Python đọc tệp tối đa 100 MiB và không tự tạo output file. Shell
+redirection hoặc yêu cầu ghi riêng sẽ thay đổi ranh giới này. Evaluator dùng
+heuristic; comment trong source dành model-based judging thật cho implementation
+production.
+
+## Hiểu các giai đoạn của lần chạy
+
+1. **Skill xác định context failure.** Nó tách áp lực capacity khỏi distraction,
+   contradiction, poisoning, lost-in-the-middle hoặc thiếu persistence.
+2. **Skill đo trước khi tối ưu.** Nó dùng runtime evidence có sẵn hoặc context
+   file được cung cấp và đánh dấu estimate là estimate.
+3. **Skill chọn strategy có giới hạn.** Source nhóm lựa chọn thành write, select,
+   compress và isolate, rồi chỉ nạp reference phù hợp.
+4. **Skill giữ task contract.** Goal, decision, constraint, artifact history,
+   current state và next step vẫn rõ ràng.
+5. **Skill đề xuất hoặc thực hiện thao tác đã yêu cầu.** Advice ở trong hội thoại;
+   analyzer đọc tệp cục bộ; design hoặc summary được yêu cầu có thể ghi vào path
+   đã duyệt.
+6. **Skill kiểm tra chất lượng.** Probe kiểm tra factual recall, artifact,
+   continuation và decision rationale thay vì chỉ tin mức giảm token.
+
+## Giữ context và credential an toàn
+
+<Callout type="warn" title="Context nhỏ hơn vẫn có thể làm lộ dữ liệu nhạy cảm">
+  Nén chỉ đổi kích thước, không đổi độ nhạy. Xóa hoặc che secret và dữ liệu riêng
+  tư trước khi ghi context bundle, chia sẻ với agent khác hoặc gửi đến model
+  provider.
+</Callout>
+
+- Đọc context, summary hoặc memory file cục bộ cần quyền trên path đó; ghi hoặc
+  thay thế chúng cần ranh giới artifact rõ ràng.
+- Usage awareness riêng của Claude có thể đọc status data cục bộ và dùng
+  Anthropic OAuth credential để gọi usage endpoint. Không sao chép credential
+  value vào prompt hay report.
+- Context isolation qua agent khác có thể nhân model usage và cost. Hãy xin phép
+  trước khi thêm paid provider, parallelism rộng hoặc external storage.
+- Memory system đề xuất không tự cấp quyền thu thập, lưu giữ hoặc lưu chéo
+  session dữ liệu cá nhân.
+- Không bỏ context gốc hoặc ghi đè trusted summary trước khi kết quả nén vượt qua
+  các probe bắt buộc.
+
+## Xác minh kết quả
+
+Một lần chạy hướng dẫn hoàn chỉnh nên nêu failure quan sát được, evidence đã
+dùng, strategy đã chọn, preservation contract, tác động token hoặc latency dự
+kiến và phép thử có thể bác bỏ proposal. Lần chạy script cũng phải báo input
+file, thao tác chính xác, exit status, JSON output và mọi giới hạn estimate hoặc
+heuristic.
+
+Chỉ coi kết quả là bằng chứng khi critical fact vẫn truy xuất được, artifact
+history và next step còn nguyên, material mâu thuẫn hoặc cũ đã được xác định và
+thay đổi không âm thầm mở rộng persistence, provider access hay cost.
+
+## Khắc phục sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Câu trả lời chung chung | Cung cấp failure quan sát được, message đại diện, fact phải giữ và success test đo được. |
+| Thiếu phần trăm runtime | Kiểm tra status surface và installation của runtime; không thay bằng context limit suy đoán. |
+| Analyzer từ chối input | Xác nhận tệp tồn tại, là JSON UTF-8, không quá 100 MiB và chứa list hoặc mảng `messages`. |
+| Nén làm mất lịch sử tệp hoặc decision | Thêm rõ artifact, decision, current state và next step rồi chạy lại probe. |
+| Kết quả bị diễn giải thành hiệu năng production | Tách local heuristic khỏi bằng chứng model-based hoặc load test. |
+| Runtime không nhận ra Skill | Xác nhận target và scope, khởi động lại runtime rồi xem [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+## Biết các giới hạn hiện tại
+
+- Script đi kèm ước tính token bằng số ký tự đơn giản; đây không phải billing
+  record của provider hay token count chính xác theo tokenizer.
+- Số liệu attention, degradation, cost và performance trong source là design
+  guidance, không phải phép đo hệ thống của bạn.
+- Skill không tự tạo context bundle, memory store, graph hay evaluation dataset.
+- External model judging, retrieval service và persistent store cần tool,
+  credential, privacy review và cost approval riêng.
+- Stable và beta đóng package nội dung Skill cùng analyzer
+  `ak:context-engineering` giống nhau.

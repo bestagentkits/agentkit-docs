@@ -1,0 +1,53 @@
+---
+title: ak content queue cancel
+description: Xoá vĩnh viễn một queue entry bằng ID chính xác.
+---
+
+Dùng `ak content queue cancel` để xoá entry trước khi giao hoặc dọn row
+`published` hay `failed` còn được giữ.
+
+## Cách dùng
+
+```bash
+ak content queue cancel <id>
+```
+
+Lệnh yêu cầu đúng một ID, không có alias hay cờ riêng. Nên copy ID đầy đủ từ
+JSON output.
+
+## Hiệu ứng và an toàn
+
+Lệnh load queue từ `~/.agentkit/content/queue.json` (hoặc `AGENTKIT_HOME`), xoá
+ID khớp chính xác đầu tiên rồi atomically thay tệp. Lệnh không gửi network
+request và không xoá Discord message đã publish.
+
+Khác với mô tả help, removal không bị giới hạn ở entry `pending`. ID chính xác
+của entry `published` hoặc `failed` cũng bị xoá. Không có prompt, dry run, force,
+backup hay undo. Nếu cần retention, hãy lưu bản sao được bảo vệ trước; bản sao
+có thể chứa message body và webhook URL.
+
+Các thao tác load-modify-save đồng thời nằm ngoài scheduler lock có thể ghi đè
+lẫn nhau. Tránh cancel khi process khác đang thêm hay cập nhật queue entry.
+
+## Đầu ra và luồng
+
+Human success ghi `[OK] cancelled post <id>` ra stdout. JSON success là:
+
+```json
+{"schema_version":1,"kind":"content.queue_cancel","data":{"id":"<id>"}}
+```
+
+Lỗi không tìm thấy và I/O là plain text trên stderr, kể cả trong `--json`.
+
+## Mã thoát
+
+| Mã | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Entry đã bị xoá và queue save hoàn tất. | Liệt kê lại queue. |
+| `1` | Sai số argument, ID không tồn tại hoặc queue/home I/O lỗi. | Xác nhận ID đầy đủ và kiểm tra queue trước khi retry. |
+| `2` | Không parse được cờ. | Sửa cờ. |
+
+## Lệnh liên quan
+
+- [Liệt kê queue ID](<./ak content queue list>)
+- [Help đầy đủ của `ak content queue cancel`](../cli/ak_content_queue_cancel)

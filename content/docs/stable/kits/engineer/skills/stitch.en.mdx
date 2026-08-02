@@ -1,0 +1,194 @@
+---
+title: Generate and hand off interface concepts with ak:stitch
+description: Use Google Stitch to generate UI concepts, review variants, export HTML and image artifacts, and hand an inspected design specification to implementation.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:stitch` for a provider-backed design exploration that ends in reviewable
+artifacts, not an automatic production interface. The bundled workflow can
+generate a Stitch screen, download HTML and a preview image, derive a compact
+`DESIGN.md`, and then hand the approved direction to an implementation Skill.
+
+## Choose ak:stitch for provider-backed UI exploration
+
+### Use ak:stitch when
+
+- You want rapid UI concepts or variants from a concrete product brief.
+- You need exported HTML, a screenshot, and design-token clues before coding.
+- You want to isolate concepts by repository or plan and review a screen before
+  implementation.
+- Google Stitch is approved for the content and available to the current account.
+
+### Choose another workflow when
+
+- You need to implement directly in the existing design system. Use
+  `ak:frontend-design` or `ak:frontend-development`.
+- You cannot send the brief or brand material to an external provider. Work from
+  local requirements and approved assets instead.
+- You need a responsive, animated, accessible production component as the direct
+  output. The tagged Stitch workflow produces static design artifacts that still
+  require implementation and verification.
+- You only need design advice without generation or file writes. Use a design
+  workflow in an analysis-only mode.
+
+## Prepare provider access and the project
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Engineer Kit is installed for the active runtime and scope.
+- Obtain a Stitch API key and expose it as `STITCH_API_KEY` through an approved
+  secret-loading method. Do not put the key in prompts, output, or committed files.
+- Make Node.js and npm available. The bundled scripts declare
+  `@google/stitch-sdk` in the range `>=0.0.3 <1.0.0` and use `tsx`; installing
+  them downloads third-party packages.
+- State the audience, device, content, brand constraints, output directory,
+  number of variants, and whether implementation is in scope.
+- Check the provider account's current models, quota, pricing, terms, data
+  handling, and API availability before generation.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:stitch ...` | The source documents Claude-oriented environment and optional MCP setup. The bundled TypeScript scripts can run only when their SDK dependencies and provider credentials are available. |
+| Cursor | `/ak:stitch ...` | Slash invocation is user-verified. Equivalent MCP configuration, secret loading, package execution, and image review depend on the Cursor session. |
+| Codex | `$ak:stitch ...` | Uses native Skill discovery. Provider access, script execution, image review, and companion Skill availability depend on the session. |
+
+See [Runtime adapters](../../../concepts/runtime-adapters) before assuming the
+same MCP, Hook, or UI behavior across targets.
+
+## Run the Skill
+
+Pass the desired screen and constraints in natural language. The Skill may use
+its bundled `generate`, `export`, and local quota scripts after confirming the
+required network and file effects.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:stitch "Generate two desktop checkout concepts for an existing SaaS design system. Use the supplied copy, send no customer data, show previews for approval, and export the selected screen to ./stitch-exports without implementing it."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:stitch "Generate two desktop checkout concepts for an existing SaaS design system. Use the supplied copy, send no customer data, show previews for approval, and export the selected screen to ./stitch-exports without implementing it."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:stitch "Generate two desktop checkout concepts for an existing SaaS design system. Use the supplied copy, send no customer data, show previews for approval, and export the selected screen to ./stitch-exports without implementing it."
+```
+
+  </Tab>
+</Tabs>
+
+When an existing Stitch project must be reused, provide its exact project ID.
+Otherwise the bundled generator can look up or create a project by an explicit
+project name, an environment override, the Git repository or current-directory
+name, then a fallback name.
+
+## Understand the bundled actions
+
+| Action | Observable result | Important boundary |
+| --- | --- | --- |
+| Generate | Screen ID, project ID, preview image URL, and optional variant IDs | Calls Google Stitch and may create a remote project |
+| Export HTML | `design.html` in the selected output directory | Downloads provider-generated HTML |
+| Export image | `design.png` in the selected output directory | Downloads the provider preview |
+| Export all | `design.html`, `design.png`, and generated `DESIGN.md` | `DESIGN.md` is extracted locally from HTML patterns and needs review |
+| Check quota | Local JSON summary of used and remaining credits | Reads an advisory local counter, not provider usage |
+
+The tagged generator already increments its local counter after a successful
+generation and variants. Do not run the separate `increment` action again for
+the same bundled generation, or local usage will be counted twice.
+
+## Observe the design-to-code workflow
+
+1. **The run validates access and boundaries.** It confirms the key is available,
+   the prompt is safe to send, dependencies can run, and the output path is
+   writable.
+2. **The run checks advisory quota.** It reads the local counter and explains
+   that provider-side enforcement remains authoritative.
+3. **The run resolves a project.** It uses an explicit ID or a bounded
+   lookup-or-create name and reports any remote project creation.
+4. **The run generates concepts.** It requests the screen and approved variants,
+   then returns IDs and preview URLs instead of hiding the provider response.
+5. **You review the visual.** The run presents the available image and waits for
+   selection or revision before implementation.
+6. **The run exports the selection.** It downloads the requested HTML and image
+   and derives `DESIGN.md` when `all` is selected.
+7. **Implementation starts separately.** An approved companion workflow adapts
+   the artifacts to the repository, adds responsive and interaction behavior,
+   and verifies the result in the actual application.
+
+## Keep provider use, quota, and generated files explicit
+
+<Callout type="warn" title="A generation request leaves the local workspace">
+  Stitch receives the prompt and any content included in it. Generation and
+  export require network access; remote project creation changes provider state;
+  package installation and export change local state. Confirm all four boundaries
+  before the first request.
+</Callout>
+
+- Remove secrets, personal data, proprietary customer data, and unapproved
+  assets from prompts.
+- Treat the source's free-credit figures, reset timing, model IDs, latency notes,
+  and lack-of-paid-tier statement as point-in-time guidance, not a current
+  provider promise. Verify the active account before relying on them.
+- The local quota file is advisory and can drift when Stitch is used elsewhere.
+  Resetting it does not restore provider quota.
+- Review generated content for licensing, brand fit, originality, accessibility,
+  and unsafe or misleading copy before reuse.
+- Ask before installing packages, creating remote projects, overwriting exports,
+  implementing code, committing, publishing, or deploying.
+
+## Verify the outputs and handoff
+
+A complete exploration should provide:
+
+- The final prompt, device target, project resolution method, screen ID, and
+  selected variant.
+- The provider and network calls made, plus the local quota state before and
+  after generation without exposing credentials.
+- Preview evidence and an explicit user selection.
+- Exact paths to `design.html`, `design.png`, and `DESIGN.md` when requested.
+- A review of the derived tokens, content, semantic structure, responsive gaps,
+  animation gaps, and accessibility work still required.
+- A separate implementation plan or handoff that names which generated details
+  are constraints and which are suggestions.
+
+`DESIGN.md` is a lightweight extraction from Tailwind-like classes and HTML
+elements. It is not proof of a complete design system and should not silently
+override stronger repository tokens or approved requirements.
+
+## Troubleshoot or continue
+
+| Symptom | Safe next step |
+| --- | --- |
+| `STITCH_API_KEY` is missing or rejected | Load the key through the approved secret mechanism and retry without printing it. |
+| The bundled scripts cannot import the SDK | Install the declared dependencies only with approval; the Skill references an installer that is not included in its shipped directory. |
+| Local quota says available but the provider rate-limits | Treat the provider as authoritative, stop generation, and wait or use an approved non-provider workflow. |
+| Local usage seems too high | Check whether the generator and manual `increment` were both run; correct the advisory counter without claiming provider quota changed. |
+| A screen cannot be found during export | Confirm the screen ID and the exact project ID or project-name resolution used for generation. |
+| `DESIGN.md` misses important tokens | Inspect `design.html` and the visual directly, then correct the handoff rather than treating the extraction as complete. |
+| The runtime does not recognize the Skill | Confirm target and scope, restart the session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Continue with [Frontend design](./frontend-design) for approved implementation,
+or review [Projects, artifacts, and checkpoints](../../../concepts/projects-artifacts-checkpoints).
+
+## Know the current limits
+
+- The Skill bundles wrappers and guidance, not Google Stitch, an API key, SDK
+  dependencies, or a verified provider entitlement.
+- Its source references an `install.sh` helper that is not shipped with this
+  Skill. Use the declared package manifest or an approved project setup instead.
+- The tagged export is static HTML, image, and a locally derived design summary;
+  production framework code, responsiveness, motion, accessibility, and browser
+  QA remain separate work.
+- Stable and beta contain identical `ak:stitch` files for this release pair.
+  Current provider behavior can still differ from the point-in-time guidance.

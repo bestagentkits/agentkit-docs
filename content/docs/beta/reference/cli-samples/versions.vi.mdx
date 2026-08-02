@@ -1,0 +1,100 @@
+---
+title: ak versions
+description: Kiểm tra inventory ak, Kit và Skill trong Claude plugin cục bộ, đồng thời diễn giải chính xác dữ liệu phiên bản mới nhất từ cache và phạm vi nguồn.
+---
+
+Dùng `ak versions` để kiểm tra build CLI đang chạy, thư mục nguồn Kit và Skill
+được tìm thấy dưới install root của Claude plugin. Đây là lệnh inventory, không
+phải trình cập nhật.
+
+## Cách dùng
+
+```bash
+ak versions
+```
+
+Lệnh không nhận argument theo vị trí.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--cache-ttl <duration>` | `1h0m0s` | Quyết định khi nào dữ liệu registry cache hiện có bị xem là stale. Giá trị không dương trở về một giờ. |
+| `--local-only` | `false` | Liệt kê dữ liệu cục bộ mà không đọc registry cache hay thử fetch registry. |
+| `--remote-only` | `false` | Bỏ qua việc liệt kê Kit và Skill cục bộ; live versions endpoint chưa được cấu hình trong bản phát hành này. |
+
+`--local-only` và `--remote-only` loại trừ nhau. Các cờ đầu ra dùng chung được
+mô tả trong [quy ước CLI](../cli-conventions). Lệnh không bao giờ hỏi và
+`--yes` không có tác dụng.
+
+## Trước khi chạy
+
+Quá trình liệt kê cục bộ đọc:
+
+- binary version, commit và build date được compile vào `ak`;
+- thư mục Kit dưới `AGENTKIT_KITS_DIR`, mặc định là `./kits`;
+- manifest Skill dưới `AGENTKIT_PLUGIN_DIR/<kit>/skills/`, mặc định là
+  `~/.claude/plugins/<kit>/skills/`.
+
+Phạm vi này không bao gồm mọi route native của runtime. Cụ thể, Skill native
+của Codex và bản cài Claude project-native nằm ngoài collector Skill của lệnh.
+
+Live latest-version endpoint bị tắt trong lệnh đã phát hành. Chế độ mặc định có
+thể đọc `~/.agentkit/cache/registry/index.json`; cache fresh được dùng, còn cache
+stale được giữ làm fallback offline. Cache thiếu, hỏng hoặc không đọc được được
+xem là cache miss. `--local-only` bỏ qua cache.
+
+`--remote-only` hiện chỉ trả binary identity, mảng `kits` và `skills` rỗng, cùng
+giá trị `latest` của binary từ cache nếu dùng được. Cờ này không gửi live remote
+request trong bản phát hành này.
+
+## Ví dụ
+
+```bash
+ak versions
+ak versions --local-only
+ak versions --json
+ak versions --cache-ttl 30m
+```
+
+## Đầu ra và luồng
+
+Stdout dành cho người dùng là bảng gồm `TYPE`, `NAME`, `CURRENT`, `LATEST` và
+`STATUS`. Khi không có dữ liệu latest, nhãn trạng thái thông tin không chứng
+minh item đã cài là development build.
+
+JSON thành công dùng envelope ngoài `kind=versions`. `data` có
+`schema_version` riêng của inventory:
+
+```text
+schema_version: 1
+kind: versions
+data.schema_version: 1
+data.binary: version, commit, date, latest
+data.kits[]: name, version, latest
+data.skills[]: kit, name, version
+data.registry: cached_at, stale, optional stale_age
+```
+
+Các mảng luôn có mặt dù rỗng; trường version không có dữ liệu là chuỗi rỗng.
+Lỗi dùng stderr và error envelope JSON dùng chung. Lỗi parse cờ có thể vẫn là
+plain text.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Inventory hoàn tất. Cache miss, cache hỏng, cache stale hoặc remote lookup bị tắt đều không phải lỗi. | Đọc phạm vi và `registry.stale` trước khi diễn giải `latest`. |
+| `1` | Không thể liệt kê Kit hoặc install root cục bộ, chẳng hạn thư mục không đọc được. | Sửa quyền truy cập root được báo hoặc dùng biến nguồn phù hợp. |
+| `2` | Cờ không hợp lệ, duration không parse được, đặt cả hai cờ nguồn hoặc truyền argument. | Sửa cách gọi. |
+
+Lệnh không apply, thay thế hay xoá gì. Khi live endpoint bị tắt như trong bản
+phát hành này, lệnh cũng không ghi cache. Chỉ dùng lệnh cập nhật sau khi xem lại
+vòng đời liên quan.
+
+## Lệnh liên quan và giới hạn
+
+- [Kiểm tra hoặc áp dụng cập nhật CLI](./self-update)
+- [Refresh một route Kit](../cli/ak_kit_refresh)
+- [Thông tin đầy đủ của lệnh `ak versions`](../cli/ak_versions)
+- [Xử lý sự cố cập nhật](../../troubleshooting/updates)

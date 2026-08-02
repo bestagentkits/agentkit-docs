@@ -1,0 +1,176 @@
+---
+title: Transform local media with ak:media-processing
+description: Inspect, convert, resize, encode, stream, or remove backgrounds with explicit source preservation and resource limits.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:media-processing` for local image, audio, and video transformations with
+FFmpeg, ImageMagick, and RMBG. The Skill covers format conversion, encoding,
+filters, thumbnails, batch images, background removal, HLS or DASH packaging,
+and explicitly authorized live streaming.
+
+## Choose deterministic media tooling
+
+### Use ak:media-processing when
+
+- You need repeatable local conversion, resize, crop, compositing, filtering,
+  audio extraction, thumbnail, GIF, or codec work.
+- A batch needs explicit naming, output directories, success counts, and failures.
+- You need HLS or DASH files from a local source.
+- You need local AI background removal and accept a model download.
+- You want to inspect media properties before selecting output settings.
+
+### Choose another workflow when
+
+- You need semantic OCR, transcription, scene understanding, or provider media
+  generation. Use [`ak:ai-multimodal`](./ai-multimodal).
+- You need a curated visual prompt and new AI image. Use
+  [`ak:ai-artist`](./ai-artist).
+- You need an HTML scene rendered into a scripted animation. Use
+  [`ak:html-video`](./html-video).
+- You do not have permission to transform, remove metadata from, watermark,
+  broadcast, or redistribute the source.
+
+## Prepare sources, targets, and tools
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Engineer Kit is installed for the current runtime and scope.
+- Install only the required local tools: FFmpeg and `ffprobe` for video or
+  audio, ImageMagick for still images, and `rmbg-cli` for background removal.
+  Verify with `ffmpeg -version`, `ffprobe -version`, `magick -version`, or
+  `rmbg --version` as applicable.
+- Preserve originals in a separate location and choose new output paths. Avoid
+  an in-place `mogrify` command unless overwrite is intentional and recoverable.
+- Inspect codecs, streams, dimensions, frame rate, duration, color space,
+  metadata, file size, and target playback requirements before conversion.
+- Estimate output count and free disk. Long encodes, high-resolution images,
+  batch concurrency, and local models can consume substantial CPU, GPU, memory,
+  temporary storage, and time.
+- For live streaming, name the exact endpoint, account, stream key handling,
+  start and stop window, audience, and approval to publish.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:media-processing ...` | The Skill can run available local binaries and write approved outputs; codec builds, hardware devices, and process approvals remain environment-specific. |
+| Cursor | `/ak:media-processing ...` | Slash invocation is user-verified; shell tools, resource controls, and output access depend on the Cursor session. |
+| Codex | `$ak:media-processing ...` | Native discovery is supported; equivalent FFmpeg builds, ImageMagick policies, hardware encoders, and shell authority are not implied. |
+
+## Run a reversible transformation
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:media-processing "Inspect ./media/demo.mov, create ./artifacts/demo-web.mp4 as H.264/AAC with fast-start and a maximum width of 1920, preserve the source, test settings on a 15-second sample first, and report size, duration, streams, and visual quality"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:media-processing "Inspect ./media/demo.mov, create ./artifacts/demo-web.mp4 as H.264/AAC with fast-start and a maximum width of 1920, preserve the source, test settings on a 15-second sample first, and report size, duration, streams, and visual quality"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:media-processing "Inspect ./media/demo.mov, create ./artifacts/demo-web.mp4 as H.264/AAC with fast-start and a maximum width of 1920, preserve the source, test settings on a 15-second sample first, and report size, duration, streams, and visual quality"
+```
+
+  </Tab>
+</Tabs>
+
+### Match the tool to the effect
+
+| Task | Tool or helper | Important effect |
+| --- | --- | --- |
+| Video or audio conversion | FFmpeg or bundled `media_convert.py` | Re-encoding changes quality; stream copy is only valid when container and codecs are compatible |
+| Video size optimization | Bundled `video_optimize.py` | Can lower resolution, frame rate, audio bitrate, or video bitrate and writes FFmpeg pass logs temporarily |
+| Image resize or conversion | ImageMagick or bundled `batch_resize.py` | Cropping, forced dimensions, quality, color conversion, and `-strip` can remove information |
+| In-place image batch | `mogrify` | Overwrites matching source files unless `-path` points to another directory |
+| Background removal | RMBG or bundled shell and Node helpers | Downloads a local model on first use and writes a transparent PNG |
+| HLS or DASH packaging | FFmpeg | Creates playlists, manifests, and many segment files; encryption adds key material requiring separate protection |
+| RTMP, UDP, or RTP stream | FFmpeg | Starts a network process and can publish continuously until stopped |
+
+The bundled Python helpers support `--dry-run`; inspect the actual emitted
+command before a large batch. `batch_resize.py` also supports bounded parallel
+workers, while `media_convert.py` offers `web`, `archive`, and `mobile` presets.
+
+## Observe the processing stages
+
+1. **The Skill confirms ownership and outcome.** It records input scope, output
+   paths, target devices or service, quality goals, and destructive boundaries.
+2. **It inventories the source.** `ffprobe`, `identify`, or tool-specific checks
+   capture streams, codecs, dimensions, duration, metadata, and file size.
+3. **It checks local capability.** Installed encoders, decoders, delegates,
+   policies, models, hardware acceleration, and writable storage are verified.
+4. **It plans a sample.** Codec, quality, scale, crop, filter order, audio,
+   metadata, and naming are made explicit and tested on a small representative input.
+5. **It writes new outputs.** The transformation runs with bounded threads or
+   batch concurrency and preserves logs or failures needed for diagnosis.
+6. **It validates the files.** Output probes, playback or visual inspection,
+   dimensions, duration, stream presence, file size, transparency, and quality
+   are compared with the contract.
+7. **It reports cleanup.** Outputs, temporary files, model downloads, skipped
+   items, failures, and whether sources remain untouched are summarized.
+
+## Control overwrites, publication, and local resources
+
+<Callout type="warn" title="Some media commands overwrite or publish immediately">
+  `mogrify` can replace every matching image, FFmpeg `-y` can replace an output,
+  and a live-stream command can publish to an external audience as soon as the
+  process starts. Preview exact targets and obtain separate approval first.
+</Callout>
+
+- Do not pass broad globs until the matched file list and output collision
+  behavior are reviewed. Keep batch outputs outside the input directory when possible.
+- Metadata stripping can improve privacy but can also remove attribution,
+  orientation, color profiles, timestamps, or evidence. Decide what to retain.
+- Stream keys and encryption keys are secrets. Keep them out of command history,
+  logs, reports, playlists, and source control.
+- RMBG processes locally, but installation and first model use require network
+  downloads. The bundled shell helpers can install `rmbg-cli` globally when it
+  is missing; do not run them without approving that package-manager mutation.
+- Hardware acceleration and high concurrency can monopolize shared GPUs, CPU,
+  memory, and I/O. Set resource boundaries and stop when the host becomes unstable.
+- Codec, container, browser, device, social-platform, and broadcast support vary
+  by installed build and target. Verify the actual destination rather than
+  treating a successful encode as universal compatibility.
+
+## Verify the outputs
+
+A complete result should include:
+
+- Source inventory, tool versions, command or helper used, and the exact target
+  settings.
+- Output paths, counts, dimensions, duration, codecs, streams, file sizes, and
+  metadata or transparency state.
+- Sample review and final visual or playback checks, including quality loss,
+  crop, sync, color, audio, and compatibility findings.
+- Source preservation, overwrite decisions, temporary-file cleanup, and failed
+  or skipped batch items.
+- CPU or GPU path, concurrency, elapsed time, model download, network endpoint,
+  and any external publication effect.
+
+Stable and beta package identical `ak:media-processing` sources and helpers. The
+release does not prove that every host FFmpeg build, ImageMagick delegate, RMBG
+download, hardware encoder, target device, or streaming service behaves alike.
+
+## Troubleshoot and interpret limits
+
+| Symptom | Safe next step |
+| --- | --- |
+| An encoder, decoder, or format is unavailable | Inspect `ffmpeg -encoders`, `ffmpeg -formats`, or `magick identify -list format`; install support only with approval. |
+| Stream copy fails or the output will not play | Re-check container and codec compatibility, then re-encode a short sample instead of forcing the copy. |
+| ImageMagick rejects PDF or another delegate | Preserve the policy error; changing a system policy expands attack surface and requires explicit administration approval. |
+| A batch would overwrite originals | Stop, create a new output directory, use `--dry-run`, and enumerate collisions before retrying. |
+| The job exhausts memory or runs too slowly | Reduce resolution, threads, parallel workers, or sample duration; use hardware acceleration only when supported and approved. |
+| RMBG model download or memory use fails | Use an approved smaller model or resolution, report the download, and preserve the source. |
+| Output is smaller but visibly degraded | Revisit codec, CRF or bitrate, preset, scaling, and filter order; compare a short sample before the full rerun. |
+| A live stream drops or targets the wrong service | Stop the process, protect the stream key, inspect endpoint and platform requirements, and require new approval before reconnecting. |
+| The runtime does not recognize the Skill | Confirm target and scope, restart the runtime session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |

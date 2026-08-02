@@ -1,0 +1,75 @@
+---
+title: Troubleshooting AgentKit
+description: Start from the symptom, check the smallest safe scope, and collect redacted evidence when you need help.
+---
+
+Start with the symptom you can observe. Check identity, scope, and recorded state
+before reinstalling or changing files.
+
+## Choose the symptom
+
+- **The installer failed, or the shell cannot find `ak`:** [Installation
+  problems](./installation)
+- **Sign-in fails, or your Kit is not available:** [Sign-in and Kit
+  access](./authentication)
+- **A Kit download, verification, or install fails:** [Kit installation
+  problems](./kit-installation)
+- **The install succeeds, but the runtime cannot find a Skill or Agent:**
+  [Runtime cannot find a Skill or Agent](./runtime-cannot-find-skill-or-agent)
+- **An update fails or leaves an unexpected result:** [Updates and
+  recovery](./updates)
+- **A setting is invalid, ignored, or comes from the wrong scope:**
+  [Configuration problems](./configuration)
+
+## Safe diagnostic order
+
+Run read-only checks before a recovery command:
+
+```bash
+ak --version
+ak doctor --json
+```
+
+`ak doctor` checks installation and runtime health. By default it exits `0` even
+when the report is unhealthy; inspect `data.healthy` in the JSON envelope. Use
+`ak doctor --exit-on-fail` only when a script needs exit `1` for failing checks.
+
+For Claude Code, select the audit form that matches the delivery route:
+
+```bash
+ak audit --json
+ak audit --project-dir . --json
+ak audit --plugin-mode --project-dir ./ak-engineer --json
+```
+
+These audit user plugins, project-native content, and the named project plugin
+root respectively. Audit exits `0` when every selected Kit matches its manifest
+and `1` for drift or a command failure. An invalid Kit argument exits `2`; add
+`--strict` when a missing or unreadable manifest must fail.
+
+## Share diagnostics safely
+
+Create a redacted support bundle instead of sending raw configuration or
+environment files:
+
+```bash
+ak diagnostics export --json > agentkit-diagnostics.json
+```
+
+The export runs `ak doctor --json`, removes known secrets, email addresses, and
+local path prefixes, and writes JSON to standard output. Exit `1` means the
+doctor run, redaction, or encoding failed; invalid flags exit `2`.
+
+Review the exported file before sharing it. Never send API keys, license keys,
+provider configuration, private keys, raw environment files, or session
+transcripts.
+
+## Keep recovery narrow
+
+Do not delete `~/.agentkit`, `~/.claude`, `~/.codex`, or a project's runtime
+directory to troubleshoot. Do not use `--force` as a routine retry. First record
+the failing command, its exit code, the current directory, the target runtime,
+and whether the install was project-scoped or global.
+
+See the [CLI reference](../reference/cli) for the complete command and flag
+surface.

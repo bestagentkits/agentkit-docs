@@ -1,0 +1,87 @@
+---
+title: ak content-search delete
+description: Xem trước và xoá vĩnh viễn một shard content-search plaintext do AgentKit sở hữu.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak content-search delete` khi owner muốn xoá vĩnh viễn shard tìm kiếm dẫn
+xuất của một project. Tệp runtime nguồn và `operational.db` nằm ngoài ranh giới
+xoá.
+
+## Cách dùng
+
+```bash
+ak content-search delete --project <uuid>
+```
+
+Lệnh không nhận đối số theo vị trí trong cú pháp được công bố.
+
+## Cờ và xác nhận
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--project <uuid>` | Trống, bắt buộc | UUIDv7 chữ thường chuẩn của project. |
+| `--yes` | `false` | Apply plan được tạo trong chính lần gọi này. |
+
+Lệnh không có prompt TTY và không đọc stdin. `--no-interactive` không cấp quyền
+xoá. Khi thiếu `--yes`, lệnh in preview rồi thoát `2`.
+
+```bash
+# Chỉ xem trước; dự kiến exit 2.
+ak content-search delete --project <uuid> --json
+
+# Chủ động apply.
+ak content-search delete --project <uuid> --yes --no-interactive --json
+```
+
+## Đọc preview
+
+JSON preview là object thô trên stdout:
+
+```text
+planId: token plan ngẫu nhiên của process hiện tại
+projectId: UUID project chuẩn
+documentCount: số document đã index
+logicalBytes: bộ đếm độ dài title cộng body do SQLite báo
+generation: thế hệ shard được kiểm tra lại trước khi xoá
+createdAt: timestamp UTC
+```
+
+Token preview chỉ tồn tại trong process hiện tại. Với `--yes`, cùng lần gọi kiểm
+tra lại `generation` rồi xoá `.db`, WAL, SHM, journal và lifecycle marker của
+project. JSON apply là `{"projectId":"<uuid>","deleted":"true"}`; `deleted`
+là string, không phải boolean. Đầu ra human là `deleted`.
+
+<Callout type="warning">
+  Apply không tạo backup hay recovery snapshot. Generation cũ sẽ bị từ chối,
+  nhưng khi xoá thành công, các lệnh vòng đời content-search không thể khôi phục
+  shard.
+</Callout>
+
+Thao tác chỉ ở máy cục bộ và yêu cầu quyền owner. Lệnh không gọi registry,
+provider, xác thực, entitlement hay network.
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Các tệp shard đã được xoá; sidecar đã vắng mặt cũng không gây lỗi cho bước xoá đã apply. |
+| `1` | Phân giải owner, UUID project, operational store, kiểm tra shard, generation hoặc xoá tệp thất bại. |
+| `2` | Chỉ preview vì thiếu `--yes`, hoặc giá trị flag không phân tích được. |
+
+Thiếu `--project` required hiện thoát `1`. JSON preview vẫn hợp lệ dù exit dự
+kiến là `2`; hãy kiểm tra cả stdout và process status.
+
+## Xác minh và khôi phục
+
+```bash
+ak content-search status --project <uuid> --json
+```
+
+Sau khi xoá thành công, kỳ vọng `lifecycle=absent` và `health=absent`. Bật lại
+chỉ tạo shard rỗng; tệp runtime nguồn vẫn còn nhưng cần đường index để nạp lại.
+
+## Lệnh liên quan
+
+- [Quy ước CLI](../cli-conventions)

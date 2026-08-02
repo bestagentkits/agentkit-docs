@@ -1,0 +1,163 @@
+---
+title: Tìm tài liệu hiện hành với ak:docs-seeker
+description: Khám phá tài liệu thư viện đúng phiên bản, theo nguồn chính và trả về kết quả có citation cùng giới hạn bằng chứng rõ ràng.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:docs-seeker` để tìm tài liệu thư viện hoặc framework hiện hành từ một
+topic cụ thể hay yêu cầu tổng quát. Skill phân loại query, truy xuất index
+`llms.txt` qua Context7 khi có, mở các trang tài liệu liên quan nhất và báo cáo
+finding kèm nguồn.
+
+## Chọn ak:docs-seeker cho tài liệu bên ngoài
+
+### Dùng ak:docs-seeker khi
+
+- Bạn cần tài liệu API, configuration, installation hoặc feature hiện hành.
+- Phiên bản thư viện quan trọng và bạn cần source khớp với phiên bản đó.
+- Index tài liệu chính thức có thể thu hẹp web search rộng.
+- Tài liệu chưa đầy đủ và bạn cần fallback sang repository code được ghi nhãn
+  rõ.
+
+### Chọn workflow khác khi
+
+- Bạn cần fact trong project hiện tại. Dùng `ak:scout`.
+- Bạn đã có source file và muốn một repository bundle dễ review. Dùng
+  `ak:repomix`.
+- Bạn cần lập luận research từ nhiều nguồn thay vì tài liệu thư viện. Dùng
+  `ak:research` hoặc chuẩn bị brief tái sử dụng với `ak:research-prompt`.
+- Bạn cần sửa tài liệu project. Dùng `ak:docs` sau khi thu thập source evidence.
+
+## Chuẩn bị query và runtime
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận Engineer
+  Kit đã được cài cho đúng runtime cùng scope.
+- Nêu library, topic, version mong muốn, ngôn ngữ đích và câu hỏi tài liệu phải
+  trả lời.
+- Ưu tiên input công khai. Loại tên repository riêng tư, token, dữ liệu khách
+  hàng và code mật trừ khi cần thiết và đã được duyệt.
+- Quyết định có cho phép network access, clone repository và tạo local bundle
+  khi không có documentation index hay không.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:docs-seeker ...` | Chạy workflow script-first đã đóng package và có thể dùng web cùng repository tool hiện có. |
+| Cursor | `/ak:docs-seeker ...` | Dùng cách gọi slash đã được người dùng xác minh; parity về web, delegation và repository tool phụ thuộc session Cursor. |
+| Codex | `$ak:docs-seeker ...` | Dùng native discovery của Codex và chỉ các network, filesystem cùng provider tool có trong session. |
+
+## Chạy Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:docs-seeker "API cache invalidation của Next.js 16. Dùng source chính thức đúng version, cite mọi behavior claim và không clone repository."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:docs-seeker "API cache invalidation của Next.js 16. Dùng source chính thức đúng version, cite mọi behavior claim và không clone repository."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:docs-seeker "API cache invalidation của Next.js 16. Dùng source chính thức đúng version, cite mọi behavior claim và không clone repository."
+```
+
+  </Tab>
+</Tabs>
+
+Skill nhận library name và topic tùy chọn dưới dạng free-form input, không có
+mode flag được công bố. Yêu cầu theo topic đi theo đường ngắn nhất; yêu cầu tổng
+quát có thể trả về index lớn hơn cần được ưu tiên hóa.
+
+### Dạng thực thi dự kiến
+
+| Yêu cầu | Đường đi theo source | Runtime projection |
+| --- | --- | --- |
+| Topic cụ thể | Phát hiện query, fetch topic index, fallback sang general index, đọc vài trang liên quan | Source dự kiến khoảng 10–15 giây trước khi đọc trang, phụ thuộc network và provider latency |
+| Library tổng quát | Phát hiện general query, fetch library index, nhóm URL rồi đọc trang ưu tiên | Source dự kiến khoảng 30–60 giây trước khi đọc sâu |
+| Không có index dùng được | Tìm official repository, xem docs/tests/examples, tùy chọn clone và pack | Source dự kiến khoảng 5–10 phút, dùng disk, network và context cao hơn đáng kể |
+
+Detector và index analyzer đi kèm chạy cục bộ và in JSON. Fetcher gửi HTTPS
+request tới `context7.com`, tùy chọn dùng `CONTEXT7_API_KEY`, rồi in fetched
+content trong JSON. Chúng không ghi cache hay tệp `llms.txt` trừ khi workflow
+xung quanh redirect hoặc lưu output rõ ràng.
+
+## Theo đường bằng chứng
+
+1. **Skill phân loại query.** Nó trích library cùng topic ngắn hoặc coi yêu cầu
+   là tổng quát.
+2. **Skill lấy index.** Context7 lookup theo topic fallback sang general library
+   lookup khi topic endpoint không có.
+3. **Skill ưu tiên trang.** Getting-started và installation được nhóm riêng với
+   API guide, advanced material, migration note và supplementary source khác.
+4. **Skill mở tài liệu chính.** Finding phải đến từ official page đúng version
+   được index liên kết, không chỉ từ tiêu đề index.
+5. **Skill fallback có chủ đích.** Khi thiếu official docs, Skill có thể xem
+   official repository và ghi nhãn claim suy ra từ README, test, example hay code.
+6. **Skill tổng hợp có citation.** Mỗi behavior hoặc version claim trỏ đến trang
+   hỗ trợ nó; conflict và khoảng trống tài liệu vẫn hiện rõ.
+
+## Giữ truy cập source an toàn
+
+<Callout type="warn" title="Tra cứu tài liệu có thể rời khỏi project cục bộ">
+  Fetch path liên hệ Context7 và các documentation site được liên kết. Repository
+  fallback có thể clone source và tạo Repomix bundle. Hãy duyệt provider, private
+  source, destination và retention boundary trước khi dùng material nhạy cảm.
+</Callout>
+
+- Environment lookup có thể đọc `.env` tại cấp Skill, shared-Skills và runtime;
+  process environment có độ ưu tiên cao nhất. Không in hoặc cite token value.
+- `CONTEXT7_API_KEY` là tùy chọn cho fetcher. `GITHUB_TOKEN` và
+  `GEMINI_API_KEY` có trong environment example nhưng core script detect, fetch
+  và analyze không yêu cầu chúng.
+- Clone repository, checkout tag, cài Repomix global và ghi
+  `repomix-output.xml` là external hoặc persistent effect. Xin duyệt và dùng
+  destination có giới hạn trước khi thực hiện.
+- Public web access vẫn có thể dùng provider quota. External model, paid API
+  hoặc agent distribution rộng cần cost approval riêng.
+- Không trình bày community tutorial ngang với official versioned docs. Khi
+  source xung đột, chỉ ra conflict và giải thích authority đã chọn.
+
+## Xác minh kết quả
+
+Kết quả hoàn chỉnh phải nêu library cùng version, phân biệt direct documentation
+với code inference, liên kết từng primary source, tóm tắt câu trả lời cho topic,
+ghi fallback và xác định khoảng trống chưa giải quyết. Nếu repository được clone
+hoặc pack, kết quả cũng phải báo destination, generated bundle, cleanup status
+và disk impact.
+
+Test đi kèm bao phủ normalize và classify query, dựng Context7 URL, parse cùng
+nhóm ưu tiên URL và gợi ý distribution. Chúng không chứng minh live provider
+khả dụng hay trang lấy về đúng với release được hỏi.
+
+## Khắc phục sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Phát hiện sai topic | Nêu rõ library, version và một feature keyword ngắn. |
+| Context7 không trả tài liệu | Thử `llms.txt` hoặc docs site chính thức đúng version, rồi official repository. |
+| Source không nhất quán | Ưu tiên official source đúng version và trình bày cả hai claim cùng scope. |
+| Kết quả chỉ cite index | Mở primary page được liên kết và gắn citation vào claim mà trang hỗ trợ. |
+| Repository bundle quá rộng | Giới hạn clone hoặc Repomix include set vào docs, tests, examples và source liên quan. |
+| Runtime không nhận ra Skill | Xác nhận target và scope, khởi động lại runtime rồi xem [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+## Biết các giới hạn hiện tại
+
+- Query classification dựa trên pattern và có thể phân loại sai câu mơ hồ.
+- Coverage, độ mới của trang, rate limit và linked URL trên Context7 là external
+  state; xác minh claim quan trọng với official page.
+- Repository analysis là code-based evidence, không thay thế documented public
+  contract.
+- Gợi ý thời gian và số agent trong source là projection, không phải bảo đảm hay
+  parallelism bắt buộc.
+- Stable và beta đóng package script cùng workflow `ak:docs-seeker` giống nhau.

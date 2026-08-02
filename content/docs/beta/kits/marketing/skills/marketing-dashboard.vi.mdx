@@ -1,0 +1,124 @@
+---
+title: Duyệt asset cục bộ với ak:marketing-dashboard
+description: Chạy và kiểm tra dashboard Assets, Brand và Settings hiện tại với ranh giới rõ về storage, privacy và authentication.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:marketing-dashboard` để vận hành ứng dụng Vue và Hono cục bộ hiện tại
+nhằm duyệt marketing asset, kiểm tra brand context, upload logo đã validate và
+cấu hình API base URL của browser client. README là nguồn vận hành; ứng dụng
+hiện tại không có campaign manager, content library, AI generation endpoint hay
+automation recipe.
+
+## Chọn dashboard để kiểm tra cục bộ
+
+### Dùng ak:marketing-dashboard khi
+
+- Bạn cần view Assets (`/`), Brand (`/brand`) hoặc Settings (`/settings`).
+- Bạn muốn rescan shared asset, preview tệp hỗ trợ, cập nhật asset metadata,
+  kiểm tra token hoặc voice hay upload logo sau khi được duyệt.
+
+### Chọn workflow khác khi
+
+- Bạn cần performance analytics. Dùng `ak:analytics` hoặc `ak:analyze`.
+- Bạn cần cloud asset sync, vận hành campaign, tạo content hay deployment. Các
+  behavior này không được dashboard triển khai.
+- Bạn chỉ cần mode token của launcher. Dùng `ak:dashboard`.
+
+## Chuẩn bị runtime và dữ liệu cục bộ
+
+Resolve thư mục Skill đã cài qua live runtime catalog. Khuyến nghị Node.js 20
+LTS. Server dùng Hono và `better-sqlite3` tùy chọn; frontend dùng Vue 3 và Vite.
+Review port `3457`, `5173`, quyền network tới npm, shared `assets/`,
+`docs/brand-guidelines.md`, `assets/design-tokens.json`, `assets/logos/`,
+`app/dist/` và `data/marketing.db` trước khi cho phép thay đổi.
+
+Scanner tạo ID 12 ký tự từ relative asset path và ghi path, name, category,
+format, size, timestamp, tag, reference, campaign label cùng trạng thái suy
+đoán AI-generated. SQLite còn có thể lưu `ai_prompt`, `r2_status` và `r2_url`;
+các field này không chứng minh đã sync R2. Coi filename, prompt, path, URL,
+brand guidance và nội dung tệp là có thể bí mật. Preview text thô giới hạn 10
+MB, nhưng đây là ranh giới kích thước, không phải privacy control.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:marketing-dashboard ...` | Có thể resolve và chạy script cục bộ trong package với quyền rõ ràng. |
+| Cursor | `/ak:marketing-dashboard ...` | Cách gọi bằng slash đã được người dùng xác minh; behavior process và shell có thể khác. |
+| Codex | `$ak:marketing-dashboard ...` | Native discovery được hỗ trợ; chạy cục bộ vẫn phụ thuộc tool cùng phê duyệt. |
+
+## Chạy Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:marketing-dashboard "Resolve thư mục Skill đã cài, giải thích thay đổi dependency và storage, sau đó chỉ chạy development khi được duyệt"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:marketing-dashboard "Resolve thư mục Skill đã cài, giải thích thay đổi dependency và storage, sau đó chỉ chạy development khi được duyệt"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:marketing-dashboard "Resolve thư mục Skill đã cài, giải thích thay đổi dependency và storage, sau đó chỉ chạy development khi được duyệt"
+```
+
+  </Tab>
+</Tabs>
+
+Các script được ghi nhận là `./start.sh`, `./stop.sh`, `./build.sh` và
+`./start-production.sh`. Chạy chúng từ thư mục Skill đã resolve, không từ path
+chỉ dành cho Claude được giả định.
+
+## Hiểu các giai đoạn
+
+1. Đọc README đã cài và resolve thư mục Skill.
+2. Review dependency, port, shared source path, database, build cùng effect PID.
+3. Chạy development hoặc build rồi chạy production cục bộ theo yêu cầu rõ ràng.
+4. Dùng route Assets và Brand; tách action đọc khỏi scan, cập nhật metadata,
+   upload logo và tạo filesystem.
+5. Báo URL, health, mutation cùng remediation SQLite thực tế; dừng process đã sở hữu.
+
+## Bảo vệ tệp và quyền truy cập cục bộ
+
+<Callout type="warn" title="Field API key không phải security boundary đang hoạt động">
+  Middleware API key của server bị tắt. Settings lưu giá trị legacy trong
+  `sessionStorage`, nhưng server không thực thi nó. Giữ service trong môi trường
+  cục bộ đáng tin cậy, không expose như production API được bảo vệ và không nhập
+  secret thật với kỳ vọng kiểm soát truy cập.
+</Callout>
+
+Logo upload ghi PNG, JPEG, SVG hoặc WebP tối đa 5 MB vào `assets/logos/` sau khi
+sanitize filename. Scan ghi asset metadata vào SQLite, còn metadata update có
+thể đổi prompt cùng field R2. Đây là mutation cục bộ cần phê duyệt. Không action
+dashboard nào cấp quyền upload bên ngoài, publish, truy cập provider hay chi tiêu.
+
+## Xác minh output và bằng chứng
+
+Xác minh `GET /health`; kết quả route Assets và Brand; tệp thực sự được ghi;
+record SQLite; cùng URL frontend/API được báo. Trong development, mong đợi
+`http://localhost:5173` và `http://localhost:3457`; production phục vụ app đã
+build từ `http://localhost:3457`. Ghi format không hỗ trợ, lỗi đọc, thiếu tệp
+brand cùng write bị bỏ qua hoặc thất bại.
+
+## Xử lý sự cố và biết giới hạn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| SQLite driver không khả dụng | Từ `server/`, chạy `npm install`; ưu tiên Node.js 20 LTS. Trên Windows, guidance trong package có thể yêu cầu C++ Build Tools và `npm rebuild better-sqlite3 --build-from-source`. |
+| Thiếu dữ liệu Brand | Xác nhận `assets/design-tokens.json` và `docs/brand-guidelines.md`; không tạo giả. |
+| Upload logo lỗi | Kiểm tra MIME type, giới hạn 5 MB, filename đã sanitize và quyền ghi. |
+| Thiếu feature tạo nội dung hoặc campaign | Nó nằm ngoài product surface hiện tại. Không suy diễn behavior từ description cũ. |
+| Runtime không tìm thấy Skill | Làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Dashboard không bảo đảm authentication, network isolation, cloud sync, AI
+feature, vận hành campaign hay provider compatibility. Xem
+[Marketing Kit](../../marketing) và [Runtime adapter](../../../concepts/runtime-adapters).

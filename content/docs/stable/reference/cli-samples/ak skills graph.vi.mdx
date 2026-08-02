@@ -1,0 +1,79 @@
+---
+title: ak skills graph
+description: Tạo workflow graph cục bộ và phân biệt edge explicit, derived với heuristic opt-in.
+---
+
+Dùng `ak skills graph` để xem quan hệ workflow được khai báo hoặc mô tả bởi các
+skill trong local kit source.
+
+## Cách dùng
+
+```bash
+ak skills graph
+```
+
+Lệnh không nhận argument theo vị trí.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--edge-kind <kind>` | Trống | Giữ một edge kind có thể lặp: `typically_follows`, `typically_precedes` hoặc `related`. Giá trị không được validate; giá trị lạ tạo kết quả không có edge khớp. |
+| `--heuristic` | `false` | Thêm edge `related` từ co-mention dạng literal `/ak:<skill>`. |
+| `--kit <kit>` | Trống | Load đúng một local kit ID. |
+| `--skill <skill>` | Trống | Giữ skill khớp đầu tiên và connected component của nó sau khi lọc edge. |
+
+Source directory là `AGENTKIT_KITS_DIR` hoặc `./kits`. Lệnh này không có cờ
+`--kits-dir`.
+
+## Hiểu bằng chứng graph
+
+| Confidence | Source | Mặc định |
+| --- | --- | --- |
+| `explicit` | `metadata.workflow.follows` hoặc `metadata.workflow.precedes` trong frontmatter | Có |
+| `derived` | Dòng `Typically follows:` hoặc `Typically precedes:` trong section `Workflow Position` | Có |
+| `heuristic` | Reference literal `/ak:` ở bất kỳ đâu trong nội dung skill | Chỉ với `--heuristic` |
+
+Heuristic edge là gợi ý lexical, không chứng minh execution order hay dependency.
+View `--skill` dùng transitive undirected connectivity, không chỉ immediate
+neighbor. Nếu selector không khớp node nào, implementation hiện giữ nguyên full
+graph; hãy kiểm tra kết quả thay vì giả định graph rỗng.
+
+Internal composition kit không được phát như user-facing kit riêng. Export hợp
+lệ của child kit vẫn có thể project skill kế thừa thành node ID của child kit.
+Kit, skill hoặc relationship target không đọc/resolve được sẽ trở thành warning
+khi có thể thay vì làm hỏng toàn bộ graph.
+
+## Đầu ra
+
+Human stdout liệt kê số node và edge, rồi outgoing edge và warning. JSON dùng
+`kind=skills.graph` với các field sau dưới `data`:
+
+```text
+schemaVersion: 1
+nodes[]: id, name, kitId, description?, category?, tags, runtimeSupport?, sourcePath?
+edges[]: id, source, target, kind, confidence, evidence?
+warnings[]
+```
+
+`sourcePath`, evidence và warning có thể lộ relative local kit path hoặc lỗi
+metadata. Lệnh không đưa body skill vào output.
+`runtimeSupport` phản ánh các installable adapter đã đăng ký, không phải phép thử
+compatibility trực tiếp theo từng skill.
+
+## Tác động và mã thoát
+
+Lệnh chạy cục bộ, chỉ đọc, không tương tác và không gửi request mạng. Không có
+cache, backup, apply hay force behavior.
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Graph đã được tạo, kể cả graph rỗng hoặc filter không có edge. |
+| `1` | Không tạo được local source hoặc build graph thất bại. Argument theo vị trí thừa hiện cũng dùng đường này. |
+| `2` | Không parse được cờ. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skills graph`](../cli/ak_skills_graph)
+- [Liệt kê local skill](../cli/ak_skills_list)
+- [Xem metadata skill](../cli/ak_skills_show)

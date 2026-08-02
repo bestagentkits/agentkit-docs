@@ -1,0 +1,131 @@
+---
+title: ak config prefs validate
+description: Validate AgentKit YAML against the schema embedded in the CLI and use findings safely in local or CI checks.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak config prefs validate` after editing AgentKit configuration or when a
+preference is not taking effect. It checks YAML structure and the config schema
+embedded in the installed CLI; it does not fetch a schema from the network.
+
+## Usage
+
+```bash
+ak config prefs validate
+```
+
+The command accepts no positional arguments.
+
+## Command flag
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--file <path>` | Empty | Validate exactly one named file instead of the existing user and current-project configs. |
+
+Shared flags such as `--json`, `--no-interactive`, `--quiet`, `--verbose`, and
+`--yes` are described in [CLI conventions](../cli-conventions).
+
+## Choose what to validate
+
+Without `--file`, the command checks whichever of these files exist, in this
+order:
+
+1. `$AGENTKIT_HOME/config.yaml`, or `~/.agentkit/config.yaml` by default.
+2. `.agentkit/config.yaml` under the current working directory.
+
+```bash
+ak config prefs validate
+```
+
+Missing default files are skipped. If neither exists, the human result says
+there is nothing to validate and exits `0`; JSON returns an empty `files` array.
+The command does not search parent directories for a project config.
+
+Default discovery currently skips any candidate whose initial filesystem
+status check fails; it does not distinguish “missing” from another status
+error. For a strict CI check that must fail on an inaccessible expected file,
+name that file explicitly with `--file`.
+
+Use `--file` when CI should check a committed file or when the file lives
+elsewhere:
+
+```bash
+ak config prefs validate --file ./config.yaml
+```
+
+An explicitly named missing or unreadable file is an error. `--file -` does not
+read stdin; `-` is treated as a file path.
+
+## Interpret findings
+
+The validator reports the file, severity, line, config path, and message for
+each finding.
+
+- `error` means the YAML cannot be parsed or the normalized document violates
+  the embedded schema. Any error makes the command exit `1`.
+- `warning` marks a legacy key spelling that this CLI can still read. Warnings
+  do not make the file invalid and do not change exit `0`.
+
+Hook names and skill IDs are treated as identifiers, not field spellings.
+Validation messages redact values from credential sections and other
+secret-shaped fields before writing them to terminal or CI output.
+
+<Callout type="info">
+  The result describes compatibility with the schema in the CLI you ran. A
+  newer or older AgentKit binary can embed a different schema, so validate with
+  the release that will consume the file.
+</Callout>
+
+## Output for automation
+
+```bash
+ak config prefs validate --json
+```
+
+The command writes one JSON report to stdout, including when schema findings
+make it exit `1`:
+
+```text
+schema_version: 1
+files: array
+files[].path: string
+files[].findings: array
+files[].findings[].severity: "warning" or "error"
+files[].findings[].line: integer
+files[].findings[].path: string
+files[].findings[].message: string
+```
+
+This is a command-specific report rather than the shared `kind`/`data`
+envelope, and it is not NDJSON. A parse failure that cannot be attributed to a
+key can use line `0` and an empty finding path.
+
+File-read and internal validation failures can return before the report is
+written and are not guaranteed to emit a structured JSON error. Flag-parse
+errors can remain plain-text usage. Always check the process status before
+consuming the report.
+
+## Effects and interaction
+
+The command only reads local files and the schema embedded in the binary. It
+does not rewrite configuration, create backups, start a process, contact a
+provider, or use AgentKit authentication. It never prompts or reads stdin, so
+`--yes` and `--no-interactive` do not change its behavior. `--quiet` does not
+suppress this command-specific report, and `--verbose` adds no command-specific
+diagnostics. There is no preview, apply, dry-run, or force mode.
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | Every checked file has no errors; warnings may still be present, or no default files exist. | Review warnings and update legacy spellings when convenient. |
+| `1` | A file contains an error, cannot be read, or validation itself failed. | Fix the reported file; do not overwrite it from validator output. |
+| `2` | Arguments or flags were invalid. | Correct the invocation. |
+
+After a manual fix, rerun the same command. To confirm which value wins after
+both files validate, use `ak config prefs resolve`.
+
+## Related commands
+
+- [CLI conventions](../cli-conventions)

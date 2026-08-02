@@ -1,0 +1,177 @@
+---
+title: ak kit uninstall
+description: Preview or remove one kit's owned runtime output while preserving user and sibling state.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak kit uninstall` to plan or apply removal of one installed Kit. The
+command classifies installed paths from lifecycle evidence, removes clean
+AgentKit-owned state, and preserves user-modified, unknown, and sibling-owned
+content.
+
+## Syntax
+
+```bash
+ak kit uninstall <kit-name>
+```
+
+`<kit-name>` is required and must be an installable Kit ID.
+
+## Before you run
+
+Uninstall is local and does not contact the registry or require authentication
+or entitlement. It reads install manifests, ownership indexes, runtime settings,
+and provider state for the selected route.
+
+The command is a preview unless `--yes` is present. It does not open an
+interactive confirmation prompt.
+
+<Callout type="warning">
+  `--json`, `--no-interactive`, and a TTY do not authorize deletion. Only
+  `--yes` applies the plan. `--dry-run` always keeps the command in preview mode.
+</Callout>
+
+## Arguments
+
+`<kit-name>` is the single installed Kit ID whose selected route will be planned
+or removed. It is required; the command does not prompt for a Kit.
+
+The command has no alias.
+
+## Options
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `--dry-run` | `false` | Show the removal plan without changing installed files. |
+| `-g, --global` | `false` | Select user/global native lifecycle roots. |
+| `--kits-dir <dir>` | Empty | Supply a local source for legacy fallback classification when recorded manifests are unavailable. |
+| `--plugin-mode` | `false` | Select Claude Code plugin delivery instead of native routes. |
+| `--project-dir <dir>` | Empty | Select a project-native route, or a project plugin when combined with `--plugin-mode`. |
+
+Shared flags are documented in [CLI conventions](../cli-conventions).
+
+## Select the exact scope and mode
+
+| Selector | Route |
+| --- | --- |
+| No scope or mode flags | Broad user-scope cleanup: the recognized user plugin/legacy roots and registered global native lifecycle roots for the Kit. It does not select the current project-native route. |
+| `--global` | Registered user/global native lifecycle roots. |
+| `--global --plugin-mode` | Only the Claude Code user plugin. |
+| `--project-dir <dir>` | Project-native lifecycle roots for the selected project. |
+| `--plugin-mode` | Claude Code project plugin in the current directory. |
+| `--plugin-mode --project-dir <dir>` | Claude Code project plugin in the specified project. |
+
+`--global` cannot be combined with `--project-dir`. Project and user state are
+independent; a project-plugin uninstall does not authorize user-plugin or native
+cleanup.
+
+## Examples
+
+```bash
+# Preview the default broad user-scope plan.
+ak kit uninstall engineer --dry-run
+
+# Apply the reviewed default plan.
+ak kit uninstall engineer --yes
+
+# Remove only the Claude user plugin.
+ak kit uninstall engineer --global --plugin-mode --yes
+
+# Preview one project-native route as JSON.
+ak kit uninstall engineer --project-dir ./app --json
+
+# Remove one project plugin.
+ak kit uninstall engineer --plugin-mode --project-dir ./app --yes
+```
+
+## Preview, apply, and decline semantics
+
+If `--yes` is absent, the command computes and renders the full plan, changes no
+owned surface, then exits `3`. `--dry-run` does the same even when `--yes` is
+also present. This exit is a completed preview, not a failed classification.
+
+An applied uninstall holds the Kit lifecycle lock from planning through
+mutation. A dry-run is lock-free because it does not change owned surfaces.
+
+## Output and streams
+
+Human output goes to stdout. It reports `dry-run` or `uninstalled`, counts for
+delete, preserve, and skip, warnings, and every actionable recovery snapshot.
+
+With `--json`, stdout contains a versioned envelope with
+`kind=kit.uninstall`. Its `data` includes:
+
+```text
+kit, dryRun, pluginDir, pluginDirs
+snapshotId, snapshotIds, recovery
+removedPaths, preservedPaths, skippedPaths, configPaths
+deactivationSteps, warnings, manifestResult
+deleted, preserved, skipped, success
+```
+
+A successful preview has `data.success=true` and `data.dryRun=true`, then the
+process exits `3`. Mutation failures in JSON mode write an error envelope to
+stderr with optional `recovery.snapshots`. Flag-parse errors can remain
+plain-text usage.
+
+## Exit status
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The reviewed uninstall plan was applied successfully. |
+| `1` | Invalid Kit or route, unreadable or unsafe ownership state, snapshot failure, provider/config failure, mutation failure, or refused automatic rollback. |
+| `2` | Cobra rejected flags or arguments. |
+| `3` | Preview completed because `--yes` was absent or `--dry-run` was set. |
+| `4` | Another Kit lifecycle mutation holds the lock. |
+
+## Effects and ownership safety
+
+Depending on the selected route, an applied uninstall can remove clean owned
+runtime files and lifecycle metadata, deactivate a Claude plugin, update shared
+runtime settings, remove Kit-owned Codex registrations, and clean recorded
+manifest state.
+
+Classification is anchored on install-time paths and hashes, not on a rebuilt
+current Kit source:
+
+- A recorded path whose bytes still match can be removed.
+- A recorded path changed by the user is preserved.
+- Unknown files are preserved.
+- Shared files and entries owned by another Kit or the user are preserved.
+- Unsafe symlinks, changed mutation boundaries, corrupt ownership evidence, and
+  ambiguous shared state fail closed.
+
+For global Codex Hooks, ownership evidence created by installation participates
+in rollback. Last-owner cleanup can remove AgentKit-emptied groups, events, and
+the outer `hooks` wrapper instead of leaving empty owned structures. Pre-existing
+empty structures, foreign fields, user Hooks, and sibling-owned entries remain
+preserved; this does not authorize deleting arbitrary shared Hook content.
+
+The default plan can span several user-scope providers. Always inspect
+`removedPaths`, `configPaths`, and `preservedPaths` before adding `--yes`.
+
+## Recovery and limitations
+
+Before applied writes, AgentKit creates snapshots for affected roots and exact
+shared provider files. Output supplies `ak backups verify`, a bounded restore
+command, or a manual recovery path for snapshots outside normal restore scope.
+
+```bash
+ak backups verify <id>
+ak backups show <id>
+```
+
+Rollback guards concurrent changes and may refuse a destructive automatic
+restore when it cannot prove the live postimage. Keep reported recovery data
+and inspect state manually in that case. Snapshots are not full-machine backups,
+and multi-file operations are not guaranteed to be transactional across process
+termination.
+
+## Related commands
+
+- [`ak kit install`](./kit-install) installs a route.
+- [`ak kit refresh`](./kit-refresh) reconciles owned output without uninstalling the route.
+- [`ak kit repair-install-mode`](./kit-repair-install-mode) resolves one mixed Claude project mode while keeping native output.
+- [Complete command facts](../cli/ak_kit_uninstall)
+- [Kit installation troubleshooting](../../troubleshooting/kit-installation)
