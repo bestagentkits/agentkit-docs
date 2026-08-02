@@ -1,0 +1,177 @@
+---
+title: Engineer Kit lifecycle and recovery
+description: Refresh, recover, and uninstall Engineer Kit without crossing AgentKit ownership boundaries.
+---
+
+Engineer Kit lifecycle operations manage installation files, not the rest of
+your project or runtime home. AgentKit records the files it emits, then uses
+that evidence to decide what it may refresh, restore, or remove.
+
+Use this overview to keep the Kit, runtime, scope, and delivery mode aligned
+throughout an operation. A project install and a global install are separate,
+and Claude Code native and plugin delivery are not interchangeable recovery
+routes.
+
+## How lifecycle ownership starts
+
+Installing Engineer Kit creates a resolved runtime package and records the
+files emitted for that exact route. Shared Kit content is part of the same
+install; it is not a second Kit that you manage separately.
+
+```bash
+ak kit init engineer --target claude-code
+```
+
+If a project already contains supported AgentKit-managed files, `ak init` can
+adopt those files into project ownership evidence. Preview the adoption first:
+
+```bash
+ak init --dry-run
+ak init
+```
+
+Adoption does not install Engineer Kit and does not claim the whole project.
+Project code, plans, reports, media, and other workflow outputs remain your
+artifacts unless a Kit installation explicitly emitted and recorded them.
+
+Installed state is scoped by Kit, runtime, location, and delivery mode. Project
+and global copies can coexist. Within one Claude Code scope, native and plugin
+delivery are mutually exclusive and require an explicit, ownership-checked
+transition.
+
+## Choose the right update path
+
+The CLI and Engineer Kit have separate release lifecycles:
+
+| Goal | Use | Boundary |
+| --- | --- | --- |
+| Check or replace the `ak` binary only | [`ak self-update`](../../../reference/cli/ak_self-update) | Does not refresh installed Kit files. |
+| Review or apply project and global Kit updates | [`ak update`](../../../reference/cli/ak_update) | Can preview a selected project, Kit, runtime, and channel before applying. The interactive wizard can also offer CLI and Kit steps separately. |
+| Re-emit one installed Engineer route | [`ak kit refresh`](../../../reference/cli/ak_kit_refresh) | Rewrites current owned output and reconciles stale generated owned paths. It does not update the CLI or change scope or delivery mode for you. |
+
+Keep the same target, project or global scope, and Claude Code delivery mode
+when you refresh. If a Kit requires a newer CLI, update the CLI on the intended
+release channel first, then review the Kit operation again.
+
+## Preview before you apply
+
+Use `ak update` when you need a read-only Kit plan. An explicit dry run writes
+nothing and creates no recovery snapshot:
+
+```bash
+ak update . --kits engineer --dry-run
+```
+
+Apply only after the plan identifies the expected route and preserved files.
+`ak kit refresh` has a confirmation preview, but that prompt is not a dry run;
+non-interactive execution can continue to writes. In automation, use `--yes`
+only when you deliberately intend to apply the matching refresh route.
+
+Preview uninstall separately because removal has its own ownership plan:
+
+```bash
+ak kit uninstall engineer --project-dir . --dry-run
+```
+
+Do not use `--force` as routine recovery. Consider it only when the selected
+operation supports it, you have reviewed the exact conflict, and the scoped
+snapshot is an acceptable recovery boundary.
+
+## Understand what AgentKit can change
+
+AgentKit classifies every tracked path before a lifecycle write:
+
+| File state | Normal lifecycle behavior |
+| --- | --- |
+| A recorded file still matches its fingerprint | AgentKit may replace it during refresh or remove it during uninstall. |
+| A recorded file has changed | AgentKit preserves it by default and reports the conflict. Even a line-ending change counts as drift. |
+| A file is unknown, user-created, or foreign | AgentKit preserves it. Being inside a runtime directory does not make it owned. |
+| A tracked file is missing | AgentKit reports or skips it as appropriate instead of treating another file as a substitute. |
+
+The same boundary applies to shared settings and Hook registrations. AgentKit
+updates or removes entries it can attribute to the selected install and
+preserves unclaimed or user-managed content.
+
+Before supported mutations, the normal sequence is validation, ownership
+classification, preview, recovery snapshot, confirmed write, and ownership
+record update. A recovery snapshot contains the affected paths; it is not a
+backup of your whole project, runtime home, or machine.
+
+## Recover from a failed change
+
+Start with the operation report and current ownership state. Do not broadly
+delete runtime directories or immediately repeat the operation with `--force`.
+
+```bash
+ak audit
+ak backups show <id>
+ak backups verify <id>
+ak recover <id> --dry-run
+```
+
+Use the exact snapshot ID printed by the operation. If the preview is correct,
+apply the same `ak recover <id>` route and keep every required `--allow-root`
+value shown for a project bundle.
+
+Restore is scoped and replace-only. It restores captured files, removes only
+exact paths recorded absent or explicitly approved AgentKit plugin directories,
+and normally leaves unrelated files created later in place. A multi-file
+restore is not transactional, so an interruption can leave an intermediate
+state.
+
+Some project-local snapshots are outside the normal restore command. In that
+case, follow the recovery path printed by the failed operation and copy back
+only the affected files from its snapshot-files directory. After either form
+of recovery, run `ak audit`, reopen the runtime, and refresh or reinstall the
+same route only if ownership state still requires it.
+
+## Uninstall without deleting unrelated work
+
+Match the uninstall route to the original install. A project-native install
+uses `--project-dir`; a global install uses `--global`; a Claude Code plugin
+install also uses `--plugin-mode`.
+
+```bash
+ak kit uninstall engineer --project-dir . --dry-run
+ak kit uninstall engineer --project-dir . --yes
+```
+
+Uninstall takes a snapshot before applying changes and removes only matching,
+unmodified AgentKit-owned output. Modified owned files, unknown files, foreign
+settings, and content shared with another owned install survive. Their presence
+can leave part of an install directory in place, which is expected protection,
+not permission to delete the directory wholesale.
+
+## Keep Codex ownership boundaries visible
+
+Codex can project only representable Hook groups. A successful Engineer install
+may therefore report omitted groups while keeping supported Hooks active. For a
+global Codex install, AgentKit merges its registrations into the shared Hooks
+document. User and unclaimed entries, registrations owned by sibling Kits, and
+foreign fields remain in place. Identical sibling registrations can share
+ownership instead of being duplicated, while an owned registration you changed
+is preserved and reported. AgentKit refuses malformed or concurrently changed
+state instead of overwriting it, and last-owner cleanup removes only empty
+AgentKit-created structure.
+
+On Windows, an eligible `.cjs` Hook inside the Codex home can use a managed
+sibling `.cmd` shim when an ordinary path contains spaces. The shim is an owned
+output, so refresh and uninstall apply the same fingerprint and preservation
+rules to it. External paths, `cmd.exe` metacharacters, non-ASCII shim basenames,
+and unsafe baked arguments are not made safe by this mechanism; AgentKit warns
+or refuses instead of claiming universal path support.
+
+Treat a preserved or refused Hook change as an ownership signal. Review the
+install or refresh report instead of hand-editing AgentKit lifecycle metadata
+or assuming Claude Code and Codex Hook behavior is identical.
+
+## Continue with detailed guidance
+
+- Use [Installing kits](../../../guides/installing-kits) for exact target,
+  scope, Claude Code delivery, refresh, and uninstall options.
+- Use [Updating AgentKit and kits](../../../guides/updating) for CLI and Kit
+  previews, apply boundaries, and recovery commands.
+- Read [Projects, artifacts, and checkpoints](../../../concepts/projects-artifacts-checkpoints)
+  for the broader ownership and snapshot model.
+- Open the [CLI reference](../../../reference/cli) for exact syntax, flags, and
+  exit behavior.

@@ -1,0 +1,179 @@
+---
+title: Vòng đời và khôi phục Engineer Kit
+description: Làm mới, khôi phục và gỡ Engineer Kit mà không vượt qua ranh giới sở hữu của AgentKit.
+---
+
+Các thao tác vòng đời của Engineer Kit quản lý file cài đặt, không quản lý phần
+còn lại của project hay thư mục người dùng của runtime. AgentKit ghi nhận những
+file nó phát ra, sau đó dùng bằng chứng đó để quyết định file nào có thể được làm
+mới, khôi phục hoặc gỡ.
+
+Hãy giữ nguyên Kit, runtime, phạm vi và chế độ phân phối trong suốt một thao tác.
+Bản cài trong project và bản cài global là hai tuyến riêng biệt; cách phân phối
+native và plugin của Claude Code cũng không thể tự động thay thế cho nhau khi
+khôi phục.
+
+## Cách bắt đầu ghi nhận quyền sở hữu
+
+Cài Engineer Kit sẽ tạo package đã được resolve cho runtime và ghi nhận các file
+được phát ra cho đúng tuyến đó. Nội dung Kit dùng chung thuộc cùng bản cài, không
+phải Kit thứ hai cần được quản lý riêng.
+
+```bash
+ak kit init engineer --target claude-code
+```
+
+Nếu project đã có các file được AgentKit hỗ trợ quản lý, `ak init` có thể đưa
+những file đó vào bằng chứng sở hữu của project. Hãy xem trước việc tiếp nhận:
+
+```bash
+ak init --dry-run
+ak init
+```
+
+Việc tiếp nhận không cài Engineer Kit và không nhận quyền sở hữu toàn bộ project.
+Code, plan, report, media và các output khác của workflow vẫn là artifact của
+bạn, trừ khi bản cài Kit đã trực tiếp phát ra và ghi nhận chúng.
+
+Trạng thái cài đặt được phân biệt theo Kit, runtime, vị trí và chế độ phân phối.
+Bản cài project và global có thể cùng tồn tại. Trong cùng một phạm vi Claude
+Code, native và plugin loại trừ lẫn nhau; việc chuyển đổi phải được chọn rõ ràng
+và đi qua kiểm tra quyền sở hữu.
+
+## Chọn đúng tuyến cập nhật
+
+CLI và Engineer Kit có vòng đời phát hành riêng:
+
+| Mục tiêu | Dùng | Ranh giới |
+| --- | --- | --- |
+| Chỉ kiểm tra hoặc thay binary `ak` | [`ak self-update`](../../../reference/cli/ak_self-update) | Không làm mới file của Kit đã cài. |
+| Xem lại hoặc áp dụng cập nhật Kit trong project và global | [`ak update`](../../../reference/cli/ak_update) | Có thể xem trước project, Kit, runtime và kênh đã chọn trước khi áp dụng. Trình hướng dẫn tương tác cũng có thể đề xuất riêng từng bước cho CLI và Kit. |
+| Phát lại một tuyến Engineer đã cài | [`ak kit refresh`](../../../reference/cli/ak_kit_refresh) | Ghi lại output hiện tại thuộc quyền sở hữu và đối soát đường dẫn sinh tự động đã cũ. Lệnh không cập nhật CLI hoặc tự đổi phạm vi hay chế độ phân phối. |
+
+Khi làm mới, hãy giữ nguyên target, phạm vi project hoặc global và chế độ phân
+phối của Claude Code. Nếu Kit yêu cầu CLI mới hơn, hãy cập nhật CLI trên kênh
+phát hành dự định dùng trước rồi xem lại thao tác với Kit.
+
+## Xem trước trước khi áp dụng
+
+Dùng `ak update` khi bạn cần kế hoạch Kit chỉ đọc. Dry run rõ ràng không ghi file
+và không tạo snapshot khôi phục:
+
+```bash
+ak update . --kits engineer --dry-run
+```
+
+Chỉ áp dụng sau khi kế hoạch xác định đúng tuyến và những file sẽ được giữ.
+`ak kit refresh` có màn hình xác nhận xem trước, nhưng prompt đó không phải dry
+run; khi chạy không tương tác, lệnh có thể tiếp tục ghi file. Trong automation,
+chỉ dùng `--yes` khi bạn chủ động áp dụng đúng tuyến refresh.
+
+Hãy xem trước thao tác gỡ riêng vì thao tác này có kế hoạch quyền sở hữu riêng:
+
+```bash
+ak kit uninstall engineer --project-dir . --dry-run
+```
+
+Không dùng `--force` như cách khôi phục thông thường. Chỉ cân nhắc khi thao tác
+đã chọn hỗ trợ flag này, bạn đã review đúng xung đột và snapshot có phạm vi là
+ranh giới khôi phục chấp nhận được.
+
+## Hiểu những gì AgentKit có thể thay đổi
+
+AgentKit phân loại mọi đường dẫn được theo dõi trước khi ghi trong vòng đời:
+
+| Trạng thái file | Hành vi vòng đời thông thường |
+| --- | --- |
+| File đã ghi nhận vẫn khớp fingerprint | AgentKit có thể thay file khi refresh hoặc gỡ file khi uninstall. |
+| File đã ghi nhận nhưng đã thay đổi | AgentKit mặc định giữ file và báo xung đột. Ngay cả thay đổi line ending cũng được tính là drift. |
+| File không rõ nguồn gốc, do người dùng tạo hoặc thuộc bên khác | AgentKit giữ file. Việc nằm trong thư mục runtime không biến file thành nội dung thuộc sở hữu. |
+| File được theo dõi nhưng đang thiếu | AgentKit báo hoặc bỏ qua tùy trường hợp thay vì dùng file khác làm nội dung thay thế. |
+
+Ranh giới tương tự áp dụng cho setting dùng chung và đăng ký Hook. AgentKit chỉ
+cập nhật hoặc gỡ mục có thể quy về bản cài đã chọn, đồng thời giữ nội dung chưa
+được nhận quyền sở hữu hoặc do người dùng quản lý.
+
+Trước thao tác được hỗ trợ, trình tự thông thường là xác thực, phân loại quyền sở
+hữu, xem trước, tạo snapshot khôi phục, ghi sau khi xác nhận rồi cập nhật bản ghi
+quyền sở hữu. Snapshot chỉ chứa các đường dẫn bị ảnh hưởng; đây không phải backup
+của toàn bộ project, thư mục runtime hay máy tính.
+
+## Khôi phục sau một thay đổi thất bại
+
+Bắt đầu từ report của thao tác và trạng thái quyền sở hữu hiện tại. Không xóa
+diện rộng thư mục runtime hoặc lập tức chạy lại với `--force`.
+
+```bash
+ak audit
+ak backups show <id>
+ak backups verify <id>
+ak recover <id> --dry-run
+```
+
+Dùng đúng ID snapshot mà thao tác đã in ra. Nếu phần xem trước chính xác, áp dụng
+cùng tuyến `ak recover <id>` và giữ mọi giá trị `--allow-root` bắt buộc được hiển
+thị cho project bundle.
+
+Restore có phạm vi và chỉ thay thế. Thao tác khôi phục các file đã chụp, chỉ gỡ
+đường dẫn chính xác được ghi là từng vắng mặt hoặc thư mục plugin AgentKit đã
+được phê duyệt rõ ràng, đồng thời thường giữ lại file không liên quan được tạo
+sau đó. Restore nhiều file không có tính giao dịch; nếu bị gián đoạn, trạng thái
+có thể dừng ở giữa.
+
+Một số snapshot cục bộ của project nằm ngoài lệnh restore thông thường. Khi đó,
+hãy làm theo đường dẫn khôi phục mà thao tác thất bại đã in ra và chỉ chép lại
+những file bị ảnh hưởng từ thư mục snapshot-files. Sau mỗi hình thức khôi phục,
+hãy chạy `ak audit`, mở lại runtime và chỉ refresh hoặc cài lại đúng tuyến nếu
+trạng thái quyền sở hữu vẫn yêu cầu.
+
+## Gỡ Kit mà không xóa công việc không liên quan
+
+Hãy khớp tuyến uninstall với bản cài ban đầu. Bản cài native trong project dùng
+`--project-dir`; bản cài global dùng `--global`; bản cài plugin Claude Code dùng
+thêm `--plugin-mode`.
+
+```bash
+ak kit uninstall engineer --project-dir . --dry-run
+ak kit uninstall engineer --project-dir . --yes
+```
+
+Uninstall tạo snapshot trước khi áp dụng và chỉ gỡ output không thay đổi, khớp
+quyền sở hữu của AgentKit. File thuộc sở hữu nhưng đã sửa, file không rõ nguồn
+gốc, setting của bên khác và nội dung dùng chung với bản cài thuộc sở hữu khác
+đều được giữ. Vì vậy, một phần thư mục cài đặt có thể còn lại; đây là cơ chế bảo
+vệ dự kiến, không phải quyền xóa toàn bộ thư mục.
+
+## Giữ ranh giới sở hữu của Codex
+
+Codex chỉ có thể phát những nhóm Hook biểu diễn được. Vì vậy, một lần cài
+Engineer thành công có thể báo nhóm bị bỏ qua trong khi các Hook được hỗ trợ vẫn
+hoạt động. Với bản cài Codex global, AgentKit hợp nhất đăng ký của mình vào tài
+liệu Hooks dùng chung. Mục của người dùng hoặc chưa được nhận quyền sở hữu, đăng
+ký thuộc Kit khác và trường dữ liệu của bên khác đều được giữ. Đăng ký giống nhau
+của nhiều Kit có thể dùng chung quyền sở hữu thay vì bị nhân đôi; đăng ký thuộc
+AgentKit nhưng đã được bạn sửa cũng được giữ và báo lại. AgentKit từ chối trạng
+thái hỏng hoặc bị thay đổi đồng thời thay vì ghi đè, còn việc dọn dẹp chủ sở hữu
+cuối cùng chỉ gỡ cấu trúc trống do AgentKit tạo.
+
+Trên Windows, Hook `.cjs` đủ điều kiện nằm trong thư mục Codex có thể dùng shim
+`.cmd` cùng thư mục do AgentKit quản lý khi đường dẫn thông thường chứa khoảng
+trắng. Shim là output thuộc quyền sở hữu nên refresh và uninstall áp dụng cùng
+quy tắc fingerprint và bảo toàn. Cơ chế này không biến đường dẫn bên ngoài, ký
+tự đặc biệt của `cmd.exe`, basename shim không phải ASCII hoặc argument không an
+toàn thành hợp lệ; AgentKit sẽ cảnh báo hoặc từ chối thay vì tuyên bố hỗ trợ mọi
+đường dẫn.
+
+Hãy coi một thay đổi Hook được giữ hoặc bị từ chối là tín hiệu về quyền sở hữu.
+Review report cài đặt hoặc refresh thay vì sửa thủ công metadata vòng đời của
+AgentKit hay giả định hành vi Hook của Claude Code và Codex giống nhau.
+
+## Tiếp tục với hướng dẫn chi tiết
+
+- Dùng [Cài đặt Kit](../../../guides/installing-kits) để xem chính xác tùy chọn
+  target, phạm vi, cách phân phối Claude Code, refresh và uninstall.
+- Dùng [Cập nhật AgentKit và Kit](../../../guides/updating) để xem preview cho
+  CLI và Kit, ranh giới áp dụng cùng các lệnh khôi phục.
+- Đọc [Projects, artifacts và checkpoints](../../../concepts/projects-artifacts-checkpoints)
+  để hiểu mô hình quyền sở hữu và snapshot rộng hơn.
+- Mở [Tham chiếu CLI](../../../reference/cli) để xem cú pháp, flag và hành vi mã
+  thoát chính xác.
