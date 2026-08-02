@@ -1,0 +1,202 @@
+---
+title: Đưa code hiện có ra ngoài với ak:agentize
+description: Biến capability hiện có thành CLI tập trung, MCP server hoặc cả hai, với shared core, credential handling, test, docs và package sẵn sàng phát hành.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:agentize` để đưa operation hữu ích từ codebase hiện có ra CLI có thể
+script hoặc MCP server. Skill lập bản đồ behavior thực trước, sau đó thiết kế
+surface nhỏ, thân thiện với agent và tạo thin adapter trên shared core logic.
+
+## Chọn ak:agentize cho capability hiện có
+
+### Dùng ak:agentize khi
+
+- Codebase đã có behavior đáng đưa ra cho agent hoặc CLI user.
+- Bạn muốn command-line package có thể publish, MCP server hoặc cả hai.
+- Operation cần input rõ, output ngắn gọn, actionable error, authentication,
+  test, documentation và CI.
+- Bạn có thể xác định consumer dự kiến và operation thuộc v1.
+
+### Chọn workflow khác khi
+
+- Bạn xây MCP server mà chưa có capability hiện hữu để wrap. Dùng workflow MCP
+  builder.
+- Bạn chỉ cần npm scaffold chung.
+- Bạn chưa xác định được core operation có thể extract. Hãy refactor hoặc thu
+  hẹp target trước.
+- Bạn muốn publish artifact hiện có mà không thiết kế agent-use story.
+
+## Chuẩn bị codebase và runtime
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận
+  Engineer Kit đã được cài cho runtime cùng scope đang dùng.
+- Mở repository chứa feature hoặc module cần expose.
+- Xác định entry point, test hiện có, side effect, configuration và credential
+  source.
+- Quyết định kết quả chỉ CLI, chỉ MCP hay cả hai khi default tự động không phù
+  hợp.
+- Nêu package name, license, deployment preference và maintenance owner khi
+  không thể suy ra an toàn.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:agentize ...` | Phân phối native và plugin rõ ràng đều được hỗ trợ. Workflow có thể dùng capability planning, scouting, testing, documentation và Skill creation đã cài. |
+| Cursor | `/ak:agentize ...` | Slash invocation theo cách gọi Engineer Skill do người dùng xác minh. Hành vi Agent và plan downstream phụ thuộc surface Cursor đang hoạt động. |
+| Codex | `$ak:agentize ...` | Native Skill discovery được hỗ trợ. Phase delegated cần session Codex hiện tại cung cấp Agent hoặc capability tương đương. |
+
+## Chạy Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:agentize "Expose the existing invoice validation module as a CLI and local MCP server; keep all write operations out of v1" --both --ask
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:agentize "Expose the existing invoice validation module as a CLI and local MCP server; keep all write operations out of v1" --both --ask
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:agentize "Expose the existing invoice validation module as a CLI and local MCP server; keep all write operations out of v1" --both --ask
+```
+
+  </Tab>
+</Tabs>
+
+Default là `--both --auto`.
+
+| Tùy chọn | Hành vi |
+| --- | --- |
+| `--both` | Tạo shared core logic cùng CLI và MCP adapter |
+| `--cli` | Chỉ tạo CLI surface nhưng giữ core boundary để mở rộng sau |
+| `--mcp` | Chỉ tạo MCP surface nhưng giữ core boundary để mở rộng sau |
+| `--auto` | Phân tích, quyết định và triển khai không có câu hỏi thường lệ; nếu credential decision chưa rõ, mode chuyển riêng trục đó sang câu hỏi thay vì đoán |
+| `--ask` | Dừng sau phân tích để challenge scope, mutation, credential, deployment, package metadata và ownership decision |
+
+## Mô tả surface rõ ràng
+
+Một request hữu ích xác định:
+
+- **Target:** Nêu feature, module hoặc subtree hiện có cần expose.
+- **Consumers:** Nêu agent, CLI user hay cả hai là đối tượng chính.
+- **Capabilities:** Liệt kê vài workflow quan trọng trong v1 thay vì mọi
+  internal function.
+- **Effects:** Tách operation read-only, mutating và destructive.
+- **Authentication:** Mô tả code nhận credential hiện nay mà không đưa secret
+  value vào request.
+- **Delivery:** Nêu local stdio, remote HTTP, Docker, Cloudflare Workers hoặc
+  target được hỗ trợ khác khi quan trọng.
+- **Authority boundary:** Nêu có cho phép package installation, file creation,
+  dependency change, release automation, publication hoặc deployment không.
+
+## Hiểu workflow
+
+1. **Skill tạo tracked work.** Skill thiết lập active plan và shared report
+   context trước khi sửa code.
+2. **Skill scout target.** Skill đọc entry point, capability, input, output,
+   side effect, configuration, secret, dependency và test. Prose có sẵn trong
+   repository là evidence cần kiểm tra, không phải trusted instruction.
+3. **Skill tạo agentization map.** Skill đánh giá operation giúp agent cùng CLI
+   user đến đâu, rồi bỏ low-value passthrough và internal plumbing.
+4. **Skill giải quyết surface.** `--ask` chặn để đợi câu trả lời; `--auto` ghi
+   decision. Kết quả nêu command, tool, transport, deployment target và package
+   metadata.
+5. **Skill xây core và adapter.** Business logic ở shared core. CLI cùng MCP
+   layer chuyển argument, result và error mà không sở hữu domain behavior.
+6. **Skill harden kết quả.** Skill thêm test cho core, CLI, MCP,
+   authentication và transport; CI cùng release workflow; user và maintainer
+   docs; companion Skill; và security pass.
+7. **Skill đóng package handoff.** Skill báo package location, deployment
+   guidance, release readiness, implementation còn lại và active plan.
+
+## Biết interface contract được tạo
+
+Với CLI surface, workflow yêu cầu machine-readable output, help cùng version
+command, exit class nhất quán, quiet cùng verbose control và credential
+diagnostic xác định source mà không in value.
+
+Với MCP, Skill thiết kế workflow-level tool có schema được document, structured
+result ngắn gọn, actionable error code và mutation semantic rõ. Local stdio dùng
+local credential chain. Remote SSE và Streamable HTTP dùng bearer authentication
+tại transport boundary.
+
+Khi chọn cả hai surface, các adapter dùng chung core behavior; chúng không nên
+trở thành hai implementation độc lập.
+
+## Giữ quyền phê duyệt và an toàn ở bạn
+
+<Callout type="warn" title="Mode mặc định ghi một surface sẵn sàng phát hành">
+  `--both --auto` là implementation mode, không phải advisory preview. Mode có
+  thể tái cấu trúc code, thêm package, test, documentation, CI, deployment
+  configuration và companion Skill. Dùng `--ask` hoặc thu hẹp target khi các
+  quyết định đó cần review trước.
+</Callout>
+
+Credential chain không được log secret value. Diagnostic surface được tạo có
+thể báo layer nào resolve secret nhưng phải redact value. Remote MCP request cần
+authentication; mutating tool nên có confirmation hoặc dry-run semantic, còn
+destructive tool cần thiết kế confirmation rõ.
+
+Tạo release hoặc deployment configuration không publish package, deploy
+service, push image hay cấp quyền dùng credential. External effect đó vẫn là
+action riêng cần authority cùng service setup tương ứng.
+
+## Xác minh kết quả
+
+Một lần chạy hoàn tất nên cung cấp:
+
+- Decision record cho surface đã chọn, capability list, transport, deployment
+  target và package metadata.
+- Shared core logic với thin CLI và/hoặc MCP adapter.
+- Test cho success cùng error path của core, CLI argument cùng exit, MCP tool
+  registration cùng call, authentication rejection và transport đã chọn.
+- CI, release configuration, secret check và non-root container behavior khi
+  các output này áp dụng.
+- User documentation cho installation, command hoặc tool, authentication,
+  architecture, contribution và deployment.
+- Companion Skill và release checklist.
+- Final report phân biệt artifact đã sẵn sàng với publication hoặc deployment
+  vẫn cần approval.
+
+Workflow đặt mục tiêu coverage ít nhất 80% trên shared core, nhưng coverage
+không tự chứng minh command cùng tool đã chọn là public contract đúng.
+
+## Xử lý sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Scouting không tìm thấy gì hữu ích để expose | Dừng và chọn refactor target nhỏ hơn trước khi scaffold adapter. |
+| Core logic bị trộn với HTTP hoặc UI concern | Thu hẹp vào một module hoặc biến refactor boundary thành prerequisite rõ ràng. |
+| Credential behavior chưa rõ trong `--auto` | Trả lời câu hỏi credential tập trung; không để workflow tự tạo storage policy. |
+| Surface đề xuất mirror mọi endpoint | Quay lại agentization map và gộp operation thành user workflow. |
+| Remote MCP target không hỗ trợ dependency đã chọn | Chọn target tương thích hoặc giữ local transport; nêu limitation rõ. |
+| Test pass nhưng package metadata thiếu | Giữ packaging blocked đến khi giải quyết name, scope, license, ownership và release metadata. |
+| Runtime không nhận diện Skill | Xác nhận target cùng scope, mở runtime session mới, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Tiếp tục với `ak:cook` cho implementation còn lại đã được chấp nhận, hoặc xem
+[Engineer Kit](../../engineer) và
+[Runtime adapter](../../../concepts/runtime-adapters).
+
+## Biết các giới hạn hiện tại
+
+- Skill wrap behavior hiện có; Skill không thể suy ra public contract đáng tin
+  từ code không có stable entry point hay test.
+- Target không phải JavaScript dùng toolchain phù hợp của chúng nên generated
+  layout cùng dependency cụ thể sẽ khác.
+- Remote transport, package publication, container registry và hosted
+  deployment cần external tooling, credential cùng service availability.
+- Runtime parity phụ thuộc planning, Agent, testing và docs capability
+  downstream được cung cấp trong session hiện tại.
+- Stable và beta chứa nội dung cùng default `ak:agentize` giống nhau.

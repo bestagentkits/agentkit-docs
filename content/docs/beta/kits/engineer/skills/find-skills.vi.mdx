@@ -1,0 +1,167 @@
+---
+title: Khám phá capability phù hợp với ak:find-skills
+description: Route tới AgentKit Skill đã cài trước, hoặc tìm trong hệ sinh thái Skills bên ngoài và cài package đã review với approval rõ ràng.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:find-skills` khi bạn cần capability nhưng chưa biết Skill nào cung
+cấp. Skill phân biệt việc route giữa AgentKit Skill đã cài với việc khám phá
+package bên ngoài, để lựa chọn local không âm thầm trở thành installation.
+
+## Chọn ak:find-skills để khám phá capability
+
+### Dùng ak:find-skills khi
+
+- Bạn muốn biết có Skill cho specialized task hay không.
+- Nhiều AgentKit Skill đã cài có scope gần nhau và bạn cần primary owner.
+- Bạn muốn tìm hệ sinh thái Skills mở theo task hoặc domain.
+- Bạn muốn xem install command cùng source link trước khi quyết định thêm Skill
+  của bên thứ ba.
+
+### Chọn workflow khác khi
+
+- Bạn đã nêu tên Skill cần dùng. Hãy gọi trực tiếp.
+- Task nằm trong general capability hiện tại và không cần reusable package.
+- Bạn cần tạo Skill mới sau khi search không có kết quả. Dùng workflow tạo
+  Skill.
+- Bạn chỉ muốn kiểm tra hoặc cập nhật bản cài AgentKit. Dùng lifecycle command
+  của AgentKit.
+
+## Chuẩn bị runtime
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận
+  Engineer Kit đã được cài cho runtime cùng scope đang dùng.
+- Mô tả một task cụ thể cùng domain.
+- Với external discovery, bảo đảm environment chạy được `npx` và truy cập được
+  Skills registry.
+- Quyết định bạn chỉ muốn recommendation hay có thể cài result đã review.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:find-skills ...` | Local AgentKit routing khả dụng từ catalog Skill đã cài. External search cần Skills CLI cùng network access. |
+| Cursor | `/ak:find-skills ...` | Slash invocation theo cách gọi Engineer Skill do người dùng xác minh. External CLI execution phụ thuộc tool policy Cursor đang hoạt động. |
+| Codex | `$ak:find-skills ...` | Native Skill discovery được hỗ trợ. External CLI execution cùng installation vẫn theo permission Codex hiện tại. |
+
+## Chạy Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:find-skills "Audit a Next.js checkout for accessibility and keyboard navigation"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:find-skills "Audit a Next.js checkout for accessibility and keyboard navigation"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:find-skills "Audit a Next.js checkout for accessibility and keyboard navigation"
+```
+
+  </Tab>
+</Tabs>
+
+Skill không có mode flag. Intent chọn một trong hai path:
+
+| Intent | Path | External effect |
+| --- | --- | --- |
+| Chọn giữa AgentKit Skill đã cài | Đọc domain-routing map local và đề xuất một primary Skill | Không có ngoài local read |
+| Khám phá Skill bên ngoài | Chạy `npx skills find <query>` và trình bày matching package | Có thể download hoặc chạy Skills CLI và liên hệ registry |
+| Cài result đã chấp nhận | Chạy `npx skills add <owner/repo@skill> -g -y` sau khi bạn chọn tiếp tục | Ghi bản cài Skill ở user scope và bỏ qua confirmation prompt của CLI |
+
+## Mô tả search rõ ràng
+
+Một request hữu ích gồm:
+
+- **Domain:** Nêu ecosystem hoặc concern như React, testing, deployment,
+  documentation, security hay design.
+- **Task:** Nêu outcome chính xác như review pull request hoặc tạo changelog.
+- **Context:** Thêm framework, language hoặc platform để thu hẹp result.
+- **Install intent:** Nêu bạn muốn local routing, chỉ recommendation hay
+  installation sau review.
+
+Query cụ thể như “React hydration performance” hữu ích hơn một term rộng như
+“performance.” Nếu search đầu yếu, Skill có thể thử synonym có giới hạn như
+“deployment” sau “deploy.”
+
+## Hiểu workflow
+
+1. **Skill xác định intent.** Skill tìm domain, task cụ thể, context và nhu cầu
+   capability đã cài hay bên ngoài.
+2. **Skill route local khi có thể.** Nếu bạn chọn giữa AgentKit Skill, Skill
+   chọn primary Skill cụ thể nhất và chỉ nêu secondary helper cho follow-up.
+3. **Skill search bên ngoài khi được yêu cầu.** Skill chạy query Skills CLI tập
+   trung rồi đọc package identifier cùng source page được trả về.
+4. **Skill trình bày candidate.** Mỗi recommendation gồm Skill có vẻ làm gì,
+   install command chính xác và page để bạn kiểm tra.
+5. **Skill chờ install decision.** Installation chỉ xảy ra khi bạn chọn tiếp
+   tục.
+6. **Skill fallback trung thực.** Nếu không có package phù hợp, Skill đề nghị
+   general assistance hoặc tạo reusable Skill.
+
+## Giữ quyền phê duyệt và an toàn ở bạn
+
+<Callout type="warn" title="External Skill là nội dung bên thứ ba có thể thực thi">
+  Review package owner, repository, Skill instruction, script, tool được yêu
+  cầu và data boundary trước installation. Search relevance không phải security
+  hay quality review.
+</Callout>
+
+Install command được document dùng `-g -y`: lệnh ghi ở user scope và bỏ qua
+confirmation của Skills CLI. Assistant chỉ nên dùng sau khi bạn chấp nhận đúng
+package cùng scope. Search request không tự cấp quyền install, update hay chạy
+Skill được tìm thấy.
+
+External search cùng installation có thể dùng network access và chạy code của
+package manager. Không đưa credential, private source hay workspace content
+không liên quan vào query.
+
+## Xác minh kết quả
+
+Discovery result hữu ích nên cung cấp:
+
+- Một primary AgentKit Skill đã cài cho câu hỏi local routing, kèm lý do ngắn.
+- Một tập nhỏ external candidate cho ecosystem search.
+- Package identifier, install command và inspection link chính xác.
+- Phát biểu rõ không tìm thấy result khi search chưa kết luận.
+- Xác nhận package cùng scope đã cài chỉ sau khi installation thực sự thành
+  công.
+
+Sau installation, mở runtime session mới nếu assistant không reload Skill động,
+rồi gọi Skill đã cài trên task có giới hạn trước khi tin cậy với access rộng hơn.
+
+## Xử lý sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Result quá rộng | Thêm framework, task và expected output vào query. |
+| Local routing đề xuất nhiều Skill | Chọn primary owner cụ thể nhất, rồi chỉ dùng Skill khác cho follow-up work riêng biệt. |
+| `npx skills find` không khả dụng | Kiểm tra Node, npm, network cùng tool policy hoặc chỉ tiếp tục với AgentKit routing đã cài. |
+| Package có vẻ phù hợp nhưng không đáng tin | Kiểm tra source cùng instruction; không cài đến khi trust boundary chấp nhận được. |
+| Không tìm thấy Skill phù hợp | Dùng general capability của assistant hoặc tạo Skill mới cho workflow lặp lại. |
+| Skill đã cài không được nhận diện | Khởi động lại runtime, xác nhận install scope, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Xem [Cài đặt Kit](../../../guides/installing-kits) cho installation do AgentKit
+sở hữu và [Runtime adapter](../../../concepts/runtime-adapters) cho khác biệt
+runtime discovery.
+
+## Biết các giới hạn hiện tại
+
+- Search quality phụ thuộc external Skills registry cùng keyword bạn cung cấp.
+- Skill không tự chứng nhận security, maintenance hay compatibility của package.
+- External installation dùng Skills CLI thay vì Kit ownership lifecycle của
+  AgentKit.
+- Cursor slash invocation được người dùng xác minh, nhưng broader CLI cùng
+  permission parity chưa được thiết lập.
+- Stable và beta chứa cùng routing cùng command `ak:find-skills`.
