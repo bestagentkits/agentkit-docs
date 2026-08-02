@@ -7,7 +7,10 @@ import {
   filterTreeByProduct,
   productTabs,
 } from '@/lib/product-navigation';
-import type * as PageTree from 'fumadocs-core/page-tree';
+import {
+  deserializePageTree,
+  type SerializedPageTree,
+} from 'fumadocs-core/source/client';
 import { DocsLayout } from 'fumadocs-ui/layouts/docs';
 import { usePathname } from 'next/navigation';
 import { type ReactNode, useMemo } from 'react';
@@ -19,19 +22,20 @@ export function ProductDocsLayout({
 }: {
   children: ReactNode;
   locale: string;
-  tree: PageTree.Root;
+  tree: SerializedPageTree;
 }) {
   const pathname = usePathname();
   const product = activeProduct(pathname);
   const channelSegment = pathname.split('/').filter(Boolean)[1];
   const channel = channelSegment === 'beta' ? 'beta' : 'stable';
+  const pageTree = useMemo(() => deserializePageTree(tree), [tree]);
   const filteredTree = useMemo(
-    () => filterTreeByProduct(tree, product),
-    [product, tree],
+    () => filterTreeByProduct(pageTree, product),
+    [pageTree, product],
   );
   const tabs = useMemo(
-    () => productTabs(tree, locale, channel),
-    [channel, locale, tree],
+    () => productTabs(pageTree, locale, channel),
+    [channel, locale, pageTree],
   );
 
   return (

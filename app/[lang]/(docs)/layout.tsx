@@ -6,8 +6,10 @@ export default async function Layout({
   children,
 }: LayoutProps<'/[lang]'>) {
   const { lang } = await params;
+  const tree = await source.serializePageTree(source.getPageTree(lang));
+
   return (
-    <ProductDocsLayout locale={lang} tree={source.getPageTree(lang)}>
+    <ProductDocsLayout locale={lang} tree={tree}>
       {children}
     </ProductDocsLayout>
   );
