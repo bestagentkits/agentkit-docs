@@ -1,0 +1,62 @@
+---
+title: ak sessions tail
+description: Theo dõi message displayable mới nối vào một session Claude Code, với giới hạn stream và mất sự kiện rõ ràng.
+---
+
+Dùng `ak sessions tail` khi Claude Code đang nối dữ liệu vào một file session
+cục bộ đã biết.
+
+## Cách dùng
+
+```bash
+ak sessions tail <project> <session-id>
+```
+
+Lệnh cần project đã đăng ký và session ID chỉ gồm chữ, số, `_` hoặc `-`. Không
+có cờ riêng.
+
+## Hành vi stream
+
+```bash
+ak sessions tail myapp session-abc
+ak sessions tail myapp session-abc --json
+```
+
+Tail seek đến cuối file hiện tại trước khi poll mỗi 500 ms. Nó không phát lại
+lịch sử; dùng [sessions show](./sessions-show) trước nếu cần transcript hiện có.
+Dừng bằng Ctrl-C hoặc huỷ process; bình thường thoát `0`.
+
+Chỉ line hoàn chỉnh, parse được và displayable mới được phát. Event lỗi hoặc
+không displayable bị bỏ qua, không có counter. Buffer nội bộ giữ 32 event; consumer
+chậm có thể mất event sau thay vì chặn writer. Đây là quan sát live, không phải
+audit log lossless.
+
+Lệnh chỉ tail session Claude Code. Nó không tail Codex dù `list` và `show` có thể
+tìm Codex. Lệnh đọc cục bộ, không hỏi, không ghi state và không gọi network.
+
+## Output và quyền riêng tư
+
+Human stdout in timestamp, loại message và text đầu tiên hoặc tên tool. Với
+`--json`, stdout là NDJSON: mỗi message nối thêm là một envelope
+`kind=sessions.event`. Không parse toàn stream như một JSON document.
+
+Event có thể chứa prompt, thinking, input và output tool riêng tư. Content block
+có giới hạn 256 KiB của parser nhưng đây là giới hạn kích thước, không phải
+redaction. Chỉ đưa stream ra ngoài máy sau khi xem lại.
+
+## Mã thoát
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Stream kết thúc do huỷ hoặc source channel đóng. |
+| `1` | Thiết lập home, project, path, subscription hoặc encode stdout thất bại. |
+| `2` | Argument hoặc cờ không hợp lệ. |
+
+File thiếu có thể làm stream đóng không lỗi sau khi setup subscription; xác minh
+session bằng `show` trước khi dựa vào tail dài hạn.
+
+## Lệnh liên quan
+
+- [Hiển thị message lịch sử](./sessions-show)
+- [Redact file session Claude Code](./sessions-redact)
+- [Thông tin đầy đủ của lệnh `ak sessions tail`](../cli/ak_sessions_tail)

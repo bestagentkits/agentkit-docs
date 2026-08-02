@@ -1,0 +1,74 @@
+---
+title: ak watch dry-run
+description: Preview issue GitHub khớp và reply được sinh mà không post comment hay cập nhật watch state.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak watch dry-run` để xem lại filter và text reply được sinh trước khi cho
+phép comment GitHub.
+
+## Cách dùng
+
+```bash
+ak watch dry-run <owner/repo>
+```
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--label <labels>` | `[]` | Khớp issue có bất kỳ label nào đã liệt kê. |
+| `--author <logins>` | `[]` | Khớp issue từ bất kỳ login nào đã liệt kê. |
+| `--keyword <terms>` | `[]` | Khớp title/body chứa bất kỳ term nào, không phân biệt hoa thường. |
+| `--agent <kit/skill>` | `engineer/scout` | Sinh response cho từng candidate bằng skill này. |
+| `--max-per-hour <count>` | `10` | Đánh giá rolling-hour budget đã lưu bằng ceiling này. |
+| `--kits-dir <path>` | `""` | Override nguồn Kit dùng bởi `ak run`. |
+
+Giá trị phân cách bằng dấu phẩy và cờ lặp theo hành vi Cobra string-slice. Các
+nhóm filter kết hợp AND; giá trị trong một nhóm kết hợp OR. Dùng ceiling dương.
+
+## Preview thực hiện gì
+
+```bash
+ak watch dry-run owner/repo --label needs-response --max-per-hour 5
+ak watch dry-run owner/repo --author octocat --keyword crash --json
+```
+
+Lệnh yêu cầu `gh issue list` lấy tối đa 100 issue mở, đọc local watch state nếu
+có, áp dụng filter và chạy `ak run` cho từng issue được phép và chưa response.
+Nó không gọi `gh issue comment`, không đánh dấu issue, không tiêu thụ bucket đã
+lưu và không save watch state.
+
+<Callout type="warning">
+  Dry-run ngăn posting lên GitHub, không ngăn mọi tác động bên ngoài. Nó đọc
+  GitHub, gửi nội dung issue tới agent/provider và `ak run` có thể tạo activity
+  hoặc tác động runtime cục bộ thông thường.
+</Callout>
+
+Preview hiện kiểm tra bucket đang có nhưng không giữ một slot cho từng reply mô
+phỏng. Khi còn budget, nhiều candidate có thể cùng nằm trong
+`would_post_issues` dù live run sẽ chạm ceiling. Xem `rate_limit_remaining` là
+budget ban đầu, không phải budget cuối mô phỏng.
+
+## Output và mã thoát
+
+Human stdout hiển thị target và preview dòng đầu; full text được sinh cũng được
+ghi vào stderr trong log dry-run. JSON stdout dùng `kind=watch.dry_run` với repo,
+match count, ID would-post/would-skip và rate remainder ban đầu; không có body
+response.
+
+Lỗi agent và rate từng issue được log stderr nhưng không nằm trong hai array ID;
+lệnh vẫn có thể thoát `0`.
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Poll và render cuối hoàn tất; kiểm tra stderr để thấy lỗi từng issue. |
+| `1` | Load home/state, poll GitHub hoặc render cuối thất bại. |
+| `2` | Argument repository hoặc cờ không hợp lệ. |
+
+## Lệnh liên quan
+
+- [Bắt đầu live watch](./watch-start)
+- [Kiểm tra state đã lưu](./watch-status)
+- [Thông tin đầy đủ của lệnh `ak watch dry-run`](../cli/ak_watch_dry-run)

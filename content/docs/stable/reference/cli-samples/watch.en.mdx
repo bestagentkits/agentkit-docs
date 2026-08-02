@@ -1,0 +1,56 @@
+---
+title: ak watch
+description: Choose a GitHub issue watch workflow and understand its credential, posting, state, and rate-limit boundaries.
+---
+
+Use `ak watch` to discover commands that poll GitHub issues, generate responses
+through an AgentKit skill, and optionally post comments.
+
+## Usage
+
+```bash
+ak watch
+```
+
+The parent has no positional arguments or command-specific flags. It shows help
+and performs no GitHub request, agent invocation, state write, or prompt.
+
+## Choose a subcommand
+
+| Goal | Command | External mutation |
+| --- | --- | --- |
+| Preview matching issues and generated replies | `ak watch dry-run <owner/repo>` | No GitHub comment, but GitHub and the configured model/provider are contacted. |
+| Poll and post once | `ak watch start <owner/repo>` | Posts issue comments after generation. |
+| Keep polling in the current process | `ak watch start <owner/repo> --daemon` | Can continue posting until that process is interrupted. |
+| Inspect persisted state | `ak watch status [owner/repo]` | None. |
+| Mark persisted state inactive | `ak watch stop <owner/repo>` | Local state only; it does not signal a running process. |
+
+## Credentials and privacy
+
+Polling and posting execute the local `gh` CLI and inherit its GitHub
+authentication and environment. Response generation executes `ak run`, so the
+selected skill, runtime, provider credentials, and provider network policy also
+apply. The issue title, body, author, labels, number, repository, and URL are
+placed in the agent prompt. Review repository privacy and provider policy before
+running either `start` or `dry-run`.
+
+The default rolling ceiling is 10 successfully recorded posts per hour per
+repository state. This is a safety bound, not a permission boundary or a review
+queue. Use least-privilege GitHub credentials and preview filters first.
+
+## Output and exit status
+
+Subcommands define their own single-object or streaming JSON contracts. Parent
+help declares exits `1` for runtime failures, `2` for invalid invocations, and
+`3` for one-shot rate limiting. The current one-shot implementation handles
+per-issue rate-limit, agent, and posting errors as stderr log entries and can
+still exit `0`; do not use exit status alone to prove every matched issue was
+posted.
+
+## Related commands
+
+- [Preview a watch](./watch-dry-run)
+- [Start posting](./watch-start)
+- [Inspect watch state](./watch-status)
+- [Stop persisted watch state](./watch-stop)
+- [Complete `ak watch` command facts](../cli/ak_watch)

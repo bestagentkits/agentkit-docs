@@ -1,0 +1,63 @@
+---
+title: ak watch stop
+description: Đặt một watch record cục bộ thành inactive và hiểu rằng process đang chạy không được signal.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak watch stop` để đặt persisted watch state của repository thành inactive
+và xoá PID metadata đã ghi.
+
+## Cách dùng
+
+```bash
+ak watch stop <owner/repo>
+```
+
+Lệnh không có cờ riêng. Nó không hỏi và không gọi GitHub hay provider.
+
+## Tác động và ranh giới process
+
+```bash
+ak watch stop owner/repo
+ak watch stop owner/repo --json
+```
+
+Với state tồn tại, lệnh rewrite atomically
+`~/.agentkit/watch/<repo-slug>/state.json` với `active=false`, rồi best-effort
+rewrite `cli-meta.json` với PID `0`. `AGENTKIT_HOME` thay root. Nó không xoá
+responded ID, hourly timestamp, log hoặc state directory, và không tạo backup.
+
+<Callout type="warning">
+  Lệnh không gửi signal tới PID đã ghi. Loop `ak watch start --daemon` hiện tại
+  không đọc lại `active`, vì vậy nó có thể tiếp tục poll và post sau khi
+  `ak watch stop` thành công. Hãy ngắt hoặc terminate process thực và xác minh nó
+  đã thoát.
+</Callout>
+
+Nếu state không tồn tại, lệnh in cảnh báo stderr và thoát `0` mà không tạo state.
+Điều này idempotent với state cục bộ nhưng không chứng minh không có process được
+khởi chạy riêng.
+
+## Output và mã thoát
+
+Human stdout của state tồn tại báo PID đã dừng nếu metadata có. JSON stdout dùng
+`kind=watch.stop` với repository và PID tuỳ chọn. Nhánh thành công khi thiếu state
+chỉ in cảnh báo plain text lên stderr, kể cả với `--json`; không có JSON success
+object.
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | State đã inactive hoặc đã vắng mặt. Vẫn phải xác minh process riêng. |
+| `1` | Không load/save được state hiện có. Lỗi save metadata là best-effort và có thể không làm lệnh fail. |
+| `2` | Số argument repository hoặc cờ không hợp lệ. |
+
+Không có lệnh rollback. Nếu cần cấu hình cũ, kiểm tra external backup có version
+trước khi sửa state thủ công; chạy lại `ak watch start` sẽ tạo hoặc reactivate
+state bằng các cờ mới.
+
+## Lệnh liên quan
+
+- [Kiểm tra persisted status](./watch-status)
+- [Bắt đầu hoặc tiếp tục watcher](./watch-start)
+- [Thông tin đầy đủ của lệnh `ak watch stop`](../cli/ak_watch_stop)

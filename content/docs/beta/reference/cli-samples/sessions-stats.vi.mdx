@@ -1,0 +1,71 @@
+---
+title: ak sessions stats
+description: Tổng hợp metric session cục bộ giới hạn quyền riêng tư với source, quality, window và cache rõ ràng.
+---
+
+Dùng `ak sessions stats` để so sánh aggregate cục bộ mà không trả về text của
+transcript.
+
+## Cách dùng
+
+```bash
+ak sessions stats
+```
+
+Lệnh không nhận argument theo vị trí.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--project <name>` | `[]` | Chỉ lấy project đã đăng ký này; có thể lặp. |
+| `--runtime <name>` | `""` | Lọc theo source, thường là `claude-code` hoặc `codex`. |
+| `--metric <name>` | `tokens` | Tổng hợp `tokens`, `tool_calls`, `skills_used`, `sessions`, `projects`, `duration`, `messages`, `subagent_spawns` hoặc `loc`. |
+| `--by <dimension>` | `runtime` | Nhóm theo `runtime`, `model`, `provider`, `project` hoặc `date`. |
+| `--window <duration>` | `720h0m0s` | Khoảng lookback. Duration không dương trở về 30 ngày. |
+| `--refresh` | `false` | Bỏ qua index và memoized-cache có thể dùng, rồi tính lại. |
+
+Hãy dùng đúng token metric và dimension ở trên. Token lạ không được từ chối
+nhất quán và có thể rơi về phép tính token/runtime nhưng vẫn giữ label đã nhập.
+
+## Nguồn, quyền riêng tư và cache
+
+Khi có project đã đăng ký, collector đọc summary session Claude Code và Codex
+cục bộ của chúng. Khi registry rỗng và không có filter tường minh, lệnh fallback
+sang discovery có giới hạn trong transcript directory Claude Code và đặt
+`source_scope=discovered`; nó không đăng ký các project đó.
+
+Kết quả có count dẫn xuất, timestamp, bucket model/provider, provenance và
+source coverage—không có title, preview, prompt hay body transcript. Nhóm
+provider là heuristic. Row có quality `exact`, `estimated`, `partial` hoặc
+`unavailable`; `loc` không có nguồn tin cậy trong bản này.
+
+Dù help nói read-only, phép tính live vẫn best-effort ghi JSON cache mode `0600`
+dưới `~/.agentkit/cache/analytics`. `AGENTKIT_HOME` thay root. `--refresh` bỏ qua
+đọc cache nhưng vẫn ghi kết quả tính lại. Lệnh không gọi network và không hỏi.
+
+## Ví dụ và output
+
+```bash
+ak sessions stats --json
+ak sessions stats --metric tokens --by model --window 168h --json
+ak sessions stats --project myapp --runtime codex --by date --refresh --json
+```
+
+Human stdout in tổng và các row. JSON stdout dùng `kind=sessions.stats`; `data`
+có `rows`, `total`, `metric`, `dimension`, `provenance`, `coverage`,
+`schema_version` và `source_scope`.
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Tổng hợp hoàn tất, kể cả không có row. |
+| `1` | Xử lý home, registry, duration, source hoặc aggregate thất bại. |
+| `2` | Không parse được argument hoặc cờ. |
+
+Cache có thể xoá; dùng analytics lifecycle để dọn derived state cục bộ. Lệnh
+không có apply, force, backup hoặc rollback.
+
+## Lệnh liên quan
+
+- [Liệt kê file session](./sessions-list)
+- [Thông tin đầy đủ của lệnh `ak sessions stats`](../cli/ak_sessions_stats)

@@ -1,0 +1,91 @@
+---
+title: ak watch start
+description: Poll GitHub issues, generate replies, post comments, and operate the local rolling-rate and watcher state safely.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak watch start` only after reviewing the same filters with `dry-run`. A
+successful candidate causes an external GitHub comment.
+
+## Usage
+
+```bash
+ak watch start <owner/repo>
+```
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--label <labels>` | `[]` | Match any listed label. |
+| `--author <logins>` | `[]` | Match any listed GitHub login. |
+| `--keyword <terms>` | `[]` | Match any term in title or body, case-insensitively. |
+| `--agent <kit/skill>` | `engineer/scout` | Skill passed to `ak run` for response generation. |
+| `--max-per-hour <count>` | `10` | Maximum successfully recorded posts in a rolling hour. |
+| `--poll-interval <seconds>` | `60` | Interval between daemon polls. |
+| `--daemon` | `false` | Repeat in the current process until interrupted. |
+| `--kits-dir <path>` | `""` | Override the kit source used by `ak run`. |
+
+Use positive values for both numeric flags. The implementation does not fully
+validate their range before starting.
+
+## External and local effects
+
+```bash
+ak watch dry-run owner/repo --label needs-response
+ak watch start owner/repo --label needs-response --max-per-hour 5
+```
+
+Each pass fetches at most 100 open issues through authenticated `gh`, applies
+AND-across-category/OR-within-category filters, skips IDs already recorded,
+checks the persisted rolling-hour bucket, sends issue content to `ak run`, and
+posts the generated stdout through `gh issue comment`.
+
+After a successful post, the issue ID and timestamp are saved atomically under
+`~/.agentkit/watch/<repo-slug>/state.json`; `AGENTKIT_HOME` moves the root. If
+that save fails after GitHub accepted the comment, the failure is only logged
+and a later run can post again. Inspect stderr and persisted state after every
+live run.
+
+<Callout type="warning">
+  The command never asks for confirmation. `--json`, `--no-interactive`, and a
+  non-TTY do not make posting safer; they still allow external comments.
+</Callout>
+
+## Daemon mode
+
+`--daemon` does not fork or background the watcher. It keeps the current process
+running, writes `daemon.log` and `cli-meta.json`, polls immediately, then repeats
+at the configured interval. Stop that process with Ctrl-C, SIGTERM, or your
+process supervisor.
+
+`ak watch stop` does not signal it, and the running loop does not reread the
+persisted `active` field. Do not rely on `stop` alone to prevent further posts.
+
+## Output and exit status
+
+One-shot human stdout summarizes responded, skipped, and remaining counts. JSON
+uses one `kind=watch.start` envelope. Per-issue agent, rate, and post failures go
+to stderr and do not appear in either ID array.
+
+Daemon `--json` output is mixed: a human start line is written first, then one
+`watch.start` JSON object per successful tick. Later polling errors are logged
+and the loop continues. Do not feed the complete stream directly to an NDJSON
+parser without discarding the initial line.
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The one-shot pass rendered, or the daemon ended by cancellation; per-issue failures may still exist. |
+| `1` | State, initial polling, rendering, or daemon setup failed. |
+| `2` | Repository argument or flags were invalid. |
+
+Although parent help declares exit `3` for scripted one-shot rate limiting, the
+current loop absorbs that per-issue error and can return `0`.
+
+## Related commands
+
+- [Preview without posting](./watch-dry-run)
+- [Inspect state and PID metadata](./watch-status)
+- [Mark state inactive](./watch-stop)
+- [Complete `ak watch start` command facts](../cli/ak_watch_start)
