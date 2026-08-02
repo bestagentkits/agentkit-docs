@@ -23,7 +23,8 @@ export function ProductDocsLayout({
 }) {
   const pathname = usePathname();
   const product = activeProduct(pathname);
-  const channel = pathname.split('/').filter(Boolean)[1] ?? 'stable';
+  const channelSegment = pathname.split('/').filter(Boolean)[1];
+  const channel = channelSegment === 'beta' ? 'beta' : 'stable';
   const filteredTree = useMemo(
     () => filterTreeByProduct(tree, product),
     [product, tree],
