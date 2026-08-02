@@ -1,0 +1,64 @@
+---
+title: Hook Marketing và hành vi runtime
+description: Tìm hiểu automation của Marketing Kit chạy quanh thao tác dùng công cụ, cách phân biệt tệp hỗ trợ với Hook đang hoạt động và nội dung mỗi runtime có thể projection.
+---
+
+Marketing Kit bổ sung các bước kiểm tra và nhắc việc chạy nền quanh workflow
+thông thường. Một Hook chỉ hoạt động khi runtime nối event với entrypoint. Các
+manifest, thư viện và utility đi kèm là artifact, không phải những hành vi tự
+động bổ sung.
+
+## Kết quả đang hoạt động
+
+| Thời điểm | Hook graph đang hoạt động làm gì |
+| --- | --- |
+| Trước khi dùng công cụ | Kiểm tra cách đặt tên mô tả trước khi ghi, kiểm tra thao tác tệp và shell có truy cập dữ liệu nhạy cảm về quyền riêng tư, đồng thời phát hiện việc đọc hoặc khám phá bằng shell quá rộng cần thu hẹp. |
+| Sau khi chỉnh sửa | Theo dõi hoạt động `Edit`, `Write` và `MultiEdit`, sau đó có thể nhắc workflow đơn giản hóa và review thay đổi đáng kể. |
+| Khi bạn gửi prompt | Kiểm tra yêu cầu có thể làm lộ secret và hiển thị hướng dẫn development rule phù hợp. |
+
+Tùy event và runtime, những hành vi này có thể thêm hướng dẫn hoặc dừng thao tác
+để review. Đây là guardrail cho workflow, không phải ranh giới bảo mật tổng quát
+hay cơ chế thay thế permission control của runtime.
+
+## Artifact entry không phải số lượng hành vi
+
+Manifest Marketing khai báo tám Hook file export:
+
+- Một entrypoint tự động riêng của Marketing cung cấp lời nhắc sau chỉnh sửa.
+- Một Discord sender thủ công được đóng gói như utility.
+- Sáu thư viện hỗ trợ cấu hình và trạng thái runtime có giới hạn.
+
+Manifest `hooks.json` riêng nối entrypoint Marketing với năm entrypoint core được
+dùng lại. Thư viện hỗ trợ không tự chạy độc lập và không entry nào trong số này
+là command của Marketing.
+
+`notifications/send-discord` không được tham chiếu trong `hooks.json`. Utility
+chỉ chạy khi caller chủ động gọi; cài Marketing Kit không tự động bật thông báo
+Discord. Các nhánh lỗi của utility không chặn workflow.
+
+## Projection theo runtime
+
+| Runtime | Hành vi được projection |
+| --- | --- |
+| Claude Code | Kích hoạt event graph đã cấu hình qua cách phân phối native hoặc plugin. Statusline Marketing riêng cũng khả dụng tại đây và có thể hiển thị tín hiệu về thư mục, Git, model, context và mức sử dụng, phần việc đã thay đổi, cấu hình và hoạt động. |
+| Codex | Chuyển các group có thể biểu diễn vào `.codex/hooks.json`. Tập tool matcher hẹp hơn Claude Code, vì vậy một phần phạm vi trigger có thể bị bỏ ngay cả khi phần còn lại của group vẫn hoạt động. Nội dung không được hỗ trợ sẽ bị bỏ kèm cảnh báo. Statusline Marketing không được projection. |
+| Cursor | Chuyển các registration được hỗ trợ vào `.cursor/hooks.json`. Projection ở mức source không chứng minh hành vi giống hệt nhau trên mọi thiết lập provider. Statusline Marketing không được projection. |
+
+Trên Windows, lệnh Codex Hook có đường dẫn chứa khoảng trắng hoặc metacharacter
+của `cmd.exe` có thể không chạy. AgentKit báo giới hạn trong lúc emit; chỉ có tệp
+đã cài không chứng minh Hook tương ứng đã hoạt động.
+
+## Ownership và lifecycle
+
+AgentKit ghi nhận các tệp và registration Hook mà nó emit. Refresh và uninstall
+chỉ tác động lên output thuộc ownership còn khớp, đồng thời giữ lại hoặc báo cáo
+nội dung đã sửa, nội dung bên ngoài và nội dung thuộc Kit khác. Bản cài theo
+project và người dùng có thể cùng tồn tại, vì vậy hãy kiểm tra cả hai scope nếu
+automation xuất hiện hai lần.
+
+Hãy review tóm tắt và cảnh báo sau mỗi lần cài hoặc refresh. Cài đặt thành công
+vẫn có thể chứa giới hạn projection riêng của runtime.
+
+Xem [Runtime adapter](../../../concepts/runtime-adapters) để hiểu mô hình tương
+thích rộng hơn. Xem [Cài đặt Kit](../../../guides/installing-kits) để biết các
+lệnh lifecycle.
