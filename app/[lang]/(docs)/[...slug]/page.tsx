@@ -8,17 +8,39 @@ import {
   ViewOptionsPopover,
 } from 'fumadocs-ui/layouts/docs/page';
 import { getBreadcrumbItems } from 'fumadocs-core/breadcrumb';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { getMDXComponents } from '@/components/mdx';
 import { BetaBanner } from '@/components/beta-banner';
 import { channelFromSlug } from '@/lib/channels';
+import { i18n } from '@/lib/i18n';
+import { localePath } from '@/lib/locale-path';
 import type { Metadata } from 'next';
 import { createDocsRelativeLink } from '@/lib/docs-relative-link';
 import { docsPageMetadata } from '@/lib/metadata';
 import { gitConfig } from '@/lib/shared';
 
+const channels = ['stable', 'beta'] as const;
+
+function isLegacyCliRoot(slug: string[] | undefined): boolean {
+  return (
+    slug?.length === 4 &&
+    (slug[0] === 'stable' || slug[0] === 'beta') &&
+    slug[1] === 'reference' &&
+    slug[2] === 'cli' &&
+    slug[3] === 'ak'
+  );
+}
+
+function canonicalPageSlug(slug: string[] | undefined): string[] | undefined {
+  return isLegacyCliRoot(slug) ? slug?.slice(0, -1) : slug;
+}
+
 export default async function Page(props: PageProps<'/[lang]/[...slug]'>) {
   const params = await props.params;
+  if (isLegacyCliRoot(params.slug)) {
+    redirect(localePath(params.lang, ...(params.slug?.slice(0, -1) ?? [])));
+  }
+
   const page = source.getPage(params.slug, params.lang);
   if (!page) notFound();
 
@@ -65,17 +87,25 @@ export default async function Page(props: PageProps<'/[lang]/[...slug]'>) {
 }
 
 export async function generateStaticParams() {
-  return source.generateParams();
+  return [
+    ...source.generateParams(),
+    ...i18n.languages.flatMap((lang) =>
+      channels.map((channel) => ({
+        lang,
+        slug: [channel, 'reference', 'cli', 'ak'],
+      })),
+    ),
+  ];
 }
 
 export async function generateMetadata(
   props: PageProps<'/[lang]/[...slug]'>,
 ): Promise<Metadata> {
   const params = await props.params;
-  const page = source.getPage(params.slug, params.lang);
+  const page = source.getPage(canonicalPageSlug(params.slug), params.lang);
   if (!page) notFound();
 
-  return docsPageMetadata(params.lang, params.slug ?? [], {
+  return docsPageMetadata(params.lang, page.slugs, {
     title: page.data.title,
     description: page.data.description,
     openGraph: {

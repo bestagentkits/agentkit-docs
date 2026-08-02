@@ -1,4 +1,4 @@
-import { readdirSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import Link from 'next/link';
 import { ArrowUpRight } from 'lucide-react';
@@ -20,22 +20,35 @@ const terminalLines: TerminalLine[] = [
   { kind: 'cmd', text: 'ak kit init engineer --target claude-code' },
 ];
 
-// Command surface is derived from the generated CLI reference at build time,
-// so counts and groups always match the released binary.
-const cliDir = path.join(process.cwd(), 'content/docs/stable/reference/cli');
-const cliPages = readdirSync(cliDir).filter(
-  (f) => f.startsWith('ak_') && f.endsWith('.mdx'),
+// Command surface is derived from the reviewed authored reference at build
+// time, so the homepage and canonical docs navigation share one inventory.
+const cliDir = path.join(
+  process.cwd(),
+  'content/docs/stable/reference/cli-samples',
 );
+const cliPages = readdirSync(cliDir).filter((file) => file.endsWith('.en.mdx'));
 const commandCount = cliPages.length;
-const commandGroups = [
-  ...cliPages
-    .reduce((map, file) => {
-      const group = file.slice(3, -4).split('_')[0];
-      map.set(group, (map.get(group) ?? 0) + 1);
-      return map;
-    }, new Map<string, number>())
-    .entries(),
-].sort(([a], [b]) => a.localeCompare(b));
+const commandGroupMap = new Map<string, { count: number; slug: string }>();
+
+for (const file of cliPages) {
+  if (file === 'index.en.mdx') continue;
+
+  const content = readFileSync(path.join(cliDir, file), 'utf8');
+  const title = /^title:\s+ak(?:\s+(.+))?$/m.exec(content)?.[1];
+  if (!title) throw new Error(`Missing canonical ak title in ${file}`);
+
+  const [group, ...rest] = title.split(/\s+/);
+  const slug = encodeURI(file.slice(0, -'.en.mdx'.length));
+  const current = commandGroupMap.get(group);
+  commandGroupMap.set(group, {
+    count: (current?.count ?? 0) + 1,
+    slug: rest.length === 0 ? slug : (current?.slug ?? slug),
+  });
+}
+
+const commandGroups = [...commandGroupMap.entries()].sort(([a], [b]) =>
+  a.localeCompare(b),
+);
 
 // Link titles/descriptions mirror the frontmatter of the target pages.
 const copy = {
@@ -49,7 +62,7 @@ const copy = {
     copyLabel: 'Copy install command',
     copiedLabel: 'Copied',
     stats: [
-      { value: String(commandCount), label: 'commands documented' },
+      { value: String(commandCount), label: 'authored CLI pages' },
       { value: String(commandGroups.length), label: 'command groups' },
       { value: channels.stable.tag, label: 'stable channel' },
       { value: channels.beta.tag, label: 'beta channel' },
@@ -74,8 +87,8 @@ const copy = {
     ],
     surfaceLabel: 'Command surface',
     surfaceTitle: 'Every workflow, one prefix.',
-    surfaceDesc: (groups: number, commands: number) =>
-      `${groups} command groups, ${commands} documented commands — generated from the released binary.`,
+    surfaceDesc: (groups: number, pages: number) =>
+      `${groups} command groups, ${pages - 1} subcommand pages, plus the root ak landing.`,
     sectionLabel: 'Start here',
     links: [
       {
@@ -95,7 +108,7 @@ const copy = {
       },
       {
         title: 'CLI commands',
-        desc: 'Every command and flag, generated from the released binary.',
+        desc: 'Reviewed syntax, effects, output, and recovery guidance.',
         href: 'stable/reference/cli',
       },
     ],
@@ -112,7 +125,7 @@ const copy = {
     copyLabel: 'Sao chép lệnh cài đặt',
     copiedLabel: 'Đã sao chép',
     stats: [
-      { value: String(commandCount), label: 'lệnh được tài liệu hoá' },
+      { value: String(commandCount), label: 'trang CLI đã biên soạn' },
       { value: String(commandGroups.length), label: 'nhóm lệnh' },
       { value: channels.stable.tag, label: 'kênh stable' },
       { value: channels.beta.tag, label: 'kênh beta' },
@@ -137,8 +150,8 @@ const copy = {
     ],
     surfaceLabel: 'Bề mặt lệnh',
     surfaceTitle: 'Mọi workflow, một tiền tố.',
-    surfaceDesc: (groups: number, commands: number) =>
-      `${groups} nhóm lệnh, ${commands} lệnh được tài liệu hoá — sinh từ binary đã phát hành.`,
+    surfaceDesc: (groups: number, pages: number) =>
+      `${groups} nhóm lệnh, ${pages - 1} trang subcommand và trang lệnh gốc ak.`,
     sectionLabel: 'Bắt đầu từ đây',
     links: [
       {
@@ -158,7 +171,7 @@ const copy = {
       },
       {
         title: 'Lệnh CLI',
-        desc: 'Mọi lệnh và flag, sinh từ binary đã phát hành.',
+        desc: 'Cú pháp, tác động, đầu ra và hướng dẫn khôi phục đã rà soát.',
         href: 'stable/reference/cli',
       },
     ],
@@ -277,8 +290,8 @@ export default async function HomePage({ params }: PageProps<'/[lang]'>) {
           </ol>
         </div>
 
-        {/* Command surface: the real CLI namespace map, straight from the
-            generated reference. Density is the point — this is the product. */}
+        {/* Command surface: the reviewed authored CLI namespace map. Density
+            is the point — this is the product. */}
         <div className="mt-24">
           <div className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2">
             <div>
@@ -292,16 +305,24 @@ export default async function HomePage({ params }: PageProps<'/[lang]'>) {
             </p>
           </div>
           <ul className="mt-8 flex flex-wrap gap-2">
-            {commandGroups.map(([group, count]) => (
+            {commandGroups.map(([group, commandGroup]) => (
               <li key={group}>
                 <Link
-                  href={localePath(lang, 'stable', 'reference', 'cli', `ak_${group}`)}
+                  href={localePath(
+                    lang,
+                    'stable',
+                    'reference',
+                    'cli',
+                    commandGroup.slug,
+                  )}
                   className="inline-flex items-baseline gap-1.5 rounded-md border border-fd-border bg-fd-card px-3 py-1.5 font-mono text-xs text-fd-foreground transition-colors hover:border-fd-primary/60 hover:text-fd-primary"
                 >
                   <span className="text-fd-muted-foreground">ak</span>
                   {group}
-                  {count > 1 && (
-                    <span className="text-fd-muted-foreground">{count}</span>
+                  {commandGroup.count > 1 && (
+                    <span className="text-fd-muted-foreground">
+                      {commandGroup.count}
+                    </span>
                   )}
                 </Link>
               </li>
