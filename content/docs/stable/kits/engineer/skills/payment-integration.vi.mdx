@@ -1,0 +1,193 @@
+---
+title: Tích hợp thanh toán an toàn với ak:payment-integration
+description: Triển khai checkout và webhook SePay, Polar hoặc Stripe với credential, idempotency, financial side effect cùng bằng chứng go-live rõ ràng.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:payment-integration` để thiết kế hoặc triển khai payment flow với
+SePay, Polar hay Stripe. Skill bao quát checkout, subscription, VietQR và bank
+transfer, signed webhook, order nhận biết provider, refund cùng xử lý event bền
+vững. Skill hữu ích nhất khi provider và business outcome đã rõ.
+
+## Chọn ak:payment-integration cho công việc provider
+
+### Dùng ak:payment-integration khi
+
+- Bạn cần SePay cho VND, bank transfer hoặc VietQR.
+- Bạn cần Polar cho software checkout, subscription, usage billing hoặc benefit
+  delivery.
+- Bạn cần guidance Stripe Checkout, Billing, Payment Element hoặc Connect.
+- Bạn cần order model hợp nhất hoặc webhook processing idempotent giữa nhiều
+  provider.
+
+### Chọn workflow khác khi
+
+- Việc chọn provider, trách nhiệm thuế, merchant-of-record policy, refund policy
+  hoặc liability chưa thống nhất. Giải quyết quyết định product và legal trước
+  implementation.
+- Task chỉ là database design. Dùng `ak:databases` với payment contract.
+- Bạn cần backend implementation tổng quát rộng hơn thanh toán. Dùng `ak:cook`
+  và nêu Skill này như specialist guidance.
+- Bạn cần đảm bảo tài chính, pháp lý, PCI hoặc kế toán. Hãy dùng human review đủ
+  chuyên môn; Skill này không cung cấp đảm bảo đó.
+
+## Chuẩn bị payment contract và sandbox
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận
+  Engineer Kit đã được cài cho runtime cùng scope hiện tại.
+- Xác định provider SDK và API version đã cài, framework, database, order
+  schema, authentication, queue, deployment host cùng test tool.
+- Xác định currency, cách lưu smallest unit, product/price, tax, discount,
+  trial, fulfillment, cancellation, refund, dispute cùng reconciliation rule.
+- Dùng sandbox account, test product, test payment method, webhook endpoint cô
+  lập cùng customer data giả lập.
+- Giữ `SEPAY_SECRET_KEY`, webhook key, `POLAR_ACCESS_TOKEN`,
+  `POLAR_WEBHOOK_SECRET`, Stripe secret key, signing secret và customer data
+  ngoài prompt, log, client bundle, command history cùng Git.
+- Nêu rõ có cho phép cài package, gọi provider API, đổi dashboard, mở public
+  tunnel, ghi database, gửi email, refund hay deploy không.
+
+Fee, limit, payment method được hỗ trợ, API version cùng compliance requirement
+của provider thay đổi theo thời gian. Xác nhận trong tài liệu provider hiện tại
+trước quyết định tài chính hoặc production.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:payment-integration ...` | Có thể triển khai và test bằng project tool khả dụng; truy cập provider vẫn cần credential cùng quyền rõ ràng. |
+| Cursor | `/ak:payment-integration ...` | Dùng slash syntax đã được người dùng xác minh; parity rộng hơn về Agent, Hook và external tool chưa được thiết lập. |
+| Codex | `$ak:payment-integration ...` | Dùng native Skill discovery; Hook được chuyển đổi một phần và provider/network tool tùy session. |
+
+Xem [Runtime adapter](../../../concepts/runtime-adapters) để hiểu khác biệt theo
+từng component.
+
+## Chạy Skill
+
+Argument shape được khai báo là `[provider] [task]`. Nêu một provider hoặc ranh
+giới multi-provider có chủ đích, rồi mô tả contract về tiền, order, webhook,
+test cùng publication.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:payment-integration "stripe Add a sandbox subscription checkout to the existing SaaS app. Reuse its order schema and auth, pin the installed API version, verify webhook signatures on the raw body, deduplicate events, test renewal and failure paths, and do not create live products, charge cards, refund, or deploy."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:payment-integration "stripe Add a sandbox subscription checkout to the existing SaaS app. Reuse its order schema and auth, pin the installed API version, verify webhook signatures on the raw body, deduplicate events, test renewal and failure paths, and do not create live products, charge cards, refund, or deploy."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:payment-integration "stripe Add a sandbox subscription checkout to the existing SaaS app. Reuse its order schema and auth, pin the installed API version, verify webhook signatures on the raw body, deduplicate events, test renewal and failure paths, and do not create live products, charge cards, refund, or deploy."
+```
+
+  </Tab>
+</Tabs>
+
+| Input | Cần gồm |
+| --- | --- |
+| Commercial contract | Provider, product, price ID, currency, tax/MoR role, trial, entitlement, refund cùng dispute policy |
+| Data contract | Internal order ID, provider ID, amount/currency gốc, status mapping, event ledger cùng audit retention |
+| Webhook contract | Endpoint, raw-body access, signature scheme, event ID, retry, queue behavior, idempotency cùng reconciliation |
+| Quyền hạn | Sandbox hay live account, API mutation được phép, tunnel, database write, notification, refund cùng deployment |
+| Bằng chứng | Test tập trung, provider test event, order transition, duplicate delivery, failure recovery, log cùng reconciliation output |
+
+## Quan sát các giai đoạn thanh toán
+
+1. **Lần chạy xác minh ranh giới provider.** Skill xác nhận SDK/API version,
+   environment, checkout product, currency, legal ownership cùng integration
+   point thực tế của project.
+2. **Lần chạy lập bản đồ order state machine.** Internal/provider identifier,
+   amount, currency, subscription, refund, entitlement cùng terminal state luôn
+   rõ ràng.
+3. **Lần chạy tạo checkout ở server.** Thao tác dùng secret key nằm sau server
+   endpoint đã xác thực; client chỉ nhận value an toàn.
+4. **Lần chạy xử lý webhook trước fulfillment.** Skill xác minh raw request
+   thật, từ chối delivery không hợp lệ, ghi unique event và bảo đảm processing
+   idempotent trước khi đổi access hay money state.
+5. **Lần chạy xác minh retry và reconciliation.** Event trùng, trễ, sai thứ
+   tự, lỗi, refunded, renewed, canceled cùng unknown được kiểm tra trên sandbox
+   contract.
+6. **Lần chạy báo cáo gap go-live.** Tệp đổi, credential cần có, provider
+   object, test, monitoring, dashboard step thủ công cùng financial hoặc
+   deployment action chưa duyệt được liệt kê.
+
+## Giữ tiền và external service dưới quyền duyệt
+
+<Callout type="warn" title="Một API call thành công có thể đổi tiền hoặc access">
+  Live checkout, subscription change, refund, benefit grant, bank event,
+  product edit cùng webhook replay có thể ảnh hưởng customer và financial
+  record. Quyền sandbox không bao hàm quyền production.
+</Callout>
+
+- Dùng secret ở server và cơ chế constant-time hoặc SDK signature verification
+  do provider khuyến nghị. Không coi redirect hay client success page là xác
+  nhận thanh toán.
+- Giữ fulfillment cùng entitlement change idempotent. Lưu provider event ID và
+  đủ bằng chứng cho replay cùng reconciliation.
+- Public tunnel tool đưa local endpoint ra internet. Xác nhận endpoint,
+  authentication, payload logging cùng kế hoạch shutdown trước.
+- Checkout helper đi kèm tạo configuration; nó không hoàn tất provider
+  checkout. Output Polar nhúng access token vào lệnh cURL được hiển thị, vì vậy
+  đừng dùng live token trong interactive output hoặc shell history.
+- Polar CLI verifier đi kèm tự tạo mock header cho payload của nó; nó không
+  chứng minh real incoming delivery. OAuth mode của helper SePay chỉ kiểm tra có
+  Bearer token, không kiểm tra token hợp lệ. Dùng provider SDK hoặc verifier đạt
+  chuẩn production cho endpoint thật.
+- Commit, product publication, live webhook registration, refund execution,
+  rollout cùng deployment cần phê duyệt riêng.
+
+## Xác minh kết quả
+
+Kết quả hoàn tất nên cung cấp:
+
+- Checkout cùng order-state contract, gồm amount unit, currency, provider ID,
+  customer mapping cùng fulfillment boundary.
+- Chính xác tệp đổi, package, tên environment variable, schema hay migration
+  artifact, queue cùng provider object mà không có secret value.
+- Bằng chứng test cho checkout creation, invalid input, signature failure,
+  duplicate delivery, retry, out-of-order event, renewal, cancellation, refund
+  cùng unknown-event handling khi áp dụng.
+- Log hoặc persisted event evidence hỗ trợ audit, replay cùng reconciliation mà
+  không lưu payment data nhạy cảm quá mức.
+- Go-live checklist bao gồm provider configuration, secret rotation, endpoint
+  TLS, monitoring, alerting, backup, rollback, support cùng phê duyệt.
+
+## Xử lý sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Webhook signature thất bại | Giữ exact raw byte cùng header an toàn, xác nhận thứ tự parser và environment secret, rồi replay provider-generated test event. |
+| Provider retry event đã thành công | Kiểm tra response timing/status cùng durable idempotency record; đừng chặn retry bằng cách acknowledge payload chưa xác minh. |
+| Order và provider state không khớp | Dừng automated fulfillment, so provider ID cùng event history, reconcile trong report có giới hạn rồi duyệt corrective mutation riêng. |
+| Test chạm live account | Dừng, revoke hoặc rotate credential bị lộ, kiểm tra object và charge đã tạo, chỉ tiếp tục với sandbox identity đã xác minh. |
+| Helper đi kèm báo success | Chỉ coi đó là local format validation; xác minh handler thật bằng provider test event cùng application persistence. |
+| Runtime không nhận diện Skill | Xác nhận target cùng scope, mở session mới, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Tiếp tục với `ak:databases` cho order ledger, `ak:test` cho verification độc lập
+hoặc [Tổng quan Engineer Kit](../../engineer) cho delivery được điều phối.
+
+## Biết các giới hạn hiện tại
+
+- Reference là snapshot provider, không phải live contract. API, SDK, price,
+  fee, limit, payment method, tax handling cùng store policy hiện tại cần được
+  xác minh với provider.
+- Skill không cung cấp PCI scope determination, tư vấn pháp lý/thuế/kế toán,
+  fraud underwriting, bảo đảm bank reconciliation hay production credential.
+- Helper test đi kèm kiểm tra JavaScript utility cục bộ, không kiểm tra provider
+  network behavior, real webhook delivery, database transaction, financial
+  accuracy, dispute hay production failover.
+- Ví dụ multi-provider là pattern; currency conversion, refund, discount,
+  commission cùng entitlement rule phải khớp business ledger hiện tại.
+- Stable và beta chứa nội dung Skill cùng resource giống nhau trong cặp release
+  này. Diagnostic Codex Hook của beta không thay đổi workflow này.
