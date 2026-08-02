@@ -1,0 +1,192 @@
+---
+title: Benchmark coding model với ak:deep-swe
+description: Chạy đánh giá DeepSWE theo nguyên tắc smoke-first qua Pier và OpenRouter với gate rõ ràng cho chi phí, runtime và submission.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:deep-swe` để đánh giá một model OpenRouter trên coding-agent benchmark
+DeepSWE bên ngoài qua Pier. Skill kiểm tra toolchain local, xác minh một task
+trước sample lớn hơn và báo cáo bằng chứng run có thể tái hiện mà không xem
+benchmark score là bảo đảm cho sản phẩm.
+
+## Chọn ak:deep-swe để đánh giá model bên ngoài
+
+### Dùng ak:deep-swe khi
+
+- Bạn muốn chấm một OpenRouter model slug cụ thể trên DeepSWE.
+- Bạn cần run độc lập để kiểm tra coding result do vendor công bố.
+- Bạn muốn smoke test một task trước khi duyệt deterministic subset.
+- Bạn chấp nhận Docker execution, network use, chi phí model token và benchmark
+  artifact local trong giới hạn đã nêu.
+
+### Chọn workflow khác khi
+
+- Bạn muốn cải thiện metric trong repository của mình. Dùng `ak:loop`.
+- Bạn muốn test project hiện tại thay vì benchmark model. Dùng `ak:test`.
+- Bạn cần tư vấn model hoặc provider mà không chạy evaluation có phí. Hãy yêu
+  cầu research hoặc guidance trước.
+- Bạn không thể cấp quyền cho Docker, external model request hoặc cài tool
+  local. Giữ task ở chế độ advisory.
+
+## Chuẩn bị môi trường benchmark
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận
+  Engineer Kit đã được cài cho runtime cùng scope hiện tại.
+- Cài `uv`, `git` và Docker, rồi khởi động Docker daemon.
+- Cấu hình `OPENROUTER_API_KEY` trong environment. Chỉ xác nhận biến tồn tại;
+  không bao giờ in giá trị.
+- Chọn chính xác OpenRouter model slug và đặt spending limit ở phía provider.
+- Dành disk space cho repository DeepSWE, Docker image, task sandbox và Pier job
+  artifact.
+- Quyết định task đầu tiên, số task tối đa, giới hạn wall-clock, spend bound và
+  stop condition trước khi chạy.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:deep-swe ...` | Chạy như Engineer Skill đã cài; external tool và credential vẫn phụ thuộc environment. |
+| Cursor | `/ak:deep-swe ...` | Dùng cách gọi slash đã được người dùng xác minh cho Engineer Skill; parity thực thi rộng hơn chưa được thiết lập. |
+| Codex | `$ak:deep-swe ...` | Dùng discovery Skill native của Codex; các external prerequisite và approval gate tương tự vẫn áp dụng. |
+
+## Chạy smoke test trước
+
+Yêu cầu một task cụ thể và ranh giới dừng trước khi mở rộng:
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:deep-swe <vendor/model> "Run one named DeepSWE task as a smoke test. Show the exact Pier command and estimated spend exposure before execution. Stop after the task and do not submit results."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:deep-swe <vendor/model> "Run one named DeepSWE task as a smoke test. Show the exact Pier command and estimated spend exposure before execution. Stop after the task and do not submit results."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:deep-swe <vendor/model> "Run one named DeepSWE task as a smoke test. Show the exact Pier command and estimated spend exposure before execution. Stop after the task and do not submit results."
+```
+
+  </Tab>
+</Tabs>
+
+Model slug là identifier bên ngoài, không phải catalog do AgentKit sở hữu. Hãy
+xác minh nó với catalog OpenRouter hiện tại trước khi tiêu token.
+
+## Xác nhận live native command
+
+Setup được định nghĩa trong release dùng:
+
+```text
+git clone https://github.com/datacurve-ai/deep-swe
+uv tool install datacurve-pier
+pier --help
+pier run --help
+```
+
+Chạy từ thư mục chứa folder `deep-swe` đã clone. Native model form được release
+định nghĩa cho một task là:
+
+```text
+pier run -p deep-swe/tasks/<task-id> --agent mini-swe-agent \
+  --model openrouter/<vendor/model>
+```
+
+Với subset nhỏ và deterministic, release source ghi:
+
+```text
+pier run -p deep-swe/tasks --agent mini-swe-agent \
+  --model openrouter/<vendor/model> --n-tasks 10 --sample-seed 0
+```
+
+Xem cả hai snippet là candidate phải qua `pier run --help` hiện tại. Chỉ dùng
+model-class route riêng khi help của Pier đã cài ghi rõ; đừng đoán flag theo
+version.
+
+## Quan sát các giai đoạn đánh giá
+
+1. **Skill kiểm tra prerequisite.** Nó xác nhận `uv`, `git`, Docker, daemon và
+   sự tồn tại—không phải giá trị—của `OPENROUTER_API_KEY`.
+2. **Skill xác minh live command surface.** Nó đọc Pier help, xác nhận model
+   slug, resolve task path và ghi tool version.
+3. **Skill trình bày bounded run.** Exact command, task count, timeout, expected
+   spend exposure, artifact location và stop condition vẫn hiển thị trước khi
+   thực thi.
+4. **Một task chạy trước.** Authentication, provider mapping, agent behavior,
+   sandbox startup và result emission được kiểm tra end to end.
+5. **Mở rộng cần quyết định.** Subset hoặc full corpus là approval riêng sau
+   smoke evidence. Full corpus không bao giờ được chạy tiếp ngầm.
+6. **Skill kiểm tra Pier artifact.** Khi version đã cài hỗ trợ, `pier view`,
+   `pier analyze` và `pier critique` giúp kiểm tra job directory.
+7. **Skill báo cáo mà không submit.** Score, reward, task count, cost khi có,
+   failure và giới hạn bằng chứng được tóm tắt local.
+
+## Giữ quyền kiểm soát chi phí, credential và submission
+
+<Callout type="warn" title="Full corpus cần approval mới">
+  Smoke task thành công không cấp quyền cho subset hoặc full benchmark. Trước
+  khi mở rộng, hãy review exact command, model slug, task count, timeout,
+  expected spend exposure, tác động Docker và disk cùng stop condition.
+</Callout>
+
+Không bao giờ echo, persist, commit hoặc đặt `OPENROUTER_API_KEY` vào command,
+prompt, report hay benchmark artifact. Dừng khi authentication thất bại và để
+người dùng sửa environment. Đừng tự đổi model, provider, execution backend hay
+task count chỉ để run hoàn tất.
+
+Leaderboard submission hoặc liên hệ external service tách biệt với benchmark
+execution và cần request rõ ràng. Skill không được tự động publish kết quả.
+
+## Xác minh bằng chứng benchmark
+
+Report hoàn chỉnh nên gồm:
+
+- Exact Pier và model command sau live help validation.
+- Pier version, model slug, task ID hoặc count, agent và execution environment.
+- Kết quả smoke test trước mọi run lớn hơn.
+- Score hoặc reward, bằng chứng pass và failure cùng artifact location.
+- Cost được báo khi Pier hoặc provider expose đáng tin cậy; nếu không, nêu rõ
+  measured cost không khả dụng.
+- Timeout, authentication hoặc provider-mapping failure và task bị skip.
+- Xác nhận không có result được submit trừ khi đã được yêu cầu riêng.
+
+Benchmark chỉ có thể tái hiện trong phạm vi tool version, task revision, model
+route, provider behavior, sandbox và run parameter được ghi lại. Một score đơn
+lẻ không chứng minh software-engineering quality tổng quát.
+
+## Xử lý sự cố an toàn
+
+| Triệu chứng | Bước an toàn tiếp theo |
+| --- | --- |
+| `OPENROUTER_API_KEY` chưa có | Dừng và cấu hình ngoài prompt; xác nhận sự tồn tại mà không in giá trị. |
+| Docker không khả dụng | Khởi động daemon hoặc dừng; không âm thầm đổi execution backend. |
+| Model trả HTTP 401 | Dừng và sửa authentication; không đưa key vào diagnostic. |
+| Pier báo provider hoặc model không xác định | Kiểm tra lại exact OpenRouter slug và Pier help hiện tại trước khi đổi command. |
+| Flag bị từ chối | Đọc `pier run --help`; không retry syntax đoán mò. |
+| Smoke task thất bại | Giữ job artifact và blocker; không mở rộng sang nhiều task hơn. |
+| Cost tăng nhanh hơn dự kiến | Dừng tại budget hoặc provider limit đã khai báo và báo cáo partial evidence. |
+| Runtime không tìm thấy Skill | Xác nhận installation và xem [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Dùng `ak:loop` để tối ưu repository metric local. Tiếp tục với
+[Tổng quan Engineer Kit](../../engineer) để xem Skill testing và review liên
+quan.
+
+## Biết các giới hạn hiện tại
+
+- Pier, DeepSWE, OpenRouter slug, flag, task path và corpus size là external và
+  thay đổi theo version; hãy xác minh khi chạy.
+- Release source ghi corpus 113 task, nhưng con số này không phải bảo đảm bền
+  vững cho external revision về sau.
+- AgentKit không đảm bảo model availability, benchmark score, cost, throughput,
+  sandbox compatibility hay leaderboard acceptance.
+- Cost chỉ có thể báo khi harness được chọn expose đáng tin cậy.
+- Stable và beta chứa source `ak:deep-swe` giống nhau.

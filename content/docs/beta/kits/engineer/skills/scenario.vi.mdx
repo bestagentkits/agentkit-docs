@@ -1,0 +1,199 @@
+---
+title: Mở rộng edge case với ak:scenario
+description: Phân rã feature qua mười hai dimension và tạo scenario evidence có giới hạn, được deduplicate cho planning cùng test.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:scenario` để chuyển feature description hoặc code path thành edge case,
+failure path và test target cụ thể. Chạy một pass để review nhanh, số iteration
+cố định để có hard ceiling hoặc saturation mode để tiếp tục tới khi hai
+iteration liên tiếp không thêm scenario mới.
+
+## Chọn ak:scenario cho coverage trước implementation
+
+### Dùng ak:scenario khi
+
+- Feature phức tạp hoặc stateful cần edge case trước implementation.
+- Bạn đang planning regression test, review API contract hoặc chuẩn bị release
+  risk audit.
+- Timing, scale, authorization, data integrity, integration hoặc partial failure
+  có thể thay đổi expected behavior.
+- Bạn muốn mỗi scenario được classify và gắn với expected outcome.
+
+### Chọn workflow khác khi
+
+- Thay đổi trivial, cosmetic hoặc không có logic branch đáng kể.
+- Target đã ổn định và có evidence hiện tại cho cùng risk.
+- Bạn cần thực thi test thay vì tạo target. Dùng `ak:test`.
+- Bạn cần verdict từ năm góc nhìn cho design đề xuất. Dùng `ak:predict`.
+- Bạn cần implementation. Đưa scenario đã duyệt vào `ak:plan` hoặc `ak:cook`.
+
+## Chuẩn bị target và giới hạn
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận
+  Engineer Kit đã được cài cho runtime cùng scope hiện tại.
+- Cung cấp feature description hoặc file path hẹp và behavior phải giữ.
+- Nêu actor, state, data, integration, constraint và known failure mode.
+- Chọn one-shot, `--iterations N` hoặc `--saturation` có chủ đích.
+- Ưu tiên `--iterations N` khi cần hard count ceiling. Saturation mode có novelty
+  stop nhưng không có numeric maximum riêng trong shipped contract.
+- Loại secret và unrelated file khỏi evidence scope.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:scenario ...` | Chạy như Engineer Skill đã cài và có thể đọc project evidence được cho phép. |
+| Cursor | `/ak:scenario ...` | Dùng cách gọi slash đã được người dùng xác minh cho Engineer Skill; runtime parity rộng hơn chưa được thiết lập. |
+| Codex | `$ak:scenario ...` | Dùng discovery Skill native của Codex; file access và approval behavior theo live host. |
+
+## Chạy exploration có giới hạn
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:scenario "Account recovery with expiring email links, active sessions, and organization SSO" --iterations 25 --domain security --focus failures --format test-scenarios
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:scenario "Account recovery with expiring email links, active sessions, and organization SSO" --iterations 25 --domain security --focus failures --format test-scenarios
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:scenario "Account recovery with expiring email links, active sessions, and organization SSO" --iterations 25 --domain security --focus failures --format test-scenarios
+```
+
+  </Tab>
+</Tabs>
+
+Dùng one-shot mode bằng cách bỏ cả `--iterations` và `--saturation`:
+
+```text
+/ak:scenario src/api/account-recovery.ts
+```
+
+Với Codex, dùng `$ak:scenario src/api/account-recovery.ts`.
+
+## Chọn exploration control
+
+| Input hoặc tùy chọn | Mặc định | Tác dụng |
+| --- | --- | --- |
+| Feature description hoặc file path | Bắt buộc | Xác định behavior và evidence scope |
+| `--iterations N` | — | Chạy đúng `N` scenario iteration rồi summarize |
+| `--saturation` | Tắt | Dừng sau hai iteration liên tiếp không có classification `New` |
+| `--domain <type>` | Auto | Ưu tiên context `software`, `product`, `business`, `security` hoặc `marketing` |
+| `--focus <dim>` | Auto | Ưu tiên `edge-cases`, `failures`, `security` hoặc `scale` |
+| `--format <type>` | `table` | Chọn `table`, `use-cases`, `test-scenarios` hoặc `threat-scenarios` |
+
+Đừng kết hợp claim coverage exhaustive với bất kỳ mode nào. Fixed count là
+budget và saturation là novelty heuristic—không phải bằng chứng mọi behavior đã
+được phát hiện.
+
+## Hiểu mười hai dimension
+
+Skill trước tiên filter theo relevance thay vì điền mọi category máy móc:
+
+| Dimension | Câu hỏi được mở ra |
+| --- | --- |
+| User types | Role, guest, new user, banned user, automation và abuse |
+| Input extremes | Empty, null, maximum, Unicode, malformed và injection input |
+| Timing | Concurrency, race, timeout, slow path và retry storm |
+| Scale | Zero, one, large set, pagination và cursor boundary |
+| State transitions | First use, interruption, resume, crash và partial completion |
+| Environment | Device, CPU, JavaScript, assistive technology, proxy, locale và timezone |
+| Error cascades | Dependency outage, full disk, memory pressure, partition và partial write |
+| Authorization | Expiry, role mismatch, sharing, CORS, CSRF và privilege escalation |
+| Data integrity | Duplicate, orphan, encoding và migration concurrency |
+| Integration | Replay, version mismatch, outage và contract drift |
+| Compliance | Deletion, audit, retention và PII exposure |
+| Business logic | Boundary price, stacking, refund, delivery state và usage limit |
+
+Dimension không liên quan nên được liệt kê cùng lý do, không âm thầm tính là đã
+cover.
+
+## Quan sát scenario loop
+
+1. **Skill đọc target.** Nó xác định actor, component, precondition, state và
+   expected behavior.
+2. **Skill filter dimension.** Relevant dimension trở thành exploration plan;
+   skipped dimension vẫn hiển thị.
+3. **Skill đề xuất một situation mỗi iteration.** Trigger, flow và expected
+   outcome làm scenario có thể test.
+4. **Skill classify novelty.** Scenario `New` và `Variant` hữu ích được giữ;
+   `Duplicate`, out-of-scope và low-value case bị discard cùng lý do.
+5. **Skill mở rộng case được giữ.** Boundary, interruption, ordering và stale
+   hoặc missing data lộ derived edge case.
+6. **Skill rotate exploration.** Sau ba same-dimension iteration, nó chuyển qua
+   dimension, combination, negation, amplification, persona và temporal shift.
+7. **Skill checkpoint progress.** Mỗi năm iteration, nó summarize kept và
+   discarded case, dimension, severity cùng gap.
+8. **Skill dừng và tổng hợp.** Count hoặc novelty condition đã chọn kết thúc
+   run, sau đó là grouped report và coverage matrix.
+
+## Giữ analysis trong authority
+
+<Callout type="warn" title="Scenario là hypothesis, không phải defect đã xác minh">
+  Row Critical hoặc High xác định consequence đáng test. Nó không chứng minh
+  exploitability, production behavior hoặc compliance impact. Yêu cầu
+  implementation evidence, test và specialist review trước release action.
+</Callout>
+
+Workflow đọc evidence được cho phép và có thể ghi `scenario-results.tsv` trong
+iterative mode. Nó không nên đổi product code, tạo test file, liên hệ external
+system hay thực thi attack payload trong khi tạo scenario.
+
+Giữ sensitive source và customer data khỏi prompt cùng report. Nếu scenario
+hàm ý destructive test, credential use, production traffic hoặc external cost,
+hãy ghi nó như gated follow-up thay vì chạy.
+
+## Xác minh scenario evidence
+
+Report hoàn chỉnh nên chứa:
+
+- Target, assumption, evidence scope và mode đã chọn.
+- Dimension được analyze và dimension bị skip cùng lý do.
+- Scenario với trigger, flow, expected behavior, severity và dimension.
+- Trong iterative mode, `scenario-results.tsv` với novelty classification và
+  discard reason.
+- Progress checkpoint cho run dài.
+- Coverage matrix và gap rõ ràng.
+- Halt reason: one-shot, fixed count hoặc hai iteration không có case mới.
+- Recommendation cho test, plan, prediction hoặc security review tiếp theo.
+
+Bundled composite score gán trọng số cho generated scenario, edge case,
+dimension, actor và severity. Xem nó là internal prioritization heuristic, không
+phải coverage percentage hay release threshold.
+
+## Xử lý sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước an toàn tiếp theo |
+| --- | --- |
+| Scenario quá generic | Thêm actor, state transition, integration, constraint và expected behavior. |
+| Xuất hiện quá nhiều duplicate | Thu hẹp target, kiểm tra classification trước và đổi dimension hoặc trigger. |
+| Một dimension chiếm ưu thế | Áp dụng rotation do source định nghĩa và báo gap còn lại. |
+| Saturation chạy lâu hơn dự kiến | Dừng thủ công hoặc restart với `--iterations N` để có hard ceiling. |
+| Row Critical thiếu evidence | Giữ như hypothesis và định tuyến sang focused testing hoặc security review. |
+| Report claim exhaustive coverage | Thay bằng dimension đã analyze, iteration count, novelty result và known gap. |
+| Runtime không tìm thấy Skill | Xác nhận installation và xem [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Đưa row có thể test sang `ak:test`, risk Critical và High sang `ak:plan`, hoặc
+proposal quan trọng nhất sang `ak:predict`.
+
+## Biết các giới hạn hiện tại
+
+- Scenario generation không chứng minh runtime behavior hay complete coverage.
+- Novelty classification và severity có model judgment và có thể sai.
+- `--saturation` có novelty stop hai iteration nhưng không có maximum iteration
+  count do source định nghĩa; dùng `--iterations N` cho strict resource ceiling.
+- Composite score là heuristic và không được trình bày như test coverage.
+- Runtime access kiểm soát tệp và context Skill có thể đọc.
+- Stable và beta chứa dimension cùng loop rule `ak:scenario` giống nhau.
