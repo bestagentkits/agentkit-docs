@@ -1,0 +1,136 @@
+---
+title: Browse local marketing assets with ak:content-hub
+description: Open ak:content-hub as a local asset gallery, understand its real file effects, and keep editing and AI enhancement under review.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:content-hub` to scan a project's `assets/` directory and browse the
+result in a local visual gallery. The Hub can filter and preview assets, show
+brand context, rescan the library, and edit supported text files. Its manifest
+contains fields reserved for Cloudflare R2, but cloud sync is not active.
+
+## Choose ak:content-hub for a local asset library
+
+### Use ak:content-hub when
+
+- Marketing assets already live under the current project's `assets/` folder.
+- You want visual search, type filters, previews, paths, and basic metadata.
+- You want to compare assets with colors, typography, or voice extracted from
+  an existing brand-guideline file.
+- You accept a local HTTP server and can review any local file save.
+
+### Choose another workflow when
+
+- You need content strategy or an editorial calendar. Use
+  `ak:content-marketing`.
+- You need cloud asset storage or R2 synchronization. The Hub only records R2
+  fields in `.assets/manifest.json`; its upload control is disabled.
+- You need a full digital-asset-management system with permissions, approvals,
+  versioning, or remote collaboration.
+
+## Prepare the project and runtime
+
+Confirm Marketing Kit is installed for the current runtime and scope. Run the
+Skill from the project whose `assets/` folder you intend to scan. The project
+must allow Node.js, a free local port, browser access, and writes to `assets/`,
+`.assets/`, and the temporary PID location. Create `.assets/` if it does not
+exist; the shipped scanner writes the manifest but does not create its parent.
+
+Brand context is read from the first available path among
+`docs/brand-guidelines.md`, `docs/design-guidelines.md`, and
+`brand-guidelines.md`. AI enhancement additionally requires the `claude` CLI
+to be available; gallery browsing does not.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:content-hub open` | Can run the local gallery and use the bundled Claude Code AI bridge when the `claude` CLI is available. |
+| Cursor | `/ak:content-hub open` | The Skill is projected to Cursor and slash invocation is user-verified. The bundled AI bridge still calls the separate `claude` CLI. |
+| Codex | `$ak:content-hub open` | The Skill uses native Codex discovery. The local gallery can run, but AI enhancement is not converted to Codex; it still depends on the `claude` CLI. |
+
+## Open the Hub
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:content-hub open Scan this project's assets, open the local gallery, and do not save or enhance any file until I approve it
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:content-hub browse Show the local asset library and brand context without changing asset files
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:content-hub search Find assets related to the launch campaign; keep the run local and read-only
+```
+
+  </Tab>
+</Tabs>
+
+The canonical action hint is `open|browse|search`. State your authority boundary
+in the request because the gallery itself includes save and AI-enhance actions.
+
+## Understand the stages
+
+1. **Start the local service.** The bundled server chooses an available port
+   from `3457` through `3500`, records a PID, and can open `/hub` in a browser.
+2. **Scan the asset tree.** The scanner reads supported files recursively,
+   derives type, category, tags, size, and timestamps, then writes
+   `.assets/manifest.json` while preserving existing R2 and user metadata.
+3. **Load brand context.** The sidebar extracts a bounded set of colors,
+   typography, and voice traits from the first supported guideline file.
+4. **Browse or filter.** Search and type filters operate on the manifest;
+   previews and copied paths refer to local files.
+5. **Edit only with approval.** Supported text assets can be loaded and saved
+   from the gallery. AI enhancement sends the current content and instruction
+   through the local `claude` CLI before you decide whether to save it.
+
+## Keep file and provider effects explicit
+
+<Callout type="warn" title="Browsing, editing, and cloud sync are different actions">
+  Opening the Hub starts a local process and writes a manifest. Saving replaces
+  the selected local text file. AI enhancement can send that file's content to
+  the configured Claude provider. None of these actions uploads to R2, publishes
+  an asset, or approves use of generated claims.
+</Callout>
+
+Review sensitive data before scanning because paths and metadata enter the
+manifest and supported files can be served by the local HTTP process. Stop the
+service when finished. Do not expose its port beyond the local machine or treat
+the path check as a complete security boundary.
+
+## Verify outputs and evidence
+
+A useful run should provide the local Hub URL, scanned asset count, manifest
+path, categories and formats found, brand-context source or a clear missing-file
+notice, and any file path changed. For a read-only browse request, the only
+project mutation should be the refreshed `.assets/manifest.json`.
+
+If you approve an edit, inspect the before-and-after content yourself. A gallery
+preview, inferred tag, `aiGenerated` filename heuristic, or AI rewrite is not
+proof of asset quality, origin, rights, accuracy, or brand approval.
+
+## Troubleshoot and know the limits
+
+| Symptom | Safe next step |
+| --- | --- |
+| The runtime cannot find `ak:content-hub` | Confirm target and scope, restart the runtime, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+| Manifest creation fails | Confirm both `assets/` and `.assets/` exist and are writable; preserve any existing manifest before retrying. |
+| The browser does not open | Use the reported local `/hub` URL and confirm a port in `3457`–`3500` is available. |
+| Brand context is empty | Check the supported guideline paths and heading names; extraction is pattern-based and intentionally limited. |
+| AI enhancement is unavailable | Continue browsing without it, or verify the separate `claude` CLI and its provider permissions. |
+| You expected an R2 upload | Stop. R2 fields are manifest placeholders and the upload control is disabled in this release. |
+
+The Hub handles a local asset library, not publication, remote sync, licensing,
+or source-of-truth governance. Continue with the [Marketing Kit
+overview](../../marketing) or review [Runtime
+adapters](../../../concepts/runtime-adapters) before assuming equal behavior
+across runtimes.
