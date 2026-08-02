@@ -1,0 +1,173 @@
+---
+title: Tạo retrospective dựa trên bằng chứng với ak:retro
+description: Phân tích Git history trong khoảng rõ ràng, tính engineering indicator minh bạch và lưu retrospective Markdown hoặc HTML có hành động.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:retro` để biến một giai đoạn repository history đã xác định thành
+engineering retrospective có căn cứ. Skill thu thập Git evidence, hiển thị công
+thức cho derived indicator, kiểm tra plan file gần đây và lưu recommendation gắn
+với dữ liệu quan sát được thay vì narrative được tạo ra.
+
+## Chọn ak:retro cho bằng chứng lịch sử
+
+### Dùng ak:retro khi
+
+- Bạn cần sprint, monthly hoặc quarterly engineering review.
+- Bạn muốn commit cadence, file hotspot, change volume hoặc test-change proxy.
+- Bạn cần comparison với giai đoạn trước hoặc breakdown theo author.
+- Bạn muốn plan-checkbox evidence cùng repository activity.
+
+### Chọn workflow khác khi
+
+- Bạn cần live project status thay vì historical review. Dùng
+  `ak:project-management`.
+- Bạn cần chẩn đoán vì sao một thay đổi cụ thể thất bại. Dùng `ak:debug`.
+- Bạn cần kết luận về productivity, quality hoặc individual performance mà Git
+  activity không hỗ trợ. Hãy thêm product và team evidence phù hợp trước.
+- Bạn muốn workflow đổi source code, commit, push hoặc deploy.
+
+## Chuẩn bị nguồn bằng chứng
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận
+  Engineer Kit đã được cài cho đúng runtime cùng scope bạn đang dùng.
+- Mở Git repository có history bạn muốn phân tích.
+- Chọn timeframe được hỗ trợ và xác nhận time boundary cục bộ của repository.
+- Bảo đảm common shell tool cùng `git` khả dụng.
+- Chỉ làm `gh` khả dụng và authenticated nếu muốn optional issue data.
+- Review privacy của author email trước khi yêu cầu output `--team`.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:retro ...` | Phân phối native là mặc định; workflow chạy local Git cùng shell command. |
+| Cursor | `/ak:retro ...` | Cách gọi bằng slash đã được người dùng xác minh. Điều này không chứng minh shell permission giống nhau. |
+| Codex | `$ak:retro ...` | Skill dùng discovery native của Codex; command cùng file-write approval phụ thuộc session. |
+
+## Chọn timeframe và report shape
+
+| Input | Mặc định | Effect |
+| --- | --- | --- |
+| `timeframe` | `7d` | Nhận `7d`, `2w`, `1m`, `sprint` hoặc `YYYY-MM-DD:YYYY-MM-DD` |
+| `--compare` | Tắt | Thêm giai đoạn liền trước có độ dài bằng nhau cùng delta column |
+| `--team` | Tắt | Thêm breakdown theo author |
+| `--format` | `md` | Nhận `html` hoặc `md`; ghi Markdown hoặc self-contained HTML report với inline CSS |
+
+Với `sprint`, Skill hỏi start date khi không thể suy ra từ Git tag. Date pair rõ
+ràng phù hợp hơn khi calendar boundary quan trọng.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:retro 2026-07-15:2026-07-28 --compare --team --format md
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:retro 2026-07-15:2026-07-28 --compare --team --format md
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:retro 2026-07-15:2026-07-28 --compare --team --format md
+```
+
+  </Tab>
+</Tabs>
+
+## Hiểu điều gì xảy ra trong một lần chạy
+
+1. **Skill resolve date.** Skill chuyển timeframe thành `SINCE` cùng `UNTIL`;
+   comparison mode còn tạo preceding window có độ dài bằng nhau.
+2. **Skill thu thập raw Git metric.** Command đếm commit, active date, LOC thêm
+   cùng xóa, changed file, hotspot, commit-subject type, author và test-file
+   change. Kết quả trống thành `0` hoặc `N/A`.
+3. **Skill tính derived indicator.** Report hiển thị công thức commit frequency,
+   active-day ratio, test-to-code change ratio cùng churn thay vì đưa ra opaque
+   score.
+4. **Skill kiểm tra optional issue evidence.** Khi `gh` khả dụng, Skill có thể
+   query closed issue trong kỳ; nếu không, issue metric giữ `N/A`.
+5. **Skill scan recent plan file.** Skill tạo temporary period sentinel và kiểm
+   tra tối đa hai mươi Markdown file phù hợp dưới `plans/`, đếm task đã check và
+   chưa check.
+6. **Skill ghi report.** Markdown vào
+   `plans/reports/retro-{YYMMDD}-{slug}.md`; HTML dùng cùng tên với `.html` và
+   không có external asset.
+7. **Skill giải thích finding.** Kết quả gồm hai đến bốn factual highlight cùng
+   ba đến năm recommendation dựa trên metric được nêu.
+
+Report được yêu cầu giữ dưới 200 dòng; nếu evidence cần nhiều hơn, Skill có thể
+chia thành nhiều report file.
+
+## Diễn giải indicator thận trọng
+
+<Callout type="warn" title="Git activity là evidence, không phải performance score">
+  Commit count, LOC, churn cùng test-file change là proxy có giới hạn. Dùng chúng
+  để bắt đầu investigation, không để xếp hạng contributor hoặc claim product quality.
+</Callout>
+
+- Binary file cùng row `git --numstat` không phải số bị loại khỏi LOC sum.
+- Test-to-code ratio đo changed filename khớp test pattern, không đo test
+  coverage hoặc test quality.
+- Conventional-commit distribution chỉ có ý nghĩa khi subject theo convention đó.
+- Churn dùng `(added + removed) / max(net, 1)`; negative hoặc near-zero net
+  change có thể làm value khó diễn giải.
+- Author grouping dùng Git email và có thể tách một người thành nhiều identity
+  hoặc expose personal data trong report.
+- Issue data cần command `gh` authenticated và có thể tạo read-only network
+  request tới GitHub. Nếu unavailable, ghi `N/A` thay vì hỏi secret hay tạo số.
+
+## Giữ effect và approval có giới hạn
+
+- Source file vẫn read-only, nhưng workflow ghi retrospective artifact dưới
+  `plans/reports/` cùng temporary sentinel dưới `/tmp`.
+- Shell cùng Git process chạy local và có thể scan lượng history lớn; repository
+  lớn hoặc period dài có thể lâu hơn default bảy ngày.
+- HTML output dùng inline CSS và không fetch external dependency.
+- Skill không nêu paid provider. Mọi GitHub access kế thừa account, permission
+  cùng service term hiện có của user.
+- Commit, push, issue mutation, publication, sharing cùng deployment cần approval riêng.
+
+## Xác minh kết quả
+
+Một lần chạy hoàn tất nên cung cấp:
+
+- Exact period date, generation date, repository identity cùng active-author count.
+- Raw velocity và code-health value với công thức cho derived metric.
+- Optional delta chỉ khi chọn `--compare`.
+- Optional author row chỉ khi chọn `--team`.
+- Hotspot cùng plan evidence trace được tới repository path và checkbox.
+- `N/A` ở mọi nơi required source unavailable.
+- Saved artifact path cùng recommendation trích actual finding.
+
+Chạy lại một hoặc hai underlying Git count để spot check, kiểm tra report diff và
+xác nhận source file không đổi trước khi share retrospective.
+
+## Xử lý sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Period mơ hồ | Dùng range `YYYY-MM-DD:YYYY-MM-DD` rõ ràng. |
+| `sprint` không có start suy ra được | Cung cấp sprint start date thay vì đoán từ activity. |
+| Issue metric unavailable | Giữ `N/A` hoặc authenticate `gh` chỉ khi cần GitHub evidence. |
+| Test ratio có vẻ bất thường | Kiểm tra filename match; metric là change proxy, không phải coverage. |
+| Churn cực lớn với negative net LOC | Hiển thị raw added và removed value, tránh kết luận mạnh từ ratio. |
+| Plan completion khác current status | Coi checkbox count là period evidence và đối chiếu durable plan state riêng. |
+| Report có lời khen hoặc số được tạo ra | Loại bỏ và generate lại chỉ từ captured evidence. |
+| Runtime không nhận diện Skill | Xác nhận target cùng scope, mở runtime session mới, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+## Biết các giới hạn hiện tại
+
+- Report không gồm product outcome, review quality, incident data, deployment
+  frequency hoặc uncommitted work trừ khi bạn cung cấp evidence riêng.
+- Issue completion formula do Skill mô tả cần opened cùng closed count, trong
+  khi example query chỉ lấy closed issue; ghi rate là `N/A` trừ khi cả hai phía
+  được xác minh.
+- Package stable và beta hiện chứa cùng instruction, template, metric guidance
+  cùng invocation behavior cho `ak:retro`.

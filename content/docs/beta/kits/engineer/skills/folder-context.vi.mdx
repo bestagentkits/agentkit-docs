@@ -1,0 +1,165 @@
+---
+title: Lưu quy ước thư mục con với ak:folder-context
+description: Tạo instruction cục bộ ngắn gọn cho một thư mục con có ý nghĩa, đồng thời bảo vệ hướng dẫn ở root và chỉnh sửa của người dùng.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:folder-context` khi một thư mục con có quyết định hoặc quy ước bền vững
+mà agent trong tương lai không thể suy ra đáng tin cậy. Skill đề xuất một local
+instruction file ngắn gọn, chờ bạn duyệt, rồi tạo `CLAUDE.md` cùng `AGENTS.md`
+được liên kết trong thư mục đã xác nhận.
+
+## Chọn ak:folder-context cho hướng dẫn cục bộ bền vững
+
+### Dùng ak:folder-context khi
+
+- Một thư mục con có quy tắc naming, architecture, workflow hoặc safety khác
+  với project root.
+- Locked decision hoặc ongoing work phải tồn tại qua nhiều session.
+- Agent trong tương lai cần bản đồ ngắn về các local file thiết yếu cùng vai trò.
+- Bạn muốn guidance tương thích Claude và AGENTS dùng chung một nguồn.
+
+### Chọn workflow khác khi
+
+- Bạn cần project instruction ở root. Skill này không bao giờ sửa `CLAUDE.md`
+  hoặc `AGENTS.md` ở root.
+- Thư mục chỉ chứa tài liệu tham khảo tĩnh hoặc context có thể dễ dàng khám phá
+  khi cần.
+- Bạn đang viết project documentation được publish dưới `docs/`; hãy dùng docs
+  workflow của project.
+- Bạn chỉ cần session note tạm thời thay vì agent guidance bền vững.
+
+## Chuẩn bị target folder
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận
+  Engineer Kit đã được cài cho đúng runtime cùng scope bạn đang dùng.
+- Nêu một thư mục con hiện có làm target.
+- Giữ nguyên instruction hiện tại cùng mọi work không liên quan.
+- Sẵn sàng xác nhận outline đề xuất trước khi tệp được ghi.
+- Loại credential và secret khác khỏi mọi context bạn cung cấp.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:folder-context <target-folder>` | Phân phối native là mặc định; phân phối plugin rõ ràng cũng được hỗ trợ. |
+| Cursor | `/ak:folder-context <target-folder>` | Cách gọi bằng slash đã được người dùng xác minh. Điều này không thiết lập runtime parity rộng hơn. |
+| Codex | `$ak:folder-context <target-folder>` | Skill dùng discovery native của Codex. Hành vi filesystem và symlink vẫn phụ thuộc môi trường hiện tại. |
+
+Xem [Runtime adapter](../../../concepts/runtime-adapters) để hiểu khác biệt về
+delivery cùng từng loại component.
+
+## Yêu cầu local context
+
+Skill nhận một target-folder argument. Skill không có mode flag được công bố
+hay automatic-write mode: duyệt outline là một phần của workflow.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:folder-context packages/payments
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:folder-context packages/payments
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:folder-context packages/payments
+```
+
+  </Tab>
+</Tabs>
+
+Request hữu ích có thể thêm bằng chứng như “capture provider naming rules,
+constraint unit test không dùng network và quyết định giữ giá trị tiền tệ dưới
+dạng integer minor unit.” Target vẫn là positional folder argument; các chi
+tiết này định hướng việc kiểm tra cùng outline đề xuất.
+
+## Hiểu điều gì xảy ra trong một lần chạy
+
+1. **Skill xác thực target.** Skill xác nhận path là thư mục con, không phải
+   project root, và đọc local instruction hiện có trước.
+2. **Skill kiểm tra bằng chứng cục bộ.** Skill review source, configuration,
+   Markdown cùng context file chính cần để hiểu thư mục.
+3. **Skill áp dụng sanity gate.** Skill bỏ qua thư mục có context tĩnh hoặc dễ
+   khám phá thay vì tạo tệp không cần thiết.
+4. **Skill đề xuất outline.** Skill chỉ nhóm section hữu ích và chờ bạn xác nhận
+   trước khi ghi.
+5. **Skill ghi nguồn bền vững.** Skill tạo local `CLAUDE.md` ngắn gọn từ bằng
+   chứng trong thư mục cùng quyết định rõ của người dùng, bỏ section rỗng.
+6. **Skill liên kết companion file.** Skill tạo `AGENTS.md` dưới dạng symlink
+   tới `CLAUDE.md`; nơi không hỗ trợ symlink, Skill ghi pointer một dòng và báo
+   fallback.
+7. **Skill tôn trọng chỉnh sửa sau đó.** Nếu bạn sửa context, Skill đọc lại tệp
+   và nêu mâu thuẫn mà không revert công việc của bạn.
+
+Nội dung hữu ích gồm purpose của thư mục, essential file với vai trò một dòng,
+constraint cục bộ, naming convention cùng locked decision có ngày. Skill ưu
+tiên bullet tập trung thay vì generic prose hoặc file tree được sao chép.
+
+## Giữ quyền kiểm soát tệp
+
+<Callout type="warn" title="Outline cần bạn phê duyệt">
+  Việc kiểm tra không cấp quyền ghi. Xác nhận target cùng outline đề xuất trước
+  khi Skill tạo hoặc thay thế local instruction path.
+</Callout>
+
+- Skill chỉ ghi trong thư mục con đã xác nhận.
+- Skill không lặp lại root instruction hoặc tạo constraint không được local
+  evidence hỗ trợ.
+- Skill không đưa credential vào context file.
+- Local instruction hiện có cùng chỉnh sửa của người dùng vẫn authoritative.
+- Symlink thay đổi cách hai path resolve về một nguồn; hãy review effect này
+  trước khi duyệt, đặc biệt trên platform hỗ trợ symlink hạn chế.
+- Workflow chỉ nêu local read và write, không nêu network access, external
+  provider, paid service, commit, push, publication hay deployment. Hãy duyệt
+  riêng mọi follow-up như vậy nếu runtime đề xuất.
+
+## Xác minh kết quả
+
+Một lần chạy hoàn tất nên cung cấp:
+
+- `CLAUDE.md` ngắn gọn trong thư mục con được yêu cầu.
+- Symlink `AGENTS.md` resolve tới tệp đó, hoặc pointer một dòng fallback được
+  công bố.
+- Nội dung dựa trên tệp đã kiểm tra hoặc quyết định bạn cung cấp rõ ràng.
+- Không sửa root instruction hay tệp ngoài target đã xác nhận.
+- Báo cáo path đã tạo, hành vi fallback cùng mọi mâu thuẫn còn cần giải quyết.
+
+Kiểm tra cả hai path cùng link hoặc pointer trước khi dựa vào context trong
+session sau. Skill này không định nghĩa automated test suite riêng; bằng chứng
+có thể quan sát là nội dung tệp, path boundary cùng hành vi link.
+
+## Xử lý sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Skill từ chối project root | Chọn một thư mục con có ý nghĩa; root instruction nằm ngoài workflow này. |
+| Skill khuyên không tạo gì | Chấp nhận sanity gate trừ khi bạn có thể nêu durable context không thể suy ra. |
+| Outline chứa rule chung chung hoặc trùng lặp | Loại chúng và chỉ giữ local guidance dựa trên bằng chứng. |
+| `AGENTS.md` là pointer thay vì symlink | Xác nhận symlink không khả dụng, rồi kiểm tra fallback một dòng đã được công bố. |
+| Instruction hiện có mâu thuẫn proposal | Giữ mâu thuẫn hiển thị và quyết định local rule nào authoritative trước khi ghi. |
+| Chỉnh sửa của người dùng biến mất | Dừng và khôi phục bản do người dùng viết; Skill không được revert nếu chưa có instruction. |
+| Runtime không nhận diện Skill | Xác nhận target cùng scope, mở runtime session mới, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Tiếp tục với [Project, artifact và checkpoint](../../../concepts/projects-artifacts-checkpoints)
+khi bạn cần model rộng hơn cho công việc bền vững.
+
+## Biết các giới hạn hiện tại
+
+- Chất lượng phụ thuộc local evidence hữu ích cùng quyết định rõ; Skill không
+  thể suy ra policy chưa được ghi lại một cách đáng tin cậy.
+- Output chủ ý ngắn gọn và không thay thế project docs hoặc root governance.
+- Việc tạo symlink phụ thuộc capability của filesystem cùng platform.
+- Package stable và beta hiện chứa cùng instruction và invocation behavior cho
+  `ak:folder-context`.
