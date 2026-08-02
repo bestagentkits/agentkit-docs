@@ -1,0 +1,87 @@
+---
+title: ak config prefs
+description: Chọn thao tác tra cứu, validate hoặc thay đổi Hook toggle có giới hạn, đồng thời giữ đúng scope, default, secret và ranh giới backup.
+---
+
+Dùng `ak config prefs` để tìm các lệnh resolve hoặc thay đổi giá trị preference
+đã được ghi của AgentKit. Bản thân lệnh nhóm chỉ in trợ giúp; lệnh không đọc hay
+ghi tệp config.
+
+## Cách dùng
+
+```bash
+ak config prefs
+```
+
+Lệnh không có cờ riêng. Các cờ dùng chung được mô tả trong
+[quy ước CLI](../cli-conventions), nhưng `--json` không biến phần trợ giúp của
+nhóm thành preference payload.
+
+## Chọn lệnh preference
+
+| Mục tiêu | Lệnh | Tác động |
+| --- | --- | --- |
+| Xem giá trị đã ghi có hiệu lực | `ak config prefs resolve` | Đọc config user và project hiện tại, rồi deep-merge project lên user. |
+| Kiểm tra cú pháp và schema config | `ak config prefs validate` | Đọc tệp user/project hiện có hoặc một `--file` rõ ràng; không ghi gì. |
+| Ghim một Hook toggle | `ak config prefs set <key> <true\|false>` | Backup config đã chọn nếu tồn tại, rồi ghi atomically một boolean `hooks.<name>`. |
+| Ngừng ghim một Hook toggle | `ak config prefs unset <key>` | Xoá một leaf trong scope đã chọn khi tồn tại, có backup trước khi ghi lại. |
+
+Các lệnh này không chỉnh provider key, API token, update setting hay section
+khác do setup quản lý.
+
+## Hiểu scope và thứ tự ưu tiên
+
+Hai tệp ứng viên là:
+
+1. user scope: `~/.agentkit/config.yaml` hoặc `$AGENTKIT_HOME/config.yaml`;
+2. project scope: `.agentkit/config.yaml` dưới working directory hiện tại của
+   lệnh.
+
+Resolve deep-merge giá trị project lên giá trị user. Mapping project có thể ghi
+đè một nested key nhưng vẫn giữ giá trị user bên cạnh. Kết quả chỉ gồm giá trị
+đã được ghi: key thiếu không được điền default của binary. Mỗi Kit Hook tự áp
+dụng default tích hợp khi không có giá trị.
+
+`set` và `unset` mặc định dùng user scope; truyền `--scope project` để chọn tệp
+của project hiện tại. Scope dựa trên working directory của process, không dựa
+vào project đã đăng ký được chọn ở nơi khác.
+
+## Ranh giới riêng tư và đầu ra
+
+Resolve dùng allowlist cho các section preference rồi đổi tên field sang cách
+viết camel-case cũ mà Kit Hook sử dụng. Section credential của setup, gồm
+`keys` và `api`, bị loại. Tuy nhiên, section `extensions` được giữ nguyên, vì
+vậy hãy xem đầu ra preference là dữ liệu user-authored có thể nhạy cảm và kiểm
+tra trước khi chia sẻ log.
+
+Các lệnh preference dùng object JSON thô riêng cho từng lệnh thay vì success
+envelope chung `schema_version`/`kind`/`data`. `ak config prefs` trần in trợ
+giúp Cobra thông thường ra stdout và thường thoát `0`.
+
+Lỗi runtime của các lệnh preference không được chuyển tập trung thành JSON
+error envelope. Với `--json`, lỗi có thể không phát object chẩn đoán; hãy dùng
+mã thoát process và validate đầu ra thành công trước khi xử lý. Lỗi parse cờ có
+thể vẫn in hướng dẫn dùng dạng plain text và thoát `2`.
+Subcommand không tồn tại hoặc positional token dư đi theo đường lỗi runtime
+chung và thoát `1`.
+
+## Ranh giới ghi và khôi phục
+
+Set/unset giữ section YAML không được model, comment, thứ tự key và schema
+editor directive. Tệp được thay qua sibling temporary file với mode `0600`.
+Target hiện có được sao chép trước dưới `~/.agentkit/backups/config/`; đầu ra
+thành công báo đường dẫn backup chính xác.
+
+Backup là bản sao của từng tệp config, không phải transaction xuyên user và
+project scope. Tránh nhiều config writer chạy đồng thời. Để khôi phục, dừng các
+writer khác, kiểm tra backup được báo rồi copy tệp đó về config path được báo;
+không có lệnh rollback preference tự động.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của lệnh `ak config prefs`](../cli/ak_config_prefs)
+- [Resolve preference đã ghi](../cli/ak_config_prefs_resolve)
+- [Đặt Hook preference](../cli/ak_config_prefs_set)
+- [Validate tệp config](../cli/ak_config_prefs_validate)
+- [Xoá Hook preference](../cli/ak_config_prefs_unset)
+- [Quy ước CLI](../cli-conventions)

@@ -1,0 +1,152 @@
+---
+title: ak config prefs set
+description: Set one bounded Hook boolean with exact scope, schema, backup, atomic-write, output, and manual-recovery behavior.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak config prefs set` to pin one Hook soft-preference to `true` or `false`
+in the user config or the current project's config. The command changes the
+selected file immediately; it does not unregister or install a Hook.
+
+## Usage
+
+```bash
+ak config prefs set <key> <true|false>
+```
+
+Supply exactly two positional arguments.
+
+## Command flag
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--scope <scope>` | `user` | Select `user` under AgentKit home or `project` under the current working directory. |
+
+Shared flags are described in [CLI conventions](../cli-conventions). The write
+does not prompt, so `--yes` and `--no-interactive` do not change it. There is no
+`--dry-run`, `--force`, or preview mode.
+
+## Key and value validation
+
+The only accepted key shape is:
+
+```text
+hooks.<name>
+```
+
+`<name>` must be a lowercase kebab-case Hook script basename matching
+`^[a-z0-9]+(?:-[a-z0-9]+)*$`. It cannot contain another dot. The value must be
+the exact lowercase literal `true` or `false`.
+
+```bash
+ak config prefs set hooks.simplify-gate false
+ak config prefs set hooks.simplify-gate true --scope project
+```
+
+Keys such as `keys.anthropic`, `api.token`, `telemetry.enabled`,
+`hooks.Bad-Name`, and `hooks.a.b` are rejected before a preference write. This
+allowlist prevents the command from being used as a general secret or config
+editor.
+
+`false` lets a Hook that honors this preference exit early on its next run;
+`true` records the opposite preference. Harness registration is unchanged, and
+setting a name does not prove that Hook is installed.
+
+## Scope and filesystem effects
+
+| Scope | Target | Additional effect |
+| --- | --- | --- |
+| `user` | `$AGENTKIT_HOME/config.yaml`, normally `~/.agentkit/config.yaml` | A missing file is created. |
+| `project` | `<cwd>/.agentkit/config.yaml` | If absent, AgentKit scaffolds the project template and `.agentkit/.gitignore` first. The project config is intended to be committed, so do not place credentials in it. |
+
+The writer changes only the selected `hooks.<name>` leaf. It preserves other
+sections, unmodelled YAML, comments, key order, and the schema editor directive.
+If `hooks` already exists but is not a mapping, the write is refused.
+
+Before writing, AgentKit validates the whole candidate against the schema
+embedded in this binary. Existing legacy spellings can produce warnings but do
+not by themselves fail validation; schema errors leave an existing target
+untouched.
+
+## Backup, atomicity, and recovery
+
+When the target exists, AgentKit copies its current bytes to a mode-`0600` file
+under `$AGENTKIT_HOME/backups/config/`. User backups begin with `config-`;
+project backups begin with `project-config-`. Backup failure aborts the config
+rewrite.
+
+The new document is written to a sibling temporary file, changed to mode
+`0600`, then renamed over the target. This prevents readers from seeing a
+half-written document.
+
+<Callout type="warning">
+  Atomic replacement is not a cross-process transaction lock. Do not run this
+  command alongside another config writer or a manual save; both can read the
+  same old document and the later rename can lose the earlier change. A
+  symlinked config path is also replaced by the new regular file rather than
+  preserved as a symlink.
+</Callout>
+
+To recover, stop other writers, inspect the `backup_path` reported by the
+successful command, manually replace `config_path` with that backup, and run
+`ak config prefs validate`. These config copies are not full AgentKit snapshots
+and have no automatic rollback command.
+
+## Human and JSON output
+
+Human success writes the change and target path to stdout, followed by the
+backup path when one was created:
+
+```text
+set hooks.simplify-gate = false (user scope) in /home/user/.agentkit/config.yaml
+backed up prior config to /home/user/.agentkit/backups/config/config-<timestamp>.yaml
+```
+
+`--json` writes a raw object, not the shared success envelope:
+
+```json
+{
+  "action":"set",
+  "key":"hooks.simplify-gate",
+  "value":false,
+  "scope":"user",
+  "config_path":"/home/user/.agentkit/config.yaml",
+  "backup_path":"/home/user/.agentkit/backups/config/config-<timestamp>.yaml",
+  "found":true
+}
+```
+
+`backup_path` is omitted when no backup was created. `found` is always `true`
+for a successful set. `--quiet` does not suppress this command-specific stdout.
+
+Runtime failures do not emit the shared JSON error envelope and can be silent
+under `--json`; use process status and validate the expected fields. Flag-parse
+errors can remain plain-text usage. A wrong positional-argument count follows
+the generic runtime error path instead.
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | The selected leaf was written and any reported backup completed first. | Run resolve and validate. |
+| `1` | The positional-argument count, key, value, scope, path, YAML shape, schema, backup, or write failed. | Correct the invocation or read the human error without exposing config secrets; do not force the write. |
+| `2` | Flag parsing failed. | Correct the flags. |
+
+## Verify the result
+
+```bash
+ak config prefs resolve --json
+ak config prefs validate
+```
+
+For project scope, run resolve from that same project directory so the intended
+project file participates in precedence.
+
+## Related commands
+
+- [Complete `ak config prefs set` command facts](../cli/ak_config_prefs_set)
+- [Resolve authored preferences](../cli/ak_config_prefs_resolve)
+- [Validate config files](../cli/ak_config_prefs_validate)
+- [Remove an explicit Hook preference](../cli/ak_config_prefs_unset)
+- [CLI conventions](../cli-conventions)

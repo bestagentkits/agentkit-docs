@@ -1,0 +1,137 @@
+---
+title: ak config
+description: Mở dashboard AgentKit qua native window hoặc HTTP foreground với ranh giới rõ ràng về fallback, auth, state và thay đổi dữ liệu.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak config` để mở dashboard trực quan của AgentKit. Tuỳ binary, terminal
+và cờ, lệnh mở native window bằng Wails hoặc chạy HTTP dashboard ở foreground.
+
+## Cách dùng
+
+```bash
+ak config
+```
+
+Lệnh không nhận argument theo vị trí.
+
+## Tuỳ chọn của lệnh
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--auth-token <token>` | Trống | Yêu cầu `Authorization: Bearer <token>` trên mọi HTTP request; fallback sang `AK_DASHBOARD_TOKEN`. |
+| `--bind <host>` | `127.0.0.1` | Chọn host của HTTP listener. Giá trị không phải loopback yêu cầu token. |
+| `--no-open` | `false` | Bỏ qua thao tác mở browser best-effort trên đường HTTP. |
+| `--no-window` | `false` | Buộc dùng HTTP dashboard thay cho native window. |
+| `--port <port>` | `8766` | Chọn HTTP port. `0` yêu cầu hệ điều hành tự cấp port. |
+
+Các cờ dùng chung được mô tả trong [quy ước CLI](../cli-conventions). `--yes`
+không phê duyệt thay đổi trong dashboard; mỗi thao tác UI có hợp đồng API riêng.
+
+## Hiểu cách chọn native và HTTP
+
+`ak config` trần chỉ mở native window khi tất cả điều kiện sau đúng:
+
+- binary được build với build tag `wails`;
+- stdout là TTY;
+- không có `--no-window`;
+- chưa truyền rõ `--port`;
+- effective `--no-interactive` là false.
+
+Binary CLI-only tiêu chuẩn không có Wails nên dùng đường HTTP. `--json` ngầm
+bật `--no-interactive` và vì vậy cũng chọn HTTP. Truyền rõ `--port 8766` vẫn
+chọn HTTP dù giá trị bằng mặc định.
+
+<Callout type="info">
+  Trên TTY với binary có Wails, chỉ `--bind`, `--auth-token` hoặc `--no-open`
+  không buộc dùng HTTP; đường native-window bỏ qua các cờ này. Hãy thêm
+  `--no-window` khi bạn muốn các cờ HTTP có hiệu lực.
+</Callout>
+
+Để có lần gọi headless dễ dự đoán:
+
+```bash
+ak config --no-window --no-open --no-interactive --json
+```
+
+## Xem dashboard là bề mặt thay đổi dữ liệu
+
+Mở dashboard không tương đương chỉ đọc `config.yaml`. Bề mặt native và HTTP
+cung cấp thao tác cho account access, config và settings, project, Kit,
+analytics, update, migration, MCP, content và session redaction. Thao tác bạn
+chọn trong UI có thể ghi tệp user hoặc project, gửi request mạng, chạy tool hay
+áp dụng thao tác vòng đời.
+
+Dashboard host còn tự động reconcile analytics khi đang mở; quá trình này có
+thể đọc nguồn coding-agent cục bộ và cập nhật private analytics index. Hãy xem
+confirmation cùng thông tin khôi phục của từng thao tác; việc mở dashboard
+không tạo một snapshot chung để rollback mọi thứ.
+
+## Ranh giới bảo mật HTTP và browser
+
+Theo mặc định, HTTP server lắng nghe tại `127.0.0.1:8766`. Token được resolve từ
+`--auth-token` trước, sau đó là `AK_DASHBOARD_TOKEN`. Khác `ak api start`, lệnh
+không đọc token từ `config.yaml`, không hỗ trợ cú pháp `@file`, và token cờ thô
+có thể xuất hiện trong danh sách process.
+
+<Callout type="warning">
+  Giữ browser dashboard trên loopback. Dù listener không phải loopback được
+  phép khi có token, server từ chối mọi `Host` và `Origin` không phải loopback.
+  Server còn yêu cầu bearer header cho page shell và asset, trong khi browser
+  được mở bình thường không tự thêm header đó. Vì vậy, listener có token hoặc
+  bind LAN cần client có thể gửi header mà vẫn tuân theo loopback host guard;
+  đây không phải public dashboard mode.
+</Callout>
+
+Mutation request còn phải có `Content-Type: application/json` và bị từ chối nếu
+có fetch metadata cross-site hoặc origin không khớp request host.
+
+## State process và browser fallback
+
+Đường HTTP ghi atomically `~/.agentkit/dashboard/state.json` với PID, port, địa
+chỉ bind và thời điểm bắt đầu. Lỗi ghi state được log nhưng không dừng listener.
+Shutdown sạch sẽ xoá tệp sau graceful drain tối đa 30 giây.
+
+Trừ khi có `--no-open`, `--no-interactive`, `--json` hoặc `--quiet`, đường HTTP
+khởi động browser mặc định của hệ điều hành. Lỗi mở browser là cảnh báo không
+fatal. Sau đó lệnh vẫn ở foreground; lệnh không có daemon flag. Dùng
+`ak config start`, `status`, `stop` cho vòng đời HTTP rõ ràng, đồng thời nhớ
+status và stop tin vào PID đã ghi.
+
+Đường native không ghi tệp state dashboard. Đóng window sẽ kết thúc lệnh;
+`ak config status` và `ak config stop` không quản lý window đó.
+
+## Đầu ra dành cho người dùng và JSON
+
+Đường native không có success envelope CLI tiêu chuẩn; Wails quản lý vòng đời
+window và có thể ghi log ra stderr.
+
+Đường HTTP ghi kết quả khởi động ra stdout. Chế độ JSON phát một dòng rồi vẫn
+gắn với server:
+
+```json
+{"schema_version":1,"kind":"config.start","data":{"status":"running","bind_addr":"127.0.0.1:8766","url":"http://127.0.0.1:8766","pid":12345}}
+```
+
+Log server vẫn là plain text trên stderr trong chế độ JSON, vì vậy hãy xử lý hai
+luồng riêng. Lỗi runtime JSON dùng `schema_version`, `error`, `error_code`,
+`exit_code`; lỗi parse cờ có thể vẫn là hướng dẫn dùng dạng plain text.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Native window đóng bình thường hoặc HTTP server shutdown sạch sẽ. Cảnh báo mở browser vẫn là thành công. | Xác minh riêng thao tác UI dự định thực hiện. |
+| `1` | Có positional argument không mong đợi, hoặc khởi tạo window, resolve home, tạo server, bind, serve hay bước runtime khác thất bại. | Sửa argument dư; nếu không, đọc stderr và xác nhận đường nào đã được chọn. |
+| `2` | Parse cờ thất bại. | Sửa các cờ. |
+| `7` | Đường HTTP chọn bind không phải loopback mà không có token. | Trở lại loopback hoặc cấu hình token cho client không phải browser. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của lệnh `ak config`](../cli/ak_config)
+- [Kiểm tra preference đã resolve](../cli/ak_config_prefs_resolve)
+- [Khởi động HTTP dashboard rõ ràng](../cli/ak_config_start)
+- [Kiểm tra state HTTP dashboard](../cli/ak_config_status)
+- [Dừng process HTTP dashboard đã ghi](../cli/ak_config_stop)
+- [Quy ước CLI](../cli-conventions)

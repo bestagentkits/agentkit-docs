@@ -1,0 +1,102 @@
+---
+title: ak api stop
+description: Gửi signal đến PID API do AgentKit ghi, đồng thời tính đến state stale, PID reuse, shutdown bất đồng bộ và no-op không có envelope.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak api stop` để gửi `SIGTERM` đến PID do `ak api start` ghi. Lệnh có tính
+idempotent khi không có tệp state, nhưng không xác minh identity của process hay
+việc shutdown đã hoàn tất.
+
+## Cách dùng
+
+```bash
+ak api stop
+```
+
+Lệnh không nhận argument theo vị trí và không có cờ riêng. Các cờ dùng chung
+được mô tả trong [quy ước CLI](../cli-conventions). Lệnh không bao giờ hỏi;
+`--yes` và `--no-interactive` không thay đổi thao tác signal.
+
+## Trước khi dừng một record cũ
+
+Lệnh đọc `~/.agentkit/api/state.json` (`AGENTKIT_HOME` thay đổi thư mục gốc),
+tìm PID đã ghi rồi gửi `SIGTERM`.
+
+<Callout type="warning">
+  Tệp state được tin cậy mà không kiểm tra identity của executable hay thời điểm
+  process bắt đầu. Nếu tệp stale và hệ điều hành đã tái sử dụng PID, lệnh có thể
+  gửi signal đến process khác. Với record có vẻ cũ, hãy so sánh PID được báo với
+  danh sách process trước khi chạy stop.
+</Callout>
+
+Dùng `ak api status` để đọc record, rồi xác minh PID bằng hệ điều hành. Nếu
+không có process AgentKit tương ứng, chỉ xoá `~/.agentkit/api/state.json` thay
+vì gọi stop hoặc xoá thư mục rộng hơn.
+
+## Hành vi signal và dọn dẹp
+
+- Nếu tệp state không tồn tại, lệnh ghi cảnh báo not-running ra stderr và thoát
+  `0`.
+- Nếu `SIGTERM` được chấp nhận, lệnh báo thành công ngay. Lệnh không đợi process
+  đích thoát hay tệp state biến mất.
+- AgentKit server xử lý `SIGTERM` bằng graceful drain tối đa 30 giây và xoá tệp
+  state khi return sạch sẽ.
+- Nếu gửi signal trả lỗi, stop xem process đã kết thúc, thử xoá tệp state, ghi
+  cảnh báo rồi thoát `0` ngay cả khi lần dọn dẹp đó thất bại.
+
+Lệnh không tạo backup hay rollback. Lệnh không liên hệ server qua HTTP và không
+gửi request mạng đến provider.
+
+## Xác minh hoàn tất
+
+Sau khi gửi signal dừng, hãy poll state đã ghi và kiểm tra hệ điều hành khi cần,
+thay vì xem dòng thành công là bằng chứng process đã thoát:
+
+```bash
+ak api status --json
+```
+
+Shutdown sạch sẽ cuối cùng trả `data.running: false`. Hãy nhớ status chỉ kiểm
+tra tệp state; xác minh PID riêng nếu state vẫn còn.
+
+## Đầu ra dành cho người dùng và JSON
+
+Khi `SIGTERM` được chấp nhận, kết quả dành cho người dùng được ghi ra stdout:
+
+```text
+[OK] api server stopped (pid 12345)
+```
+
+JSON thành công dùng `kind=api.stop`:
+
+```json
+{"schema_version":1,"kind":"api.stop","data":{"pid":12345}}
+```
+
+Khi không có tệp state, stdout rỗng và stderr chứa cảnh báo plain text
+`[!] api: server is not running`; `--json` không thêm success envelope cho
+đường no-op này. Lỗi signal cũng dùng cảnh báo plain text trên stderr và không
+có object JSON thành công.
+
+Lỗi đọc state ở chế độ JSON được ghi ra stderr với `schema_version`, `error`,
+`error_code`, `exit_code`. Lỗi parse cờ có thể vẫn là hướng dẫn dùng dạng plain
+text.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Không có state, `SIGTERM` được chấp nhận, hoặc gửi signal lỗi và lệnh đã thử dọn state stale. | Đọc stdout/stderr, rồi xác minh state và identity process. |
+| `1` | Có positional argument không mong đợi, xử lý AgentKit home hay state thất bại, hoặc việc tìm process lỗi. | Sửa argument dư; nếu không, kiểm tra đúng PID và đường dẫn state trước khi thử lại. |
+| `2` | Parse cờ thất bại. | Sửa các cờ. |
+
+Lệnh không có preview, dry-run, force, confirmation hay đường từ chối.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của lệnh `ak api stop`](../cli/ak_api_stop)
+- [Kiểm tra state API đã ghi](../cli/ak_api_status)
+- [Khởi động API server](../cli/ak_api_start)
+- [Quy ước CLI](../cli-conventions)

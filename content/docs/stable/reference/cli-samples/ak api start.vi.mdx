@@ -1,0 +1,127 @@
+---
+title: ak api start
+description: Chạy API proxy AgentKit ở foreground với ranh giới rõ ràng về listener, token, provider key, luồng đầu ra và shutdown.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak api start` khi công cụ cục bộ cần endpoint sức khoẻ của AgentKit hoặc
+các route reverse proxy Anthropic, OpenAI và Gemini. Lệnh giữ process ở
+foreground cho đến khi interrupt hoặc `SIGTERM` dừng nó.
+
+## Cách dùng
+
+```bash
+ak api start
+```
+
+Lệnh không nhận argument theo vị trí. Lệnh không có daemon mode.
+
+## Tuỳ chọn của lệnh
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--auth-token <token-or-@file>` | Trống | Bảo vệ mọi HTTP route bằng bearer token. Giá trị bắt đầu bằng `@` được đọc từ tệp đó. |
+| `--bind <host>` | `127.0.0.1` | Chọn host của listener. Giá trị không phải loopback yêu cầu effective auth token. |
+| `--port <port>` | `8765` | Chọn TCP port. `0` yêu cầu hệ điều hành tự cấp port. |
+
+Các cờ dùng chung được mô tả trong [quy ước CLI](../cli-conventions). `--yes`
+không cấp thêm quyền nào, và `--no-interactive` không tách server khỏi process.
+
+## Chọn bind và token an toàn
+
+Effective token theo thứ tự ưu tiên sau:
+
+1. `--auth-token`, gồm cả dạng `@file`;
+2. `AK_API_TOKEN`;
+3. `api.token` trong `~/.agentkit/config.yaml`.
+
+Ưu tiên biến môi trường hoặc tệp token được bảo vệ bằng permission:
+
+```bash
+AK_API_TOKEN="$SERVICE_TOKEN" ak api start
+ak api start --auth-token @/run/secrets/agentkit-api-token
+```
+
+Giá trị cờ thô vẫn hoạt động, nhưng lệnh cảnh báo trên stderr vì secret xuất
+hiện trong danh sách process. Token là bắt buộc với mọi IP hoặc hostname không
+phải loopback, đồng thời bảo vệ cả endpoint cục bộ lẫn route proxy. Request phải
+gửi `Authorization: Bearer <token>`.
+
+<Callout type="warning">
+  Bind không phải loopback mà không resolve được token sẽ bị từ chối trước khi
+  tạo listener và thoát `7`. Route proxy còn yêu cầu `Host` là loopback và
+  `Origin` khớp loopback khi header này có mặt, nên bind vào địa chỉ LAN không
+  làm các route proxy đó dùng được rộng rãi từ host từ xa.
+</Callout>
+
+## Route provider và cục bộ
+
+Server cung cấp:
+
+| Route | Hành vi |
+| --- | --- |
+| `/health` | Trả `{"status":"ok"}`. |
+| `/status` | Trả `status`, `bind_addr`, `started_at`, `request_count` và `uptime` của process đang chạy. |
+| `/version` | Trả `version`. |
+| `/anthropic/*` | Proxy đến `https://api.anthropic.com` sau khi bỏ `/anthropic`; chèn `x-api-key` đã cấu hình khi có. |
+| `/openai/*` | Proxy đến `https://api.openai.com` sau khi bỏ `/openai`; chèn bearer auth đã cấu hình khi có. |
+| `/gemini/*` | Proxy đến `https://generativelanguage.googleapis.com` sau khi bỏ `/gemini`; bản phát hành này không đọc Gemini key từ config. |
+
+Request proxy có tác động mạng và billing thật tại provider. Config được đọc
+theo kiểu best-effort: config thiếu, không đọc được hoặc không hợp lệ không làm
+listener dừng, nhưng provider-key injection đã cấu hình có thể không tồn tại.
+Lệnh không xác minh credential upstream khi khởi động.
+
+`request_count` là instrumentation counter, không phải tổng request một-một:
+route cục bộ tăng bộ đếm một lần, còn route proxy được chấp nhận tăng ở cả
+server-wide wrapper và proxy metrics wrapper.
+
+## State, vòng đời foreground và shutdown
+
+Sau khi bind, AgentKit ghi atomically `~/.agentkit/api/state.json` với
+`version`, `pid`, `port`, `bind_addr`, `started_at` và `request_count` tuỳ chọn.
+Lỗi ghi state được log nhưng không dừng server; trong trường hợp đó,
+`ak api status` và `ak api stop` không tìm thấy server.
+
+Hãy chạy lệnh dưới process supervisor khi cần hoạt động nền. Interrupt hoặc
+`SIGTERM` sạch sẽ bắt đầu graceful shutdown với cửa sổ drain 30 giây, xoá tệp
+state và thoát `0`. Lệnh không tạo snapshot hay rollback.
+
+## Đầu ra dành cho người dùng và JSON
+
+Kết quả khởi động dành cho người dùng được ghi ra stdout:
+
+```text
+[OK] api server running on 127.0.0.1:8765 (pid 12345)
+```
+
+Log khởi động và từng request được ghi ra stderr. Với `--json`, stdout phát một
+startup envelope rồi vẫn gắn với process đang chạy:
+
+```json
+{"schema_version":1,"kind":"api.start","data":{"status":"running","bind_addr":"127.0.0.1:8765","pid":12345}}
+```
+
+Chế độ JSON không chuyển log server trên stderr thành JSON. Hãy xử lý hai luồng
+riêng. Lỗi runtime JSON dùng các trường error envelope `schema_version`,
+`error`, `error_code`, `exit_code`; lỗi parse cờ có thể vẫn là hướng dẫn dùng
+dạng plain text.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Listener shutdown sạch sẽ sau khi đã khởi động. | Xác nhận tệp state đã biến mất. |
+| `1` | Có positional argument không mong đợi, hoặc resolve home hay tệp token, tạo listener, bind, serve hay bước runtime khác thất bại. | Đọc stderr; xác minh cách gọi, địa chỉ, port, tệp token và process đang sở hữu. |
+| `2` | Parse cờ thất bại. | Sửa các cờ. |
+| `7` | Bind không phải loopback không có effective token. | Cấu hình token hoặc trở lại loopback. |
+
+Lệnh không có prompt, preview, dry-run, force hay đường từ chối.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của lệnh `ak api start`](../cli/ak_api_start)
+- [Kiểm tra state API đã ghi](../cli/ak_api_status)
+- [Dừng process API đã ghi](../cli/ak_api_stop)
+- [Quy ước CLI](../cli-conventions)

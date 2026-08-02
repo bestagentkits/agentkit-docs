@@ -1,0 +1,85 @@
+---
+title: ak api
+description: Chọn và vận hành API proxy foreground của AgentKit với ranh giới rõ ràng về bind, bearer token, trạng thái process và state bị stale.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak api` để tìm các lệnh chạy và kiểm tra HTTP API cùng provider proxy cục
+bộ của AgentKit. Lệnh nhóm không khởi động server; lệnh chỉ in trợ giúp rồi
+thoát.
+
+## Cách dùng
+
+```bash
+ak api
+```
+
+Lệnh không nhận argument theo vị trí và không có cờ riêng. Các cờ dùng chung
+được mô tả trong [quy ước CLI](../cli-conventions), nhưng cờ đầu ra không biến
+phần trợ giúp của nhóm thành kết quả trạng thái API.
+
+## Chọn lệnh vòng đời
+
+| Mục tiêu | Lệnh | Kết quả |
+| --- | --- | --- |
+| Bắt đầu phục vụ | `ak api start` | Chạy HTTP server ở foreground cho đến khi nhận interrupt hoặc `SIGTERM`. |
+| Kiểm tra state đã ghi | `ak api status` | Đọc tệp state cục bộ và báo chi tiết process đã ghi. |
+| Yêu cầu dừng | `ak api stop` | Gửi `SIGTERM` đến PID trong tệp state. |
+
+<Callout type="warning">
+  Phần trợ giúp cha hiện có ví dụ `ak api start --daemon`, nhưng lệnh `start`
+  đã phát hành không có cờ `--daemon`. Hãy dùng process supervisor hoặc trình
+  quản lý background job của shell khi cần kiểm soát vòng đời nền.
+</Callout>
+
+## Bề mặt server và tác động mạng
+
+Theo mặc định, server lắng nghe tại `127.0.0.1:8765`. Server cung cấp endpoint
+JSON cục bộ `/health`, `/status`, `/version`, cùng các route reverse proxy dưới
+`/anthropic/`, `/openai/` và `/gemini/`. Request proxy liên hệ provider tương
+ứng và có thể chèn credential provider đọc từ `~/.agentkit/config.yaml`
+(`AGENTKIT_HOME` thay đổi thư mục gốc).
+
+Khi được cấu hình, bearer token bảo vệ mọi route. Bind không phải loopback bị
+từ chối với mã `7` nếu token không resolve được từ `--auth-token`,
+`AK_API_TOKEN` hoặc `api.token` trong config.
+
+Route proxy còn từ chối header `Host` không phải loopback, đồng thời từ chối
+browser origin không phải loopback hoặc không khớp `Host`. Vì vậy, listener
+không phải loopback có bearer token không tự động làm provider proxy dùng được
+qua hostname hay địa chỉ LAN. Hãy thử đúng route của client trước khi dựa vào
+một tích hợp từ xa.
+
+## State process và ranh giới khôi phục
+
+Trong khi phục vụ, AgentKit ghi `~/.agentkit/api/state.json` chứa PID, địa chỉ
+bind, port và thời điểm bắt đầu. Shutdown sạch sẽ xoá tệp này. Tệp không chứa
+bearer token hay provider key và được ghi atomically trong thư mục riêng tư.
+
+Status và stop tin vào state record này; chúng không xác minh identity của
+executable. Record stale có thể bị báo là đang chạy, và PID được tái sử dụng có
+thể khiến `ak api stop` gửi signal đến process khác. Trước khi dừng một record
+có vẻ cũ, hãy so sánh PID và địa chỉ được báo với danh sách process của hệ điều
+hành. Nếu record stale, chỉ xoá `~/.agentkit/api/state.json`; không xoá toàn bộ
+thư mục home AgentKit.
+
+## Đầu ra và mã thoát
+
+`ak api` trần in trợ giúp Cobra ra stdout và thường thoát `0`. Lệnh không phát
+success envelope `api.*` vì chưa có thao tác vòng đời nào chạy. Cờ không hợp lệ
+thoát `2` và có thể in hướng dẫn dùng dạng plain text ngay cả khi có `--json`.
+Subcommand không tồn tại hoặc positional token dư đi theo đường lỗi runtime
+chung và thoát `1`.
+
+Các subcommand có hợp đồng đầu ra và mã thoát riêng. Cụ thể, "not running" là
+thành công với cả status và stop, còn thao tác start bind không an toàn dùng mã
+thoát `7`.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của lệnh `ak api`](../cli/ak_api)
+- [Thông tin đầy đủ của lệnh `ak api start`](../cli/ak_api_start)
+- [Thông tin đầy đủ của lệnh `ak api status`](../cli/ak_api_status)
+- [Thông tin đầy đủ của lệnh `ak api stop`](../cli/ak_api_stop)
+- [Quy ước CLI](../cli-conventions)

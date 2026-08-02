@@ -1,0 +1,121 @@
+---
+title: ak config prefs resolve
+description: Resolve preference đã ghi ở user và project hiện tại với hành vi merge, cách viết key, nguồn, riêng tư và JSON thô chính xác.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak config prefs resolve` để xem giá trị preference mà Kit Hook đọc cho
+working directory hiện tại. Lệnh chỉ đọc và hoạt động không cần mạng.
+
+## Cách dùng
+
+```bash
+ak config prefs resolve
+```
+
+Lệnh không nhận argument theo vị trí và không có cờ riêng. Các cờ dùng chung
+được mô tả trong [quy ước CLI](../cli-conventions). Chỉ `--json` thay đổi định
+dạng payload; `--yes` và `--no-interactive` không thay đổi resolution.
+
+## Thứ tự nguồn và quy tắc merge
+
+Lệnh xem xét đúng hai đường dẫn:
+
+1. `~/.agentkit/config.yaml` hoặc `$AGENTKIT_HOME/config.yaml` dưới scope `user`;
+2. `<current-working-directory>/.agentkit/config.yaml` dưới scope `project`.
+
+Tệp thiếu được ghi là absent và không phải lỗi. Tệp không đọc được hoặc sai
+định dạng làm toàn bộ resolution thất bại để Hook không âm thầm fallback khi
+config đã ghi bị hỏng.
+
+Giá trị user được đọc trước, sau đó giá trị project được deep-merge lên trên.
+Mapping project lồng nhau chỉ thay leaf được nêu; giá trị scalar hoặc không phải
+mapping ở project thay giá trị user tương ứng. Cách viết camel-case cũ và
+snake-case của config được xem là cùng field. Khi một section preference có cả
+hai cách viết, cách viết config thắng.
+
+## Giá trị đã ghi, không phải default
+
+`prefs` chỉ chứa giá trị có trong hai tệp. Lệnh không chèn default của binary
+hay Hook. Key thiếu vẫn vắng mặt, và Hook sử dụng sẽ tự áp dụng giá trị
+`DEFAULT_CONFIG` của nó.
+
+Điểm này quan trọng khi so sánh version CLI và Hook: Hook mới hơn có thể sở hữu
+default mà CLI cũ chưa biết mà không bị CLI ghi đè.
+
+## Section được đưa vào và cách viết key
+
+Resolver phát các section preference sau khi chúng được ghi:
+
+```text
+assertions, codingLevel, content, docs, gemini, hooks, locale, paths,
+plan, privacyBlock, project, simplify, skills, statusline,
+statuslineColors, statuslineLayout, statuslineQuota, trust, watch,
+workflowArtifactGate, extensions
+```
+
+Tên field config được đổi từ snake_case sang cách viết camel-case cũ mà Hook sử
+dụng. Tên Hook ngay dưới `hooks` và Skill ID ngay dưới `skills` vẫn là identifier
+nguyên văn. Mọi thứ dưới `extensions` được giữ nguyên, không đổi tên.
+
+<Callout type="warning">
+  Các section do setup quản lý như `keys`, `api`, `provider`, `updates` và
+  `backups` bị loại, ngăn provider key thông thường và dashboard token đi vào
+  đầu ra Hook. Tuy nhiên, `extensions` do user ghi và được giữ nguyên. Hãy kiểm
+  tra trước khi công bố đầu ra. Mảng `sources` còn làm lộ đường dẫn user và
+  project cục bộ.
+</Callout>
+
+## Đầu ra dành cho người dùng
+
+Stdout dành cho người dùng in hai đường dẫn nguồn cùng trạng thái `present`
+hoặc `absent` trước. Sau đó lệnh in object preference đã resolve dưới dạng JSON
+thụt dòng. Khi chưa ghi preference nào, lệnh in:
+
+```text
+No preferences are set; hooks use their built-in defaults.
+```
+
+`--quiet` không chặn stdout riêng của lệnh này.
+
+## Đầu ra JSON
+
+`--json` ghi đúng một document JSON thô ra stdout, không có outer envelope
+`kind` hay `data` dùng chung:
+
+```json
+{
+  "schema_version": 1,
+  "prefs": {"hooks":{"simplify-gate":false}},
+  "sources": [
+    {"scope":"user","path":"/home/user/.agentkit/config.yaml","present":true},
+    {"scope":"project","path":"/work/project/.agentkit/config.yaml","present":false}
+  ]
+}
+```
+
+`prefs` luôn là object, còn `sources` luôn gồm entry `user` rồi `project`. Kiểu
+giá trị được giữ từ YAML.
+
+Lỗi runtime không phát JSON error envelope dùng chung và có thể im lặng dưới
+`--json`; hãy dùng mã thoát process và yêu cầu đủ cả ba top-level field trước
+khi xử lý. Lỗi parse cờ có thể vẫn là hướng dẫn dùng dạng plain text.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Hai nguồn ứng viên resolve thành công, kể cả khi một hoặc cả hai vắng mặt. | Kiểm tra `sources[].present` rồi mới đọc `prefs`. |
+| `1` | Có positional argument không mong đợi, resolve home hay working directory thất bại, hoặc không đọc hay parse được config hiện có. | Sửa argument dư; nếu không, sửa tệp được báo. |
+| `2` | Parse cờ thất bại. | Sửa các cờ. |
+
+Lệnh không ghi tệp, không chạy process, không tạo backup và không có preview,
+apply, force hay rollback.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của lệnh `ak config prefs resolve`](../cli/ak_config_prefs_resolve)
+- [Đặt Hook preference](../cli/ak_config_prefs_set)
+- [Validate tệp config](../cli/ak_config_prefs_validate)
+- [Quy ước CLI](../cli-conventions)

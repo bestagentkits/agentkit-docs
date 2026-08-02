@@ -1,0 +1,128 @@
+---
+title: ak api start
+description: Run the AgentKit API proxy in the foreground with explicit listener, token, provider-key, stream, and shutdown boundaries.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak api start` when a local tool needs AgentKit's health endpoints or its
+Anthropic, OpenAI, and Gemini reverse-proxy routes. The command owns the
+foreground process until an interrupt or `SIGTERM` stops it.
+
+## Usage
+
+```bash
+ak api start
+```
+
+The command accepts no positional arguments. It has no daemon mode.
+
+## Command flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--auth-token <token-or-@file>` | Empty | Protect every HTTP route with a bearer token. A value beginning with `@` is read from that file. |
+| `--bind <host>` | `127.0.0.1` | Select the listener host. A non-loopback value requires an effective auth token. |
+| `--port <port>` | `8765` | Select the TCP port. `0` asks the operating system to assign one. |
+
+Shared flags are described in [CLI conventions](../cli-conventions). `--yes`
+does not authorize anything, and `--no-interactive` does not detach the server.
+
+## Choose the bind and token safely
+
+The effective token uses this precedence:
+
+1. `--auth-token`, including the `@file` form;
+2. `AK_API_TOKEN`;
+3. `api.token` in `~/.agentkit/config.yaml`.
+
+Prefer an environment variable or a mode-protected token file:
+
+```bash
+AK_API_TOKEN="$SERVICE_TOKEN" ak api start
+ak api start --auth-token @/run/secrets/agentkit-api-token
+```
+
+Passing a raw flag value works, but the command warns on stderr because the
+secret is visible in process listings. The token is required for any
+non-loopback IP or hostname and protects local endpoints as well as proxy
+routes. Requests must send `Authorization: Bearer <token>`.
+
+<Callout type="warning">
+  A non-loopback bind without a resolved token is rejected before the listener
+  is created and exits `7`. Proxy routes separately require a loopback `Host`
+  and a matching loopback `Origin` when one is present, so binding to a LAN
+  address does not make those proxy routes generally usable from remote hosts.
+</Callout>
+
+## Provider and local routes
+
+The server exposes:
+
+| Route | Behavior |
+| --- | --- |
+| `/health` | Returns `{"status":"ok"}`. |
+| `/status` | Returns `status`, `bind_addr`, `started_at`, `request_count`, and `uptime` for the live process. |
+| `/version` | Returns `version`. |
+| `/anthropic/*` | Proxies to `https://api.anthropic.com` after removing `/anthropic`; injects configured `x-api-key` when available. |
+| `/openai/*` | Proxies to `https://api.openai.com` after removing `/openai`; injects configured bearer auth when available. |
+| `/gemini/*` | Proxies to `https://generativelanguage.googleapis.com` after removing `/gemini`; this release does not load a Gemini key from config. |
+
+Proxy calls have real provider network and billing effects. Config loading is
+best-effort: a missing, unreadable, or invalid config does not stop the
+listener, but configured provider-key injection can be absent. The command
+does not validate upstream credentials at startup.
+
+`request_count` is an instrumentation counter rather than a one-to-one request
+total: local routes increment it once, while accepted proxy routes increment it
+in both the server-wide and proxy metrics wrappers.
+
+## State, foreground lifetime, and shutdown
+
+After binding, AgentKit atomically writes `~/.agentkit/api/state.json` with
+`version`, `pid`, `port`, `bind_addr`, `started_at`, and an optional
+`request_count`. A state-write failure is logged but does not stop the server;
+in that case `ak api status` and `ak api stop` cannot discover it.
+
+Run the command under your process supervisor when background operation is
+required. A clean interrupt or `SIGTERM` starts a graceful shutdown with a
+30-second drain window, removes the state file, and exits `0`. No snapshot or
+rollback is created.
+
+## Human and JSON output
+
+Human startup success is written to stdout:
+
+```text
+[OK] api server running on 127.0.0.1:8765 (pid 12345)
+```
+
+Startup and per-request logs are written to stderr. With `--json`, stdout emits
+one startup envelope and then remains attached to the running process:
+
+```json
+{"schema_version":1,"kind":"api.start","data":{"status":"running","bind_addr":"127.0.0.1:8765","pid":12345}}
+```
+
+JSON mode does not convert server logs on stderr to JSON. Consume the streams
+separately. Runtime JSON errors use the error-envelope fields
+`schema_version`, `error`, `error_code`, and `exit_code`; flag-parse errors can
+remain plain-text usage.
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | The listener shut down cleanly after having started. | Confirm the state file is gone. |
+| `1` | An unexpected positional argument, home or token-file resolution, listener creation, bind, serving, or another runtime step failed. | Inspect stderr; verify the invocation, address, port, token file, and owning process. |
+| `2` | Flag parsing failed. | Correct the flags. |
+| `7` | A non-loopback bind had no effective token. | Configure a token or return to loopback. |
+
+There is no prompt, preview, dry-run, force, or decline path.
+
+## Related commands
+
+- [Complete `ak api start` command facts](../cli/ak_api_start)
+- [Inspect recorded API state](../cli/ak_api_status)
+- [Stop the recorded API process](../cli/ak_api_stop)
+- [CLI conventions](../cli-conventions)
