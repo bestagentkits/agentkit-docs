@@ -35,14 +35,6 @@ const { provider } = defineI18nUI(i18n, {
   },
 });
 
-function useCanonicalPathname(): string {
-  const pathname = useNextPathname();
-
-  if (pathname === '/en') return '/';
-  if (pathname.startsWith('/en/')) return pathname.slice('/en'.length);
-  return pathname;
-}
-
 export function Provider({
   children,
   locale,
@@ -55,7 +47,7 @@ export function Provider({
       Link={FrameworkLink}
       Image={FrameworkImage}
       useParams={useParams}
-      usePathname={useCanonicalPathname}
+      usePathname={useNextPathname}
       useRouter={useRouter}
     >
       <RootProvider

@@ -3,7 +3,7 @@ import { localePath } from './locale-path';
 import { appName, gitConfig } from './shared';
 
 // Logo/home link stays inside the active locale. The language switcher is
-// rendered by the layout from the i18n provider (respects hideLocale).
+// rendered by the layout from the i18n provider.
 export function baseOptions(locale: string): BaseLayoutProps {
   return {
     nav: {

@@ -28,23 +28,9 @@ function extractHrefs(html) {
   return [...hrefs];
 }
 
-// hideLocale: default-locale — prefixless en paths map to the /en/… static tree.
-const EN_INTERNAL_PREFIX = '/en';
-const RESERVED_PREFIXES = ['/vi', '/en', '/api', '/_next', '/icon.svg', '/og', '/llms'];
-
 function internalCandidates(sitePath) {
   const clean = sitePath.split('#')[0].split('?')[0];
-  const candidates = [clean];
-  if (
-    clean !== '/' &&
-    !RESERVED_PREFIXES.some((p) => clean === p || clean.startsWith(`${p}/`))
-  ) {
-    candidates.push(`${EN_INTERNAL_PREFIX}${clean}`);
-  }
-  if (clean === '/') {
-    candidates.push(`${EN_INTERNAL_PREFIX}.html`, `${EN_INTERNAL_PREFIX}/`);
-  }
-  return candidates;
+  return [clean];
 }
 
 // A site path resolves if any of these exist: the literal file (assets), or
