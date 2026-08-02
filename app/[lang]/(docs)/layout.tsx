@@ -1,7 +1,5 @@
+import { ProductDocsLayout } from '@/components/product-docs-layout';
 import { source } from '@/lib/source';
-import { DocsLayout } from 'fumadocs-ui/layouts/docs';
-import { baseOptions } from '@/lib/layout.shared';
-import { ChannelSelector } from '@/components/channel-selector';
 
 export default async function Layout({
   params,
@@ -9,13 +7,8 @@ export default async function Layout({
 }: LayoutProps<'/[lang]'>) {
   const { lang } = await params;
   return (
-    <DocsLayout
-      tree={source.getPageTree(lang)}
-      tabs={false}
-      sidebar={{ banner: <ChannelSelector locale={lang} /> }}
-      {...baseOptions(lang)}
-    >
+    <ProductDocsLayout locale={lang} tree={source.getPageTree(lang)}>
       {children}
-    </DocsLayout>
+    </ProductDocsLayout>
   );
 }
