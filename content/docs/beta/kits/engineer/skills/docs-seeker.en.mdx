@@ -1,0 +1,169 @@
+---
+title: Find current documentation with ak:docs-seeker
+description: Discover version-relevant library documentation, follow primary sources, and return cited findings with clear evidence limits.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:docs-seeker` to locate current library or framework documentation from
+a focused topic or general library request. The Skill classifies the query,
+retrieves an `llms.txt` index through Context7 when available, follows the most
+relevant documentation pages, and reports source-qualified findings.
+
+## Choose ak:docs-seeker for external documentation
+
+### Use ak:docs-seeker when
+
+- You need current API, configuration, installation, or feature documentation.
+- A library version matters and you need sources that match it.
+- An official documentation index can narrow a broad web search.
+- Documentation is incomplete and you need a clearly labeled repository-code
+  fallback.
+
+### Choose another workflow when
+
+- You need facts from the current project. Use `ak:scout`.
+- You already have source files and want one reviewable repository bundle. Use
+  `ak:repomix`.
+- You need a multi-source research argument rather than library documentation.
+  Use `ak:research` or prepare a reusable brief with `ak:research-prompt`.
+- You need to edit project documentation. Use `ak:docs` after gathering the
+  source evidence.
+
+## Prepare the query and runtime
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Engineer Kit is installed for the runtime and scope you use.
+- Name the library, topic, desired version, target language, and question the
+  documentation must answer.
+- Prefer public inputs. Remove private repository names, tokens, customer data,
+  and confidential code unless their use is necessary and approved.
+- Decide whether network access, repository cloning, and local bundle creation
+  are permitted if the documentation index is unavailable.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:docs-seeker ...` | Runs the packaged script-first workflow and can use available web and repository tools. |
+| Cursor | `/ak:docs-seeker ...` | Uses the user-verified slash spelling; web, delegation, and repository-tool parity depend on the active Cursor session. |
+| Codex | `$ak:docs-seeker ...` | Uses native Codex discovery and only the network, filesystem, and provider tools available in the session. |
+
+## Run the Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:docs-seeker "Next.js 16 cache invalidation APIs. Use official version-matched sources, cite every behavior claim, and do not clone repositories."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:docs-seeker "Next.js 16 cache invalidation APIs. Use official version-matched sources, cite every behavior claim, and do not clone repositories."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:docs-seeker "Next.js 16 cache invalidation APIs. Use official version-matched sources, cite every behavior claim, and do not clone repositories."
+```
+
+  </Tab>
+</Tabs>
+
+The Skill accepts a library name and optional topic as free-form input. It has
+no published mode flag. Topic-specific requests take the shortest path; general
+requests can return a larger index that needs prioritization.
+
+### Expected execution shape
+
+| Request | Source-defined path | Runtime projection |
+| --- | --- | --- |
+| Specific topic | Detect query, fetch topic index, fall back to general index, read the few relevant pages | The source projects about 10–15 seconds before page reading, subject to network and provider latency |
+| General library | Detect general query, fetch the library index, group URLs, then read prioritized pages | The source projects about 30–60 seconds before deeper reading |
+| No usable index | Find the official repository, inspect docs/tests/examples, optionally clone and pack it | The source projects about 5–10 minutes and materially higher disk, network, and context use |
+
+The bundled detector and index analyzer run locally and print JSON. The fetcher
+makes HTTPS requests to `context7.com`, optionally with `CONTEXT7_API_KEY`, and
+prints the fetched content inside JSON. They do not write a cache or `llms.txt`
+file unless the surrounding workflow explicitly redirects or saves output.
+
+## Follow the evidence path
+
+1. **The Skill classifies the query.** It extracts a library and short topic or
+   treats the request as general.
+2. **It retrieves an index.** Topic-specific Context7 lookup falls back to a
+   general library lookup when the topic endpoint is unavailable.
+3. **It prioritizes pages.** Getting-started and installation pages are grouped
+   separately from API guides, advanced material, migration notes, and other
+   supplementary sources.
+4. **It opens primary documents.** Findings should come from the official,
+   version-matched pages linked by the index, not from the index title alone.
+5. **It falls back deliberately.** When official docs are missing, the Skill
+   can inspect the official repository and label claims inferred from README,
+   tests, examples, or implementation code.
+6. **It synthesizes with citations.** Each behavioral or version claim points
+   to the page that supports it; conflicts and documentation gaps remain visible.
+
+## Keep source access safe
+
+<Callout type="warn" title="Documentation lookup can leave the local project">
+  The fetch path contacts Context7 and the linked documentation sites. A
+  repository fallback can clone source and create a Repomix bundle. Approve the
+  provider, private source, destination, and retention boundary before using
+  sensitive material.
+</Callout>
+
+- Environment lookup can read `.env` files at Skill, shared-Skills, and runtime
+  levels; process environment values take precedence. Never print or cite token
+  values.
+- `CONTEXT7_API_KEY` is optional for the bundled fetcher. `GITHUB_TOKEN` and
+  `GEMINI_API_KEY` appear in the example environment but are not required by the
+  core detect, fetch, and analyze scripts.
+- Cloning a repository, checking out a tag, installing Repomix globally, and
+  writing `repomix-output.xml` are external or persistent effects. Request
+  approval and use a bounded destination before taking them.
+- Public web access may still incur provider quotas. External models, paid APIs,
+  or broad agent distribution require separate cost approval.
+- Do not present community tutorials as equal to official versioned docs. When
+  sources conflict, show the conflict and explain the selected authority.
+
+## Verify the result
+
+A complete result should name the library and version, distinguish direct
+documentation from code inference, link each primary source, summarize the
+answer to the requested topic, record fallbacks, and identify unresolved gaps.
+If a repository was cloned or packed, it should also report the destination,
+generated bundle, cleanup status, and disk impact.
+
+The bundled tests cover query normalization and classification, Context7 URL
+construction, URL parsing and priority grouping, and distribution suggestions.
+They do not prove that a live provider is available or that a retrieved page is
+correct for the requested release.
+
+## Troubleshoot or continue
+
+| Symptom | Safe next step |
+| --- | --- |
+| The wrong topic is detected | Restate the library, version, and one short feature keyword explicitly. |
+| Context7 returns no document | Try the official versioned `llms.txt` or docs site, then the official repository. |
+| Sources disagree | Prefer the official version-matched source and show both claims with their scope. |
+| The result cites only an index | Open the linked primary pages and attach citations to the claims they support. |
+| A repository bundle is too broad | Limit the clone or Repomix include set to docs, tests, examples, and relevant source. |
+| The runtime does not recognize the Skill | Confirm target and scope, restart the runtime, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+## Know the current limits
+
+- Query classification is pattern-based and can misclassify ambiguous wording.
+- Context7 coverage, page freshness, rate limits, and linked URLs are external
+  state; verify important claims against the official page.
+- Repository analysis is code-based evidence, not a substitute for a documented
+  public contract.
+- The source's timing and agent-count suggestions are projections, not
+  guarantees or required parallelism.
+- Stable and beta package identical `ak:docs-seeker` scripts and workflows.

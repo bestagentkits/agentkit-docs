@@ -1,0 +1,166 @@
+---
+title: Tạo codebase bundle dễ review với ak:repomix
+description: Chọn repository evidence, loại tệp nhạy cảm, tạo Repomix artifact có giới hạn và xác minh trước khi chia sẻ.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:repomix` để biến các repository file được chọn thành một artifact XML,
+Markdown, JSON hoặc plain text thân thiện với AI. Kết quả có thể hỗ trợ
+onboarding, review, planning, documentation hoặc audit, đồng thời giữ file tree
+và token summary dễ quan sát.
+
+## Chọn ak:repomix khi bundle là deliverable
+
+### Dùng ak:repomix khi
+
+- Bạn cần snapshot ổn định của code và tài liệu liên quan để phân tích.
+- Một module tập trung trải trên nhiều tệp, khó đọc từng tệp riêng lẻ.
+- Bạn cần input artifact dễ review cho model hoặc audit workflow khác.
+- Bạn cần so sánh source set có giới hạn giữa repository hoặc revision.
+
+### Chọn workflow khác khi
+
+- Bạn chỉ cần vài repository fact. Dùng `ak:scout` mà không tạo bundle.
+- Bạn cần tài liệu thư viện hiện hành thay vì source. Dùng `ak:docs-seeker`.
+- Bạn cần relationship graph thay vì source nối tiếp. Dùng `ak:tech-graph`.
+- Bạn cần câu trả lời tổng hợp từ source bên ngoài. Dùng `ak:research`.
+
+## Chuẩn bị source và destination
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận Engineer
+  Kit đã được cài cho đúng runtime cùng scope.
+- Nêu local path hoặc remote repository, revision chính xác khi cần tái lập,
+  include set, exclusion, output format và destination.
+- Kiểm tra `.gitignore`, `.repomixignore` và repository instruction. Loại rõ
+  `.env*`, key, credential, private data, generated dependency, archive, media và
+  build output không liên quan.
+- Xác nhận Repomix có sẵn hoặc duyệt việc cài hay tải tool.
+- Dành disk cho output và context space cho instruction, tool, conversation cùng
+  response ngoài token count của bundle.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:repomix ...` | Chạy Repomix qua local shell cùng filesystem hoặc network access hiện có. |
+| Cursor | `/ak:repomix ...` | Dùng cách gọi slash đã được người dùng xác minh; capability shell, clipboard và remote access phụ thuộc session Cursor. |
+| Codex | `$ak:repomix ...` | Dùng native discovery của Codex cùng authority filesystem, process, clipboard và network trong session. |
+
+## Chạy Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:repomix "Pack ./packages/auth thành markdown tại ./artifacts/auth-context.md. Gồm src, tests, package manifest và README; loại fixture có dữ liệu khách hàng; giữ security check."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:repomix "Pack ./packages/auth thành markdown tại ./artifacts/auth-context.md. Gồm src, tests, package manifest và README; loại fixture có dữ liệu khách hàng; giữ security check."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:repomix "Pack ./packages/auth thành markdown tại ./artifacts/auth-context.md. Gồm src, tests, package manifest và README; loại fixture có dữ liệu khách hàng; giữ security check."
+```
+
+  </Tab>
+</Tabs>
+
+Argument shape được công bố của Skill là
+`[path] [--style xml|markdown|plain|json]`. Bản thân Repomix còn hỗ trợ include
+và ignore pattern, output path cụ thể, comment removal, token tree, config file,
+clipboard output và remote repository.
+
+### Chọn output có chủ đích
+
+| Input hoặc tùy chọn | Tác động |
+| --- | --- |
+| Không có output option | Ghi `repomix-output.xml` trong working directory hiện hành |
+| `--style xml|markdown|json|plain` | Chọn XML có cấu trúc, Markdown dễ đọc, JSON cho programmatic use hoặc plain text tối giản |
+| `--include` và `-i` | Thu hẹp included path và thêm ignore pattern |
+| `--remove-comments` | Xóa comment của ngôn ngữ được hỗ trợ và có thể giảm context, nhưng có thể xóa rationale hoặc directive |
+| `--copy` | Đặt generated result vào system clipboard ngoài xử lý thông thường |
+| `--remote` qua `npx repomix` | Tải và xử lý public remote repository hoặc revision bằng network access |
+| `--no-security-check` | Tắt scan dựa trên Secretlint; chỉ dùng sau risk decision rõ ràng |
+| `--init` | Tạo `repomix.config.json` trong project |
+
+Batch utility đi kèm nhận nhiều local path, remote repository hoặc JSON list.
+Nó tạo output directory, mặc định là `repomix-output`, ghi một tệp cho mỗi
+repository, xử lý tuần tự và đặt timeout năm phút cho từng Repomix subprocess.
+
+## Hiểu các giai đoạn của lần chạy
+
+1. **Skill xác nhận evidence boundary.** Nó xác định repository, revision, path
+   liên quan, sensitive exclusion, format và consumer.
+2. **Skill kiểm tra tool và configuration.** Repomix config, ignore rule, Git
+   ignore behavior và security scan hiện có vẫn rõ ràng.
+3. **Skill preview scope.** Include và ignore pattern được thu hẹp trước broad
+   pack, nhất là với monorepo và dependency tree.
+4. **Skill tạo artifact.** Repomix đọc tệp đã chọn và ghi output; remote mode còn
+   liên hệ repository provider.
+5. **Skill review kết quả.** Lần chạy kiểm tra included file, security warning,
+   output size, token distribution, revision identity và omission ngoài ý muốn.
+6. **Skill bàn giao mà không tự chia sẻ.** Local bundle ở cục bộ trừ khi bạn duyệt
+   riêng clipboard, upload, provider submission hoặc external transfer khác.
+
+## Bảo vệ source và generated context
+
+<Callout type="warn" title="Security scan không bảo đảm không lộ dữ liệu">
+  Repomix có thể phát hiện common secret pattern, nhưng output vẫn có thể chứa
+  private code, dữ liệu cá nhân, proprietary identifier hoặc credential bị bỏ
+  sót. Review generated artifact trước khi chia sẻ.
+</Callout>
+
+- Không tắt `.gitignore`, default ignore hoặc security check chỉ để file bị thiếu
+  xuất hiện. Xác nhận từng expanded path trước.
+- Local packing đọc source và ghi bundle; remote packing thêm network access và
+  có thể tải package `npx`. Cài npm hoặc Homebrew global làm đổi máy và cần duyệt
+  riêng.
+- Batch script nạp environment value từ runtime, Skill và shared `.env`, rồi
+  chuyển chúng cho subprocess. Không đưa các tệp đó vào bundle hoặc lộ value
+  trong verbose log.
+- Xóa comment và line number đánh đổi evidence lấy kích thước. Giữ comment chứa
+  license, security constraint, generated-file notice hoặc design rationale.
+- Repomix không tự yêu cầu paid model. Gửi output tới LLM hoặc external analysis
+  service có thể dùng quota và làm lộ toàn bộ nội dung.
+
+## Xác minh artifact
+
+Lần chạy hoàn chỉnh phải báo source và revision, include cùng ignore rule,
+format và exact output path, file cùng token summary, kết quả security scan,
+bundle size, command status và evidence bị loại. Mở artifact và lấy mẫu phần
+đầu, giữa, cuối trước khi coi nó là snapshot đáng tin cậy.
+
+Batch test đi kèm bao phủ config default, environment precedence, command
+construction, local và remote mode, output naming, timeout, batch success và
+failure cùng JSON-list loading. Test mock Repomix execution; chúng không chứng
+minh bundle thật đầy đủ hoặc không có dữ liệu nhạy cảm.
+
+## Khắc phục sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Repomix không có sẵn | Hỏi trước khi cài global; khi phù hợp, dùng one-shot `npx` đã được duyệt. |
+| Output quá lớn | Xem token tree, thu hẹp `--include`, thêm ignore và pack từng package hoặc concern. |
+| Thiếu tệp mong đợi | Review ignore precedence và verbose output trước khi tắt protection. |
+| Có secret warning | Dừng, xóa hoặc loại source nhạy cảm, tạo lại và kiểm tra artifact mới. |
+| Remote processing thất bại | Xác minh repository và revision; với private code, dùng local clone đã cấp quyền thay vì đặt credential trong URL. |
+| Runtime không nhận ra Skill | Xác nhận target và scope, khởi động lại runtime rồi xem [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+## Biết các giới hạn hiện tại
+
+- Bundle là projection tại một thời điểm, không phải repository hoặc bằng chứng
+  runtime behavior.
+- Token count giúp lập kế hoạch context nhưng không gồm session xung quanh và có
+  thể khác tokenizer của target model.
+- Generated output có thể lớn bằng source đã chọn; runtime phụ thuộc repository
+  size, filter, storage và network. Batch mode dừng mỗi repository sau năm phút.
+- Stable và beta đóng package guidance cùng batch utility `ak:repomix` giống nhau.

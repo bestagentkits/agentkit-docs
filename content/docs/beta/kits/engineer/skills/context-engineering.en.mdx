@@ -1,0 +1,177 @@
+---
+title: Design reliable context with ak:context-engineering
+description: Diagnose context pressure, choose a bounded optimization, and verify what the change preserves.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:context-engineering` to reason about context budgets, degradation,
+compression, memory, tools, and agent coordination. It starts as guidance: the
+Skill selects the relevant source material and proposes a measurable change. It
+produces local artifacts only when you ask it to run its bundled analyzers or
+to write a design, summary, or memory file.
+
+## Choose ak:context-engineering for context problems
+
+### Use ak:context-engineering when
+
+- A long session is losing important facts, mixing tasks, or approaching its
+  context limit.
+- You need to reduce token use without losing decisions, file history, or next
+  steps.
+- You are designing retrieval, memory, tool descriptions, or context isolation
+  for an agent system.
+- You want a probe-based way to compare an original context with a compressed
+  summary.
+
+### Choose another workflow when
+
+- You need repository facts or file locations. Use `ak:scout` first.
+- You need current external documentation. Use `ak:docs-seeker`.
+- You need implementation rather than a context design. Move to planning or
+  `ak:cook` after the proposal has measurable acceptance criteria.
+- You only need the runtime's authoritative quota display. Check that runtime's
+  own status and account controls; the Skill cannot invent unavailable usage
+  data.
+
+## Prepare the evidence and runtime
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Engineer Kit is installed for the runtime and scope you use.
+- State the failure you observe, the model or runtime limit when known, and the
+  evidence that must survive any compression.
+- Identify sensitive messages, tool output, credentials, or customer data that
+  must not be copied into summaries, files, or external services.
+- For script-based analysis, prepare UTF-8 JSON containing either a message
+  array or an object with a `messages` array.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:context-engineering ...` | Can use Claude-specific usage-awareness evidence when the installed Hook and statusline provide it. |
+| Cursor | `/ak:context-engineering ...` | Uses the user-verified slash spelling; Claude Hook, statusline, and quota behavior are not implied. |
+| Codex | `$ak:context-engineering ...` | Uses native Codex discovery; Claude-specific usage injection is not projected as a general Codex capability. |
+
+See [Runtime adapters](../../../concepts/runtime-adapters) before treating a
+runtime-specific usage signal as portable evidence.
+
+## Run the Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:context-engineering "Our tool outputs dominate a long debugging session. Design a compaction policy that preserves errors, decisions, changed files, and next steps; do not write files."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:context-engineering "Our tool outputs dominate a long debugging session. Design a compaction policy that preserves errors, decisions, changed files, and next steps; do not write files."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:context-engineering "Our tool outputs dominate a long debugging session. Design a compaction policy that preserves errors, decisions, changed files, and next steps; do not write files."
+```
+
+  </Tab>
+</Tabs>
+
+The Skill accepts a topic or question. It has no published mode flag. Ask for a
+specific output such as a diagnosis, budget, compression policy, memory design,
+tool review, or evaluation plan.
+
+### Optional local analyzers
+
+| Operation | Input | Observable output |
+| --- | --- | --- |
+| Context analysis | UTF-8 context JSON, optional token limit and critical keywords | JSON on standard output with estimated tokens, utilization, health signals, and recommendations |
+| Budget calculation | Token allocations for system, tools, docs, and history; optional buffer | JSON on standard output with allocation, total budget, and thresholds |
+| Compression evaluation | Original context JSON plus a compressed text file | JSON on standard output with a heuristic compression ratio, quality score, dimension scores, and recommendations |
+| Probe generation | UTF-8 context JSON | JSON probe list on standard output for recall, artifacts, continuation, and decisions |
+
+These Python utilities read files up to 100 MiB and do not create output files
+on their own. Shell redirection or a separate write request changes that
+boundary. The evaluator is heuristic; comments in the source reserve real
+model-based judging for a production implementation.
+
+## Understand what happens during a run
+
+1. **The Skill identifies the context failure.** It separates capacity pressure
+   from distraction, contradiction, poisoning, lost-in-the-middle behavior, or
+   missing persistence.
+2. **It measures before optimizing.** It uses available runtime evidence or a
+   supplied context file and labels estimates as estimates.
+3. **It selects a bounded strategy.** The source organizes choices as write,
+   select, compress, and isolate, then loads only the relevant reference.
+4. **It preserves the task contract.** Goals, decisions, constraints, artifact
+   history, current state, and next steps remain explicit.
+5. **It proposes or performs the requested operation.** Advice stays in the
+   conversation; analyzers read local files; requested designs or summaries may
+   write to an approved path.
+6. **It checks quality.** Probe-based checks test factual recall, artifacts,
+   continuation, and decision rationale instead of trusting token reduction
+   alone.
+
+## Keep context and credentials safe
+
+<Callout type="warn" title="A smaller context can still expose sensitive data">
+  Compression changes size, not sensitivity. Remove or redact secrets and
+  private data before writing a context bundle, sharing it with another agent,
+  or sending it to a model provider.
+</Callout>
+
+- Reading local context, summaries, or memory files requires access to those
+  paths; writing or replacing them requires an explicit artifact boundary.
+- Claude-specific usage awareness can read local status data and use an
+  Anthropic OAuth credential to call the provider's usage endpoint. Do not copy
+  credential values into prompts or reports.
+- Context isolation through another agent can multiply model use and cost. Ask
+  before adding paid providers, broad parallelism, or external storage.
+- A proposed memory system does not authorize collection, retention, or
+  cross-session storage of personal data.
+- Do not discard the original context or overwrite a trusted summary until the
+  compressed result passes the required probes.
+
+## Verify the result
+
+A complete guidance run should provide the observed failure, evidence used,
+selected strategy, preservation contract, expected token or latency effect,
+and a test that can falsify the proposal. A script run should also report input
+files, exact operation, exit status, JSON output, and any estimate or heuristic
+limit.
+
+Treat the result as evidence only when critical facts remain recoverable,
+artifact history and next steps survive, contradictory or stale material is
+identified, and the proposed change does not silently expand persistence,
+provider access, or cost.
+
+## Troubleshoot or continue
+
+| Symptom | Safe next step |
+| --- | --- |
+| The answer is generic | Supply the observed failure, representative messages, required facts, and a measurable success test. |
+| The runtime percentage is missing | Check the runtime's own status surface and installation; do not substitute a guessed context limit. |
+| The analyzer rejects the input | Confirm the file exists, is UTF-8 JSON, is at most 100 MiB, and contains a list or `messages` array. |
+| Compression loses file or decision history | Add explicit artifacts, decisions, current state, and next steps, then rerun probes. |
+| Results imply production performance | Separate the local heuristic from model-based or load-tested evidence. |
+| The runtime does not recognize the Skill | Confirm target and scope, restart the runtime, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+## Know the current limits
+
+- Token estimates use simple character-based approximations in the bundled
+  scripts; they are not provider billing records or tokenizer-exact counts.
+- Attention, degradation, cost, and performance figures in the source material
+  are design guidance, not measurements of your system.
+- The Skill does not automatically create a context bundle, memory store, graph,
+  or evaluation dataset.
+- External model judging, retrieval services, and persistent stores require
+  separate tools, credentials, privacy review, and cost approval.
+- Stable and beta package identical `ak:context-engineering` Skill content and
+  bundled analyzers.
