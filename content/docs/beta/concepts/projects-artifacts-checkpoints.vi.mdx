@@ -1,0 +1,97 @@
+---
+title: Projects, artifacts và checkpoints
+description: Hiểu scope project, quyền sở hữu tệp, nội dung được giữ lại, snapshot khôi phục và ranh giới review của con người.
+---
+
+AgentKit làm việc bên trong project thực, nơi nội dung được tạo ra và công việc
+sẵn có của bạn có thể nằm cạnh nhau. Mô hình an toàn dựa trên việc phân biệt các
+tệp cài đặt đã ghi nhận với tệp mà AgentKit không sở hữu.
+
+## Project là vị trí, không phải tuyên bố quyền sở hữu
+
+Registry project của AgentKit theo dõi các thư mục được khởi tạo bằng `ak new`
+hoặc `ak init`; bạn cũng có thể chủ động thêm hoặc xóa entry trong registry.
+Registry giúp CLI tìm project. Đăng ký một thư mục không chuyển quyền sở hữu nội
+dung trong đó cho AgentKit.
+
+Cài Kit theo scope project là một khái niệm riêng. Thao tác này ghi nội dung
+runtime được hỗ trợ cho workspace hiện tại và lưu metadata lifecycle cho bản cài
+đó. Cài theo scope người dùng sẽ ghi vào các vị trí người dùng của runtime được
+chọn. Xem [Runtime adapter](./runtime-adapters) để hiểu các tổ hợp scope và cách
+phân phối.
+
+## AgentKit ghi nhận những gì
+
+Với một Kit đã cài, AgentKit ghi nhận đường dẫn và fingerprint nội dung của các
+tệp nó đã tạo. Các thao tác lifecycle sau đó dùng dữ liệu này để phân loại tệp:
+
+| Trạng thái tệp | Hành vi lifecycle |
+| --- | --- |
+| Đã ghi nhận và chưa đổi | AgentKit có thể thay thế khi refresh hoặc xóa khi gỡ cài đặt. |
+| Đã ghi nhận nhưng đã sửa | Giữ lại và báo conflict hoặc tệp được bảo toàn. |
+| Không rõ nguồn gốc hoặc do người dùng thêm | Giữ lại; không nhận quyền sở hữu hay xóa chỉ vì tệp nằm trong thư mục cài đặt. |
+
+Ranh giới này cũng áp dụng cho cấu hình runtime dùng chung. AgentKit xóa hoặc
+cập nhật đăng ký mà nó xác định được là của mình và giữ cấu hình ngoài quyền sở
+hữu. Nếu CLI không chứng minh được quyền sở hữu, giữ nguyên là kết quả đúng.
+
+## Artifact thuộc về workflow và project
+
+Workflow có thể tạo code, plan, report, hình ảnh hoặc các tệp khác. Đây là
+**artifact**, không tự động trở thành tệp cài đặt do AgentKit quản lý. Hãy review
+chúng bằng công cụ phù hợp với project—thường là editor, test và diff của hệ
+thống quản lý phiên bản.
+
+Hãy xem output của model là một đề xuất cho đến khi bạn kiểm tra xong. Đặc biệt,
+cần review trước khi:
+
+- commit hoặc merge code;
+- publish nội dung hoặc liên hệ người khác;
+- gửi dữ liệu nhạy cảm đến dịch vụ bên ngoài;
+- chấp thuận hành động phá hủy hoặc có thể phát sinh chi phí.
+
+Metadata cài đặt của AgentKit không thể quyết định một artifact có đúng, an toàn
+hay sẵn sàng để publish hay chưa.
+
+## Checkpoint và snapshot khôi phục
+
+**Checkpoint** là thời điểm kiểm tra trạng thái trước khi tiếp tục. Với công việc
+trong project, đó có thể là plan đã được duyệt, các test tập trung đã pass hoặc
+diff đã được review. Với thao tác lifecycle của AgentKit, CLI còn tạo
+**snapshot** rollback trước các thay đổi được hỗ trợ như ghi đè bắt buộc, chuyển
+chế độ cài hoặc gỡ cài đặt.
+
+Snapshot được lưu trong khu vực backup của AgentKit và có manifest các đường dẫn
+đã chụp. Đây là bản ghi khôi phục có scope, không phải bản backup đầy đủ cho
+repository hay thư mục runtime của bạn. Bỏ qua bằng `--no-backup` sẽ loại bỏ
+đường khôi phục đó và chỉ dành cho người dùng chấp nhận rủi ro.
+
+Trước khi khôi phục, hãy kiểm tra snapshot và xem trước restore plan:
+
+```bash
+ak backups list
+ak backups show <id>
+ak backups verify <id>
+ak backups restore <id> --dry-run
+```
+
+Restore có thể ghi đè đường dẫn đã chụp và có thể xóa các đường dẫn được liệt kê
+rõ trong plan đã xác nhận. Hãy review plan trước khi áp dụng. Một số snapshot
+trong project cục bộ cần làm theo đúng hướng dẫn khôi phục mà thao tác đã in ra
+thay vì dùng restore chuẩn; hãy giữ backup ID và đường dẫn được báo.
+
+## Vòng review an toàn
+
+1. Đọc preview của thao tác và cảnh báo từ adapter.
+2. Giữ công việc không liên quan bằng hệ thống quản lý phiên bản hoặc bản backup
+   riêng của bạn.
+3. Để AgentKit tạo snapshot; không dùng `--force` như cách khôi phục thường lệ.
+4. Chạy workflow và kiểm tra artifact được tạo.
+5. Test hành vi đã thay đổi và review diff.
+6. Chỉ sau đó mới commit, publish hoặc chấp thuận hành động bên ngoài.
+
+Không khôi phục bằng cách xóa toàn bộ thư mục runtime home hoặc thư mục cấu hình
+của project. Hãy bắt đầu từ report của thao tác, trạng thái quyền sở hữu và
+manifest snapshot để việc khôi phục chỉ giới hạn ở các tệp bị ảnh hưởng.
+
+Với lệnh backup và lifecycle chính xác, hãy dùng [Tham chiếu CLI](../reference/cli).

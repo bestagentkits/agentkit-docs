@@ -1,0 +1,96 @@
+---
+title: Projects, artifacts, and checkpoints
+description: Understand project scope, file ownership, preserved work, recovery snapshots, and human review boundaries.
+---
+
+AgentKit works inside real projects, where generated content and your existing
+work can live side by side. Its safety model depends on distinguishing recorded
+installation files from files it does not own.
+
+## Projects are locations, not ownership claims
+
+The AgentKit project registry tracks directories bootstrapped with `ak new` or
+`ak init`; you can also add or remove registry entries explicitly. The registry
+helps the CLI find projects. Registering a directory does not transfer ownership
+of its contents to AgentKit.
+
+Project-scoped Kit installation is a separate idea. It writes supported runtime
+content for the current workspace and records lifecycle metadata for that
+installation. User-scoped installation writes to the selected runtime's user
+locations instead. See [Runtime adapters](./runtime-adapters) for the scope and
+delivery combinations.
+
+## What AgentKit records
+
+For an installed Kit, AgentKit records the paths and content fingerprints of the
+files it emitted. Later lifecycle operations use that record to classify files:
+
+| File state | Lifecycle behavior |
+| --- | --- |
+| Recorded and unchanged | AgentKit may replace it during refresh or remove it during uninstall. |
+| Recorded but modified | Preserve it and report the conflict or preserved file. |
+| Unknown or user-added | Preserve it; do not adopt or delete it merely because it is inside an install directory. |
+
+This boundary also applies to shared runtime settings. AgentKit removes or
+updates registrations it can identify as its own and preserves foreign settings.
+If the CLI cannot prove ownership, preservation is the expected result.
+
+## Artifacts belong to the workflow and project
+
+A workflow may produce code, plans, reports, images, or other files. These are
+**artifacts**, not automatically AgentKit-managed installation files. Review
+them with the tools appropriate to the project—often your editor, tests, and
+version-control diff.
+
+Treat model output as a proposal until you have checked it. In particular,
+review before you:
+
+- commit or merge code;
+- publish content or contact another person;
+- send sensitive data to an external service;
+- approve a destructive action or one that can incur cost.
+
+AgentKit installation metadata cannot decide whether an artifact is correct,
+safe, or ready to publish.
+
+## Checkpoints and recovery snapshots
+
+A **checkpoint** is a moment to inspect state before continuing. For project
+work, that can mean an approved plan, passing focused tests, or a reviewed diff.
+For AgentKit lifecycle operations, the CLI also creates rollback **snapshots**
+before supported mutations such as forced overwrite, install-mode transition,
+or uninstall.
+
+Snapshots are stored in AgentKit's backup area and carry a manifest of captured
+paths. They are scoped recovery records, not full backups of your repository or
+runtime home. Skipping them with `--no-backup` removes that recovery path and is
+intended only for users who accept the risk.
+
+Before restoring, inspect the snapshot and preview the restore plan:
+
+```bash
+ak backups list
+ak backups show <id>
+ak backups verify <id>
+ak backups restore <id> --dry-run
+```
+
+A restore can overwrite captured paths and may remove paths explicitly listed
+in its confirmed plan. Review that plan before applying it. Some project-local
+snapshots require the exact recovery instructions printed by the operation
+rather than a standard restore; keep the reported backup ID and path.
+
+## A safe review loop
+
+1. Read the operation preview and adapter warnings.
+2. Preserve unrelated work with version control or your own backup.
+3. Let AgentKit create its snapshot; do not use `--force` as routine recovery.
+4. Run the workflow and inspect the artifacts it creates.
+5. Test the changed behavior and review the diff.
+6. Only then commit, publish, or approve external actions.
+
+Never recover by deleting an entire runtime home or project configuration
+directory. Start with the operation report, ownership status, and snapshot
+manifest so recovery stays limited to the affected files.
+
+For exact backup and lifecycle commands, use the [CLI reference](../reference/cli).
