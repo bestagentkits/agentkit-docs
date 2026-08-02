@@ -1,0 +1,188 @@
+---
+title: Tạo audio có kiểm soát với ak:elevenlabs
+description: Tạo speech, instant voice clone được phép hoặc sound effect qua ElevenLabs trong khi review consent, thay đổi tài khoản, chi phí provider và tệp audio.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:elevenlabs` cho ba hành động audio trực tiếp: biến text thành speech,
+tạo instant voice clone được phép hoặc tạo sound effect. Skill dùng ElevenLabs
+API và các helper Python đi kèm, vì vậy một lần chạy có thể tạo audio cục bộ,
+tiêu quota provider và, với cloning, thêm voice tồn tại lâu dài vào tài khoản
+ElevenLabs đã kết nối.
+
+## Chọn một hành động audio có scope rõ ràng
+
+### Dùng ak:elevenlabs khi
+
+- Bạn cần text-to-speech từ text được cung cấp hoặc tệp text cục bộ.
+- Bạn có quyền rõ ràng để tạo instant voice clone từ sample audio sạch.
+- Bạn cần sound effect được mô tả với thời lượng tối đa 30 giây.
+- Bạn có thể review pronunciation, identity, chất lượng audio, quyền, chi phí
+  provider và distribution dự kiến trước khi dùng kết quả.
+
+### Chọn workflow khác khi
+
+- Bạn cần production video hoàn chỉnh có script, storyboard, mixing và export.
+  Dùng `ak:video`.
+- Bạn cần edit, normalize, transcode hoặc mix audio mà không có request
+  generation ElevenLabs. Dùng workflow media processing đã được duyệt.
+- Bạn muốn clone một người khi chưa có informed consent hoặc authorization.
+- Bạn cần integration conversational agent hoặc music composition. Các topic
+  đó có trong knowledge base của package, nhưng invocation hint trực tiếp expose
+  `speak`, `clone` và `sfx`, không có route riêng cho chúng.
+
+## Chuẩn bị provider và source material
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận
+  Marketing Kit đã được cài cho runtime cùng scope hiện tại.
+- Cài Python và requirement trong package `elevenlabs>=1.0.0` vào môi trường đã
+  được duyệt.
+- Cung cấp `ELEVENLABS_API_KEY` qua cơ chế secret đã duyệt và cho phép request
+  ra ElevenLabs.
+- Xác nhận tài khoản có feature access, quota, billing và license cần cho thao
+  tác đã chọn.
+- Với speech, cung cấp text đã duyệt hoặc path tệp text cục bộ cùng output path.
+- Với cloning, cung cấp tên voice và một hoặc nhiều tệp audio được phép. Helper
+  chấp nhận path MP3, WAV, M4A, OGG, FLAC và WebM, đồng thời khuyến nghị một đến
+  hai phút source audio rõ ràng.
+- Với sound effect, cung cấp prompt mô tả và duration tùy chọn không quá 30
+  giây.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:elevenlabs ...` | Phân phối native là mặc định; phân phối plugin rõ ràng cũng được hỗ trợ. Provider key và tài khoản vẫn là yêu cầu bên ngoài. |
+| Cursor | `/ak:elevenlabs ...` | Cách gọi bằng slash đã được người dùng xác minh. Audio preview và behavior của tool hỗ trợ có thể khác theo thiết lập. |
+| Codex | `$ak:elevenlabs ...` | Skill dùng discovery native của Codex. Hook projection một phần không thay đổi ranh giới provider, consent hay billing. |
+
+Xem [Runtime adapter](../../../concepts/runtime-adapters) để hiểu khác biệt
+delivery rộng hơn.
+
+## Chạy Skill
+
+Nêu một hành động trực tiếp và ranh giới output. Ví dụ speech này chỉ yêu cầu
+bản nháp cục bộ.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:elevenlabs speak "Your data stays under your control." Dùng voice Rachel đã duyệt, model eleven_multilingual_v2, lưu vào assets/audio/privacy-intro.mp3, review pronunciation và không publish
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:elevenlabs speak "Your data stays under your control." Dùng voice Rachel đã duyệt, model eleven_multilingual_v2, lưu vào assets/audio/privacy-intro.mp3, review pronunciation và không publish
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:elevenlabs speak "Your data stays under your control." Dùng voice Rachel đã duyệt, model eleven_multilingual_v2, lưu vào assets/audio/privacy-intro.mp3, review pronunciation và không publish
+```
+
+  </Tab>
+</Tabs>
+
+### Hiểu hành động trực tiếp và control của helper
+
+| Hành động | Input | Control helper quan trọng | Tác động |
+| --- | --- | --- | --- |
+| `speak` | Text hoặc một tệp | `-f`/`--file`, `-o`/`--output`, `-v`/`--voice`, `-m`/`--model`, `--stability`, `--similarity`, `--speed`, `--stream` | Ghi audio; output mặc định của helper là `output.mp3` |
+| `clone` | Tên voice và các tệp sample | `-d`/`--description`, `--labels` với JSON | Upload sample và tạo voice trong tài khoản provider; trả về voice ID |
+| `sfx` | Mô tả âm thanh | `-o`/`--output`, `-d`/`--duration`, `--loop`, `--influence` | Ghi tệp sound effect; mặc định của helper là `sound_effect.mp3` |
+
+Helper text-to-speech mặc định dùng voice `Rachel`, model
+`eleven_multilingual_v2`, stability `0.5`, similarity `0.75` và speed `1.0`.
+Hãy coi đây là default trong package, không phải lời hứa voice hay model vẫn khả
+dụng trên tài khoản đã kết nối.
+
+## Theo các giai đoạn audio
+
+1. **Xác nhận hành động.** Skill resolve `speak`, `clone` hoặc `sfx`, input
+   path, output path, quyền provider, consent và ranh giới publication.
+2. **Xác minh input cục bộ.** Skill kiểm tra text hoặc tệp trước khi gửi dữ
+   liệu. Sample bị thiếu hay không được hỗ trợ phải dừng cloning.
+3. **Xác nhận tác động tài khoản.** Speech và sound effect tạo audio; cloning
+   còn tạo voice có thể tái sử dụng trong tài khoản ElevenLabs.
+4. **Gọi provider.** Helper xác thực bằng `ELEVENLABS_API_KEY`, gửi request và
+   báo lỗi provider thay vì bịa audio.
+5. **Ghi hoặc báo kết quả.** Chunk speech và sound effect được ghi vào output đã
+   chọn. Cloning báo tên cùng voice ID đã tạo.
+6. **Review trước khi dùng.** Nghe để phát hiện pronunciation, artifact, identity
+   cue ngoài ý muốn, tone gây hiểu nhầm, silence, clipping và vấn đề quyền.
+
+## Giữ rõ consent, thay đổi tài khoản và chi phí
+
+<Callout type="warn" title="Voice cloning thay đổi tài khoản provider">
+  `clone` upload sample giọng nói giống dữ liệu sinh trắc và tạo voice identity
+  tồn tại lâu dài trong ElevenLabs. Chỉ tiếp tục khi có quyền được ghi nhận và
+  informed consent cho đúng mục đích dự kiến. Ghi lại voice ID trả về cùng owner
+  chịu trách nhiệm retention hoặc deletion về sau.
+</Callout>
+
+| Nhóm công việc | Ranh giới thông thường |
+| --- | --- |
+| Hướng dẫn và soạn nháp | Skill có thể chuẩn bị text, prompt và setting trước provider request. |
+| Thay đổi cục bộ | `speak` và `sfx` ghi audio vào path đã chọn. Xác nhận parent directory và giữ tệp hiện có. |
+| Tác động provider và chi phí | Request gửi text, prompt hoặc audio sample tới ElevenLabs, tiêu quota và có thể phát sinh chi phí theo plan đã kết nối. |
+| Thay đổi tài khoản | `clone` thêm voice. Voice manager đi kèm cũng có thể xóa voice, nhưng deletion là hành động phá hủy riêng có confirmation và không được ngụ ý bởi lần chạy Skill thông thường. |
+| Tác động publication | Skill không cấp quyền phân phối audio, gắn vào campaign, thực hiện cuộc gọi, tạo conversational agent đang hoạt động hay publish lên platform. |
+
+Không bao giờ expose API key trong prompt, tệp được tạo, đoạn log hay commit.
+Không dùng audio được tạo hoặc clone để impersonation, deception, endorsement
+không được phép, né disclosure rule hay testimony gây hiểu nhầm.
+
+## Review output và bằng chứng
+
+Một lần chạy hoàn tất nên báo:
+
+- Hành động, source text hoặc sample path, setting provider và output path chính
+  xác hoặc voice ID trả về.
+- Provider response hoặc lỗi rõ ràng mà không có artifact bịa đặt.
+- Listening review về pronunciation, pacing, identity, artifact, duration và
+  mức phù hợp với context đã duyệt.
+- Trạng thái consent và quyền cho source voice, script, music cùng sound design.
+- Request liên quan quota hoặc chi phí và mọi bước tài khoản hay publication còn
+  chờ.
+
+Với cloning, giữ consent record cùng voice ID tách khỏi public content. Với TTS,
+so sánh tên, ngày, giá và wording pháp lý hoặc y tế với script đã duyệt sau khi
+nghe; text đúng không đảm bảo pronunciation đúng.
+
+## Xử lý sự cố an toàn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Runtime không tìm thấy `ak:elevenlabs` | Xác nhận target cùng scope, mở session mới, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+| Xuất hiện `ELEVENLABS_API_KEY not found` | Cấu hình key qua cơ chế secret đã duyệt; không dán hoặc commit key. |
+| Xuất hiện `elevenlabs package not installed` | Cài requirement Python trong package vào môi trường đã duyệt, rồi chỉ chạy lại hành động dự kiến. |
+| Không tìm thấy voice được yêu cầu | Liệt kê voice của tài khoản đã kết nối hoặc chọn voice được phép và khả dụng. Không tự thay identity. |
+| Sample clone bị thiếu hoặc nhiễu | Dừng, thay bằng recording rõ ràng được phép và xác nhận lại consent trước upload. |
+| Labels parse lỗi | Truyền JSON hợp lệ vào `--labels`; không bỏ metadata identity hay consent chỉ để vượt lỗi. |
+| Duration sound effect vượt 30 giây | Giảm `--duration` xuống 30 giây hoặc ít hơn, hoặc lập workflow edit riêng. |
+| Output nghe không đúng | Giữ setting cùng provider result, sửa có chủ đích một biến và chỉ tạo lại nếu quota cùng chi phí vẫn được duyệt. |
+
+Tiếp tục với [Tổng quan Marketing Kit](../../marketing) hoặc
+[Projects, artifacts và checkpoints](../../../concepts/projects-artifacts-checkpoints).
+
+## Biết các giới hạn hiện tại
+
+- Argument hint trực tiếp là `[action: speak|clone|sfx] [text-or-file]`.
+  Reference ElevenLabs rộng hơn không tạo thêm routed action.
+- Helper sound effect hiện tại chấp nhận `--loop` và `--influence`, nhưng SDK
+  request chỉ forward prompt cùng duration tùy chọn. Không tuyên bố tệp đã lưu
+  seamless hay prompt influence đã được áp dụng khi chưa có bằng chứng riêng.
+- Helper cloning triển khai instant voice creation qua `voices.add`; không thực
+  hiện workflow training professional cloning được mô tả trong reference.
+- Model, voice, language coverage, quota, latency, giá, plan requirement, output
+  format và licensing của provider có thể thay đổi độc lập với Skill trong
+  package.
+- Audio generation không đảm bảo naturalness, identity fidelity,
+  intelligibility, conversion, platform acceptance hay quyền pháp lý.
