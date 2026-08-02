@@ -1,0 +1,74 @@
+---
+title: ak plan
+description: Choose safely between plan-directory commands and the private local plan-store lifecycle.
+---
+
+Use `ak plan` as the namespace for working with AgentKit plan files and the
+local plan index. The group command itself only prints help; select a
+subcommand to read or change a plan.
+
+## Usage
+
+```bash
+ak plan
+```
+
+The group accepts no positional arguments and has no command-specific flags.
+Shared flags are described in [CLI conventions](../cli-conventions), but
+`ak plan --json` is not a JSON data operation: the parent has no renderer and
+still shows command help.
+
+## Choose the correct storage layer
+
+| Goal | Command | Primary owner | Effect |
+| --- | --- | --- | --- |
+| Create a plan directory | `ak plan create <name>` | Plan files | Creates `plan.md` and a starter phase, then best-effort indexes them. |
+| Add or complete tasks | `ak plan add-phase`, `ak plan check` | Plan files | Writes phase Markdown, then best-effort refreshes an existing store row. |
+| Inspect one directory | `ak plan parse <path>`, `ak plan kanban [path]` | Plan files | Reads `plan.md` and `phase-NN-*.md` directly. |
+| List tracked work | `ak plan list` | Plan store, with a files fallback | Reads the private SQLite index; may fall back to the current repository's `./plans/`. |
+| Close, archive, or retain | `ak plan close`, `ak plan archive`, `ak plan cleanup` | Plan store | Changes lifecycle state without deleting the plan directory. |
+| Import older folders | `ak plan migrate --from-project-files` | Files to plan store | Previews or indexes recognized repository plan folders. |
+| Manage one indexed phase | `ak plan phase` | Files and plan store, depending on the child command | Keeps file-owned phase state separate from index-only notes and evidence. |
+
+Plan files under a repository are canonical for their title, body, phase
+content, and checkbox-derived progress. The store lives at
+`$AGENTKIT_HOME/plans/plans.db` (default `~/.agentkit/plans/plans.db`) and holds
+cross-project identity, lifecycle state, index-only fields, and full-text
+search data.
+
+## Local effects and privacy
+
+The plan family does not contact a network, authenticate, invoke a provider, or
+use a remote cache. Commands that resolve repository identity can launch the
+local `git` executable with fixed arguments. Store-backed commands can create the private plan-store
+directory and database, tighten their permissions, and apply forward-only
+schema migrations when the store is opened.
+
+Structured plan output can include repository URLs, absolute project or
+worktree paths, and plan text or titles. Remove local details before sharing
+captured JSON outside your machine.
+
+## Confirmation and recovery
+
+There is no family-wide confirmation rule. File mutations, `close`, and
+`archive` run directly. `cleanup` and `migrate` instead use an explicit
+preview/apply split. `--yes` does not replace either command's required
+`--apply` flag.
+
+Close, archive, and applied cleanup retain plan-store recovery databases. These
+are separate from the general `ak backups` inventory and do not back up the
+repository's plan files. Read the command page before changing either layer.
+
+## Exit behavior
+
+Running the parent help succeeds with exit `0`. Invalid parent flags or
+arguments use exit `2`. Every operational exit is subcommand-local; do not
+apply the parent's generic `1`/`2`/`3` help rows as a complete contract for
+all children.
+
+## Related commands
+
+- [Complete `ak plan` command facts](../cli/ak_plan)
+- [Parse a plan directory](../cli/ak_plan_parse)
+- [Show a plan kanban](../cli/ak_plan_kanban)
+- [CLI conventions](../cli-conventions)

@@ -1,0 +1,78 @@
+---
+title: ak plan cleanup
+description: Preview or archive old closed plan-store rows without deleting repository plan files.
+---
+
+Use `ak plan cleanup` for a retention sweep over closed plans in the private
+local plan store. The default is a preview; only `--apply` changes lifecycle
+state.
+
+## Usage
+
+```bash
+ak plan cleanup --older-than <duration> [--apply]
+```
+
+## Command flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--older-than <duration>` | Required | Select closed plans whose `updated_at` is earlier than now minus this Go duration. |
+| `--apply` | `false` | Archive the selected rows. Without it, report candidates only. |
+
+Go durations use units such as `h`, `m`, and `s`; `90d` is invalid. For
+example, 30 days is `720h`. Zero is accepted and can select every closed plan
+updated before the sweep starts; negative durations are rejected.
+
+## Preview, then apply
+
+```bash
+ak plan cleanup --older-than 720h --json
+ak plan cleanup --older-than 720h --apply --json
+```
+
+Review the first result's `data.archived` candidates before running the second
+command. `--apply` is the mutation authority: the command does not prompt, read
+stdin, or additionally require `--yes`.
+
+Applied cleanup changes `closed` rows to `archived`. It never deletes plan
+rows, full-text entries, or repository plan files, so archived plans remain
+searchable. When at least one row changes, AgentKit takes one whole-store
+SQLite recovery snapshot, then updates all candidates in one transaction. A
+no-op apply does not create a snapshot.
+
+Opening the plan store can create or forward-migrate
+`$AGENTKIT_HOME/plans/plans.db` even during a preview. No network,
+authentication, provider, or remote cache is involved.
+
+## Output and privacy
+
+JSON success uses `kind=plan.cleanup` with:
+
+```text
+data.applied, data.older_than, data.cutoff,
+data.already_archived, data.archived[]
+```
+
+Each archived summary can include repository URLs and absolute local paths.
+Pretty output includes the cutoff and candidates. Plain noninteractive output
+is a tab-separated candidate list and may be empty, so prefer JSON in scripts.
+Success is on stdout; errors are on stderr. There is no NDJSON mode.
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | The preview completed, or the selected rows were archived. An empty set is success. | Check `data.applied` and `data.archived`. |
+| `1` | The store, snapshot, query, or transaction failed. | Preserve the store and recovery directory; inspect the error before retrying. |
+| `2` | `--older-than` was missing, negative, or not a Go duration, or other input was invalid. | Correct the duration and preview again. |
+
+Plan-store recovery snapshots live under
+`$AGENTKIT_HOME/plans/plans-recovery/`; they are whole-store artifacts and are
+not listed by `ak backups`.
+
+## Related commands
+
+- [Complete `ak plan` command facts](../cli/ak_plan)
+- [List archived rows](./ak%20plan%20list)
+- [CLI conventions](../cli-conventions)

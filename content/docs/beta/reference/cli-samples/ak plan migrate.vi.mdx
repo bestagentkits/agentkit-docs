@@ -1,0 +1,86 @@
+---
+title: ak plan migrate
+description: Xem trước và lập chỉ mục an toàn các thư mục plan cũ mà không theo symlink hoặc xoá tệp nguồn.
+---
+
+Dùng `ak plan migrate` để nhập các thư mục hợp lệ từ `plans/` của một
+repository vào plan store cục bộ riêng tư. Đây là migration từ tệp sang index,
+không phải di chuyển hoặc viết lại định dạng.
+
+## Cách dùng
+
+```bash
+ak plan migrate --from-project-files [--path <repo-root>] [--apply]
+```
+
+## Tuỳ chọn của lệnh
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--from-project-files` | `false` | Bộ chọn nguồn bắt buộc cho thư mục plan trong repository. |
+| `--path <repo-root>` | Thư mục hiện tại | Chọn root có thư mục con trực tiếp `plans/` để quét. |
+| `--apply` | `false` | Nhập plan hợp lệ và ghi migration marker. Khi thiếu cờ, chỉ phân loại. |
+
+## Preview rồi import
+
+```bash
+ak plan migrate --from-project-files --path ./ --json
+ak plan migrate --from-project-files --path ./ --apply --json
+```
+
+Preview không tạo plan row hoặc marker `.agentkit-migrated`. Việc mở plan store
+vẫn có thể tạo hoặc forward-migrate cơ sở dữ liệu riêng tư. Hãy xem mọi outcome
+trước khi apply.
+
+Apply nhập định danh plan, title, status, metadata phase, body phase và nội dung
+tìm kiếm toàn văn vào SQLite. Sau đó lệnh tạo marker `.agentkit-migrated` với
+quyền owner-only trong từng thư mục đã import. Markdown nguồn không bao giờ bị
+xoá hoặc ghi lại. Plan finished/cancelled được nhập ở trạng thái closed; status
+khác hoặc không rõ được nhập ở trạng thái active.
+
+## An toàn và kết quả một phần
+
+Lệnh canonicalize root của repository và từ chối theo symlink ở candidate
+folder, `plan.md` hoặc phase file. Đường dẫn thoát khỏi root bị bỏ qua. Các phép
+kiểm tra an toàn chạy lại ngay trước lúc import. Folder ID có tính xác định nên
+apply lại không tạo row trùng.
+
+Không có prompt, đọc stdin, yêu cầu `--yes`, snapshot hay transaction rollback
+bao phủ toàn bộ lần chạy. Mỗi plan cùng các phase được import nguyên tử, nhưng
+marker được ghi sau đó. Nếu ghi marker thất bại, store row vẫn tồn tại và
+outcome báo rằng chạy lại là an toàn.
+
+Lỗi unsafe, unrecognized hoặc import của từng folder được báo trong outcomes
+và có thể đồng thời có mã thoát `0`. Tự động hoá phải kiểm tra mọi `status` và
+`reason`, không chỉ trạng thái process.
+
+Lệnh chỉ chạy cục bộ và có thể chạy lệnh `git` cục bộ để thu thập định danh
+repository. Không có mạng, xác thực registry, provider hay cache từ xa. Index
+cục bộ chứa bản sao có thể tìm kiếm của nội dung plan; hãy bảo vệ
+`$AGENTKIT_HOME` và loại bỏ đường dẫn khỏi log trước khi chia sẻ.
+
+## Đầu ra
+
+JSON thành công dùng `kind=plan.migrate` với:
+
+```text
+data.applied, data.root, data.plans_dir,
+data.outcomes[].slug, status, reason, store_id, phases
+```
+
+Kết quả human/plain ở stdout. Lỗi ở stderr. Không có chế độ NDJSON; lỗi phân
+tích cờ có thể vẫn là plain text trong lần gọi JSON.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Quá trình phân loại/import hoàn tất, kể cả không có thư mục `plans/` và có outcome bị skipped. | Kiểm tra mọi outcome trước khi xem migration là hoàn tất. |
+| `1` | Root, ngữ cảnh Git, store hoặc quét filesystem cấp cao thất bại. | Sửa quyền truy cập rồi chạy lại preview. |
+| `2` | Thiếu `--from-project-files` hoặc input khác không hợp lệ. | Thêm cờ nguồn rõ ràng và xác minh root. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak plan`](../cli/ak_plan)
+- [Liệt kê plan đã import](./ak%20plan%20list)
+- [Quy ước CLI](../cli-conventions)

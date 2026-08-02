@@ -1,0 +1,80 @@
+---
+title: ak plan add-phase
+description: Append a phase file, understand best-effort store synchronization, and avoid unreviewed file writes.
+---
+
+Use `ak plan add-phase` to add the next numbered phase Markdown file to an
+existing plan directory. It changes files immediately; there is no preview,
+confirmation, backup, or force mode.
+
+## Usage
+
+```bash
+ak plan add-phase <plan-dir> <name>
+```
+
+Pass exactly two arguments. The command has no command-specific flags. Shared
+flags are described in [CLI conventions](../cli-conventions).
+
+## Create a phase safely
+
+```bash
+ak plan add-phase ./plans/260802-1030-release-docs "Deploy"
+```
+
+The command scans `phase-NN-*.md`, selects one more than the highest existing
+number, slugifies the name for the filename, and writes a starter template such
+as `phase-03-deploy.md`. If the name produces no filename characters, the slug
+falls back to `phase`.
+
+Use a simple single-line name. The name is inserted into Markdown and YAML
+front matter, and the command does not validate the completed plan afterward.
+It also does not add the new phase to a hand-authored phase table in `plan.md`.
+
+## File and store ownership
+
+The new phase file is the primary result. After writing it, AgentKit tries to
+refresh the already-linked plan-store row and its full-text index.
+
+- If no store row owns the directory, the command leaves the store unchanged.
+- If store synchronization fails, the file remains authoritative, a warning is
+  written to stderr, and the command still succeeds.
+- A later `ak plan reindex --apply` can rebuild the index from the files.
+
+The operation is local. Its best-effort store sync can run local `git` commands
+to resolve repository identity. It does not use stdin, show a TTY prompt,
+contact the network, authenticate, or invoke a provider. `--yes` has no
+additional effect.
+
+## Output
+
+Human success is written to stdout. With `--json`, stdout contains one envelope
+with `kind=plan.add_phase` and these fields under `data`:
+
+```text
+plan_dir, phase_name, file
+```
+
+`file` is the created path and can be absolute. A best-effort store-sync warning
+is plain text on stderr even in JSON mode, so capture the streams separately.
+Execution errors in JSON mode use the structured error envelope on stderr;
+flag-parse errors can remain plain text.
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | The phase file was created. Store synchronization may still have warned. | Verify the file and update any phase table in `plan.md`. |
+| `1` | The directory could not be read or the phase file could not be written. | Inspect the directory and permissions before retrying. |
+| `2` | The argument count or flags were invalid. | Supply one plan directory and one quoted phase name. |
+
+Because there is no retained snapshot, recover an unintended addition through
+your version-control or filesystem recovery process. Do not rerun concurrently
+against the same directory: two writers can select the same next number.
+
+## Related commands
+
+- [Complete `ak plan add-phase` command facts](../cli/ak_plan_add-phase)
+- [Parse the updated plan](../cli/ak_plan_parse)
+- [Validate a plan directory](../cli/ak_plan_validate)
+- [CLI conventions](../cli-conventions)

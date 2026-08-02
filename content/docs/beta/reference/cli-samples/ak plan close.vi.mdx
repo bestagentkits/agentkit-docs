@@ -1,0 +1,62 @@
+---
+title: ak plan close
+description: Đóng một plan đã lập chỉ mục với snapshot toàn store mà không thay đổi tệp plan.
+---
+
+Dùng `ak plan close` khi công việc cần rời khỏi danh sách plan active nhưng
+chưa được đưa vào khu vực archive dài hạn.
+
+## Cách dùng
+
+```bash
+ak plan close <id>
+```
+
+Truyền một plan store ID đầy đủ. Lệnh không có cờ riêng.
+
+## Đóng một plan
+
+```bash
+ak plan close my-project/260722-1200
+```
+
+Lệnh trực tiếp đổi `state` vòng đời của store row thành `closed` và cập nhật
+timestamp. `status` workflow và `state` vòng đời là hai trường riêng: ghi status
+completed không đóng plan, và đóng plan không ghi lại `plan.md`.
+
+Không có preview, prompt, đọc stdin hay cổng `--yes`. Tệp plan trong repository
+không bị sửa, di chuyển hoặc xoá. Row đã đóng vẫn được lập chỉ mục và có thể
+liệt kê bằng `ak plan list --include-closed`.
+
+Trước khi chuyển trạng thái, AgentKit tạo snapshot nhất quán với SQLite của
+toàn bộ plan store trong `$AGENTKIT_HOME/plans/plans-recovery/`. Snapshot được
+giữ lại sau khi thành công, tách biệt với `ak backups` và không chứa tệp plan
+trong repository. Lệnh không in đường dẫn snapshot.
+
+## Đầu ra và quyền riêng tư
+
+Kết quả dành cho người dùng được ghi vào stdout. JSON thành công dùng
+`kind=plan.close` và phần tổng hợp plan trong `data`, gồm `id`, `status`, `state`
+và `updated_at`. Trường tuỳ chọn có thể chứa URL repository và đường dẫn tuyệt
+đối tới project/worktree, vì vậy hãy loại bỏ dữ liệu đó trước khi chia sẻ.
+
+Lỗi dùng stderr. Lỗi thực thi JSON dùng error envelope có cấu trúc; lỗi phân
+tích cờ có thể vẫn là plain text. Lệnh không phát NDJSON.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Store row đã đóng và cơ sở dữ liệu recovery đã được giữ lại. | Xác minh bằng `ak plan list --all --include-closed`. |
+| `1` | Không tìm thấy ID, store không khả dụng hoặc I/O của snapshot/trạng thái thất bại. | Xác nhận ID và giữ nguyên recovery data trước khi thử lại. |
+| `2` | Argument hoặc cờ không hợp lệ. | Truyền đúng một plan ID. |
+
+Không có lệnh công khai `ak plan` để restore. Hãy xem tệp recovery là vật liệu
+toàn store và không tự thay cơ sở dữ liệu live khi process AgentKit khác đang
+sử dụng.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak plan`](../cli/ak_plan)
+- [Liệt kê record trong plan store](./ak%20plan%20list)
+- [Quy ước CLI](../cli-conventions)

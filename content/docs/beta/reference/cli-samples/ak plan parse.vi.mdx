@@ -1,0 +1,66 @@
+---
+title: ak plan parse
+description: Đọc thư mục plan thành phần tổng hợp có cấu trúc mà không mở hoặc thay đổi plan store cục bộ.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak plan parse` để đọc trực tiếp `plan.md` và các tệp `phase-NN-*.md`
+trong một thư mục rồi tính tiến độ phase/task.
+
+## Cách dùng
+
+```bash
+ak plan parse <path>
+```
+
+Lệnh yêu cầu đúng một đường dẫn thư mục và không có cờ riêng.
+
+## Đọc phần tổng hợp human hoặc JSON
+
+```bash
+ak plan parse ./plans/260802-1030-release-docs
+ak plan parse ./plans/260802-1030-release-docs --json
+```
+
+Parser đọc `title`, `description`, `status` và `priority` từ front matter đơn
+giản của `plan.md`. Lệnh quét các tệp con trực tiếp có tên khớp
+`phase-NN-<slug>.md`, sắp xếp theo số rồi báo tổng checkbox và phần trăm hoàn
+tất.
+
+Khi phase có checkbox, chúng quyết định status. Phase không có checkbox dùng
+front-matter status hợp lệ. Trường plan không nhận biết được bỏ qua.
+
+<Callout type="info">
+  Parse là thao tác đọc có cấu trúc, không phải validate toàn bộ định dạng. Một
+  thư mục có `plan.md` đọc được vẫn có thể parse khi metadata chưa đầy đủ. Dùng
+  `ak plan validate <path>` khi tính hợp lệ cần chặn workflow.
+</Callout>
+
+## Hiệu ứng và quyền riêng tư
+
+Lệnh chỉ đọc: không mở hoặc khởi tạo plan store, ghi tệp, prompt, đọc stdin,
+truy cập mạng, xác thực hay gọi provider.
+
+Đầu ra human được ghi vào stdout. JSON thành công là một envelope có
+`kind=plan.parse`; `data` gồm metadata plan, tổng số/đã hoàn tất, phần trăm và
+mảng `phases`. `dir` và `file_path` của từng phase là đường dẫn tuyệt đối, còn
+title/description có thể chứa ngữ cảnh riêng tư. Hãy loại bỏ trước khi chia sẻ.
+
+Không có chế độ NDJSON. Lỗi thực thi JSON dùng structured envelope trên stderr;
+lỗi phân tích cờ có thể vẫn là plain text.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Thư mục đã được parse và tổng hợp. Plan có zero task là đầu ra hợp lệ với `0%`. | Kiểm tra trường trả về hoặc chạy validate riêng. |
+| `1` | `plan.md` bị thiếu/không đọc được, không quét được thư mục hoặc không parse được phase khớp mẫu. | Sửa tệp hoặc thư mục được nêu trước khi thử lại. |
+| `2` | Số argument hoặc cờ không hợp lệ. | Truyền đúng một đường dẫn thư mục plan. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak plan parse`](../cli/ak_plan_parse)
+- [Validate một thư mục plan](../cli/ak_plan_validate)
+- [Hiển thị kanban của plan](../cli/ak_plan_kanban)
+- [Quy ước CLI](../cli-conventions)

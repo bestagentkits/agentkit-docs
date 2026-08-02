@@ -1,0 +1,64 @@
+---
+title: ak plan archive
+description: Lưu trữ một plan đã lập chỉ mục với snapshot riêng của plan store và không xoá tệp plan.
+---
+
+Dùng `ak plan archive` để đưa một plan đã theo dõi ra khỏi danh sách active và
+closed nhưng vẫn giữ record đã lập chỉ mục cùng nội dung có thể tìm kiếm.
+
+## Cách dùng
+
+```bash
+ak plan archive <id>
+```
+
+Truyền store ID đầy đủ do `ak plan list --all` in ra. Lệnh không có cờ riêng.
+
+## Lưu trữ một plan
+
+```bash
+ak plan archive my-project/260722-1200
+```
+
+Đây là thao tác ghi cục bộ trực tiếp. Lệnh không preview, prompt, đọc stdin hay
+yêu cầu `--yes`. Lệnh đổi trạng thái vòng đời trong plan store thành
+`archived` và cập nhật timestamp. Lệnh không sửa, di chuyển hay xoá thư mục
+plan trong repository; chỉ mục toàn văn vẫn có thể tìm kiếm.
+
+Trước khi đổi trạng thái, AgentKit ghi cơ sở dữ liệu khôi phục nhất quán với
+SQLite vào `$AGENTKIT_HOME/plans/plans-recovery/` (mặc định
+`~/.agentkit/plans/plans-recovery/`). Snapshot bao phủ toàn bộ plan store, không
+chỉ row được chọn, và không phải snapshot của `ak backups`. Lệnh không in đường
+dẫn snapshot.
+
+## Đầu ra và quyền riêng tư
+
+Kết quả dành cho người dùng được ghi vào stdout. `--json` phát một envelope có
+`kind=plan.archive`; `data` là phần tổng hợp plan đã archive và có thể gồm:
+
+```text
+id, project_slug, repo_url, project_path, branch, worktree,
+task_title, backend, status, state, issue_number, linked_pr, updated_at
+```
+
+URL repository và đường dẫn cục bộ có thể nhạy cảm. Hãy loại bỏ chúng trước khi
+chia sẻ JSON. Lỗi dùng stderr; lỗi phân tích cờ có thể vẫn là plain text dù có
+`--json`. Lệnh không phát NDJSON.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Store row đã được archive và snapshot khôi phục đã được giữ lại. | Xác minh bằng `ak plan list --all --include-archived`. |
+| `1` | Không tìm thấy ID, store không khả dụng hoặc I/O của snapshot/trạng thái thất bại. | Xác nhận ID và giữ nguyên dữ liệu khôi phục hiện có trước khi thử lại. |
+| `2` | Argument hoặc cờ không hợp lệ. | Truyền đúng một plan ID. |
+
+Hiện không có lệnh con công khai `ak plan` để restore. Hãy xem cơ sở dữ liệu
+khôi phục là vật liệu phục hồi toàn store; không thay `plans.db` khi process
+AgentKit khác đang dùng và đừng kỳ vọng nó khôi phục tệp plan trong repository.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak plan`](../cli/ak_plan)
+- [Liệt kê record trong plan store](./ak%20plan%20list)
+- [Quy ước CLI](../cli-conventions)

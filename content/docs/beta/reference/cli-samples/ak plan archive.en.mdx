@@ -1,0 +1,65 @@
+---
+title: ak plan archive
+description: Archive one indexed plan with a private plan-store recovery snapshot and no plan-file deletion.
+---
+
+Use `ak plan archive` to move one tracked plan out of active and closed
+listings while retaining its indexed record and searchable content.
+
+## Usage
+
+```bash
+ak plan archive <id>
+```
+
+Supply the full store ID printed by `ak plan list --all`. The command has no
+command-specific flags.
+
+## Archive one plan
+
+```bash
+ak plan archive my-project/260722-1200
+```
+
+This is a direct local mutation. It does not preview, prompt, read stdin, or
+require `--yes`. It changes the plan-store lifecycle state to `archived` and
+updates its timestamp. It does not edit, move, or delete the repository plan
+directory, and the full-text index remains searchable.
+
+Before the state change, AgentKit writes a SQLite-consistent recovery database
+under `$AGENTKIT_HOME/plans/plans-recovery/` (default
+`~/.agentkit/plans/plans-recovery/`). The snapshot covers the complete plan
+store, not only the selected row, and is not an `ak backups` snapshot. The
+command does not print its snapshot path.
+
+## Output and privacy
+
+Human success is written to stdout. `--json` emits one envelope with
+`kind=plan.archive`; `data` is the archived plan summary and can include:
+
+```text
+id, project_slug, repo_url, project_path, branch, worktree,
+task_title, backend, status, state, issue_number, linked_pr, updated_at
+```
+
+Repository URLs and local paths can be sensitive. Redact them before sharing
+the JSON. Errors use stderr; flag-parse failures can remain plain text even
+when `--json` is present. No NDJSON stream is produced.
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | The store row is archived and its recovery snapshot was retained. | Verify with `ak plan list --all --include-archived`. |
+| `1` | The ID was not found, the store was unavailable, or snapshot/state I/O failed. | Confirm the ID and preserve any existing recovery files before retrying. |
+| `2` | Arguments or flags were invalid. | Supply exactly one plan ID. |
+
+There is no public `ak plan` restore subcommand. Treat the recovery database as
+whole-store recovery material; do not replace `plans.db` while another AgentKit
+process is using it, and do not expect it to restore repository plan files.
+
+## Related commands
+
+- [Complete `ak plan` command facts](../cli/ak_plan)
+- [List plan-store records](./ak%20plan%20list)
+- [CLI conventions](../cli-conventions)

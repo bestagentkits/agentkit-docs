@@ -1,0 +1,78 @@
+---
+title: ak plan list
+description: Liệt kê plan đã lập chỉ mục của project hiện tại hoặc mọi project, với bộ lọc vòng đời và giới hạn fallback rõ ràng.
+---
+
+Dùng `ak plan list` để xem các plan được theo dõi trong plan store cục bộ riêng
+tư. Theo mặc định, lệnh giới hạn kết quả ở project hiện tại và loại row closed,
+archived.
+
+## Cách dùng
+
+```bash
+ak plan list
+```
+
+## Tuỳ chọn của lệnh
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--all` | `false` | Liệt kê row của mọi project trong store cục bộ. |
+| `--include-closed` | `false` | Bao gồm trạng thái vòng đời `closed`. |
+| `--include-archived` | `false` | Bao gồm trạng thái vòng đời `archived`. |
+
+## Ví dụ thường dùng
+
+```bash
+ak plan list
+ak plan list --all
+ak plan list --all --include-closed --include-archived --json
+```
+
+Việc khớp project hiện tại dùng ngữ cảnh Git/repository, gồm remote URL đã
+chuẩn hoá hoặc đường dẫn project. Kết quả rỗng vẫn thành công và được biểu diễn
+bằng mảng JSON rỗng.
+
+## Hiểu files fallback
+
+Mở store có thể tạo thư mục/cơ sở dữ liệu riêng tư và áp dụng migration schema
+chỉ tiến về phía trước. Nếu index không ghi được hoặc schema mới hơn CLI đang
+chạy, `list` fallback sang tệp plan chuẩn trong `./plans/` của repository hiện
+tại và ghi warning vào stderr.
+
+Fallback không thể liệt kê project khác. Kể cả có `--all`, lệnh chỉ trả về tệp
+của project hiện tại và cảnh báo rằng phạm vi xuyên project cần index. Trường
+chỉ có trong index có thể vắng mặt. Cơ sở dữ liệu hỏng hoặc thuộc ứng dụng khác
+không được xem là fallback an toàn và có thể làm lệnh thất bại.
+
+Lệnh không đổi trạng thái vòng đời hoặc tệp trong repository, nhưng việc khởi
+tạo store và migration schema là hiệu ứng đĩa cục bộ có thể xảy ra. Việc
+resolve project hiện tại có thể chạy lệnh `git` cục bộ. Không có mạng, xác thực,
+provider hay cache từ xa.
+
+## Đầu ra và quyền riêng tư
+
+Pretty output in một dòng cho mỗi plan; plain output phân tách bằng tab. JSON
+thành công dùng `kind=plan.list`, với `data` là mảng phần tổng hợp gồm:
+
+```text
+id, project_slug, repo_url, project_path, branch, worktree,
+task_title, backend, status, state, issue_number, linked_pr, updated_at
+```
+
+URL repository, branch, title và đường dẫn tuyệt đối có thể tiết lộ ngữ cảnh
+cục bộ riêng tư. Hãy loại bỏ trước khi chia sẻ. Kết quả ở stdout; warning
+fallback và lỗi dùng stderr. Không có chế độ NDJSON.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Store hoặc files fallback đã được liệt kê, kể cả kết quả rỗng. | Kiểm tra stderr để tìm warning về phạm vi suy giảm. |
+| `1` | Truy cập store, resolve ngữ cảnh project hoặc quét fallback thất bại. | Làm theo hint về quyền/upgrade index; đừng xoá tệp plan chuẩn. |
+| `2` | Argument hoặc cờ không hợp lệ. | Bỏ argument theo vị trí và sửa cờ. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak plan`](../cli/ak_plan)
+- [Quy ước CLI](../cli-conventions)

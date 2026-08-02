@@ -1,0 +1,85 @@
+---
+title: ak plan create
+description: Scaffold canonical plan files, then understand non-fatal indexing and current-plan pointer warnings.
+---
+
+Use `ak plan create` to scaffold a new plan directory and make it immediately
+available to store-backed plan commands when local indexing succeeds.
+
+## Usage
+
+```bash
+ak plan create <name> [--basedir <dir>]
+```
+
+## Command flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--basedir <dir>` | `<current-directory>/plans` | Choose the parent directory for the new timestamped plan folder. |
+
+## Create a plan
+
+```bash
+ak plan create "Release documentation"
+```
+
+AgentKit lowercases and slugifies the name, prefixes it with the local
+`YYMMDD-HHMM` time, creates the directory with owner/group access, and writes:
+
+```text
+plan.md
+phase-01-start.md
+```
+
+The files are the canonical result. The command then tries to index the plan in
+`$AGENTKIT_HOME/plans/plans.db` and, inside a Git worktree, best-effort writes
+the worktree's current-plan pointer.
+
+## Review direct-write behavior
+
+There is no preview, confirmation, stdin read, force flag, or backup. Avoid
+running the same slug within the same minute: the timestamp and slug identify
+the directory, and an existing collision is reused while `plan.md` and
+`phase-01-start.md` are rewritten. File creation is not transactional; an I/O
+failure can leave a partially scaffolded directory.
+
+If the files are created but store indexing fails, the command deliberately
+exits `0`, writes a warning to stderr, leaves `store_id` empty, and includes a
+`warning` field in JSON. The files remain usable with directory commands and
+can be indexed later with `ak plan reindex --apply`. A pointer-write failure is
+also a warning, but does not undo file or store creation.
+
+The operation is local. It can run local `git` commands to resolve repository,
+branch, and worktree identity. It does not contact a registry, authenticate,
+invoke a provider, or populate a remote cache.
+
+## Output
+
+Human success is on stdout, with warnings on stderr. JSON success is one
+envelope with `kind=plan.create` and:
+
+```text
+data.name, data.dir, data.store_id, data.warning (optional)
+```
+
+`dir` is absolute, and the warning can contain local paths. Capture and redact
+streams separately when sharing automation logs.
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | Both files were scaffolded. Index or pointer warnings may still exist. | Verify the paths, warning field, and `store_id`. |
+| `1` | The name produced no slug, the working directory failed, or a directory/file write failed. | Inspect for a partial directory before retrying. |
+| `2` | The argument count or flags were invalid. | Supply one quoted name and, optionally, one base directory. |
+
+Use version control or filesystem recovery to undo an unintended scaffold; the
+plan-store recovery snapshots used by close/archive are not created here.
+
+## Related commands
+
+- [Complete `ak plan create` command facts](../cli/ak_plan_create)
+- [Parse the created plan](../cli/ak_plan_parse)
+- [Validate a plan directory](../cli/ak_plan_validate)
+- [CLI conventions](../cli-conventions)
