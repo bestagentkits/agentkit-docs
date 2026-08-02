@@ -1,6 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/cn';
+import { getChannelVersion } from '@/lib/channels';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -18,6 +19,7 @@ export function ChannelSelector({ locale }: { locale: string }) {
         {channels.map((channel) => {
           const active = channel === activeChannel;
           const href = `/${locale}/${channel}${remainder.length > 0 ? `/${remainder.join('/')}` : ''}`;
+          const version = getChannelVersion(channel);
 
           return (
             <Link
@@ -26,11 +28,16 @@ export function ChannelSelector({ locale }: { locale: string }) {
               aria-current={active ? 'page' : undefined}
               data-active={active}
               className={cn(
-                'rounded-md px-2 py-1.5 text-center text-sm font-medium capitalize text-fd-muted-foreground transition-colors hover:text-fd-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring',
+                'rounded-md px-2 py-1.5 text-center text-sm font-medium text-fd-muted-foreground transition-colors hover:text-fd-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring',
                 active && 'bg-fd-background text-fd-primary shadow-sm',
               )}
             >
-              {channel}
+              <span className="block capitalize">{channel}</span>
+              {version && (
+                <span className="block font-mono text-[11px] font-normal">
+                  {version}
+                </span>
+              )}
             </Link>
           );
         })}

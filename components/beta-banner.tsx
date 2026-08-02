@@ -21,6 +21,12 @@ const copy = {
           before the next stable release.
         </>
       ),
+    mirrored: (v: string) => (
+      <>
+        The <b>beta</b> channel currently mirrors stable (<code>{v}</code>)
+        while the next beta is prepared.
+      </>
+    ),
     link: 'Switch to stable →',
   },
   vi: {
@@ -37,6 +43,12 @@ const copy = {
           trước bản stable tiếp theo.
         </>
       ),
+    mirrored: (v: string) => (
+      <>
+        Kênh <b>beta</b> hiện đang giống stable (<code>{v}</code>) trong khi
+        bản beta tiếp theo được chuẩn bị.
+      </>
+    ),
     link: 'Chuyển sang stable →',
   },
 } as const;
@@ -50,6 +62,8 @@ export function BetaBanner({
 }) {
   const t = copy[locale as keyof typeof copy] ?? copy.en;
   const version = getChannelVersion('beta');
+  const stableVersion = getChannelVersion('stable');
+  const mirrorsStable = version !== null && version === stableVersion;
   // Same page on the stable channel = swap the leading `beta` segment.
   // Static params retain percent-encoded spaces; pass decoded segments to
   // Next's Link so it applies URL encoding exactly once.
@@ -64,7 +78,7 @@ export function BetaBanner({
       <span className="rounded border border-fd-primary/45 px-1.5 py-0.5 font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-fd-primary">
         {t.tag}
       </span>
-      <span>{t.lead(version)}</span>
+      <span>{mirrorsStable ? t.mirrored(version) : t.lead(version)}</span>
       <Link href={stableHref} className="text-fd-primary hover:underline">
         {t.link}
       </Link>
