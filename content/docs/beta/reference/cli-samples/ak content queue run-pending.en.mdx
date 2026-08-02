@@ -1,0 +1,77 @@
+---
+title: ak content queue run-pending
+description: Attempt every due pending post once, with exact retry, locking, output, and duplicate-delivery boundaries.
+---
+
+Use `ak content queue run-pending` for one scheduler pass from a timer, cron job,
+or manual invocation.
+
+## Usage
+
+```bash
+ak content queue run-pending
+```
+
+The command has no documented positional arguments or command-specific flags.
+Extra positional tokens are currently ignored.
+
+## Delivery and retries
+
+The command immediately selects entries with `status=pending`,
+`scheduled_at <= now`, and fewer than three attempts. It calls the stored
+channel adapter for each selected entry and then atomically saves its updated
+state.
+
+- Success changes the entry to `published` and increments `attempts`.
+- Failure records `last_error` and increments `attempts` but does not fail the
+  command. After the third failed attempt, status becomes `failed` and the
+  scheduler never retries it.
+- There is no delay or exponential backoff beyond the next scheduler invocation.
+- Future, published, and failed entries are skipped.
+
+The command directly performs external webhook writes. It has no prompt,
+`--dry-run`, apply flag, force flag, or rollback. `--yes`, `--no-interactive`,
+TTY, and stdin do not change delivery.
+
+## Lock and recovery boundaries
+
+A transient `queue.json.lock` file serializes scheduler passes. Lock contention
+logs a skip and exits successfully. A crash can leave a stale lock; after you
+verify no scheduler is running, remove only that lock file to resume processing.
+
+The lock prevents two scheduler passes from publishing the same loaded row, but
+it cannot make the network post and queue update transactional. If Discord
+accepts a post and the process crashes or the following queue save fails, the
+entry can remain pending and a later pass can duplicate it. Verify the channel
+before retrying uncertain deliveries.
+
+## Output and streams
+
+Per-entry progress and failures are written as human text to stderr, including
+with `--json`; `--quiet` does not suppress those direct log lines. The final
+summary is stdout and is suppressed by `--quiet`. JSON success is:
+
+```json
+{"schema_version":1,"kind":"content.queue_run_pending","data":{"fired":1}}
+```
+
+`fired` is calculated as the number of rows that left `pending`. It can include
+an entry that reached `failed` on its third attempt, so it is not a verified
+published-message count. A first or second publish failure can produce
+`fired=0` and exit `0`.
+
+## Exit status
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | The pass completed or skipped for lock contention, even when individual posts failed. | Inspect stderr and re-list every affected entry. |
+| `1` | Home, lock setup, initial load, or final reload failed. | Preserve queue state and verify destination posts before retrying. |
+| `2` | A flag could not be parsed. | Correct the invocation. |
+
+An entry-update failure inside the pass is logged but does not change exit `0`.
+
+## Related commands
+
+- [Inspect attempts and status](<./ak content queue list>)
+- [Run continuously](<./ak content schedule daemon>)
+- [Complete `ak content queue run-pending` help facts](../cli/ak_content_queue_run-pending)

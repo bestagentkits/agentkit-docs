@@ -1,0 +1,55 @@
+---
+title: ak content queue cancel
+description: Permanently remove one retained queue entry by its exact ID.
+---
+
+Use `ak content queue cancel` to remove an entry before delivery or to clean up
+a retained published or failed row.
+
+## Usage
+
+```bash
+ak content queue cancel <id>
+```
+
+Exactly one ID is required; there are no aliases or command-specific flags.
+Copy the full ID from JSON output when possible.
+
+## Effects and safety
+
+The command loads the queue from `~/.agentkit/content/queue.json` (or
+`AGENTKIT_HOME`), removes the first exact ID match, and atomically replaces the
+file. It makes no network request and does not delete an already published
+Discord message.
+
+Despite the help description, removal is not limited to `pending` entries. An
+exact ID for a `published` or `failed` entry is removed too. There is no prompt,
+dry run, force flag, backup, or undo. Save a protected copy of the queue first
+if retention matters; that copy can contain message bodies and webhook URLs.
+
+Concurrent list-modify-save operations outside the scheduler lock can overwrite
+one another. Avoid canceling while another process is adding or updating queue
+entries.
+
+## Output and streams
+
+Human success writes `[OK] cancelled post <id>` to stdout. JSON success is:
+
+```json
+{"schema_version":1,"kind":"content.queue_cancel","data":{"id":"<id>"}}
+```
+
+Not-found and I/O errors are plain text on stderr, including in `--json` mode.
+
+## Exit status
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | The entry was removed and the queue save completed. | Re-list the queue. |
+| `1` | The argument count was wrong, the ID was absent, or queue/home I/O failed. | Confirm the exact ID and inspect the queue before retrying. |
+| `2` | A flag could not be parsed. | Correct the flag. |
+
+## Related commands
+
+- [List queue IDs](<./ak content queue list>)
+- [Complete `ak content queue cancel` help facts](../cli/ak_content_queue_cancel)

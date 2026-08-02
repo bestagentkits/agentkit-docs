@@ -1,0 +1,76 @@
+---
+title: ak content schedule daemon
+description: Run the content scheduler in the foreground with explicit polling, retry, locking, and supervision limits.
+---
+
+Use `ak content schedule daemon` to keep attempting due scheduled posts while
+the process remains running.
+
+## Usage
+
+```bash
+ak content schedule daemon --poll-interval 60
+```
+
+The command has no documented positional arguments or aliases. Extra positional
+tokens are currently ignored.
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--poll-interval <seconds>` | `60` | Seconds between queue passes. Zero and negative values silently fall back to `60`. |
+
+Shared flags are described in [CLI conventions](../cli-conventions), but this
+long-running command writes its operational log directly to stderr. `--json`
+does not produce JSON, and `--quiet` does not suppress these lines.
+
+## Process and delivery behavior
+
+The command stays in the foreground. It runs one pass immediately, then starts
+the interval timer. `SIGINT` and `SIGTERM` stop it cleanly with exit `0`; there
+is no background fork, PID file, service installation, or automatic restart.
+
+Each pass applies the same contract as `ak content queue run-pending`:
+
+- due pending rows are published through their stored channel and webhook;
+- each failure increments `attempts`; the third failure marks the row `failed`;
+- no backoff is added beyond the polling interval;
+- published and failed rows remain in the queue;
+- individual publish and entry-update errors are logged and the daemon keeps
+  running.
+
+This is a live external-write process with no dry run or confirmation gate.
+Preview each post before enqueueing and supervise the process explicitly.
+
+## Locking and recovery
+
+The daemon acquires `queue.json.lock` only during each pass; it does not hold the
+lock for its full lifetime. Concurrent daemons therefore skip overlapping
+passes rather than both publishing them. A stale lock left by a crash causes
+every pass to skip successfully. After confirming no scheduler is active,
+remove only the stale lock file.
+
+Webhook delivery and queue persistence are not transactional. A crash after a
+successful network post but before status persistence can cause duplicate
+delivery on a later tick.
+
+## Output and exit status
+
+Start, stop, tick, lock, publish, and retry messages are plain text on stderr.
+There is no normal stdout success object or NDJSON stream.
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | The process stopped on context or signal. Tick and post failures may have occurred earlier. | Inspect stderr and queue status. |
+| `1` | AgentKit home resolution failed before the loop, or the daemon returned an unrecoverable error. | Correct filesystem access, then inspect destination state before restarting. |
+| `2` | A flag value could not be parsed. | Correct the invocation. |
+
+Queue-load, lock-setup, and publish errors during a tick are logged and do not
+terminate the daemon.
+
+## Related commands
+
+- [Inspect retained status](<./ak content queue list>)
+- [Run one pass](<./ak content queue run-pending>)
+- [Complete `ak content schedule daemon` help facts](../cli/ak_content_schedule_daemon)

@@ -1,0 +1,58 @@
+---
+title: ak content queue list
+description: Read every retained queue entry while protecting stored post bodies and webhook credentials.
+---
+
+Use `ak content queue list` to inspect the current persistent queue.
+
+## Usage
+
+```bash
+ak content queue list
+```
+
+The command has no documented positional arguments or command-specific flags.
+Extra positional tokens are currently ignored; do not rely on that behavior.
+
+## What it reads
+
+The command reads `~/.agentkit/content/queue.json`; `AGENTKIT_HOME` changes the
+base. A missing file is an empty queue and exits `0`. It makes no network
+request and does not acquire the scheduler lock or modify state.
+
+Although the short help says “pending,” the implementation returns every
+retained status: `pending`, `published`, and `failed`. Published and failed
+entries are not pruned automatically.
+
+## Output and privacy
+
+Human output goes to stdout and shows the ID, channel, UTC scheduled time,
+status, attempt count, and optional last error. It omits body, metadata, and
+creation time.
+
+JSON uses `kind=content.queue_list`. Inspect the envelope at
+`.data.entries`, not the `.entries` path shown in the tagged help example. Each
+entry can include:
+
+```text
+id, channel, body, scheduled_at, status, attempts,
+last_error?, metadata?, created_at
+```
+
+`metadata.webhook_url` can contain a live Discord credential, and `body` can
+contain unpublished content. Keep JSON output out of shared logs. Load or parse
+errors are plain text on stderr even with `--json`.
+
+## Exit status
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | The queue was read, including an empty queue. | Inspect status and attempts before acting. |
+| `1` | Home resolution, file reading, or JSON parsing failed. | Preserve the file; repair permissions or JSON before mutation. |
+| `2` | A flag could not be parsed. | Correct the invocation. |
+
+## Related commands
+
+- [Cancel an entry](<./ak content queue cancel>)
+- [Attempt due entries](<./ak content queue run-pending>)
+- [Complete `ak content queue list` help facts](../cli/ak_content_queue_list)

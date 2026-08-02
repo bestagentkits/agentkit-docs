@@ -1,0 +1,56 @@
+---
+title: ak content queue list
+description: Đọc mọi queue entry còn được giữ và bảo vệ post body cùng webhook credential đã lưu.
+---
+
+Dùng `ak content queue list` để xem persistent queue hiện tại.
+
+## Cách dùng
+
+```bash
+ak content queue list
+```
+
+Lệnh không có positional argument được tài liệu hoá hay cờ riêng. Positional
+token thừa hiện bị bỏ qua; đừng phụ thuộc vào hành vi đó.
+
+## Dữ liệu được đọc
+
+Lệnh đọc `~/.agentkit/content/queue.json`; `AGENTKIT_HOME` thay đổi thư mục gốc.
+Tệp chưa tồn tại được xem là queue rỗng và thoát `0`. Lệnh không gửi network
+request, không lấy scheduler lock và không sửa trạng thái.
+
+Dù short help nói “pending”, implementation trả về mọi status còn giữ:
+`pending`, `published` và `failed`. Entry `published` và `failed` không tự prune.
+
+## Đầu ra và quyền riêng tư
+
+Human output ra stdout và hiển thị ID, channel, UTC scheduled time, status,
+attempt count cùng last error tuỳ chọn. Nó không hiển thị body, metadata hay
+creation time.
+
+JSON dùng `kind=content.queue_list`. Đọc envelope tại `.data.entries`, không
+phải `.entries` như ví dụ trong tagged help. Mỗi entry có thể chứa:
+
+```text
+id, channel, body, scheduled_at, status, attempts,
+last_error?, metadata?, created_at
+```
+
+`metadata.webhook_url` có thể là Discord credential còn hoạt động, còn `body`
+có thể là nội dung chưa publish. Không đưa JSON output vào log dùng chung. Lỗi
+load hay parse là plain text trên stderr kể cả với `--json`.
+
+## Mã thoát
+
+| Mã | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Queue đã được đọc, gồm cả queue rỗng. | Kiểm tra status và attempts trước khi thao tác. |
+| `1` | Resolve home, đọc tệp hoặc parse JSON thất bại. | Giữ nguyên tệp; sửa permission hoặc JSON trước mutation. |
+| `2` | Không parse được cờ. | Sửa invocation. |
+
+## Lệnh liên quan
+
+- [Cancel entry](<./ak content queue cancel>)
+- [Thử entry đến hạn](<./ak content queue run-pending>)
+- [Help đầy đủ của `ak content queue list`](../cli/ak_content_queue_list)

@@ -1,0 +1,73 @@
+---
+title: ak content schedule daemon
+description: Chạy content scheduler ở foreground với giới hạn polling, retry, locking và supervision rõ ràng.
+---
+
+Dùng `ak content schedule daemon` để tiếp tục thử scheduled post đã đến hạn khi
+process còn chạy.
+
+## Cách dùng
+
+```bash
+ak content schedule daemon --poll-interval 60
+```
+
+Lệnh không có positional argument được tài liệu hoá hay alias. Positional token
+thừa hiện bị bỏ qua.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--poll-interval <seconds>` | `60` | Số giây giữa các queue pass. Giá trị không dương âm thầm quay về `60`. |
+
+Các cờ dùng chung ở [quy ước CLI](../cli-conventions), nhưng lệnh dài hạn này
+ghi operational log trực tiếp ra stderr. `--json` không tạo JSON và `--quiet`
+không suppress các dòng này.
+
+## Hành vi process và delivery
+
+Lệnh ở foreground. Nó chạy một pass ngay rồi bắt đầu interval timer. `SIGINT`
+và `SIGTERM` dừng sạch với exit `0`; không có background fork, PID file, service
+installation hay automatic restart.
+
+Mỗi pass dùng cùng contract với `ak content queue run-pending`:
+
+- row pending đã đến hạn được publish qua channel và webhook đã lưu;
+- mỗi lỗi tăng `attempts`; lỗi thứ ba chuyển row sang `failed`;
+- không có backoff ngoài polling interval;
+- row `published` và `failed` vẫn còn trong queue;
+- lỗi publish và entry-update riêng lẻ được log, daemon tiếp tục chạy.
+
+Đây là process ghi ra external system, không có dry run hay confirmation gate.
+Hãy preview từng post trước khi enqueue và supervise process rõ ràng.
+
+## Locking và recovery
+
+Daemon chỉ lấy `queue.json.lock` trong từng pass, không giữ lock suốt vòng đời.
+Vì vậy các daemon đồng thời bỏ qua pass trùng nhau thay vì cùng publish. Stale
+lock do crash làm mọi pass bỏ qua thành công. Sau khi xác nhận không còn
+scheduler chạy, chỉ xoá stale lock file.
+
+Webhook delivery và queue persistence không phải transaction. Crash sau network
+post thành công nhưng trước khi lưu status có thể gây delivery trùng ở tick sau.
+
+## Đầu ra và mã thoát
+
+Thông báo start, stop, tick, lock, publish và retry là plain text trên stderr.
+Không có stdout success object hay NDJSON stream thông thường.
+
+| Mã | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Process dừng do context hoặc signal. Tick và post error có thể đã xảy ra trước đó. | Đọc stderr và queue status. |
+| `1` | Resolve AgentKit home thất bại trước loop, hoặc daemon trả unrecoverable error. | Sửa filesystem access rồi kiểm tra destination trước restart. |
+| `2` | Không parse được flag value. | Sửa invocation. |
+
+Lỗi queue-load, lock-setup và publish trong tick được log nhưng không terminate
+daemon.
+
+## Lệnh liên quan
+
+- [Xem status còn giữ](<./ak content queue list>)
+- [Chạy một pass](<./ak content queue run-pending>)
+- [Help đầy đủ của `ak content schedule daemon`](../cli/ak_content_schedule_daemon)
