@@ -1,0 +1,74 @@
+---
+title: ak plan search
+description: Chạy full-text search có giới hạn và xếp hạng trên private plan index cục bộ với structured filter.
+---
+
+Dùng `ak plan search` để tìm text của plan và phase đã index mà không scan
+repository ở mỗi query.
+
+## Cách dùng
+
+```bash
+ak plan search <query> [flags]
+```
+
+Một hoặc nhiều query token được nối bằng dấu cách.
+
+## Tuỳ chọn của lệnh
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--project <slug>` | Trống | Lọc chính xác theo project slug. |
+| `--branch <name>` | Trống | Lọc chính xác theo branch. |
+| `--issue <number>` | `0` | Lọc chính xác theo issue khi giá trị dương. |
+| `--status <status>` | Trống | Một trong `pending`, `in-progress`, `completed`, `cancelled`, `unknown`. |
+| `--limit <n>` | `0` | Số hit tối đa; giá trị bằng 0 hoặc âm dùng mặc định hiệu lực `50`. |
+| `--include-closed` | `false` | Bao gồm plan đã closed. |
+| `--include-archived` | `false` | Bao gồm plan đã archived. |
+
+## Phạm vi và giới hạn tìm kiếm
+
+SQLite FTS5 xếp hạng match trên task title của plan và title, body, notes,
+evidence, acceptance của phase. Match trong title có trọng số cao nhất; score
+export lớn hơn nghĩa là phù hợp hơn.
+
+Input bị giới hạn 256 byte và 16 token phân tách bởi whitespace. Mỗi token giữ
+lại trở thành literal phrase có quote và các term được kết hợp bằng AND. Control
+byte, token chỉ có dấu câu và toán tử `*` ở cuối bị loại. Nếu không còn token có
+thể tìm, lệnh trả mảng rỗng và thoát `0`.
+
+Structured filter là điều kiện SQL chính xác, không phải FTS term. Search đọc
+index hiện có và không freshen tệp. Chạy `ak plan reindex` sau thay đổi tay chưa
+được đồng bộ.
+
+## Quyền riêng tư và tác động
+
+Index lưu bản có thể tìm kiếm của nội dung plan/phase tại
+`$AGENTKIT_HOME/plans/plans.db`. AgentKit đặt quyền owner-only cho thư mục và
+tệp store, nhưng result/snippet vẫn có thể lộ nội dung qua stdout hoặc log.
+
+Lệnh không dùng mạng, auth, provider, process, stdin hay prompt. Nó không đổi
+row plan, dù mở store thiếu hoặc cũ có thể tạo/forward-migrate store. Không có
+apply, force, xác nhận hay backup.
+
+## Đầu ra
+
+Human output hiện vị trí hit, trường khớp và snippet. Plain output phân tách bằng
+tab. JSON thành công dùng `kind=plan.search`; mỗi `data[]` hit có `plan_id`,
+`phase_n` tuỳ chọn, score, snippet, matched fields và plan summary. Không match
+trả mảng rỗng.
+
+## Kết quả và mã thoát
+
+| Mã | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Search hoàn tất, kể cả không match hoặc mọi token bị loại. | Kiểm tra result array. |
+| `1` | Plan store hoặc FTS query lỗi. | Sửa quyền store; reindex nếu index stale hoặc unusable. |
+| `2` | Status, cờ hoặc số argument không hợp lệ. | Sửa query hoặc filter. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak plan search`](../cli/ak_plan_search)
+- [Build lại plan index](../cli/ak_plan_reindex)
+- [Hiển thị một kết quả](../cli/ak_plan_show)
+- [Liệt kê plan theo lifecycle filter](../cli/ak_plan_list)

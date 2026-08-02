@@ -1,0 +1,76 @@
+---
+title: ak plan resolve
+description: Resolve the active plan that best matches an issue, branch, worktree, or project context.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak plan resolve` to ask which active store record best matches the current
+Git and filesystem context.
+
+## Usage and flag
+
+```bash
+ak plan resolve [--issue <number>]
+```
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--issue <number>` | `0` | Match an explicit GitHub issue first. Values at or below zero behave as unset. |
+
+The command accepts no positional arguments.
+
+## Resolution order
+
+Active plans are collected in this precedence order:
+
+1. explicit positive issue number;
+2. current branch within the current project identity;
+3. current worktree within that project identity;
+4. normalized origin repository, or canonical project path when no origin exists.
+
+Duplicates are removed, candidates are newest-updated first within a tier, and
+the first candidate is `best`. Closed and archived plans are never candidates.
+An explicit issue is allowed to cross the current project boundary.
+
+<Callout type="warning">
+  `ak plan resolve` does not read the worktree-private pointer written by
+  `ak plan use`. The pointer has priority for `ak plan show` with no ID, but
+  resolve continues to use the issue/branch/worktree/project rules above.
+</Callout>
+
+No match is a successful result: human output says no matching plan, while
+JSON has `data.best: null` and no candidates.
+
+## Effects and freshness
+
+The command runs local `git` probes and queries the private plan store. If the
+best plan's linked files changed since the last sync, it reparses those files
+and may update the index before rendering. If that refresh fails, it prints a
+warning on stderr and returns the older row rather than failing the lookup.
+Candidate summaries other than `best` are not freshened by this command.
+
+It uses no network, auth, provider, stdin, or prompt. Opening the store can
+create or forward-migrate it. There is no preview, force, backup, or rollback.
+
+## Output
+
+JSON success uses `kind=plan.resolve` with `data.best` and
+`data.candidates[]`; each candidate includes a `reason` and plan summary.
+Human/plain output prints the best ID followed by matching reasons and IDs.
+Results use stdout; freshness warnings use stderr.
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | Resolution completed, including no match or a nonfatal freshness warning. | Inspect `data.best`; do not infer a match from exit `0`. |
+| `1` | Working-directory, Git-context, or plan-store access failed. | Fix local Git/store access and retry. |
+| `2` | Arguments or flags were invalid. | Correct the invocation. |
+
+## Related commands
+
+- [Complete `ak plan resolve` facts](../cli/ak_plan_resolve)
+- [Pin a plan for one worktree](../cli/ak_plan_use)
+- [Show the pinned or resolved plan](../cli/ak_plan_show)
+- [List tracked plans](../cli/ak_plan_list)

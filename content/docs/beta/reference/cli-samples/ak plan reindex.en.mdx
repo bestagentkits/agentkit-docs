@@ -1,0 +1,81 @@
+---
+title: ak plan reindex
+description: Preview or rebuild the private plan index from canonical repository plan files without deleting those files.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak plan reindex` after hand-editing `plan.md` or phase files, or when the
+local SQLite index has drifted from the repository files.
+
+## Usage and flags
+
+```bash
+ak plan reindex [--path <root>] [--apply]
+```
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--path <root>` | Empty | Scan `<root>/plans/`; an empty value uses the current directory as `<root>`. |
+| `--apply` | `false` | Write recognized plans into the index. Without it, classify only. |
+
+The command accepts no positional arguments. Shared flags are described in
+[CLI conventions](../cli-conventions).
+
+## Preview and apply
+
+The default run parses each candidate folder and reports what would be
+reindexed. `--apply` inserts never-seen plans and resynchronizes already linked
+plans, including folders previously handled by migration.
+
+Files own plan and phase titles, bodies, and file-derived statuses. Reindex
+rebuilds those fields and full-text-search rows. It preserves index-owned
+lifecycle and publishing fields, including plan state, issue/PR links,
+current phase, phase revisions, notes, evidence, acceptance, and comment IDs.
+It does not resurrect a closed plan merely because `plan.md` says completed.
+
+No plan file is written or deleted. Plain files inside `plans/` are ignored;
+unrecognized folders are reported. Symlinked candidate folders and paths that
+escape the root are skipped without being read.
+
+<Callout type="warning">
+  Dry-run does not change plan rows, but opening the plan store can create
+  `$AGENTKIT_HOME/plans/plans.db` or apply forward schema migrations. A
+  per-folder sync failure is reported as a `skipped` outcome and does not
+  necessarily make the process exit non-zero. Automation must inspect every
+  outcome, not only the exit status.
+</Callout>
+
+The command is local-only and never prompts. It runs Git context probes but
+does not contact a remote. There is no `--force`, confirmation, snapshot, or
+automatic rollback.
+
+## Output
+
+JSON success uses `kind=plan.reindex`:
+
+```text
+data.applied, data.root, data.plans_dir
+data.outcomes[]: slug, status, optional reason, optional store_id, optional phases
+```
+
+Human output names dry-run/applied mode and each classification. Plain output
+is tab-separated. Results go to stdout; JSON runtime errors go to stderr.
+
+## Exit behavior and recovery
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | The scan completed, possibly with unrecognized or skipped outcomes. | Inspect all outcomes; rerun with `--apply` only after the preview is correct. |
+| `1` | The root, plans directory, Git context, store, or top-level filesystem operation failed. | Fix the reported path/store problem and rerun the preview. |
+| `2` | Arguments or flags were invalid. | Correct the invocation. |
+
+Reindex has no dedicated backup. Repository files remain canonical; keep them
+under version control, correct them there, and rerun preview before apply.
+
+## Related commands
+
+- [Complete `ak plan reindex` facts](../cli/ak_plan_reindex)
+- [Validate a plan directory](../cli/ak_plan_validate)
+- [Search the local index](../cli/ak_plan_search)
+- [Show a tracked plan](../cli/ak_plan_show)

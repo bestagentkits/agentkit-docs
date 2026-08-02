@@ -1,0 +1,74 @@
+---
+title: ak plan use
+description: Write an owner-only, worktree-private current-plan pointer and understand which readers honor it.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak plan use` to choose which plan `ak plan show` should open by default in
+one Git worktree.
+
+## Usage
+
+```bash
+ak plan use <plan-dir|plan-id>
+```
+
+There are no command-specific flags.
+
+## How the target is interpreted
+
+If the argument is an existing directory, AgentKit pins that directory path.
+The path is resolved through symlinks and must remain inside the enclosing Git
+worktree. This path form does not validate `plan.md` and does not require a
+plan-store row, so pass the exact plan directory rather than an arbitrary
+folder.
+
+If the argument is not an existing directory, it is treated as a plan-store
+ID. The row must have a linked `plan_dir` that resolves inside the current
+worktree.
+
+The stored value is a worktree-relative path. JSON `plan_id` is populated only
+when ID resolution was used; it is empty for a direct directory target.
+
+## Pointer ownership and consumers
+
+The command atomically replaces an owner-only `0600` pointer resolved through
+Git's per-worktree directory. A main worktree and each linked worktree therefore
+keep independent pointers. The file lives under Git metadata and is never
+committed; no plan file or plan-store row is changed.
+
+<Callout type="warning">
+  The pointer has priority for `ak plan show` with no ID. Despite the command
+  help's broader wording, `ak plan resolve` does not read this pointer and
+  continues to resolve by issue, branch, worktree, and project identity.
+</Callout>
+
+Running `ak plan use` again replaces the previous pointer. There is no command
+flag to clear it and no automatic backup. An invalid pointer is ignored by
+readers rather than deleted.
+
+The command runs local Git probes. ID form also opens the store, which can
+create or forward-migrate it. It uses no network, auth, providers, stdin,
+prompt, preview, apply, or force.
+
+## Output
+
+Human output says which relative path became current; plain stdout is the path.
+JSON success uses `kind=plan.use` with `plan_id` and `plan_dir`. Runtime JSON
+errors use stderr; flag-parse errors can remain plain text.
+
+## Exit behavior and recovery
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | The pointer was atomically replaced. | Run `ak plan show` with no ID to verify it. |
+| `1` | The directory/ID was not resolvable, no Git worktree existed, the target escaped the worktree, or the pointer/store write failed. | Use an exact in-worktree directory or a linked plan ID. |
+| `2` | The argument count or flags were invalid. | Pass exactly one target. |
+
+## Related commands
+
+- [Complete `ak plan use` facts](../cli/ak_plan_use)
+- [Show the pinned plan](../cli/ak_plan_show)
+- [Resolve by Git context](../cli/ak_plan_resolve)
+- [List plan IDs](../cli/ak_plan_list)

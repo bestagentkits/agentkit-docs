@@ -1,0 +1,72 @@
+---
+title: ak plan phase close
+description: Complete one file-owned plan phase, reproject it into the local index, and handle partial file/store failures safely.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak plan phase close` when a plan is already tracked in the local plan
+store and you want its canonical phase file to record completion.
+
+## Usage
+
+```bash
+ak plan phase close <plan-id> <n>
+```
+
+`<n>` must be a positive integer. The plan must have a linked directory, and
+that directory must contain exactly one `phase-NN-*.md` file with the requested
+number. The command does not use the current-plan pointer or infer a plan from
+the current branch.
+
+There are no command-specific flags. Shared flags are described in
+[CLI conventions](../cli-conventions).
+
+## File and index ownership
+
+Phase completion is file-owned:
+
+- If the phase contains task checkboxes, every remaining `- [ ]` is changed to
+  `- [x]` with an atomic file replacement.
+- If it contains no checkboxes, the command writes `status: done` in the
+  leading front matter. A missing or unterminated front-matter block is an
+  error.
+- After the file write, AgentKit reprojects the plan directory into the local
+  SQLite plan store so a later `ak plan reindex` keeps the same result.
+
+When checkboxes change, non-quiet output adds a note on stderr with the number
+of boxes completed.
+
+<Callout type="warning">
+  The file write happens before the index refresh. If the store cannot be
+  opened or refreshed, the command can exit `1` after the phase file is already
+  complete. Inspect the file before retrying; the file is canonical and the
+  checkbox operation is idempotent.
+</Callout>
+
+The command is local-only. It does not use network, authentication, providers,
+stdin, or a TTY prompt. It has no preview, force, confirmation, snapshot, or
+automatic rollback. Opening the plan store can create or forward-migrate
+`$AGENTKIT_HOME/plans/plans.db`.
+
+## Output
+
+Human and plain results go to stdout. JSON success uses
+`kind=plan.phase-close`; `data` contains `plan_id`, `n`, `title`, `status`, and
+`rev`. Warnings and the checkbox note use stderr. Runtime JSON errors use the
+shared error envelope on stderr; flag-parse errors can remain plain text.
+
+## Exit behavior and recovery
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | The phase file was completed and the indexed phase could be returned. | Verify the file and `data.status=done`. |
+| `1` | The plan, linked directory, phase file, or store was unavailable, or a file/store operation failed. The file may already have changed. | Inspect the phase file, then repair store access and run `ak plan reindex --apply` if needed. |
+| `2` | The argument count or phase number was invalid. | Pass one plan ID and a positive phase number. |
+
+## Related commands
+
+- [Complete `ak plan phase close` facts](../cli/ak_plan_phase_close)
+- [Mark a phase file todo](../cli/ak_plan_uncheck)
+- [Rebuild the plan index](../cli/ak_plan_reindex)
+- [Show a plan and its phases](../cli/ak_plan_show)

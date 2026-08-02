@@ -1,0 +1,59 @@
+---
+title: ak plan uncheck
+description: Reset mọi task checkbox trong một tệp phase chuẩn và best-effort đồng bộ phase trong index.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak plan uncheck` để đưa mọi task đã đánh dấu trong một tệp phase về todo.
+
+## Cách dùng
+
+```bash
+ak plan uncheck <phase-file>
+```
+
+Lệnh nhận đúng một path và không có cờ riêng. Basename phải khớp
+`phase-NN-<slug>.md` để đồng bộ store, dù thao tác checkbox vẫn chạy trên tệp
+được truyền nếu có thể đọc.
+
+## Mutation và đồng bộ
+
+Mọi task line Markdown bắt đầu bằng `- [x]` hoặc `- [X]` được đổi thành
+`- [ ]`. Checkbox chưa đánh dấu và mọi byte khác được giữ nguyên. Tệp được thay
+atomic và thao tác có tính idempotent.
+
+Sau khi ghi, AgentKit thử tìm owning plan bằng thư mục liên kết chính xác, sau
+đó bằng Git-context match không mơ hồ, rồi chiếu lại plan vào index cục bộ. Plan
+legacy chỉ có tệp và không có store row vẫn chỉ tồn tại trên tệp.
+
+<Callout type="warning">
+  Store synchronization là best effort. Nếu store unavailable, ambiguous hoặc
+  sync lỗi, stderr có warning nhưng lệnh vẫn thành công vì tệp phase chuẩn đã
+  được cập nhật. Hãy chạy `ak plan reindex --apply` sau khi sửa quyền store.
+</Callout>
+
+Không có preview, xác nhận, `--force`, snapshot hay rollback tự động. Lệnh không
+dùng mạng, auth, provider hoặc stdin. Sync có thể chạy Git probe cục bộ và tạo
+hoặc forward-migrate plan store.
+
+## Đầu ra
+
+Human/plain stdout xác nhận path. JSON thành công dùng `kind=plan.uncheck` với
+`data.phase` và `data.action: "unchecked"`. Warning đồng bộ dùng stderr. Lỗi
+runtime JSON dùng error envelope chung.
+
+## Kết quả, mã thoát và khôi phục
+
+| Mã | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Tệp phase đã được ghi lại; store sync có thể đã warning. | Kiểm tra tệp và stderr; reindex nếu cần. |
+| `1` | Không resolve, đọc, ghi hoặc atomic rename được tệp. | Khôi phục từ version control hoặc sửa quyền trước khi thử lại. |
+| `2` | Số argument hoặc cờ không hợp lệ. | Truyền đúng một path tệp phase. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak plan uncheck`](../cli/ak_plan_uncheck)
+- [Đánh dấu mọi checkbox hoàn tất](../cli/ak_plan_check)
+- [Close phase theo plan ID và số](../cli/ak_plan_phase_close)
+- [Build lại plan index](../cli/ak_plan_reindex)

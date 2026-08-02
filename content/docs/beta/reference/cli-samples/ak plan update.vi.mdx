@@ -1,0 +1,72 @@
+---
+title: ak plan update
+description: Cập nhật status do tệp sở hữu và bookkeeping do index sở hữu với quy tắc khôi phục riêng biệt.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak plan update` để cập nhật một phần một record trong local plan store.
+Chỉ cờ được truyền rõ ràng mới thay giá trị.
+
+## Cách dùng và tuỳ chọn
+
+```bash
+ak plan update <id> [flags]
+```
+
+| Cờ | Mặc định | Ownership và hành vi |
+| --- | --- | --- |
+| `--status <status>` | Trống | Do tệp sở hữu; nhận `pending`, `in-progress`, `completed`, `cancelled`, `unknown`. |
+| `--title <text>` | Trống | Do tệp sở hữu và bị từ chối; sửa heading `plan.md`, rồi reindex. |
+| `--branch <name>` | Trống | Branch label do index sở hữu. |
+| `--worktree <path>` | Trống | Path text do index sở hữu; không ghi current-plan pointer hay validate path. |
+| `--current-phase <n>` | `0` | Số current phase do index sở hữu. |
+| `--linked-pr <n>` | `0` | Pull-request number do index sở hữu. |
+| `--issue <n>` | `0` | GitHub issue number do index sở hữu. |
+| `--root-comment-id <n>` | `0` | Root tracking comment ID do index sở hữu. |
+
+Giá trị zero hoặc rỗng đã truyền vẫn là replacement rõ ràng. Lần gọi không có
+cờ thay đổi chỉ đọc và trả row hiện tại.
+
+## Ghi file-owned và index-owned
+
+Cờ index-owned được commit vào SQLite trước trong một transaction và cập nhật
+FTS row. Sau đó `--status` atomically cập nhật front matter của `plan.md` chuẩn
+và đồng bộ lại thư mục plan.
+
+Nếu row không có thư mục liên kết, status fallback sang ghi chỉ trong index và
+stderr cảnh báo reindex sẽ không giữ giá trị đó. `--status completed` không
+close lifecycle state; dùng `ak plan close` riêng.
+
+<Callout type="warning">
+  Lần gọi kết hợp không atomic trên cả store và tệp. Trường index-owned được ghi
+  trước status file update, nên lỗi tệp hoặc sync sau đó có thể trả mã `1` dù
+  bookkeeping đã đổi. Hãy kiểm tra plan trước khi thử lại.
+</Callout>
+
+Không có preview, prompt, `--force`, snapshot hay rollback tự động. Lệnh chỉ
+hoạt động cục bộ, không dùng Git, mạng, auth, provider hoặc stdin. Mở store có
+thể tạo hoặc forward-migrate store.
+
+## Đầu ra
+
+JSON thành công dùng `kind=plan.update` và trả plan summary gồm ID, project
+identity, branch/worktree, title, status/state, issue/PR tuỳ chọn và thời gian
+update. `current_phase` và `root_comment_id` không được trả. Human/plain chỉ xác
+nhận ID đã update.
+
+## Kết quả, mã thoát và khôi phục
+
+| Mã | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Update hoàn tất hoặc không có trường thay đổi. | Kiểm tra field trả về và `plan.md` khi đã set status. |
+| `1` | Plan không tồn tại hoặc thao tác store/tệp/sync lỗi; field index trước đó có thể đã đổi. | Chạy `ak plan show <id>`, kiểm tra `plan.md`, rồi chỉ sửa phần chưa hoàn tất. |
+| `2` | Giá trị cờ không hợp lệ, đã truyền `--title` hoặc sai argument. | Sửa tệp cho title hoặc sửa cờ. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak plan update`](../cli/ak_plan_update)
+- [Hiển thị plan sau update](../cli/ak_plan_show)
+- [Build lại field do tệp sở hữu](../cli/ak_plan_reindex)
+- [Close lifecycle của plan](../cli/ak_plan_close)
+- [Pin current plan của worktree](../cli/ak_plan_use)

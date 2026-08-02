@@ -1,0 +1,83 @@
+---
+title: ak plan show
+description: Show a tracked plan, raw plan and phase bodies, context resolution, and stale-index fallback behavior.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak plan show` to render one tracked plan with its phases and full Markdown
+bodies.
+
+## Usage
+
+```bash
+ak plan show [id]
+```
+
+The command accepts at most one plan-store ID and has no command-specific
+flags.
+
+## Choose the plan
+
+With an explicit ID, the command loads that store row even when it belongs to
+another worktree. With no ID, it uses this order:
+
+1. the valid worktree-private pointer written by `ak plan use`;
+2. the best active issue/branch/worktree/project match used by
+   `ak plan resolve`.
+
+If the pointer is absent, invalid, or does not map to a synced row, context
+resolution is used. Closed or archived plans can still be shown by explicit
+ID or a valid pointer; the context fallback considers active plans only.
+
+## Freshness, fallback, and privacy
+
+For a linked plan, show compares file modification times and reparses changed
+files into the index before rendering. A failed refresh becomes a stderr
+warning and the older indexed row is still shown. The raw `plan.md` body is
+read through a path-containment guard; unreadable body content is omitted.
+
+If the index cannot be used because it is unwritable or newer than this CLI,
+show degrades to repository files. In that mode an explicit argument is a
+folder name under `./plans/`, not a store ID; without an argument, only the
+current-plan pointer is used. Index-only fields are omitted and stderr carries
+a warning.
+
+<Callout type="warning">
+  Human and JSON output include raw plan and phase bodies without redaction.
+  They can contain private notes, links, or evidence. Do not send the output to
+  shared logs unless the plan content is safe to disclose.
+</Callout>
+
+The command is read-only on repository files, but freshness can update the
+local index and opening the store can create or migrate it. No network, auth,
+prompt, preview, force, snapshot, or rollback is involved. No-ID resolution
+runs local Git probes.
+
+## Output
+
+JSON success uses `kind=plan.show`:
+
+```text
+data.plan: plan summary
+data.plan_body: raw plan.md text or an empty string
+data.phases[]: plan_id, n, title, status, rev, body
+```
+
+Phase notes, evidence, acceptance, and comment IDs are not included. Human and
+plain modes print the plan header, body, and each phase body to stdout.
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | The selected plan was rendered, possibly with a freshness/fallback warning. | Review stderr and the returned bodies. |
+| `1` | The ID was missing, no context matched, or store/filesystem access failed. | Pass an exact ID, run `ak plan use`, or repair/reindex the store. |
+| `2` | Too many arguments or invalid flags were supplied. | Correct the invocation. |
+
+## Related commands
+
+- [Complete `ak plan show` facts](../cli/ak_plan_show)
+- [Resolve the current context](../cli/ak_plan_resolve)
+- [Pin a plan](../cli/ak_plan_use)
+- [Validate repository files](../cli/ak_plan_validate)

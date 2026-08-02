@@ -1,0 +1,78 @@
+---
+title: ak plan show
+description: Hiển thị plan được theo dõi, body plan/phase nguyên bản, cách resolve context và hành vi fallback khi index stale.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak plan show` để render một plan được theo dõi cùng các phase và toàn bộ
+body Markdown.
+
+## Cách dùng
+
+```bash
+ak plan show [id]
+```
+
+Lệnh nhận tối đa một plan-store ID và không có cờ riêng.
+
+## Chọn plan
+
+Khi có ID, lệnh tải row đó kể cả khi thuộc worktree khác. Khi không có ID, thứ
+tự là:
+
+1. pointer riêng của worktree do `ak plan use` ghi;
+2. active plan khớp issue/branch/worktree/project tốt nhất như `ak plan resolve`.
+
+Nếu pointer thiếu, không hợp lệ hoặc không map tới row đã sync, lệnh dùng context
+resolution. Plan closed/archived vẫn có thể được show bằng ID hoặc pointer hợp
+lệ; context fallback chỉ xét active plan.
+
+## Freshness, fallback và quyền riêng tư
+
+Với plan có liên kết, show so sánh mtime và parse lại tệp đã đổi vào index trước
+khi render. Refresh lỗi tạo warning trên stderr và row cũ vẫn được hiển thị. Body
+`plan.md` được đọc qua path-containment guard; body không đọc được sẽ bị lược bỏ.
+
+Nếu index unusable do không ghi được hoặc có schema mới hơn CLI, show fallback
+sang tệp repository. Trong mode này, argument là tên thư mục dưới `./plans/`,
+không phải store ID; khi không có argument, chỉ current-plan pointer được dùng.
+Trường index-only bị lược bỏ và stderr có warning.
+
+<Callout type="warning">
+  Human và JSON output chứa body plan/phase nguyên bản, không redaction. Nội
+  dung có thể chứa notes, link hoặc evidence riêng tư. Đừng gửi output tới log
+  dùng chung nếu nội dung plan không an toàn để chia sẻ.
+</Callout>
+
+Lệnh chỉ đọc tệp repository, nhưng freshness có thể cập nhật index cục bộ và
+mở store có thể tạo/migrate store. Không có mạng, auth, prompt, preview, force,
+snapshot hay rollback. Resolve không ID chạy Git probe cục bộ.
+
+## Đầu ra
+
+JSON thành công dùng `kind=plan.show`:
+
+```text
+data.plan: plan summary
+data.plan_body: raw plan.md text or an empty string
+data.phases[]: plan_id, n, title, status, rev, body
+```
+
+Phase notes, evidence, acceptance và comment ID không có trong output.
+Human/plain in plan header, body và từng phase body ra stdout.
+
+## Kết quả và mã thoát
+
+| Mã | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Plan đã chọn được render, có thể kèm freshness/fallback warning. | Xem stderr và body trả về. |
+| `1` | ID không tồn tại, context không match hoặc truy cập store/filesystem lỗi. | Truyền ID chính xác, chạy `ak plan use` hoặc sửa/reindex store. |
+| `2` | Truyền quá nhiều argument hoặc cờ không hợp lệ. | Sửa cách gọi. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak plan show`](../cli/ak_plan_show)
+- [Resolve context hiện tại](../cli/ak_plan_resolve)
+- [Pin một plan](../cli/ak_plan_use)
+- [Validate tệp repository](../cli/ak_plan_validate)

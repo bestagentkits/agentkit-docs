@@ -1,0 +1,62 @@
+---
+title: ak plan status
+description: Read file-derived phase and task progress directly from one plan directory.
+---
+
+Use `ak plan status` for a compact progress summary calculated from `plan.md`
+and `phase-NN-*.md` files.
+
+## Usage
+
+```bash
+ak plan status [path]
+```
+
+With no path, the command treats the current directory itself as the plan
+directory. It does not consult the plan store, current-plan pointer, Git branch,
+or worktree context. From a repository root whose plans live under `./plans/`,
+pass the specific plan directory.
+
+There are no command-specific flags. Shared flags are described in
+[CLI conventions](../cli-conventions).
+
+## Progress calculation
+
+The parser reads `plan.md` metadata and all files whose names match
+`phase-<number>-<slug>.md`, sorted by number.
+
+- A phase with checkboxes is `todo`, `in-progress`, or `done` according to the
+  number checked; checkboxes override phase front-matter status.
+- A checkbox-free phase uses recognized front-matter status, otherwise `todo`.
+- Overall task progress is integer `(done * 100) / total`; zero tasks means
+  `0%`.
+- Phases done counts phases resolved to `done`.
+
+The command validates only what the parser needs. Use `ak plan validate` when
+you need an explicit format gate.
+
+## Effects and output
+
+This command reads local files only. It does not open or refresh the SQLite
+store, spawn Git, use network/auth/providers, read stdin, or prompt. It has no
+preview, apply, force, backup, or recovery mutation.
+
+Human/plain stdout is one summary line. JSON success uses `kind=plan.status`
+with `name`, `title`, `status`, `phases_total`, `phases_done`, `total_tasks`,
+`done_tasks`, and `progress_pct`. Runtime JSON errors use stderr; flag-parse
+errors can remain plain text.
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | The directory was parsed and progress was reported. | Read the counters; do not treat plan front-matter status as task completion. |
+| `1` | The directory, `plan.md`, or a recognized phase file could not be parsed. | Correct the path or plan files, then rerun. |
+| `2` | Too many arguments or invalid flags were supplied. | Correct the invocation. |
+
+## Related commands
+
+- [Complete `ak plan status` facts](../cli/ak_plan_status)
+- [Validate a plan directory](../cli/ak_plan_validate)
+- [Show a store-backed plan](../cli/ak_plan_show)
+- [Mark a phase file done](../cli/ak_plan_check)
