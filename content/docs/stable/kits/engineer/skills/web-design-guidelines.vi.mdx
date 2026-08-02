@@ -1,0 +1,118 @@
+---
+title: Audit web UI với ak:web-design-guidelines
+description: Review tệp đã chọn theo Web Interface Guidelines vừa fetch và giữ finding truy vết được tới dòng source.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:web-design-guidelines` để review tập trung các UI file hiện có. Skill
+fetch Web Interface Guidelines hiện tại lúc chạy, áp dụng mọi rule đã fetch cho
+các tệp được chọn và báo finding ngắn theo dạng `file:line`.
+
+## Chọn Skill cho audit hiện tại ở cấp tệp
+
+### Dùng Skill khi
+
+- Bạn muốn review UI, UX, accessibility hoặc web design best practice trong tệp
+  cụ thể hay file pattern có giới hạn.
+- Bạn cần finding gắn với source location chính xác thay vì redesign.
+- Bạn muốn guideline upstream mới nhất thay cho design advice đóng gói.
+
+### Chọn workflow khác khi
+
+- Bạn cần product design system, style recommendation hoặc UX strategy rộng hơn.
+  Dùng `ak:ui-ux-pro-max`.
+- Bạn muốn assistant triển khai thay đổi shadcn/ui hoặc Tailwind. Dùng
+  `ak:ui-styling` sau khi review finding.
+- Bạn cần browser hay assistive-technology test đầy đủ. Skill này review code;
+  riêng nó không chứng minh rendered behavior.
+
+## Chuẩn bị review boundary
+
+- Cung cấp một hay nhiều exact file hoặc pattern hẹp. Nếu bỏ trống, Skill phải
+  hỏi tệp cần review.
+- Chỉ đưa generated source vào khi bạn định xử lý nó; ưu tiên source file sở hữu
+  thay cho derived output.
+- Chuẩn bị network access tới nguồn raw guideline upstream. Skill không đóng gói
+  fallback ruleset.
+- Giữ source identity cùng thời điểm fetch trong review evidence khi cần tái lập.
+
+| Runtime | Cách gọi | Ranh giới bằng chứng |
+| --- | --- | --- |
+| Claude Code | `/ak:web-design-guidelines ...` | Cần web-search hoặc fetch capability hoạt động và quyền đọc tệp đã chọn. |
+| Cursor | `/ak:web-design-guidelines ...` | Cách gọi slash đã được người dùng xác minh; behavior network và source fetch tương đương chưa được thiết lập. |
+| Codex | `$ak:web-design-guidelines ...` | Hỗ trợ native discovery nhưng session vẫn cần network retrieval tool được phép. |
+
+## Chạy Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:web-design-guidelines "Review src/components/account-dialog.tsx and src/styles/theme.css; report only file:line findings with the violated rule and no code changes"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:web-design-guidelines "Review src/components/account-dialog.tsx and src/styles/theme.css; report only file:line findings with the violated rule and no code changes"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:web-design-guidelines "Review src/components/account-dialog.tsx and src/styles/theme.css; report only file:line findings with the violated rule and no code changes"
+```
+
+  </Tab>
+</Tabs>
+
+Skill không có mode flag được tài liệu hóa. Input là file hoặc pattern cần
+review. Workflow có thể quan sát là:
+
+1. Fetch guideline document mới nhất từ upstream source được khai báo.
+2. Chỉ đọc tệp đã chọn và resolve line number theo nội dung hiện tại.
+3. Áp dụng mọi rule cùng output instruction trong text đã fetch.
+4. Trả finding ngắn dạng `file:line`. Review sạch nên nói không tìm thấy finding
+   thay vì tự tạo lời khuyên.
+
+## Làm rõ external authority
+
+<Callout type="warn" title="Rule source có thể đổi giữa các lần chạy">
+  Kết quả phụ thuộc nội dung upstream trực tiếp. Ghi retrieval evidence khi cần
+  tái lập review và đừng tuyên bố lần chạy sau dùng cùng rule trừ khi nội dung đã
+  fetch được pin hoặc lưu lại.
+</Callout>
+
+- Fetch source liên hệ dịch vụ bên ngoài và để lộ requested URL cho dịch vụ đó.
+  Nó không nên truyền project file.
+- Không gửi private source code tới search provider khi đọc tệp local là đủ;
+  fetch public rule rồi review file tại local.
+- Finding chỉ là advisory cho tới khi xác nhận project context cùng rendered
+  behavior. Không sửa code, cài package hay publish report nếu chưa được yêu cầu.
+- Thiếu network capability là blocker cho audit current-rules. Không âm thầm thay
+  bằng memory hoặc guidance đóng gói.
+
+## Xác minh finding và giới hạn
+
+Report hữu ích nêu tệp đã review, guideline source cùng thời điểm fetch, từng
+`file:line` finding, rule liên quan và tệp không đọc được. Trước khi sửa, kiểm tra
+component composition, design token, browser behavior, keyboard flow, focus
+order, contrast, zoom, reduced motion và screen reader output khi liên quan.
+Static source review không chứng minh các runtime fact này.
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Không có file input | Cung cấp exact path hoặc pattern hẹp; đừng mặc định toàn repository. |
+| Guideline fetch thất bại | Kiểm tra network và upstream availability rồi retry. Báo blocker thay vì dùng memory cũ. |
+| Finding thiếu line number | Đọc lại file hiện tại và map mỗi finding tới dòng actionable hẹp nhất. |
+| Rule xung đột project requirement | Ghi conflict cùng evidence; không auto-fix nếu thiếu product decision rõ ràng. |
+| Source review pass nhưng UI fail | Dùng rendered accessibility và interaction testing; Skill này không phải browser test suite. |
+
+Stable và beta chứa cùng instruction `ak:web-design-guidelines` trong các release
+được tài liệu hóa, nhưng rule upstream được fetch vẫn có thể khác giữa các lần
+chạy. Tiếp tục với [Runtime adapter](../../../concepts/runtime-adapters) hoặc
+[Tổng quan Engineer Kit](../../engineer).
