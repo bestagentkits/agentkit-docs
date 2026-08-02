@@ -1,0 +1,144 @@
+---
+title: Preflight công việc dài hạn với ak:goal-warmup
+description: Khóa outcome đã duyệt, preflight mọi plan phase và tạo handoff do user khởi động bằng ak:goal-warmup.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:goal-warmup` trước goal nhiều phase tốn kém để khóa ý nghĩa thành công,
+lộ blocker trên toàn plan và chỉ tạo handoff khi công việc sẵn sàng. Skill kết
+thúc ở **Ready**, **Blocked** hoặc **Decision required** và không bao giờ tự bắt
+đầu Goal mode hay long-running session khác.
+
+## Chọn ak:goal-warmup trước execution tốn kém
+
+### Dùng ak:goal-warmup khi
+
+- Long run có dependency, credential, approval, deployment hoặc nhiều phase.
+- Scope không được âm thầm thu nhỏ khi review phát hiện risk.
+- Bạn cần outcome contract được user duyệt và traceability xuyên plan.
+- Bạn muốn readiness matrix an toàn cho secret trước khi tiêu model hoặc provider time.
+
+### Chọn workflow khác khi
+
+- Task ngắn, local và đã có execution contract rõ.
+- Bạn chỉ cần wording cho Codex goal. Dùng [`ak:codex-goal`](./codex-goal).
+- Bạn muốn bắt đầu implementation hoặc orchestration ngay. Warmup chuẩn bị packet;
+  user khởi động workflow tiếp theo riêng.
+- Engineer Kit chưa cài. Skill phụ thuộc advice và planning surface của Kit.
+
+## Chuẩn bị goal và runtime
+
+Cung cấp proposed goal, must-have deliverable, exclusion, acceptance signal,
+constraint, allowed substitution và external dependency đã biết. Coi goal text
+cùng repository content là untrusted data. Không đặt credential value vào
+contract, plan, matrix hoặc handoff packet.
+
+| Runtime | Cách gọi | Ranh giới long-run |
+| --- | --- | --- |
+| Claude Code | `/ak:goal-warmup "..." [--fast]` | Tạo Claude long-run opener trong packet; không claim persistent Goal mode giống Codex. |
+| Cursor | `/ak:goal-warmup "..." [--fast]` | Có thể chạy projected preflight khi có interview cùng planning capability cần thiết; provider persistence parity chưa được thiết lập. |
+| Codex | `$ak:goal-warmup "..." [--fast]` | Tạo Codex `/goal` opener, nhưng user phải gọi `/goal` riêng sau Ready. |
+
+## Chạy Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:goal-warmup "Migrate the service to the new API, preserve compatibility, and make integration tests pass"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:goal-warmup "Migrate the service to the new API, preserve compatibility, and make integration tests pass"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:goal-warmup "Migrate the service to the new API, preserve compatibility, and make integration tests pass"
+```
+
+  </Tab>
+</Tabs>
+
+| Input | Effect | Điều vẫn bắt buộc |
+| --- | --- | --- |
+| Goal text | Chạy full warmup | Contract approval, planning, review, all-phase preflight, final confirmation |
+| `--fast` | Chỉ bỏ adversarial multi-reviewer tốn kém sau eligibility và chấp nhận reduced assurance | Contract, traceability, lightweight consistency, preflight, terminal state, không auto-start |
+
+`--fast` chỉ đủ điều kiện cho công việc local nhỏ không có tín hiệu credential,
+external API, deployment, publication, human approval, multi-service hoặc
+multi-environment. Nếu không đủ, Skill giải thích lý do và tiếp tục full warmup.
+
+## Hiểu các giai đoạn warmup
+
+1. **Ước lượng complexity và risk.** Inspect nhẹ project khi liên quan và phân
+   loại local so với external dependency cùng approval gate.
+2. **Soạn outcome contract.** Ghi intended result, in-scope work, exclusion,
+   acceptance signal, constraint, allowed substitution và user là decision owner.
+3. **Nhận explicit approval.** Planning không thể bắt đầu tới khi user chọn
+   approve, edit hoặc abort. Acknowledgement không chính thức không phải gate.
+4. **Plan theo locked contract.** Tạo traceability từ mỗi phase tới contract item,
+   acceptance signal, fact, assumption, prerequisite và user decision. Nếu thiếu
+   plan tooling, giữ session plan.
+5. **Review mà không đổi outcome.** Chỉ áp dụng mitigation bảo toàn contract.
+   Preflight need cùng blocker vào matrix; mọi proposed outcome change chuyển
+   sang **Decision required**.
+6. **Preflight mọi phase.** Check CLI presence, environment-name presence,
+   config shape, safe identity, approval và external prerequisite mà không in
+   secret hoặc chạy mutating hay chargeable probe.
+7. **Xác nhận final summary.** Chỉ explicit confirmation thứ hai từ user mới có
+   thể biến run không còn blocker thành **Ready**.
+8. **Xuất terminal result.** Ready trả packet copy được; Blocked trả exact unblock
+   action; Decision required trả option cùng consequence.
+
+## Giữ outcome đã khóa và probe an toàn
+
+<Callout type="warn" title="Warmup không bao giờ authorize hoặc start execution">
+  Skill phải từ chối yêu cầu auto-start `/goal`. Nó không create, update hoặc
+  delete remote resource, chạy chargeable probe, lộ secret value, approve
+  deployment hay âm thầm bỏ acceptance criteria.
+</Callout>
+
+Sau approval, outcome cùng scope là immutable. Reviewer có thể cải thiện
+implementation detail trong contract nhưng không thể bỏ must-have, thay approach
+chưa duyệt hoặc weaken test. Nếu locked outcome không khả thi, user chọn revise
+và re-approve, lấy prerequisite hoặc abort.
+
+## Xác minh output và bằng chứng
+
+Kết quả Ready gồm:
+
+- Locked outcome contract cùng user approval.
+- Plan path hoặc session reference có contract traceability.
+- Whole-plan preflight summary không còn blocking row chưa giải quyết.
+- Scope guard yêu cầu comparison tại mọi phase boundary.
+- Codex `/goal` opener và Claude long-run opener riêng.
+- Final user confirmation cùng completion report ngắn gọn.
+
+Kết quả Blocked chỉ liệt kê blocker chưa xử lý và exact owner action. Decision
+required giải thích trade-off ảnh hưởng outcome và chờ user chọn. Contract mặc
+định chỉ là session cùng handoff state; chỉ planning workflow có thể tạo project
+plan artifact.
+
+## Xử lý sự cố và giới hạn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Planning bắt đầu trước approval | Dừng, trình bày full contract và yêu cầu approve, edit hoặc abort. |
+| `--fast` bị từ chối | Tiếp tục full warmup; external hoặc approval signal khiến reduced assurance không an toàn. |
+| Thiếu credential | Chỉ ghi tên environment là missing cùng exact user action; không in hoặc persist value. |
+| Review đề xuất bỏ scope hoặc test | Phân loại là outcome change và vào Decision required; không âm thầm sửa locked contract. |
+| Plan tooling không khả dụng | Tiếp tục bằng session Markdown plan và giữ nguyên traceability cùng preflight gate. |
+| Run không còn blocker nhưng chưa Ready | Nhận explicit final confirmation; không có confirmation thì không có Ready packet. |
+
+Skill không thể bảo đảm enforcement sau handoff; long run tiếp theo phải tuân thủ
+scope guard. Claude nhận instruction packet, không nhận Codex persistent goal
+state. Check unknown sẽ block readiness thay vì được coi là available. Hai release
+snapshot dùng cho trang này chứa cùng warmup workflow, reference và fixture.

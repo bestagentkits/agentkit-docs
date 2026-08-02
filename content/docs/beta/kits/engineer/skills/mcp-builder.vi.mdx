@@ -1,0 +1,137 @@
+---
+title: Xây MCP server với ak:mcp-builder
+description: Nghiên cứu API ngoài, thiết kế tool cho Agent, triển khai server và xác minh bằng ak:mcp-builder.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:mcp-builder` để biến dịch vụ hoặc API bên ngoài thành MCP server có
+tool hỗ trợ workflow hoàn chỉnh của Agent. Skill hướng dẫn research, thiết kế
+tool cùng schema, triển khai Python hoặc TypeScript, build check và evaluation
+suite read-only.
+
+## Chọn ak:mcp-builder cho tool surface mới
+
+### Dùng ak:mcp-builder khi
+
+- Bạn đang tạo MCP server mới hoặc mở rộng bề mặt tool hay resource.
+- API cần workflow thân thiện với Agent thay vì một wrapper cho mỗi endpoint.
+- Bạn cần response có giới hạn, pagination, lỗi actionable và annotation effect
+  chính xác cho tool.
+- Bạn muốn evaluation thực tế kiểm tra LLM có dùng được server hay không.
+
+### Chọn workflow khác khi
+
+- Server đã tồn tại và bạn chỉ cần discovery hoặc execution. Dùng
+  [`ak:use-mcp`](./use-mcp).
+- Bạn cần expose codebase hiện có qua CLI hoặc MCP surface. Cân nhắc
+  `ak:agentize` trước khi tạo integration mới.
+- Bạn thiếu official API docs, test access hoặc cách an toàn để xác minh auth và
+  rate limit. Hãy giải quyết prerequisite đó trước.
+
+## Chuẩn bị integration
+
+Cung cấp dịch vụ hoặc API, user workflow dự kiến, ngôn ngữ triển khai, transport,
+auth model, permission, rate limit, data volume dự kiến và external effect được
+phép. Dự kiến có network research đối với MCP specification, SDK docs hiện hành
+và toàn bộ API docs của dịch vụ.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:mcp-builder ...` | Dùng web, file, shell và project tool có trong Claude session. |
+| Cursor | `/ak:mcp-builder ...` | Slash invocation có thể tải guidance đã projection; research, process và testing tool chính xác phụ thuộc Cursor session. |
+| Codex | `$ak:mcp-builder ...` | Dùng native Skill discovery cùng web, shell và MCP capability có trong Codex session. |
+
+## Chạy Skill
+
+Skill nhận dịch vụ hoặc API cần tích hợp và không định nghĩa cờ mode.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:mcp-builder "Build a TypeScript MCP server for the Acme tickets API with read-only search first, cursor pagination, and stdio transport"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:mcp-builder "Build a TypeScript MCP server for the Acme tickets API with read-only search first, cursor pagination, and stdio transport"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:mcp-builder "Build a TypeScript MCP server for the Acme tickets API with read-only search first, cursor pagination, and stdio transport"
+```
+
+  </Tab>
+</Tabs>
+
+Implementation Python dùng FastMCP, Pydantic validation, type hint và async I/O.
+Implementation TypeScript dùng MCP SDK, strict TypeScript, Zod schema, description
+rõ và build tạo JavaScript có thể chạy. Stdio phù hợp subprocess local; HTTP hoặc
+SSE remote cần quyết định riêng về server lifecycle, network security và deploy.
+
+## Hiểu các giai đoạn build
+
+1. **Nghiên cứu protocol và service.** Đọc guidance MCP cùng SDK chính thức hiện
+   hành và auth, endpoint, schema, pagination, lỗi, rate limit của API đích.
+2. **Lập kế hoạch workflow Agent.** Chọn task giá trị cao, API utility dùng chung,
+   response format, truncation behavior và failure handling.
+3. **Triển khai infrastructure và tool.** Tập trung auth, request, pagination,
+   formatting, cleanup và input validation trước khi thêm tool.
+4. **Annotate effect chính xác.** Đặt hint read-only, destructive, idempotent và
+   open-world theo behavior; coi chúng là UX hint chứ không phải security enforcement.
+5. **Build và test.** Compile hoặc type-check, xác minh import, chạy sample call
+   qua client và tránh mở stdio server dài hạn bằng foreground command bị block.
+6. **Tạo evaluation.** Tạo mười câu hỏi độc lập, ổn định, phức tạp chỉ cần
+   operation read-only, non-destructive; xác minh answer và chạy harness khi được phép.
+
+## Kiểm soát credential, chi phí và write
+
+<Callout type="warn" title="Research và evaluation có thể chạm hệ thống ngoài">
+  Nhận approval trước khi dùng credential, gọi API live hoặc trả phí, tạo remote
+  resource, chạy mutating tool, deploy remote server hoặc gửi project data tới
+  evaluation model. Tool annotation không thay authorization check.
+</Callout>
+
+Package installation ghi dependency xuống disk và có thể tải từ package registry.
+API research cùng integration test dùng network. Evaluation harness đi kèm cần
+`ANTHROPIC_API_KEY`, gọi Claude model đã chọn cho mỗi question và tool turn, kết
+nối tới MCP server đích, vì vậy có thể tiêu model token, API quota, thời gian và
+chi phí provider. Giữ evaluation task read-only và ưu tiên fixture an toàn.
+
+## Xác minh output và bằng chứng
+
+Implementation hoàn tất nên cung cấp:
+
+- Server code, dependency cùng compiler config và startup path đã document.
+- Workflow tool tập trung với schema strict, description, ví dụ và effect annotation chính xác.
+- Request, pagination, formatting, timeout, error và cleanup utility dùng chung.
+- Kết quả build hoặc syntax check cùng sample call được quan sát từ client.
+- Mười evaluation pair đã xác minh trong XML khi scope yêu cầu evaluation.
+- Markdown evaluation report tùy chọn với accuracy, duration, tool-call count,
+  answer theo task, summary và feedback về tool.
+- Rủi ro auth, rate limit, deploy hoặc permission còn lại.
+
+Không coi server process chỉ đang chờ stdio là test thành công. Xác minh qua
+managed client hoặc evaluation harness và xác nhận cleanup.
+
+## Xử lý sự cố và giới hạn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Server có vẻ treo | Server có thể đang chờ protocol input đúng cách; dừng foreground run và test qua managed client hoặc bounded timeout. |
+| Response làm tràn context | Thêm filter, pagination, default hợp lý, character limit và hướng dẫn truncation rõ. |
+| Tool lỗi auth | Xác minh presence và audience của credential mà không in secret; không bypass authorization. |
+| Evaluation accuracy thấp | Kiểm tra tên tool, schema, description, lỗi, pagination và feedback theo task trước khi thêm tool. |
+| Remote transport lỗi | Xác nhận server chạy riêng, URL, header, certificate và network access. |
+
+Skill là guidance, không phải generator cố định: project file chính xác phụ thuộc
+ngôn ngữ, API và repository hiện có. Live docs có thể thay đổi, nên chi tiết
+implementation phải được xác minh trong lần chạy. Hai release snapshot dùng cho
+trang này chứa cùng builder workflow và harness.
