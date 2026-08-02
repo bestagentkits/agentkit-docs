@@ -1,0 +1,187 @@
+---
+title: Turn system evidence into diagrams with ak:excalidraw
+description: Create editable Excalidraw architecture, flow, and codebase diagrams through a live canvas or file-based workflow, then verify the rendered artifact.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:excalidraw` to turn a technical explanation, workflow, or inspected
+codebase into an editable diagram. The Skill chooses a live Excalidraw MCP canvas
+when one is available and otherwise can build `.excalidraw` JSON for a
+file-based render-and-review loop.
+
+## Choose ak:excalidraw for editable visual explanations
+
+### Use ak:excalidraw when
+
+- You need an architecture, data-flow, workflow, system-design, or conceptual
+  diagram that remains editable.
+- You want the Skill to inspect a repository and propose an architecture map
+  before drawing it.
+- You need `.excalidraw` source plus a PNG or SVG review artifact.
+- The relationships and teaching value matter more than a uniform box grid.
+
+### Choose another workflow when
+
+- You only need a text diagram inside documentation. Use a Mermaid-capable
+  workflow instead.
+- You need to implement a working interface rather than explain one. Use
+  `ak:frontend-design` or `ak:frontend-development`.
+- You need a general project preview rather than an editable diagram. Use
+  `ak:preview`.
+- You cannot inspect the system deeply enough to support the requested
+  connections. Ask for the missing evidence or draw only the verified scope.
+
+## Prepare the diagram and renderer
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Engineer Kit is installed for the active runtime and scope.
+- State the audience, question the diagram should answer, desired depth, output
+  directory, and whether source, PNG, SVG, or a live canvas is required.
+- For codebase auto-diagramming, open the repository and identify any directories
+  or data that must not be read.
+- For live mode, configure an Excalidraw MCP server and canvas, then make its
+  diagram tools available to the runtime.
+- For file mode, provide Python 3.11 or newer, `uv`, Playwright, and Chromium if
+  you want the bundled PNG renderer.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:excalidraw ...` | Can use the live MCP workflow when its tools are configured. The bundled file workflow documents a Claude-oriented Skill-root command, so the run must resolve the installed path rather than assume it elsewhere. |
+| Cursor | `/ak:excalidraw ...` | Slash invocation is user-verified. MCP tools, browser access, and bundled-helper path resolution depend on the Cursor session. |
+| Codex | `$ak:excalidraw ...` | Uses native Skill discovery. MCP and local image-viewing or browser capabilities depend on the session; Engineer Hooks and statusline are not fully portable. |
+
+See [Runtime adapters](../../../concepts/runtime-adapters) for the supported
+delivery and projection boundaries.
+
+## Run the Skill
+
+Pass a visual outcome and evidence boundary in natural language. The Skill has
+no documented mode flags; it detects the rendering backend from the tools that
+are actually available.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:excalidraw "Inspect this repository and propose an architecture overview for a new maintainer. Confirm the components and connections before drawing, then create architecture.excalidraw and architecture.png without installing software or clearing an existing canvas."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:excalidraw "Inspect this repository and propose an architecture overview for a new maintainer. Confirm the components and connections before drawing, then create architecture.excalidraw and architecture.png without installing software or clearing an existing canvas."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:excalidraw "Inspect this repository and propose an architecture overview for a new maintainer. Confirm the components and connections before drawing, then create architecture.excalidraw and architecture.png without installing software or clearing an existing canvas."
+```
+
+  </Tab>
+</Tabs>
+
+For a supplied design, say which labels must remain verbatim. For a large
+system, request an overview first and name the areas that deserve separate
+drill-down diagrams.
+
+## Understand the two rendering paths
+
+| Path | What it does | Typical evidence |
+| --- | --- | --- |
+| Live MCP canvas | Reads the available diagram guide, creates elements in batches, inspects the scene and screenshot, then exports on request | Visible canvas, screenshot, scene export, PNG or SVG |
+| File-based | Writes Excalidraw JSON, uses the bundled Playwright renderer for PNG when its dependencies are available, then inspects and repairs the result | `.excalidraw` source, renderer output, PNG review |
+
+The live path is preferred by the Skill, but detection is evidence-based. A
+successful Skill invocation does not prove that an Excalidraw MCP server,
+browser, or renderer is configured.
+
+## Observe the diagram workflow
+
+1. **The run defines the teaching goal.** It identifies the audience, the
+   question the visual must answer, and whether a conceptual or technical depth
+   is appropriate.
+2. **The run grounds technical claims.** It inspects real components, protocols,
+   events, methods, or data formats instead of inventing generic connections.
+3. **The run proposes the map.** For automatic repository analysis, it reports
+   discovered components and edges for confirmation before drawing.
+4. **The run selects visual patterns.** Hierarchy, sequence, convergence,
+   fan-out, cycles, and comparisons receive structures that express their
+   behavior instead of identical cards.
+5. **The run generates the artifact.** It batches live-canvas elements or builds
+   file JSON section by section, with bounded component and arrow counts for an
+   overview.
+6. **The run renders and critiques.** It checks clipping, overlap, spacing,
+   arrow routing, labels, balance, and missing connections, then repairs and
+   re-renders within the workflow's review limit.
+
+## Keep canvas and environment changes explicit
+
+<Callout type="warn" title="Rendering can cross local and network boundaries">
+  Clearing a live canvas removes its current scene. Docker, `npm`, `uv`,
+  Playwright, and Chromium setup change the local environment. The bundled
+  file renderer also imports Excalidraw code from `esm.sh` at render time, so do
+  not describe it as network-free unless that dependency has been made locally
+  available and the run proves offline rendering.
+</Callout>
+
+- Ask before clearing a canvas that may contain user work. Snapshot or export it
+  first when the configured MCP tools support recovery.
+- Treat package downloads, containers, background servers, browser installation,
+  and shareable-link publication as separate approvals.
+- Do not place secrets, private identifiers, or unapproved source excerpts in a
+  diagram or externally hosted share link.
+- Preserve unrelated files and agree on output paths before writing source and
+  image artifacts.
+- A diagram is an explanation, not an authority. Mark inferred connections and
+  have an owner review security, data-flow, and deployment claims.
+
+## Verify the outputs and evidence
+
+A complete run should provide:
+
+- The confirmed diagram scope, audience, source evidence, and any inference.
+- The selected backend and the tools or dependencies actually used.
+- An editable `.excalidraw` or live scene, plus requested PNG or SVG exports.
+- A rendered review showing that text is readable, elements do not overlap,
+  arrows connect the intended objects, and spacing supports the reading order.
+- Exact output paths, external services contacted, skipped checks, and remaining
+  visual or factual gaps.
+
+For repository auto-diagrams, the Skill's source workflow caps an overview at
+12 components and 20 arrows, grouping larger systems and offering drill-down.
+Treat that as a clarity boundary, not proof that the omitted system is
+unimportant.
+
+## Troubleshoot or continue
+
+| Symptom | Safe next step |
+| --- | --- |
+| No Excalidraw MCP tools are available | Use file mode if its dependencies are approved, or configure the MCP canvas and restart the runtime. |
+| The live canvas is not empty | Stop before clearing it; snapshot or export the existing scene and ask whether replacement is intended. |
+| The renderer cannot find Chromium | Install Playwright's Chromium only with approval, or deliver the editable source and report PNG verification as blocked. |
+| The renderer waits for or cannot load its module | Check network access to the module source; do not claim the bundled path is fully offline. |
+| Labels are clipped or arrows cross content | Widen elements, increase gaps, reroute connections, and inspect a fresh render. |
+| Repository connections are uncertain | Remove unsupported arrows, label the uncertainty, or inspect the specific entry points before redrawing. |
+| The runtime does not recognize the Skill | Confirm target and scope, restart the session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Review [Projects, artifacts, and checkpoints](../../../concepts/projects-artifacts-checkpoints)
+before generating into a repository, or continue with [Engineer Kit](../../engineer).
+
+## Know the current limits
+
+- The Skill bundles guidance and a file renderer, but no Excalidraw MCP server,
+  canvas service, Python environment, browser, or container runtime.
+- Live MCP tool names and export behavior depend on the configured external
+  server; file rendering depends on Playwright, Chromium, and a remote module in
+  the tagged template.
+- Visual inspection does not prove architectural correctness, completeness,
+  accessibility, or permission to publish the depicted material.
+- Stable and beta contain identical `ak:excalidraw` Skill content for this
+  release pair; the beta's Codex Hook changes do not alter this workflow.

@@ -67,11 +67,13 @@ continuous with the marketing site. Do **not** invent colours, fonts, or radii.
   URL-prefixed (`/en`, `/vi`). Files use `.en.mdx` / `.vi.mdx`; nav labels use
   `meta.json` + `meta.vi.json`. A missing `.vi.mdx` falls back to English
   (`fallbackLanguage: 'en'`), so VI can land page-by-page without breaking the
-  tree. Cross-page links inside MDX should be **relative** (`./installation`,
-  `../guides/updating`) so `createRelativeLink` localizes them to the current
-  locale; a hardcoded `/en/...` link would strand readers of the other locale on
-  a fallback page. The generated CLI reference is **English-only** — do not
-  translate command syntax.
+  tree.   Cross-page links inside MDX should be **relative** (`./installation`,
+  `../guides/updating`). The docs page resolves extensionless relatives via
+  `createDocsRelativeLink` (retries `.mdx` / `/index.mdx`) so they localize to
+  the current locale; a hardcoded `/en/...` link would strand readers of the
+  other locale on a fallback page. The generated CLI reference and release-notes
+  body are **English-only** — do not translate command syntax; VI nav labels
+  live in `meta.vi.json` (CLI `pages` must mirror EN: `index`, `ak`, `...`).
 - **Generated dirs are machine-owned:** any directory containing a `.generated`
   marker (currently `…/reference/cli/`) is written by the release-sync pipeline;
   do not hand-edit. Placeholder pages carry `generated: true` frontmatter.
@@ -107,15 +109,16 @@ prompt trust.
   (`.github/workflows/agent-guard.yml`): modify-only, inside
   `content/docs/beta/{getting-started,guides}` prose, never generated dirs /
   reference / `stable/` / workflows / config. A human reviews every agent PR
-  (CODEOWNERS on `content/docs/**`). The agent runs under its **own** identity
-  (`agentkit-docs-agent`), which is deliberately **not** on the `main` ruleset
-  bypass list — so every agent change must pass the PR guards, even if the run is
-  compromised. Disabling the agent is one file: delete/disable `docs-agent.yml`;
-  the sync pipeline is unaffected.
+  (CODEOWNERS on `content/docs/**`). The agent targets the `dev` integration
+  branch and runs under its **own** identity (`agentkit-docs-agent`), which is
+  deliberately **not** on the `dev` ruleset bypass list — so every agent change
+  must pass the PR guards, even if the run is compromised. Disabling the agent is
+  one file: delete/disable `docs-agent.yml`; the sync pipeline is unaffected.
   - **Reviewer note:** release notes are semi-trusted input (generated from PR
     titles). The agent has no write power beyond a guarded PR, but read agent PR
     diffs on their merits.
 - **docs-bundle contract + secrets + runbook:** see the README pipeline section.
+- **Workflow diagrams:** [`docs/README.md`](docs/README.md) (CLI reference layers, release sync, deploy, CI).
 
 ## Repo conventions
 

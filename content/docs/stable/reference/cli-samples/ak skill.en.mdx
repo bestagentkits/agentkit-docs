@@ -1,0 +1,74 @@
+---
+title: ak skill
+description: Manage the local Python and Node environments used by one skill without confusing them with installed skill content.
+---
+
+Use `ak skill` for the runtime environment behind one local skill. It does not
+install or remove the skill's `SKILL.md` content; use `ak skills` for that
+catalog and content lifecycle.
+
+## Usage
+
+```bash
+ak skill <command>
+```
+
+Running the group without a child prints help. The group itself does not write
+files.
+
+## Choose a command
+
+| Goal | Command | Effect |
+| --- | --- | --- |
+| Create a missing environment | `ak skill install <kit>/<skill>` | Populates or reuses a content-addressed cache and writes the skill record. |
+| Check local health | `ak skill verify <kit>/<skill>` | Reads the live `runtime:` block, record, and expected cache markers. |
+| Repair a corrupt record or environment | `ak skill repair <kit>/<skill>` | Acts only when verification reports `corrupt`. |
+| Apply an edited `runtime:` block | `ak skill upgrade <kit>/<skill>` | Selects a new cache hash and refreshes the record when the declaration changed. |
+| Remove the runtime record | `ak skill remove <kit>/<skill>` | Deletes the per-skill record but preserves shared cache data. |
+
+The canonical reference is `<kit>/<skill>`. Every child accepts
+`--kits-dir <dir>`; source resolution is explicit flag, then
+`AGENTKIT_KITS_DIR`, then `./kits`.
+
+## Understand records and caches
+
+Runtime state defaults to these locations:
+
+```text
+~/.agentkit/skills/<kit>/<skill>/.manifest.json
+~/.agentkit/cache/<runtime-hash>/
+```
+
+`AGENTKIT_HOME` changes the `~/.agentkit` base. Skills with identical normalized
+Python and Node declarations share one cache entry. Removing or upgrading one
+record therefore does not garbage-collect an old cache.
+
+The runtime manager is enabled by default. Setting
+`AGENTKIT_SKILL_RUNTIME=0` is an opt-out kill switch. In that state, mutating
+primitives become no-ops and verification reports `unknown`; command completion
+text does not prove files changed.
+
+## Security and network boundary
+
+Install and upgrade can execute `uv` or `pnpm` and contact the fixed public PyPI
+or npm registry. Package-source override environment variables are removed, and
+package declarations must use exact versions. Node installation also uses
+`--ignore-scripts`; Python packages can still involve normal Python build and
+installation behavior. Review a kit's `runtime:` block before provisioning it.
+
+These commands never prompt and have no preview, backup, rollback, `--force`, or
+remote AgentKit registry entitlement step.
+
+## Output boundary
+
+`verify --json` writes a small raw object with `kit`, `skill`, and `status` to
+stdout. The other successful children currently write `[OK]` completion lines
+to stderr and do not emit a JSON success envelope, even with `--json`.
+`--quiet` does not suppress these direct status lines. JSON execution errors do
+use a structured error envelope on stderr.
+
+## Related commands
+
+- [Browse and manage skill content](../cli/ak_skills)
+- [Run a skill](../cli/ak_run)
+- [CLI conventions](../cli-conventions)

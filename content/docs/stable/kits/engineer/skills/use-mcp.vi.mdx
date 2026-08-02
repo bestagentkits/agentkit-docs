@@ -1,0 +1,143 @@
+---
+title: Khám phá và chạy MCP tool với ak:use-mcp
+description: Chọn MCP native của runtime hoặc client đi kèm, kiểm tra schema và kiểm soát external effect bằng ak:use-mcp.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:use-mcp` để khám phá tool, prompt hoặc resource của MCP server hiện có
+và gọi tool nhỏ nhất hoàn thành task có giới hạn. Skill ưu tiên bề mặt MCP đã
+đăng ký trong runtime hiện tại và cung cấp client local xác định cho stdio server
+được khai báo trong cấu hình project.
+
+## Chọn ak:use-mcp cho server hiện có
+
+### Dùng ak:use-mcp khi
+
+- MCP tool đã đăng ký có thể đọc hoặc thay đổi dịch vụ bên ngoài cho task.
+- Bạn cần kiểm tra tên tool và input schema trước khi gọi.
+- Project đã cấu hình stdio server nhưng runtime hiện tại không thấy server đó.
+- Bạn cần catalog local được lưu lại cho scripted workflow có thể tái tạo.
+
+### Chọn workflow khác khi
+
+- Bạn cần thiết kế và triển khai server mới. Dùng [`ak:mcp-builder`](./mcp-builder).
+- Bạn cần cookie thật hoặc profile Chrome chính xác của user. Hãy thiết lập
+  browser context đó trước khi dùng DevTools server không nhận biết profile.
+- Task không cần MCP. Dùng native tool hoặc project command hẹp hơn.
+- Bạn phải sao chép credential vào global config của runtime khác. Hãy dừng và
+  cấu hình rõ runtime dự kiến.
+
+## Chuẩn bị access và chọn path
+
+Với MCP native, xác nhận server cùng tool hiển thị trong session hiện tại. Với
+direct client, bạn cần Node.js, npm, script đi kèm và `.claude/.mcp.json` hợp lệ
+chứa `command`, `args` cùng `env` tùy chọn cho mỗi stdio server. Giữ credential
+trong environment hoặc secret store đã được phê duyệt.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:use-mcp ...` | Ưu tiên MCP tool đã đăng ký trong Claude session; direct script bao phủ cấu hình stdio của project chưa đăng ký tại đó. |
+| Cursor | `/ak:use-mcp ...` | Slash invocation có thể tải Skill, nhưng bằng chứng phát hành không thiết lập native MCP path cho Cursor; chỉ dùng capability hiển thị trong session hoặc direct client. |
+| Codex | `$ak:use-mcp ...` | Ưu tiên MCP tool đã đăng ký hoặc tìm thấy qua deferred discovery trong Codex session; tên tool có thể khác Claude. |
+
+## Chạy Skill
+
+Skill nhận một task và không định nghĩa cờ mode. Nêu server khi đã biết, nói rõ
+discovery phải read-only hay không và xác định external write bạn sẵn sàng duyệt.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:use-mcp "List the issue tools available from the registered project server; do not call a mutating tool"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:use-mcp "List the issue tools available from the registered project server; do not call a mutating tool"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:use-mcp "List the issue tools available from the registered project server; do not call a mutating tool"
+```
+
+  </Tab>
+</Tabs>
+
+### Chỉ dùng direct client đi kèm khi cần
+
+Từ thư mục `scripts/` của Skill:
+
+```bash
+npm install
+npx tsx cli.ts list-tools
+npx tsx cli.ts list-prompts
+npx tsx cli.ts list-resources
+npx tsx cli.ts call-tool <server> <tool> '<json-args>'
+```
+
+`list-tools` ghi schema đã tìm thấy vào `assets/tools.json`. Client kết nối các
+server đã cấu hình theo thứ tự, tiếp tục nếu một server lỗi, dùng global CLI
+timeout mặc định 120 giây qua `MCP_TIMEOUT`, cho phép tối đa 300 giây cho từng
+list hoặc call operation và đóng client cùng transport khi hoàn tất.
+
+## Hiểu workflow có thể quan sát
+
+1. **Kiểm kê capability native.** Tìm trong runtime hiện tại trước khi kết luận
+   server không khả dụng.
+2. **Chọn path hẹp nhất.** Dùng native tool khi hiển thị; chỉ dùng direct client
+   cho stdio server đã cấu hình hoặc nhu cầu CLI xác định.
+3. **Kiểm tra schema.** Validate argument bắt buộc cùng constraint từ live tool
+   definition hoặc catalog đã lưu.
+4. **Phân loại effect.** Tách discovery, read-only access, external write,
+   destructive action và call có thể phát sinh chi phí provider.
+5. **Yêu cầu approval khi cần.** Xác nhận mutation, destination, data và chi phí
+   dự kiến chính xác trước execution.
+6. **Gọi và báo cáo.** Trả về tên server/tool, argument có giới hạn, kết quả hoặc
+   lỗi cùng bằng chứng external state đã đổi nếu có.
+
+## Giữ external effect rõ ràng
+
+<Callout type="warn" title="MCP discovery không phải blanket authorization">
+  Tool description hoặc annotation là hướng dẫn, không phải bảo đảm security.
+  Kiểm tra argument và nhận approval rõ trước write, delete, message, purchase,
+  upload, dùng credential hoặc call có hậu quả khác.
+</Callout>
+
+Ngay cả list command cũng khởi động subprocess server đã cấu hình, có thể mở
+network connection hoặc provider client. `npm install` tải dependency và tạo
+disk state local. Tool call có thể truyền input tới dịch vụ ngoài, đổi remote
+data, tiêu quota hoặc phát sinh phí tùy server cùng provider. Không ghi secret
+vào command output hoặc catalog.
+
+## Xác minh output và bằng chứng
+
+Một lần chạy hoàn tất nêu path đã chọn, server cùng tool tìm thấy, argument
+schema đã validate, effect classification, approval record khi cần và kết quả
+trả về. Với direct discovery, xác nhận `assets/tools.json` là JSON hợp lệ có tên
+server cùng input schema đầy đủ. Smoke test đi kèm kiểm tra dependency, TypeScript
+compilation, CLI help, round trip với config rỗng và khôi phục catalog cũ; test
+không gọi live server.
+
+## Xử lý sự cố và giới hạn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Thiếu native tool | Tìm deferred capability, xác nhận runtime registration rồi khởi động lại session nếu cấu hình đã đổi. |
+| Direct script không tìm thấy cấu hình | Chạy từ project có `.claude/.mcp.json` hợp lệ; client đi kèm dùng path mặc định đó. |
+| Một server lỗi khi discovery | Đọc connection error; các server đã cấu hình khác vẫn có thể được liệt kê. |
+| Không chắc tool hoặc argument | Tạo lại và kiểm tra `assets/tools.json`; không đoán mutating call. |
+| CLI đạt timeout | Thu hẹp server scope hoặc chẩn đoán server chậm; không tắt lifecycle cleanup. |
+
+Direct client chỉ hỗ trợ cấu hình stdio dù protocol MCP và client khác có thể hỗ
+trợ remote transport. Reference cấu hình mô tả env loading rộng hơn phần client
+đi kèm thực thi, vì vậy hãy dựa vào process environment thực tế và mapping
+`env` của server. Catalog đã lưu là snapshot, không chứng minh tool vẫn khả
+dụng. Hai release snapshot dùng cho trang này chứa cùng Skill và client.

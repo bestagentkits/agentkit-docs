@@ -1,0 +1,97 @@
+---
+title: ak diagnostics export
+description: Export a redacted, versioned doctor report and understand its privacy and network boundaries.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak diagnostics export` to create a support artifact from the current
+AgentKit health report. The command runs doctor without fixes, redacts known
+sensitive patterns, and emits one JSON document to stdout.
+
+## Usage
+
+```bash
+ak diagnostics export
+```
+
+The command accepts no positional arguments. Its output is JSON even when you
+omit `--json`.
+
+## Command flag
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--offline` | `false` | Skip the `binary_version` and `network` doctor checks before export. |
+
+Shared flags are described in [CLI conventions](../cli-conventions). Export
+forces noninteractive JSON output and never applies doctor fixes, so `--yes`
+does not change it.
+
+## Network and disk effects
+
+Without `--offline`, the embedded doctor suite includes network-dependent
+checks. The command needs no AgentKit registry session or kit entitlement.
+It reads local diagnostic state but does not change AgentKit or runtime files.
+
+The CLI writes only to stdout. In this example, the shell—not AgentKit—creates
+the destination file with the shell's normal redirection and permission rules:
+
+```bash
+ak diagnostics export --offline > agentkit-diagnostics.json
+```
+
+## Redaction boundary
+
+The exporter replaces recognized bearer tokens, AgentKit and common provider
+keys, JWTs, token-bearing URLs, private-key blocks, secret assignments, email
+addresses, and common local home or AgentKit path prefixes. It records counts by
+detector in the result.
+
+<Callout type="warning">
+  Pattern-based redaction cannot guarantee that every secret, identifier, file
+  name, command argument, or business value is removed. Open the JSON and review
+  the embedded doctor evidence before attaching it to feedback or an issue.
+</Callout>
+
+## JSON schema and streams
+
+Successful stdout is one versioned envelope, not NDJSON:
+
+```text
+schema_version: 1
+kind: diagnostics.export
+data.schema_version: 1
+data.generated_at: RFC 3339 UTC timestamp
+data.command: ak doctor --json, optionally followed by --offline
+data.redactions: detector-to-count object
+data.doctor: complete redacted doctor.report envelope
+```
+
+The nested doctor report keeps its own `schema_version`, `kind=doctor.report`,
+and `data` fields. A completed but unhealthy doctor run normally remains a
+successful export; inspect `data.doctor.data.healthy` rather than relying on the
+export exit alone.
+
+Execution failures happen before the export renderer. An explicit `--json`
+failure is not guaranteed to emit a JSON error envelope, so always check the
+process exit status. Flag-parse errors can remain plain text.
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | Doctor completed and the redacted JSON artifact was encoded. | Inspect redaction counts and the nested health result before sharing. |
+| `1` | Doctor execution failed, redaction produced invalid JSON, output encoding failed, or a positional argument was supplied. | Run `ak doctor --json` locally and resolve the execution or invocation error; do not share raw output automatically. |
+| `2` | A flag could not be parsed. | Correct the invocation. |
+
+There is no apply, fix, force, cache write, backup, or rollback mode. If shell
+redirection created an unwanted artifact, delete that specific file after you
+no longer need it.
+
+## Related commands
+
+- [Diagnostics command group](<./ak diagnostics>)
+- [Run and interpret doctor](./doctor)
+- [Send or export product feedback](<./ak feedback>)
+- [Complete `ak diagnostics export` command facts](../cli/ak_diagnostics_export)

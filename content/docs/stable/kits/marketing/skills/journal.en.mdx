@@ -1,0 +1,191 @@
+---
+title: Record chronological work history with ak:journal
+description: Turn meaningful session events into a local technical journal without treating the entry as current authority or publishing it.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:journal` after meaningful implementation, review, incident, or analysis
+work when the project needs a chronological record of what happened and why.
+The Skill drafts a concise entry, persists it through `ak journal create`, and
+keeps the local file as the source of truth.
+
+## Choose ak:journal for work history
+
+### Use ak:journal when
+
+- A session uncovered a root cause, important change, impact, or lesson worth
+  preserving.
+- Future contributors need a chronological record of decisions and next steps.
+- You want concrete errors, paths, and outcomes captured after the work.
+- A significant failure benefits from honest reflection or failure archaeology.
+
+### Choose another workflow when
+
+- You need a current product decision, policy, specification, or marketing
+  authority. Update its ADR or documentation owner.
+- You need a fresh-session transfer that preserves conversation state. Use
+  `ak:handoff`.
+- You need a repository-derived report across branches, worktrees, plans, and
+  roadmaps. Use `ak:watzup`.
+- You want to publish an entry. Publication is outside this Skill and requires
+  a separate reviewed workflow.
+
+## Prepare a safe entry
+
+Before starting:
+
+- Complete [Onboarding](../../../getting-started/onboarding), install Marketing
+  Kit, and ensure the `ak` CLI is available.
+- Run from the intended project, or know its registered project name for
+  `--project <registry-name>`.
+- Gather only the high-signal events: root cause, changes, impacts, decisions,
+  evidence, and next steps.
+- Remove credentials, customer data, personal data, private URLs, and sensitive
+  commercial details that do not belong in repository history.
+- Identify the current ADR or documentation owner for any lasting decision that
+  must also be updated.
+
+Without `--project`, the CLI uses the registered project matching the current
+directory when possible, then falls back to the current directory. Confirm the
+resolved project before accepting the file path.
+
+## Invoke the Skill
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:journal [topic or reflection]` | The Skill drafts the entry and calls the first-class `ak journal` CLI to persist it. |
+| Cursor | `/ak:journal [topic or reflection]` | Slash invocation is user-verified for installed AgentKit Skills. CLI and filesystem access still depend on the environment. |
+| Codex | `$ak:journal [topic or reflection]` | Codex discovers the Skill natively; persistence still requires the `ak` binary and write access to the resolved project. |
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:journal "Record why the launch-brief review stopped, the evidence checked, the wording removed, and the pending legal dependency. Exclude customer names and do not publish or commit"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:journal "Record why the launch-brief review stopped, the evidence checked, the wording removed, and the pending legal dependency. Exclude customer names and do not publish or commit"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:journal "Record why the launch-brief review stopped, the evidence checked, the wording removed, and the pending legal dependency. Exclude customer names and do not publish or commit"
+```
+
+  </Tab>
+</Tabs>
+
+Read [Runtime adapters](../../../concepts/runtime-adapters) for discovery and
+tooling differences. The persisted journal format is owned by the CLI rather
+than by a runtime-specific editor.
+
+## Understand the stages
+
+1. **Gather important events.** The Skill extracts the root cause, key changes,
+   impacts, decisions, evidence, and next steps from the current session.
+2. **Draft a title, summary, and body.** It favors concrete errors, paths, and
+   outcomes over a vague retrospective.
+3. **Persist through the CLI.** It passes the Markdown body on standard input so
+   the workflow does not depend on `$EDITOR`.
+4. **Validate when needed.** It can run `ak journal validate` against the new
+   slug or filename stem.
+5. **Keep publishing separate.** It reports `AgentWiki publish skipped` and
+   retains the local file as the source of truth.
+6. **Offer read-only browsing.** Existing entries can be inspected with
+   `ak journal list` and `ak journal show <slug>`.
+
+The canonical persistence shape is:
+
+```bash
+ak journal create "<title>" --summary "<one-line summary>" --stdin <<'EOF'
+## What happened
+...
+
+## Decision
+...
+
+## Next steps
+...
+EOF
+```
+
+Use `--date YYYY-MM-DD` to override the default UTC date, or
+`--project <registry-name>` to target a registered project. Created files use
+`YYYY-MM-DD-<slug>.md`; collisions receive `-2`, `-3`, and later suffixes rather
+than overwriting an existing entry.
+
+## Keep history, authority, and publication separate
+
+<Callout type="warn" title="A journal is historical, not current authority">
+  The CLI appends a notice that the entry is a historical work record. Move any
+  lasting decision into the project’s current docs, specification, or ADR owner.
+  Do not let a later reader infer current policy from an old journal alone.
+</Callout>
+
+- `ak journal create` writes one new file under
+  `<project>/plans/journals/`. The CLI creates the directory when necessary and
+  writes atomically through a temporary file.
+- `ak journal list`, `ak journal show`, and `ak journal validate` are read-only.
+- The entry may contain repository paths, errors, and decisions. Redact content
+  that should not be retained, committed, indexed, or shared.
+- AgentWiki publication is deferred. The Skill must report it as skipped rather
+  than claiming a remote copy exists.
+- The file write does not authorize Git staging, commit, push, publication,
+  deployment, outreach, account mutation, provider access, or spend.
+
+## Verify the output
+
+A complete run should provide:
+
+- One new Markdown file under `<project>/plans/journals/` with a safe,
+  collision-free filename.
+- Frontmatter containing the title and date, plus the summary when supplied.
+- A body that records what happened, the decision or lesson, and next steps.
+- The standard notice that the entry is historical work, not durable authority.
+- The created path and the result of `ak journal validate` when validation was
+  requested.
+- An explicit `AgentWiki publish skipped` statement.
+
+You can inspect the entry without changing it:
+
+```bash
+ak journal validate <slug-or-filename-stem>
+ak journal list
+ak journal show <slug>
+```
+
+Review the file and repository diff before deciding whether the history should
+be committed or shared.
+
+## Troubleshoot safely
+
+| Symptom | Safe next step |
+| --- | --- |
+| The runtime does not recognize `ak:journal` | Confirm Marketing target and scope, restart the runtime, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+| The CLI resolves the wrong project | Stop and rerun with the exact registered `--project <registry-name>` after confirming it. |
+| `ak journal create` rejects the date | Use exact `YYYY-MM-DD`; the default is today in UTC. |
+| A filename already exists | Let the CLI allocate its collision suffix. Do not overwrite the older entry. |
+| Validation fails | Keep the file local, fix the missing title or invalid date, then rerun validation. |
+| The entry contains durable policy | Update the current docs or ADR owner and link the journal as historical context. |
+| A publish step is proposed | Stop. Publication is deferred in this Skill and requires a separate authorized workflow. |
+
+Continue with the [Marketing Kit overview](../../marketing) or
+[Projects, artifacts, and checkpoints](../../../concepts/projects-artifacts-checkpoints)
+for broader persistence and ownership guidance.
+
+## Know the current limits
+
+- The journal reflects the evidence visible in the current session; it does not
+  independently reconstruct complete repository or provider history.
+- `validate` checks the entry’s readable Markdown shape, title, date, and file
+  extension. It does not prove factual accuracy or current authority.
+- The optional `journal-writer` Agent can deepen failure reflection when the
+  runtime supports it, but the entry still persists through `ak journal create`.

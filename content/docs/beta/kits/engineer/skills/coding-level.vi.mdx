@@ -1,0 +1,154 @@
+---
+title: Điều chỉnh độ sâu giải thích với ak:coding-level
+description: Lưu preference về kinh nghiệm coding từ level 0 đến 5 và hiểu nơi automatic session injection được hỗ trợ.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:coding-level` để lưu lượng giải thích, teaching structure cùng strategic
+context bạn muốn trong response tương lai. Level đã chọn được lưu dưới key
+`codingLevel` trong `.claude/.ck.json`; nó thay đổi communication style, không
+thay đổi code standard hoặc safety rule của project.
+
+## Chọn ak:coding-level cho preference bền vững
+
+### Dùng ak:coding-level khi
+
+- Giải thích thường xuyên quá cơ bản hoặc quá ngắn với bạn.
+- Bạn muốn beginner teaching, professional design context hoặc lead-level risk
+  framing tiếp tục trong session sau.
+- Bạn muốn project-scoped preference thay vì lặp response-format instruction
+  trong mọi prompt.
+
+### Chọn workflow khác khi
+
+- Bạn cần chỉnh tone cho một response; hãy nêu trực tiếp trong request.
+- Bạn cần đổi linting, language, architecture hoặc review requirement. Coding
+  level không override repository instruction.
+- Bạn cần guarantee độc lập runtime. Automatic injection được chứng minh bằng
+  Engineer session-start Hook, còn hỗ trợ đầy đủ Hook là Claude-specific.
+
+## Chuẩn bị preference
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận
+  Engineer Kit đã được cài trong project scope dự kiến.
+- Chọn một integer rõ ràng từ `0` tới `5`.
+- Giữ nguyên key không liên quan trong `.claude/.ck.json`.
+- Mở supported session mới sau khi đổi value nếu muốn xác minh automatic
+  injection.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:coding-level 0-5` | Phân phối native là mặc định. Engineer session-start Hook đọc value đã lưu và inject guidance tương ứng. |
+| Cursor | `/ak:coding-level 0-5` | Cách gọi bằng slash đã được người dùng xác minh, nhưng source không thiết lập automatic session-start injection hay manual output-style parity. |
+| Codex | `$ak:coding-level 0-5` | Native Skill discovery được hỗ trợ. Codex Hook projection chỉ một phần nên persisted automatic injection chưa được bằng chứng này thiết lập. |
+
+Xem [Runtime adapter](../../../concepts/runtime-adapters) trước khi dựa vào hành
+vi dựa trên Hook bên ngoài Claude Code.
+
+## Đặt level
+
+Skill nhận một level. Metadata của Skill tắt automatic model invocation, vì vậy
+hãy chọn Skill rõ ràng thay vì chờ assistant tự thay preference.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:coding-level 2
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:coding-level 2
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:coding-level 2
+```
+
+  </Tab>
+</Tabs>
+
+| Level | Profile | Trọng tâm dự kiến |
+| --- | --- | --- |
+| `0` | ELI5 | Analogy, term được định nghĩa, bước rất nhỏ, code được giải thích đầy đủ |
+| `1` | Junior | Why trước how, lỗi thường gặp, professional habit có hướng dẫn |
+| `2` | Mid-level | Pattern, system thinking, testability, trade-off rõ |
+| `3` | Senior | Architecture ngắn gọn, operations, security, recovery, team impact |
+| `4` | Tech lead | Risk, business impact, strategy, dependency, stakeholder decision |
+| `5` | God mode | Hiệu quả tối đa với giải thích tối thiểu; đây là default được ghi nhận |
+
+Không có hành vi được mô tả cho argument bị bỏ trống hoặc ngoài range. Hãy cung
+cấp level hợp lệ hoặc yêu cầu runtime làm rõ thay vì đoán.
+
+## Hiểu điều gì xảy ra trong một lần chạy
+
+1. **Bạn chọn level.** Skill nhận value rõ từ `0` đến `5`.
+2. **Preference được lưu.** Skill cập nhật `codingLevel` trong
+   `.claude/.ck.json` và giữ phần còn lại của project configuration.
+3. **Supported session khởi động.** Engineer session-start Hook tải config và
+   mặc định level `5` khi thiếu `codingLevel`.
+4. **Hook map level sang guidance.** Hook expose selected style name và inject
+   communication rule tương ứng vào session context.
+5. **Response theo profile.** Explanation depth, hình dạng code example cùng
+   response section đổi; repository constraint và approval boundary không đổi.
+
+Claude Code còn expose sáu manual output style được nêu qua bề mặt
+`/output-style`. Source không thiết lập command này trên Cursor hoặc Codex, vì
+vậy coi manual style selection ở đó là unsupported trừ khi live runtime hiển thị.
+
+## Giữ thay đổi đúng scope
+
+<Callout type="warn" title="Communication style không phải authority">
+  Expertise level cao hơn không cấp quyền edit, chạy command, truy cập secret,
+  gọi external service, Git action, publication hoặc deployment. Level thấp hơn
+  không làm yếu project rule hoặc verification requirement.
+</Callout>
+
+- Review diff `.claude/.ck.json` vì preference tồn tại qua các session trong
+  project đó.
+- Đừng thay toàn bộ config file chỉ để đổi một key.
+- Skill không nêu provider, network call, subprocess, paid service hay large
+  disk effect nào ngoài config edit nhỏ.
+- Manual output-style selection có thể ảnh hưởng current response shape mà
+  không chứng minh persisted preference đã được tải.
+
+## Xác minh kết quả
+
+Một lần chạy hoàn tất nên cung cấp:
+
+- Value `codingLevel` hợp lệ trong `.claude/.ck.json`.
+- Không có config change không liên quan.
+- Trên supported fresh session, guidance khớp rõ selected profile.
+- Ví dụ ở level `1`, giải thích dẫn bằng why, nêu common pitfall và có key
+  takeaways cho work quan trọng.
+
+Skill không định nghĩa standalone test. Hãy xác minh persisted JSON, restart
+supported runtime và so sánh response quan sát được với selected level.
+
+## Xử lý sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Level bị bỏ qua | Xác nhận `.claude/.ck.json` nằm trong active project và mở session mới. |
+| Config thành JSON không hợp lệ | Khôi phục JSON hợp lệ trong khi giữ key không liên quan, rồi đặt một integer value. |
+| Response vẫn giống level `5` | Kiểm tra runtime có project Engineer session-start Hook hay không; absence mặc định efficient behavior. |
+| Cursor hoặc Codex không tự áp dụng preference | Coi automatic injection là unavailable và nêu depth mong muốn trong request. |
+| Assistant đổi project standard | Khẳng định lại repository instruction; coding level chỉ điều khiển presentation. |
+| Runtime không nhận diện Skill | Xác nhận target cùng scope, mở runtime session mới, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+## Biết các giới hạn hiện tại
+
+- Automatic injection phụ thuộc Engineer session-start Hook; exact source cung
+  cấp bằng chứng đầy đủ cho Claude Code, không cho hành vi Cursor hoặc Codex
+  tương đương.
+- Sáu profile là default rộng, không phải phép đo ability.
+- Package stable và beta hiện chứa cùng `ak:coding-level`, output-style cùng
+  relevant session-injection content.

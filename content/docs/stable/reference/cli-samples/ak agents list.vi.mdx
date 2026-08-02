@@ -1,0 +1,76 @@
+---
+title: ak agents list
+description: So sánh tệp agent installed với agent available trong cây Kit cục bộ đã cấu hình.
+---
+
+Dùng `ak agents list` để xem inventory agent cục bộ đã gộp trước khi cài hoặc
+gỡ một tệp. Dù mô tả ngắn nói về agent installed, kết quả còn thêm các record
+available cục bộ.
+
+## Cách dùng
+
+```bash
+ak agents list
+```
+
+Lệnh không nhận argument theo vị trí và không prompt.
+
+## Cờ của lệnh
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--kit <name>` | Trống | Chỉ giữ record từ đúng một kit directory name. |
+| `--tag <tag>` | Danh sách rỗng `[]` | Được chấp nhận dưới dạng cờ string-slice lặp lại. Trong các release này, agent lister không áp dụng bộ lọc này. |
+
+Không dựa vào `--tag` để lọc ở cả hai release. Nếu cần gate theo tag, hãy lọc
+JSON trong caller. Các cờ dùng chung nằm ở [quy ước CLI](../cli-conventions).
+
+## Quy tắc inventory
+
+Lệnh scan tệp available tại `./kits/<kit>/agents/<agent>.md` và tệp installed
+tại `~/.claude/plugins/<kit>/agents/<agent>.md`. Có thể thay root bằng
+`AGENTKIT_KITS_DIR` và `AGENTKIT_PLUGIN_DIR`.
+
+Chỉ tệp `.md` trực tiếp được xét. Tên ẩn, tên bắt đầu bằng `_`, directory,
+segment ref không hợp lệ và extension khác bị bỏ qua. Tệp agent không đọc được
+vẫn có thể xuất hiện dưới dạng record tối thiểu lấy từ filename.
+
+Record là duy nhất theo `<kit>/<agent>`. Nếu có cả hai bản, bản installed thắng
+và metadata của nó được trả về. Kết quả sắp theo ref chuẩn. Đây là catalog trên
+filesystem cục bộ: lệnh không liên hệ registry, kiểm tra entitlement hay đọc
+verified package cache.
+
+## Đầu ra
+
+Đầu ra cho người dùng là bảng trên stdout gồm `NAME`, `DESCRIPTION`, `SOURCE`
+và `STATUS`. Status là `installed` hoặc `available`; `SOURCE` là tên Kit.
+
+JSON thành công dùng:
+
+```text
+schema_version: 1
+kind: assets.list
+data.agents[]:
+  kit, name, description, installed
+  optional tools, model, memory, tags
+```
+
+Inventory rỗng là JSON array rỗng thành công. Chế độ cho người dùng in empty
+state. Không có NDJSON hay status stream trên stderr.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Scan hoàn tất, kể cả inventory rỗng. |
+| `1` | Không đọc được root directory hoặc có positional argument. |
+| `2` | Không phân tích được cờ. |
+
+Lỗi được ghi vào stderr. Lỗi phân tích cờ có thể vẫn là plain text dù có
+`--json`.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak agents list`](../cli/ak_agents_list)
+- [Tìm agent](../cli/ak_agents_search)
+- [Cài một agent](../cli/ak_agents_install)

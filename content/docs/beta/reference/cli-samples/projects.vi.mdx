@@ -1,0 +1,72 @@
+---
+title: ak projects
+description: Kiểm tra và duy trì registry cục bộ theo user, ánh xạ tên project AgentKit sang thư mục canonical.
+---
+
+Dùng `ak projects` để quản lý project registry theo user. Registry mặc định là
+`~/.agentkit/projects.json`; khi được đặt, `AGENTKIT_HOME` thay thế root
+`~/.agentkit`.
+
+`ak init` và `ak new` thường tự đăng ký project. Registry chỉ là metadata để
+discovery: registration không chứng minh thư mục là project AgentKit hợp lệ
+hoặc hiện đang khoẻ mạnh.
+
+## Chọn subcommand
+
+| Mục tiêu | Lệnh | Tác động |
+| --- | --- | --- |
+| Đăng ký hoặc refresh thư mục | `ak projects add <path>` | Canonicalize thư mục và ghi một entry. |
+| Kiểm tra registry | `ak projects list` | Đọc mọi entry, sắp xếp theo thư mục canonical. |
+| Kiểm tra một entry | `ak projects show <name-or-path>` | Resolve exact path trước, sau đó exact name. |
+| Bỏ đăng ký một entry | `ak projects remove <name-or-path>` | Chỉ xoá metadata registry. |
+| Dọn entry stale hoặc toàn bộ | `ak projects prune ...` | Mặc định preview; chỉ apply với safety flag tường minh. |
+
+Chạy `ak projects` mà không có subcommand chỉ hiển thị trợ giúp, không đọc hoặc
+ghi registry.
+
+## Ownership và độ bền của registry
+
+Mỗi entry ghi display name, absolute directory canonical, `registered_at` và
+`updated_at`. Directory là canonical key; name lấy từ thành phần cuối của path
+và không được đảm bảo unique.
+
+Registry writer dùng lock file cùng cấp và chờ advisory lock tối đa 10 giây.
+Mỗi lần save dùng file tạm cùng thư mục, sync rồi rename đè lên `projects.json`.
+Registry và lock file chỉ dành cho owner; thư mục state AgentKit được tạo với
+quyền cho owner và group.
+
+Không có lệnh backup hoặc rollback registry. `add` cố ý thay registry malformed
+hoặc không đúng version bằng registry mới chỉ chứa entry vừa thêm. Hãy giữ một
+bản sao trước khi dùng `add` để recovery nếu metadata hiện tại còn quan trọng.
+
+## An toàn và quyền riêng tư
+
+Family này chỉ hoạt động cục bộ. Nó không request registry server, trao đổi
+auth, gọi provider, tải cache hay khởi chạy child process. Subcommand không có
+TTY prompt; mutation được kiểm soát bằng argument chính xác và, với `prune`,
+`--yes` cùng các gate liên quan.
+
+Đầu ra dành cho người dùng và JSON làm lộ absolute project path canonical cùng
+timestamp. Hãy kiểm tra trước khi đính kèm log hoặc chia sẻ. `remove` và `prune`
+không xoá thư mục project hay file bên trong.
+
+## Đầu ra và mã thoát
+
+Subcommand thành công ghi đầu ra dành cho người dùng hoặc JSON có version lên
+stdout. `--quiet` ẩn stdout thành công. Các JSON kind là `projects.add`,
+`projects.list`, `projects.show`, `projects.remove` và `projects.prune`. Lỗi
+command sau khi renderer đã khởi tạo dùng JSON error envelope trên stderr; lỗi
+parse cờ vẫn là plain text.
+
+Ý nghĩa mã thoát phụ thuộc command. Đặc biệt, `show` không tìm thấy là `5`,
+`remove` idempotent khi không tồn tại là `0`, và prune preview hoàn tất là `3`.
+
+## Lệnh liên quan
+
+- [Đăng ký project](./projects-add)
+- [Liệt kê project](./projects-list)
+- [Prune registry entry](./projects-prune)
+- [Xoá một entry](./projects-remove)
+- [Hiển thị một entry](./projects-show)
+- [Nhóm lệnh journal](./journal)
+- [Quy ước CLI](../cli-conventions)

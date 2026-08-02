@@ -21,11 +21,25 @@ export function changedFiles(base, { head = 'HEAD', cwd } = {}) {
  */
 export function generatedDirsAt(ref, { cwd } = {}) {
   const out = git(['ls-tree', '-r', '--name-only', ref], cwd);
-  return out
+  const markers = out
     .split('\n')
     .map((s) => s.trim())
-    .filter((p) => p.endsWith('/.generated'))
-    .map((p) => p.slice(0, -'/.generated'.length));
+    .filter((p) => p.endsWith('/.generated'));
+  const dirs = [];
+  for (const marker of markers) {
+    // A generated dir is machine-owned only once it has actually been synced —
+    // i.e. its marker carries a real tag. A null-placeholder marker (the Phase-3
+    // bootstrap slot, `tag: null`) is not yet owned, so the first real population
+    // (manual or bot) is allowed; every edit after that is guarded.
+    let tag = null;
+    try {
+      tag = JSON.parse(git(['show', `${ref}:${marker}`], cwd)).tag ?? null;
+    } catch {
+      tag = null;
+    }
+    if (tag) dirs.push(marker.slice(0, -'/.generated'.length));
+  }
+  return dirs;
 }
 
 /** Changed entries with git status letter; rename/copy resolve to the dest path. */

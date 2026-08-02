@@ -1,0 +1,83 @@
+---
+title: ak content-search rebuild
+description: Irreversibly replace one stale or corrupt content-search shard with an empty enabled shard.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak content-search rebuild` only when one project's shard is stale,
+corrupt, or incompatible. It removes that shard and creates a new empty,
+enabled AKC1 database. It does not rebuild `operational.db`.
+
+## Usage
+
+```bash
+ak content-search rebuild --project <uuid> --yes
+```
+
+The command accepts no documented positional arguments.
+
+## Required flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--project <uuid>` | Empty, required | Canonical lowercase UUIDv7 for an owner-authorized project. |
+| `--yes` | `false`, required by runtime | Authorize deletion and accept an empty replacement shard. |
+
+There is no preview or interactive prompt. TTY input, piped confirmation,
+`--json`, and `--no-interactive` do not substitute for `--yes`.
+
+## Destructive boundary
+
+<Callout type="warning">
+  Rebuild creates no backup. It removes the selected project's database,
+  WAL, SHM, journal, and lifecycle marker before creating the empty
+  replacement. Existing indexed documents and checkpoints are not restored.
+</Callout>
+
+The command closes the selected shard and never deletes runtime-owned source
+files or the core operational database. It performs no network, registry,
+provider, authentication, or entitlement request. The project owner check is
+re-evaluated before the operation.
+
+Rebuild does not ingest content into the replacement. A separate AgentKit
+indexing path must repopulate it; `ak data ingest` refreshes `operational.db`,
+not the content-search shard.
+
+## Output
+
+Human stdout is `rebuilt`. JSON stdout is a raw status object with:
+
+```text
+projectId: canonical UUID
+lifecycle: enabled
+health: ready
+documentCount: omitted when zero
+logicalBytes: omitted when zero
+disclosure: plaintext-at-rest notice
+```
+
+The output is neither a versioned envelope nor NDJSON. A runtime failure can
+produce no structured JSON error object.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | An empty enabled shard was created and its status emitted. |
+| `1` | The project flag was absent, owner/store/path validation failed, or shard removal or recreation failed. |
+| `2` | `--yes` was absent or a flag value could not be parsed. |
+
+## Verify
+
+```bash
+ak content-search status --project <uuid> --json
+```
+
+Expect `lifecycle` to be `enabled`, `health` to be `ready`, and no documents
+until indexing repopulates the shard. If you only need to pause search, use
+`disable` instead of rebuilding.
+
+## Related commands
+
+- [CLI conventions](../cli-conventions)

@@ -1,0 +1,162 @@
+---
+title: Threat model và khắc phục code với ak:security
+description: Chạy audit theo STRIDE và OWASP, tùy chọn thêm red-team discovery và áp dụng fix có giới hạn với quyền commit local rõ ràng.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:security` khi bạn cần audit dựa trên threat model thay vì quét pattern
+nhanh. Skill đọc code trong scope, lần theo attack surface bằng STRIDE và OWASP
+Top 10, audit dependency, phát hiện secret rồi xếp hạng bằng chứng theo severity.
+Mode red-team và fix tùy chọn bổ sung discovery sâu hơn cùng thay đổi code local.
+
+## Chọn ak:security cho review theo threat model
+
+### Dùng ak:security khi
+
+- Authentication, authorization, payment, dữ liệu cá nhân hoặc ranh giới hệ
+  thống nhạy cảm đã thay đổi.
+- Bạn muốn finding gắn với kịch bản tấn công và vị trí source.
+- Bạn cần góc nhìn external, supply-chain, insider và infrastructure.
+- Bạn đang chuẩn bị release hoặc compliance review tập trung.
+
+### Chọn workflow khác khi
+
+- Bạn chỉ cần quét nhanh secret và dependency. Dùng `ak:security-scan`.
+- Thay đổi chỉ có tính thẩm mỹ và không ảnh hưởng dữ liệu hay hành vi người dùng.
+- Bạn cần penetration test thực trên service đang chạy; Skill này audit dựa trên
+  source và không tuyên bố thực thi exploit.
+- Bạn đã có defect được xác nhận và chỉ cần implementation. Dùng `ak:fix` với
+  bằng chứng cùng ranh giới acceptance.
+
+## Chuẩn bị audit surface có giới hạn
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận Engineer
+  Kit đã được cài cho runtime cùng scope hiện tại.
+- Cung cấp file glob, thư mục hoặc đúng keyword `full`.
+- Đảm bảo source, manifest, lockfile, cấu hình CI, tệp deployment và instruction
+  repository liên quan đều có thể đọc.
+- Cài audit tool của stack nếu bạn cần bằng chứng dependency: `npm audit`,
+  `pip-audit`, `govulncheck` hoặc `bundle audit` cho các stack đã được mô tả.
+- Quyết định trước liệu advisory lookup qua network và fix commit local có được
+  phép hay không.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:security ...` | Thực thi native có thể dùng công cụ tệp, shell, test và chỉnh sửa hiện có. |
+| Cursor | `/ak:security ...` | Cách gọi bằng slash đã được người dùng xác minh; shell, approval và tool khả dụng phụ thuộc session Cursor. |
+| Codex | `$ak:security ...` | Hỗ trợ discovery native; không mặc nhiên có audit binary, approval và write tool tương đương. |
+
+## Chọn riêng độ sâu và quyền thay đổi
+
+| Input hoặc tùy chọn | Kết quả | Tác động và giới hạn |
+| --- | --- | --- |
+| `<scope>` | Audit một lượt theo STRIDE, OWASP, dependency và secret | Đọc tệp trong scope; dependency tool có thể dùng network và cache |
+| `full` | Mở rộng audit ra toàn project | Tăng chi phí disk, context, process và dependency audit |
+| `--red-team` | Thêm bốn phase attacker persona trước sweep cuối | Ghi nối tiếp bằng chứng discovery vào `security-audit-results.tsv` |
+| `--iterations N` | Giới hạn iteration red-team discovery hoặc fix cho mode đã chọn | Người dùng phải chọn `N`; source không định nghĩa numeric cap mặc định |
+| `--fix` | Áp dụng fix tập trung, chạy guard và commit iteration thành công | Thay đổi source cùng Git history; dừng khi guard thất bại |
+| `--red-team --fix` | Discovery rộng, sau đó sửa finding Critical và High đã xác nhận | Vẫn cần quyền có scope và command verification dùng được |
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:security src/auth/ --red-team --iterations 12
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:security src/auth/ --red-team --iterations 12
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:security src/auth/ --red-team --iterations 12
+```
+
+  </Tab>
+</Tabs>
+
+Bắt đầu không có `--fix` khi bạn cần hiệu chỉnh finding hoặc xin duyệt cho cách
+khắc phục rủi ro. Input thực tế cũng nên nêu command test đáng tin cậy, tệp không
+được thay đổi và commit local có được phép hay không.
+
+## Hiểu các giai đoạn có thể quan sát
+
+1. **Skill phân giải scope.** Skill mở rộng glob, thư mục hoặc `full` và đọc mọi
+   tệp đã chọn trước khi phân tích.
+2. **Skill lập bản đồ threat.** STRIDE bao phủ spoofing, tampering, repudiation,
+   information disclosure, denial of service và elevation of privilege.
+3. **Skill kiểm tra category OWASP.** Access control, cryptography, injection,
+   design, configuration, component, authentication, integrity, logging và SSRF
+   đều có lượt kiểm tra rõ ràng.
+4. **Skill audit dependency và secret.** Stack đã phát hiện chọn package auditor,
+   còn source được kiểm tra theo credential pattern.
+5. **Red-team mode lặp qua persona.** Các phase external adversary,
+   supply-chain, insider và infrastructure chọn vector, lần theo flow, xác minh
+   bằng chứng và nối finding có liên quan.
+6. **Skill hợp nhất bằng chứng.** Finding được deduplicate, gán severity Critical,
+   High, Medium, Low hoặc Info và ghi vào report.
+7. **Fix mode khắc phục theo iteration.** Mỗi thay đổi tập trung chạy test hoặc
+   lint guard và chỉ tạo commit `security(fix-N): ...` sau khi guard pass.
+
+## Bảo vệ credential và trạng thái repository
+
+<Callout type="warn" title="Audit có thể làm lộ bằng chứng nhạy cảm">
+  Giữ scope tránh xa secret store không liên quan. Finding phải che token,
+  password, connection string và private-key value trước khi ghi log hoặc trả
+  về. Chỉ báo tên biến hoặc giá trị đã che, không bao giờ báo credential.
+</Callout>
+
+- Dependency audit command có thể liên hệ advisory registry và cập nhật cache
+  local. Khả dụng, data transfer, rate limit và provider cost là thuộc tính của
+  tool cùng environment đã chọn.
+- Kiểm tra tĩnh không cấp quyền gửi request tới production, dùng credential,
+  thực thi exploit, exfiltrate dữ liệu hay destructive testing.
+- `--fix` cấp quyền edit local và một commit cho mỗi fix iteration thành công.
+  Nó không cấp quyền push, tạo pull request, merge, release hay deploy.
+- Guard thất bại sẽ dừng fix loop và vẫn được hiển thị; Skill không bỏ hoặc làm
+  yếu verification để tiếp tục.
+- Review thay đổi sinh ra trước khi chấp nhận hardening rộng. Một số finding cần
+  quyết định product, compliance hoặc compatibility mà automation không thể tự
+  đưa ra.
+
+## Xác minh report và fix
+
+Audit hoàn chỉnh nên cung cấp:
+
+- Số tệp đã quét và số finding theo severity.
+- Category, vị trí source, mô tả, attack scenario, impact, confidence và đề xuất
+  fix có giới hạn cho từng finding.
+- Red-team persona cùng bằng chứng iteration khi mode đó chạy.
+- Dependency-audit command và kết quả, hoặc lý do không khả dụng rõ ràng.
+- Bằng chứng secret đã che và không chứa credential raw.
+- Với fix mode, tệp thay đổi, guard command cùng kết quả, commit đã tạo,
+  iteration bị dừng và finding chưa xử lý.
+
+Bằng chứng package xác nhận coverage cài đặt cho Skill; nó không phải test
+end-to-end của toàn bộ audit, advisory service live hay chất lượng fix. Stable
+và beta chứa cùng source cùng reference của `ak:security`.
+
+## Khắc phục và hiểu giới hạn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Scope match quá nhiều | Thay `full` hoặc glob rộng bằng trust boundary nhỏ nhất vẫn chứa flow liên quan. |
+| Thiếu dependency auditor | Cài tool đã mô tả một cách chủ động hoặc đánh dấu bằng chứng dependency không khả dụng; đừng claim dependency tree sạch. |
+| Dependency audit không tới được registry | Giữ command cùng lỗi network, rồi chạy lại trong environment kết nối đã được duyệt. |
+| Match giống secret là fixture | Xác nhận đó là placeholder không hoạt động, tiếp tục che giá trị và ghi lý do không exploitable. |
+| Red-team iteration dừng trước khi đủ mọi persona | Báo coverage persona, STRIDE và OWASP một phần; đừng trình bày như full audit. |
+| Fix guard thất bại | Dừng tại commit boundary đó, kiểm tra regression và bàn giao bằng chứng cho `ak:fix` hoặc reviewer. |
+| Runtime không nhận ra Skill | Xác nhận target và scope, khởi động lại runtime session, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+So sánh [`ak:security-scan`](./security-scan) cho scanner nhanh hơn hoặc tiếp tục
+với [`ak:plan`](./plan) để lên lịch finding chưa nên sửa ngay.

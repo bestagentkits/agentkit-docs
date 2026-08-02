@@ -1,0 +1,69 @@
+---
+title: ak agents search
+description: Tìm trong inventory agent cục bộ đã gộp theo tên, mô tả và tag với thứ tự xếp hạng xác định.
+---
+
+Dùng `ak agents search` khi biết từ khoá capability nhưng chưa biết ref
+`<kit>/<agent>` chính xác. Lệnh tìm trong tệp installed và available cục bộ,
+không phải remote registry search.
+
+## Cách dùng
+
+```bash
+ak agents search <query>
+```
+
+Một hoặc nhiều positional token được nối bằng dấu cách. Thiếu argument là lỗi
+số lượng argument của Cobra; query đã truyền nhưng sau khi trim là rỗng bị từ
+chối như empty query.
+
+Không có cờ riêng cho lệnh. Lệnh chỉ đọc và không prompt.
+
+## Tìm kiếm và xếp hạng
+
+Search bắt đầu từ inventory đã gộp giống `ak agents list`:
+
+- record installed thay record available có cùng ref chuẩn;
+- source root và install root là vị trí cục bộ theo `AGENTKIT_KITS_DIR` và
+  `AGENTKIT_PLUGIN_DIR`;
+- không có registry, authentication, entitlement, network hay cache lookup.
+
+Query được chuyển thành chữ thường và tách theo whitespace. Mỗi token cộng `3`
+điểm khi khớp substring trong tên agent, `2` cho mỗi tag khớp và `1` khi khớp
+mô tả. Record được đưa vào khi ít nhất một token có điểm. Kết quả sắp theo tổng
+điểm giảm dần, sau đó theo ref chuẩn tăng dần.
+
+```bash
+ak agents search code
+ak agents search 'code review' --json
+```
+
+Search không đọc Markdown body, tools, model, memory hay tên Kit trừ khi giá
+trị đó cũng xuất hiện trong các trường metadata được tìm.
+
+## Đầu ra
+
+Đầu ra cho người dùng dùng cùng bảng với list: `NAME`, `DESCRIPTION`, `SOURCE`
+và `STATUS`. Không có kết quả vẫn là empty state thành công.
+
+JSON dùng `schema_version: 1`, `kind: assets.list` và `data.agents[]`. Mỗi agent
+có `kit`, `name`, `description`, `installed` cùng các trường đã parse
+`tools`, `model`, `memory` hoặc `tags` nếu có. Search và list dùng chung JSON
+kind.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Search hoàn tất, kể cả không có kết quả. |
+| `1` | Không đọc được local inventory root hoặc không truyền positional query argument. |
+| `2` | Query đã truyền chỉ có whitespace hoặc không phân tích được cờ. |
+
+Lỗi vào stderr. Lỗi thực thi JSON dùng shared error envelope; lỗi phân tích cờ
+có thể vẫn là plain text.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak agents search`](../cli/ak_agents_search)
+- [Liệt kê agent](../cli/ak_agents_list)
+- [Xem một agent](../cli/ak_agents_show)

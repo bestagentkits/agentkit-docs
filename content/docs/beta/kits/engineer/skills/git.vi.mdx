@@ -1,0 +1,202 @@
+---
+title: Chạy workflow Git có guard với ak:git
+description: Stage và tách commit, push branch, mở pull request, merge branch hoặc merge GitHub PR qua các safety gate rõ ràng.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:git` khi bạn muốn AgentKit thực hiện một thao tác bàn giao Git xác định
+với conventional commit, quét secret đã stage, so sánh theo remote và merge gate
+rõ ràng. Skill có thể đổi lịch sử cục bộ và trạng thái repo từ xa, vì vậy hãy
+chọn thao tác có chủ đích và review scope trước.
+
+## Chọn ak:git cho thao tác bàn giao
+
+### Dùng ak:git khi
+
+- Bạn muốn stage và commit các thay đổi hiện tại.
+- Bạn yêu cầu rõ push commit lên remote branch hiện tại.
+- Bạn muốn tạo pull request từ diff của remote branch.
+- Bạn muốn merge một remote branch vào branch khác và push.
+- Bạn muốn chỉ merge GitHub pull request sau khi qua readiness check, rồi theo
+  dõi CI trên target branch tới khi kết thúc.
+
+### Chọn workflow khác khi
+
+- Bạn chỉ cần status hoặc diff. Dùng lệnh Git read-only thông thường hoặc
+  workflow trạng thái project phù hợp.
+- Bạn cần code review trước khi bàn giao. Dùng `ak:code-review`.
+- Bạn cần triển khai hoặc sửa bug. Dùng `ak:cook` hoặc workflow fix trước khi gọi
+  thao tác Git.
+- Bạn chưa chắc tệp nào thuộc thay đổi. Hãy giải quyết ownership và scope trước
+  khi stage mọi thứ.
+
+## Chuẩn bị project và runtime
+
+Trước khi bắt đầu:
+
+- Hoàn tất [Làm quen](../../../getting-started/onboarding), và xác nhận Engineer
+  Kit đã được cài cho runtime và scope bạn đang dùng.
+- Mở đúng Git repo và đọc quy ước branch, commit, review và merge của nó.
+- Review `git status`, công việc không liên quan, branch hiện tại, remote cùng
+  source và target branch chính xác của thao tác.
+- Xác nhận xác thực `gh` và quyền repo trước khi chạy `pr` hoặc `merge-pr`.
+- Quyết định push, tạo pull request, merge, auto-merge hoặc follow-up fix có được
+  phép hay không. Yêu cầu commit không tự cho phép các thao tác đó.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:git ...` | Skill delegate phần thực thi Git nhiều output cho agent `git-manager` đã cài. |
+| Cursor | `/ak:git ...` | Dùng cách viết slash đã được người dùng xác minh; chưa xác lập tính tương đương của agent delegation và chooser tương tác. |
+| Codex | `$ak:git ...` | Dùng cơ chế khám phá native của Codex; việc thực thi vẫn phụ thuộc khả năng Git, GitHub và agent được cung cấp. |
+
+## Chạy Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:git cm
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:git cm
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:git cm
+```
+
+  </Tab>
+</Tabs>
+
+Khi không có đối số, Skill hiển thị chooser thao tác. Các thao tác tường minh:
+
+| Thao tác | Hiệu ứng cục bộ | Hiệu ứng remote hoặc bên ngoài |
+| --- | --- | --- |
+| `cm` | Chạy `git add -A`, phân tích thay đổi đã stage và tạo một hoặc nhiều commit | Mặc định không có |
+| `cp` | Thực hiện workflow commit | Push branch hiện tại sau khi commit |
+| `pr [to-branch] [from-branch]` | Phân tích so sánh remote branch | Push source branch khi cần và tạo GitHub pull request; target mặc định là `main`, source là branch hiện tại |
+| `merge [to-branch] [from-branch]` | Checkout và cập nhật target, rồi merge `origin/<from-branch>` bằng merge commit | Push target branch; target mặc định là `main`, source là branch hiện tại |
+| `merge-pr <pr-ref>` | Kiểm tra trạng thái PR và quy ước repo | Merge GitHub PR, có thể bật auto-merge cho check đang chờ và theo dõi CI sau merge |
+
+`merge-pr` yêu cầu số hoặc URL của PR. Các đối số branch khác dùng mặc định đã
+được ghi rõ khi bỏ qua.
+
+## Hiểu hành vi commit và push
+
+1. **Skill stage working tree.** `cm` và `cp` dùng `git add -A`, nên path đã
+   tracked, chưa tracked và đã xóa trong repo đều có thể vào tập stage.
+2. **Skill tóm tắt staged diff.** Skill báo thay đổi tệp và dòng, đồng thời phân
+   loại path theo code, test, tài liệu, cấu hình hoặc dependency.
+3. **Skill quét nội dung đã stage.** Một lượt quét keyword và pattern credential
+   sẽ chặn commit khi phát hiện secret khả nghi.
+4. **Skill quyết định ranh giới commit.** Type hoặc scope hỗn hợp được tách; thay
+   đổi nhỏ cùng type và scope có thể nằm trong một commit.
+5. **Skill viết conventional commit.** Message dùng `type(scope): description`,
+   câu mệnh lệnh và không có attribution cho AI.
+6. **Skill chỉ push trong workflow đã chọn.** `cp` push sau commit. Push bị từ
+   chối được báo lại thay vì âm thầm viết lại lịch sử.
+
+## Hiểu hành vi pull request và merge
+
+### Pull request
+
+Workflow `pr` fetch remote, bảo đảm source branch có trên remote và dựng PR từ
+`origin/<target>...origin/<source>`. Skill tạo title conventional dưới 72 ký tự
+cùng phần summary và test plan qua `gh pr create`.
+
+### Merge branch
+
+Workflow `merge` cập nhật target branch, chỉ merge remote source branch đã commit
+và push với `--no-ff`, rồi push target. Conflict hoặc push bị từ chối vẫn hiển
+thị để xử lý thủ công.
+
+### Merge GitHub PR
+
+Workflow `merge-pr`:
+
+1. **Kiểm tra sẵn sàng.** PR phải đang mở, merge được, không có yêu cầu thay đổi,
+   được branch policy cho phép và không có CI đỏ.
+2. **Chọn phương thức merge.** Skill làm theo chỉ dẫn project, PR đã merge gần
+   đây, cấu hình repo, rồi mặc định dùng merge commit.
+3. **Merge hoặc bật auto-merge.** Check đang chờ có thể dùng `--auto`; check đỏ
+   và conflict dừng workflow.
+4. **Chờ merge thực tế.** Auto-merge được poll trước khi bắt đầu công việc sau
+   merge; chờ quá 30 phút được báo là blocker.
+5. **Theo dõi CI của target branch.** Các run cho merge commit được theo dõi tới
+   kết luận.
+6. **Xử lý lỗi xác định được.** Lỗi sau merge có thể sửa trong repo có thể bắt
+   đầu follow-up fix branch và PR flow bình thường. Blocker bên ngoài hoặc cùng
+   lỗi sau ba lần thử sẽ dừng workflow.
+7. **Xác minh hoàn tất.** Skill báo PR, merge SHA, phương thức, kết quả CI,
+   follow-up fix và đóng plan record khớp duy nhất khi phù hợp.
+
+## Giữ quyền và an toàn trong tay bạn
+
+<Callout type="warn" title="Chọn thao tác trước khi gọi Skill">
+  `cm` stage toàn bộ repo bằng `git add -A`. `cp`, `pr`, `merge` và `merge-pr` có
+  thể thay đổi trạng thái remote. Hãy review công việc không liên quan, branch
+  target và policy repo trước khi tiếp tục.
+</Callout>
+
+Các gate quan trọng:
+
+- Secret khả nghi sẽ chặn tạo commit. Hãy xóa hoặc ignore nội dung và chạy lại
+  scan; đừng bỏ qua cảnh báo.
+- Push yêu cầu thao tác có khả năng push được chọn rõ. Commit thường không cho
+  phép push.
+- Không bao giờ force push lên `main`, `master`, production hay release branch.
+  Force push feature branch vẫn cần yêu cầu rõ và cảnh báo vì nó viết lại lịch sử.
+- Recovery mang tính phá hủy hoặc xóa branch cần xác nhận.
+- Không bypass protected-branch rule, review bắt buộc hay CI đỏ.
+- Thao tác GitHub cần network, xác thực `gh` và quyền repo. Source không định
+  nghĩa chi phí dịch vụ riêng.
+
+Lượt quét pattern tích hợp là commit gate, không chứng minh nội dung đã stage
+không có secret. Hãy áp dụng tool bảo mật chuyên dụng của repo khi được yêu cầu.
+
+## Xác minh kết quả
+
+Bằng chứng mong đợi gồm:
+
+- Số tệp đã stage và số dòng thêm, xóa.
+- Kết quả security scan và path bị chặn.
+- Mỗi commit SHA và message conventional.
+- Branch và commit hash đã push khi được yêu cầu.
+- URL pull request và so sánh remote cho `pr`.
+- Source, target và merge commit cho `merge`.
+- URL PR, phương thức và SHA merge, kết luận CI đã theo dõi cùng follow-up fix
+  cho `merge-pr`.
+
+## Khắc phục sự cố an toàn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Tệp không liên quan đã được stage | Dừng trước commit, review tập staged và xác định nhóm ownership dự kiến. |
+| Phát hiện pattern secret | Kiểm tra dòng staged khớp, unstage path, chuyển giá trị vào secret store được phê duyệt và cập nhật ignore rule khi phù hợp. |
+| Không có thay đổi | Thoát sạch; đừng tạo empty commit. |
+| Push bị từ chối | Fetch và đối chiếu remote theo policy repo; đừng force push protected branch. |
+| Pull request có diff rỗng | Xác minh remote source và target branch cùng việc local commit đã được push hay chưa. |
+| Merge có conflict | Dừng, báo conflict và xử lý trong branch workflow được phê duyệt. |
+| `gh` không khả dụng hoặc chưa xác thực | Cài hoặc xác thực GitHub CLI, rồi chỉ thử lại thao tác bên ngoài. |
+| CI sau merge bị kẹt | Báo URL run sau timeout được ghi rõ thay vì tuyên bố hoàn tất. |
+
+## Biết giới hạn hiện tại
+
+- Việc tách commit dùng heuristic theo path và kích thước; hãy review ranh giới
+  đề xuất về tính đúng đắn ngữ nghĩa.
+- So sánh remote loại trừ công việc chưa push theo thiết kế.
+- Secret scan có thể gắn cờ text vô hại hoặc bỏ sót secret ngoài pattern.
+- `merge-pr` có thể quan sát và phản ứng với CI repo nhưng không thể bypass outage
+  bên ngoài, thiếu quyền, review bắt buộc hay branch protection.
+- Cách gọi slash trên Cursor là bằng chứng do người dùng xác minh, không chứng
+  minh agent hay GitHub tool tương đương.
+- Stable và beta đóng gói cùng thao tác và gate của `ak:git`.

@@ -1,0 +1,149 @@
+---
+title: ak run
+description: Resolve a local Kit skill and stream it through Claude Code, Codex, or Cursor with explicit stdin, timeout, output, and dependency behavior.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak run` to execute one skill through a local coding-agent adapter. It
+resolves the skill from a Kit source, activates any declared managed runtime,
+builds a prompt from the skill instructions and your arguments, then starts the
+selected backend CLI.
+
+## Usage
+
+```bash
+ak run <kit>/<skill> [args...] [flags]
+```
+
+The reference must contain exactly one slash and use its canonical lowercase
+form. Unprefixed bundled skill names can resolve their `ak-` export, so
+`engineer/scout` can select the exported `ak-scout` skill.
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--target <adapter>` | `claude-code` | Select `claude-code`, `codex`, or `cursor`. |
+| `--kits-dir <dir>` | `AGENTKIT_KITS_DIR` or `./kits` | Select the local Kit source directory. |
+| `--timeout <duration>` | `0s` | Set an invocation deadline; zero disables the command timeout. |
+
+Shared flags are described in [CLI conventions](../cli-conventions). There is
+no preview, apply, force, or general confirmation phase.
+
+## Backend and credential behavior
+
+| Target | Backend invocation | Pre-dispatch gate |
+| --- | --- | --- |
+| `claude-code` | `AGENTKIT_CLAUDE_BIN` or `claude` on `PATH`; prompt on stdin. | Requires a detectable Anthropic/OpenAI key in environment or AgentKit config unless `AK_DISABLE_FIRSTRUN_GATE=1`. |
+| `codex` | `AGENTKIT_CODEX_BIN` or `codex` on `PATH`; runs `codex exec -`. | Provider gate is skipped; Codex owns its authentication. |
+| `cursor` | `AGENTKIT_CURSOR_BIN` or `agent` on `PATH`; uses non-interactive `stream-json`. | Provider gate is skipped; Cursor owns its authentication. |
+
+For Claude Code, a missing provider key in JSON, quiet, noninteractive, or
+`CI=1` mode writes a warning and exits `4`. In the default mode, the command
+reads stdin and asks `Run 'ak setup' now? [Y/n]:`. Answering yes does not launch
+setup in this path; it still exits `4`. A negative answer or EOF exits `3`.
+The gate does not test whether stdin is a TTY.
+
+<Callout type="warning">
+  Parent stdin is not forwarded to the backend after launch. The complete
+  generated prompt is written, then child stdin is closed. Do not use
+  `ak run` for a backend workflow that expects follow-up interactive input.
+</Callout>
+
+## Prompt and privacy boundary
+
+AgentKit reads the resolved `SKILL.md`, normalizes it, strips selected invisible
+characters, wraps it as untrusted Kit content with a digest, and appends all
+remaining CLI arguments joined by spaces. That prompt is sent to the backend
+and can be transmitted to its provider.
+
+The command does not redact secrets in skill text, arguments, backend output,
+or errors. Avoid passing credentials as arguments. JSON mode escapes child
+bytes into event strings; escaping is not redaction.
+
+When a skill declares a Python or Node runtime, AgentKit activates its existing
+managed environment. A missing environment exits `4` with an `ak skill install`
+hint; a corrupt one exits `4` with an `ak skill repair` hint. Set
+`AGENTKIT_SKILL_RUNTIME=0` only when intentionally opting out of that managed
+runtime.
+
+Required adapter capabilities without a declared fallback also exit `4`.
+Optional/fallback capability gaps are warnings on stderr unless `--quiet`.
+
+## Streams and JSON protocol
+
+In human mode, backend stdout passes to stdout and backend stderr passes to
+stderr. AgentKit start/end status lines also use stderr unless `--quiet`.
+
+`--json` writes schema-v1 NDJSON events to stdout, not one JSON envelope:
+
+```json
+{"schema":"v1","event":"start","ts":"2026-08-02T00:00:00.000Z","skill":"ak-scout","kit":"engineer","adapter":"codex"}
+{"schema":"v1","event":"env_activate","ts":"2026-08-02T00:00:00.001Z","skill":"ak-scout","kit":"engineer","status":"skipped"}
+{"schema":"v1","event":"chunk","ts":"2026-08-02T00:00:00.002Z","stream":"stdout","data":"result\n"}
+{"schema":"v1","event":"end","ts":"2026-08-02T00:00:01.000Z"}
+```
+
+Event types are `start`, `env_activate`, `chunk`, `error`, and `end`. The
+activation event reports `ok` or `skipped` before backend chunks.
+`chunk.stream` is `stdout` or `stderr`. A non-zero terminal event includes
+`exit_code`; interruption and timeout add booleans. Because zero-valued fields
+are omitted, a successful `end` event has no `exit_code` field.
+
+Failures before streaming use the shared structured error on stderr instead of
+this NDJSON sequence. A backend that is missing after `start` produces NDJSON
+`error` and `end` events on stdout. Consume stdout line by line and check the
+process status separately.
+
+## Timeout, cancellation, and process effects
+
+`--timeout` applies to backend invocation only. A positive deadline cancels
+the adapter process and exits `1`; zero leaves it unlimited. SIGINT/SIGTERM
+cancels the process group where supported and exits `3`. Backends receive a
+graceful termination attempt followed by forced termination after a short
+grace period.
+
+The adapter can access the network, provider credentials, current working
+directory, and inherited process environment. Managed runtime variables are
+added to the child; the Codex and Cursor adapters drop managed `LD_*` and
+`DYLD_*` loader overrides before launch.
+
+## Disk effects and activity record
+
+`ak run` reads Kit and skill files. A backend can write its own working files,
+session data, caches, or project changes. Independently, AgentKit makes
+best-effort append-only writes for `run.started` and `run.completed` or
+`run.failed` under:
+
+```text
+~/.agentkit/activity/events.ndjson
+```
+
+`AGENTKIT_HOME` changes that path. Activity contains the skill reference,
+adapter, timestamps, duration, and exit code, not the prompt or backend output.
+Logging failures are ignored and never fail the run. There is no backup or
+rollback for these append-only events.
+
+## Exit status
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The backend completed successfully. |
+| `1` | A runtime, stream, timeout, prompt-build, or adapter failure occurred. |
+| `2` | The reference, target, arguments, or flags were invalid. |
+| `3` | The provider-key prompt was declined/ended, or the invocation was interrupted. |
+| `4` | A provider key, managed skill environment, required capability, or backend binary was missing. |
+| `5` | The Kit or skill was not found in the selected source. |
+
+A backend process that starts and exits with another positive non-zero status
+is propagated as that process exit. Do not assume every backend failure becomes
+`1`.
+
+## Related commands
+
+- [Complete `ak run` command facts](../cli/ak_run)
+- [Install a managed skill runtime](../cli/ak_skill_install)
+- [Verify a managed skill runtime](../cli/ak_skill_verify)
+- [Inspect local activity](../cli/ak_activity_list)
+- [CLI conventions](../cli-conventions)

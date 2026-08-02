@@ -1,0 +1,114 @@
+---
+title: ak kit list-kits
+description: Kiểm tra Kit có thể cài từ nguồn authoring cục bộ mà không truy cập registry hoặc thay đổi đĩa.
+---
+
+Dùng `ak kit list-kits` để kiểm tra metadata và số lượng export của Kit trong
+một thư mục Kits cục bộ. Lệnh này phục vụ authoring, development và discovery
+trong CI; nó không truy vấn release registry.
+
+## Cú pháp
+
+```bash
+ak kit list-kits
+```
+
+Lệnh không nhận argument theo vị trí.
+
+## Trước khi chạy
+
+Nguồn được resolve theo thứ tự:
+
+1. `--kits-dir <dir>`
+2. `AGENTKIT_KITS_DIR`
+3. `./kits`
+
+Thư mục đã chọn phải đọc được như một nguồn Kit cục bộ. Lệnh không dùng xác
+thực, entitlement, mạng, verified cache, project scope, user scope hoặc runtime
+delivery mode.
+
+## Đối số
+
+Lệnh không nhận đối số vị trí. Chọn nguồn bằng `--kits-dir` hoặc cơ chế resolve
+từ biến môi trường/giá trị mặc định đã mô tả.
+
+Lệnh không có alias.
+
+## Tuỳ chọn
+
+| Tuỳ chọn | Mặc định | Tác động |
+| --- | --- | --- |
+| `--kits-dir <dir>` | `AGENTKIT_KITS_DIR` hoặc `./kits` | Chọn thư mục Kits cục bộ. |
+
+Xem các cờ dùng chung tại [quy ước CLI](../cli-conventions). `--yes` và
+`--no-interactive` không thay đổi thao tác read-only này.
+
+## Ví dụ
+
+```bash
+# Đọc ./kits.
+ak kit list-kits
+
+# Đọc authoring tree cục bộ tường minh.
+ak kit list-kits --kits-dir ./fixtures/kits
+
+# Đọc versioned JSON envelope.
+ak kit list-kits --kits-dir ./kits --json | jq '.data.kits'
+```
+
+## Đầu ra và stream
+
+Đầu ra dành cho người dùng trên stdout là bảng đã sắp xếp với các cột:
+
+```text
+NAME VERSION TIER EXTENDS AGENTS SKILLS COMMANDS HOOKS RULES OUTPUT-STYLES SCRIPTS
+```
+
+Kit composition nội bộ bị loại khỏi danh sách công khai. Nếu nguồn đã chọn
+rỗng, human mode ghi `No kits found` lên stderr rồi thoát `0`.
+
+Với `--json`, stdout chứa:
+
+```text
+schema_version: 1
+kind: kit.list
+data.kits: array
+```
+
+Mỗi object Kit có `name`, `version`, `extends`, `tier` và `counts`. Object
+`counts` có `agents`, `skills`, `commands`, `hooks`, `rules`, `output_styles`
+và `scripts`. Nguồn rỗng tạo `data.kits=[]`.
+
+Nếu một Kit được tìm thấy nhưng load thất bại, lệnh ghi cảnh báo cho Kit đó lên
+stderr, bỏ qua nó rồi tiếp tục. Vì vậy JSON có thể hợp lệ và thoát `0` trong khi
+thiếu Kit bị lỗi; hãy kiểm tra stderr trong CI.
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Nguồn cục bộ đã được liệt kê, kể cả nguồn rỗng hoặc nguồn có từng lỗi load bị bỏ qua. |
+| `1` | Không thể mở hoặc liệt kê nguồn đã chọn, hoặc xảy ra lỗi đọc runtime khác. |
+| `2` | Cobra từ chối cờ hoặc argument theo vị trí. |
+
+Phần help dành mã `5` cho thư mục Kits không tồn tại, nhưng implementation hiện
+trả lỗi nguồn chưa phân loại nên process thoát `1`. Đừng rẽ nhánh theo `5` cho
+lệnh này cho đến khi runtime thay đổi cách phân loại.
+
+## Tác động, an toàn và giới hạn
+
+Lệnh đọc directory entry, tệp `kit.yaml`, metadata Kit kế thừa và export được
+tham chiếu để tính số lượng. Nó không ghi tệp, spawn runtime, liên hệ provider
+hoặc thay đổi trạng thái xác thực hay cache.
+
+Đây không phải catalog từ xa theo license. Kit không có trong thư mục cục bộ đã
+chọn sẽ không có trong kết quả dù tài khoản của bạn có thể cài Kit đó từ
+registry. Ngược lại, thấy Kit cục bộ không chứng minh entitlement trên registry
+hoặc quá trình cài cho target runtime sẽ thành công.
+
+## Lệnh liên quan
+
+- [`ak kit validate`](./kit-validate) kiểm tra authoring tree cục bộ.
+- [`ak kit install`](./kit-install) resolve và cài một Kit.
+- [Thông tin lệnh đầy đủ](../cli/ak_kit_list-kits)
+- [Cài Kit an toàn](../../guides/installing-kits)

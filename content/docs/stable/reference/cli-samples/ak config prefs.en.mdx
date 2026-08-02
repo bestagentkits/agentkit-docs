@@ -1,0 +1,82 @@
+---
+title: ak config prefs
+description: Choose a preference lookup, validation, or bounded hook-toggle mutation while preserving scope, defaults, secrets, and backup boundaries.
+---
+
+Use `ak config prefs` to discover the commands that resolve or change
+AgentKit's authored preference values. The group command itself prints help; it
+does not read or write a config file.
+
+## Usage
+
+```bash
+ak config prefs
+```
+
+The command has no command-specific flags. Shared flags are described in
+[CLI conventions](../cli-conventions), but `--json` does not turn group help
+into a preference payload.
+
+## Choose a preference command
+
+| Goal | Command | Effect |
+| --- | --- | --- |
+| See effective authored values | `ak config prefs resolve` | Reads user and current-project config, then deep-merges project over user. |
+| Check config syntax and schema | `ak config prefs validate` | Reads existing user/project files, or one explicit `--file`; writes nothing. |
+| Pin one Hook toggle | `ak config prefs set <key> <true\|false>` | Backs up an existing selected config, then atomically writes one `hooks.<name>` boolean. |
+| Stop pinning one Hook toggle | `ak config prefs unset <key>` | Removes one selected-scope leaf when present, with a backup before rewrite. |
+
+These commands do not edit provider keys, API tokens, update settings, or other
+setup-owned sections.
+
+## Understand scope and precedence
+
+The candidate files are:
+
+1. user scope: `~/.agentkit/config.yaml`, or `$AGENTKIT_HOME/config.yaml`;
+2. project scope: `.agentkit/config.yaml` under the command's current working
+   directory.
+
+Resolve deep-merges project values over user values. A project mapping can
+override one nested key while preserving user values beside it. These are
+authored values only: missing keys are not filled with binary defaults. Each
+Kit Hook applies its own built-in default when a value is absent.
+
+`set` and `unset` default to user scope; pass `--scope project` to select the
+current project's file. Scope is based on the process working directory, not a
+registered project chosen elsewhere.
+
+## Privacy and output boundary
+
+Resolve allowlists preference sections and converts their field names to the
+legacy camel-case spelling consumed by Kit Hooks. Setup credential sections,
+including `keys` and `api`, are excluded. The `extensions` section is passed
+through verbatim, however, so treat preference output as potentially sensitive
+user-authored data and review it before sharing logs.
+
+The preference commands use command-specific raw JSON objects rather than the
+shared `schema_version`/`kind`/`data` success envelope. Bare `ak config prefs`
+prints ordinary Cobra help to stdout and normally exits `0`.
+
+Runtime failures in these preference commands are not centrally converted to a
+JSON error envelope. With `--json`, a failure can produce no diagnostic object;
+use the process exit status and validate success output before consuming it.
+Flag-parse errors can still print plain-text usage and exit `2`.
+An unknown subcommand or extra positional token instead follows the generic
+runtime error path and exits `1`.
+
+## Write and recovery boundary
+
+Set/unset writes preserve unmodelled YAML sections, comments, key order, and
+the schema editor directive. Replacement uses a sibling temporary file and
+mode `0600`. An existing target is copied first under
+`~/.agentkit/backups/config/`; the success output reports the exact backup path.
+
+Backups are individual config-file copies, not a transaction across user and
+project scopes. Avoid concurrent config writers. To recover, stop other writers,
+inspect the reported backup, and copy that file back to the reported config
+path; no automatic preference rollback command is provided.
+
+## Related commands
+
+- [CLI conventions](../cli-conventions)

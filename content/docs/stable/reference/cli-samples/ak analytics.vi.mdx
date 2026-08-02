@@ -1,0 +1,83 @@
+---
+title: ak analytics
+description: Kiểm tra và chủ động điều khiển index analytics cục bộ, riêng tư, dùng một lần mà không thay đổi dữ liệu nguồn có thẩm quyền.
+---
+
+Dùng `ak analytics` để kiểm tra hoặc thay đổi vòng đời index SQLite analytics
+cục bộ của AgentKit. Index là cache dẫn xuất tuỳ chọn; tệp session và activity
+cục bộ vẫn là nguồn có thẩm quyền.
+
+## Cách dùng
+
+```bash
+ak analytics
+```
+
+Nhóm lệnh không nhận argument theo vị trí và không có cờ riêng. Khi không có
+lệnh con, lệnh in help rồi thoát `0`.
+
+## Chọn lệnh vòng đời
+
+| Mục tiêu | Lệnh | Kết quả |
+| --- | --- | --- |
+| Kiểm tra mà không tạo state | `ak analytics status` | Báo lifecycle, serving mode, health, freshness và fact count. |
+| Opt in và build | `ak analytics enable` | Đánh dấu index enabled rồi chạy full source refresh. |
+| Dừng indexed read nhưng giữ dữ liệu | `ak analytics disable` | Giữ database và ghi disabled intent. |
+| Cập nhật hiệu quả | `ak analytics refresh` | Tái sử dụng fact của nguồn không đổi và publish một current generation. |
+| Suy ra lại mọi fact | `ak analytics rebuild` | Phân tích lại mọi nguồn và publish một current generation. |
+| Xoá dữ liệu analytics dẫn xuất | `ak analytics delete` | Xoá database và dữ liệu recovery còn lại, chỉ giữ deleted intent. |
+
+## Lưu trữ cục bộ và quyền riêng tư
+
+Theo mặc định, state analytics nằm dưới `~/.agentkit`:
+
+```text
+analytics/analytics.db       private SQLite index
+analytics-state.json         lifecycle marker and lease target
+analytics-recovery/          transient rollback files during bounded maintenance
+```
+
+`AGENTKIT_HOME` đổi phần gốc. Thư mục và tệp do analytics sở hữu được bảo vệ chỉ
+cho owner khi nền tảng hỗ trợ; layout symlink, quyền sở hữu hay permission không
+an toàn sẽ bị từ chối.
+
+Index đọc các nguồn cục bộ trong allowlist: phiên project Claude Code, phiên
+Codex và activity event AgentKit. `AGENTKIT_CLAUDE_HOME` đổi Claude home;
+`CODEX_HOME` đổi Codex home. Fact lưu trữ là dữ liệu tổng hợp có giới hạn và
+HMAC identity, không phải prompt, raw transcript, source path, session ID,
+trace ID hay raw error.
+
+Không lệnh vòng đời analytics nào gửi telemetry, gọi provider, dùng mạng, cần
+xác thực hay kiểm tra entitlement. Xoá hoặc disable index không xoá nguồn
+session hay activity có thẩm quyền.
+
+## Retention và vòng đời generation
+
+Database giữ một current complete generation. Refresh hoặc rebuild thành công
+publish bản thay thế theo cách nguyên tử rồi xoá các generation cũ. Đây là vòng
+đời index, không phải retention dữ liệu nguồn: các lệnh không prune activity log
+append-only hoặc tệp session runtime.
+
+CLI chạy một lần không khởi động scheduler analytics nền. Giá trị
+`will_auto_sync=true` nghĩa là dashboard hoặc desktop host có reconciler được
+phép sync state đó; không có nghĩa process CLI này để lại daemon.
+
+## Xác nhận và output
+
+Mọi mutation tạo preview gắn với state trong cùng process trước khi apply.
+`--yes` áp dụng preview. Với `--json` hoặc `--no-interactive` nhưng thiếu
+`--yes`, lệnh in preview và thoát `3` mà không mutate. Khi prompt được bật,
+prompt nằm trên stderr; mọi câu trả lời ngoài `y` hoặc `yes`, kể cả EOF, đều từ
+chối, in preview và hiện thoát `0`.
+
+JSON của mutation dùng `kind=analytics.plan`; status dùng
+`kind=analytics.status`. Xem trang từng lệnh để biết trường chính xác và ranh
+giới recovery.
+
+Trên macOS, guard first-launch dùng chung của CLI cũng có thể ghi
+`~/.agentkit/.first-run-darwin` và in hint một lần lên stderr trước khi lệnh
+này chạy.
+
+## Lệnh liên quan
+
+- [Quy ước CLI](../cli-conventions)

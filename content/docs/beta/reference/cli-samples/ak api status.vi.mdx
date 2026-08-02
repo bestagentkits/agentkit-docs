@@ -1,0 +1,95 @@
+---
+title: ak api status
+description: Đọc state process API AgentKit đã ghi mà không nhầm tệp state với kiểm tra process sống hoặc sức khoẻ.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak api status` để kiểm tra state do `ak api start` ghi. Lệnh chỉ đọc tệp
+cục bộ; lệnh không liên hệ HTTP server hay provider upstream.
+
+## Cách dùng
+
+```bash
+ak api status
+```
+
+Lệnh không nhận argument theo vị trí và không có cờ riêng. Các cờ dùng chung
+được mô tả trong [quy ước CLI](../cli-conventions). Lệnh không bao giờ hỏi;
+`--yes` và `--no-interactive` không thay đổi query.
+
+## Lệnh kiểm tra điều gì
+
+Lệnh đọc `~/.agentkit/api/state.json` (`AGENTKIT_HOME` thay đổi thư mục gốc) và
+chỉ xác minh cấu trúc JSON cùng phiên bản schema của state.
+
+- Thiếu tệp state tạo `running: false` và thoát `0`.
+- Tệp state đọc được, đúng phiên bản tạo `running: true` và thoát `0`.
+- Tệp state không đọc được, sai định dạng hoặc có phiên bản không hỗ trợ tạo lỗi.
+
+<Callout type="warning">
+  `running: true` chỉ có nghĩa state record tồn tại. Lệnh không probe PID, không
+  gọi `/health` và không xác minh PID vẫn thuộc AgentKit. Vì vậy, tệp stale có
+  thể tạo kết quả running sai.
+</Callout>
+
+Để kiểm tra sức khoẻ process đang chạy, hãy dùng địa chỉ đã ghi để gọi
+`/health`. Thêm bearer token nếu server được khởi động với token:
+
+```bash
+curl http://127.0.0.1:8765/health
+```
+
+## Đầu ra dành cho người dùng và JSON
+
+Khi không có tệp state, stdout dành cho người dùng là:
+
+```text
+[i] api: server is not running
+```
+
+Khi record tồn tại, stdout báo PID, địa chỉ, thời điểm bắt đầu theo múi giờ cục
+bộ, uptime được tính và request count lưu trong tệp.
+
+JSON thành công dùng `kind=api.status`. Với process đã ghi, `data` có thể chứa:
+
+```text
+running, pid, port, bind_addr, started_at, request_count, uptime
+```
+
+Trường số bằng không và chuỗi rỗng bị lược bỏ. Vì `started_at` là giá trị thời
+gian, payload not-running vẫn có zero timestamp:
+
+```json
+{"schema_version":1,"kind":"api.status","data":{"running":false,"started_at":"0001-01-01T00:00:00Z"}}
+```
+
+<Callout type="info">
+  Server đang chạy không cập nhật tệp state sau khi khởi động. Request count
+  ban đầu bằng không, còn shutdown sạch sẽ xoá tệp. Vì vậy, lệnh status của CLI
+  không cung cấp bộ đếm request trực tiếp; hãy gọi endpoint `/status` của server
+  để đọc instrumentation counter trong bộ nhớ. Bộ đếm tăng một lần với route
+  cục bộ và hai lần với route proxy được chấp nhận.
+</Callout>
+
+Lỗi runtime JSON được ghi ra stderr với `schema_version`, `error`, `error_code`
+và `exit_code`. Lỗi parse cờ có thể vẫn là hướng dẫn dùng dạng plain text.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Đọc state thành công hoặc tệp state không tồn tại. | Branch theo `data.running`, rồi probe `/health` khi cần biết process còn sống. |
+| `1` | Có positional argument không mong đợi, hoặc không thể resolve AgentKit home hay đọc, parse, kiểm tra version tệp state. | Sửa argument dư; nếu không, chỉ kiểm tra đường dẫn state được báo. |
+| `2` | Parse cờ thất bại. | Sửa các cờ. |
+
+Lệnh chỉ đọc và không có preview, apply, force, backup hay rollback. Nếu đã xác
+nhận tệp state stale bằng danh sách process của hệ điều hành, chỉ xoá
+`~/.agentkit/api/state.json`.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của lệnh `ak api status`](../cli/ak_api_status)
+- [Khởi động API server](../cli/ak_api_start)
+- [Dừng process API đã ghi](../cli/ak_api_stop)
+- [Quy ước CLI](../cli-conventions)

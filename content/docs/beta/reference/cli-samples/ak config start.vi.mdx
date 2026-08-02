@@ -1,0 +1,164 @@
+---
+title: ak config start
+description: Chạy dashboard AgentKit cục bộ an toàn, tự động hoá sự kiện startup và hiểu vòng đời foreground cùng tệp state.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak config start` để chạy dashboard AgentKit trên trình duyệt. Lệnh phục vụ
+UI và API cục bộ qua HTTP, ghi state vòng đời cho `status` và `stop`, đồng thời
+gắn với process hiện tại cho đến khi nhận tín hiệu shutdown hoặc gặp lỗi server.
+
+## Cách dùng
+
+```bash
+ak config start
+```
+
+Lệnh không nhận argument theo vị trí.
+
+## Cờ của lệnh
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--auth-token <token>` | Trống hoặc `AK_DASHBOARD_TOKEN` | Yêu cầu bearer token này cho request dashboard. Token là bắt buộc khi bind ngoài loopback. |
+| `--bind <address>` | `127.0.0.1` | Chọn địa chỉ lắng nghe. Hostname không xác định được xem là ngoài loopback. |
+| `--no-open` | `false` | Không mở trình duyệt mặc định sau startup. |
+| `--port <port>` | `8766` | Chọn cổng lắng nghe. Dùng `0` để hệ điều hành tự cấp. |
+
+Các cờ dùng chung như `--json`, `--no-interactive`, `--quiet`, `--verbose` và
+`--yes` được mô tả trong [quy ước CLI](../cli-conventions).
+
+## Khởi động dashboard cục bộ
+
+```bash
+ak config start
+```
+
+URL mặc định là `http://127.0.0.1:8766`. Lệnh in URL và PID thực tế sau khi
+listener bind thành công, rồi block ở foreground. Đây không phải daemon tách
+rời và không có cờ `--daemon`. Hãy giữ process đó chạy; `Ctrl-C`, `SIGINT`,
+`SIGTERM` hoặc `ak config stop` sẽ bắt đầu graceful shutdown.
+
+Dùng cổng do hệ điều hành cấp cho một phiên riêng:
+
+```bash
+ak config start --port 0 --no-open
+```
+
+Hãy đọc cổng thực tế từ kết quả startup thay vì giả định `8766`.
+
+Thao tác mở trình duyệt là best-effort và không quyết định startup có thành
+công hay không. `--no-open`, `--no-interactive`, `--json` hoặc `--quiet` sẽ bỏ
+qua thao tác này. Chỉ pipe stdout không tự ngăn mở trình duyệt, vì vậy script
+dùng đầu ra dạng người đọc nên truyền rõ `--no-open`.
+
+## An toàn bind và xác thực
+
+Bind loopback mặc định không yêu cầu bearer token. IP ngoài loopback hoặc
+hostname không xác định bị từ chối trước khi lắng nghe nếu chưa có token:
+
+```bash
+AK_DASHBOARD_TOKEN='<secret>' \
+  ak config start --bind 0.0.0.0 --no-open
+```
+
+Token bảo vệ mọi route dashboard. Nên dùng `AK_DASHBOARD_TOKEN` thay vì
+`--auth-token` khi shell history hoặc danh sách process có thể làm lộ argument.
+Token không xuất hiện trong JSON startup hoặc tệp state vòng đời.
+
+<Callout type="warning">
+  Loopback giới hạn phơi bày qua mạng nhưng không phải ranh giới phân quyền với
+  process cục bộ khác. Dashboard có các thao tác thay đổi config, kit, update,
+  migration và account. Chỉ chạy khi cần, và đừng đưa dashboard qua proxy hoặc
+  tunnel nếu chưa có thiết kế xác thực vượt ngoài mặc định cục bộ.
+</Callout>
+
+HTTP server cũng từ chối Host header và Origin header cross-origin không an
+toàn. Các guard này bổ sung bearer authentication; chúng không phải lý do để
+bỏ token khi bind ngoài loopback.
+
+## Tác động lên process và filesystem
+
+Sau khi bind thành công, AgentKit ghi atomically
+`$AGENTKIT_HOME/dashboard/state.json`, thông thường là
+`~/.agentkit/dashboard/state.json`. Tệp ghi version `1`, PID, port, địa chỉ đã
+bind và thời gian bắt đầu theo UTC. Clean shutdown sẽ xoá tệp.
+
+Việc ghi state vòng đời là best-effort. Nếu ghi thất bại, server vẫn có thể
+tiếp tục chạy nhưng `status` và `stop` không thể tìm thấy nó. Trong trường hợp
+đó, hãy dừng process foreground bằng tín hiệu từ terminal của nó.
+
+Host bắt đầu tự động đồng bộ analytics cục bộ trong suốt vòng đời dashboard.
+Tuỳ thiết lập analytics, tác vụ này có thể đọc nguồn session coding cục bộ và
+refresh private local index. Việc mở và dùng UI cũng có thể đọc hoặc thay đổi
+các bề mặt cục bộ tương ứng với thao tác trong UI, đồng thời có thể liên hệ dịch
+vụ release, registry hoặc provider cho tính năng cần chúng. Chỉ khởi động
+listener không tự đăng nhập AgentKit hay cấp entitlement.
+
+Tránh chạy nhiều process dashboard đồng thời. Tệp vòng đời chỉ theo dõi một
+PID; server chạy sau trên cổng khác có thể thay thế state mà `status` và `stop`
+sử dụng.
+
+## Đầu ra cho tự động hoá
+
+```bash
+ak config start --port 0 --no-open --json
+```
+
+Sau khi bind thành công, stdout nhận một envelope startup có version rồi process
+tiếp tục chạy:
+
+```text
+schema_version: 1
+kind: config.start
+data.status: "running"
+data.bind_addr: string
+data.url: string
+data.pid: integer
+```
+
+Đây là một sự kiện startup, không phải stream sự kiện NDJSON. Hãy lấy dòng đầu
+trên stdout, giữ handle của process và kết thúc process đó trong bước teardown.
+
+Diagnostic server được ghi vào stderr và có thể gồm log vòng đời plain text
+ngay cả khi dùng `--json`. Lỗi lệnh phát qua JSON renderer dùng error envelope
+có cấu trúc, nhưng đừng yêu cầu mọi dòng stderr đều là JSON. Lỗi parse cờ xảy ra
+trước renderer này và có thể vẫn là hướng dẫn dùng dạng plain text.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Server shutdown sạch sau khi chạy. | Xác nhận `status` báo đã dừng. |
+| `1` | Resolve home/config, tạo server, bind, timeout startup hoặc phục vụ request thất bại. | Kiểm tra stderr, cổng đã chọn, quyền tệp và process foreground. |
+| `2` | Argument hoặc cờ không hợp lệ. | Sửa cách gọi lệnh. |
+| `7` | Yêu cầu bind ngoài loopback nhưng chưa có auth token. | Quay về loopback hoặc cấu hình token mạnh. |
+
+Lệnh không có confirmation, preview, apply, dry-run hay force. `--yes` không có
+tác dụng với lệnh này; `--no-interactive` ngăn mở trình duyệt nhưng không làm
+process chạy dài tách khỏi terminal.
+
+## Xác minh và khôi phục
+
+Từ terminal khác, kiểm tra process đang được theo dõi:
+
+```bash
+ak config status
+```
+
+Khi dùng xong:
+
+```bash
+ak config stop
+ak config status
+```
+
+Nếu crash để lại state vòng đời, `status` vẫn có thể báo PID được theo dõi là
+đang chạy vì lệnh không kiểm tra process. Đừng xoá state AgentKit không liên
+quan hoặc kill một PID lấy từ tệp cũ khi chưa xác minh identity process hiện tại.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của lệnh `ak config start`](../cli/ak_config_start)
+- [Quy ước CLI](../cli-conventions)

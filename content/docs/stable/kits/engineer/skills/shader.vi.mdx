@@ -1,0 +1,191 @@
+---
+title: Xây dựng và xác minh procedural visual với ak:shader
+description: Thiết kế GLSL fragment shader cho shape, pattern, noise, texture và animation, rồi tích hợp cùng kiểm thử trên graphics runtime thật của project.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:shader` để biến effect brief thành code GLSL fragment shader cùng
+guidance tích hợp. Reference được bundle bao phủ coordinate, shaping function,
+color, signed distance field, tiling, transformation, noise, fBm, Voronoi
+pattern và procedural texture. Runtime của project vẫn quyết định kết quả có
+compile, render và đạt performance chấp nhận được hay không.
+
+## Chọn ak:shader cho procedural pixel effect
+
+### Dùng ak:shader khi
+
+- Bạn cần procedural background, texture, transition, mask, generative visual
+  hoặc custom material effect cho WebGL hay Three.js.
+- Bạn muốn shape tạo từ distance field hoặc pattern tạo từ coordinate được tile
+  và transform.
+- Bạn cần kỹ thuật noise, fBm, cellular, Voronoi, cloud, marble, wood, terrain,
+  fire, smoke, water hay shader liên quan.
+- Bạn đã biết host graphics API và có thể render kết quả để review.
+
+### Chọn workflow khác khi
+
+- CSS gradient, SVG, canvas drawing, image asset hoặc material hiện có có thể đạt
+  outcome với runtime complexity thấp hơn.
+- Bạn cần cả Three.js scene hoặc interaction system. Dùng `ak:threejs` và đưa
+  Skill này vào cho fragment effect.
+- Bạn cần bitmap độc lập thay vì code. Dùng workflow image generation hoặc media
+  đã duyệt.
+- Bạn không thể chạy target renderer. Hãy yêu cầu implementation sketch và đánh
+  dấu visual cùng performance verification bị chặn.
+
+## Chuẩn bị graphics contract của target
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận Engineer
+  Kit đã được cài cho runtime cùng scope hiện tại.
+- Xác định shader language cùng version chính xác, host API, framework, material
+  interface, vertex shader, yêu cầu precision, quy ước output color và device
+  được hỗ trợ.
+- Cung cấp uniform cùng coordinate convention project đang dùng. Ví dụ của Skill
+  thường dùng `u_time`, `u_resolution`, `u_mouse`, `gl_FragCoord` và
+  `gl_FragColor`; các tên cùng API này không phổ quát.
+- Nêu visual target, motion behavior, color constraint, performance budget,
+  fallback behavior và tệp có thể sửa.
+- Cung cấp shader compiler, browser, graphics test harness hoặc preview route
+  của project để verification.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:shader ...` | Có thể author và sửa shader code bằng tool project khả dụng. Compilation, browser rendering và GPU inspection phụ thuộc workspace. |
+| Cursor | `/ak:shader ...` | Cách gọi bằng slash đã được người dùng xác minh. Bằng chứng này không thiết lập render, screenshot và graphics-debugging tool tương đương. |
+| Codex | `$ak:shader ...` | Dùng native Skill discovery. Rendering cùng visual inspection phụ thuộc session; Engineer automation được projection một phần. |
+
+Xem [Runtime adapter](../../../concepts/runtime-adapters) để hiểu khác biệt theo
+từng component giữa các target.
+
+## Chạy Skill
+
+Truyền effect cùng host contract bằng ngôn ngữ tự nhiên. Skill khai báo argument
+effect hoặc pattern, không khai báo flag hay output path cố định.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:shader "Create a WebGL 1 fragment shader for a subtle animated marble background using the project's u_time and u_resolution uniforms. Keep motion slow, preserve text contrast, add a reduced-motion static path, and verify it in the existing preview without adding dependencies."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:shader "Create a WebGL 1 fragment shader for a subtle animated marble background using the project's u_time and u_resolution uniforms. Keep motion slow, preserve text contrast, add a reduced-motion static path, and verify it in the existing preview without adding dependencies."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:shader "Create a WebGL 1 fragment shader for a subtle animated marble background using the project's u_time and u_resolution uniforms. Keep motion slow, preserve text contrast, add a reduced-motion static path, and verify it in the existing preview without adding dependencies."
+```
+
+  </Tab>
+</Tabs>
+
+Với Three.js, nêu material, geometry, varying value, renderer version, color-space
+handling hiện có và Skill có được đổi vertex shader hay JavaScript integration
+không.
+
+## Mô tả effect chính xác
+
+Một brief hữu ích cung cấp cho Skill:
+
+- **Visual outcome:** Nêu material, motion, density, scale, palette cùng focal
+  behavior mong đợi.
+- **Host contract:** Nêu version GLSL hoặc GLSL ES, thế hệ WebGL, tên uniform
+  cùng varying, texture input và quy ước output.
+- **Performance boundary:** Nêu target device, resolution, frame target và độ
+  phức tạp octave hoặc loop chấp nhận được.
+- **Access boundary:** Nêu online editor, external shader library, package change,
+  browser automation hay asset download có được phép không.
+- **Acceptance evidence:** Xác định scene, viewport, timestamp, static state,
+  screenshot, compile check cùng performance observation bắt buộc.
+
+## Quan sát shader workflow dựa trên bằng chứng
+
+1. **Lần chạy kiểm tra host.** Skill đọc shader, material setup, uniform,
+   coordinate transform và graphics version hiện có.
+2. **Lần chạy chọn kỹ thuật tối thiểu.** Skill chọn SDF, gradient, tiling, noise,
+   cellular distance, fBm hay domain warping theo effect thay vì kết hợp mọi kỹ
+   thuật.
+3. **Lần chạy viết shader và integration.** Skill giữ input cùng output khớp
+   project và cô lập uniform hay helper mới.
+4. **Lần chạy compile trên target thật.** Skill báo compile cùng link error đúng
+   nguyên văn và sửa vấn đề về version, precision, type hay interface.
+5. **Lần chạy render state đại diện.** Skill kiểm tra resolution, aspect ratio,
+   time, mouse value, device class cùng reduced-motion hoặc fallback state phù
+   hợp.
+6. **Lần chạy đo và review.** Skill ghi visual evidence, frame hoặc GPU
+   observation có trong project, ảnh hưởng accessibility cùng browser hay device
+   gap còn lại.
+
+## Giữ generated visual và runtime effect an toàn
+
+<Callout type="warn" title="Shader compile được chưa phải visual an toàn">
+  Animated contrast, flashing, chuyển động nhanh, detail tần số cao và fragment
+  loop nặng có thể ảnh hưởng accessibility, pin, nhiệt cùng frame stability.
+  Review effect đã render với content thật và target device.
+</Callout>
+
+- Không copy shader hay library function của bên thứ ba mà chưa kiểm tra license
+  cùng yêu cầu attribution.
+- Hỏi trước khi dùng online editor hoặc external library; chúng có thể gửi source
+  code qua network hoặc thêm dependency.
+- Giữ static hoặc lower-cost fallback khi motion preference, device capability
+  hay rendering failure yêu cầu.
+- Tránh để lộ sensitive texture input, screenshot hay proprietary shader source
+  qua public playground.
+- Coi package installation, asset generation, publication, deployment và
+  production feature flag là các ranh giới quyền hạn riêng.
+
+## Xác minh code và visual evidence
+
+Một implementation hoàn tất nên cung cấp:
+
+- Fragment shader cuối cùng cùng thay đổi host integration đã duyệt.
+- Shader version, uniform, varying, texture, precision và output assumption chính
+  xác.
+- Compiler cùng linker result mới từ target thật.
+- Screenshot hoặc recording ở kích thước cùng state đại diện, gồm fallback hay
+  reduced-motion behavior khi bắt buộc.
+- Performance observation trên device hoặc environment được nêu tên, không phải
+  claim chung rằng GPU execution nhanh.
+- Phát hiện về contrast, readability, motion safety, browser support cùng
+  artifact đã biết, thêm tệp chính xác đã đổi và check bị bỏ qua.
+
+Reference snippet là nguyên liệu, không phải chương trình hoàn chỉnh. Function
+như `noise`, `fbm` cùng constant như `PI` phải được định nghĩa hoặc import trong
+compilation unit cuối nếu recipe được chọn phụ thuộc chúng.
+
+## Xử lý sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| `gl_FragColor` hoặc qualifier bị từ chối | Xác nhận GLSL/WebGL version thật và điều chỉnh input/output interface thay vì ép ví dụ cũ hơn. |
+| Shader compile nhưng render màu đen | Kiểm tra uniform binding, coordinate normalization, alpha, precision cùng numeric range bằng diagnostic color đơn giản. |
+| Pattern bị kéo giãn theo viewport | Sửa aspect ratio theo coordinate convention của project và render lại nhiều kích thước. |
+| Performance mobile giảm | Giảm octave hoặc loop count, resolution, overdraw cùng branch nặng; kiểm thử fallback có giới hạn trên target device. |
+| Symbol noise hoặc helper chưa được định nghĩa | Chỉ thêm helper function mà recipe đã chọn cần, rồi compile lại. |
+| Motion làm giảm readability | Làm chậm hoặc bỏ animation, giảm contrast variation và cung cấp static state đã duyệt. |
+| Runtime không nhận diện Skill | Xác nhận target cùng scope, khởi động lại session, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Tiếp tục với [Frontend design](./frontend-design) cho surface bao quanh, hoặc xem
+[Projects, artifacts và checkpoints](../../../concepts/projects-artifacts-checkpoints).
+
+## Biết các giới hạn hiện tại
+
+- Skill là GLSL reference library; Skill không bundle compiler, renderer,
+  browser, GPU profiler, executable hay test suite.
+- API reference được bundle nhắm tới GLSL ES 1.0 cùng function kiểu WebGL. Target
+  khác cần điều chỉnh syntax và interface có chủ đích.
+- Screenshot không chứng minh performance ổn định hay correctness trên mọi GPU,
+  driver, browser, color space cùng accessibility setting.
+- Stable và beta chứa nội dung `ak:shader` giống nhau trong cặp release này.

@@ -1,0 +1,143 @@
+---
+title: Automate isolated browser work with ak:agent-browser
+description: Use ak:agent-browser for snapshots, interactions, screenshots, scraping, and exploratory QA without relying on your everyday Chrome profile.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:agent-browser` when the outcome requires a browser or supported desktop
+app that the assistant can drive through the `agent-browser` CLI. The Skill
+routes profile-independent navigation, accessibility snapshots, element
+interaction, screenshots, scraping, exploratory QA, and cloud-browser work to
+the workflow content shipped by the installed CLI.
+
+## Choose ak:agent-browser for isolated sessions
+
+### Use ak:agent-browser when
+
+- A fresh or tool-managed browser session is acceptable.
+- You need compact snapshots and stable element references for a longer flow.
+- The task involves screenshots, form preparation, scraping, exploratory QA, or
+  a supported Electron or cloud-browser workflow.
+- You can verify the result without depending on cookies or accounts already
+  open in your everyday Chrome profile.
+
+### Choose another workflow when
+
+- The task requires your real Chrome cookies, signed-in account, tenant, or a
+  specific existing profile. Use the profile-aware browser workflow available
+  in your installation.
+- You need a repeatable test suite rather than an exploratory run. Use a web
+  testing workflow and the project's test runner.
+- You only need low-level Chrome DevTools diagnostics. Use an available
+  DevTools integration and keep its selected profile explicit.
+
+## Prepare the browser environment
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding) and install
+  Marketing Kit for the runtime and scope you are using.
+- Install or update `agent-browser` with `npm install -g agent-browser`, then
+  run `agent-browser install` once to download Chromium. Linux environments
+  may need `agent-browser install --with-deps`.
+- Run `agent-browser skills get core` before browser commands so the workflow
+  matches the installed CLI. Use `--full` when you need its command reference.
+- Decide whether the session is local or cloud-hosted. Browserbase requires
+  `BROWSERBASE_API_KEY` and `BROWSERBASE_PROJECT_ID`; keep them out of prompts,
+  logs, screenshots, and version control.
+- Define the allowed origins, account boundary, permitted form actions, and
+  whether any submission or upload is authorized.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:agent-browser ...` | Native delivery is the default; explicit plugin delivery is also supported. The Skill can call the installed CLI within Claude Code's permissions. |
+| Cursor | `/ak:agent-browser ...` | Slash invocation is user-verified. Cursor projection does not establish identical Hook, tool, or approval behavior. |
+| Codex | `$ak:agent-browser ...` | The Skill uses native Codex discovery. CLI execution still depends on the current sandbox, network, and command permissions. |
+
+See [Runtime adapters](../../../concepts/runtime-adapters) for delivery and
+component-level differences.
+
+## Run a bounded browser task
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:agent-browser Open https://example.com in an isolated session, capture an interactive snapshot and a screenshot, report the page title, and do not submit forms or sign in
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:agent-browser Open https://example.com in an isolated session, capture an interactive snapshot and a screenshot, report the page title, and do not submit forms or sign in
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:agent-browser Open https://example.com in an isolated session, capture an interactive snapshot and a screenshot, report the page title, and do not submit forms or sign in
+```
+
+  </Tab>
+</Tabs>
+
+## Follow the session stages
+
+1. **Confirm the state boundary.** Decide whether an isolated browser is enough.
+   If existing Chrome state is required, stop and switch workflows.
+2. **Load installed guidance.** The Skill reads the live `core` workflow, or a
+   specialized `electron`, `slack`, `dogfood`, `vercel-sandbox`, or
+   `agentcore` workflow when the task needs it.
+3. **Open and observe.** Start the session, navigate to the approved URL, take a
+   current snapshot, and identify elements from that evidence.
+4. **Act narrowly.** Click, fill, upload, or navigate only within the approved
+   task. Refresh the snapshot after page changes instead of reusing stale refs.
+5. **Verify and close.** Capture the requested evidence, report unresolved
+   browser state, and close the session. Closing a Browserbase session also
+   ends the remote session.
+
+## Keep account and external effects explicit
+
+<Callout type="warn" title="A browser action can be a real-world action">
+  Opening and inspecting a page is different from signing in, submitting a
+  form, uploading data, sending a message, accepting terms, purchasing, or
+  changing an account. Approve those mutations separately before they occur.
+</Callout>
+
+Installing the CLI or Chromium changes the local environment and may require
+network access. A cloud-browser run sends traffic and session data to its
+provider and may incur provider usage. Use local Chromium when appropriate,
+close remote sessions promptly, and never place provider keys in command text
+that will be retained.
+
+## Verify the evidence
+
+A complete run should identify:
+
+- The session type and approved origin or app.
+- The snapshots, screenshots, extracted data, or QA findings produced.
+- Each mutation performed, including any form submission, upload, or account
+  change.
+- The final observed state and whether the session was closed.
+- Any provider, permission, authentication, or page-state limitation.
+
+## Troubleshoot and understand limits
+
+| Symptom | Safe next step |
+| --- | --- |
+| The runtime cannot find the Skill | Confirm target and scope, restart the runtime, then use [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+| `agent-browser` is missing | Install it with npm, verify `agent-browser --version`, then load `agent-browser skills get core`. |
+| Chromium or Linux libraries are missing | Run `agent-browser install` or `agent-browser install --with-deps`. |
+| An element ref no longer works | Take a new interactive snapshot after the page update. |
+| The site needs an existing Chrome login | Stop. An isolated session is the wrong state boundary; switch to the profile-aware workflow. |
+| Browserbase authentication or quota fails | Preserve the provider error without exposing keys, close any open session, and check provider access outside the Skill. |
+
+The Skill depends on the installed CLI, available browser, current site
+behavior, network access, and provider limits. It does not guarantee that a
+site permits automation or that a flow is safe to submit. Continue with
+[Marketing Hooks](../hooks) for background guardrails or
+[Marketing Kit lifecycle](../lifecycle) for installation recovery.

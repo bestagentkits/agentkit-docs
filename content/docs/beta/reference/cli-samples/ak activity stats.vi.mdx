@@ -1,0 +1,101 @@
+---
+title: ak activity stats
+description: Tổng hợp mức sử dụng skill cục bộ có giới hạn riêng tư từ activity của AgentKit và phiên Claude Code mà không enable analytics.
+---
+
+Dùng `ak activity stats` để tổng hợp mức sử dụng skill cục bộ theo skill, kit,
+runtime, nguồn, ngày, trạng thái và nhóm thời lượng. Đây là thao tác đọc cục bộ,
+không phải telemetry từ xa.
+
+## Cách dùng
+
+```bash
+ak activity stats
+```
+
+Lệnh không nhận argument theo vị trí.
+
+## Cờ của lệnh
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--kit <id>` | Trống | Chỉ giữ row của một kit ID khớp chính xác. |
+| `--runtime <id>` | Trống | Chỉ giữ row của một runtime khớp chính xác, như `codex` hoặc `claude-code`. |
+| `--window <duration>` | `7d` | Đặt khoảng nhìn lại dương như `24h`, `7d` hoặc `2w`. |
+
+Dạng ngày và tuần dùng ngày cố định 24 giờ. Lệnh cũng nhận duration dương chuẩn
+của Go. Window bằng không, âm hoặc sai định dạng thoát `2`.
+
+## Ví dụ thường dùng
+
+```bash
+ak activity stats --window 24h
+ak activity stats --runtime codex --window 7d --json
+ak activity stats --kit engineer --window 2w
+```
+
+Các bộ lọc khớp chính xác và kết hợp khi dùng cùng nhau. Kết quả đếm event,
+không đếm phiên hay người dùng duy nhất.
+
+## Nguồn và quyền riêng tư
+
+Collector trực tiếp đọc:
+
+- `~/.agentkit/activity/events.ndjson`, với `AGENTKIT_HOME` đổi phần gốc;
+- các tệp JSONL phiên dưới `~/.claude/projects`, với
+  `AGENTKIT_CLAUDE_HOME` đổi Claude home.
+
+Một analytics generation đã có và được xác minh có thể phục vụ cùng dữ liệu
+tổng hợp. Nếu index không dùng được hoặc không hợp lệ, lệnh tự quay về nguồn
+trực tiếp. Nó không enable, tạo, refresh hay sửa index.
+
+Row chủ động loại prompt, path, argument, session ID, trace ID và raw error.
+Lệnh phân tích cục bộ lần gọi công cụ Skill của Claude Code. Báo cáo này không
+có parser phiên trực tiếp cho Codex hoặc OpenCode; mức sử dụng của chúng vẫn có
+thể xuất hiện khi được ghi trong activity log của AgentKit. Object `coverage`
+nêu rõ các khoảng trống parser đó.
+
+Window chỉ lọc báo cáo. Nó không xoá tệp phiên, activity log hay fact trong
+index. Lệnh không dùng mạng hay provider và không cần xác thực hoặc entitlement
+AgentKit.
+
+## Output cho người dùng và JSON
+
+Output cho người dùng in skill, runtime, source, status, duration bucket, count
+và UTC date bucket. JSON thành công có:
+
+```text
+schema_version: 1
+kind: activity.stats
+data.schema_version: 1
+data.rows: array
+data.total: integer
+data.coverage.sources: source, parsed, and skipped counts
+data.coverage.no_parser_runtimes: array
+```
+
+Mỗi row chứa `skill`, `kit` tuỳ chọn, `runtime`, `source`, `date_bucket`,
+`status`, `duration_bucket` và `count`. `total` là tổng `count`, không phải số
+row.
+
+## Tương tác và mã thoát
+
+Lệnh không prompt và không đọc stdin. `--yes` không có tác dụng.
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Tổng hợp hoàn tất, kể cả khi không có usage khớp. |
+| `1` | Quét/đọc nguồn cục bộ hoặc ghi output thất bại, hay có argument theo vị trí. |
+| `2` | Cờ không hợp lệ hoặc `--window` không phải duration dương được hỗ trợ. |
+
+Lỗi lệnh trong chế độ `--json` có thể không trả structured error body. Hãy dùng
+trạng thái process và xác minh success envelope trước khi dùng.
+
+Trên macOS, guard first-launch dùng chung của CLI cũng có thể ghi
+`~/.agentkit/.first-run-darwin` và in hint một lần lên stderr trước khi lệnh
+này chạy.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak activity stats`](../cli/ak_activity_stats)
+- [Quy ước CLI](../cli-conventions)

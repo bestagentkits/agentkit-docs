@@ -1,0 +1,70 @@
+---
+title: ak plan phase update
+description: Cập nhật bookkeeping của phase do index sở hữu mà không ghi đè title, status hay content do tệp sở hữu.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak plan phase update` để ghi bookkeeping của phase thuộc plan index cục
+bộ. Lệnh không chỉnh sửa tệp Markdown của phase.
+
+## Cách dùng
+
+```bash
+ak plan phase update <plan-id> <n> [flags]
+```
+
+`<n>` phải là số nguyên dương và `<plan-id>` phải tồn tại trong store.
+
+## Tuỳ chọn của lệnh
+
+| Cờ | Mặc định | Ownership và hành vi |
+| --- | --- | --- |
+| `--acceptance <text>` | Trống | Nội dung acceptance do index sở hữu. |
+| `--comment-id <id>` | `0` | GitHub tracking comment ID do index sở hữu. |
+| `--evidence <text>` | Trống | Evidence hoặc link do index sở hữu. |
+| `--notes <text>` | Trống | Ghi chú tự do do index sở hữu. |
+| `--title <text>` | Trống | Do tệp sở hữu và bị từ chối với mã `2`; sửa heading của phase. |
+| `--status <status>` | Trống | Do tệp sở hữu và bị từ chối với mã `2`; dùng check, uncheck hoặc phase close. |
+| `--content <text>` | Trống | Do tệp sở hữu và bị từ chối với mã `2`; sửa body của phase. |
+
+Chỉ cờ được truyền rõ ràng mới thay giá trị index-owned tương ứng; truyền chuỗi
+rỗng sẽ xoá trường text đó. Xem cờ dùng chung trong
+[quy ước CLI](../cli-conventions).
+
+## Hành vi mutation
+
+Nếu chưa có phase `<n>`, lệnh tạo row trong index với revision `0`; trường do
+tệp sở hữu ban đầu rỗng và status mặc định là `todo`. Nếu row đã có, mỗi lần gọi
+đều upsert và tăng `rev`, kể cả khi không có cờ bookkeeping nào thay đổi.
+
+<Callout type="warning">
+  Không dùng `--title`, `--status` hoặc `--content` như alias tương thích. Các
+  cờ này bị từ chối để reindex sau đó không âm thầm đảo giá trị chỉ có trong
+  index. Hãy sửa tệp phase rồi reindex; dùng `ak plan uncheck`, `ak plan check`
+  hoặc `ak plan phase close` cho status do checkbox sở hữu.
+</Callout>
+
+Thao tác cập nhật row phase và FTS entry trong một transaction SQLite. Lệnh
+không kiểm tra có tệp phase tương ứng hay không. Không có mạng, auth, provider,
+prompt, đọc stdin, preview, force, snapshot hay rollback. Mở store có thể tạo
+hoặc forward-migrate store.
+
+## Đầu ra
+
+JSON thành công dùng `kind=plan.phase-update` với `plan_id`, `n`, `title`,
+`status` và `rev`. Notes, evidence, acceptance và comment ID vừa ghi không được
+echo trong kết quả; hãy xem revision là receipt của thao tác. Human/plain cũng
+chỉ hiện identity, title, status và revision.
+
+## Kết quả, mã thoát và khôi phục
+
+| Mã | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Row phase đã được insert hoặc update. | Kiểm tra revision trả về; dùng search khi phù hợp với text đã index. |
+| `1` | Plan không tồn tại hoặc plan store lỗi. | Sửa quyền store hoặc reindex plan trước khi thử lại. |
+| `2` | Argument không hợp lệ, số phase không dương hoặc đã truyền cờ file-owned. | Sửa tệp chuẩn hoặc cách gọi. |
+
+Lỗi runtime JSON dùng stderr; lỗi parse cờ có thể vẫn là plain text.
+
+## Lệnh liên quan

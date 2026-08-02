@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { agentPrViolations, generatedViolations } from './lib/guards.mjs';
+import { agentPrViolations, generatedViolations, guardedDirs } from './lib/guards.mjs';
 import { isInGeneratedDir } from './lib/generated-dirs.mjs';
 
 const GENERATED = [
@@ -28,6 +28,22 @@ test('generatedViolations flags generated pages but exempts human nav meta', () 
     'content/docs/beta/reference/cli/ak.mdx',
     'content/docs/beta/reference/cli/.generated',
   ]);
+});
+
+test('guardedDirs exempts the reproducible reference dir, keeps the rest', () => {
+  // beta/reference/cli is proven by the regenerate-and-diff CI step, so the
+  // hand-edit guard drops it; stable/reference/cli (a promotion copy) stays.
+  assert.deepEqual(guardedDirs(GENERATED), ['content/docs/stable/reference/cli']);
+  // With beta exempted, an edit to a beta reference page is no longer a violation.
+  assert.deepEqual(
+    generatedViolations(['content/docs/beta/reference/cli/ak.mdx'], guardedDirs(GENERATED)),
+    [],
+  );
+  // …but a stable reference edit still is.
+  assert.deepEqual(
+    generatedViolations(['content/docs/stable/reference/cli/ak.mdx'], guardedDirs(GENERATED)),
+    ['content/docs/stable/reference/cli/ak.mdx'],
+  );
 });
 
 test('agent PR: a modify-only beta prose patch is allowed', () => {

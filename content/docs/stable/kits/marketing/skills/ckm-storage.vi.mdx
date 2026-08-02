@@ -1,0 +1,158 @@
+---
+title: Hiểu giới hạn định danh của router ak:storage
+description: Xem vì sao export ak-ckm-storage chưa thể được gọi độc lập một cách an toàn và review ranh giới thao tác S3 dự kiến.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Export `ak-ckm-storage` được thiết kế để route các thao tác `list`, `sync`,
+`upload` và `url` tới client storage tương thích S3. Export này không có định
+danh runtime riêng: frontmatter khai báo `ak:storage`, hoàn toàn trùng với
+export `ak-storage` riêng biệt.
+
+<Callout type="warn" title="Không gọi export này bằng tên canonical">
+  Package Marketing hiện tại cài hai export vào hai thư mục export riêng, nhưng
+  cả hai đều khai báo `ak:storage`. Vì vậy runtime discovery không có selector
+  đã được tài liệu hóa để bảo đảm definition nào xử lý `/ak:storage` hoặc
+  `$ak:storage`. Hai export được đóng gói có cùng collision này.
+</Callout>
+
+## Dùng trang này để hiểu ranh giới dự kiến
+
+### Scope dự kiến
+
+- Liệt kê object từ xa, có thể lọc theo prefix.
+- Preview hoặc thực hiện sync đệ quy một folder local.
+- Upload một tệp local tới object key đã chọn.
+- Tạo public URL cho một object key.
+
+### Không dùng export này khi
+
+- Bạn cần workflow storage production đáng tin cậy trước khi collision định
+  danh được giải quyết.
+- Bạn cần download, delete, access policy, tạo bucket, lifecycle hoặc migration.
+  Đây không phải subcommand của router.
+- Bạn cần bảo đảm URL được tạo là public hoặc object tồn tại. Quyền public vẫn
+  là quyết định của provider và bucket policy.
+
+## Chuẩn bị mà không làm lộ credential
+
+Client dự kiến kiểm tra các environment variable sau:
+
+| Variable | Yêu cầu |
+| --- | --- |
+| `S3_ENDPOINT` | Endpoint dịch vụ bắt buộc |
+| `S3_ACCESS_KEY_ID` | Access-key identifier bắt buộc |
+| `S3_SECRET_ACCESS_KEY` | Secret access key bắt buộc |
+| `S3_BUCKET` | Tên bucket bắt buộc |
+| `S3_REGION` | Tùy chọn; client mặc định là `auto` |
+| `S3_PUBLIC_URL` | Public base URL hoặc custom domain tùy chọn |
+
+Client phía sau cũng cần `@aws-sdk/client-s3` trong environment thực thi. Giữ
+credential trong tệp environment local đã ignore, dùng credential giới hạn ở
+bucket với least privilege và không dán secret vào prompt hay output của Skill.
+
+## Trạng thái định danh theo runtime
+
+| Runtime | Cách gọi được quảng bá | Ranh giới hiện tại |
+| --- | --- | --- |
+| Claude Code | `/ak:storage ...` | Mơ hồ vì cả hai storage export khai báo tên này; việc tách thư mục native hay plugin không chọn được definition. |
+| Cursor | `/ak:storage ...` | Mơ hồ vì cùng nguyên nhân; slash discovery không chứng minh definition trùng tên nào được chọn. |
+| Codex | `$ak:storage ...` | Mơ hồ vì native projection giữ cả hai thư mục export và hai tệp vẫn có cùng tên canonical. |
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+Không dựa vào `/ak:storage list`, `/ak:storage sync`, `/ak:storage upload` hay
+`/ak:storage url` cho tới khi một export sở hữu tên canonical.
+
+  </Tab>
+  <Tab value="Cursor">
+
+Không dựa vào `/ak:storage list`, `/ak:storage sync`, `/ak:storage upload` hay
+`/ak:storage url` cho tới khi một export sở hữu tên canonical.
+
+  </Tab>
+  <Tab value="Codex">
+
+Không dựa vào `$ak:storage list`, `$ak:storage sync`, `$ak:storage upload` hay
+`$ak:storage url` cho tới khi một export sở hữu tên canonical.
+
+  </Tab>
+</Tabs>
+
+Xem [Runtime adapter](../../../concepts/runtime-adapters) để hiểu khác biệt về
+capability và delivery. Cài lại hoặc đổi scope không sửa được định danh canonical
+bị trùng.
+
+## Review contract thao tác dự kiến
+
+| Thao tác dự kiến | Argument và option | Tác động |
+| --- | --- | --- |
+| `list` | `[prefix]` | Đọc object tới giới hạn listing hiện tại của client và format key, size cùng last-modified. |
+| `sync` | `<folder> [remote-prefix] [--dry-run] [--extensions=.png,.jpg]` | Scan đệ quy tệp local; dry-run trả về object key đề xuất, còn live run đã duyệt sẽ upload tệp phù hợp. |
+| `upload` | `<path> [remote-path]` | Đọc một tệp local và ghi một object từ xa. Nếu bỏ remote path, router dự kiến dùng local relative path. |
+| `url` | `<path>` | Tạo URL từ `S3_PUBLIC_URL` hoặc cấu hình endpoint và bucket; bước kiểm tra tồn tại là tùy chọn. |
+
+Đây là argument dự kiến, không phải ví dụ invocation an toàn khi collision định
+danh vẫn còn.
+
+## Hiểu các giai đoạn dự kiến
+
+1. Router parse argument đầu tiên thành thao tác.
+2. Router tải reference tương ứng với thao tác.
+3. Thao tác tải backing client từ export `ak-storage` riêng và xác minh cấu
+   hình.
+4. Thao tác read-only liệt kê metadata hoặc tạo URL. Thao tác ghi kiểm tra input
+   local trước request từ xa.
+5. Dry-run sync báo các object key đề xuất mà không upload. Live sync upload tuần
+   tự và báo thành công hay thất bại theo từng tệp.
+
+Dependency xuyên export này là lý do bổ sung để không coi `ak-ckm-storage` là
+implementation storage độc lập.
+
+## Giữ approval và tác động bên ngoài rõ ràng
+
+- `list` và bước kiểm tra tồn tại tùy chọn gửi request đọc có xác thực tới
+  provider đã cấu hình.
+- `upload` và live `sync` đọc tệp local rồi gửi nội dung tới bucket đã cấu hình.
+  Hãy duyệt chính xác tệp, object key, provider và phân loại dữ liệu trước.
+- `--dry-run` ngăn upload trong routine sync phía sau, nhưng vẫn scan folder
+  local.
+- Việc tạo URL không đổi bucket policy và không biến object private thành public.
+- Router dự kiến không cấp quyền delete, publication, đổi CDN, phát sinh billing
+  provider hay tạo credential.
+
+## Bằng chứng dự kiến
+
+Với implementation được giải quyết trong tương lai, hãy yêu cầu:
+
+- Thao tác đã chọn cùng local path và remote path đã resolve.
+- Trạng thái có cấu hình nhưng không hiển thị giá trị secret.
+- Mapping tệp sang object từ dry run trước multi-file upload.
+- Kết quả upload theo từng tệp, số lỗi và URL trả về cho live sync.
+- Lỗi provider được giữ đủ để chẩn đoán nhưng không làm lộ credential.
+
+## Xử lý sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Có hai storage entry hoặc behavior không nhất quán | Dừng. Không đoán export nào thắng discovery; giữ đây là defect định danh package chưa giải quyết. |
+| Storage báo chưa cấu hình | Kiểm tra variable bắt buộc và SDK ở local mà không in giá trị. Không thêm dependency hay credential cho tới khi lỗi định danh được giải quyết. |
+| Cần sync ngay | Dùng provider tool hoặc workflow riêng đã được review, với dry run, destination và ranh giới credential rõ ràng. |
+| URL trả về không truy cập được | Xác minh object tồn tại, bucket policy, routing custom domain và behavior provider bên ngoài Skill mơ hồ này. |
+| Trạng thái cài đặt bất thường | Làm theo [Lỗi cài Kit](../../../troubleshooting/kit-installation) mà không force reinstall lên tệp người dùng. |
+
+Tiếp tục với [Tổng quan Marketing Kit](../../marketing),
+[Cài đặt Kit](../../../guides/installing-kits) hoặc
+[Tham chiếu CLI](../../../reference/cli) cho lệnh lifecycle AgentKit.
+
+## Biết các giới hạn hiện tại
+
+- Không có cách được hỗ trợ để chọn `ak-ckm-storage` qua tên canonical đã khai
+  báo trong khi `ak-storage` khai báo cùng tên.
+- Router tham chiếu backing client ở export còn lại, vì vậy xóa một export không
+  phải cách sửa đã được tài liệu hóa.
+- Tương thích provider là intent được ship, không phải bảo đảm live. Endpoint,
+  authentication, public URL và billing phải được xác minh với provider đã chọn.

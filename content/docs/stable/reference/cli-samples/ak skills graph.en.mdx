@@ -1,0 +1,79 @@
+---
+title: ak skills graph
+description: Build a local workflow graph and distinguish explicit, derived, and opt-in heuristic edges.
+---
+
+Use `ak skills graph` to inspect workflow relationships declared or described by
+skills in local kit sources.
+
+## Usage
+
+```bash
+ak skills graph
+```
+
+The command accepts no positional arguments.
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--edge-kind <kind>` | Empty | Keep one repeatable edge kind: `typically_follows`, `typically_precedes`, or `related`. Values are not validated; an unknown value yields no matching edges. |
+| `--heuristic` | `false` | Add `related` edges from literal `/ak:<skill>` co-mentions. |
+| `--kit <kit>` | Empty | Load one exact local kit ID. |
+| `--skill <skill>` | Empty | Keep the first matching skill and its connected component after edge filtering. |
+
+The source directory is `AGENTKIT_KITS_DIR` or `./kits`. There is no
+`--kits-dir` flag on this command.
+
+## Understand graph evidence
+
+| Confidence | Source | Default |
+| --- | --- | --- |
+| `explicit` | `metadata.workflow.follows` or `metadata.workflow.precedes` in frontmatter | Included |
+| `derived` | `Typically follows:` or `Typically precedes:` lines in a `Workflow Position` section | Included |
+| `heuristic` | Literal `/ak:` references anywhere in skill content | Only with `--heuristic` |
+
+Heuristic edges are lexical hints, not proof of execution order or dependency.
+The `--skill` view uses transitive undirected connectivity, not only immediate
+neighbors. If the selector matches no node, the current implementation leaves
+the full graph unchanged; check the result rather than assuming an empty graph.
+
+The internal composition kit is not emitted as its own user-facing kit. Valid
+child-kit exports can still project inherited skills into child-kit node IDs.
+Unreadable kits, skills, or unresolved relationship targets become warnings
+where possible instead of failing the entire graph.
+
+## Output
+
+Human stdout lists node and edge counts, then outgoing edges and warnings. JSON
+uses `kind=skills.graph` with these fields under `data`:
+
+```text
+schemaVersion: 1
+nodes[]: id, name, kitId, description?, category?, tags, runtimeSupport?, sourcePath?
+edges[]: id, source, target, kind, confidence, evidence?
+warnings[]
+```
+
+`sourcePath`, evidence, and warnings can disclose relative local kit paths or
+metadata errors. The command does not include skill bodies.
+`runtimeSupport` reflects registered installable adapters, not a skill-specific
+live compatibility test.
+
+## Effects and exits
+
+The command is local, read-only, noninteractive, and makes no network request.
+It has no cache, backup, apply, or force behavior.
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The graph was built, including an empty graph or filter with no edges. |
+| `1` | The local source could not be constructed or graph building failed. Extra positional arguments also currently use this path. |
+| `2` | A flag could not be parsed. |
+
+## Related commands
+
+- [Complete `ak skills graph` facts](../cli/ak_skills_graph)
+- [List local skills](../cli/ak_skills_list)
+- [Show skill metadata](../cli/ak_skills_show)

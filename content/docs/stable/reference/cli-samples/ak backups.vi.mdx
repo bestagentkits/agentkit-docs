@@ -1,0 +1,96 @@
+---
+title: ak backups
+description: Kiểm tra, xác minh, dọn và khôi phục các snapshot rollback có phạm vi giới hạn do AgentKit quản lý.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak backups` làm điểm vào cho các recovery snapshot của AgentKit. Bản thân
+nhóm lệnh chỉ đọc: chạy mà không có subcommand sẽ in help và thoát `0`.
+
+## Cách dùng
+
+```bash
+ak backups <subcommand>
+```
+
+`ak backups --json` vẫn in help của nhóm, không tạo kết quả JSON. Hãy dùng
+`--json` trên subcommand có thể chạy. Các cờ dùng chung nằm trong
+[quy ước CLI](../cli-conventions), nhưng mỗi thao tác backup có hợp đồng xác
+nhận, đầu ra và mã thoát riêng.
+
+## Chọn thao tác
+
+| Mục tiêu | Lệnh | Hành vi thay đổi dữ liệu |
+| --- | --- | --- |
+| Liệt kê rollback snapshot từ mới đến cũ | `ak backups list` | Chỉ đọc. |
+| Xem một manifest | `ak backups show <id>` | Chỉ đọc. |
+| Tính lại hash của tệp | `ak backups verify <id>` | Chỉ đọc; báo `ok` hoặc `corrupt`. |
+| Preview hoặc khôi phục trạng thái đã chụp | `ak backups restore <id>` | `--dry-run` chỉ preview; apply có thể thay thế hoặc xoá path được manifest cho phép. |
+| Khôi phục snapshot mới nhất | `ak backups restore --latest` | Dùng cùng restore engine và quy tắc an toàn. |
+| Xoá snapshot theo retention policy | `ak backups prune` | Mặc định sẽ xoá; thêm `--dry-run` để preview. |
+| Stage bản sao database vận hành nhất quán | `ak backups create` | Thay thế thư mục staging vận hành và ghi bản sao `operational.db` đã xác minh. |
+
+Lệnh cấp cao nhất `ak recover [id]` là một entry point khác vào restore engine.
+Đây không phải Cobra alias của `ak backups restore`.
+
+## Hiểu giới hạn của snapshot
+
+Rollback snapshot nằm trong `~/.agentkit/backups/`, hoặc
+`$AGENTKIT_HOME/backups/` khi biến môi trường đó được đặt. Mỗi snapshot có ID
+dạng `YYYYMMDDTHHMMSSZ-<8-hex>`, manifest, dữ liệu đã chụp và metadata hash.
+
+Thao tác vòng đời tạo snapshot quyết định chính xác tệp hoặc root được cho phép
+nào sẽ được chụp. Snapshot không phải bản sao lưu toàn máy, và các loại snapshot
+khác nhau có thể có restore scope khác nhau. Hãy kiểm tra manifest trước khi
+khôi phục:
+
+```bash
+ak backups show <id>
+ak backups verify <id>
+ak backups restore <id> --dry-run
+```
+
+<Callout type="warning">
+  Hash trong manifest phát hiện thay đổi vô tình hoặc không đầy đủ; chúng không
+  xác thực snapshot trước kẻ tấn công có thể sửa cả snapshot lẫn metadata. Hãy
+  bảo vệ AgentKit home bằng quyền filesystem cấp user phù hợp.
+</Callout>
+
+`ak backups create` tách biệt với kho rollback dùng ID. Implementation hiện tại
+stage và xác minh `operational.db` trong thư mục tạm của hệ thống; lệnh không tạo
+ID xuất hiện trong `ak backups list`.
+
+## Áp dụng quy tắc an toàn riêng của từng lệnh
+
+- `prune` không hỏi xác nhận. Hãy preview chính xác tập sẽ xoá trước.
+- `restore` hỏi trên TTY tương tác, nhưng JSON, `--no-interactive` hoặc stdin
+  không phải TTY có thể tiếp tục mà không cần `--yes`. Trong automation, hãy
+  dùng `--yes` để thể hiện chủ đích.
+- Thao tác restore và prune dùng khoá liên tiến trình. Khi tranh chấp khoá, lệnh
+  thất bại thay vì chờ vô hạn.
+- Restore dry-run kiểm tra trước path đang hoạt động mà không thay đổi chúng.
+  Restore thật có thể ghi đè tệp đã chụp và xoá path vốn không tồn tại lúc chụp.
+
+Kết quả restore đã apply là ngoại lệ đầu ra: ngay cả với `--json`, stdout vẫn
+trống và stderr in một dòng hoàn tất dạng plain text. Chỉ
+`ak backups restore --dry-run --json` tạo success envelope
+`kind=backups.restore_plan`.
+
+## Quy trình khôi phục
+
+1. Liệt kê snapshot và chọn bản được tạo trước thay đổi không mong muốn.
+2. Xem và xác minh snapshot.
+3. Chạy restore dry-run rồi kiểm tra mọi path sẽ khôi phục hoặc xoá.
+4. Chỉ apply sau khi xác nhận manifest sở hữu đúng scope dự định.
+
+Nếu kết quả xác minh là corrupt, đừng restore snapshot đó. Snapshot đã bị prune
+không có đường undelete tích hợp; chỉ có thể lấy lại từ bản sao filesystem độc
+lập nếu có.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak backups`](../cli/ak_backups)
+- [Thông tin đầy đủ của `ak backups restore`](../cli/ak_backups_restore)
+- [Thông tin đầy đủ của `ak backups verify`](../cli/ak_backups_verify)
+- [Thông tin đầy đủ của `ak recover`](../cli/ak_recover)

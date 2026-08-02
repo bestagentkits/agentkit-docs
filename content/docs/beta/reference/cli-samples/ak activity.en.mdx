@@ -1,0 +1,81 @@
+---
+title: ak activity
+description: Inspect AgentKit's local activity feed, choose a finite snapshot, aggregate, or live stream, and understand its privacy boundary.
+---
+
+Use `ak activity` to inspect local skill-run evidence without opening the
+dashboard or desktop app. The group command is read-only and selects one of
+three views over local data.
+
+## Usage
+
+```bash
+ak activity
+```
+
+The group accepts no positional arguments and has no command-specific flags.
+Running it without a subcommand prints its help and exits `0`.
+
+## Choose a subcommand
+
+| Goal | Command | Behavior |
+| --- | --- | --- |
+| Read a bounded snapshot | `ak activity list` | Returns recent activity events, newest first. |
+| Aggregate skill usage | `ak activity stats` | Groups privacy-bounded local usage over a lookback window. |
+| Follow new events | `ak activity tail` | Waits at the current end of the log and streams later appends. |
+
+```bash
+ak activity list --json
+ak activity stats --window 7d --json
+ak activity tail --json
+```
+
+## Local data and privacy
+
+The activity log is `~/.agentkit/activity/events.ndjson`. `AGENTKIT_HOME`
+changes the `~/.agentkit` base. It is an append-only local NDJSON file written
+by activity-producing commands such as `ak run`; the activity commands do not
+truncate or apply retention to it.
+
+Events can contain a timestamp, event kind, skill identifier, runtime,
+duration, and subprocess exit code. They do not contain prompt text or skill
+arguments. `stats` can additionally read Claude Code session JSONL files to
+derive aggregate Skill-tool usage. No activity subcommand sends analytics,
+contacts a provider, checks entitlement, or changes the analytics lifecycle.
+
+The disposable analytics index may accelerate `stats` only when an existing
+generation is valid. Otherwise `stats` reads the authoritative local sources;
+it does not create, enable, refresh, or repair the index.
+
+## Output and interaction
+
+`list` and `stats` produce one human report or one versioned JSON envelope on
+stdout. `tail --json` is different: it emits one `kind=activity.event` envelope
+per line, so consumers must parse it as NDJSON.
+
+These commands never prompt and ignore stdin. `--yes` has no effect.
+`--no-interactive` only selects plain rendering. See each subcommand page for
+its exact output and cancellation behavior.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Help or the selected read completed; cancelling `tail` through the command context also exits `0`. |
+| `1` | A local source read, scan, or output write failed; an unexpected positional argument also currently exits `1`. |
+| `2` | A flag was invalid, or `stats --window` could not be parsed. |
+
+Activity runtime failures in `--json` mode are not routed through the shared
+JSON error renderer. They can therefore return a nonzero status with empty
+stdout and stderr. Treat the process status as authoritative and validate a
+success envelope before reading it. Flag-parse failures remain plain-text usage
+on stderr.
+
+On macOS, the CLI-wide first-launch guard can also write
+`~/.agentkit/.first-run-darwin` and print a one-time hint to stderr before this
+command runs.
+
+## Related commands
+
+- [Complete `ak activity` command facts](../cli/ak_activity)
+- [CLI conventions](../cli-conventions)

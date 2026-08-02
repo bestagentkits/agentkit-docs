@@ -1,0 +1,160 @@
+---
+title: Scan secrets, dependencies, and code patterns with ak:security-scan
+description: Run a lightweight read-only security scan, verify likely matches in context, and receive a redacted severity-ranked report.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:security-scan` for a fast, read-only pass over hardcoded credentials,
+dependency advisories, and common vulnerable code patterns. It combines search
+patterns with surrounding-code analysis so likely matches can be separated from
+obvious placeholders and false positives.
+
+## Choose ak:security-scan for fast triage
+
+### Use ak:security-scan when
+
+- You want a pre-release check for secrets and known dependency issues.
+- A focused directory needs a quick OWASP-style pattern review.
+- You need findings and fix recommendations without changing code.
+- You want to decide whether a deeper threat-modelled audit is warranted.
+
+### Choose another workflow when
+
+- You need STRIDE coverage, attacker personas, or iterative remediation. Use
+  `ak:security`.
+- You need penetration testing, runtime security analysis, infrastructure
+  validation, or a compliance audit; those are outside this Skill's scope.
+- You want findings fixed automatically. Hand confirmed evidence to `ak:fix` or
+  run `ak:security` with explicit fix authority.
+
+## Prepare the scan
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Engineer Kit is installed for the current runtime and scope.
+- Run from the project root or provide a specific directory such as `src/api/`.
+- Make manifests, lockfiles, `.gitignore`, and the relevant source available.
+- If dependency evidence matters, ensure `npm audit` or `pip audit` is available
+  for the documented Node.js and Python paths.
+- Approve network access only if the selected package audit requires its
+  advisory service.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:security-scan ...` | Native execution uses the runtime's search, read, Git, and shell capabilities. |
+| Cursor | `/ak:security-scan ...` | Slash invocation is user-verified; search and package-audit behavior depends on the Cursor session. |
+| Codex | `$ak:security-scan ...` | Native discovery is supported; equivalent search tools, binaries, and approvals are not implied. |
+
+## Select a scan mode
+
+With no arguments, the Skill scans the current project. Secret scanning always
+runs first in the normal full workflow.
+
+| Input or option | Coverage | Effects |
+| --- | --- | --- |
+| No arguments | Secrets, dependencies when applicable, code patterns, and `.env` exposure | Reads the current project and may contact an advisory registry |
+| `<scope>` | The same categories within a selected directory | Reduces file, context, and runtime cost |
+| `--secrets-only` | Credential and private-key patterns with context checks | Local reads and searches only |
+| `--deps-only` | Dependency advisories for the detected supported stack | Runs the applicable package audit command; network and cache use may occur |
+| `--full` | Declared as a supported option | The release source does not define behavior distinct from the default full-project scan |
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:security-scan src/api/
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:security-scan src/api/
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:security-scan src/api/
+```
+
+  </Tab>
+</Tabs>
+
+Use `--secrets-only` when credential exposure is the only question. Use
+`--deps-only` when you intentionally accept the package auditor's network and
+process behavior.
+
+## Understand what the scanner observes
+
+1. **The Skill detects the project type.** It checks Node.js, Python, Go, and
+   Rust manifests to understand the repository surface.
+2. **It scans secrets first.** Structured and generic patterns cover provider
+   tokens, private keys, connection strings, passwords, and bearer tokens while
+   excluding obvious examples, tests, docs, dependencies, and build output.
+3. **It audits supported dependencies.** Node.js uses `npm audit`; Python uses
+   `pip audit` when available. Failures remain explicit rather than becoming a
+   clean result.
+4. **It searches vulnerable patterns.** SQL injection, XSS, command injection,
+   path traversal, insecure randomness, dynamic evaluation, unsafe
+   deserialization, disabled TLS, and sensitive logging receive targeted checks.
+5. **It reads context.** Each likely code match is inspected around the source
+   location to distinguish a vulnerability from a safe use or fixture.
+6. **It checks `.env` exposure.** Git tracking and `.gitignore` patterns are
+   inspected for common environment files.
+7. **It returns the report.** Findings are grouped by category and severity
+   with locations and fix recommendations.
+
+## Keep the scan read-only and evidence redacted
+
+<Callout type="warn" title="Never copy a discovered credential into the report">
+  The report keeps only the first four and last two characters of a secret.
+  The Skill never executes credentials and recommends immediate rotation when
+  a live credential is confirmed.
+</Callout>
+
+- The standalone workflow does not modify code, commit, push, open a pull
+  request, merge, release, or deploy.
+- When another automatic cook workflow invokes the scanner, it can save a
+  Markdown report under that workflow's configured report path; otherwise the
+  report is returned directly in chat.
+- Package audit tools may read manifests and lockfiles, contact registries,
+  populate caches, and consume provider resources. The Skill defines no
+  independent external charge.
+- A regex match is not proof of exploitability. Preserve the pattern, location,
+  context, and reasoning used to classify it.
+
+## Verify the report
+
+A complete scan should provide:
+
+- Project identity, scan date, scope, and number of files checked.
+- Critical, High, Medium, and Low counts for secrets, dependencies, and code.
+- Redacted findings with category, source location, context, severity, and a
+  specific fix recommendation.
+- The dependency-audit result or a clear missing-tool or network failure.
+- `.env` tracking and ignore evidence.
+- Explicit boundaries for categories, directories, or tools that were skipped.
+
+The release packages contain the same `ak:security-scan` source and references.
+No directly scoped end-to-end test proves live package-registry results or
+cross-runtime scanner parity, so treat the report as evidence from the actual
+commands and files observed in the current run.
+
+## Troubleshoot and interpret limits
+
+| Symptom | Safe next step |
+| --- | --- |
+| Too many placeholder matches appear | Confirm exclusions and inspect context; never expose the matched value while classifying it. |
+| `npm audit` or `pip audit` fails | Report dependency coverage as unavailable and preserve the tool error; do not convert it to zero findings. |
+| The repository uses Go or Rust dependencies | The Skill detects those project types, but this release only defines dependency commands for Node.js and Python; use a separately approved native auditor. |
+| A finding depends on runtime configuration | Mark static evidence as incomplete and validate in an authorized test environment. |
+| You need infrastructure or compliance conclusions | Stop at the scanner's stated boundary and use a purpose-built review. |
+| The runtime does not recognize the Skill | Confirm target and scope, restart the runtime session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Continue with [`ak:security`](./security) when triage shows a trust boundary that
+needs deeper threat modelling.

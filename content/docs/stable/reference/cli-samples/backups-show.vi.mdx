@@ -1,0 +1,129 @@
+---
+title: ak backups show
+description: Kiểm tra rollback manifest, đường dẫn, hash và quyền project root cần thiết để khôi phục một snapshot.
+---
+
+Dùng `ak backups show` để kiểm tra nội dung một recovery snapshot đã commit
+trước khi xác minh hoặc khôi phục. Lệnh cũng cho biết project bundle root đã lưu
+mà thao tác restore phải được cấp quyền rõ ràng.
+
+## Cú pháp
+
+```bash
+ak backups show <id>
+```
+
+## Trước khi chạy
+
+Tìm ID bằng `ak backups list`. ID hợp lệ có đúng dạng
+`YYYYMMDDTHHMMSSZ-8lowercasehex`, ví dụ
+`20260426T123005Z-deadbeef`.
+
+Lệnh chạy cục bộ và chỉ đọc. Lệnh không cần registry hoặc xác thực. Đầu ra
+manifest chứa đường dẫn nguồn tuyệt đối; hãy xoá hoặc che chúng trước khi chia
+sẻ đầu ra ra ngoài máy.
+
+## Argument
+
+| Argument | Bắt buộc | Ý nghĩa |
+| --- | --- | --- |
+| `<id>` | Có | Một snapshot ID đã commit và vượt qua kiểm tra định dạng. |
+
+Lệnh yêu cầu đúng một argument.
+
+## Tuỳ chọn
+
+Lệnh không có tuỳ chọn riêng. Dùng cờ chung `--json` để lấy toàn bộ manifest.
+Các cờ chung khác được mô tả trong [quy ước CLI](../cli-conventions). Lệnh
+không hỏi xác nhận.
+
+## Ví dụ
+
+Đọc phần tổng hợp ngắn cho người dùng:
+
+```bash
+ak backups show 20260426T123005Z-deadbeef
+```
+
+Kiểm tra quyền restore đã lưu và destination của tệp đã chụp:
+
+```bash
+ak backups show 20260426T123005Z-deadbeef --json |
+  jq '.data.snapshot | {bundle_roots, files, absent_files}'
+```
+
+## Đầu ra và luồng
+
+Đầu ra cho người dùng trên stdout báo `ID`, `Path` của snapshot, `When`, `Kind`,
+số tệp, tổng kích thước, trạng thái `Verified` dạng best effort, `Hash` ngắn và
+mọi `Authorized bundle roots`. `Hash` hiển thị là fingerprint 12 ký tự được tạo
+từ các chuỗi SHA-256 của từng tệp đã ghi; nó không phải giá trị
+`metadata_sha256` của manifest.
+
+JSON thành công dùng envelope sau:
+
+```json
+{
+  "schema_version": 1,
+  "kind": "backups.show",
+  "data": {
+    "snapshot": {
+      "version": 2,
+      "id": "20260426T123005Z-deadbeef",
+      "created_at": "<rfc3339-time>",
+      "label": "<operation-label>",
+      "files": [
+        {
+          "rel_path": "<snapshot-relative-path>",
+          "src_abs": "<absolute-restore-destination>",
+          "sha256": "<sha256>",
+          "mode": 384,
+          "size": 1234
+        }
+      ],
+      "agentkit_home": "<captured-home>",
+      "metadata_sha256": "<sha256>"
+    }
+  }
+}
+```
+
+Khi có dữ liệu, snapshot còn có thể chứa `absent_files`, `bundle_roots`,
+`exclude_rel` và `protected`. Trường tuỳ chọn bị bỏ khi trống. JSON không chứa
+các trường `Path`, `Verified`, tổng kích thước hoặc `Hash` ngắn được tạo riêng
+cho đầu ra người dùng.
+
+Kết quả thành công dùng stdout. Lỗi runtime JSON dùng envelope có cấu trúc trên
+stderr; lỗi phân tích cờ có thể vẫn là hướng dẫn dùng dạng plain text.
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Manifest đã được decode và hiển thị, kể cả khi kiểm tra integrity dạng best effort báo unverified. |
+| `1` | Render hoặc thao tác runtime chưa phân loại khác thất bại. |
+| `2` | Dạng ID, số argument hoặc cờ không hợp lệ. |
+| `5` | Không thể đọc hoặc decode manifest tại ID hợp lệ, bao gồm snapshot không tồn tại. |
+
+Lệnh không lấy backup mutation lock và không có mã thoát do từ chối.
+
+## Tác động, an toàn và khôi phục
+
+Lệnh đọc `manifest.json` và chạy xác minh đầy đủ dạng best effort để bổ sung
+đầu ra cho người dùng. Lệnh không thay đổi dữ liệu snapshot hoặc destination
+đang hoạt động. Manifest hiển thị được không chứng minh dữ liệu an toàn để
+restore: hãy dùng `ak backups verify <id>` và yêu cầu mã thoát `0`.
+
+Với project bundle, sao chép chính xác mọi authorized root được in thành các
+tuỳ chọn `--allow-root` lặp lại. Đừng thay bằng ancestor rộng hơn. Restore
+canonicalize tập root cung cấp và yêu cầu tập đó bằng tập đã lưu.
+
+## Lệnh liên quan và giới hạn
+
+- [Liệt kê snapshot ID](./backups-list)
+- [Xác minh dữ liệu snapshot](./backups-verify)
+- [Preview và áp dụng restore](./backups-restore)
+- [Entry point khôi phục tương đương](./recover)
+
+`ak backups show` không in báo cáo mismatch theo từng tệp. Trạng thái xác minh
+cho người dùng là best effort, còn JSON chính là manifest đã lưu.

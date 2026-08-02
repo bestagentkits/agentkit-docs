@@ -1,0 +1,65 @@
+---
+title: ak watch stop
+description: Mark one local watch record inactive while understanding that the running process is not signalled.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak watch stop` to set a repository's persisted watch state to inactive and
+clear its recorded PID metadata.
+
+## Usage
+
+```bash
+ak watch stop <owner/repo>
+```
+
+The command has no command-specific flags. It never prompts and performs no
+GitHub or provider request.
+
+## Effect and process boundary
+
+```bash
+ak watch stop owner/repo
+ak watch stop owner/repo --json
+```
+
+For existing state, the command atomically rewrites
+`~/.agentkit/watch/<repo-slug>/state.json` with `active=false`, then best-effort
+rewrites `cli-meta.json` with PID `0`. `AGENTKIT_HOME` moves the root. It does
+not delete responded IDs, hourly timestamps, logs, or the state directory, and
+it creates no backup.
+
+<Callout type="warning">
+  This command does not send a signal to the recorded PID. The current
+  `ak watch start --daemon` loop does not reread `active`, so it can continue
+  polling and posting after `ak watch stop` succeeds. Interrupt or terminate the
+  actual process and verify it has exited.
+</Callout>
+
+If no state exists, the command prints a warning to stderr and exits `0` without
+creating a state file. This is idempotent for local state but is not proof that
+no separately started process exists.
+
+## Output and exit status
+
+Existing-state human stdout reports the stopped PID when metadata has one. JSON
+stdout uses `kind=watch.stop` with repository and optional PID. The missing-state
+success path emits only a plain stderr warning, even with `--json`; it does not
+emit a JSON success object.
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | State was marked inactive, or it was already absent. Verify process liveness separately. |
+| `1` | Existing state could not be loaded or saved. A metadata-save failure is best-effort and may not fail the command. |
+| `2` | Repository argument count or flags were invalid. |
+
+There is no rollback command. If you need the previous configuration, inspect
+versioned external backups before editing state manually; restarting with
+`ak watch start` creates or reactivates state using the flags you supply.
+
+## Related commands
+
+- [Inspect persisted status](./watch-status)
+- [Start or resume a watcher](./watch-start)
+- [Complete `ak watch stop` command facts](../cli/ak_watch_stop)

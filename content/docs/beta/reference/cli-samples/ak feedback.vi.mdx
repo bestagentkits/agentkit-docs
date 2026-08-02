@@ -1,0 +1,136 @@
+---
+title: ak feedback
+description: Xem lại, xuất hoặc gửi feedback sản phẩm đã redaction với ranh giới mạng và tệp rõ ràng.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak feedback` để chuẩn bị báo cáo bug, feature hoặc enhancement. Bạn có thể
+xuất Markdown đã render để xem lại hoặc gửi payload JSON đã redaction tới
+AgentKit registry được cấu hình.
+
+## Cách dùng
+
+```bash
+ak feedback
+```
+
+Lệnh không nhận argument theo vị trí. Trên TTY, lệnh có thể hỏi các trường còn
+thiếu. Trong script, hãy truyền `--type`, `--title` và ít nhất một trường chi
+tiết.
+
+## Tuỳ chọn của lệnh
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--type <type>` | Trống | Đặt `bug`, `feature` hoặc `enhancement`. |
+| `--title <text>` | Trống | Đặt tiêu đề ngắn. |
+| `--body <text>` | Trống | Thêm chi tiết chung. |
+| `--repro <text>` | Trống | Thêm bước tái hiện bug. |
+| `--expected <text>` | Trống | Thêm hành vi mong đợi. |
+| `--actual <text>` | Trống | Thêm hành vi thực tế. |
+| `--outcome <text>` | Trống | Thêm kết quả mong muốn. |
+| `--motivation <text>` | Trống | Giải thích vì sao yêu cầu quan trọng. |
+| `--area <text>` | Trống | Xác định khu vực sản phẩm, lệnh, trang hoặc workflow. |
+| `--attach-diagnostics` | `false` | Đính kèm bản tóm tắt diagnostics đã redaction. |
+| `--diagnostics-offline` | `true` | Bỏ qua network check của doctor khi tạo bản tóm tắt. |
+| `--export <path>` | Trống | Ghi Markdown đã render thay vì gửi. Dùng `-` cho process stdout. |
+| `--registry-url <url>` | Environment hoặc mặc định bản phát hành | Ghi đè registry gửi feedback. |
+
+Chỉ `--area` không đủ làm chi tiết. Ít nhất một trong `--body`, `--repro`,
+`--expected`, `--actual`, `--outcome` hoặc `--motivation` phải khác rỗng. Các cờ
+dùng chung được mô tả trong [quy ước CLI](../cli-conventions).
+
+## Xem lại cục bộ trước khi gửi
+
+`--export` bỏ qua authentication và feedback POST:
+
+```bash
+ak feedback --type bug --title "Update failed" \
+  --body "The command stopped before changing files" \
+  --repro "Run ak update --dry-run" \
+  --export feedback.md --no-interactive
+```
+
+Tệp export mới yêu cầu mode `0600`. Tệp đã tồn tại bị ghi đè không cần xác nhận
+hay backup và giữ hành vi permission dành cho tệp hiện có của hệ điều hành. Dùng
+đường dẫn mới nếu cần giữ bản nháp trước.
+
+`--export -` in Markdown trực tiếp lên process stdout rồi in kết quả lệnh. Đừng
+kết hợp dạng này với `--json` khi bạn cần một stream JSON duy nhất có thể parse.
+
+## Chủ động gửi
+
+Việc gửi tải phiên AgentKit cục bộ, kiểm tra registry của phiên khớp registry đã
+chọn và gửi JSON POST có bearer authentication. Lệnh cần mạng và phiên hợp lệ;
+lệnh không mua hoặc thay đổi entitlement Kit.
+
+```bash
+ak feedback --type bug --title "Update failed" \
+  --body "What happened" --repro "Run ak update" --yes
+```
+
+Trên terminal tương tác, lệnh xác nhận trước khi gửi trừ khi có `--yes`.
+Xác nhận bắt đầu ở lựa chọn `Submit`, vì vậy hãy chọn rõ `Cancel` để dừng.
+`--json`, `--no-interactive` và thực thi không phải TTY có thể bỏ xác nhận và gửi
+ngay khi đủ trường bắt buộc.
+
+<Callout type="warning">
+  Lệnh không có dry-run hoặc remote preview. Dùng `--export <path>` để xem chính
+  xác báo cáo đã render trước khi gửi qua mạng.
+</Callout>
+
+Nếu gửi thất bại vì authentication, registry, rate limit, response hoặc mạng,
+lệnh thử lưu fallback có timestamp
+`agentkit-feedback-YYYYMMDD-HHMMSS.md` trong thư mục hiện tại, rồi vẫn thoát `4`.
+Hãy xem stderr để biết đường dẫn chính xác. Việc ghi fallback này có thể xảy ra
+ngay cả khi bạn không truyền `--export`.
+
+## Diagnostics và quyền riêng tư
+
+`--attach-diagnostics` nhúng cùng báo cáo đã redaction với
+`ak diagnostics export`. Mặc định `--diagnostics-offline=true` tránh network
+check của doctor; chỉ đặt `--diagnostics-offline=false` khi bạn chủ động cần các
+check đó.
+
+Các trường do người dùng nhập và diagnostics đi qua redactor cho secret, email
+và đường dẫn cục bộ đã biết trước khi export hoặc gửi. Giới hạn là 160 rune cho
+title, 80 cho area, 24.000 cho body, 12.000 cho từng chi tiết khác, 40.000 cho
+diagnostics và 60.000 cho Markdown đã render. Payload JSON cuối cùng tối đa
+256 KiB. Kết quả liệt kê redaction và các trường bị truncate.
+
+Redaction dựa trên mẫu không phải bảo đảm bảo mật. Hãy xem bản export, tránh dán
+secret không cần thiết và nhớ rằng nội dung đã gửi có thể trở thành issue do
+dịch vụ quản lý.
+
+## Đầu ra và stream
+
+Stdout cho người dùng báo issue target đã gửi hoặc đường dẫn export. JSON thành
+công dùng `kind=feedback` với các trường sau trong `data`:
+
+```text
+submitted, exported, export_path, issue_url, issue_number
+payload_bytes, redactions, truncated, schema_version
+diagnostics_attached, rendered_body
+```
+
+`rendered_body` có trong JSON export, không có trong lần gửi thành công. Lỗi
+runtime của lệnh dùng JSON error envelope có cấu trúc; lỗi phân tích cờ của Cobra
+có thể vẫn là plain text.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước an toàn tiếp theo |
+| --- | --- | --- |
+| `0` | Export hoặc gửi đã hoàn tất. | Kiểm tra đường dẫn export hoặc issue target trả về. |
+| `1` | Không thể ghi export/đầu ra kết quả hoặc có argument theo vị trí. | Chọn đường dẫn mới có thể ghi hoặc sửa cách gọi trong khi giữ tệp trước đó. |
+| `2` | Type hoặc cờ không hợp lệ, prompt bản nháp thất bại hoặc thao tác gửi bị huỷ. | Sửa type hoặc dừng mà không thử lại. |
+| `3` | Thiếu title/chi tiết, hoặc thu thập diagnostics, validation feedback, render hay giới hạn payload thất bại. | Hoàn thiện/rút gọn báo cáo hoặc xử lý diagnostics cục bộ. |
+| `4` | Authentication/registry validation thất bại hoặc registry/mạng từ chối gửi. | Xem fallback export trước khi đăng nhập lại hoặc thử lại. |
+
+## Lệnh liên quan
+
+- [Xuất diagnostics đã redaction](<./ak diagnostics export>)
+- [Kiểm tra phiên hiện tại](./whoami)
+- [Đăng nhập](./login)
+- [Thông tin đầy đủ của lệnh `ak feedback`](../cli/ak_feedback)

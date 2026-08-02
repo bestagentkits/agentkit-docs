@@ -1,0 +1,94 @@
+---
+title: Update the Desktop app
+description: Use AgentKit's signed paired-update flow, restart safely, and recover without bypassing verification.
+---
+
+Desktop auto-update is opt-in in v2.7.0. Before enabling it, install the
+standard `ak` CLI separately and keep the CLI and Desktop on the same release.
+
+```bash
+ak --version
+ak self-update --check
+```
+
+The check uses your persisted update channel, reads signed release metadata,
+and does not install an update. Confirm that the reported channel is the one you
+intend to follow. If the CLI belongs to Homebrew or Scoop, use the manager
+command AgentKit reports instead of replacing that CLI in place.
+
+## Know the platform boundary
+
+| Desktop platform | v2.7.0 paired update |
+| --- | --- |
+| macOS Intel and Apple silicon | Supported for a matching CLI and Desktop transaction |
+| Linux x64 | Supported for a matching CLI and Desktop transaction |
+| Windows x64 | Paired Desktop apply is rejected; download and verify the new Desktop zip manually |
+| Linux ARM64 and Windows ARM64 | No v2.7.0 Desktop package to update |
+
+Windows can use the CLI's trusted helper for a CLI-only update, but that does
+not update the extracted Desktop app.
+
+## What the signed flow verifies
+
+Before staging a candidate, AgentKit verifies the signed channel pointer, the
+immutable manifest and its digest, release compatibility, and each selected
+artifact's declared size and SHA-256. The matching CLI and Desktop candidates
+are staged under:
+
+```text
+$AGENTKIT_HOME/cache/binaries/<version>
+```
+
+The paired transaction is recorded at:
+
+```text
+$AGENTKIT_HOME/updater/pending-binary-update.json
+```
+
+The default `$AGENTKIT_HOME` is `~/.agentkit` on macOS and Linux and
+`%USERPROFILE%\.agentkit` on Windows.
+
+## Apply and restart
+
+1. In Desktop update settings, opt in to automatic update checks and staged
+   apply only if you want that behavior.
+2. Let Desktop stage the matching CLI and Desktop artifacts through the signed
+   flow.
+3. Quit Desktop normally when it reports that a restart is required.
+4. Open the same installed Desktop app again.
+
+At the next Desktop launch, AgentKit rereads the pending transaction, verifies
+the staged sizes and SHA-256 values again, and replaces the CLI and Desktop as
+one transaction before opening the window. Temporary backups are removed after
+a successful commit. There is no retained user-facing rollback copy afterward.
+
+You can also drive the same non-Windows paired flow from the CLI:
+
+```bash
+ak self-update --include-desktop --yes
+```
+
+Restart Desktop to complete the staged transaction. See the [authored
+`ak self-update` reference](../reference/cli-samples/self-update) for manager
+ownership, dry-run, output, and exit behavior.
+
+## Recover a staged update
+
+If verification or replacement fails:
+
+1. Do not delete the pending file, staged directory, or temporary backup named
+   in the error.
+2. Keep the currently working CLI and Desktop installation in place.
+3. Correct ordinary causes such as insufficient disk space, file permissions,
+   or another process holding the executable.
+4. Reopen the same Desktop app to retry the still-verified pending transaction.
+
+If a later replacement step fails, AgentKit attempts to restore both installed
+binaries. When restoration succeeds, it retains the pending transaction for a
+retry. If the error says rollback also failed, stop and preserve every reported
+path; do not manually mix binaries from different versions.
+
+On Windows, or when no pending transaction exists, use the manual verified
+package flow in [Installation](./installation). Replacing only the Desktop
+package preserves AgentKit state. Never fix an update by deleting the entire
+AgentKit home.

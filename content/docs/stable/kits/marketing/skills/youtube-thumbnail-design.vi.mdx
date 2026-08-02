@@ -1,0 +1,200 @@
+---
+title: Tạo thumbnail có thể review với ak:youtube-thumbnail-design
+description: Tạo các biến thể thumbnail YouTube theo thương hiệu, review text và likeness đã render, đồng thời giữ quyết định upload dưới quyền con người.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:youtube-thumbnail-design` để biến topic video và text ngắn thành một
+hoặc nhiều biến thể thumbnail PNG. Skill thu thập brief art direction, có thể
+dùng face reference đã có consent, tạo ảnh hoàn chỉnh qua Gemini và trình bày
+các tệp để review. Skill chỉ thiết kế thumbnail; không edit video, tạo channel
+art hay upload nội dung lên YouTube.
+
+## Chọn Skill này cho deliverable thumbnail
+
+### Dùng ak:youtube-thumbnail-design khi
+
+- Bạn cần thumbnail YouTube mới hoặc các biến thể cho concept hiện có.
+- Bạn có topic video, text ngắn và niche hoặc style mục tiêu.
+- Bạn muốn đưa brand color, tên channel, định hướng font, arrow hoặc face
+  reference đã có consent vào brief.
+- Bạn có thể kiểm tra độ dễ đọc ở kích thước nhỏ, độ chính xác của text, tính
+  trung thực của visual và tuân thủ platform trước khi upload hay test.
+
+### Chọn workflow khác khi
+
+- Bạn cần script, storyboard, video được tạo hoặc platform export. Dùng
+  `ak:video`.
+- Bạn cần channel art, banner campaign hoặc website hero. Dùng
+  `ak:banner-design`.
+- Bạn cần tái sử dụng nội dung của video hiện có. Dùng `ak:youtube`.
+- Bạn cần phân tích experiment đã đo lường. Skill này tạo variant; không chạy
+  A/B test hay chứng minh outcome CTR.
+
+## Chuẩn bị brief và image provider
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận
+  Marketing Kit đã được cài cho runtime cùng scope hiện tại.
+- Cung cấp topic video và text thumbnail. Brief trong package khuyến nghị một
+  đến ba từ và cảnh báo khi vượt 25 ký tự.
+- Chọn niche và style, hoặc yêu cầu Skill đề xuất hướng từ dữ liệu niche và
+  style trong package.
+- Cung cấp brand name, color và định hướng font khi đã được duyệt.
+- Chỉ dùng face reference hoặc source image bạn được phép gửi tới provider và
+  biến đổi. Hãy có informed consent của người xuất hiện trong ảnh.
+- Cung cấp `GEMINI_API_KEY`, cài `google-genai` và cho phép truy cập mạng khi
+  yêu cầu generation.
+- Xác nhận project output và số lượng variant mong đợi. Quantity mặc định trong
+  brief là ba.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:youtube-thumbnail-design ...` | Phân phối native là mặc định; phân phối plugin rõ ràng cũng được hỗ trợ. Image generation vẫn phụ thuộc quyền truy cập provider cục bộ. |
+| Cursor | `/ak:youtube-thumbnail-design ...` | Cách gọi bằng slash đã được người dùng xác minh. Cách hiển thị ảnh và hành vi tool hỗ trợ có thể khác theo thiết lập. |
+| Codex | `$ak:youtube-thumbnail-design ...` | Skill dùng discovery native của Codex. Hook projection một phần không thay đổi yêu cầu về credential Gemini hay consent. |
+
+Xem [Runtime adapter](../../../concepts/runtime-adapters) để hiểu khác biệt ở
+mức component.
+
+## Chạy Skill
+
+Đưa vào topic, text chính xác, style hoặc niche, quantity, constraint thương
+hiệu và ranh giới rằng tệp là bản nháp cho đến khi được duyệt.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:youtube-thumbnail-design Thiết kế ba thumbnail cho tutorial analytics ưu tiên privacy. Text: "OWN YOUR DATA". Niche: tech. Style: diagram, bold-text, dark-dramatic. Dùng palette xanh đã duyệt, để trống vùng duration badge và không upload
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:youtube-thumbnail-design Thiết kế ba thumbnail cho tutorial analytics ưu tiên privacy. Text: "OWN YOUR DATA". Niche: tech. Style: diagram, bold-text, dark-dramatic. Dùng palette xanh đã duyệt, để trống vùng duration badge và không upload
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:youtube-thumbnail-design Thiết kế ba thumbnail cho tutorial analytics ưu tiên privacy. Text: "OWN YOUR DATA". Niche: tech. Style: diagram, bold-text, dark-dramatic. Dùng palette xanh đã duyệt, để trống vùng duration badge và không upload
+```
+
+  </Tab>
+</Tabs>
+
+### Hiểu các control của generator trong package
+
+Khi workflow dùng generator Python đi kèm, đây là các control canonical liên
+quan nhất tới kết quả:
+
+| Control | Mục đích |
+| --- | --- |
+| `--prompt`, `-p` | Topic video hoặc mô tả thumbnail |
+| `--text`, `-t` | Text được render vào ảnh |
+| `--style`, `-s` | Một art direction được generator hỗ trợ |
+| `--niche`, `-n` | Một niche aesthetic được generator hỗ trợ |
+| `--font`, `-f` | Tên font; mặc định là `Bebas Neue` |
+| `--quality`, `-q` | `fast`, `normal` hoặc `ultra`; mặc định là `normal` |
+| `--brand`, `-b` và `--brand-colors` | Tên channel và brand color phân tách bằng dấu phẩy |
+| `--arrows` và `--ref` | Thêm arrow hoặc cung cấp ảnh face reference cục bộ |
+| `--output`, `-o` | Tệp output cho một thumbnail |
+| `--batch` và `--output-dir` | Số variant và đích batch |
+
+Mapping preset trong package dùng image model Flash cho `fast`, image model Pro
+ở 2K cho `normal` và cùng họ Pro ở 4K cho `ultra`. Hãy coi đây là request được
+đóng package, không phải bảo đảm provider luôn giữ model hoặc resolution đó.
+
+## Theo các giai đoạn thiết kế
+
+1. **Xác nhận requirement.** Skill ghi nhận topic, text ngắn, niche, style,
+   brand, face reference, quantity và ranh giới upload.
+2. **Chọn art direction.** Skill tìm hướng dẫn niche và style cục bộ, đồng thời
+   có thể chuẩn bị design brief trước generation.
+3. **Tạo variant.** Generator gửi prompt cùng reference image được cung cấp tới
+   Gemini, render text vào ảnh và ghi tệp PNG.
+4. **Trình bày các phương án.** Mỗi kết quả nên có style, preview, rationale,
+   path và generation bị lỗi nếu có.
+5. **Review và lặp lại.** Kiểm tra text chính xác, likeness, composition,
+   contrast, độ dễ đọc trên mobile, cách dùng brand và không có fake UI.
+6. **Dừng trước distribution.** Việc chọn phương án, setup experiment, upload,
+   đổi metadata và publication vẫn cần phê duyệt riêng.
+
+## Tách consent khỏi publication
+
+<Callout type="warn" title="Reference image rời project cục bộ">
+  Request generation có thể gửi prompt và byte của face reference tới provider
+  bên ngoài. Hãy có consent, giảm thiểu dữ liệu cá nhân và xác nhận provider
+  được phép dùng cho project trước khi sử dụng `--ref`.
+</Callout>
+
+| Nhóm công việc | Ranh giới thông thường |
+| --- | --- |
+| Hướng dẫn và soạn nháp | Research cục bộ và design rationale không tiêu provider credit cho đến khi generation được duyệt. |
+| Thay đổi cục bộ | Generation tạo tệp PNG và thư mục tại output path đã chọn. Giữ tệp không liên quan và xác nhận trước khi thay ảnh hiện có. |
+| Tác động provider và chi phí | Mỗi variant được tạo có thể thực hiện request Gemini tính phí. Batch size, retry, tính khả dụng model, quota, safety filter và chi phí do provider kiểm soát. |
+| Tác động publish và tài khoản | Skill không cấp quyền upload thumbnail, thay đổi video, bắt đầu experiment hay sửa tài khoản YouTube. |
+
+Chỉ dùng brand asset, font, photography, face và symbol bạn có quyền sử dụng.
+Không ngụ ý outcome video không cung cấp, bịa endorsement của một người hay
+thêm duration badge và play control giả.
+
+## Review output và bằng chứng
+
+Quy ước batch thông thường là:
+
+```text
+assets/thumbnails/{video-slug}/
+├── thumb_bold-text_01.png
+├── thumb_facecam_02.png
+└── thumb_dark-dramatic_03.png
+```
+
+Trước khi phê duyệt, hãy ghi nhận:
+
+- Các field prompt chính xác, style, niche, font, input brand, quality preset và
+  việc reference image có được gửi hay không.
+- Mọi path đã tạo và lỗi provider nếu có.
+- Visual check ở kích thước đầy đủ và kích thước feed nhỏ, gồm vùng duration
+  badge ở góc dưới bên phải.
+- Chính tả text, likeness và consent, quyền source asset cùng tính trung thực
+  của claim được ngụ ý.
+- Candidate đã chọn và mọi hành động upload hoặc experiment còn chờ.
+
+## Xử lý sự cố an toàn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Runtime không nhận diện Skill | Xác nhận target cùng scope, mở session mới, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+| Xuất hiện `google-genai package not installed` | Cài package trong môi trường Python được duyệt, rồi chỉ chạy lại generation dự kiến. |
+| Xuất hiện `GEMINI_API_KEY not set` | Cấu hình key qua cơ chế secret được duyệt; không dán hoặc commit key. |
+| Thiếu reference image | Sửa `--ref` tới PNG, JPEG hoặc WebP tồn tại và được phép dùng, hoặc tiếp tục không có face reference. |
+| Không có ảnh trả về | Giữ brief, báo response provider và sửa prompt hoặc preset mà không tuyên bố đã tạo kết quả. |
+| Text sai chính tả hoặc khó đọc | Từ chối asset rồi regenerate hoặc sửa; không chỉnh evidence report để che ảnh lỗi. |
+| Batch có ít tệp hơn dự kiến | Generator báo riêng kết quả thành công và số lượng được yêu cầu. Review từng lỗi trước khi retry. |
+
+Tiếp tục với [Tổng quan Marketing Kit](../../marketing) hoặc
+[Projects, artifacts và checkpoints](../../../concepts/projects-artifacts-checkpoints).
+
+## Biết các giới hạn hiện tại
+
+- Style reference mô tả 17 hướng, trong khi các lựa chọn `--style` của generator
+  đi kèm là `facecam`, `before-after`, `listicle`, `tutorial`, `reaction`,
+  `cinematic`, `bold-text`, `mystery`, `product-showcase`, `dark-dramatic`,
+  `diagram` và `whiteboard`. Một entry trong reference không tự động trở thành
+  generator flag.
+- Tệp được tạo có thể không chính xác 1280 × 720 hoặc dưới giới hạn upload của
+  platform chỉ vì prompt yêu cầu thumbnail 16:9. Hãy kiểm tra rồi resize hoặc
+  compress asset đã duyệt khi cần.
+- Text rendering, tính nhất quán khuôn mặt, font và safety filtering phụ thuộc
+  provider và phải được review bằng mắt.
+- Không style, arrow, facial expression hay variant count nào đảm bảo CTR,
+  engagement, revenue hoặc significance của experiment.
+- Platform specification và UI safe zone có thể thay đổi; xác minh requirement
+  upload hiện tại trước publication.

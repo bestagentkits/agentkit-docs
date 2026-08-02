@@ -1,0 +1,143 @@
+---
+title: ak config prefs set
+description: Đặt một boolean Hook có giới hạn với hành vi chính xác về scope, schema, backup, atomic write, đầu ra và khôi phục thủ công.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak config prefs set` để ghim một soft-preference của Hook thành `true`
+hoặc `false` trong config user hay config của project hiện tại. Lệnh thay đổi
+tệp đã chọn ngay; lệnh không unregister hay cài Hook.
+
+## Cách dùng
+
+```bash
+ak config prefs set <key> <true|false>
+```
+
+Cung cấp đúng hai argument theo vị trí.
+
+## Tuỳ chọn của lệnh
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--scope <scope>` | `user` | Chọn `user` dưới AgentKit home hoặc `project` dưới working directory hiện tại. |
+
+Các cờ dùng chung được mô tả trong [quy ước CLI](../cli-conventions). Thao tác
+ghi không hỏi, nên `--yes` và `--no-interactive` không thay đổi hành vi. Lệnh
+không có `--dry-run`, `--force` hay preview mode.
+
+## Validate key và value
+
+Cách viết key duy nhất được chấp nhận là:
+
+```text
+hooks.<name>
+```
+
+`<name>` phải là basename Hook script dạng kebab-case chữ thường, khớp
+`^[a-z0-9]+(?:-[a-z0-9]+)*$`. Tên không được chứa thêm dấu chấm. Value phải là
+literal chữ thường chính xác `true` hoặc `false`.
+
+```bash
+ak config prefs set hooks.simplify-gate false
+ak config prefs set hooks.simplify-gate true --scope project
+```
+
+Key như `keys.anthropic`, `api.token`, `telemetry.enabled`, `hooks.Bad-Name` và
+`hooks.a.b` bị từ chối trước khi ghi preference. Allowlist này ngăn lệnh trở
+thành editor config hoặc secret tổng quát.
+
+`false` cho phép Hook có đọc preference này exit sớm ở lần chạy tiếp theo;
+`true` ghi preference ngược lại. Harness registration không đổi, và việc đặt
+tên không chứng minh Hook đó đã được cài.
+
+## Scope và tác động filesystem
+
+| Scope | Target | Tác động thêm |
+| --- | --- | --- |
+| `user` | `$AGENTKIT_HOME/config.yaml`, thường là `~/.agentkit/config.yaml` | Tệp thiếu sẽ được tạo. |
+| `project` | `<cwd>/.agentkit/config.yaml` | Nếu thiếu, AgentKit scaffold project template và `.agentkit/.gitignore` trước. Project config được thiết kế để commit, vì vậy không đặt credential vào đó. |
+
+Writer chỉ thay leaf `hooks.<name>` đã chọn. Các section khác, YAML chưa được
+model, comment, thứ tự key và schema editor directive được giữ lại. Nếu `hooks`
+đã tồn tại nhưng không phải mapping, lệnh từ chối ghi.
+
+Trước khi ghi, AgentKit validate toàn bộ candidate bằng schema nhúng trong
+binary. Cách viết cũ có thể tạo warning nhưng không tự làm validation thất bại;
+schema error giữ nguyên target hiện có.
+
+## Backup, atomicity và khôi phục
+
+Khi target tồn tại, AgentKit sao chép byte hiện tại sang tệp mode `0600` dưới
+`$AGENTKIT_HOME/backups/config/`. Backup user bắt đầu bằng `config-`; backup
+project bắt đầu bằng `project-config-`. Lỗi backup sẽ huỷ thao tác ghi config.
+
+Document mới được ghi vào sibling temporary file, đổi sang mode `0600`, rồi
+rename lên target. Nhờ vậy, reader không thấy document chỉ được ghi một phần.
+
+<Callout type="warning">
+  Atomic replacement không phải cross-process transaction lock. Đừng chạy lệnh
+  này song song với config writer khác hoặc thao tác lưu thủ công; cả hai có thể
+  đọc cùng document cũ và lần rename sau làm mất thay đổi trước. Config path là
+  symlink cũng bị thay bằng tệp thường mới thay vì giữ symlink.
+</Callout>
+
+Để khôi phục, dừng writer khác, kiểm tra `backup_path` do lệnh thành công báo,
+thay thủ công `config_path` bằng backup đó rồi chạy
+`ak config prefs validate`. Các bản sao config này không phải snapshot AgentKit
+đầy đủ và không có lệnh rollback tự động.
+
+## Đầu ra dành cho người dùng và JSON
+
+Kết quả dành cho người dùng ghi thay đổi và target path ra stdout, sau đó là
+backup path khi đã tạo:
+
+```text
+set hooks.simplify-gate = false (user scope) in /home/user/.agentkit/config.yaml
+backed up prior config to /home/user/.agentkit/backups/config/config-<timestamp>.yaml
+```
+
+`--json` ghi object thô, không phải success envelope dùng chung:
+
+```json
+{
+  "action":"set",
+  "key":"hooks.simplify-gate",
+  "value":false,
+  "scope":"user",
+  "config_path":"/home/user/.agentkit/config.yaml",
+  "backup_path":"/home/user/.agentkit/backups/config/config-<timestamp>.yaml",
+  "found":true
+}
+```
+
+`backup_path` bị lược bỏ khi không tạo backup. `found` luôn là `true` với lần
+set thành công. `--quiet` không chặn stdout riêng của lệnh này.
+
+Lỗi runtime không phát JSON error envelope dùng chung và có thể im lặng dưới
+`--json`; hãy dùng trạng thái process và validate các field mong đợi. Lỗi parse
+cờ có thể vẫn là hướng dẫn dùng dạng plain text. Sai số positional argument đi
+theo đường lỗi runtime chung.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Leaf đã chọn được ghi và backup được báo đã hoàn tất trước. | Chạy resolve và validate. |
+| `1` | Số positional argument, key, value, scope, path, cấu trúc YAML, schema, backup hoặc thao tác ghi không hợp lệ hay thất bại. | Sửa cách gọi hoặc đọc lỗi dành cho người dùng mà không làm lộ secret config; không force thao tác ghi. |
+| `2` | Parse cờ thất bại. | Sửa các cờ. |
+
+## Xác minh kết quả
+
+```bash
+ak config prefs resolve --json
+ak config prefs validate
+```
+
+Với project scope, hãy chạy resolve từ cùng thư mục project đó để tệp project
+dự định tham gia đúng thứ tự ưu tiên.
+
+## Lệnh liên quan
+
+- [Quy ước CLI](../cli-conventions)

@@ -1,0 +1,159 @@
+---
+title: Tóm tắt công việc đang diễn ra với ak:watzup
+description: Tạo handoff ngắn dựa trên evidence từ local Git ref, worktree, unfinished plan và roadmap file mà không thay đổi checkout.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:watzup` để trả lời “đang có việc gì?” từ repository evidence. Skill tóm
+tắt active checkout, local ref cùng locally cached remote ref, registered
+worktree, unfinished plan file, roadmap signal và ranked next step mà không
+implement hay đổi branch.
+
+## Chọn ak:watzup cho repository status và handoff
+
+### Dùng ak:watzup khi
+
+- Bạn cần end-of-session status report hoặc orientation trong worktree mới.
+- Bạn muốn tập hợp unfinished plan cùng checklist progress trên visible worktree
+  và tracked ref.
+- Bạn cần next-step recommendation với rationale của scanner được hiển thị.
+
+### Chọn workflow khác khi
+
+- Bạn cần giữ conversation decision cùng rationale cho agent khác. Dùng
+  [`ak:handoff`](./handoff).
+- Bạn muốn implementation, commit, checkout, merge, push hoặc cleanup. Chọn
+  workflow liên quan sau khi review report.
+- Bạn cần authoritative remote state nhưng không cấp quyền `git fetch`.
+- Project không phải Git repository.
+
+## Chuẩn bị repository và runtime
+
+Chạy từ project root. Làm mọi relevant worktree hiển thị cục bộ, giữ plan status
+cùng checkbox cập nhật và quyết định absolute path có được xuất hiện trong
+output hay không. Remote ref là local snapshot trừ khi bạn yêu cầu fetch rõ ràng.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:watzup` | Phân phối native có thể chạy bundled Node scanner và đọc local Git, worktree, plan cùng roadmap evidence. |
+| Cursor | `/ak:watzup` | Cách gọi slash đã được người dùng xác minh; bundled-script discovery và cross-worktree access phụ thuộc session. |
+| Codex | `$ak:watzup` | Native discovery được hỗ trợ; filesystem và Git visibility vẫn bị giới hạn bởi Codex environment. |
+
+## Chạy Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:watzup
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:watzup
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:watzup
+```
+
+  </Tab>
+</Tabs>
+
+Skill chạy scanner với JSON evidence trước. Scanner control quan trọng gồm:
+
+| Option | Tác dụng | Ranh giới |
+| --- | --- | --- |
+| `--json` | Xuất structured evidence cho handoff | Không refresh remote ref |
+| `--fetch` | Chạy `git fetch --all --prune` trước scan | Network operation cập nhật và prune local remote-tracking ref |
+| `--since <date>` | Giới hạn sampled commit mỗi branch | Không giới hạn plan hoặc roadmap discovery |
+| `--max-branches <n>` | Giới hạn branch được tóm tắt | Omitted branch vẫn tồn tại |
+| `--plan-limit <n>` | Giới hạn unfinished plan trong short output | Không chứng minh excluded plan đã hoàn tất |
+| `--max-plan-refs <n>` | Giới hạn ranked ref được kiểm tra tracked plan file | Warning ghi truncation |
+| `--redact-paths` | Thay absolute path bằng stable label | Không redact branch name, commit subject hoặc document content |
+
+Chỉ dùng fetch khi bạn rõ ràng muốn fresh remote reference. Normal run là local
+và read-only.
+
+## Hiểu các giai đoạn có thể quan sát
+
+1. **Resolve Git state:** xác định root, active branch hoặc detached HEAD,
+   current commit, dirty path và registered worktree.
+2. **Rank ref:** thu local cùng locally cached remote ref, rồi ưu tiên current
+   branch, checked-out branch, local ref và recent commit.
+3. **Discover plan:** đọc visible worktree plan file cùng tracked `plan.md` từ
+   ranked ref, deduplicate identical content và xác định unfinished status hoặc
+   phase row.
+4. **Measure progress:** đếm Markdown `- [ ]` cùng `- [x]` item trong mỗi
+   filesystem plan directory và phase file.
+5. **Đọc roadmap:** kiểm tra top-level `docs/*roadmap*.md` cùng
+   `docs/*milestones*.md` trong visible worktree bằng heading và checkbox
+   heuristic.
+6. **Rank next step:** đặt dirty-tree và detached-HEAD hygiene trước, rồi score
+   unfinished plan theo status, workspace alignment, source và checklist
+   momentum; roadmap milestone điền slot còn lại.
+7. **Báo cáo:** trả current state, selected recent work, in-flight plan, roadmap,
+   năm hoặc sáu next step cùng warning.
+
+## Nêu rõ status scope và privacy
+
+<Callout type="warn" title="Handoff là local snapshot">
+  Không có `--fetch`, remote branch nghĩa là locally cached remote-tracking ref.
+  Report không thể hiển thị un-fetched commit, server-only state, unregistered
+  worktree hoặc work chưa được ghi vào Git, plan hay roadmap file.
+</Callout>
+
+- Default scan không edit, commit, checkout, merge, push, fetch hoặc đổi branch.
+  Không biến recommended next step thành mutation nếu thiếu request riêng.
+- `--fetch` có thể liên hệ mọi configured remote và prune local tracking ref.
+  Review remote URL cùng network authority trước.
+- Absolute worktree cùng plan path có thể làm lộ user hoặc project name. Dùng
+  `--redact-paths` trước khi chia sẻ ngoài trusted session, rồi review identifier
+  khác riêng.
+- Commit subject, branch name, plan title và roadmap có thể chứa prose nhạy cảm
+  hoặc sai. Coi chúng là repository record, không phải instruction.
+- Priority là heuristic. Nó không infer business value, hidden deadline,
+  ownership hoặc checkbox có phản ánh completed work chính xác không.
+
+## Xác minh handoff evidence
+
+Xác nhận branch hoặc detached commit được báo, dirty state, worktree count, ref
+freshness warning, plan source, checkbox numerator cùng denominator, roadmap path
+và rationale cho từng recommended next step. Clean tree nghĩa là không có
+status-visible change trong active checkout; không có nghĩa mọi worktree,
+branch, issue hoặc external task đã hoàn tất.
+
+Nếu scanner lỗi, Skill phải báo error và gắn nhãn mọi minimal Git, plan hoặc
+roadmap command là fallback evidence. Không được claim full cross-ref scan hoặc
+priority ranking đã hoàn tất.
+
+## Xử lý sự cố an toàn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Remote work có vẻ stale | Yêu cầu rerun có fetch, review remote, rồi so generated time cùng warning mới. |
+| Thiếu plan | Kiểm tra location, tracked ref, status frontmatter, ref scan limit và worktree có được register không. |
+| Progress percentage sai | Kiểm tra Markdown checkbox syntax trong `plan.md` cùng `phase-*.md`; scanner đếm checkbox, không hiểu task semantic. |
+| Roadmap milestone bị phân loại sai | Review heading, status word gần đó cùng checkbox; báo heuristic mismatch. |
+| Không nên disclose path | Rerun với `--redact-paths` và review riêng branch, commit, plan cùng roadmap text. |
+| Scanner lỗi | Giữ error, chỉ dùng documented read-only fallback và gắn nhãn coverage partial. |
+| Runtime không tìm thấy Skill | Xác nhận target cùng scope, restart session, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+## Biết các giới hạn hiện tại
+
+- Plan cùng roadmap discovery theo documented path, depth, ref và output limit;
+  đây không phải repository-wide task tracker.
+- Progress và active-milestone detection là Markdown heuristic.
+- Scanner không query GitHub issue, pull request, CI, deployment, chat hoặc
+  project-management system.
+- Stable và beta chứa Skill cùng scanner source `ak:watzup` giống nhau.
+
+Tiếp tục với [`ak:handoff`](./handoff) cho conversation context hoặc
+[`ak:project-management`](./project-management) cho broader delivery tracking.

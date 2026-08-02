@@ -1,0 +1,202 @@
+---
+title: Isolate Git work with ak:worktree
+description: Inspect repository state, preview and create isolated worktrees, audit their health, and clean up only after reviewing destructive effects.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:worktree` to create a separate Git checkout for a feature, inspect
+existing worktrees, audit branch health, or clean stale metadata. The Skill
+handles standalone repositories, monorepos backed by submodules, and work inside
+a superproject.
+
+## Choose ak:worktree for Git isolation
+
+### Use ak:worktree when
+
+- You want a feature or fix isolated from the current checkout.
+- Parallel workers need separate branches and directories.
+- You need to inspect worktree paths, branches, dirty state, or divergence.
+- Stale Git worktree metadata needs a preview and cleanup.
+- A monorepo or submodule setup makes the correct worktree root unclear.
+
+### Choose another workflow when
+
+- You only need a new branch in the current checkout.
+- You need operating-system, container, credential, or network isolation.
+- You want to stash or preserve uncommitted changes from the current checkout.
+- You are ready to implement inside an existing worktree. Use `ak:cook` or the
+  owning implementation workflow there.
+
+## Prepare Git and the runtime
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm the
+  Kit containing `ak:worktree` is installed for the runtime and scope you use.
+- Run from inside a Git repository.
+- Use Node.js 18 or later and Git 2.5 or later.
+- Inspect current changes. A new worktree starts from a branch or commit; it
+  does not copy uncommitted changes from another checkout.
+- Know the exact worktree or branch before any removal.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:worktree ...` | The Skill uses its bundled Node script and the Git executable available to the session. |
+| Cursor | `/ak:worktree ...` | Slash invocation follows the user-verified Skill spelling. Shell and filesystem effects depend on the active Cursor permissions. |
+| Codex | `$ak:worktree ...` | Native Skill discovery is supported. Git and filesystem effects remain subject to the current Codex sandbox and approval policy. |
+
+## Run the Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:worktree "fix checkout retry handling; base on main; preview before creating"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:worktree "fix checkout retry handling; base on main; preview before creating"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:worktree "fix checkout retry handling; base on main; preview before creating"
+```
+
+  </Tab>
+</Tabs>
+
+The Skill translates a normal description into the bundled worktree script.
+It detects `fix`, `refactor`, `docs`, `test`, `chore`, and `perf`; other normal
+descriptions default to a `feat/` branch.
+
+| Command or option | Behavior |
+| --- | --- |
+| `info` | Reports repository type, detected base, projects, worktree root, environment-file names, and dirty-state counts |
+| `create [project] <feature>` | Creates or attaches a branch in a new worktree; a monorepo requires the project |
+| `list` | Lists normalized worktree records |
+| `status` | Adds current/main flags, dirty state, branch existence, detected base, and ahead/behind counts |
+| `remove <name-or-path>` | Force-removes one matched worktree, then tries a safe `git branch -d` for its branch |
+| `prune` | Removes stale worktree metadata; `--dry-run` previews it |
+| `--prefix <type>` | Selects the branch prefix; the Skill normally derives it from the request |
+| `--base <branch>` | Overrides automatic base detection after validating the ref exists |
+| `--no-prefix` | Preserves a supplied exact branch name, including case and safe slash segments |
+| `--worktree-root <path>` | Overrides the selected worktree directory after path validation |
+| `--checkout-submodules` | Initializes and checks out submodules recursively after creation |
+| `--dry-run` | Previews `create`, `remove`, or `prune` without applying that operation |
+| `--json` | Returns structured results and errors for the workflow |
+
+## Understand naming and placement
+
+When you provide a normal feature description, the Skill creates a lowercase
+kebab-case slug of at most 50 characters and adds the derived prefix. When you
+provide an exact branch name with uppercase letters, an issue key, or slash
+segments, it uses `--no-prefix` and preserves a validated version of that name.
+
+Base detection checks `dev`, `develop`, `main`, then `master`, using a matching
+local or `origin` branch. If none exists, the script falls back to `main`; use
+`--base` when that fallback is not correct.
+
+The worktree root is selected in this order:
+
+1. **An explicit path wins.** `--worktree-root` is validated first.
+2. **An environment override comes next.** `WORKTREE_ROOT` is honored when set
+   and valid.
+3. **A superproject owns submodule worktrees.** The root is placed under the
+   topmost discovered superproject.
+4. **A monorepo keeps worktrees internally.** It uses a `worktrees` directory
+   under the monorepo root.
+5. **A standalone repository uses a sibling directory.** This avoids placing
+   worktrees inside the repository being checked out.
+
+## Understand what changes
+
+1. **The Skill inspects the repository.** It reports repository type, project
+   choices, base branch, root selection, and dirty state.
+2. **The Skill resolves project and branch naming.** Ambiguous monorepo matches
+   require a selection; invalid feature, base, or path input stops the run.
+3. **The Skill previews when requested.** Dry-run returns the branch, base,
+   path, project, and warnings without creating files or refs.
+4. **The Skill creates the worktree.** It creates a worktree directory and a
+   new branch from the base, or attaches an existing local or remote branch.
+5. **The Skill copies environment templates.** Files named like
+   `.env*.example` are copied into the new worktree with `.example` removed.
+   The copied files are templates; their contents still need review.
+6. **The Skill handles optional submodules and dependencies.** Submodules are
+   checked out only with the explicit option. After creation, the workflow can
+   run the package-manager or language setup inferred from the project files.
+7. **The Skill reports evidence.** The structured result includes the path,
+   branch, base and source, project, copied templates, and warnings.
+
+## Keep approval and safety with you
+
+<Callout type="warn" title="Remove force-deletes the worktree checkout">
+  The bundled `remove` operation runs a forced worktree removal. Uncommitted
+  changes inside that worktree can be lost. Always inspect `status`, identify
+  the exact path, and run `remove ... --dry-run` before approving removal.
+</Callout>
+
+After removing a worktree, the script deletes its branch only with the safe
+`-d` check. An unmerged branch is kept and reported. `prune` cleans stale Git
+metadata; preview it first when auditing an unfamiliar repository.
+
+Creation can write a branch, directory, copied environment templates,
+submodule checkouts, and dependency artifacts. Dependency installation may use
+the network and execute package lifecycle behavior. Request a preview and state
+whether installation is allowed when those effects matter.
+
+## Verify the result
+
+A successful create should provide:
+
+- The absolute worktree path and how its root was chosen.
+- The exact branch and base branch, including whether the base was explicit or
+  auto-detected.
+- The selected monorepo project, when applicable.
+- Whether submodules were checked out.
+- Environment templates copied and any warnings.
+- A clean `status` record or a clear explanation of expected dirty artifacts
+  after setup.
+
+Before implementation, enter the reported directory and confirm the branch,
+base, project files, copied templates, and dependency state. A successful Git
+command does not prove the new checkout contains local edits from another
+worktree.
+
+## Troubleshoot or continue
+
+| Symptom | Safe next step |
+| --- | --- |
+| The command reports no Git repository | Run it from the repository or intended submodule checkout. |
+| The detected base is wrong | Pass an existing ref with `--base`; the script rejects missing or unsafe values. |
+| Several monorepo projects match | Choose the exact project instead of accepting a partial ambiguous name. |
+| The branch is already checked out | Reuse that worktree or choose another branch; Git cannot check out one branch in two worktrees. |
+| The target path already exists | Inspect the directory and known worktrees; do not overwrite it. |
+| The current checkout is dirty | Preserve or commit those changes separately. Creation warns, but does not copy them into the new worktree. |
+| Submodule checkout fails after create | Keep the new worktree, inspect the reported error, and run the submodule command manually only after resolving access. |
+| Removal finds several matches | Use the full absolute path and preview again. |
+| The runtime does not recognize the Skill | Confirm target and scope, restart the session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Continue with `ak:cook` inside the new checkout, or review
+[Projects, artifacts, and checkpoints](../../../concepts/projects-artifacts-checkpoints)
+and [Runtime adapters](../../../concepts/runtime-adapters).
+
+## Know the current limits
+
+- The script detects monorepos from Git submodules; other workspace layouts may
+  be treated as standalone repositories.
+- Worktrees isolate Git checkouts, not processes, secrets, ports, caches,
+  databases, or external services.
+- Automatic dependency setup depends on recognizable project files and the
+  package manager available in the session.
+- The test suite covers command output, naming, validation, dry-run, status,
+  prune, and many path and monorepo cases, but some monorepo tests skip when
+  their fixture is unavailable.
+- Stable and beta contain identical `ak:worktree` Skill and script behavior.

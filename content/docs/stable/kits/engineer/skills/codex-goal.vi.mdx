@@ -1,0 +1,135 @@
+---
+title: Chuẩn bị công việc Codex bền vững với ak:codex-goal
+description: Soạn contract Codex Goal mode có giới hạn, xác minh được và giữ quyền kiểm soát công việc dài hạn bằng ak:codex-goal.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:codex-goal` để biến objective rõ ràng, phần lớn mang tính mechanical
+thành contract review được cho Codex Goal mode. Skill giúp xác định outcome,
+constraint, validation loop, checkpoint và stop condition; persistent goal thật
+thuộc về Codex và gắn với chat đang hoạt động.
+
+## Chọn ak:codex-goal cho công việc Codex dài hạn
+
+### Dùng ak:codex-goal khi
+
+- Công việc dài hơn một turn bình thường và có thể tiến triển mà không liên tục
+  cần quyết định product hoặc architecture.
+- Test, eval, build hoặc artifact rõ khác có thể chứng minh completion.
+- Scope và contract phải giữ đủ rõ qua nhiều checkpoint.
+- Bạn muốn soạn và review goal trước khi bắt đầu trong Codex.
+
+### Chọn workflow khác khi
+
+- Outcome mong muốn còn exploratory hoặc mơ hồ. Hãy làm rõ bằng planning trước.
+- Goal nhiều giờ hoặc nhiều dependency cần preflight blocker và credential. Dùng
+  [`ak:goal-warmup`](./goal-warmup).
+- Công việc là local metric-driven iteration loop hoặc headless multi-CLI job.
+  Dùng loop hoặc orchestration workflow chuyên dụng.
+- Task thay đổi production credential, shared infrastructure phá hủy hoặc backlog
+  không liên quan. Giữ nó ngoài Goal mode.
+
+## Chuẩn bị Codex Goal mode
+
+Tài liệu Codex hiện tại cung cấp `/goal` trong desktop app, interactive CLI và
+IDE extension. Mở slash-command list và xác nhận command có trong surface sẽ
+dùng. Nếu thiếu, làm theo feature cùng update guidance hiện hành của runtime
+thay vì giả định state private hoặc chưa document.
+
+| Runtime | Cách gọi Skill | Ranh giới persistent goal |
+| --- | --- | --- |
+| Claude Code | `/ak:codex-goal ...` | Chỉ có thể soạn contract; Claude không nhận state Codex `/goal` từ Skill này. |
+| Cursor | `/ak:codex-goal ...` | Chỉ có thể soạn contract; bằng chứng phát hành không thiết lập goal persistence của Cursor. |
+| Codex | `$ak:codex-goal ...` | Soạn contract; bắt đầu và điều khiển persistence bằng native `/goal` command trong Codex chat đang hoạt động. |
+
+## Chạy Skill
+
+Truyền objective hoặc draft. Skill không định nghĩa flag; output nên là goal
+contract để review, không phải goal tự khởi động.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:codex-goal "Finish the TypeScript migration, preserve behavior, keep strict mode clean, and make the focused test suite pass"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:codex-goal "Finish the TypeScript migration, preserve behavior, keep strict mode clean, and make the focused test suite pass"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:codex-goal "Finish the TypeScript migration, preserve behavior, keep strict mode clean, and make the focused test suite pass"
+```
+
+  </Tab>
+</Tabs>
+
+Sau review, bắt đầu persistent goal từ Codex surface:
+
+```text
+/goal Finish the TypeScript migration. Read the accepted plan first. Preserve public behavior and strict mode. Validate after each checkpoint with the focused test command. Stop when the build and tests pass, or when a human decision is required.
+```
+
+Dùng `/goal` để xem goal hiện tại, `/goal edit` để sửa, `/goal pause` cùng
+`/goal resume` để điều khiển và `/goal clear` để xóa. Goal text giới hạn 4.000 ký
+tự theo guidance Codex hiện hành; đặt chi tiết dài hơn trong tệp rồi trỏ goal tới đó.
+
+## Hiểu workflow
+
+1. **Kiểm tra độ phù hợp.** Xác nhận công việc đủ dài, có thể tiến triển theo
+   cách mechanical và có end state xác minh được.
+2. **Nêu bằng chứng.** Xác định tệp cần đọc, acceptance command, artifact,
+   checkpoint và contract phải giữ nguyên.
+3. **Soạn một objective.** Gồm outcome, constraint, stop condition và lệnh cấm
+   rõ việc weaken, narrow, skip hoặc delete test.
+4. **Review trước khi bắt đầu.** Giải quyết ambiguity và kiểm tra authority
+   boundary. Dùng goal warmup trước khi dependency hoặc external approval quan trọng.
+5. **Bắt đầu trong Codex.** User gọi `/goal`; objective trở thành persistent
+   target cùng completion criteria của active chat.
+6. **Steer và verify.** Tiếp tục cùng chat, hỏi status khi hữu ích, pause để chờ
+   quyết định con người và review final diff trước delivery.
+
+## Tách authorization khỏi persistence
+
+<Callout type="warn" title="Goal không phải safety boundary">
+  Bắt đầu `/goal` không mở rộng quyền filesystem, network, credential,
+  deployment, destructive hoặc external service. Sandbox cùng approval policy
+  giữ nguyên và product decision chưa giải quyết vẫn cần user.
+</Callout>
+
+Công việc dài hạn tiêu model time và có thể chạy command, ghi project file hoặc
+gọi dịch vụ được session cho phép. Validation cũng có thể dùng compute, disk,
+network hoặc paid provider. Nêu các effect đó trong contract và giữ hành động
+không thể đảo ngược sau explicit approval.
+
+## Xác minh tiến độ và completion
+
+Bằng chứng nên gồm active goal text, checkpoint status, command đã chạy, kết quả
+test hoặc build, tệp đã đổi, rủi ro còn lại và quyết định đang pause. Completion
+cần stop condition đã nêu, không chỉ thời gian đã làm. Review final diff và xác
+nhận không test hay contract nào bị weaken để tạo thành công giả.
+
+## Xử lý sự cố và giới hạn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Thiếu `/goal` | Kiểm tra slash-command list, version và official feature guidance hiện tại của Codex; không claim lifecycle state chưa được hỗ trợ. |
+| Objective liên tục drift | Pause, restate một outcome cùng contract phải giữ, hoặc clear rồi chạy `ak:goal-warmup`. |
+| Công việc cần product decision | Pause và hỏi decision owner; không tự bịa câu trả lời để giữ goal chạy. |
+| Validation không chứng minh completion | Thay stop condition mơ hồ bằng executable check hoặc observable artifact trước khi resume. |
+| Hai chat có thể sửa cùng tệp | Dừng một chat hoặc isolate công việc trong worktree riêng trước khi chạy goal đồng thời. |
+
+`ak:codex-goal` không start, pause, resume, edit hoặc clear Goal mode ngoài Codex
+surface. Persistent state thuộc từng active chat, không phải provider API portable.
+Packaged Skill vẫn giữ fallback config wording cũ, trong khi public Codex guidance
+hiện hành trình bày `/goal` là built-in command; ưu tiên live slash-command list
+cho availability. Hai release snapshot dùng cho trang này chứa cùng Skill text.

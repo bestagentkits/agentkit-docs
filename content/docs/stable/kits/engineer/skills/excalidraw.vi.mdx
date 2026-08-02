@@ -1,0 +1,181 @@
+---
+title: Biến bằng chứng hệ thống thành sơ đồ với ak:excalidraw
+description: Tạo sơ đồ Excalidraw có thể chỉnh sửa cho kiến trúc, luồng và codebase bằng canvas trực tiếp hoặc workflow dựa trên tệp, rồi xác minh artifact đã render.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:excalidraw` để biến phần giải thích kỹ thuật, workflow hoặc codebase đã
+kiểm tra thành sơ đồ có thể chỉnh sửa. Skill chọn canvas Excalidraw MCP trực
+tiếp khi khả dụng; nếu không, Skill có thể tạo JSON `.excalidraw` cho vòng lặp
+render và review dựa trên tệp.
+
+## Chọn ak:excalidraw cho phần giải thích trực quan có thể chỉnh sửa
+
+### Dùng ak:excalidraw khi
+
+- Bạn cần sơ đồ kiến trúc, data flow, workflow, system design hoặc khái niệm vẫn
+  có thể chỉnh sửa.
+- Bạn muốn Skill kiểm tra repository và đề xuất bản đồ kiến trúc trước khi vẽ.
+- Bạn cần source `.excalidraw` cùng artifact PNG hoặc SVG để review.
+- Mối quan hệ và giá trị giảng giải quan trọng hơn một lưới box đồng dạng.
+
+### Chọn workflow khác khi
+
+- Bạn chỉ cần sơ đồ dạng text trong tài liệu. Hãy dùng workflow hỗ trợ Mermaid.
+- Bạn cần triển khai interface hoạt động thay vì giải thích interface. Dùng
+  `ak:frontend-design` hoặc `ak:frontend-development`.
+- Bạn cần preview project nói chung thay vì sơ đồ có thể chỉnh sửa. Dùng
+  `ak:preview`.
+- Bạn không thể kiểm tra hệ thống đủ sâu để chứng minh các kết nối được yêu cầu.
+  Hãy hỏi thêm bằng chứng hoặc chỉ vẽ scope đã xác minh.
+
+## Chuẩn bị sơ đồ và renderer
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận Engineer
+  Kit đã được cài cho runtime cùng scope hiện tại.
+- Nêu audience, câu hỏi sơ đồ phải trả lời, độ sâu mong muốn, thư mục output và
+  yêu cầu về source, PNG, SVG hay canvas trực tiếp.
+- Với auto-diagram codebase, mở repository và chỉ rõ thư mục hoặc dữ liệu không
+  được đọc.
+- Với mode trực tiếp, cấu hình Excalidraw MCP server cùng canvas, rồi cung cấp
+  diagram tool cho runtime.
+- Với mode tệp, cung cấp Python 3.11 trở lên, `uv`, Playwright và Chromium nếu
+  muốn dùng PNG renderer được bundle.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:excalidraw ...` | Có thể dùng workflow MCP trực tiếp khi các tool đã được cấu hình. Workflow tệp được bundle mô tả lệnh dựa trên Skill root của Claude, vì vậy lần chạy phải tự xác định đường dẫn cài đặt thay vì giả định đường dẫn đó ở runtime khác. |
+| Cursor | `/ak:excalidraw ...` | Cách gọi bằng slash đã được người dùng xác minh. MCP tool, quyền truy cập browser và việc xác định đường dẫn helper phụ thuộc session Cursor. |
+| Codex | `$ak:excalidraw ...` | Dùng native Skill discovery. MCP cùng khả năng xem ảnh hoặc dùng browser cục bộ phụ thuộc session; Engineer Hook và statusline không hoàn toàn portable. |
+
+Xem [Runtime adapter](../../../concepts/runtime-adapters) để hiểu ranh giới phân
+phối và projection được hỗ trợ.
+
+## Chạy Skill
+
+Truyền outcome trực quan và ranh giới bằng chứng bằng ngôn ngữ tự nhiên. Skill
+không công bố mode flag; Skill phát hiện rendering backend từ các tool thực sự
+khả dụng.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:excalidraw "Inspect this repository and propose an architecture overview for a new maintainer. Confirm the components and connections before drawing, then create architecture.excalidraw and architecture.png without installing software or clearing an existing canvas."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:excalidraw "Inspect this repository and propose an architecture overview for a new maintainer. Confirm the components and connections before drawing, then create architecture.excalidraw and architecture.png without installing software or clearing an existing canvas."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:excalidraw "Inspect this repository and propose an architecture overview for a new maintainer. Confirm the components and connections before drawing, then create architecture.excalidraw and architecture.png without installing software or clearing an existing canvas."
+```
+
+  </Tab>
+</Tabs>
+
+Với thiết kế được cung cấp, hãy nói rõ label nào phải giữ nguyên. Với hệ thống
+lớn, yêu cầu overview trước và nêu khu vực cần sơ đồ drill-down riêng.
+
+## Hiểu hai đường render
+
+| Đường | Hoạt động | Bằng chứng điển hình |
+| --- | --- | --- |
+| Canvas MCP trực tiếp | Đọc diagram guide khả dụng, tạo element theo batch, kiểm tra scene cùng screenshot, rồi export khi được yêu cầu | Canvas hiển thị, screenshot, scene export, PNG hoặc SVG |
+| Dựa trên tệp | Ghi Excalidraw JSON, dùng Playwright renderer được bundle để tạo PNG khi dependency khả dụng, rồi kiểm tra và sửa kết quả | Source `.excalidraw`, output renderer, PNG để review |
+
+Skill ưu tiên đường trực tiếp, nhưng việc phát hiện dựa trên bằng chứng. Gọi Skill
+thành công không chứng minh Excalidraw MCP server, browser hay renderer đã được
+cấu hình.
+
+## Quan sát workflow tạo sơ đồ
+
+1. **Lần chạy xác định mục tiêu giảng giải.** Skill xác định audience, câu hỏi
+   visual phải trả lời và độ sâu khái niệm hay kỹ thuật phù hợp.
+2. **Lần chạy kiểm chứng claim kỹ thuật.** Skill kiểm tra component, protocol,
+   event, method hoặc data format thật thay vì bịa kết nối chung chung.
+3. **Lần chạy đề xuất bản đồ.** Với phân tích repository tự động, Skill báo cáo
+   component cùng edge đã tìm thấy để xác nhận trước khi vẽ.
+4. **Lần chạy chọn visual pattern.** Hierarchy, sequence, convergence, fan-out,
+   cycle và comparison nhận cấu trúc thể hiện đúng behavior thay vì card giống
+   nhau.
+5. **Lần chạy tạo artifact.** Skill batch element trên canvas trực tiếp hoặc xây
+   JSON theo từng section, với số component cùng arrow có giới hạn cho overview.
+6. **Lần chạy render và tự review.** Skill kiểm tra clipping, overlap, spacing,
+   arrow routing, label, độ cân bằng cùng kết nối bị thiếu, rồi sửa và render lại
+   trong giới hạn review của workflow.
+
+## Giữ thay đổi canvas và môi trường ở trạng thái rõ ràng
+
+<Callout type="warn" title="Rendering có thể vượt qua ranh giới local và network">
+  Xóa canvas trực tiếp sẽ loại bỏ scene hiện tại. Thiết lập Docker, `npm`, `uv`,
+  Playwright và Chromium làm thay đổi môi trường local. File renderer được
+  bundle còn import code Excalidraw từ `esm.sh` lúc render, vì vậy đừng mô tả
+  mode này là không cần network trừ khi dependency đã có cục bộ và lần chạy
+  chứng minh được offline rendering.
+</Callout>
+
+- Hỏi trước khi xóa canvas có thể chứa công việc của người dùng. Snapshot hoặc
+  export trước nếu MCP tool đã cấu hình hỗ trợ recovery.
+- Coi package download, container, background server, cài browser và xuất bản
+  share link là các phê duyệt riêng.
+- Không đưa secret, identifier riêng tư hoặc source excerpt chưa được duyệt vào
+  sơ đồ hay share link được host bên ngoài.
+- Giữ nguyên tệp không liên quan và thống nhất output path trước khi ghi source
+  cùng image artifact.
+- Sơ đồ là lời giải thích, không phải authority. Đánh dấu kết nối suy luận và
+  nhờ owner review claim về security, data flow cùng deployment.
+
+## Xác minh output và bằng chứng
+
+Một lần chạy hoàn tất nên cung cấp:
+
+- Scope sơ đồ, audience, source evidence và mọi inference đã được xác nhận.
+- Backend đã chọn cùng tool hoặc dependency thực sự được dùng.
+- `.excalidraw` có thể chỉnh sửa hoặc live scene, cùng PNG hay SVG đã yêu cầu.
+- Bản render cho thấy text đọc được, element không overlap, arrow nối đúng đối
+  tượng và spacing hỗ trợ reading order.
+- Output path chính xác, external service đã liên hệ, check bị bỏ qua và khoảng
+  trống trực quan hoặc factual còn lại.
+
+Với auto-diagram repository, workflow nguồn của Skill giới hạn overview ở 12
+component và 20 arrow, nhóm hệ thống lớn hơn rồi đề nghị drill-down. Hãy coi đây
+là ranh giới rõ ràng, không phải bằng chứng rằng phần bị lược bỏ không quan trọng.
+
+## Xử lý sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Không có Excalidraw MCP tool | Dùng mode tệp nếu dependency được duyệt, hoặc cấu hình MCP canvas rồi khởi động lại runtime. |
+| Canvas trực tiếp không trống | Dừng trước khi xóa; snapshot hoặc export scene hiện tại và hỏi xem có thực sự muốn thay thế không. |
+| Renderer không tìm thấy Chromium | Chỉ cài Chromium của Playwright khi được duyệt, hoặc giao source có thể chỉnh sửa và báo PNG verification bị chặn. |
+| Renderer chờ hoặc không tải được module | Kiểm tra quyền truy cập network tới nguồn module; đừng khẳng định đường được bundle hoàn toàn offline. |
+| Label bị cắt hoặc arrow cắt qua content | Mở rộng element, tăng gap, đổi route kết nối và kiểm tra bản render mới. |
+| Kết nối repository chưa chắc chắn | Bỏ arrow chưa được chứng minh, đánh dấu uncertainty hoặc kiểm tra entry point cụ thể trước khi vẽ lại. |
+| Runtime không nhận diện Skill | Xác nhận target cùng scope, khởi động lại session, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Xem [Projects, artifacts và checkpoints](../../../concepts/projects-artifacts-checkpoints)
+trước khi tạo artifact trong repository, hoặc tiếp tục với [Engineer Kit](../../engineer).
+
+## Biết các giới hạn hiện tại
+
+- Skill bundle guidance và file renderer, nhưng không bundle Excalidraw MCP
+  server, canvas service, Python environment, browser hay container runtime.
+- Tên live MCP tool cùng behavior export phụ thuộc server bên ngoài đã cấu hình;
+  file rendering phụ thuộc Playwright, Chromium và remote module trong template
+  tại tag.
+- Visual inspection không chứng minh kiến trúc chính xác, đầy đủ, accessible hay
+  bạn có quyền xuất bản nội dung được mô tả.
+- Stable và beta chứa nội dung Skill `ak:excalidraw` giống nhau trong cặp release
+  này; thay đổi Codex Hook của beta không làm đổi workflow.

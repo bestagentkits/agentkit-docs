@@ -1,0 +1,85 @@
+---
+title: ak plan migrate
+description: Preview and safely index legacy repository plan folders without following symlinks or deleting source files.
+---
+
+Use `ak plan migrate` to import recognized folders from one repository's
+`plans/` directory into the private local plan store. It is a files-to-index
+migration, not a move or format rewrite.
+
+## Usage
+
+```bash
+ak plan migrate --from-project-files [--path <repo-root>] [--apply]
+```
+
+## Command flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--from-project-files` | `false` | Required source selector for repository-local plan folders. |
+| `--path <repo-root>` | Current directory | Select the root whose direct `plans/` child is scanned. |
+| `--apply` | `false` | Import recognized plans and write migration markers. Without it, classify only. |
+
+## Preview, then import
+
+```bash
+ak plan migrate --from-project-files --path ./ --json
+ak plan migrate --from-project-files --path ./ --apply --json
+```
+
+The preview does not create plan rows or `.agentkit-migrated` markers. Opening
+the plan store can still create or forward-migrate its private database. Review
+every outcome before applying.
+
+Apply imports plan identity, title, status, phase metadata, phase bodies, and
+full-text search content into SQLite. It then creates an owner-only
+`.agentkit-migrated` marker in each imported folder. Source Markdown is never
+deleted or rewritten. Finished or cancelled plans import as closed; other or
+unknown statuses import as active.
+
+## Safety and partial outcomes
+
+The command canonicalizes the repository root and refuses to follow candidate
+folder, `plan.md`, or phase-file symlinks. Paths that escape the root are
+skipped. Safety checks run again immediately before import. Folder IDs are
+deterministic, so applying again does not create a duplicate row.
+
+There is no prompt, stdin read, `--yes` requirement, snapshot, or rollback
+transaction covering the whole run. Each plan and its phases are imported
+atomically, but a marker write happens afterward. If that marker fails, the
+store row remains and the outcome reports that re-running is safe.
+
+Per-folder unsafe, unrecognized, or import failures are reported as outcomes
+and can coexist with exit `0`. Automation must inspect every `status` and
+`reason`, not only the process exit.
+
+This is local-only. It can run local `git` commands to collect repository
+identity. No network, registry authentication, provider, or remote cache is
+used. The local index contains searchable copies of plan content;
+protect `$AGENTKIT_HOME` and redact output paths before sharing logs.
+
+## Output
+
+JSON success uses `kind=plan.migrate` with:
+
+```text
+data.applied, data.root, data.plans_dir,
+data.outcomes[].slug, status, reason, store_id, phases
+```
+
+Human and plain results are on stdout. Errors are on stderr. There is no NDJSON
+mode, and flag-parse errors can remain plain text in JSON invocations.
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | Classification/import traversal completed, including no `plans/` directory and per-folder skipped outcomes. | Inspect every outcome before considering the migration complete. |
+| `1` | The root, Git context, store, or top-level filesystem scan failed. | Correct access and rerun the preview. |
+| `2` | `--from-project-files` was missing or other input was invalid. | Add the explicit source flag and verify the root. |
+
+## Related commands
+
+- [Complete `ak plan` command facts](../cli/ak_plan)
+- [CLI conventions](../cli-conventions)

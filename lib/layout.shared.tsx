@@ -1,13 +1,18 @@
 import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
+import {
+  AccessibleFullSearchTrigger,
+  AccessibleSearchTrigger,
+} from '@/components/accessible-search-trigger';
+import { AccessibleThemeSwitch } from '@/components/accessible-theme-switch';
+import { localePath } from './locale-path';
 import { appName, gitConfig } from './shared';
 
-// `locale` prefixes internal nav links so the logo/home link stays inside the
-// active language (/en, /vi). The language switcher itself is rendered by the
-// layout from the i18n provider context, so it needs no config here.
+// Logo/home link stays inside the active locale. The language switcher is
+// rendered by the layout from the i18n provider.
 export function baseOptions(locale: string): BaseLayoutProps {
   return {
     nav: {
-      url: `/${locale}`,
+      url: localePath(locale),
       title: (
         <>
           {/* Real AgentKit logo mark (public/logo-icon.svg). Plain <img> so it
@@ -22,6 +27,13 @@ export function baseOptions(locale: string): BaseLayoutProps {
           <span className="font-medium">{appName}</span>
         </>
       ),
+    },
+    slots: {
+      searchTrigger: {
+        sm: AccessibleSearchTrigger,
+        full: AccessibleFullSearchTrigger,
+      },
+      themeSwitch: AccessibleThemeSwitch,
     },
     githubUrl: `https://github.com/${gitConfig.user}/${gitConfig.repo}`,
   };

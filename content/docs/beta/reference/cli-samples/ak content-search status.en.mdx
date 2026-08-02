@@ -1,0 +1,76 @@
+---
+title: ak content-search status
+description: Inspect one owner's content-search lifecycle and redacted shard health without creating shard files.
+---
+
+Use `ak content-search status` before enabling, searching, disabling, deleting,
+or rebuilding a project shard. The content-shard inspection is read-only and
+does not create the `operational/content` directory.
+
+## Usage
+
+```bash
+ak content-search status --project <uuid>
+```
+
+The command accepts no documented positional arguments.
+
+## Command flag
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--project <uuid>` | Empty, required | Canonical lowercase UUIDv7 for a project owned by the current actor. |
+
+Status still opens the existing operational store read-only to resolve the
+current actor and project membership. A missing, busy, unhealthy, or
+inaccessible `operational.db` therefore prevents status even when no shard
+exists. No registry login, entitlement, provider, or network access occurs.
+
+## Output
+
+Human stdout is one line:
+
+```text
+lifecycle=<value> health=<value> docs=<count>
+```
+
+JSON stdout is the raw status object, not a shared envelope:
+
+```text
+projectId: canonical project UUID
+lifecycle: absent | enabled | disabled
+health: absent | ready | disabled | building | stale | corrupt | incompatible | foreign-database | permission | busy
+documentCount: omitted when zero
+logicalBytes: omitted when zero
+disclosure: plaintext-at-rest notice
+```
+
+`logicalBytes` is SQLite's stored title-plus-body length counter; it is not the
+physical `.db` plus sidecar size. Status does not return the shard path or
+content excerpts.
+
+An absent result is a successful state: `lifecycle=absent`, `health=absent`,
+and no content directory is created. JSON errors are not guaranteed to have a
+structured body.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | A redacted status, including `absent`, was emitted. |
+| `1` | The required flag was absent, UUID validation failed, the actor was not an owner, or the operational store or shard could not be inspected safely. |
+| `2` | A flag value could not be parsed. |
+
+## Act on status
+
+| Result | Next step |
+| --- | --- |
+| `absent` | Review the plaintext disclosure, then run `enable --yes` if local search is appropriate. |
+| `disabled` | Re-enable to preserve existing documents, or delete to remove plaintext data. |
+| `ready` | Search normally. |
+| `corrupt`, `incompatible`, or `foreign-database` | Preserve any external copy you need, then rebuild only after accepting irreversible shard replacement. |
+| `permission` or `busy` | Fix ownership/permissions or let the active store operation finish; do not force-delete the directory. |
+
+## Related commands
+
+- [CLI conventions](../cli-conventions)

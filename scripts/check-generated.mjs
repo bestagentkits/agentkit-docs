@@ -7,7 +7,7 @@
 import { parseArgs } from 'node:util';
 import { changedFiles, generatedDirsAt } from './lib/git.mjs';
 import { findGeneratedDirs } from './lib/generated-dirs.mjs';
-import { generatedViolations } from './lib/guards.mjs';
+import { generatedViolations, guardedDirs } from './lib/guards.mjs';
 import { repoRoot } from './lib/paths.mjs';
 
 async function main() {
@@ -33,7 +33,8 @@ async function main() {
   const generatedDirs = values.base
     ? generatedDirsAt(values.base, { cwd: values.repoRoot })
     : await findGeneratedDirs(values.repoRoot);
-  const violations = generatedViolations(changed, generatedDirs);
+  // Reproducible dirs are covered by the regenerate-and-diff CI step instead.
+  const violations = generatedViolations(changed, guardedDirs(generatedDirs));
 
   if (violations.length) {
     console.error('check-generated: hand edits to machine-owned (.generated) dirs are not allowed:');

@@ -1,0 +1,140 @@
+---
+title: Navigate code semantically with ak:gkg
+description: Index a Git repository with GitLab Knowledge Graph, query definitions and references, and qualify impact claims against language support.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:gkg` to build and query a local semantic graph for a Git repository.
+It supports definition search, reference lookup, repository maps, impact
+analysis, and graph exploration through the `gkg` CLI, local HTTP API, or MCP.
+
+## Choose ak:gkg for semantic code navigation
+
+### Use ak:gkg when
+
+- You need go-to-definition or find-usages evidence before a refactor.
+- You want a graph-backed repository map or architecture exploration.
+- You are analyzing Ruby, Java, Kotlin, Python, TypeScript, or JavaScript in a
+  local Git repository.
+
+### Choose another workflow when
+
+- You need a quick text bundle, remote-repository snapshot, token count, or a
+  language outside the packaged support matrix. Use a text-oriented repository
+  tool instead.
+- You need implementation rather than analysis. Hand verified findings to
+  [`ak:plan`](./plan) or [`ak:cook`](./cook).
+- A plain code search answers the question without creating a persistent index.
+
+## Prepare the repository and runtime
+
+Install `gkg` separately, open an initialized Git repository, and decide where
+local graph data may be stored. Stop the GKG server before re-indexing.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:gkg ...` | Native delivery can use the `gkg` CLI and any exposed HTTP or MCP tools. |
+| Cursor | `/ak:gkg ...` | Slash invocation is user-verified; GKG installation and MCP registration remain environment-specific. |
+| Codex | `$ak:gkg ...` | Native discovery is supported; CLI, local-server, and MCP access depend on the Codex session. |
+
+## Run the Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:gkg "Index this repository, find every reference to PaymentRouter, and report language-support gaps. Do not modify source or delete existing indexes."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:gkg "Index this repository, find every reference to PaymentRouter, and report language-support gaps. Do not modify source or delete existing indexes."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:gkg "Index this repository, find every reference to PaymentRouter, and report language-support gaps. Do not modify source or delete existing indexes."
+```
+
+  </Tab>
+</Tabs>
+
+| Operation | Observable effect | Boundary |
+| --- | --- | --- |
+| `gkg index [path] --stats` | Parses the repository and writes graph data under `~/.gkg/` | Stop the server first; indexing consumes CPU, memory, and disk |
+| `gkg server start --register-mcp` | Starts a local HTTP/MCP service, normally on port `27495` | The packaged API has no local authentication |
+| Definition and reference queries | Return symbol locations, source bodies, or usages | Completeness varies by language |
+| `repo_map` or graph API | Returns a compact tree or connected graph data | A graph edge reflects parser output, not architectural intent |
+| `gkg remove` or `gkg clean` | Deletes indexed workspace, project, orphan, or corrupt data | Review exact targets; use `gkg clean --dry-run` first |
+
+## Understand the observable stages
+
+1. **Check context:** confirm the repository, language mix, GKG availability,
+   server status, and allowed index location.
+2. **Index:** stop the server, run `gkg index`, and capture statistics or errors.
+3. **Serve:** start the local service when HTTP or MCP queries are needed.
+4. **Discover:** list projects, search definitions, and resolve the intended
+   symbol before retrieving references.
+5. **Assess impact:** inspect call sites and definitions, then corroborate gaps
+   with ordinary code search when language support is partial.
+6. **Report:** identify the indexed project, query, returned locations,
+   unsupported edges, and any stale-index risk.
+
+## Protect source and index state
+
+<Callout type="warn" title="The local graph contains repository knowledge">
+  Treat `~/.gkg/` as source-derived data. Absolute paths, definitions, and
+  relationships can reveal private code structure even when the source files
+  themselves are not copied into the final report.
+</Callout>
+
+- Do not expose the unauthenticated local HTTP or MCP service beyond the trusted
+  machine or session.
+- Indexing writes outside the repository but does not authorize source edits.
+- `remove` and `clean` mutate index state. They are recovery operations, not a
+  routine prerequisite for every query.
+- Re-index after relevant source changes; otherwise label results as potentially
+  stale.
+
+## Verify outputs and evidence
+
+A useful result names the repository and index time, `gkg` command or MCP tool,
+symbol definition ID or location, reference locations, language support level,
+and corroborating search for any high-impact conclusion. Keep “not returned by
+GKG” distinct from “does not exist.”
+
+Ruby, Java, and Kotlin are documented with cross-file references in the shipped
+support matrix. Python, TypeScript, and JavaScript definitions, imports, and
+same-file references are documented, while cross-file reference support is
+incomplete. Verify refactor impact in those languages with an independent
+search.
+
+## Troubleshoot safely
+
+| Symptom | Safe next step |
+| --- | --- |
+| `gkg` is missing | Install it from an approved source, verify `gkg --version`, then retry. |
+| Re-indexing fails while the server runs | Run `gkg server stop`, index again, then restart the server. |
+| The default port is busy | Check `gkg server status` and the reported fallback port instead of assuming `27495`. |
+| References are missing in Python or TS/JS | Treat the result as partial and corroborate with repository search. |
+| Results do not reflect recent edits | Re-index the intended project after preserving any needed index evidence. |
+| Index data appears corrupt | Preview `gkg clean --dry-run`; approve deletion only for the resolved index target. |
+| The runtime cannot find the Skill | Confirm target and scope, restart the session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+## Know the current limits
+
+- The Skill requires an initialized local Git repository and a separately
+  available `gkg` executable.
+- Cross-repository language connections are not documented as supported.
+- Local API and MCP availability do not imply authentication, remote access, or
+  identical client integration.
+- Stable and beta contain identical `ak:gkg` Skill and reference files.
+
+Continue with [`ak:graphify`](./graphify) for Mermaid views assembled from
+repository evidence or [`ak:plan`](./plan) for an implementation roadmap.

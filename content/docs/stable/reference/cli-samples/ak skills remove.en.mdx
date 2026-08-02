@@ -1,0 +1,69 @@
+---
+title: ak skills remove
+description: Remove one installed skill and its runtime record directly while preserving the shared package cache.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak skills remove` to delete one installed skill copy from the user Claude
+plugin root.
+
+## Usage
+
+```bash
+ak skills remove <kit>/<skill>
+```
+
+The command has no command-specific flags. Canonical references are recommended;
+`ak:`, `ake:`, and `akm:` reference shorthands are accepted.
+
+## Deletion order and limits
+
+If the destination directory exists, the command:
+
+1. Removes the per-skill runtime record unless
+   `AGENTKIT_SKILL_RUNTIME=0`.
+2. Removes `~/.claude/plugins/<kit>/skills/<skill>/`.
+
+The shared `~/.agentkit/cache/<runtime-hash>/` entry is preserved. If content is
+already absent, the command returns success without trying to clean an orphan
+runtime record.
+
+<Callout type="warning">
+  Removal is immediate. There is no prompt, dry-run, ownership/drift check,
+  backup, snapshot, or rollback. If content deletion fails after runtime-record
+  deletion, the content can remain without its record.
+</Callout>
+
+To recover, reinstall from the unchanged local kits source. Any preserved shared
+runtime cache may be reused, but it does not restore the deleted content.
+
+## Output
+
+JSON uses `kind=assets.remove` with:
+
+```text
+data.ref, data.kit, data.asset,
+data.removed, data.not_installed
+```
+
+Removing an absent destination returns `removed=false`,
+`not_installed=true`, and exit `0`. Human output similarly says “nothing to
+remove.”
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Content was removed or was already absent. |
+| `1` | Runtime-record or content deletion failed. Missing or extra positional arguments also currently use this path. |
+| `2` | The reference or flags were invalid. |
+
+For malformed references, the current JSON error envelope can report
+`exit_code: 1` while the process exits `2`.
+
+## Related commands
+
+- [Complete `ak skills remove` facts](../cli/ak_skills_remove)
+- [Remove only a runtime record](../cli/ak_skill_remove)
+- [Reinstall skill content](../cli/ak_skills_install)

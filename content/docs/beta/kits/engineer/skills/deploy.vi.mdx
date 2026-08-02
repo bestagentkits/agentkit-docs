@@ -1,0 +1,180 @@
+---
+title: Deploy project đã chuẩn bị với ak:deploy
+description: Phát hiện hoặc chọn hosting platform được hỗ trợ, deploy với quyền provider rõ ràng, xác minh URL và ghi hướng dẫn rollback.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:deploy` để đưa project đã sẵn sàng deploy lên hosting platform được hỗ
+trợ. Skill phát hiện ý định deployment hiện có, chọn platform workflow phù hợp,
+kiểm tra CLI cùng authentication, thực hiện deployment, xác minh URL tạo ra rồi
+ghi lại cách deploy và rollback cho lần sau.
+
+## Chọn ak:deploy để publish ứng dụng
+
+### Dùng ak:deploy khi
+
+- Project đã sẵn sàng publish và yêu cầu build cùng runtime đã rõ.
+- Cấu hình hiện có xác định một hosting platform được hỗ trợ.
+- Bạn muốn đề xuất platform trước lần deployment đầu.
+- Bạn cần cập nhật deployment documentation sau lần chạy thành công.
+
+### Chọn workflow khác khi
+
+- Bạn cần provisioning infrastructure, database migration, thay đổi DNS, quản
+  lý SSL certificate hoặc tạo CI/CD. Dùng `ak:devops` hoặc infrastructure
+  workflow của provider.
+- Bạn chỉ muốn chuẩn bị và review release hay pull request. Dùng `ak:ship`.
+- Build, test, secret hoặc security check chưa sẵn sàng. Hoàn tất các gate đó
+  trước khi cấp quyền deployment.
+- Target không nằm trong các platform workflow đã đóng package.
+
+## Chuẩn bị target và quyền hạn
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận Engineer
+  Kit đã được cài cho runtime cùng scope hiện tại.
+- Bắt đầu từ revision sạch đã review và biết build command, output, runtime,
+  health check, environment variable cùng kỳ vọng rollback.
+- Dùng provider project hiện có hoặc duyệt riêng mọi hành động first-deploy có
+  thể tạo hosted resource.
+- Xác thực provider CLI bằng credential least-privilege. Không để secret value
+  trong prompt, log, Git và deployment documentation.
+- Xác nhận account, project, region, environment, billing boundary và production
+  traffic có được phép thay đổi hay không.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:deploy ...` | Thực thi native có thể dùng provider CLI, shell command, chỉnh sửa tệp, authentication prompt và network access của session. |
+| Cursor | `/ak:deploy ...` | Cách gọi bằng slash đã được người dùng xác minh; terminal, login, approval và deploy dài phụ thuộc Cursor. |
+| Codex | `$ak:deploy ...` | Hỗ trợ discovery native; không mặc nhiên có provider credential, interactive login và deployment tooling tương đương. |
+
+## Chọn hoặc phát hiện platform
+
+Skill nhận platform và environment tùy chọn. Không có platform, Skill dừng ở
+signal mạnh đầu tiên: deployment documentation hiện có, provider configuration,
+đề xuất theo loại project, sau đó là lựa chọn của người dùng.
+
+| Input | Kết quả | Ghi chú |
+| --- | --- | --- |
+| Không có argument | Tự phát hiện target hoặc yêu cầu bạn chọn | Ý định project hiện có được ưu tiên hơn đề xuất |
+| `[platform]` | Chỉ tải deployment reference của platform đó | Các target đóng package được liệt kê bên dưới |
+| `[platform] [environment]` | Mang environment label rõ ràng vào việc chọn target | Source release không định nghĩa environment value chuẩn hay environment mặc định |
+
+Các reference được hỗ trợ bao phủ Vercel, Netlify, Cloudflare, Railway, Fly.io,
+Render, Heroku, TOSE.sh, GitHub Pages, Coolify, Dokploy, GCP Cloud Run, AWS,
+DigitalOcean và Vultr. Service availability, giá, quota và CLI syntax thực tế do
+provider kiểm soát và nên được xác nhận trước lần chạy live.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:deploy cloudflare production
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:deploy cloudflare production
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:deploy cloudflare production
+```
+
+  </Tab>
+</Tabs>
+
+Để request an toàn nhất, hãy nêu thêm provider account và project, tệp cấu hình
+chính xác, public URL dự kiến, deploy command đã duyệt và bạn muốn preview hay
+production deployment.
+
+## Hiểu deployment workflow
+
+1. **Skill phân giải ý định.** Skill đọc `docs/deployment.md`, rồi provider
+   configuration đã biết, sau đó project structure. Nếu bằng chứng vẫn mơ hồ,
+   Skill yêu cầu bạn chọn từ danh sách đề xuất ngắn.
+2. **Skill tải một platform workflow.** Chỉ reference của provider đã chọn được
+   dùng, giữ command cùng verification gắn với target đó.
+3. **Skill kiểm tra provider CLI.** CLI còn thiếu có thể kích hoạt đường cài đặt
+   đã mô tả, có thể cài global package, tải installer hoặc compile binary.
+4. **Skill kiểm tra authentication.** Interactive login, API token, lựa chọn
+   cloud project và provider permission nằm trong CLI hoặc service đã chọn.
+5. **Skill deploy.** Provider command có thể build và upload artifact, push
+   branch, cập nhật service, kích hoạt hosted build hoặc thay remote static asset
+   tùy target.
+6. **Skill xác minh kết quả.** Workflow xác nhận deployment URL và hiển thị lỗi
+   provider thay vì coi command hoàn thành là ứng dụng khỏe.
+7. **Skill ghi vận hành.** Sau thành công, Skill tạo hoặc cập nhật
+   `docs/deployment.md` với platform, URL, command, tên environment variable,
+   hướng dẫn custom domain, rollback và troubleshooting.
+
+## Xem deployment là thay đổi bên ngoài
+
+<Callout type="warn" title="Deploy command có thể đổi traffic và tạo chi phí">
+  Xác nhận chính xác account, project, environment và command trước khi chạy.
+  Provider CLI có thể upload code, kích hoạt build, thay asset, restart service,
+  mở URL hoặc tạo billable usage.
+</Callout>
+
+Các ranh giới provider quan trọng:
+
+- Một số ví dụ cài đặt đóng package pipe remote script vào shell hoặc cài tool
+  global. Review source và checksum policy trước khi duyệt; cài sẵn CLI đáng tin
+  cậy an toàn hơn.
+- Một số command first-run có thể khởi tạo hoặc tạo provider resource dù
+  infrastructure provisioning nằm ngoài scope đã nêu của Skill. Xem các command
+  đó là approval boundary riêng.
+- Static sync command có thể xóa remote file không có ở local, còn platform dựa
+  trên Git có thể push lên deployment branch. Kiểm tra đúng remote effect của
+  command.
+- Environment command có thể upload giá trị nhạy cảm. Truyền value qua secret
+  mechanism của provider và chỉ ghi tên biến.
+- Thứ tự cost-optimized trong reference đóng package là hướng dẫn, không phải
+  bảo đảm giá hiện tại. Xác minh plan term, region, usage và commercial
+  eligibility.
+- Skill không cấp quyền Git commit, source push, pull request, release, DNS
+  change, migration hay infrastructure change trừ khi external action chính xác
+  đó được duyệt riêng và là phần bắt buộc của deploy command đã chọn.
+
+## Xác minh deployment evidence
+
+Lần chạy hoàn chỉnh nên cung cấp:
+
+- Platform đã phát hiện và xác nhận, account hoặc project cùng target
+  environment.
+- CLI installation, authentication, build và deploy command chính xác đã chạy.
+- Provider deployment identifier, public hoặc preview URL, exit status của
+  command và health hoặc reachability check phù hợp.
+- Tệp được tạo hay thay đổi ở local, đặc biệt `docs/deployment.md`.
+- Tên environment variable không có value, cùng secret hoặc manual console
+  action còn thiếu.
+- Provider-specific rollback command hoặc dashboard path đã được kiểm tra với
+  target vừa deploy.
+
+Stable và beta đóng package cùng workflow cùng platform reference `ak:deploy`.
+Test trực tiếp tìm thấy cho release này bao phủ bề mặt chọn Kit, không phải
+deployment provider thực; chúng không chứng minh credential, giá hiện tại, CLI
+compatibility, URL health hay rollback trên 15 service.
+
+## Khắc phục mà không mở rộng quyền
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Có nhiều provider config | Dừng auto-detection và nêu rõ platform, account, project cùng environment. |
+| Thiếu provider CLI | Cài bằng phương thức đã duyệt, được xác minh hoặc tạm dừng; không chạy remote installer chưa review. |
+| Login cần browser hoặc token | Hoàn tất authentication flow của provider và chỉ cấp scope cần thiết; không dán token vào docs hay chat. |
+| Build thất bại | Giữ build output và quay lại implementation hoặc testing; đừng đổi provider setting để che lỗi ứng dụng. |
+| Deploy command thành công nhưng health thất bại | Giữ deployment trước đó sẵn sàng, kiểm tra log và health check, rồi dùng rollback đã ghi. |
+| Cần DNS, SSL, migration hoặc infrastructure | Dừng ở ranh giới Skill và bàn giao cho `ak:devops` hoặc operator sở hữu. |
+| Runtime không nhận ra Skill | Xác nhận target và scope, khởi động lại runtime session, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Dùng [`ak:ship`](./ship) trước deployment khi revision vẫn cần release gate,
+hoặc dùng `ak:devops` cho infrastructure và provider troubleshooting.

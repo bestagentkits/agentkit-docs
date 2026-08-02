@@ -1,0 +1,136 @@
+---
+title: Duyệt asset marketing cục bộ với ak:content-hub
+description: Mở ak:content-hub như một thư viện asset cục bộ, hiểu đúng tác động lên tệp và giữ thao tác chỉnh sửa cùng AI enhancement dưới quyền review.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:content-hub` để quét thư mục `assets/` của project và duyệt kết quả
+trong một gallery trực quan chạy cục bộ. Hub có thể lọc, preview, hiển thị brand
+context, quét lại thư viện và sửa tệp văn bản được hỗ trợ. Manifest có các field
+dành sẵn cho Cloudflare R2, nhưng cloud sync chưa hoạt động.
+
+## Chọn ak:content-hub cho thư viện asset cục bộ
+
+### Dùng ak:content-hub khi
+
+- Asset marketing đã nằm trong thư mục `assets/` của project hiện tại.
+- Bạn cần tìm kiếm trực quan, lọc theo loại, preview, path và metadata cơ bản.
+- Bạn muốn đối chiếu asset với màu, typography hoặc voice được trích xuất từ
+  tệp brand guideline hiện có.
+- Bạn chấp nhận chạy HTTP server cục bộ và sẽ review mọi lần lưu tệp.
+
+### Chọn workflow khác khi
+
+- Bạn cần content strategy hoặc editorial calendar. Dùng
+  `ak:content-marketing`.
+- Bạn cần cloud asset storage hoặc đồng bộ R2. Hub chỉ ghi field R2 vào
+  `.assets/manifest.json`; control upload đang bị vô hiệu hóa.
+- Bạn cần hệ thống quản lý asset đầy đủ với permission, approval, versioning
+  hoặc cộng tác từ xa.
+
+## Chuẩn bị project và runtime
+
+Xác nhận Marketing Kit đã được cài cho đúng runtime và scope. Chạy Skill từ
+project có thư mục `assets/` bạn muốn quét. Project phải cho phép Node.js, một
+local port còn trống, browser access và quyền ghi vào `assets/`, `.assets/` cùng
+vị trí PID tạm. Hãy tạo `.assets/` nếu chưa có; scanner được đóng gói ghi
+manifest nhưng không tạo thư mục cha.
+
+Brand context được đọc từ path đầu tiên tồn tại trong
+`docs/brand-guidelines.md`, `docs/design-guidelines.md` và
+`brand-guidelines.md`. AI enhancement còn yêu cầu CLI `claude`; thao tác duyệt
+gallery thì không.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:content-hub open` | Có thể chạy gallery cục bộ và dùng Claude Code AI bridge đi kèm khi CLI `claude` khả dụng. |
+| Cursor | `/ak:content-hub open` | Skill được projection sang Cursor và cách gọi bằng slash đã được người dùng xác minh. AI bridge đi kèm vẫn gọi CLI `claude` riêng. |
+| Codex | `$ak:content-hub open` | Skill dùng native discovery của Codex. Gallery cục bộ có thể chạy, nhưng AI enhancement không được chuyển sang Codex; nó vẫn phụ thuộc CLI `claude`. |
+
+## Mở Hub
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:content-hub open Quét assets của project này, mở gallery cục bộ và không lưu hoặc enhance tệp nào trước khi tôi phê duyệt
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:content-hub browse Hiển thị thư viện asset cục bộ và brand context mà không thay đổi tệp asset
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:content-hub search Tìm asset liên quan đến launch campaign; giữ lần chạy cục bộ và chỉ đọc
+```
+
+  </Tab>
+</Tabs>
+
+Action hint canonical là `open|browse|search`. Hãy nêu ranh giới quyền hạn trong
+yêu cầu vì chính gallery có action lưu và AI enhance.
+
+## Hiểu các giai đoạn
+
+1. **Khởi động dịch vụ cục bộ.** Server đi kèm chọn port còn trống từ `3457`
+   đến `3500`, ghi PID và có thể mở `/hub` trong browser.
+2. **Quét cây asset.** Scanner đọc đệ quy các tệp được hỗ trợ, suy ra loại,
+   category, tag, kích thước và timestamp, rồi ghi `.assets/manifest.json` trong
+   khi giữ metadata R2 và metadata người dùng hiện có.
+3. **Nạp brand context.** Sidebar trích xuất một tập có giới hạn gồm màu,
+   typography và voice trait từ tệp guideline được hỗ trợ đầu tiên.
+4. **Duyệt hoặc lọc.** Tìm kiếm và bộ lọc hoạt động trên manifest; preview và
+   path được sao chép đều trỏ tới tệp cục bộ.
+5. **Chỉ chỉnh sửa khi được duyệt.** Asset văn bản được hỗ trợ có thể được nạp
+   và lưu trong gallery. AI enhancement gửi nội dung hiện tại cùng instruction
+   qua CLI `claude` cục bộ trước khi bạn quyết định có lưu hay không.
+
+## Giữ rõ ràng tác động lên tệp và provider
+
+<Callout type="warn" title="Duyệt, chỉnh sửa và cloud sync là các hành động khác nhau">
+  Mở Hub khởi động process cục bộ và ghi manifest. Save thay thế tệp văn bản cục
+  bộ đã chọn. AI enhancement có thể gửi nội dung tệp tới Claude provider đã cấu
+  hình. Không hành động nào trong số này upload lên R2, publish asset hay phê
+  duyệt claim do AI tạo.
+</Callout>
+
+Review dữ liệu nhạy cảm trước khi quét vì path và metadata sẽ vào manifest, còn
+tệp được hỗ trợ có thể được local HTTP process phục vụ. Hãy dừng dịch vụ khi
+xong. Không mở port ra ngoài máy cục bộ hoặc xem path check là security boundary
+hoàn chỉnh.
+
+## Xác minh output và bằng chứng
+
+Một lần chạy hữu ích nên cung cấp URL Hub cục bộ, số asset đã quét, path
+manifest, category và format tìm thấy, nguồn brand context hoặc thông báo thiếu
+tệp rõ ràng, cùng mọi path đã đổi. Với yêu cầu browse chỉ đọc, mutation duy nhất
+trong project nên là `.assets/manifest.json` được làm mới.
+
+Nếu bạn duyệt một edit, hãy tự kiểm tra nội dung trước và sau. Gallery preview,
+tag suy ra, heuristic `aiGenerated` từ filename hay bản viết lại bằng AI không
+chứng minh chất lượng, nguồn gốc, quyền sử dụng, độ chính xác hoặc brand approval.
+
+## Xử lý sự cố và biết giới hạn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Runtime không tìm thấy `ak:content-hub` | Xác nhận target cùng scope, khởi động lại runtime rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+| Tạo manifest thất bại | Xác nhận cả `assets/` và `.assets/` tồn tại, có quyền ghi; giữ manifest hiện có trước khi thử lại. |
+| Browser không mở | Dùng URL `/hub` cục bộ được báo và xác nhận có port trống trong `3457`–`3500`. |
+| Brand context trống | Kiểm tra path guideline và tên heading được hỗ trợ; việc trích xuất dựa trên pattern và có chủ đích giới hạn. |
+| AI enhancement không khả dụng | Tiếp tục duyệt mà không dùng nó, hoặc xác minh CLI `claude` riêng cùng permission provider. |
+| Bạn mong đợi upload R2 | Dừng lại. Field R2 là placeholder trong manifest và control upload đang bị vô hiệu hóa ở bản này. |
+
+Hub xử lý thư viện asset cục bộ, không xử lý publication, remote sync, licensing
+hay governance nguồn chuẩn. Tiếp tục với [tổng quan Marketing
+Kit](../../marketing) hoặc xem [Runtime
+adapter](../../../concepts/runtime-adapters) trước khi giả định hành vi giống
+nhau giữa các runtime.

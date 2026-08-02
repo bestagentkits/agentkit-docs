@@ -1,0 +1,143 @@
+---
+title: ak init
+description: Register ownership for an existing project, preview adoption, and handle drift without overwriting project content.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak init` to register an existing directory as an AgentKit project. It
+discovers AgentKit-managed files, records their hashes in
+`.agentkit/ownership.json`, and does not install a kit.
+
+## Syntax
+
+```bash
+ak init [dir] [options]
+```
+
+## Arguments
+
+`dir` is optional. It resolves to an absolute path; the current directory is
+used when omitted. The directory must already exist. Use [`ak new`](./new) to
+create a directory. The command has no aliases.
+
+## Before you run
+
+Preview first when adopting existing files:
+
+```bash
+ak init ./my-project --dry-run
+```
+
+The command discovers regular files under the project’s AgentKit, `kits`, and
+`.claude` surfaces. A global AgentKit home nested inside the project is
+excluded from ownership.
+
+## Options
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `--dry-run` | `false` | Classify and report adoption without snapshots, manifest, audit, or registry writes. |
+| `--force` | `false` | Accept existing drift and continue updating ownership records. |
+| `--no-backup` | `false` | Skip the protected pre-init snapshot of a non-empty Claude home. |
+| `--project-id <id>` | Directory name | Set the project ID on first initialization. |
+
+See [CLI conventions](../cli-conventions) for shared output and interaction
+flags.
+
+## Examples
+
+```bash
+ak init
+ak init ./my-project
+ak init ./my-project --dry-run --json
+ak init ./my-project --force --no-interactive
+```
+
+## TTY and confirmation behavior
+
+A human TTY opens a one-step wizard unless `--json`, `--quiet`, or
+`--no-interactive` is set. Enter confirms; `q`, Esc, or Ctrl-C cancels before
+initialization and currently exits `1`.
+
+<Callout type="warning">
+  `--yes` alone does not bypass the wizard. JSON, quiet, noninteractive, and
+  non-TTY execution skip the prompt and write immediately unless
+  `--dry-run` is set.
+</Callout>
+
+## Drift, force, and dry-run
+
+A re-run verifies every tracked hash. Drift exits `6` unless `--force` is
+used. Force accepts and reports the drift; it does not overwrite the modified
+file. Newly discovered managed files can then be added to ownership.
+
+Dry-run writes nothing and takes no snapshot. On an existing project, a normal
+run creates its pre-init snapshot before drift verification, so an exit `6`
+can still leave a new recovery snapshot.
+
+## Output and streams
+
+Human/scripted success is written to stdout and reports project ID, path,
+tracked/adopted counts, drift, and any snapshot IDs. `--no-backup` writes a
+warning to stderr. TUI frames use the terminal; cancellation writes to stderr.
+
+JSON success is one stdout envelope:
+
+```text
+schema_version: 1
+kind: init
+data.dir: string
+data.project_id: string
+data.manifest_version: integer
+data.files_adopted: integer
+data.files_tracked: integer
+data.drifted_files: array, optional
+data.snapshot: string, optional
+data.claude_snapshot: string, optional
+data.dry_run: boolean, optional
+```
+
+Execution errors in JSON mode use the structured error envelope on stderr.
+Flag-parse errors can remain plain text.
+
+## Exit status
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | Initialization or explicit dry-run completed. | Review adopted paths and the manifest. |
+| `1` | Directory, I/O, manifest, snapshot, or TTY cancellation failure. | Inspect the error and any snapshot created before retrying. |
+| `2` | Arguments or flags were invalid. | Correct the invocation. |
+| `6` | Tracked files drifted and `--force` was absent. | Review the named files; use `--force` only to accept their current content. |
+
+## Effects, ownership, and recovery
+
+A first run atomically creates the ownership manifest and records discovered
+files without changing their contents. A successful non-dry run also writes a
+local script-audit snapshot and attempts to add the project to the global
+project registry. Those two follow-up operations are best-effort: their failure
+does not change exit `0`.
+
+For an existing manifest, AgentKit creates a pre-init state snapshot. It also
+takes a protected full-scope snapshot of a non-empty Claude home unless
+`--no-backup` is set. Inspect reported IDs before recovery:
+
+```bash
+ak backups show <id>
+ak backups verify <id>
+```
+
+Snapshots cover recorded AgentKit/Claude surfaces, not the whole machine. Do
+not delete project or runtime homes as recovery.
+
+## Related commands and limitations
+
+- [Configure AgentKit](./setup)
+- [Create a new project](./new)
+- [Install a kit](./kit-init)
+- [Update owned project files](./update)
+- [Remove an AgentKit project](./uninstall)
+
+`ak init` records ownership only. It does not authenticate, contact the kit
+registry, resolve entitlements, download artifacts, populate kit cache, or
+start external processes.

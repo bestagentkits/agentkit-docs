@@ -1,9 +1,20 @@
 'use client';
 import SearchDialog from '@/components/search';
 import { i18n } from '@/lib/i18n';
-import { RootProvider } from 'fumadocs-ui/provider/next';
+import { FrameworkProvider, type Framework } from 'fumadocs-core/framework';
 import { defineI18nUI } from 'fumadocs-ui/i18n';
+import { RootProvider } from 'fumadocs-ui/provider/base';
+import Image from 'next/image';
+import Link from 'next/link';
+import {
+  useParams,
+  usePathname as useNextPathname,
+  useRouter,
+} from 'next/navigation';
 import { type ReactNode } from 'react';
+
+const FrameworkLink = Link as Framework['Link'];
+const FrameworkImage = Image as Framework['Image'];
 
 // Language-switcher labels + a few of the most visible UI strings in Vietnamese.
 // Un-overridden keys fall back to Fumadocs' built-in English strings — acceptable
@@ -24,6 +35,16 @@ const { provider } = defineI18nUI(i18n, {
   },
 });
 
+function useDecodedPathname(): string {
+  const pathname = useNextPathname();
+
+  try {
+    return decodeURI(pathname);
+  } catch {
+    return pathname;
+  }
+}
+
 export function Provider({
   children,
   locale,
@@ -32,14 +53,22 @@ export function Provider({
   locale: string;
 }) {
   return (
-    <RootProvider
-      search={{ SearchDialog }}
-      i18n={provider(locale)}
-      // AgentKit brand is dark-first (agentkit.best is dark-only); docs default
-      // to dark for everyone, with light available via the theme toggle.
-      theme={{ defaultTheme: 'dark', enableSystem: false }}
+    <FrameworkProvider
+      Link={FrameworkLink}
+      Image={FrameworkImage}
+      useParams={useParams}
+      usePathname={useDecodedPathname}
+      useRouter={useRouter}
     >
-      {children}
-    </RootProvider>
+      <RootProvider
+        search={{ SearchDialog }}
+        i18n={provider(locale)}
+        // AgentKit brand is dark-first (agentkit.best is dark-only); docs default
+        // to dark for everyone, with light available via the theme toggle.
+        theme={{ defaultTheme: 'dark', enableSystem: false }}
+      >
+        {children}
+      </RootProvider>
+    </FrameworkProvider>
   );
 }

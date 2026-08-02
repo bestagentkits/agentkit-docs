@@ -1,0 +1,170 @@
+---
+title: Kiểm tra tiến độ plan với ak:plans-kanban
+description: Mở plans dashboard tích hợp của AgentKit mà không coi visual view là thẩm quyền thay đổi plan.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:plans-kanban` để mở visual plans view của AgentKit cho multi-plan
+status, timeline, progress cùng điều hướng nhanh vào plan file. Skill là thin
+launcher: bề mặt live `ak plan --help`, không phải dashboard launcher, vẫn
+authoritative cho dependency, status cùng mutation operation.
+
+## Chọn ak:plans-kanban để kiểm tra trực quan
+
+### Dùng ak:plans-kanban khi
+
+- Bạn muốn kanban hoặc grid view trên nhiều plan.
+- Bạn cần timeline hoặc progress overview trước khi chọn work tiếp theo.
+- Bạn muốn điều hướng nhanh vào `plan.md` hoặc `phase-*.md`.
+- Bạn cần phân biệt trực quan work active và completed.
+
+### Chọn workflow khác khi
+
+- Bạn cần tạo hoặc cập nhật plan. Dùng `ak:plan` và kiểm tra live help.
+- Bạn cần đối chiếu runtime work đã xác minh về durable phase file. Dùng
+  `ak:project-management`.
+- Bạn cần custom dashboard host hoặc port. Khởi động `ak config` trực tiếp.
+- Bạn mong đợi plans server legacy riêng; implementation đó đã được loại bỏ.
+
+## Chuẩn bị local dashboard
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận
+  Engineer Kit đã được cài cho đúng runtime cùng scope bạn đang dùng.
+- Cài AgentKit CLI tương thích và xác nhận `ak --version` hoạt động, hoặc đặt
+  `AGENTKIT_CLI` tới local binary dự kiến.
+- Chạy từ project hoặc global context có plan scope bạn muốn xem.
+- Bảo đảm Node.js cùng browser-opening command được hỗ trợ khả dụng.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:plans-kanban` | Phân phối native là mặc định; Skill khởi chạy local Node process và có thể mở system browser. |
+| Cursor | `/ak:plans-kanban` | Cách gọi bằng slash đã được người dùng xác minh. Hành vi browser cùng process phụ thuộc host environment. |
+| Codex | `$ak:plans-kanban` | Skill dùng discovery native của Codex; quyền local process cùng browser vẫn áp dụng. |
+
+Xem [Runtime adapter](../../../concepts/runtime-adapters) để hiểu khác biệt về
+delivery cùng từng loại component.
+
+## Mở dashboard
+
+Skill request thông thường mở plans route. Nêu scope và cho biết lần chạy có
+được khởi động background local dashboard hoặc mở browser hay không.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:plans-kanban "Open this project's plans dashboard for inspection only; do not change plan state."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:plans-kanban "Open this project's plans dashboard for inspection only; do not change plan state."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:plans-kanban "Open this project's plans dashboard for inspection only; do not change plan state."
+```
+
+  </Tab>
+</Tabs>
+
+Launcher bên dưới hỗ trợ các control path hiện tại:
+
+| Control | Hành vi có thể quan sát |
+| --- | --- |
+| Mặc định hoặc `--open` | Tìm hoặc khởi động dashboard, probe hỗ trợ plans, mở `/plans` và in kết quả JSON |
+| `--no-open` | Thực hiện discovery cùng capability check nhưng báo URL mà không mở browser |
+| `--stop` | Delegate tới `ak config stop` và trả kết quả của lệnh đó |
+| Launcher input legacy | Cảnh báo rồi bỏ qua hoặc chuyển đổi; chúng không sở hữu plan scope, host hay port |
+
+Với custom startup option, dùng live `ak config --help`. Với plan mutation, dùng
+live `ak plan --help`; đừng suy ra cú pháp hiện tại từ launcher.
+
+## Hiểu điều gì xảy ra trong một lần chạy
+
+1. **Launcher kiểm tra dashboard state hiện có.** Launcher hỏi
+   `ak config status --json` để lấy running URL, nếu không có thì probe loopback
+   port mặc định.
+2. **Launcher xác minh plans capability.** Launcher chấp nhận health response
+   quảng bá `plans-dashboard` hoặc `/api/plans` response thành công.
+3. **Launcher khởi động dashboard khi cần.** Launcher chạy
+   `ak config start --port 8766 --no-open --no-interactive` dưới dạng detached
+   local process.
+4. **Launcher chờ readiness.** Mỗi readiness window được giới hạn khoảng mười
+   giây. Dashboard chưa chạy có thể cần một window trước startup và một window
+   thứ hai sau startup.
+5. **Launcher mở hoặc báo route.** Kết quả thông thường nhắm `/plans` trên URL
+   do CLI báo và in JSON gồm success, URL, open state cùng platform.
+6. **Dashboard đọc plan state.** Project dashboard chỉ nên hiện project-scoped
+   plan; global dashboard chỉ nên hiện global-scoped plan.
+
+Route `/plans` chung mặc định dùng thư mục `plans` trừ khi query `dir` đã tồn
+tại. Scope-aware root đến từ project hoặc global dashboard context xung quanh,
+không đến từ launcher flag deprecated.
+
+## Giữ rõ thẩm quyền plan và process control
+
+<Callout type="warn" title="Dashboard là view, không phải mutation authority">
+  Dùng bề mặt live `ak plan --help` cho dependency, status change cùng plan
+  mutation khác. Riêng visual state không phải verified completion.
+</Callout>
+
+- Launcher có thể spawn detached `ak config` process và mở local application
+  khác. Hãy duyệt các process effect đó trước khi chạy.
+- Probe dùng loopback HTTP endpoint. Skill không nêu remote provider hay paid
+  service, nhưng local dashboard kế thừa environment cùng access của CLI.
+- Launcher không claim quyền sửa `plan.md` hoặc `phase-*.md`.
+- Dừng dashboard do launcher khởi động bằng `--stop` hoặc `ak config stop` khi
+  bạn không còn cần background process.
+- Commit, push, thay đổi external task system, publication cùng deployment vẫn
+  là hành động và approval riêng.
+
+## Xác minh kết quả
+
+Một launch thành công nên cung cấp:
+
+- Kết quả JSON với `success: true`, local URL đã chọn, browser có được mở hay
+  không cùng platform được phát hiện.
+- Dashboard URL kết thúc bằng `/plans`.
+- Capability probe pass trước khi browser mở.
+- Plan card, progress, timeline information cùng link được suy ra từ project
+  hoặc global scope đã chọn.
+
+Nếu capability detection thất bại, launcher thoát với code `1` mà không mở
+browser. Package không định nghĩa test command riêng; hãy xác minh JSON result,
+local route, displayed scope cùng live CLI help dùng cho follow-up operation.
+
+## Xử lý sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Không tìm thấy `ak` | Cài AgentKit CLI, xác minh `ak --version`, hoặc đặt `AGENTKIT_CLI` tới binary dự kiến. |
+| Dashboard không công bố plans support | Nâng cấp CLI; launcher phải thấy feature hoặc plans API response thành công. |
+| Browser không mở | Chạy với `--no-open`, dùng URL được báo, hoặc khởi động `ak config` thủ công. |
+| Dashboard chạy trên port khác | Tin URL từ `ak config status --json`; đừng ép launcher port deprecated. |
+| Plan hiển thị sai | Dừng và xác minh bạn đã mở project hay global dashboard context. |
+| Bạn cần plan mutation | Đọc live `ak plan --help` và dùng CLI operation sở hữu. |
+| Bạn cần dừng process | Dùng `--stop` hoặc `ak config stop`. |
+| Runtime không nhận diện Skill | Xác nhận target cùng scope, mở runtime session mới, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Tiếp tục với `ak:project-management` khi visual inspection phát hiện durable
+state cần đối chiếu dựa trên bằng chứng.
+
+## Biết các giới hạn hiện tại
+
+- Launcher chủ ý opinionated quanh integrated local dashboard và không cung cấp
+  custom host hoặc port control.
+- Độ chính xác dashboard phụ thuộc plan file parse được, mới cùng scope đúng.
+- Migration note được Skill nêu không có trong cả hai exact release; hãy dựa
+  vào current integrated-dashboard behavior cùng live CLI help.
+- Package stable và beta hiện chứa cùng file và invocation behavior cho
+  `ak:plans-kanban`.

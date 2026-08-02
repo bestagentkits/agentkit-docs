@@ -1,0 +1,80 @@
+---
+title: ak codex-agent-runtime
+description: Đăng ký, kiểm tra, chạy hoặc gỡ AgentKit MCP dispatch runtime dùng bởi Codex.
+---
+
+Dùng `ak codex-agent-runtime` để expose AgentKit agent đã cài thành MCP tool cho
+Codex. Lệnh nhóm chỉ orchestration; không chỉnh config hay mở transport nếu
+không có subcommand.
+
+## Cách dùng
+
+```bash
+ak codex-agent-runtime
+```
+
+Lệnh nhóm không nhận argument theo vị trí. Chạy không có subcommand sẽ in trợ
+giúp.
+
+## Luồng runtime
+
+```text
+Codex MCP client
+  -> ak codex-agent-runtime serve (stdio)
+  -> agent_<slug> MCP tool
+  -> codex exec subprocess mới
+  -> tool result trả về MCP client
+```
+
+Runtime khám phá user agent từ `~/.codex/agents/*.toml` và staged Kit agent từ
+`<plugin-root>/<kit>/.codex/agents/*.toml`. User agent thắng conflict cùng slug.
+Giữa các staged Kit, Kit đứng trước theo thứ tự từ điển thắng. Slug hợp lệ bắt
+đầu bằng chữ thường và dài tối đa 64 ký tự gồm chữ thường, số, underscore hoặc
+hyphen.
+
+## Chọn subcommand
+
+| Mục tiêu | Lệnh | Hiệu ứng |
+| --- | --- | --- |
+| Thêm MCP stanza vào Codex config | `ak codex-agent-runtime register` | Ghi `config.toml`. |
+| Liệt kê agent mà không serve | `ak codex-agent-runtime serve --list-only` | Report plain text chỉ đọc. |
+| Chạy stdio MCP server | `ak codex-agent-runtime serve` | Process dài hạn, dispatch `codex exec`. |
+| Gỡ MCP stanza | `ak codex-agent-runtime unregister` | Ghi `config.toml`. |
+
+Cờ dùng chung nằm trong [quy ước CLI](../cli-conventions), nhưng mỗi subcommand
+nêu rõ cờ output nào thực sự có hiệu lực.
+
+## Ranh giới bảo mật và riêng tư
+
+Mỗi MCP call chuyển agent instruction đã cài và prompt của caller đến một Codex
+CLI subprocess mới. Subprocess có thể liên hệ provider và đọc hoặc sửa dữ liệu
+được sandbox/approval policy cho phép. Hãy review agent TOML và tool policy
+trước khi đăng ký.
+
+`tool` có tên trong MCP request được kiểm tra với allow/deny policy trước khi
+spawn. Allow-list rõ ràng còn thu hẹp Codex sandbox thành read-only hoặc
+workspace-write; allow-list có Bash thêm on-request approval. Deny-list không có
+allow-list không thu hẹp được subprocess sandbox và dựa vào named-tool check,
+Codex default cùng prompt guidance.
+
+## Output và mã thoát
+
+Trợ giúp nhóm là plain text. Register/unregister dùng raw JSON result riêng,
+không dùng shared envelope. Serve dành stdout cho MCP protocol; startup
+diagnostic đi stderr.
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Help, list-only, config mutation hoặc server shutdown sạch hoàn tất. |
+| `1` | Discovery, config, transport hoặc process-level runtime thất bại. |
+| `2` | Argument hoặc cờ không hợp lệ. |
+
+Một `codex exec` thất bại được trả thành MCP tool error và không làm server dài
+hạn dừng.
+
+## Lệnh liên quan
+
+- [Thông tin runtime group](../cli/ak_codex-agent-runtime)
+- [Đăng ký runtime](../cli/ak_codex-agent-runtime_register)
+- [Chạy runtime](../cli/ak_codex-agent-runtime_serve)
+- [Cài Kit cho Codex](../cli/ak_kit_init)

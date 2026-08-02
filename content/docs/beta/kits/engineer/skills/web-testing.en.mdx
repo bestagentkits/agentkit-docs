@@ -1,0 +1,212 @@
+---
+title: Design and run web test systems with ak:web-testing
+description: Apply Playwright, Vitest, k6, accessibility, performance, visual, API, contract, and test-data patterns with explicit runtime and environment boundaries.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:web-testing` to choose and implement a repeatable web-testing strategy,
+from unit and component tests through browser, visual, accessibility, contract,
+performance, load, and security checks. It provides detailed reference patterns,
+a Playwright bootstrap script, and a result summarizer rather than one fixed
+test suite for every project.
+
+## Choose ak:web-testing for repeatable automation
+
+### Use ak:web-testing when
+
+- You need project-native Playwright, Vitest, or k6 tests that can run again in
+  local development or CI.
+- A feature needs browser, mobile-emulation, visual, accessibility, API, or
+  contract coverage.
+- You want to establish Playwright configuration, fixtures, example tests, and
+  report formats.
+- You need to diagnose flakiness or select a testing pyramid, trophy, or
+  contract-centric strategy.
+
+### Choose another workflow when
+
+- You only need a one-off live browser inspection. Use the runtime's browser
+  workflow rather than creating a test system.
+- You need the user's real Chrome cookies or signed-in profile. Use a
+  profile-aware browser workflow; Playwright contexts are isolated by default.
+- You need threat modelling or a source security audit. Use `ak:security`.
+- You need general repository test execution without designing web-test
+  infrastructure. Use `ak:test`.
+
+## Prepare the test environment
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Engineer Kit is installed for the current runtime and scope.
+- Provide the test type, target URL or module, expected behavior, browsers or
+  devices, auth method, test data, environment, and cleanup boundary.
+- Use Node.js 20 or newer for the declared isolated runtime path.
+- Make the selected runners available. Playwright browser binaries, Vitest, k6,
+  axe, Lighthouse, database containers, and optional cloud services are separate
+  dependencies unless the project already provides them.
+- Start or explicitly authorize the application server and any database,
+  container, broker, or external test service the suite requires.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:web-testing ...` | Native execution can use project files, Node scripts, shell commands, browsers, containers, and network services available to the session. |
+| Cursor | `/ak:web-testing ...` | Slash invocation is user-verified; equivalent browser control, isolated dependencies, containers, and approval prompts depend on Cursor. |
+| Codex | `$ak:web-testing ...` | Native discovery is supported; browser binaries, live profile state, device clouds, and process behavior are not automatically equivalent. |
+
+## Name the test surface explicitly
+
+The Skill declares `[test-type] [target]`, but this release does not define a
+fixed parser, enumerated values, or a default dispatch for those arguments.
+State the desired runner and evidence directly.
+
+| Test surface | Typical tool | Observable evidence |
+| --- | --- | --- |
+| Unit and integration | Vitest, Jest, or project runner | Assertions, coverage, isolated service or database results |
+| Component | Testing Library, Vitest browser mode, or Playwright CT | Behavior, DOM, CSS, cross-browser, and component screenshots |
+| End-to-end | Playwright | User-flow assertions, trace, screenshot, video, and JSON or HTML report |
+| API and contract | Supertest, MSW, Pact, Dredd, or project tools | Status, schema, auth, provider verification, and deployment contract gate |
+| Accessibility and visual | axe, Lighthouse, Playwright screenshots | Violations, keyboard checks, baselines, and diff images |
+| Performance and load | Lighthouse CI, browser metrics, or k6 | Core Web Vitals, latency, error rate, thresholds, and run duration |
+| Security checks | Approved SAST, DAST, SCA, or header tools | Scoped findings without unauthorized exploitation |
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:web-testing e2e "Test checkout on http://localhost:3000 with Chromium and mobile Safari emulation; use seeded test data and never contact payment production."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:web-testing e2e "Test checkout on http://localhost:3000 with Chromium and mobile Safari emulation; use seeded test data and never contact payment production."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:web-testing e2e "Test checkout on http://localhost:3000 with Chromium and mobile Safari emulation; use seeded test data and never contact payment production."
+```
+
+  </Tab>
+</Tabs>
+
+## Use the packaged helper scripts deliberately
+
+### Bootstrap Playwright files
+
+The packaged initializer defaults to the current directory. `--dir <path>`
+selects a different project, and `--ct` adds React component-testing
+configuration.
+
+It creates missing Playwright configuration, E2E fixtures, example tests,
+global setup, and `.env.test.example`; it skips files that already exist. It
+does not install the printed dependencies or browsers. The generated config
+defaults to `http://localhost:3000`, runs `npm run dev`, uses Chromium, Firefox,
+WebKit, and two mobile emulations, and writes failure artifacts and JSON results.
+Adapt the sample routes, auth cookie, credentials, package manager, and server
+command before executing it.
+
+When `AGENTKIT_SKILL_RUNTIME=1` is enabled, the declared runtime can isolate
+`@playwright/test@1.48.0` under AgentKit's cache instead of adding it to the
+project. Browser downloads and the other tools listed on this page remain
+separate requirements.
+
+### Summarize existing results
+
+The analyzer accepts any combination of Playwright JSON, Vitest JSON, and JUnit
+XML. Output defaults to text; `--output json` and `--output markdown` are also
+supported. `--fail-threshold N` exits non-zero when the calculated pass rate is
+below `N`; its default is `0`.
+
+It reports totals, passed, failed, skipped, flaky, duration, suites, and a
+bounded failure list. No readable result input exits with failure.
+
+## Follow an evidence-led test workflow
+
+1. **Choose the confidence model.** Select unit, integration, contract,
+   component, E2E, or a combination based on the architecture and failure risk.
+2. **Define isolation.** Choose fixtures, seeded factories, worker-specific
+   records, transaction rollback, disposable containers, mocked external
+   services, and cleanup.
+3. **Configure deterministic execution.** Prefer accessible selectors,
+   condition-based waits, fixed viewports, disabled animations, controlled time,
+   stable network responses, and reproducible data.
+4. **Run the smallest useful layer first.** Static and unit checks fail fast;
+   integration, browser, visual, accessibility, performance, and load checks
+   expand only where the requested confidence requires them.
+5. **Exercise selected environments.** Browser projects and mobile emulation
+   cover automation; real Safari, real devices, and provider clouds remain
+   separate evidence when required.
+6. **Preserve artifacts.** Keep traces, videos, screenshots, visual diffs,
+   coverage, JSON, JUnit, Lighthouse, k6, or contract reports needed to explain
+   the conclusion.
+7. **Report limitations.** Failed, skipped, flaky, unavailable, emulated, and
+   externally hosted checks remain distinguishable.
+
+## Keep data, load, and security effects controlled
+
+<Callout type="warn" title="A test can mutate the system it targets">
+  Browser, API, contract, database, load, and security tests can create users,
+  submit forms, charge integrations, delete records, send email, exhaust quotas,
+  or disrupt service. Use an isolated environment and explicit cleanup.
+</Callout>
+
+- Do not run vulnerability payloads, DAST scanners, brute-force checks, SSRF
+  probes, or load tests against a system without exact authorization and a safe
+  target. Never aim packaged example payloads at production by default.
+- Test credentials belong in approved secret storage. Do not commit real values
+  to `.env.test.example`, fixtures, snapshots, traces, screenshots, or reports.
+- Playwright installation can download browser binaries and system packages.
+  Testcontainers can pull images and start local containers. Both consume disk,
+  network, CPU, memory, and process capacity.
+- BrowserStack, Sauce Labs, AWS Device Farm, Pact Broker, Grafana Cloud k6,
+  Lighthouse temporary public storage, Snyk, and similar services can upload
+  code-adjacent data or artifacts and incur provider usage or cost.
+- Updating visual snapshots changes the accepted baseline. Review every diff;
+  `--update-snapshots` is not a repair for an unexplained regression.
+- The workflow does not commit, push, open a PR, merge, deploy, or publish test
+  artifacts unless a separate authorized workflow performs that action.
+
+## Verify the result
+
+A complete result should include:
+
+- Test strategy, exact scope, target environment, runner versions, browsers,
+  emulations or real devices, and commands executed.
+- Passed, failed, skipped, flaky, duration, coverage, thresholds, and build or
+  server status as applicable.
+- Failure names, essential error evidence, trace and artifact locations, and
+  reproduction steps.
+- Data created, cleanup performed, network services contacted, and any provider
+  or container resources used.
+- Accessibility violations, visual diffs, Core Web Vitals, load percentiles,
+  contract results, or security findings only for the selected surfaces.
+- Explicit evidence gaps for missing browsers, real devices, auth, tools,
+  permissions, network, or environment parity.
+
+Release testing verifies that the runtime manifest parses and declares a Node
+runtime with packages. No directly scoped tests were found for the initializer,
+result analyzer, generated Playwright project, or live browser and provider
+workflows. Stable and beta package the same `ak:web-testing` content.
+
+## Troubleshoot and interpret limits
+
+| Symptom | Safe next step |
+| --- | --- |
+| The generated Playwright suite fails immediately | Adapt `baseURL`, `webServer`, routes, auth endpoint, cookie, test credentials, and package-manager commands to the project before judging the app. |
+| Browser binaries are missing | Install only the required Playwright browsers in an approved environment and record the download. |
+| A test is flaky | Reproduce the smallest case, remove hard waits and shared state, control network and animations, and report retries separately from first-pass success. |
+| Mobile emulation passes but the real device fails | Treat emulation as partial evidence and run the required real iOS or Android device check. |
+| Visual snapshots differ | Inspect the diff and environment consistency before updating the baseline. |
+| The analyzer finds no results | Confirm the reporter format and path; no input is an error, not a passing run. |
+| A security or load check could affect shared service | Stop and obtain exact target, rate, duration, data, and rollback approval. |
+| The runtime does not recognize the Skill | Confirm target and scope, restart the runtime session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Use [`ak:test`](./test) for a broader project validation report, or
+[`ak:security`](./security) for threat-modelled source review.

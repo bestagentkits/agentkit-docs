@@ -1,0 +1,87 @@
+---
+title: ak analytics delete
+description: Xoá tệp analytics dẫn xuất do AgentKit sở hữu trong khi giữ disabled intent marker và toàn bộ dữ liệu nguồn có thẩm quyền.
+---
+
+Dùng `ak analytics delete` để xoá database analytics cục bộ dùng một lần. Lệnh
+không xoá phiên Claude Code, phiên Codex hoặc activity log AgentKit.
+
+## Cách dùng
+
+```bash
+ak analytics delete
+```
+
+Lệnh không nhận argument theo vị trí và không có cờ riêng.
+
+## Preview và apply
+
+```bash
+ak analytics delete --json --no-interactive
+ak analytics delete --yes --json --no-interactive
+```
+
+Preview chỉ đọc lifecycle và status; nó không quét nội dung nguồn hoặc ghi.
+Apply xoá các tệp do AgentKit sở hữu dưới
+`~/.agentkit/analytics/analytics.db`, gồm SQLite sidecar, và purge thư mục
+analytics recovery. Nó chỉ giữ `~/.agentkit/analytics-state.json` với deleted
+intent để indexed read và automatic reconciliation tiếp tục disabled.
+`AGENTKIT_HOME` đổi phần gốc.
+
+Delete hợp lệ ở mọi lifecycle state, kể cả khi không có database, nên có thể
+lặp lại an toàn.
+
+## Ranh giới sở hữu và recovery
+
+Thao tác từ chối path không an toàn, database dùng schema mới hơn, nội dung
+database của ứng dụng khác hoặc byte không phải database mà nó không nhận ra.
+Nó có thể xoá database thuộc sở hữu nhưng corrupt, hoặc artifact enable rỗng bị
+gián đoạn khi chứng minh được quyền sở hữu mà không cần tin schema hỏng.
+
+Với index đọc được, delete tạo temporary rollback snapshot nhất quán. Với index
+thuộc sở hữu nhưng không đọc được, nó sao chép các sidecar có giới hạn. Các tệp
+này chỉ dùng để restore khi xoá một phần thất bại và bị purge sau khi thành
+công; chúng không phải backup có thể restore bởi người dùng.
+
+Vì vậy, xoá thành công là không thể đảo ngược đối với derived index. Do nguồn có
+thẩm quyền vẫn còn, bạn có thể chủ động tạo lại bằng
+`ak analytics enable --yes` hoặc `ak analytics rebuild --yes`.
+
+## Hành vi xác nhận
+
+Khi prompt được bật, chỉ `y` hoặc `yes` mới apply. Mọi câu trả lời khác hoặc EOF
+in preview, không đổi gì và hiện thoát `0`.
+
+Với `--json` hoặc `--no-interactive`, lệnh không đọc prompt. Thiếu `--yes`,
+preview thoát `3`. Không có cờ dry-run hay force.
+
+## Output và quyền riêng tư
+
+Output cho người dùng nằm trên stdout, prompt trên stderr. JSON dùng một
+envelope `kind=analytics.plan` với `data.plan`, `data.applied` và `data.status`;
+delete không có source `scan`.
+
+Dùng `data.plan.status` cho preview và chỉ dùng post-operation `data.status` khi
+`applied=true`. Response và thao tác không lộ source path hoặc raw transcript,
+đồng thời không dùng mạng, provider, auth hay entitlement.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Delete đã apply, state vốn đã bị xoá về thực chất, hoặc prompt được bật bị từ chối/kết thúc tại EOF. |
+| `1` | Plan, xác minh sở hữu/an toàn, contention, removal, rollback hoặc output thất bại; argument theo vị trí cũng dùng `1`. |
+| `2` | Cờ không hợp lệ. |
+| `3` | Preview noninteractive hoàn tất mà không có `--yes`. |
+
+Lỗi lifecycle/service trong chế độ JSON phát error envelope có phiên bản trên
+stderr. Lỗi parse cờ, xác minh argument và render output cuối có thể nằm ngoài
+đường này.
+
+Trên macOS, guard first-launch dùng chung của CLI cũng có thể ghi
+`~/.agentkit/.first-run-darwin` và in hint một lần lên stderr trước khi lệnh
+này chạy.
+
+## Lệnh liên quan
+
+- [Quy ước CLI](../cli-conventions)

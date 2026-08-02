@@ -1,0 +1,141 @@
+---
+title: Lỗi cài Kit
+description: Chẩn đoán quyền dùng Kit, xác minh nguồn, runtime đích, phạm vi, xung đột ownership và cài đặt dở dang theo thứ tự an toàn.
+---
+
+Dùng trang này khi `ak kit init` hoặc `ak kit install` thất bại trước khi runtime
+đích có thể dùng Kit.
+
+## Xác nhận điều kiện cần
+
+```bash
+ak --version
+ak whoami --json
+ak licenses --json
+```
+
+Các kết quả mong đợi là đúng phiên bản CLI, đúng tài khoản và có grant cho
+Kit. Đăng nhập thành công nhưng Kit không có trong `ak licenses` là lỗi quyền sử
+dụng, không phải lỗi cài đặt. Hãy xem [Đăng nhập và quyền sử dụng
+Kit](./authentication) trước.
+
+## Xác nhận target và scope
+
+Chạy lệnh cài từ project sẽ sở hữu nội dung project-scoped. Ghi rõ runtime để
+đích không mơ hồ:
+
+```bash
+ak kit init engineer --target claude-code
+ak kit init engineer --target codex
+```
+
+Scope mặc định là project hiện tại. `--global` chọn user scope của runtime. Cài
+thành công trong một scope không làm Kit xuất hiện trong project hoặc user
+profile khác.
+
+Với Claude Code, project-native delivery là mặc định. Plugin delivery là lựa
+chọn riêng:
+
+```bash
+ak kit init engineer --target claude-code --switch-to-plugin
+ak kit init engineer --target claude-code --global --switch-to-plugin
+```
+
+Lệnh đầu chọn project plugin; lệnh thứ hai chọn user plugin. Không thêm
+`--switch-to-plugin` vào bản cài Codex.
+
+Với bản phát hành, authenticated remote registry là nguồn mặc định. `--local`
+dành cho nguồn development hoặc CI rõ ràng và yêu cầu `--kits-dir` hoặc
+`AGENTKIT_KITS_DIR`; đây không phải fallback cho lỗi registry.
+
+## Đọc nhóm lỗi
+
+| Kết quả | Ý nghĩa | Hành động tiếp theo |
+| --- | --- | --- |
+| Thoát `1` | Bạn từ chối preview trên TTY, hoặc có lỗi xác thực, tải, xác minh, nguồn, I/O, runtime hay lỗi vận hành chưa được phân loại khác | Nếu từ chối preview thì lệnh dừng trước khi ghi bản cài. Với lỗi khác, giữ output và kiểm tra target trước khi thử lại. |
+| Thoát `2` | Flag, argument, target hoặc tổ hợp đích không hợp lệ | Sửa lệnh; không cần khôi phục cài đặt. |
+| Thoát `3` | Một thao tác lifecycle bị hủy, gián đoạn hoặc dừng do thiếu xác nhận | Không coi mã này là bằng chứng rằng chưa có gì thay đổi; hãy kiểm tra trạng thái khôi phục được báo. |
+| Thoát `4` | Một thao tác AgentKit khác đang giữ Kit lifecycle lock | Chờ lượt cài hoặc cập nhật kia hoàn tất rồi thử lại. Không xóa lock file. |
+| Thoát `5` | Nhóm not-found trong help cho trường hợp thiếu Kit trong `--kits-dir` local được chỉ định rõ | Kiểm tra tên Kit và nguồn local; trong v2.7.0 đường này vẫn có thể trả mã `1`. |
+| Thoát `6` | Refresh không detect được target đã cài, hoặc lệnh báo trạng thái target không an toàn hay xung đột | Kiểm tra ownership, delivery mode, scope và target cụ thể mà lỗi yêu cầu. Target init đã có nội dung vẫn có thể trả mã `1`. |
+
+Hãy dùng cả nội dung lỗi và mã thoát; v2.7.0 không gắn nhóm cụ thể hơn vào mọi
+đường lỗi thiếu nguồn hoặc target đã có nội dung. Từ chối trên TTY hoặc nhấn
+Enter cũng thoát `1`, nhưng
+xảy ra tại preview gate trước khi resolve nguồn hoặc thay đổi bản cài. Ngược
+lại, hủy hay gián đoạn muộn hơn không bảo đảm target còn nguyên: snapshot,
+journal, cache entry hoặc staged write có thể đã tồn tại. Giữ mọi recovery ID
+và audit target trước khi thử lại.
+
+Bản cài Codex vẫn có thể thành công khi in
+`Hooks dropped (unsupported on this target)`. Đây là partial projection được
+công bố, không phải lỗi exit. JSON báo `hooksDropped` và
+`droppedHookSummaries`; hãy xem event, matcher và handler được nêu thay vì thử
+lại với `--force`. Xem [Runtime không tìm thấy Skill hoặc
+Agent](./runtime-cannot-find-skill-or-agent) để biết các ranh giới được hỗ trợ.
+
+Khi đích đã có tệp, không thử lại ngay với `--force`. Trước tiên hãy xác định
+nội dung do AgentKit sở hữu, thuộc install mode khác hay chứa thay đổi của người
+dùng.
+
+## Kiểm tra runtime và nội dung đã ghi nhận
+
+```bash
+ak doctor --adapter claude-code --json
+ak doctor --adapter codex --json
+```
+
+Chỉ chạy adapter bạn đã chọn. Chọn một adapter được document: `claude-code`,
+`codex` hoặc `cursor`. Tên
+`--check` không tồn tại là lỗi lệnh; dùng `ak doctor --list` để xem các tên mà
+CLI đang cài hỗ trợ. Filter `claude-code` cũng giữ lại các shared check.
+
+Với nội dung Claude Code, audit đúng delivery mode:
+
+```bash
+ak audit engineer
+ak audit engineer --project-dir .
+ak audit engineer --plugin-mode --project-dir ./ak-engineer
+```
+
+Lệnh đầu audit user plugin, lệnh thứ hai audit project-native install và lệnh
+thứ ba audit project plugin có plugin root là `./ak-engineer`. `ak audit` chỉ
+đọc: thoát `0` là sạch; thoát `1` nghĩa là có drift hoặc audit thất bại; Kit
+argument không hợp lệ thoát `2`. Dùng `--strict` khi manifest bị thiếu hoặc
+không đọc được cũng phải làm check thất bại.
+
+## Khôi phục cài đặt thất bại
+
+Refresh và các đường ghi đè dùng recovery snapshot. Nếu lệnh in snapshot hoặc
+recovery ID, hãy kiểm tra trước khi restore:
+
+```bash
+ak backups list
+ak backups show <id>
+ak backups verify <id>
+ak backups restore <id> --dry-run
+```
+
+Chỉ restore sau khi preview nêu đúng state bạn muốn thay thế. Nếu cài đặt hoàn
+tất nhưng `ak audit` chứng minh nội dung phát hành bị drift, coi lệnh refresh
+theo Kit mà audit in là điểm bắt đầu. Audit không dựng lại runtime, scope hoặc
+Claude delivery mode ban đầu: thêm selector `--target`, `--global` và
+`--switch-to-plugin` khi áp dụng trước khi xác nhận. Không thêm `--no-backup`,
+đổi kênh hoặc xóa runtime home để sửa lỗi.
+
+Restore chỉ thay thế các tệp trong snapshot, giữ nguyên tệp không liên quan được
+tạo sau đó và không bảo đảm giao dịch tất cả-hoặc-không. Xem [Cập nhật và khôi
+phục](./updates) trước khi áp dụng snapshot.
+
+## Xác minh kết quả
+
+Chạy lại doctor cho adapter. Sau đó mở session runtime mới trong cùng project và
+xác minh Skill hoặc Agent mong đợi đã có. Nếu cài đặt khỏe nhưng runtime vẫn
+không discover được, tiếp tục với [Runtime không tìm thấy Skill hoặc
+Agent](./runtime-cannot-find-skill-or-agent).
+
+## Trang liên quan
+
+- [Cài Kit](../guides/installing-kits)
+- [Đăng nhập và quyền sử dụng Kit](./authentication)
+- [Cập nhật và khôi phục](./updates)

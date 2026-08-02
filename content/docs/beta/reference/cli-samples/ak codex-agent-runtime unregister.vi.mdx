@@ -1,0 +1,72 @@
+---
+title: ak codex-agent-runtime unregister
+description: Gỡ riêng AgentKit MCP runtime stanza khỏi Codex config theo cách idempotent và hiểu phần nào vẫn còn.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng lệnh này để ngăn phiên Codex sau tự load AgentKit agent runtime. Nó chỉ xoá
+`[mcp_servers.ak-agent-runtime]`.
+
+## Cách dùng
+
+```bash
+ak codex-agent-runtime unregister [flags]
+```
+
+Lệnh không nhận argument theo vị trí.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--codex-home <dir>` | `CODEX_HOME` hoặc `~/.codex` | Chọn thư mục chứa `config.toml`. |
+
+Cờ dùng chung nằm trong [quy ước CLI](../cli-conventions). Không có prompt,
+preview, dry-run, force hay yêu cầu `--yes`.
+
+## Ranh giới mutation
+
+Nếu có, AgentKit stanza bị xoá và mọi MCP server cùng config value chưa model
+khác được giữ theo giá trị. Nếu stanza không có, lệnh trả `changed=false` mà
+không rewrite tệp.
+
+<Callout type="warning">
+  Unregister không xoá agent TOML đã cài, dừng server đang chạy, restore TOML
+  formatting cũ hay reset `features.hooks = true` do registration ghi. Lệnh
+  không tạo backup hoặc rollback record.
+</Callout>
+
+Tệp thay đổi được encode lại và replace atomically với mode `0600`; comment,
+thứ tự và whitespace có thể normalize. Thao tác dùng config lock chờ năm giây
+như registration và có thể tiếp tục kèm warning khi platform không hỗ trợ lock.
+
+## Output và luồng
+
+Human success là một dòng trên stdout; warning giảm bảo vệ lock đi stderr.
+`--json` success là raw object thay vì shared envelope, gồm `config_path`,
+`changed`, `server_name`, `warnings` và `op=unregister`. Warning nằm trong JSON
+success. Flag-parse error có thể vẫn là plain text.
+
+<Callout type="warning">
+  Tagged help khai báo mã `5` cho config failure, nhưng command hiện trả `1`.
+  Trong `--json`, runtime failure không emit structured error object; dựa vào
+  process status và stderr, có thể trống.
+</Callout>
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Stanza đã gỡ hoặc vốn không tồn tại. |
+| `1` | Home resolution, lock, TOML read/parse hoặc atomic write thất bại. |
+| `2` | Argument hoặc cờ không hợp lệ. |
+
+Restart Codex sau changed result. Nếu cần khôi phục config chính xác, restore
+bản copy bạn tự tạo trước registration hoặc unregistration.
+
+## Lệnh liên quan
+
+- [Đăng ký lại](../cli/ak_codex-agent-runtime_register)
+- [Thông tin unregister](../cli/ak_codex-agent-runtime_unregister)
+- [Serve hoặc inspect agent](../cli/ak_codex-agent-runtime_serve)

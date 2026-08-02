@@ -1,0 +1,210 @@
+---
+title: Cải thiện mechanical metric với ak:loop
+description: Chạy thử nghiệm tuần tự được Git theo dõi trên một numeric metric với guard, bằng chứng rollback và hard stop condition.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:loop` để cải thiện một mechanical repository metric qua các thử nghiệm
+tuần tự có giới hạn. Mỗi iteration tạo một thay đổi có thể quy kết, commit một
+rollback point, đo kết quả, chạy regression guard và giữ hoặc revert thay đổi
+theo contract đã khai báo.
+
+## Chọn ak:loop để tối ưu đo được
+
+### Dùng ak:loop khi
+
+- Một command có thể xuất một con số cho coverage, error, byte, latency,
+  accuracy hoặc objective metric khác.
+- Bạn có thể xác định editable scope hẹp và regression guard riêng.
+- Nhiều thử nghiệm nhỏ hữu ích hơn one-shot implementation.
+- Project là Git repository có working tree sạch và named branch.
+
+### Chọn workflow khác khi
+
+- Goal mang tính chủ quan, như “make this cleaner.” Dùng `ak:cook` với
+  acceptance criteria.
+- Bạn biết bug và cần root-cause work. Dùng `ak:fix` hoặc `ak:debug`.
+- Bạn chỉ cần một thay đổi. Dùng `ak:cook`.
+- Bạn cần benchmark model bên ngoài. Dùng `ak:deep-swe`.
+- Tệp dự kiến không thể tách khỏi tệp do guard sở hữu. Hãy thiết kế lại scope
+  thủ công trước khi chạy loop.
+
+## Chuẩn bị experiment branch sạch
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận
+  Engineer Kit đã được cài cho runtime cùng scope hiện tại.
+- Bắt đầu từ Git working tree sạch trên named branch. Giữ unrelated work ở nơi
+  khác.
+- Xác định `Goal`, `Scope` và `Verify`; `Verify` phải exit thành công và in một
+  numeric result.
+- Thêm `Guard` phát hiện regression mà không phụ thuộc tệp loop được phép sửa.
+- Chọn `Iterations`, `Direction`, `Noise`, `Min-Delta`, target và wall-clock
+  hoặc resource stop condition.
+- Review mọi command sẽ chạy lặp lại để phát hiện destructive behavior, network
+  write, credential, elevated privilege và thời gian dự kiến.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:loop ...` | Chạy như Engineer Skill đã cài và dùng Git cùng shell tool của project. |
+| Cursor | `/ak:loop ...` | Dùng cách gọi slash đã được người dùng xác minh cho Engineer Skill; runtime parity rộng hơn chưa được thiết lập. |
+| Codex | `$ak:loop ...` | Dùng discovery Skill native của Codex; command approval và Hook behavior phụ thuộc live host. |
+
+## Chạy Skill với contract rõ ràng
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:loop
+Goal: Reduce TypeScript errors in src/api to zero
+Scope: src/api/**/*.ts
+Verify: npx tsc --noEmit 2>&1 | grep -c '^src/api/.*error TS' || true
+Guard: npm test
+Iterations: 12
+Direction: lower
+Noise: low
+Min-Delta: 1
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:loop
+Goal: Reduce TypeScript errors in src/api to zero
+Scope: src/api/**/*.ts
+Verify: npx tsc --noEmit 2>&1 | grep -c '^src/api/.*error TS' || true
+Guard: npm test
+Iterations: 12
+Direction: lower
+Noise: low
+Min-Delta: 1
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:loop
+Goal: Reduce TypeScript errors in src/api to zero
+Scope: src/api/**/*.ts
+Verify: npx tsc --noEmit 2>&1 | grep -c '^src/api/.*error TS' || true
+Guard: npm test
+Iterations: 12
+Direction: lower
+Noise: low
+Min-Delta: 1
+```
+
+  </Tab>
+</Tabs>
+
+Bạn có thể cung cấp required field trong request đầu tiên. Nếu thiếu, Skill nên
+thu thập tất cả field còn thiếu cùng lúc trước mọi dry run.
+
+## Hiểu các control
+
+| Field | Mặc định | Tác dụng |
+| --- | --- | --- |
+| `Goal` | Bắt buộc | Outcome và target dễ hiểu |
+| `Scope` | Bắt buộc | File pattern loop được phép sửa |
+| `Verify` | Bắt buộc | Command trả về một numeric metric |
+| `Guard` | Không có | Regression command; exit code `0` nghĩa là pass |
+| `Iterations` | `10` | Số trial tối đa |
+| `Noise` | `medium` | Cách xử lý measurement `low`, `medium` hoặc `high` |
+| `Min-Delta` | `0` | Thay đổi tối thiểu được tính là progress |
+| `Direction` | `higher` | Metric lớn hơn hay nhỏ hơn là tốt hơn |
+
+Với measurement có noise, hãy xác định repeat count và aggregation có chủ
+đích. Bundled guidance khuyến nghị lấy kết quả xấu hơn trong hai lần cho medium
+noise và median của ba đến năm lần cho high noise. Việc pin environment—input,
+seed, cache state và competing process—vẫn là trách nhiệm của bạn.
+
+## Quan sát từng iteration
+
+1. **Skill chứng minh precondition.** Nó kiểm tra Git state, branch state, scope
+   match, stale loop lock, baseline `Verify` và baseline `Guard`.
+2. **Skill ghi iteration zero.** Metric ban đầu thiết lập comparison point trong
+   `loop-results.tsv`.
+3. **Skill review memory.** Git history gần đây, diff trước và result log cung
+   cấp thông tin cho experiment tiếp theo.
+4. **Skill chọn một thay đổi.** Attempt phải mô tả được bằng một câu và nằm
+   trong `Scope`.
+5. **Skill tạo rollback point.** Nó commit atomic change theo convention
+   `loop(iter-N): ...` trước verification.
+6. **Skill đo và guard.** `Verify` trả metric; `Guard` kiểm tra behavior mà
+   optimization phải giữ.
+7. **Skill giữ hoặc loại.** Improvement đủ lớn cùng guard pass sẽ được giữ.
+   Regression, crash hoặc delta không đủ sẽ bị revert trong khi experiment
+   history được bảo toàn.
+8. **Skill log và quyết định.** Nó ghi metric, delta, disposition và description,
+   rồi kiểm tra bound cùng stuck condition.
+
+Sau năm lần discard liên tiếp, workflow nên phân tích pattern và đổi strategy.
+Tại mười lần discard liên tiếp, nó dừng và trả bằng chứng. Verification timeout
+vượt giới hạn 30 giây do source định nghĩa cũng abort loop thay vì chạy vô hạn.
+
+## Giữ quyền Git và command trong tay bạn
+
+<Callout type="warn" title="Loop tạo commit">
+  Bắt đầu `ak:loop` cấp quyền cho chỉnh sửa có scope lặp lại và iteration commit
+  chỉ trên branch hiện tại. Nó không cấp quyền push, merge, publication,
+  deployment, secret access, destructive recovery hoặc thay đổi ngoài `Scope`.
+</Callout>
+
+Skill ưu tiên `git revert` cho experiment bị loại vì failed attempt là memory
+hữu ích. Nếu revert conflict, hãy dừng và trình bày lựa chọn recovery thay vì
+dùng destructive reset khi chưa có approval rõ ràng.
+
+Từ chối verification command xóa path rộng hoặc fetch rồi thực thi remote code.
+Xác nhận outbound write chưa nêu, `sudo`, ownership change và high-impact
+operation khác. Giữ guard file ở chế độ read-only. Mask token, connection
+password, private key và environment value trong log cùng reproduction step.
+
+## Xác minh bằng chứng cuối
+
+Run hoàn chỉnh nên cung cấp:
+
+- Baseline, best và final metric, direction, target và total delta.
+- Iteration được cấu hình so với đã hoàn thành cùng lý do loop dừng.
+- Kept commit với mô tả một thay đổi.
+- Trial bị discard, crash, timeout và guard-failed.
+- `loop-results.tsv` với iteration record có thể audit.
+- Guard command cùng kết quả.
+- Cảnh báo plateau hoặc noise và recommendation dừng, tiếp tục hoặc sửa
+  contract.
+- Tuyên bố rõ mọi push, merge hoặc deployment action vẫn chờ approval.
+
+Chỉ xem score cao hơn hay con số thấp hơn là có ý nghĩa nếu metric thực sự đại
+diện outcome dự kiến và guard bao phủ regression liên quan.
+
+## Xử lý sự cố hoặc dừng
+
+| Triệu chứng | Bước an toàn tiếp theo |
+| --- | --- |
+| Working tree bẩn hoặc HEAD detached | Giữ công việc hiện có và chuyển sang named branch sạch trước khi retry. |
+| `Verify` in text hoặc nhiều số | Thay bằng deterministic extractor exit đúng và chỉ emit một số. |
+| Baseline `Guard` thất bại | Sửa baseline ngoài loop; không nới guard. |
+| Measurement thay đổi giữa các lần chạy | Đặt noise level phù hợp, lặp phép đo và dùng `Min-Delta` có ý nghĩa. |
+| Revert conflict | Dừng, giữ conflict evidence và yêu cầu quyết định recovery. |
+| Năm trial liên tiếp bị discard | Đổi tệp hoặc kỹ thuật dựa trên log mà không mở rộng scope đã khai báo. |
+| Mười trial liên tiếp bị discard | Dừng và báo plateau để review thủ công. |
+| Verification vượt 30 giây | Abort hoặc thiết kế metric sample nhanh hơn trước loop khác. |
+| Runtime không tìm thấy Skill | Xác nhận installation và xem [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Dùng `ak:autoresearch` khi vẫn cần chọn route, hoặc tiếp tục với `ak:test` và
+`ak:code-review` để verification độc lập.
+
+## Biết các giới hạn hiện tại
+
+- `ak:loop` không thể tối ưu subjective goal hay đảm bảo improvement.
+- Iteration chạy tuần tự; workflow không parallelize experiment.
+- Loop không thể kiểm soát system noise, external service hay background load.
+- Chất lượng guard và độ hợp lệ của metric quyết định sức mạnh kết quả.
+- Giới hạn verification 30 giây do source định nghĩa khiến evaluation đắt tiền
+  không phù hợp trừ khi giảm thành sample nhanh và đại diện.
+- Stable và beta chứa protocol cùng reference `ak:loop` giống nhau.

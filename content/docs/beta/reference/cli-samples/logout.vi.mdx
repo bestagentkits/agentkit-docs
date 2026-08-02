@@ -1,0 +1,76 @@
+---
+title: ak logout
+description: Xoá phiên CLI AgentKit cục bộ và API-key credential có thể gia hạn mà không xoá phiên App device.
+---
+
+Dùng `ak logout` trước khi bàn giao máy, sau khi xoay credential, hoặc khi bạn
+muốn thao tác registry tiếp theo yêu cầu đăng nhập CLI mới.
+
+## Cách dùng
+
+```bash
+ak logout
+```
+
+Lệnh được công bố không có argument theo vị trí hay cờ riêng. Implementation
+hiện tại bỏ qua token theo vị trí thừa; đừng dựa vào hành vi này. Các cờ đầu ra
+dùng chung có trong [quy ước CLI](../cli-conventions).
+
+## Trước khi chạy
+
+Lệnh này chỉ xoá slot xác thực CLI. Phiên App device trả phí nằm cùng tệp vẫn
+được giữ lại. Nếu bạn muốn gỡ một device activation khỏi tài khoản,
+`ak logout` không thực hiện việc đó.
+
+Lệnh không có prompt, preview, dry-run hay force mode. `--yes` và
+`--no-interactive` không thay đổi hành vi.
+
+## Tác động
+
+AgentKit atomically lấy CLI slot khỏi `~/.agentkit/auth/session.json` và xoá tệp
+API key được lưu cùng cấp. `AGENTKIT_HOME` thay đổi thư mục gốc. CLI session
+không tồn tại vẫn được xem là thành công, nên có thể chạy lặp lại an toàn.
+
+Với phiên email OTP, AgentKit chỉ thử revoke phiên từ xa sau khi secret cục bộ
+đã bị xoá. Nếu access token hết hạn, lệnh có thể dùng rotating refresh
+credential một lần rồi thử revoke lại. Lỗi registry là best-effort và không khôi
+phục trạng thái đăng nhập cục bộ.
+
+Đăng nhập bằng API key và license key không dùng đường revoke phiên email này.
+App slot do license-key activation tạo vẫn còn trên đĩa.
+
+## Đầu ra và luồng
+
+Đầu ra thành công dành cho người dùng được ghi ra stdout:
+
+```text
+[OK] logged out
+```
+
+JSON thành công là một envelope trên stdout:
+
+```json
+{"schema_version":1,"kind":"auth.logout","data":{"success":true}}
+```
+
+Lỗi lưu trữ cục bộ dùng stderr; chế độ JSON phát error envelope dùng chung. Lỗi
+revoke từ xa không được xem là lỗi lệnh. Lỗi parse cờ có thể vẫn là plain text.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | CLI slot không còn tồn tại sau lệnh, kể cả khi vốn đã không có; revoke phiên email từ xa vẫn có thể đã thất bại. | Chạy `ak whoami` để xác nhận trạng thái được resolve cục bộ. |
+| `1` | Không thể đọc, khoá, ghi lại hoặc xoá auth store. | Thử lại một lần rồi kiểm tra permission bằng `ak doctor`; không xoá toàn bộ AgentKit home. |
+| `2` | Không parse được cờ. | Sửa cách gọi. |
+
+Nếu gặp mã `1` sau khi đã xoá một phần dữ liệu cục bộ, hãy chạy lại
+`ak logout`. Thao tác không tạo backup và không có rollback; cách khôi phục là
+chạy `ak login` mới.
+
+## Lệnh liên quan và giới hạn
+
+- [Đăng nhập lại](./login)
+- [Kiểm tra tài khoản hiện tại](./whoami)
+- [Thông tin đầy đủ của lệnh `ak logout`](../cli/ak_logout)
+- [Xử lý sự cố xác thực](../../troubleshooting/authentication)

@@ -1,0 +1,76 @@
+---
+title: ak commands list
+description: So sánh tệp command installed dạng phẳng với template slash command available trong cây Kit cục bộ đã cấu hình.
+---
+
+Dùng `ak commands list` để xem inventory template command cục bộ đã gộp. Kết
+quả gồm cả record installed và available cục bộ dù mô tả ngắn nói “installed
+commands”.
+
+## Cách dùng
+
+```bash
+ak commands list
+```
+
+Lệnh không nhận argument theo vị trí và không prompt.
+
+## Cờ của lệnh
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--kit <name>` | Trống | Chỉ giữ record từ đúng một kit directory. |
+| `--tag <tag>` | Danh sách rỗng `[]` | Được chấp nhận dưới dạng cờ string-slice lặp lại. Trong các release này, command lister không áp dụng bộ lọc này. |
+
+Không dùng `--tag` làm automation gate. Thay vào đó, hãy lọc `data.commands`
+trong caller. Các cờ dùng chung nằm ở [quy ước CLI](../cli-conventions).
+
+## Quy tắc discovery và merge
+
+Command available là regular file `.md` đệ quy dưới
+`./kits/<kit>/commands/`. Segment ẩn hoặc bắt đầu bằng `_`, tên sai dạng, tệp
+symlink và extension khác bị bỏ qua. Relative path lồng nhau được làm phẳng bằng
+`-` thành asset name; cấu trúc gốc tạo slash name. Nếu flatten collision, source
+path đứng trước theo alphabet được giữ.
+
+Command installed là tệp `.md` trực tiếp dưới
+`~/.claude/plugins/<kit>/commands/`. Flat filename là path identity duy nhất
+còn lại, nên record installed báo giá trị phẳng đó làm cả name và slash name.
+`AGENTKIT_KITS_DIR` và `AGENTKIT_PLUGIN_DIR` thay các root.
+
+Record là duy nhất theo `<kit>/<flat-name>`. Record installed thắng record
+available, và danh sách cuối sắp theo ref chuẩn. Không truy vấn remote catalog,
+auth, entitlement, cache hay runtime process.
+
+## Đầu ra
+
+Stdout cho người dùng là bảng `NAME`, `DESCRIPTION`, `SOURCE` và `STATUS`.
+Record available hiện source slash name; record installed hiện flat name.
+
+JSON thành công dùng:
+
+```text
+schema_version: 1
+kind: assets.list
+data.commands[]:
+  kit, name, slash_name, rel_path
+  description, tags, installed
+  optional argument_hint
+```
+
+Inventory rỗng thoát thành công với JSON array rỗng hoặc human empty state.
+Không phát NDJSON hoặc status stream trên stderr.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Local scan hoàn tất, kể cả kết quả rỗng. |
+| `1` | Root hoặc recursive source scan thất bại, hay có positional argument. |
+| `2` | Không phân tích được cờ. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak commands list`](../cli/ak_commands_list)
+- [Tìm command](../cli/ak_commands_search)
+- [Cài một command](../cli/ak_commands_install)

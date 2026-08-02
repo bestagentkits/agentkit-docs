@@ -1,0 +1,92 @@
+---
+title: ak codex-agent-runtime serve
+description: List discovered Codex agents or run the long-lived stdio MCP server that dispatches fresh codex exec subprocesses.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `--list-only` to inspect agent discovery. Without it, this command runs the
+stdio MCP server registered in Codex config and blocks until the client
+disconnects or the process is cancelled.
+
+## Usage
+
+```bash
+ak codex-agent-runtime serve [flags]
+```
+
+The command accepts no positional arguments.
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--codex-home <dir>` | `CODEX_HOME` or `~/.codex` | Select user agents under `<dir>/agents`. |
+| `--plugin-root <dir>` | `AGENTKIT_PLUGIN_DIR` or `~/.claude/plugins` | Select staged Kit agent discovery. |
+| `--list-only` | `false` | Print discovery and exit without opening MCP transport. |
+
+Shared flags are described in [CLI conventions](../cli-conventions), but
+`--json`, `--quiet`, `--yes`, and `--no-interactive` do not change the serve or
+list renderer.
+
+## Inspect discovery
+
+```bash
+ak codex-agent-runtime serve --list-only
+```
+
+List-only output is plain text on stdout even with `--json`. It prints the
+resolved Codex home, plugin root, count, agent slugs, and owning Kit when known.
+Those paths and names may be sensitive in support output.
+
+Discovery scans valid `*.toml` filenames. User agents take precedence over
+same-slug staged agents; staged Kit conflicts resolve by lexicographic Kit
+order. Missing roots are accepted as empty. An unreadable root fails exit `1`.
+Unreadable individual agent files are still listed with an empty, permissive
+parsed policy.
+
+## Serve over stdio
+
+```bash
+ak codex-agent-runtime serve
+```
+
+Stdout is reserved for MCP protocol frames. Do not redirect log text into that
+stream. A startup line with server version and agent count is written to
+stderr. The process does not read interactive terminal input or ask for
+confirmation.
+
+Each agent becomes `agent_<slug>`. A tool call accepts a required `prompt` and
+an optional named `tool`, reads the installed agent TOML, checks policy, and
+starts a fresh `codex exec` subprocess. The prompt is piped to that subprocess
+stdin; its stdout becomes MCP text content. A failed subprocess returns an MCP
+tool result with `isError=true` and captured stderr, while the server continues.
+
+<Callout type="warning">
+  The server process is read-only at setup, but dispatched `codex exec`
+  processes can access the network and modify files within their effective
+  Codex sandbox. Agent instructions and user prompts can be sent to the
+  configured provider. There is no command-level redaction.
+</Callout>
+
+The serve command does not preflight the `codex` binary. It can start and list
+tools without Codex installed; the affected tool call fails when dispatch is
+attempted. Registration config gives each MCP tool call 600 seconds, but a
+manually connected client can use its own timeout.
+
+## Exit status
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | List-only completed, the client disconnected cleanly, or the command context was cancelled. |
+| `1` | Root resolution, agent discovery, or MCP transport failed. |
+| `2` | Arguments or flags were invalid. |
+
+Dispatch dependency/provider exits are represented inside the MCP result, not
+as the long-running server's process exit.
+
+## Related commands
+
+- [Register automatic startup](../cli/ak_codex-agent-runtime_register)
+- [Complete serve facts](../cli/ak_codex-agent-runtime_serve)
+- [Run a skill through an adapter](../cli/ak_run)

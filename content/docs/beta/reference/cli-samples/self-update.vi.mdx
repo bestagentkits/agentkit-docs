@@ -1,0 +1,140 @@
+---
+title: ak self-update
+description: Kiểm tra, xác minh, stage hoặc áp dụng cập nhật AgentKit CLI và Desktop tuỳ chọn có chữ ký, với giới hạn ownership và khôi phục rõ ràng.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak self-update` cho vòng đời binary AgentKit. Lệnh không refresh tệp Kit
+trong project hoặc user scope; hãy dùng `ak update` hoặc `ak kit refresh` cho
+các lớp đó.
+
+## Cách dùng
+
+```bash
+ak self-update
+```
+
+Lệnh không nhận argument theo vị trí.
+
+## Trước khi chạy
+
+Khi thiếu `--yes`, lệnh chỉ kiểm tra khả dụng và không tải artifact. Lệnh không
+bao giờ hỏi tương tác, bất kể TTY hay stdin. Binary channel mặc định là channel
+cập nhật đã lưu, hoặc `beta` khi chưa có tuỳ chọn; hãy chọn `--channel stable`
+nếu đó là track bạn muốn.
+
+AgentKit phát hiện ownership của executable đang chạy trước. Bản cài Homebrew
+hoặc Scoop đã xác minh không bị thay tại chỗ; kết quả báo `brew upgrade ak` hoặc
+`scoop update ak` và không gửi release request. Ownership của package manager
+không chắc chắn sẽ bị từ chối an toàn.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--beta` | `false` | Viết tắt của `--channel beta`; xung đột với channel không phải beta được đặt rõ. |
+| `--changelog` | `false` | In changelog bản phát hành đã xác minh mà không kiểm tra hay áp dụng cập nhật. |
+| `--channel <channel>` | Config hoặc `beta` | Chọn `dev`, `beta` hoặc `stable`. |
+| `--check` | `false` | Kiểm tra metadata có chữ ký mà không tải artifact. |
+| `--disable-auto-update` | `false` | Tắt kiểm tra auto-update Desktop và staged apply. |
+| `--dry-run` | `false` | Tải và xác minh artifact đã chọn trong thư mục tạm mà không thay bản cài. |
+| `--enable-auto-update` | `false` | Bật kiểm tra auto-update Desktop và staged apply. |
+| `--include-desktop` | `false` | Yêu cầu cả artifact CLI và Desktop khớp platform hiện tại. |
+| `--kit <name>` | Trống | Với `--changelog`, lọc một Kit công khai: `engineer` hoặc `marketing`. |
+| `--registry-url <url>` | Biến môi trường hoặc mặc định của bản phát hành | Ghi đè release root binary có chữ ký. |
+| `--target <targets>` | Trống | Với `--changelog`, lọc `all`, `cli`, `app`, `kits`, `engineer` hoặc `marketing`; có thể lặp/phân tách bằng dấu phẩy. |
+| `--version <version>` | Channel pointer | Resolve một binary version chính xác. |
+
+Các cờ dùng chung được mô tả trong [quy ước CLI](../cli-conventions).
+
+## Check, dry-run và apply
+
+```bash
+ak self-update --check --channel stable
+ak self-update --dry-run --channel stable
+ak self-update --channel stable --yes
+```
+
+- Check fetch và xác minh channel pointer có chữ ký cùng manifest bất biến,
+  nhưng không tải artifact. Lỗi availability trở thành `status=unknown`, thường
+  kèm `reason=release_check_unavailable`, và vẫn thoát `0`.
+- Dry-run tải artifact cho platform, xác minh, ghi thư mục staging tạm rồi xoá
+  nó. Lệnh không thay CLI hay ghi binary cache/pending state lâu dài.
+- Apply yêu cầu `--yes`. Lệnh xác minh chữ ký Ed25519, digest manifest trong
+  channel pointer, compatibility của manifest, cùng size và SHA-256 được khai
+  báo của từng artifact trước khi thay thế.
+
+<Callout type="warning">
+  `--enable-auto-update` và `--disable-auto-update` ghi
+  `~/.agentkit/config.yaml` mà không cần `--yes`, rồi tiếp tục bằng check trừ
+  khi có thêm `--dry-run`. Hai cờ này không apply binary trong cùng lần gọi, kể
+  cả khi có thêm `--yes`.
+</Callout>
+
+## Hành vi thay thế và Desktop
+
+Với cập nhật chỉ CLI không do package manager quản lý, artifact được stage dưới
+`~/.agentkit/cache/binaries/<version>` (`AGENTKIT_HOME` thay đổi thư mục gốc):
+
+- Trên macOS và Linux, AgentKit ghi executable tạm cùng cấp, đổi tên executable
+  cũ thành backup tạm, cài candidate rồi xoá backup sau khi thành công. Nếu bước
+  rename cuối thất bại, lệnh thử khôi phục ngay.
+- Trên Windows, thay thế chỉ CLI được stage để trusted helper tách rời hoàn tất
+  sau khi process hiện tại thoát.
+- Với `--include-desktop --yes` trên platform không phải Windows được hỗ trợ,
+  artifact CLI và GUI khớp nhau được stage thành một transaction đang chờ. Hãy
+  khởi động lại ứng dụng AgentKit Desktop để xác minh lại và hoàn tất. Windows
+  từ chối paired Desktop apply.
+
+Sau khi thay thế thành công, không có bản rollback dành cho người dùng được giữ
+lại. Nếu xác minh hay thay thế thất bại, hãy giữ đường dẫn staging/pending được
+báo, chạy lại check và dùng package manager khi ownership được báo. Không tự
+thay bằng byte chưa xác minh.
+
+## Chế độ changelog
+
+```bash
+ak self-update --changelog
+ak self-update --changelog --target cli --json
+```
+
+Chế độ changelog fetch catalog/body đã xác minh và chỉ đọc. Không thể kết hợp
+với cờ update, settings, `--version` hoặc `--yes`.
+
+## Đầu ra và luồng
+
+Kết quả dành cho người dùng được ghi ra stdout. JSON thành công thông thường
+dùng `kind=self_update` với các trường `data`:
+
+```text
+available, status, reason, current_version, latest_version,
+auto_update, channel, applied, restart_required, message,
+updated_paths, pending_path, staging_dir, install_manager, upgrade_command
+```
+
+Trường tuỳ chọn bị lược bỏ khi rỗng. JSON changelog dùng
+`kind=self_update.changelog`.
+
+Lỗi validation ở cấp lệnh và lỗi apply trả về trước success renderer; đừng yêu
+cầu error envelope có cấu trúc trong chế độ `--json`. Lỗi parse cờ vẫn là plain
+text. Hãy dùng trạng thái process làm tín hiệu lỗi và capture stderr ở chế độ
+dành cho người dùng.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Check, báo managed install, đổi settings rồi check, dry-run đã xác minh, changelog hoặc apply đã hoàn tất. `status=unknown` cũng thoát `0`. | Kiểm tra `status`, `reason`, `applied` và `restart_required`. |
+| `1` | Config, phát hiện manager, network apply, chữ ký/digest, compatibility, artifact, staging, replacement hoặc changelog availability thất bại. | Không bỏ qua xác minh; dùng lệnh manager được báo hoặc thử lại signed flow. |
+| `2` | Argument, cờ, tổ hợp channel hoặc bộ lọc changelog không hợp lệ. | Sửa cách gọi. |
+
+Không có mã thoát từ chối vì lệnh không bao giờ hỏi.
+
+## Lệnh liên quan và giới hạn
+
+- [Kiểm tra version cục bộ và trong cache](./versions)
+- [Thông tin cập nhật hợp nhất CLI và Kit](../cli/ak_update)
+- [Refresh một route Kit](../cli/ak_kit_refresh)
+- [Thông tin đầy đủ của lệnh `ak self-update`](../cli/ak_self-update)
+- [Xử lý sự cố cập nhật](../../troubleshooting/updates)

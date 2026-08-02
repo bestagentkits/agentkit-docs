@@ -1,0 +1,197 @@
+---
+title: Integrate payments safely with ak:payment-integration
+description: Implement SePay, Polar, or Stripe checkout and webhooks with explicit credentials, idempotency, financial side effects, and go-live evidence.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:payment-integration` to design or implement a payment flow with SePay,
+Polar, or Stripe. The Skill covers checkout, subscriptions, VietQR and bank
+transfer flows, signed webhooks, provider-aware orders, refunds, and durable
+event handling. It is most useful when the provider and business outcome are
+already known.
+
+## Choose ak:payment-integration for provider work
+
+### Use ak:payment-integration when
+
+- You need SePay for VND, bank-transfer, or VietQR flows.
+- You need Polar for software checkout, subscriptions, usage billing, or
+  benefit delivery.
+- You need Stripe Checkout, Billing, Payment Element, or Connect guidance.
+- You need a unified order model or idempotent webhook processing across
+  providers.
+
+### Choose another workflow when
+
+- Provider selection, tax responsibility, merchant-of-record policy, refund
+  policy, or liability is unsettled. Resolve the product and legal decision
+  before implementation.
+- The task is only database design. Use `ak:databases` with the payment contract.
+- You need a general backend implementation spanning more than payments. Use
+  `ak:cook` and name this Skill as specialist guidance.
+- You need financial, legal, PCI, or accounting assurance. Use qualified human
+  review; this Skill does not provide it.
+
+## Prepare the payment contract and sandbox
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Engineer Kit is installed for the current runtime and scope.
+- Identify the installed provider SDK and API version, framework, database,
+  order schema, authentication, queue, deployment host, and test tools.
+- Define currencies, smallest-unit storage, products/prices, taxes, discounts,
+  trials, fulfillment, cancellation, refund, dispute, and reconciliation rules.
+- Use sandbox accounts, test products, test payment methods, isolated webhook
+  endpoints, and synthetic customer data.
+- Keep `SEPAY_SECRET_KEY`, webhook keys, `POLAR_ACCESS_TOKEN`,
+  `POLAR_WEBHOOK_SECRET`, Stripe secret keys, signing secrets, and customer data
+  out of prompts, logs, client bundles, command history, and Git.
+- State whether package installation, provider API calls, dashboard changes,
+  public tunnels, database writes, emails, refunds, or deployment are allowed.
+
+Provider fees, limits, supported methods, API versions, and compliance
+requirements change. Confirm them in current provider documentation before
+making a financial or production decision.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:payment-integration ...` | Can implement and test with available project tools; provider access still requires explicit credentials and authority. |
+| Cursor | `/ak:payment-integration ...` | Uses the user-verified slash spelling; broader Agent, Hook, and external-tool parity is not established. |
+| Codex | `$ak:payment-integration ...` | Uses native Skill discovery; projected Hooks are partial and provider/network tools depend on the session. |
+
+See [Runtime adapters](../../../concepts/runtime-adapters) for component-level
+differences.
+
+## Run the Skill
+
+The declared argument shape is `[provider] [task]`. Name one provider or a
+deliberate multi-provider boundary, then state the money, order, webhook, test,
+and publication contract.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:payment-integration "stripe Add a sandbox subscription checkout to the existing SaaS app. Reuse its order schema and auth, pin the installed API version, verify webhook signatures on the raw body, deduplicate events, test renewal and failure paths, and do not create live products, charge cards, refund, or deploy."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:payment-integration "stripe Add a sandbox subscription checkout to the existing SaaS app. Reuse its order schema and auth, pin the installed API version, verify webhook signatures on the raw body, deduplicate events, test renewal and failure paths, and do not create live products, charge cards, refund, or deploy."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:payment-integration "stripe Add a sandbox subscription checkout to the existing SaaS app. Reuse its order schema and auth, pin the installed API version, verify webhook signatures on the raw body, deduplicate events, test renewal and failure paths, and do not create live products, charge cards, refund, or deploy."
+```
+
+  </Tab>
+</Tabs>
+
+| Input | Include |
+| --- | --- |
+| Commercial contract | Provider, product, price IDs, currency, tax/MoR role, trial, entitlement, refund, and dispute policy |
+| Data contract | Internal order ID, provider IDs, original amount/currency, status mapping, event ledger, and audit retention |
+| Webhook contract | Endpoint, raw-body access, signature scheme, event IDs, retries, queue behavior, idempotency, and reconciliation |
+| Authority | Sandbox or live account, allowed API mutations, tunnels, database writes, notifications, refunds, and deployment |
+| Evidence | Focused tests, provider test events, order transitions, duplicate delivery, failure recovery, logs, and reconciliation output |
+
+## Observe the payment stages
+
+1. **The run verifies the provider boundary.** It confirms the current SDK/API
+   version, environment, checkout product, currency, legal ownership, and
+   project integration points.
+2. **The run maps the order state machine.** Internal and provider identifiers,
+   amounts, currencies, subscriptions, refunds, entitlements, and terminal
+   states remain explicit.
+3. **The run creates checkout server-side.** Secret-key operations stay behind
+   authenticated server endpoints; only safe client values are returned.
+4. **The run handles webhooks before fulfillment.** It validates the authentic
+   raw request, rejects invalid deliveries, records a unique event, and makes
+   processing idempotent before changing access or money state.
+5. **The run verifies retries and reconciliation.** Duplicate, delayed,
+   out-of-order, failed, refunded, renewed, canceled, and unknown events are
+   exercised against the sandbox contract.
+6. **The run reports the go-live gap.** Changed files, credentials required,
+   provider objects, tests, monitoring, manual dashboard steps, and unapproved
+   financial or deployment actions are listed.
+
+## Keep money and external services under approval
+
+<Callout type="warn" title="A successful API call can move money or access">
+  Live checkout, subscription changes, refunds, benefit grants, bank events,
+  product edits, and webhook replays can affect customers and financial
+  records. Sandbox authority never implies production authority.
+</Callout>
+
+- Use server-side secrets and provider-recommended constant-time or SDK
+  signature verification. Do not trust a redirect or client success page as
+  payment confirmation.
+- Make fulfillment and entitlement changes idempotent. Persist provider event
+  IDs and preserve enough evidence for replay and reconciliation.
+- Public tunnel tools expose a local endpoint to the internet. Confirm the
+  endpoint, authentication, payload logging, and shutdown plan first.
+- The bundled checkout helper generates configuration; it does not complete a
+  provider checkout. Its Polar output embeds the access token in a displayed
+  cURL command, so do not use a live token in interactive output or shell
+  history.
+- The bundled Polar CLI verifier creates mock headers for its own payload; it
+  does not prove a real incoming delivery. The SePay helper’s OAuth mode only
+  checks that a Bearer token is present, not that it is valid. Use the provider
+  SDK or a production-grade verifier for the real endpoint.
+- Commit, product publication, live webhook registration, refund execution,
+  rollout, and deployment require separate approval.
+
+## Verify the result
+
+A complete result should provide:
+
+- The checkout and order-state contract, including amount units, currency,
+  provider IDs, customer mapping, and fulfillment boundary.
+- Exact changed files, packages, environment-variable names, schema or
+  migration artifacts, queues, and provider objects without secret values.
+- Test evidence for checkout creation, invalid input, signature failure,
+  duplicate delivery, retry, out-of-order event, renewal, cancellation, refund,
+  and unknown-event handling as applicable.
+- Logs or persisted event evidence that support audit, replay, and
+  reconciliation without storing sensitive payment data unnecessarily.
+- A go-live checklist covering provider configuration, secret rotation,
+  endpoint TLS, monitoring, alerting, backup, rollback, support, and approval.
+
+## Troubleshoot or continue
+
+| Symptom | Safe next step |
+| --- | --- |
+| A webhook signature fails | Preserve the exact raw bytes and headers safely, confirm parser ordering and environment secret, then replay a provider-generated test event. |
+| The provider retries a successful event | Check response timing/status and the durable idempotency record; do not suppress retries by acknowledging an unverified payload. |
+| Orders and provider state disagree | Stop automated fulfillment, compare provider IDs and event history, reconcile in a bounded report, then approve any corrective mutation separately. |
+| A test reaches a live account | Stop, revoke or rotate exposed credentials, inspect created objects and charges, and resume only with a verified sandbox identity. |
+| The bundled helper reports success | Treat it as local format validation only; verify the real handler with provider test events and application persistence. |
+| The runtime does not recognize the Skill | Confirm target and scope, restart the session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Continue with `ak:databases` for the order ledger, `ak:test` for independent
+verification, or the [Engineer Kit overview](../../engineer) for coordinated
+delivery.
+
+## Know the current limits
+
+- The references are provider snapshots, not live contracts. Current APIs,
+  SDKs, prices, fees, limits, payment methods, tax handling, and store policies
+  require provider verification.
+- The Skill does not provide PCI scope determination, legal/tax/accounting
+  advice, fraud underwriting, bank reconciliation guarantees, or production
+  credentials.
+- Bundled helper tests cover local JavaScript utilities, not provider network
+  behavior, real webhook delivery, database transactions, financial accuracy,
+  disputes, or production failover.
+- Multi-provider examples are patterns; currency conversion, refund, discount,
+  commission, and entitlement rules must match the current business ledger.
+- Stable and beta contain identical Skill content and resources for this
+  release pair. Beta Codex Hook diagnostics do not change this workflow.

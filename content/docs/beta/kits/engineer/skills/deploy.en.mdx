@@ -1,0 +1,180 @@
+---
+title: Deploy a prepared project with ak:deploy
+description: Detect or select a supported hosting platform, deploy with explicit provider authority, verify the URL, and record rollback guidance.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:deploy` to take a deployment-ready project to a supported hosting
+platform. The Skill detects existing deployment intent, selects the matching
+platform workflow, checks its CLI and authentication, performs the deployment,
+verifies the resulting URL, and records how to deploy and roll back again.
+
+## Choose ak:deploy for application publication
+
+### Use ak:deploy when
+
+- The project is ready to publish and its build and runtime requirements are
+  already understood.
+- Existing configuration identifies a supported hosting platform.
+- You want a platform recommendation before the first deployment.
+- You need deployment documentation updated after a successful run.
+
+### Choose another workflow when
+
+- You need infrastructure provisioning, database migrations, DNS changes, SSL
+  certificate management, or CI/CD creation. Use `ak:devops` or the provider's
+  infrastructure workflow.
+- You only want to prepare and review a release or pull request. Use `ak:ship`.
+- Build, tests, secrets, or security checks are not ready. Complete those gates
+  before granting deployment authority.
+- The target is not one of the packaged platform workflows.
+
+## Prepare the target and authority
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Engineer Kit is installed for the current runtime and scope.
+- Start from a clean, reviewed revision and know the build command, output,
+  runtime, health check, environment variables, and rollback expectation.
+- Use an existing provider project or separately approve any first-deploy action
+  that would create hosted resources.
+- Authenticate the provider CLI with least-privilege credentials. Keep secret
+  values out of prompts, logs, Git, and deployment documentation.
+- Confirm the target account, project, region, environment, billing boundary,
+  and whether production traffic may change.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:deploy ...` | Native execution can use provider CLIs, shell commands, file edits, authentication prompts, and network access available to the session. |
+| Cursor | `/ak:deploy ...` | Slash invocation is user-verified; terminal, login, approval, and long-running deploy behavior depends on Cursor. |
+| Codex | `$ak:deploy ...` | Native discovery is supported; equivalent provider credentials, interactive login, and deployment tooling are not implied. |
+
+## Select or detect the platform
+
+The Skill accepts an optional platform and environment. With no platform, it
+stops at the first strong signal: existing deployment documentation, provider
+configuration, project-type recommendation, then a user choice.
+
+| Input | Result | Notes |
+| --- | --- | --- |
+| No arguments | Auto-detects a target or asks you to choose | Existing project intent takes precedence over recommendations |
+| `[platform]` | Loads only that platform's deployment reference | Supported packaged targets are listed below |
+| `[platform] [environment]` | Carries an explicit environment label into target selection | The release source does not define canonical environment values or a default environment |
+
+Supported references cover Vercel, Netlify, Cloudflare, Railway, Fly.io,
+Render, Heroku, TOSE.sh, GitHub Pages, Coolify, Dokploy, GCP Cloud Run, AWS,
+DigitalOcean, and Vultr. Actual service availability, pricing, quotas, and CLI
+syntax remain provider-controlled and should be confirmed before a live run.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:deploy cloudflare production
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:deploy cloudflare production
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:deploy cloudflare production
+```
+
+  </Tab>
+</Tabs>
+
+For the safest request, also name the provider account and project, the exact
+configuration file, the expected public URL, the approved deploy command, and
+whether a preview or production deployment is intended.
+
+## Understand the deployment workflow
+
+1. **The Skill resolves intent.** It reads `docs/deployment.md`, then known
+   provider configuration, then project structure. If evidence remains
+   ambiguous, it asks you to choose from a short recommendation list.
+2. **It loads one platform workflow.** Only the selected provider reference is
+   used, keeping commands and verification tied to that target.
+3. **It checks the provider CLI.** A missing CLI can trigger its documented
+   installation path, which may install a global package, download an installer,
+   or compile a binary.
+4. **It checks authentication.** Interactive login, API tokens, cloud project
+   selection, and provider permissions stay within the selected CLI or service.
+5. **It deploys.** The provider command can build and upload artifacts, push a
+   branch, update a service, trigger a hosted build, or replace remote static
+   assets depending on the target.
+6. **It verifies the result.** The workflow confirms the deployment URL and
+   surfaces provider errors rather than treating command completion as health.
+7. **It records operations.** After success, it creates or updates
+   `docs/deployment.md` with platform, URL, command, environment-variable names,
+   custom-domain guidance, rollback, and troubleshooting.
+
+## Treat deployment as an external mutation
+
+<Callout type="warn" title="A deploy command can change traffic and create cost">
+  Confirm the exact account, project, environment, and command before execution.
+  Provider CLIs can upload code, trigger builds, replace assets, restart
+  services, expose a URL, or create billable usage.
+</Callout>
+
+Important provider boundaries:
+
+- Some packaged installation examples pipe remote scripts into a shell or
+  install global tools. Review the source and checksum policy before approving
+  that step; preinstalling a trusted CLI is safer.
+- Some first-run commands can initialize or create provider resources even
+  though infrastructure provisioning is outside the Skill's stated scope.
+  Treat those commands as a separate approval boundary.
+- Static sync commands can delete remote files that are absent locally, and
+  Git-based platforms can push to a deployment branch. Inspect the command's
+  exact remote effect.
+- Environment commands can upload sensitive values. Pass values through the
+  provider's secret mechanism and document only variable names.
+- Cost-optimized ordering in the packaged reference is guidance, not a current
+  price guarantee. Verify plan terms, region, usage, and commercial eligibility.
+- The Skill does not authorize a Git commit, source push, pull request, release,
+  DNS change, migration, or infrastructure change unless that exact external
+  action is separately approved and required by the selected deploy command.
+
+## Verify deployment evidence
+
+A complete run should provide:
+
+- Detected and confirmed platform, account or project, and target environment.
+- Exact CLI installation, authentication, build, and deploy commands that ran.
+- Provider deployment identifier, public or preview URL, command exit status,
+  and an appropriate health or reachability check.
+- Files created or changed locally, especially `docs/deployment.md`.
+- Environment-variable names without values, plus any missing secret or manual
+  console action.
+- A provider-specific rollback command or dashboard path that has been checked
+  against the deployed target.
+
+The stable and beta releases package the same `ak:deploy` workflow and platform
+references. Direct tests found for this release cover Kit selection surfaces,
+not real provider deployments; they do not prove credentials, current pricing,
+CLI compatibility, URL health, or rollback across the 15 services.
+
+## Troubleshoot without widening authority
+
+| Symptom | Safe next step |
+| --- | --- |
+| Multiple provider configs are present | Stop auto-detection and name the platform, account, project, and environment explicitly. |
+| The provider CLI is missing | Install it through an approved, verified method or pause; do not run an unreviewed remote installer. |
+| Login requires a browser or token | Complete the provider's own authentication flow and grant only the required scope; never paste the token into docs or chat. |
+| The build fails | Preserve the build output and return to implementation or testing; do not alter provider settings to hide an application failure. |
+| The deploy command succeeds but health fails | Keep the previous deployment available, inspect logs and health checks, then use the documented rollback. |
+| DNS, SSL, migration, or infrastructure work is required | Stop at the Skill boundary and hand off to `ak:devops` or the owning operator. |
+| The runtime does not recognize the Skill | Confirm target and scope, restart the runtime session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Use [`ak:ship`](./ship) before deployment when the revision still needs release
+gates, or use `ak:devops` for infrastructure and provider troubleshooting.

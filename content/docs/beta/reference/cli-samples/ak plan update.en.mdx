@@ -1,0 +1,67 @@
+---
+title: ak plan update
+description: Update file-owned plan status and index-owned bookkeeping while preserving their distinct recovery rules.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak plan update` for a partial update to one local plan-store record. Only
+explicitly passed flags change values.
+
+## Usage and flags
+
+```bash
+ak plan update <id> [flags]
+```
+
+| Flag | Default | Ownership and behavior |
+| --- | --- | --- |
+| `--status <status>` | Empty | File-owned; accepts `pending`, `in-progress`, `completed`, `cancelled`, or `unknown`. |
+| `--title <text>` | Empty | File-owned and rejected; edit the `plan.md` heading, then reindex. |
+| `--branch <name>` | Empty | Index-owned branch label. |
+| `--worktree <path>` | Empty | Index-owned path text; it does not write the current-plan pointer or validate the path. |
+| `--current-phase <n>` | `0` | Index-owned current phase number. |
+| `--linked-pr <n>` | `0` | Index-owned pull-request number. |
+| `--issue <n>` | `0` | Index-owned GitHub issue number. |
+| `--root-comment-id <n>` | `0` | Index-owned root tracking comment ID. |
+
+A passed zero or empty value is still an explicit replacement. An invocation
+with no changed flag reads and returns the current row without updating it.
+
+## File-owned versus index-owned writes
+
+Index-owned flags are committed to SQLite first in one transaction and update
+the plan FTS row. `--status` then updates the canonical `plan.md` front matter
+with an atomic file replacement and resynchronizes the plan directory.
+
+If the row has no linked directory, status falls back to an index-only write
+and stderr warns that reindex will not preserve it. `--status completed` does
+not close the plan lifecycle state; use `ak plan close` separately.
+
+<Callout type="warning">
+  A mixed invocation is not atomic across the store and file. Index-owned
+  fields are written before the status file update, so a later file or sync
+  failure can return exit `1` after those bookkeeping fields changed. Inspect
+  the plan before retrying.
+</Callout>
+
+There is no preview, prompt, `--force`, snapshot, or automatic rollback. The
+command is local-only and does not use Git, network, auth, providers, or stdin.
+Opening the store can create or forward-migrate it.
+
+## Output
+
+JSON success uses `kind=plan.update` and returns a plan summary including ID,
+project identity, branch/worktree, title, status/state, optional issue/PR, and
+updated time. `current_phase` and `root_comment_id` are not returned. Human and
+plain output only confirm that the ID was updated.
+
+## Exit behavior and recovery
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | The requested update completed, or no fields were changed. | Inspect returned fields and `plan.md` when status was set. |
+| `1` | The plan was missing or a store/file/sync operation failed; earlier index fields may have changed. | Run `ak plan show <id>`, inspect `plan.md`, then correct only the incomplete part. |
+| `2` | A flag value was invalid, `--title` was passed, or arguments were wrong. | Edit the file for title or correct the flag. |
+
+## Related commands

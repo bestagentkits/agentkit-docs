@@ -38,6 +38,9 @@ jobs:
       - name: Unit tests (pipeline scripts)
         run: pnpm test
 
+      - name: Reference hygiene (no internal leaks in generated reference)
+        run: pnpm check:reference
+
       - name: Generated-dir guard
         env:
           GITHUB_ACTOR: ${{ github.actor }}
@@ -50,16 +53,37 @@ jobs:
             node scripts/check-generated.mjs --base "$BASE"
           fi
 
+      # JSON overlays (reference-prose-json/) compile to reference-prose/*.md;
+      # then reference-raw + prose derive the published pages.
+      - name: Prose overlays match JSON sources
+        run: node scripts/compile-prose.mjs --check
+
+      # Proves the published CLI reference equals generator(reference-raw +
+      # reference-prose). This is why the hand-edit guard exempts that dir: any
+      # drift (a hand edit, a stale page after a generator/overlay change) shows
+      # up as a diff here. Regenerate + commit to fix.
+      - name: Reference is regenerated (no drift from source + overlays)
+        run: |
+          node scripts/generate-reference.mjs
+          if ! git diff --quiet -- content/docs/beta/reference/cli; then
+            echo "::error::content/docs/beta/reference/cli is stale. Run 'node scripts/generate-reference.mjs' and commit."
+            git --no-pager diff --stat -- content/docs/beta/reference/cli
+            exit 1
+          fi
+
       - name: Build (static export)
         run: pnpm build
+
+      - name: Static asset limits
+        run: pnpm check:assets
 
       - name: Link check (internal)
         run: pnpm check:links
 
       - name: Assert static output
         run: |
-          test -f out/en/docs.html
-          test -f out/vi/docs.html
+          test -f out/en/stable/getting-started/installation.html
+          test -f out/vi/stable/getting-started/installation.html
           test -f out/en/llms.txt
           test -f out/_redirects
           # No server runtime may leak into the static export.

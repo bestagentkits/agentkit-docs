@@ -1,0 +1,174 @@
+---
+title: Render video HTML-first với ak:html-video
+description: Build, preview và xác minh MP4 export local từ HTML template qua Chromium cùng FFmpeg với process boundary rõ ràng.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:html-video` để biến HTML, CSS, JavaScript, template và project asset
+thành MP4 local qua `nexu-io/html-video`, headless Chromium cùng FFmpeg. Skill
+phù hợp với product promo theo template, explainer, data hay social clip, article
+hoặc repository summary và HTML-first motion prototype.
+
+## Chọn video rendering HTML-first
+
+### Dùng ak:html-video khi
+
+- Template cùng browser-rendered layout phù hợp với video.
+- Bạn cần CLI project, browser preview, Studio editing tùy chọn và MP4 export.
+- Copy, screenshot, logo, structured data hoặc project asset khác dẫn dắt scene.
+- Bạn muốn inspect HTML được tạo trước khi trả full render cost.
+
+### Chọn workflow khác khi
+
+- Bạn cần React cùng Remotion composition code, frame math hoặc Remotion-native
+  rendering. Dùng `ak:remotion`.
+- Bạn chỉ cần transcode, trim, thumbnail, HLS hay DASH hoặc batch FFmpeg.
+  Dùng [`ak:media-processing`](./media-processing).
+- Kết quả là page, slide, document, diagram hoặc demo tĩnh không cần MP4. Dùng
+  `ak:preview` hoặc document workflow phù hợp.
+- Bạn chỉ cần browser QA. Dùng [`ak:agent-browser`](./agent-browser), hoặc
+  [`ak:chrome-profile`](./chrome-profile) chỉ khi signed-in state thật quan trọng.
+
+## Chuẩn bị engine và video brief
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận
+  Engineer Kit đã được cài cho runtime cùng scope hiện tại.
+- Xác định audience, goal, duration, aspect ratio, source asset hay URL, template
+  preference, output path và deliverable là draft hay polished export.
+- Ưu tiên binary `html-video` đã publish và có sẵn. Nếu không có, giữ source
+  checkout ngoài target project và đặt `HTML_VIDEO_HOME`; không vendor upstream
+  engine vào project hay Kit.
+- Với source path trong Skill được ship, dùng Node.js 20+, pnpm 9+ và package
+  manager do upstream khai báo. Source build, dependency install và Playwright
+  Chromium download là mutation riêng.
+- Chạy `html_video doctor` cùng `html_video list-engines`, rồi inspect
+  `html_video --help`, `project-render --help` và `studio --help`. Upstream
+  command có thể tiến hóa độc lập với AgentKit release này.
+- Bảo đảm FFmpeg, Chromium, project asset, đủ disk và writable output directory.
+  Review template hay source URL có được phép liên hệ network không.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:html-video ...` | Skill có thể điều phối CLI bên ngoài, file, local browser, FFmpeg và Studio server khi session cho phép các process đó. |
+| Cursor | `/ak:html-video ...` | Cách gọi bằng slash đã được người dùng xác minh; browser, shell, local-server và artifact behavior tương đương phụ thuộc Cursor. |
+| Codex | `$ak:html-video ...` | Native discovery được hỗ trợ; external engine, Chromium, FFmpeg, port và process approval không phải runtime guarantee đi kèm. |
+
+## Tạo video project có giới hạn
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:html-video "Create a 12-second 16:9 draft product promo from ./assets/cli-screenshot.png and the headline 'Ship with evidence'; use a discovered template, preview before rendering, write ./artifacts/ship-with-evidence.mp4, make no network asset requests, and do not commit or publish the video"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:html-video "Create a 12-second 16:9 draft product promo from ./assets/cli-screenshot.png and the headline 'Ship with evidence'; use a discovered template, preview before rendering, write ./artifacts/ship-with-evidence.mp4, make no network asset requests, and do not commit or publish the video"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:html-video "Create a 12-second 16:9 draft product promo from ./assets/cli-screenshot.png and the headline 'Ship with evidence'; use a discovered template, preview before rendering, write ./artifacts/ship-with-evidence.mp4, make no network asset requests, and do not commit or publish the video"
+```
+
+  </Tab>
+</Tabs>
+
+### Dùng live CLI workflow
+
+| Giai đoạn | Command family | Bằng chứng |
+| --- | --- | --- |
+| Diagnose | `html_video doctor`, `html_video list-engines` | Browser, FFmpeg, engine và environment readiness |
+| Discover | `search-templates`, rồi `inspect-template` | Ranked template ID, aspect fit và variable schema |
+| Create | `project-create`, `project-list`, `project-show` | Project ID ổn định và brief đã lưu |
+| Configure | `project-set-template`, `project-add-asset`, `project-set-var`, `project-set-vars` | Template đã chọn, asset copy hay inline và explicit variable value |
+| Preview | `project-preview` hoặc `studio --port 3071` | HTML preview path hoặc local Studio endpoint |
+| Render | `project-render <project-id> --output <path> --stream-progress` | Progress event và MP4 path yêu cầu |
+| Verify | `ffprobe -v error -show_streams -show_format -of json <path>` | Duration khác zero, dimension, stream, format và file size đúng |
+
+Một số template expose variable có thể đặt bằng CLI; template khác có schema
+trống và cần Studio hoặc project editing. Inspect template trước khi giả định CLI
+có thể theme nó.
+
+## Quan sát các giai đoạn render
+
+1. **Skill pin video brief.** Audience, message, duration, aspect, asset, output
+   path, quality level và publication boundary được ghi nhận.
+2. **Skill kiểm tra external engine.** Binary hay source checkout đã chọn,
+   current help, Chromium, FFmpeg và writable project storage được xác minh.
+3. **Skill discover trước khi chọn.** Candidate template được tìm và input của
+   template đã chọn được inspect.
+4. **Skill tạo và cấu hình project.** Template, inline text, local file cùng
+   supported variable được gắn vào project ID.
+5. **Skill preview trong browser.** HTML trả về được kiểm tra layout, typography,
+   missing asset, motion, timing, console failure và network use.
+6. **Skill render qua Chromium cùng FFmpeg.** Browser capture scene và FFmpeg
+   encode MP4 tới output path rõ ràng.
+7. **Skill probe artifact.** `ffprobe` phải báo duration khác zero và video
+   dimension đúng trước khi export được coi là hoàn tất.
+
+## Kiểm soát effect của code, network, process và storage
+
+<Callout type="warn" title="Rendering thực thi HTML, CSS và JavaScript trong Chromium">
+  Coi template cùng remote asset là input có thể chạy code và dùng network.
+  Review origin cùng behavior trước render; không expose local secret,
+  authenticated page, private file hay network access không giới hạn.
+</Callout>
+
+- Clone hay update upstream source dùng network và moving state không pin trừ
+  khi bạn chọn riêng reviewed revision. `pnpm install` cùng build tạo dependency
+  tree lớn; Playwright install tải Chromium.
+- Studio khởi động local server, với port `3071` trong workflow được ship. Chỉ
+  bind và expose theo chủ đích, dừng sau khi dùng và không giả định page an toàn
+  cho shared network.
+- Preview và render khởi động browser cùng FFmpeg process, có thể dùng nhiều CPU,
+  memory, disk, temporary file và thời gian. Hãy thử draft ngắn trước.
+- Source URL, font, image, script, analytics cùng embedded media có thể tạo
+  external request. Ghi nhận hoặc chặn network effect khi privacy hay
+  reproducibility quan trọng.
+- Xác nhận quyền với image, logo, copy, font, audio và template. Skill không cấp
+  publication hay redistribution right.
+- Workflow ghi project state, preview file, scratch data và MP4 output. Nó không
+  commit, upload, publish hay deploy nếu chưa có quyền riêng.
+
+## Xác minh video và bằng chứng
+
+Kết quả hoàn tất nên gồm:
+
+- CLI source hay binary identity, current help đã kiểm tra, doctor result,
+  engine, template ID, project ID và variable schema.
+- Input asset cùng URL, inline text, network request hay blocked request và mọi
+  Studio edit.
+- Preview path, visual review note, render command, progress result và MP4 path.
+- Bằng chứng `ffprobe` cho duration, dimension, video cùng audio stream, format
+  và file size.
+- Browser, FFmpeg, dependency, port, storage, rights, privacy hoặc publication
+  limitation còn lại.
+
+Stable và beta đóng package cùng wrapper `ak:html-video`. Release không pin
+upstream checkout revision hay chứng minh published binary, live template
+catalog, source build, Chromium installation hoặc cross-runtime render parity.
+
+## Xử lý sự cố và hiểu giới hạn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Không tìm thấy `html-video` | Dùng binary khả dụng hoặc built source checkout được duyệt riêng, đặt `HTML_VIDEO_HOME` và chạy lại `doctor`. |
+| Source build hoặc command khác | Theo current upstream `package.json` cùng live CLI help; giữ observed version thay vì force syntax cũ. |
+| Playwright báo thiếu executable | Chỉ cài Chromium cần thiết qua upstream source checkout, ghi download và chạy lại `doctor`. |
+| Thiếu FFmpeg | Cài qua platform package manager được duyệt và xác minh `ffmpeg -version`. |
+| Template không có variable | Dùng Studio hoặc edit project sau preview; CLI variable command không cấu hình được schema trống. |
+| Preview trống hoặc thiếu asset | Kiểm tra preview path, console, file reference và network policy trước render. |
+| MP4 trống, zero-duration hoặc sai size | Giữ render log, preview lại, render với progress và yêu cầu bằng chứng `ffprobe` pass. |
+| Rendering dùng hết local resource | Giảm duration, resolution, asset size hay concurrency và render draft nhỏ hơn trước retry. |
+| Output path sai | Re-render với `--output` rõ ràng; không di chuyển partial render directory rồi coi là complete. |
+| Runtime không nhận diện Skill | Xác nhận target cùng scope, mở lại runtime session, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |

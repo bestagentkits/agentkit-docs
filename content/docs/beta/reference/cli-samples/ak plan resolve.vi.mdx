@@ -1,0 +1,70 @@
+---
+title: ak plan resolve
+description: Resolve active plan khớp tốt nhất với issue, branch, worktree hoặc project context.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak plan resolve` để xác định store record active nào khớp tốt nhất với
+Git và filesystem context hiện tại.
+
+## Cách dùng và tuỳ chọn
+
+```bash
+ak plan resolve [--issue <number>]
+```
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--issue <number>` | `0` | Ưu tiên khớp GitHub issue rõ ràng. Giá trị không dương được xem là chưa đặt. |
+
+Lệnh không nhận argument theo vị trí.
+
+## Thứ tự resolve
+
+Active plan được thu thập theo thứ tự ưu tiên:
+
+1. issue number dương được truyền rõ ràng;
+2. branch hiện tại trong project identity hiện tại;
+3. worktree hiện tại trong project identity đó;
+4. origin repository đã normalize, hoặc canonical project path khi không có origin.
+
+Candidate trùng bị loại; trong cùng tier, plan mới update đứng trước và
+candidate đầu tiên là `best`. Plan đã closed/archived không bao giờ là candidate.
+Issue truyền rõ ràng có thể vượt qua ranh giới project hiện tại.
+
+<Callout type="warning">
+  `ak plan resolve` không đọc pointer riêng của worktree do `ak plan use` ghi.
+  Pointer được ưu tiên cho `ak plan show` không có ID; resolve vẫn dùng quy tắc
+  issue/branch/worktree/project ở trên.
+</Callout>
+
+Không tìm thấy match vẫn là thành công: human output báo không có plan phù hợp,
+còn JSON có `data.best: null` và không có candidate.
+
+## Tác động và freshness
+
+Lệnh chạy local `git` probe và query private plan store. Nếu tệp liên kết của
+best plan đổi từ lần sync trước, lệnh parse lại và có thể cập nhật index trước
+khi render. Nếu refresh lỗi, stderr nhận warning và row cũ vẫn được trả về.
+Candidate khác `best` không được freshen.
+
+Lệnh không dùng mạng, auth, provider, stdin hay prompt. Mở store có thể tạo hoặc
+forward-migrate store. Không có preview, force, backup hay rollback.
+
+## Đầu ra
+
+JSON thành công dùng `kind=plan.resolve` với `data.best` và
+`data.candidates[]`; mỗi candidate có `reason` và plan summary. Human/plain in
+best ID, sau đó là reason và ID phù hợp. Kết quả dùng stdout; freshness warning
+dùng stderr.
+
+## Kết quả và mã thoát
+
+| Mã | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Resolve hoàn tất, gồm cả không match hoặc freshness warning không fatal. | Kiểm tra `data.best`; mã `0` không chứng minh có match. |
+| `1` | Không truy cập được working directory, Git context hoặc plan store. | Sửa quyền Git/store cục bộ rồi thử lại. |
+| `2` | Argument hoặc cờ không hợp lệ. | Sửa cách gọi. |
+
+## Lệnh liên quan

@@ -1,0 +1,113 @@
+---
+title: Vận hành dashboard cục bộ với ak:dashboard
+description: Khởi động, build, kiểm tra hoặc dừng Marketing Dashboard hiện tại trong đúng ranh giới process, storage và network.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:dashboard` làm launcher cho Marketing Dashboard cục bộ cùng package.
+Các mode được hỗ trợ là `dev` (mặc định), `build`, `prod` và `stop`; `check`
+định tuyến tới kiểm tra trạng thái. Danh sách feature cũ trong launcher không
+phải nguồn hiện hành: dùng `ak:marketing-dashboard` cùng README của nó cho bề
+mặt Assets, Brand và Settings đã triển khai.
+
+## Chọn launcher cho thao tác cục bộ
+
+### Dùng ak:dashboard khi
+
+- Bạn muốn chạy development, build, chạy production cục bộ, dừng hoặc kiểm tra process.
+- Bạn chấp nhận effect lên dependency, build, PID, SQLite và port cục bộ.
+
+### Chọn workflow khác khi
+
+- Bạn cần contract hiện tại về route, storage hoặc troubleshooting. Dùng trực
+  tiếp `ak:marketing-dashboard`.
+- Bạn mong đợi quản lý campaign, tạo content, automation recipe hay AI endpoint.
+  Ứng dụng hiện tại không triển khai các feature này.
+- Bạn muốn cloud deployment hoặc publishing. `prod` phục vụ build cục bộ; nó
+  không deploy.
+
+## Chuẩn bị môi trường cục bộ
+
+Resolve thư mục Skill `ak-marketing-dashboard` đã cài qua live catalog của
+runtime. Ưu tiên Node.js 20 LTS, bảo đảm port `3457` và `5173` khả dụng, đồng
+thời review công việc hiện có dưới path data, build và shared asset. Lần chạy
+đầu có thể gọi `npm install`, ghi dependency và liên hệ npm. `build` ghi
+`app/dist/`; server tạo `data/marketing.db` cùng tệp PID.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:dashboard ...` | Có thể route tới script trong package khi resolve được thư mục đã cài. |
+| Cursor | `/ak:dashboard ...` | Cách gọi bằng slash đã được người dùng xác minh; behavior shell và process phụ thuộc môi trường. |
+| Codex | `$ak:dashboard ...` | Native Skill discovery được hỗ trợ; chạy script vẫn cần quyền và tool cục bộ. |
+
+## Chạy Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:dashboard dev
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:dashboard dev
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:dashboard dev
+```
+
+  </Tab>
+</Tabs>
+
+Dùng `ak:dashboard check` để kiểm tra, `ak:dashboard build` trước
+`ak:dashboard prod` và chỉ dùng `ak:dashboard stop` sau khi kiểm tra owner của
+process.
+
+## Hiểu các giai đoạn
+
+1. Resolve thư mục Skill đã cài và mode được chọn.
+2. Review effect lên dependency, build, network, storage cùng process.
+3. Chạy script dashboard tương ứng hoặc health check có giới hạn.
+4. Báo cáo URL, PID, health response và remediation SQLite thực tế.
+5. Chỉ dừng đúng process dự kiến và xác minh lại port.
+
+## Giữ quyền phê duyệt process và network ở bạn
+
+<Callout type="warn" title="Cục bộ không có nghĩa đã xác thực hoặc không có hệ quả">
+  Server hiện tại không thực thi xác thực API key. Không mở nó ra network không
+  đáng tin cậy. Khi không có tệp PID, `stop.sh` fallback sang kill process trên
+  port `3457` và `5173`; hãy xác minh ownership trước khi duyệt fallback đó.
+</Callout>
+
+Khởi động không cấp quyền cài package, upload logo, đổi asset metadata, publish
+bên ngoài, gọi provider hay chi tiêu. Hãy duyệt riêng từng việc.
+
+## Xác minh output và bằng chứng
+
+Development phải báo frontend `http://localhost:5173`, API
+`http://localhost:3457` và health `http://localhost:3457/health`. Production
+phục vụ app đã build từ `http://localhost:3457`. Ghi mode, thay đổi dependency
+hoặc build, PID, health status cùng lỗi database.
+
+## Xử lý sự cố và biết giới hạn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Thiếu production build | Chạy `ak:dashboard build`, kiểm tra `app/dist/`, rồi yêu cầu `prod`. |
+| SQLite driver không khả dụng | Từ `server/`, chạy `npm install`; ưu tiên Node.js 20 LTS và hiển thị nguyên văn remediation trong package. |
+| Port đang được dùng | Xác định owner của process trước khi dùng `stop`; không kill service không liên quan. |
+| Không có feature campaign hoặc AI mong đợi | Đây là scope hiện tại, không phải lỗi startup. Chỉ dùng Assets, Brand và Settings. |
+| Runtime không tìm thấy Skill | Làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Launcher không bảo đảm cài dependency, port khả dụng, network isolation hay
+runtime parity. Xem [Marketing Dashboard](./marketing-dashboard) và
+[Marketing Kit](../../marketing).

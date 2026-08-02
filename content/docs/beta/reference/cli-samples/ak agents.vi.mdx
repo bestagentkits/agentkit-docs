@@ -1,0 +1,78 @@
+---
+title: ak agents
+description: Duyệt và quản lý từng tệp persona của agent cục bộ mà không nhầm inventory asset với một bản cài Kit hoàn chỉnh.
+---
+
+Dùng `ak agents` làm điểm vào để liệt kê, tìm kiếm, xem, cài hoặc gỡ một
+persona của agent. Chạy riêng lệnh nhóm sẽ in help và thoát `0`; lệnh không đọc
+hay thay đổi catalog.
+
+## Mô hình catalog
+
+Nhóm lệnh này so sánh hai inventory trên filesystem cục bộ:
+
+| Inventory | Vị trí mặc định | Ý nghĩa |
+| --- | --- | --- |
+| Available | `./kits/<kit>/agents/<agent>.md` | Tệp nguồn agent tìm thấy trong cây `kits` của working directory hiện tại. |
+| Installed | `~/.claude/plugins/<kit>/agents/<agent>.md` | Bản sao từng agent trong user plugin root. |
+
+`AGENTKIT_KITS_DIR` thay cho `./kits`. `AGENTKIT_PLUGIN_DIR` thay cho
+`~/.claude/plugins`. Các lệnh này không truy vấn remote kit registry, verified
+cache, account session hay entitlement. Source root hoặc install root không tồn
+tại được xem là inventory rỗng.
+
+Khi cùng một `<kit>/<agent>` có ở cả hai nơi, bản installed thắng. Vì vậy
+`list`, `search` và `show` trả metadata của tệp installed.
+
+## Cách dùng
+
+```bash
+ak agents
+```
+
+Lệnh nhóm không nhận argument theo vị trí. `--json` không chuyển help của nhóm
+thành JSON; hãy chọn một subcommand có thể chạy để nhận đầu ra có cấu trúc.
+
+## Subcommand
+
+| Lệnh | Kết quả | Tác động lên đĩa |
+| --- | --- | --- |
+| `ak agents list` | Gộp agent installed và available cục bộ. | Chỉ đọc. |
+| `ak agents search <query>` | Xếp hạng inventory đã gộp theo metadata cục bộ. | Chỉ đọc. |
+| `ak agents show <kit>/<agent>` | Hiển thị một record installed hoặc available. | Chỉ đọc. |
+| `ak agents install <kit>/<agent>` | Sao chép một tệp Markdown nguồn cục bộ vào user plugin root. | Ghi một tệp. |
+| `ak agents remove <kit>/<agent>` | Xoá đúng tệp Markdown đã cài. | Xoá một tệp nếu có. |
+
+Nhóm này không có Cobra command alias. Ref chuẩn là `<kit>/<agent>`. Các dạng
+rút gọn của ref được chấp nhận gồm
+`ak:<agent>` cho `core/<agent>`, `ake:<agent>` cho `engineer/<agent>` và
+`akm:<agent>` cho `marketing/<agent>`. Nên dùng dạng chuẩn trong script và log.
+
+## Phạm vi và an toàn
+
+Đây là thao tác cục bộ trên từng tệp, không phải alias của `ak kit init`, `ak
+kit refresh` hay `ak kit uninstall`. Chúng không emit một route theo runtime,
+activate Kit, cập nhật ownership manifest, tạo recovery snapshot hay quản lý
+runtime environment cho agent.
+
+Hãy xem cả hai root đã cấu hình là thư mục cục bộ đáng tin cậy. Đặc biệt,
+installer agent đọc source path dự kiến như tệp bình thường và có thể follow
+source symlink. Hãy xem lại nội dung Kit cục bộ trước khi sao chép và không trỏ
+root tới thư mục mà user hoặc process khác có thể thay đổi.
+
+## Đầu ra và mã thoát
+
+Subcommand thành công ghi đầu ra cho người dùng hoặc một JSON success envelope
+vào stdout. Lỗi runtime vào stderr; lỗi JSON dùng shared error envelope. Lỗi
+phân tích cờ có thể vẫn là usage dạng plain text trên stderr. Không lệnh nào
+trong nhóm phát NDJSON hay đọc prompt từ stdin.
+
+Đường help của nhóm thoát `0`. Các lệnh lá có mã thoát riêng như `2` cho ref
+sai dạng, `5` cho source hoặc record không tồn tại và `6` khi bản cài đã có mà
+không truyền `--force`.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak agents`](../cli/ak_agents)
+- [Cài một route Kit hoàn chỉnh](./kit-init)
+- [Quy ước CLI](../cli-conventions)

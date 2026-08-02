@@ -1,0 +1,174 @@
+---
+title: Inspect plan progress with ak:plans-kanban
+description: Open the integrated AgentKit plans dashboard without treating its visual view as plan-mutation authority.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:plans-kanban` to open AgentKit's visual plans view for multi-plan status,
+timelines, progress, and quick navigation into plan files. The Skill is a thin
+launcher: the live `ak plan --help` surface, not the dashboard launcher, remains
+authoritative for dependency, status, and mutation operations.
+
+## Choose ak:plans-kanban for visual inspection
+
+### Use ak:plans-kanban when
+
+- You want kanban or grid views across several plans.
+- You need a timeline or progress overview before choosing the next work.
+- You want to navigate quickly into `plan.md` or `phase-*.md` files.
+- You need to distinguish active and completed work visually.
+
+### Choose another workflow when
+
+- You need to create or update a plan. Use `ak:plan` and check its live help.
+- You need to reconcile verified runtime work back to durable phase files. Use
+  `ak:project-management`.
+- You need a custom dashboard host or port. Start `ak config` directly.
+- You expect a separate legacy plans server; that implementation has been
+  retired.
+
+## Prepare the local dashboard
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Engineer Kit is installed for the runtime and scope you are using.
+- Install a compatible AgentKit CLI and confirm `ak --version` works, or set
+  `AGENTKIT_CLI` to the intended local binary.
+- Run from the project or global context whose plan scope you intend to view.
+- Have Node.js and a supported browser-opening command available.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:plans-kanban` | Native delivery is the default; the Skill launches a local Node process and may open the system browser. |
+| Cursor | `/ak:plans-kanban` | Slash invocation is user-verified. Browser and process behavior depends on the host environment. |
+| Codex | `$ak:plans-kanban` | The Skill uses native Codex discovery; local process and browser permissions still apply. |
+
+See [Runtime adapters](../../../concepts/runtime-adapters) for delivery and
+component-level differences.
+
+## Open the dashboard
+
+The normal Skill request opens the plans route. State your scope and say whether
+the run may start a background local dashboard or open a browser.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:plans-kanban "Open this project's plans dashboard for inspection only; do not change plan state."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:plans-kanban "Open this project's plans dashboard for inspection only; do not change plan state."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:plans-kanban "Open this project's plans dashboard for inspection only; do not change plan state."
+```
+
+  </Tab>
+</Tabs>
+
+The underlying launcher supports these current control paths:
+
+| Control | Observable behavior |
+| --- | --- |
+| Default or `--open` | Finds or starts the dashboard, probes plans support, opens `/plans`, and prints a JSON result |
+| `--no-open` | Performs discovery and capability checks but reports the URL without opening a browser |
+| `--stop` | Delegates to `ak config stop` and returns that command's result |
+| Legacy launcher inputs | Warns and ignores or translates them; they do not own plan scope, host, or port |
+
+For custom startup options, use live `ak config --help`. For plan mutations, use
+live `ak plan --help`; do not infer current syntax from the launcher.
+
+## Understand what happens during a run
+
+1. **The launcher checks existing dashboard state.** It asks
+   `ak config status --json` for a running URL and otherwise probes the default
+   loopback port.
+2. **It verifies plans capability.** It accepts either a health response that
+   advertises `plans-dashboard` or a successful `/api/plans` response.
+3. **It starts the dashboard when needed.** It launches
+   `ak config start --port 8766 --no-open --no-interactive` as a detached local
+   process.
+4. **It waits for readiness.** Each readiness window is bounded to about ten
+   seconds. A missing dashboard can require one window before startup and a
+   second after startup.
+5. **It opens or reports the route.** The normal result targets `/plans` on the
+   URL reported by the CLI and prints JSON containing success, URL, open state,
+   and platform.
+6. **The dashboard reads plan state.** Project dashboards should show only
+   project-scoped plans; global dashboards should show only global-scoped plans.
+
+The generic `/plans` route defaults to a `plans` directory unless a `dir` query
+is already present. Scope-aware roots come from the surrounding project or
+global dashboard context, not deprecated launcher flags.
+
+## Keep plan authority and process control clear
+
+<Callout type="warn" title="The dashboard is a view, not mutation authority">
+  Use the live `ak plan --help` surface for dependencies, status changes, and
+  other plan mutations. A visual state alone is not verified completion.
+</Callout>
+
+- The launcher can spawn a detached `ak config` process and open another local
+  application. Approve those process effects before running it.
+- Probes use loopback HTTP endpoints. The Skill does not specify a remote
+  provider or paid service, but the local dashboard inherits the CLI's own
+  environment and access.
+- The launcher does not claim authority to edit `plan.md` or `phase-*.md`.
+- Stop a launcher-started dashboard with `--stop` or `ak config stop` when you
+  no longer need the background process.
+- Commit, push, external task-system changes, publication, and deployment remain
+  separate actions and approvals.
+
+## Verify the result
+
+A successful launch should give you:
+
+- A JSON result with `success: true`, the selected local URL, whether a browser
+  was opened, and the detected platform.
+- A dashboard URL ending in `/plans`.
+- A capability probe that passed before the browser opened.
+- Plan cards, progress, timeline information, and links derived from the
+  selected project or global scope.
+
+If capability detection fails, the launcher exits with code `1` without opening
+the browser. The package defines no dedicated test command; verify the JSON
+result, local route, displayed scope, and the live CLI help used for any
+follow-up operation.
+
+## Troubleshoot or continue
+
+| Symptom | Safe next step |
+| --- | --- |
+| `ak` is not found | Install AgentKit CLI, verify `ak --version`, or set `AGENTKIT_CLI` to the intended binary. |
+| The dashboard does not expose plans support | Upgrade the CLI; the launcher must see the feature or a successful plans API response. |
+| The browser does not open | Run with `--no-open`, use the reported URL, or start `ak config` manually. |
+| The dashboard runs on another port | Trust the URL from `ak config status --json`; do not force a deprecated launcher port. |
+| The wrong plans are visible | Stop and verify whether you opened project or global dashboard context. |
+| You need a plan mutation | Read live `ak plan --help` and use the owning CLI operation. |
+| You need to stop the process | Use `--stop` or `ak config stop`. |
+| The runtime does not recognize the Skill | Confirm target and scope, restart the runtime session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Continue with `ak:project-management` when the visual inspection reveals durable
+state that needs evidence-backed reconciliation.
+
+## Know the current limits
+
+- The launcher is intentionally opinionated around the integrated local
+  dashboard and does not provide custom host or port control.
+- Dashboard accuracy depends on parseable, current plan files and correct scope.
+- A migration note named by the Skill is not included in either exact release;
+  rely on the current integrated-dashboard behavior and live CLI help.
+- The current stable and beta packages contain identical
+  `ak:plans-kanban` files and invocation behavior.

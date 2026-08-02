@@ -1,0 +1,209 @@
+---
+title: Drive a request to PR readiness with ak:vibe
+description: Orchestrate isolated planning, implementation, verification, GitHub delivery, and optional merge and CI convergence without bypassing gates.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:vibe` when one well-bounded GitHub issue or feature request should move
+through an isolated worktree, validated plan, implementation or repair, local
+review, pull request, and optional merge. The pipeline coordinates the owning
+Skills; it does not replace their tests, approval gates, branch protections, or
+security rules.
+
+## Choose ak:vibe for end-to-end delivery
+
+### Use ak:vibe when
+
+- A GitHub issue is the source of truth for a feature or bugfix.
+- A concrete natural-language request should become an issue and reviewed PR.
+- You want the same pipeline to choose `ak:cook` for feature work or `ak:fix`
+  for bug, regression, failing CI, or incident evidence.
+- You want optional beta delivery, dual-stage promotion, or advisory checkpoints.
+
+### Choose another workflow when
+
+- Requirements or product scope still need exploration. Start with
+  `ak:brainstorm` or `ak:plan`.
+- You need local implementation only and do not authorize GitHub mutations,
+  branch push, or PR creation. Use `ak:cook` or `ak:fix` directly.
+- You only need review. Use `ak:code-review` or `ak:review-pr`.
+- The current repository does not match the supplied issue repository.
+- The work must run directly on a protected or shared integration branch.
+
+## Prepare delivery authority
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm all
+  orchestrated Engineer Skills are installed for the runtime and scope.
+- Open the matching Git repository with a clean or reusable isolated feature
+  worktree strategy.
+- Install the AgentKit CLI, Git, and authenticated `gh` CLI with the permissions
+  needed for issue, label, branch, PR, review, and any requested merge actions.
+- Provide a GitHub issue URL/number or a feature request with outcome, scope,
+  constraints, acceptance criteria, and non-goals.
+- Decide whether the run may only reach PR readiness or may merge and converge CI.
+- Preserve unrelated work and identify protected branches and promotion policy.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:vibe ...` | Native delivery is the default. The source directly defines the nested Skill and advisory orchestration for this runtime. |
+| Cursor | `/ak:vibe ...` | Slash invocation is user-verified, but full parity for nested Skills, agents, GitHub actions, and long CI monitoring is not established. |
+| Codex | `$ak:vibe ...` | Native discovery applies to the main Skill. Nested slash-form calls require runtime adaptation; Kongming has a Codex-specific model projection, but full pipeline parity remains capability-dependent. |
+
+See [Runtime adapters](../../../concepts/runtime-adapters) before starting a long,
+mutation-heavy run outside the runtime with the strongest evidence.
+
+## Choose the ship mode deliberately
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:vibe --beta "Add exportable audit logs with existing authorization, focused tests, and no breaking API changes"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:vibe --beta "Add exportable audit logs with existing authorization, focused tests, and no breaking API changes"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:vibe --beta "Add exportable audit logs with existing authorization, focused tests, and no breaking API changes"
+```
+
+  </Tab>
+</Tabs>
+
+| Input | Delivery target and stopping point |
+| --- | --- |
+| No ship flag | Creates an official/stable-target PR, reviews and fixes it, labels it ready, then stops without merging |
+| `--beta` | Creates and readies a beta/dev-target PR, then stops without merging |
+| `--ship` | Uses the stable target, merges a ready PR, and watches or fixes target-branch CI |
+| `--ship --beta` | Uses the beta target, merges a ready PR, and converges beta CI |
+| `--both` | Implies merge authority; completes beta merge and green CI before stable promotion, merge, and green CI |
+| `--advice` | Adds Kongming checkpoints and posts its post-CI assessment to the PR and source issue; composes with every ship mode |
+
+Mode resolution is `--both` over `--beta` over default stable. When both flags
+appear, the Skill warns once and continues in dual-stage mode.
+
+<Callout type="warn" title="PR readiness still mutates Git and GitHub">
+  Omitting `--ship` prevents merge, but the pipeline still creates or updates an
+  issue, creates labels, writes a plan, changes code, commits, pushes, opens a
+  PR, posts review replies, and updates labels. Use a narrower Skill if those
+  effects are not authorized.
+</Callout>
+
+## Understand what happens during a run
+
+1. **The Skill resolves the request.** It verifies repository identity, reads
+   issue title, body, and comments when supplied, extracts the contract, chooses
+   feature or bugfix route, and searches for an existing durable plan.
+2. **It creates isolation.** `ak:worktree` creates or reuses a matching clean
+   worktree and descriptive branch. It never implements directly on common
+   protected or integration branches.
+3. **It validates the plan.** A valid existing `plan.md` is reused; otherwise
+   `ak:plan --tdd` creates one. Validation, red-team, and a whole-plan
+   consistency sweep always run before implementation.
+4. **It projects state to GitHub.** The workflow creates missing delivery labels,
+   creates or updates the source issue, records branch, route, plan, mode, and
+   acceptance criteria, then links the issue into the local plan index.
+5. **It implements the scoped work.** Features use `ak:cook --tdd --auto`;
+   bugfixes use `ak:fix --auto`. The issue changes from `ready to cook` to
+   `in progress` before code changes begin.
+6. **It performs local review.** `ak:code-review --pending` checks spec
+   compliance and quality. Critical and Important findings are fixed and
+   relevant validation reruns.
+7. **It ships a PR.** `ak:ship beta` or `ak:ship official` finalizes plan files,
+   merges the target branch into the feature branch, tests, reviews, commits,
+   pushes, opens the PR, and records the linked PR.
+8. **It converges PR review.** `ak:review-pr --fix --reply` reviews the full PR,
+   fixes actionable findings, pushes verified fixes, posts the final review,
+   and waits for required checks to become terminal and green.
+9. **It marks readiness.** The issue and PR receive the correct ready label;
+   stale implementation labels are removed.
+10. **It optionally merges and monitors.** `--ship` and `--both` merge through
+    repository conventions, watch target-branch CI or deploy workflows, and run
+    bounded follow-up fix branches for deterministic failures.
+
+Dual-stage mode does not begin stable delivery until beta CI is green. Before a
+promotion merge, the Skill lists carried commits and stops for approval if the
+promotion would sweep unrelated work.
+
+## Keep approval gates intact
+
+- `--ship` authorizes merging a PR only after readiness gates pass; it does not
+  authorize force push, direct push to protected targets, bypassing review, or
+  hiding a failing check.
+- `--both` authorizes two delivery stages but not an unrelated promotion sweep.
+- A public-contract, security-sensitive, business, or irreversible decision
+  remains a human gate even in automatic implementation modes.
+- Branch protection and required reviews remain authoritative. Pending checks
+  may use repository-supported auto-merge; failed or conflicting state cannot be
+  forced through.
+- The same unresolved CI blocker is attempted at most three times before the
+  run stops and hands off evidence.
+- `--advice` adds counsel and external PR/issue comments. Kongming never edits
+  code or supplies approval on the user's behalf.
+
+## Account for network, process, disk, and cost
+
+- GitHub issue, label, PR, review, merge, and workflow operations use authenticated
+  network requests and mutate shared repository state.
+- Worktree creation writes another checkout; its owning Skill may install
+  dependencies based on lockfiles, using substantial network, CPU, and disk.
+- Planning, implementation, tests, builds, reviews, commits, and follow-up fixes
+  can spawn many local processes and create durable files.
+- CI and deploy workflows consume repository runner or provider capacity after
+  pushes and merges. The Skill defines no price; account billing and quotas apply.
+- Issue bodies, comments, plans, PR text, logs, and advisory comments must exclude
+  secrets, tokens, customer data, private environment values, and unredacted
+  sensitive command output.
+
+## Verify the result
+
+A complete PR-readiness run should give you:
+
+- Source issue or created issue URL, isolated branch and worktree, durable plan,
+  implementation route, and resolved ship mode.
+- Acceptance criteria backed by current tests and local review evidence.
+- A pushed PR with structured evidence, linked plan, final review verdict, green
+  required checks, and the correct ready label.
+- No unresolved Critical or Important review findings.
+- A completion report naming review iterations, blockers, and unresolved questions.
+
+A merge-enabled run must additionally show the merge result, merge commit,
+target-branch CI conclusions, and every follow-up fix. Dual-stage completion
+requires separate beta and stable PR/merge/CI evidence.
+
+## Troubleshoot or continue
+
+| Symptom | Safe next step |
+| --- | --- |
+| The issue belongs to another repository | Stop and switch to the matching repository or supply a matching issue. |
+| Plan resolution is ambiguous | Present verified candidates and choose before creating the worktree. |
+| Validation or red-team findings remain | Repair the plan; do not start implementation. |
+| GitHub label or issue mutation fails | Report the exact `gh` error and stop before implementation state diverges. |
+| Tests or review fail | Keep the evidence visible and fix through the owning Skill before shipping. |
+| PR CI remains pending | Continue monitoring; do not report ready or merged prematurely. |
+| CI fails for missing secrets or human approval | Record an external blocker without weakening tests or exposing secret values. |
+| A promotion contains unrelated commits | Stop and request explicit approval for the expanded merge scope. |
+| The same fix fails three times | Stop with attempted fixes, exact failure evidence, and a bounded handoff. |
+| The runtime cannot project a nested Skill or agent | Stop at the completed stage and report the missing capability; do not simulate success. |
+
+## Know the current limits
+
+- The full run depends on compatible nested Skills, GitHub access, repository
+  conventions, branch protection, test infrastructure, and CI availability.
+- Natural-language input causes GitHub issue creation after plan gates; it is not
+  a local-only shortcut.
+- Automatic implementation does not remove business or irreversible-action gates.
+- The current stable and beta packages contain identical `ak:vibe` instructions
+  and invocation behavior.

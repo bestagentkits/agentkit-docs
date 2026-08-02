@@ -1,0 +1,194 @@
+---
+title: Tóm tắt công việc repository với ak:watzup
+description: Quét Git ref local, worktree, plan và roadmap để tạo báo cáo trạng thái ngắn dựa trên bằng chứng mà không đổi checkout.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:watzup` khi bạn cần góc nhìn ngắn lấy từ repository về công việc đang
+diễn ra, tiến độ plan chưa hoàn thành và next step nào đáng ưu tiên. Lần quét
+mặc định đọc branch local, remote ref đã cache, worktree, plan, roadmap, status
+và history mà không fetch hay thay đổi checkout.
+
+## Chọn ak:watzup cho trạng thái repository
+
+### Dùng ak:watzup khi
+
+- Bạn vào worktree mới hoặc detached checkout và cần định hướng.
+- Bạn muốn status cuối session dựa trên bằng chứng Git và plan.
+- Nhiều branch hay worktree có thể chứa plan chưa hoàn thành.
+- Bạn cần next step được xếp priority với tiến độ checkbox và rationale.
+- Bạn muốn đưa remote-tracking branch vào trong khi chấp nhận local ref có thể
+  đã cũ.
+
+### Chọn workflow khác khi
+
+- Bạn cần giữ quyết định hội thoại, rationale, blocker và source pointer cho
+  session mới. Dùng `ak:handoff`.
+- Bạn cần reflection theo thời gian. Dùng `ak:journal`.
+- Bạn cần implement, edit, checkout, merge, commit, push hoặc publish. Dùng
+  workflow sở hữu phần việc và cấp quyền mutation riêng.
+- Bạn cần trạng thái provider hay campaign live không được biểu diễn trong
+  repository. Lấy bằng chứng hiện tại qua integration đã duyệt.
+
+## Chuẩn bị lần quét có scope
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và cài Marketing
+  Kit cho runtime cùng scope đang hoạt động.
+- Chạy từ Git repository dự kiến.
+- Quyết định cached remote ref đã đủ chưa. Mặc định không thực hiện network
+  operation.
+- Xem branch name, commit subject, worktree path, plan title, roadmap hoặc status
+  line có chứa thông tin riêng tư không.
+- Yêu cầu redaction path khi output sẽ được sao chép ra ngoài context tin cậy
+  hiện tại.
+
+Scanner bên dưới hỗ trợ `--redact-paths`, thay absolute path bằng label ổn định.
+Tùy chọn này bảo vệ path, không bảo vệ mọi từ nhạy cảm trong branch name, commit
+subject, plan title hay working-tree status.
+
+## Gọi Skill
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:watzup ...` | Skill chạy Node scanner được đóng gói và trả báo cáo từ bằng chứng repository. |
+| Cursor | `/ak:watzup ...` | Cách gọi bằng slash đã được người dùng xác minh cho AgentKit Skill đã cài. Khả năng chạy script và nhìn thấy worktree đã đăng ký phụ thuộc environment. |
+| Codex | `$ak:watzup ...` | Codex tìm Skill bằng discovery native. Scanner vẫn cần Node, Git và quyền đọc worktree cùng ref nhìn thấy được. |
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:watzup "Báo công việc marketing hiện tại chỉ từ local ref. Không fetch, checkout, edit, commit, push hoặc publish. Redact absolute path và cảnh báo rủi ro remote ref đã cũ"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:watzup "Báo công việc marketing hiện tại chỉ từ local ref. Không fetch, checkout, edit, commit, push hoặc publish. Redact absolute path và cảnh báo rủi ro remote ref đã cũ"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:watzup "Báo công việc marketing hiện tại chỉ từ local ref. Không fetch, checkout, edit, commit, push hoặc publish. Redact absolute path và cảnh báo rủi ro remote ref đã cũ"
+```
+
+  </Tab>
+</Tabs>
+
+Dùng [Runtime adapter](../../../concepts/runtime-adapters) để hiểu khác biệt
+chung về Skill và tooling. Workflow này chủ yếu phụ thuộc Node, Git cùng quyền
+truy cập filesystem local thay vì Hook parity.
+
+## Hiểu các giai đoạn quét
+
+1. **Resolve Git root.** Scanner ghi current branch hoặc detached `HEAD`, short
+   commit, dirty state, tối đa 20 status line và active worktree.
+2. **Đọc ref và worktree.** Scanner quét local cùng remote-tracking ref,
+   registered worktree, commit subject gần đây và quan hệ checkout.
+3. **Tìm plan.** Scanner đọc `plan.md` chưa hoàn thành từ worktree nhìn thấy và
+   tracked ref. Plan trên filesystem còn nhận tiến độ checkbox tổng hợp từ các
+   tệp Markdown trong thư mục plan, kèm breakdown cho `phase-*.md`.
+4. **Đọc bằng chứng roadmap.** Scanner kiểm tra `docs/*roadmap*.md` và
+   `docs/*milestones*.md` trong worktree nhìn thấy để tìm active milestone.
+5. **Xếp priority cho next step.** Scanner kết hợp plan status, mức khớp với
+   workspace hiện tại, provenance của nguồn và momentum tiến độ. Dirty working
+   tree cùng detached `HEAD` vẫn đứng đầu; roadmap item lấp slot còn lại.
+6. **Render báo cáo ngắn.** Báo cáo trình bày current state, recent work được
+   chọn, in-flight plan, roadmap, năm hoặc sáu next step đã xếp priority cùng
+   warning.
+
+Skill chạy scanner được đóng gói ở JSON mode trước. Nếu thất bại, workflow có
+thể dùng command Git và filesystem chỉ đọc tối thiểu, nhưng phải nói đã dùng
+fallback và không được claim full scan thành công.
+
+## Diễn giải priority và độ mới
+
+| Tín hiệu | Tác động lên ranking |
+| --- | --- |
+| Plan status | `in-progress` xếp trên `in-review`, còn `in-review` xếp trên `pending` |
+| Workspace alignment | Current worktree và current branch nhận relevance boost mạnh nhất |
+| Provenance | Bằng chứng filesystem xếp trên bằng chứng chỉ từ local ref |
+| Momentum | Plan hoàn thành từ 40% đến 90% nhận boost hướng tới hoàn tất; plan hoàn toàn mới nhận starter boost nhỏ hơn |
+| Hygiene | Dirty state và detached `HEAD` xuất hiện trước action từ plan hoặc roadmap |
+
+Score sắp xếp bằng chứng; nó không phê duyệt action. Hãy kiểm tra dependency,
+owner, campaign timing, constraint pháp lý và trạng thái provider hiện tại trước
+khi làm theo recommendation.
+
+## Giữ ranh giới Git, network và quyền riêng tư rõ ràng
+
+<Callout type="warn" title="--fetch thay đổi ref và liên hệ remote">
+  Chỉ dùng remote ref mới khi người dùng yêu cầu rõ ràng. Tùy chọn `--fetch` của
+  scanner chạy `git fetch --all --prune`, dùng network cùng credential và có thể
+  cập nhật hoặc prune remote-tracking ref. Tùy chọn không được cấp quyền chỉ vì
+  báo cáo status sẽ mới hơn.
+</Callout>
+
+- Default mode không chạy network operation, không đổi branch và không mutate
+  checkout.
+- Scanner đọc plan trong mọi registered worktree nhìn thấy và có thể đọc
+  tracked plan content từ nhiều local hoặc remote-tracking ref.
+- JSON evidence chứa absolute repository cùng worktree path trừ khi dùng
+  `--redact-paths`. Nó cũng chứa branch name, commit subject, plan title, roadmap
+  path và current status line.
+- Vì vậy báo cáo có thể làm lộ identifier nội bộ về roadmap, product, campaign
+  hoặc client khi được chia sẻ. Hãy review và redact final report, không chỉ path.
+- Workflow không cấp quyền checkout, edit, commit, merge, push, publication,
+  deployment, outreach, account change hay spend.
+
+## Xác minh báo cáo
+
+Một lần chạy hoàn tất nên cung cấp:
+
+- Current branch hoặc detached `HEAD`, short commit, dirty hay clean state và
+  current worktree.
+- Một nhóm có scope gồm local và remote-tracking branch tín hiệu cao cùng bằng
+  chứng commit gần đây.
+- Plan chưa hoàn thành với `X/Y todos · NN% done` khi có bằng chứng checkbox từ
+  filesystem.
+- Bằng chứng active roadmap hoặc milestone khi có tệp khớp.
+- Năm hoặc sáu next step đã xếp priority, mỗi item có rationale một dòng.
+- Warning cho remote ref đã cũ, scan limit, failure, detached `HEAD` hoặc bằng
+  chứng chưa đầy đủ khác.
+- Statement rõ ràng cho biết fetch có được yêu cầu không và có thành công không.
+
+So sánh báo cáo với `git status --short --branch` và plan được nêu trước khi hành
+động. Khi độ mới remote quan trọng, hãy duyệt fetch riêng rồi chạy lại báo cáo
+thay vì trình bày cached ref như trạng thái provider live.
+
+## Xử lý sự cố an toàn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Runtime không nhận diện `ak:watzup` | Xác nhận target và scope Marketing, khởi động lại runtime rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+| Scanner nói thư mục không phải Git repository | Di chuyển tới repository dự kiến. Không khởi tạo Git trong workflow status này. |
+| Công việc remote có vẻ đã cũ | Giữ warning stale ref, hoặc duyệt rõ `--fetch` sau khi kiểm tra tác động network và credential. |
+| Báo cáo làm lộ absolute path | Chạy lại scanner với path redaction và review riêng name, subject, title cùng status line. |
+| Một plan bị thiếu | Kiểm tra plan có nằm ngoài `plans`, vượt scan depth, trong ref chưa quét hay vượt plan/ref limit đã cấu hình không. Không claim không có plan. |
+| Scanner thất bại | Báo error và chỉ dùng fallback chỉ đọc tối thiểu đã mô tả. Gắn nhãn kết quả là partial. |
+| Next step đề xuất mutation | Coi đó là recommendation. Chọn workflow sở hữu phần việc và yêu cầu phê duyệt rõ ràng trước khi hành động. |
+
+Tiếp tục với [Tổng quan Marketing Kit](../../marketing) hoặc
+[Projects, artifact và checkpoint](../../../concepts/projects-artifacts-checkpoints)
+để hiểu hướng dẫn ownership và khôi phục.
+
+## Biết các giới hạn hiện tại
+
+- Scanner mặc định giới hạn 12 branch được tóm tắt, 3 commit trên mỗi branch, 8
+  plan trong mỗi nhóm plan ngắn và 80 ref đã xếp hạng được kiểm tra cho tracked
+  plan. Báo cáo có chủ đích không phải archive repository đầy đủ.
+- Remote branch lấy từ local ref trừ khi `--fetch` được dùng rõ ràng, nên có thể
+  không khớp remote provider hiện tại.
+- Tiến độ plan dựa trên checkbox. Markup plan thiếu, không nhất quán hoặc không
+  chuẩn có thể làm percentage chưa đầy đủ hay gây hiểu nhầm.
+- Roadmap discovery giới hạn ở tệp khớp dưới `docs` trong worktree nhìn thấy.
+- Báo cáo không thể thiết lập hiệu suất campaign, revenue, conversion, account
+  state hay provider status hiện tại trừ khi bằng chứng đó đã được biểu diễn
+  trong repository được quét.

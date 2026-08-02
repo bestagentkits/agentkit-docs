@@ -1,0 +1,93 @@
+---
+title: ak agents install
+description: Sao chép một persona agent từ cây Kit cục bộ đáng tin cậy vào user plugin root với giới hạn ghi đè rõ ràng.
+---
+
+Dùng `ak agents install` để sao chép một tệp Markdown của agent đang available
+cục bộ vào inventory agent theo Kit dưới user plugin root. Đây là thao tác sao
+chép một tệp, không phải cài từ remote catalog hay emit Kit theo runtime.
+
+## Cách dùng
+
+```bash
+ak agents install <kit>/<agent>
+```
+
+Phải có đúng một ref. Mỗi segment phải bắt đầu bằng chữ thường hoặc chữ số, sau
+đó có thể chứa chữ thường, chữ số, `.`, `_` hoặc `-`. Traversal, chữ hoa,
+whitespace, path segment thừa và dấu gạch ngang ở đầu đều bị từ chối.
+
+Nên dùng dạng chuẩn. Các dạng `ak:<agent>`, `ake:<agent>` và `akm:<agent>` lần
+lượt mở rộng thành `core`, `engineer` và `marketing`.
+
+## Cờ của lệnh
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--force` | `false` | Xoá đúng entry đích trước nếu đã tồn tại rồi sao chép lại source. |
+
+Các cờ dùng chung được mô tả trong [quy ước CLI](../cli-conventions). Lệnh
+không prompt, nên `--yes` không thêm approval gate và `--no-interactive` chỉ
+ảnh hưởng cách trình bày.
+
+## Source và destination
+
+Với `engineer/researcher`, lệnh resolve:
+
+```text
+source:      ./kits/engineer/agents/researcher.md
+destination: ~/.claude/plugins/engineer/agents/researcher.md
+```
+
+`AGENTKIT_KITS_DIR` và `AGENTKIT_PLUGIN_DIR` thay hai root. Destination directory
+được tạo với mode `0750` khi cần; tệp mới được tạo với mode `0600`.
+
+Thao tác không gửi request mạng, không xác thực, kiểm tra entitlement, ghi
+cache, chạy subprocess, cài runtime environment, cập nhật ownership manifest
+hay tạo backup. Kết quả duy nhất được bảo đảm là bản sao tệp cục bộ. Dùng
+`ak kit init` khi cần một route Kit hoàn chỉnh đã được adapt theo runtime.
+
+## Giới hạn của force và recovery
+
+Không có `--force`, destination entry đã tồn tại là conflict và lệnh thoát `6`
+mà không thay đổi entry đó. Có force, AgentKit xoá đúng entry trước khi mở và
+sao chép source; vì vậy một directory rỗng có thể bị xoá, còn directory không
+rỗng làm thao tác thất bại. Không có content hash check, bảo vệ tệp đã sửa, snapshot, temporary-file
+swap hay rollback. Nếu copy lỗi sau khi xoá, tệp cũ không được khôi phục.
+
+Hãy giữ bản sao thủ công trước khi force một agent đã chỉnh sửa. Xem source và
+plugin root là dữ liệu đáng tin cậy: đường đọc source của agent có thể follow
+symlink và lệnh này không phải sandbox cho nội dung Kit không tin cậy.
+
+## Đầu ra
+
+Đầu ra thành công cho người dùng trên stdout báo ref và `1 files`. JSON thành
+công có:
+
+```text
+schema_version: 1
+kind: assets.install
+data.ref, data.kit, data.asset
+data.files_written: 1
+data.env_installed: false
+data.success: true
+```
+
+Lỗi dùng stderr. Lỗi thực thi JSON dùng shared error envelope; lỗi phân tích cờ
+có thể vẫn là plain text.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Một tệp agent đã được sao chép. | Chạy `ak agents show <kit>/<agent>` và xác minh runtime discovery riêng. |
+| `1` | Có lỗi filesystem/copy hoặc sai số lượng argument theo vị trí. | Kiểm tra destination trước khi thử lại; khôi phục bản sao thủ công nếu force đã xoá tệp. |
+| `2` | Ref sai dạng hoặc không phân tích được cờ. | Sửa ref hoặc cờ chính xác. |
+| `5` | Tệp source dự kiến không tồn tại hoặc là directory. | Kiểm tra local kits root và ref. |
+| `6` | Destination đã tồn tại mà không có `--force`. | Xem lại tệp; chỉ force sau khi giữ lại phần chỉnh sửa. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak agents install`](../cli/ak_agents_install)
+- [Xem một agent](../cli/ak_agents_show)
+- [Cài một route Kit hoàn chỉnh](./kit-init)

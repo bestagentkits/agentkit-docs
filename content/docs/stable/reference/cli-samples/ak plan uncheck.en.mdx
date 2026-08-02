@@ -1,0 +1,59 @@
+---
+title: ak plan uncheck
+description: Reset every task checkbox in one canonical phase file and best-effort synchronize its indexed phase.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak plan uncheck` to reset all checked tasks in one phase file to todo.
+
+## Usage
+
+```bash
+ak plan uncheck <phase-file>
+```
+
+The command accepts exactly one file path and has no command-specific flags.
+The basename must match `phase-NN-<slug>.md` for store synchronization, although
+the checkbox rewrite itself operates on the supplied readable file.
+
+## Mutation and synchronization
+
+Every Markdown task line beginning with `- [x]` or `- [X]` is changed to
+`- [ ]`. Already-unchecked boxes and all other bytes are preserved. The file is
+replaced atomically and the operation is idempotent.
+
+After the write, AgentKit tries to identify the owning plan by exact linked
+directory, then by an unambiguous Git-context match, and reprojects that plan
+into the local index. A legacy file-only plan with no store row remains
+file-only.
+
+<Callout type="warning">
+  Store synchronization is best effort. If it is unavailable, ambiguous, or
+  fails, the command prints a warning on stderr but still succeeds because the
+  canonical phase file was updated. Run `ak plan reindex --apply` after fixing
+  store access.
+</Callout>
+
+There is no preview, confirmation, `--force`, snapshot, or automatic rollback.
+The command does not use network, auth, providers, or stdin. Synchronization can
+run local Git probes and can create or forward-migrate the plan store.
+
+## Output
+
+Human/plain stdout confirms the path. JSON success uses `kind=plan.uncheck`
+with `data.phase` and `data.action: "unchecked"`. Synchronization warnings use
+stderr. Runtime JSON errors use the shared error envelope.
+
+## Exit behavior and recovery
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | The phase file was rewritten; store synchronization may have warned. | Inspect the file and stderr; reindex if needed. |
+| `1` | The file could not be resolved, read, written, or atomically renamed. | Restore the file from version control or correct permissions before retrying. |
+| `2` | The argument count or flags were invalid. | Pass exactly one phase-file path. |
+
+## Related commands
+
+- [Complete `ak plan uncheck` facts](../cli/ak_plan_uncheck)
+- [Mark all checkboxes done](../cli/ak_plan_check)

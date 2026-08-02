@@ -1,0 +1,143 @@
+---
+title: ak migrate prefs
+description: Preview and merge legacy ClaudeKit preferences into AgentKit configuration with explicit precedence and credential handling.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak migrate prefs` when legacy `.ck.json` settings remain, including after
+kit content has already moved. It migrates preferences only; it does not move or
+install kits.
+
+## Usage
+
+```bash
+ak migrate prefs [flags]
+```
+
+The documented command has no positional arguments. The current implementation
+ignores extra positional tokens; do not rely on that behavior.
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--from <source>` | `ck` | Select the legacy source. Only the exact value `ck` is supported. |
+| `--dry-run <bool>` | `true` | Preview plans without writing configuration files. |
+
+Applying requires both `--dry-run=false` and `--yes`:
+
+```bash
+ak migrate prefs --dry-run=false --yes
+```
+
+There is no prompt or stdin read. `--json`, `--no-interactive`, and non-TTY
+stdin do not bypass the explicit `--yes` requirement. Shared output flags are
+described in [CLI conventions](../cli-conventions).
+
+## Source and destination authority
+
+The command checks up to two local files:
+
+| Scope | Legacy source | AgentKit destination |
+| --- | --- | --- |
+| User | `~/.claude/.ck.json` | `$AGENTKIT_HOME/config.yaml`, normally `~/.agentkit/config.yaml` |
+| Current project | `./.claude/.ck.json` | `./.agentkit/config.yaml` |
+
+`AGENTKIT_CLAUDE_HOME` can change the Claude home, and `AGENTKIT_HOME` can
+change the AgentKit home. Project scope always comes from the current working
+directory. The command performs no network, registry, authentication,
+entitlement, provider, process-launch, or cache operation.
+
+## Understand merge precedence
+
+Each readable legacy file becomes a plan of leaf-level actions:
+
+- a value missing from AgentKit is marked `migrate`;
+- a value already set in `config.yaml`, including explicit null, is
+  `keep_existing` and wins;
+- recognized top-level legacy sections map to AgentKit section names;
+- unrecognized top-level keys are preserved under `extensions`;
+- credential-like project values are `omit_secret` and never written to the
+  project config.
+
+User-scope credentials are not omitted. If a legacy user preference contains a
+key whose name includes `passphrase`, `password`, `secret`, `token`, `apikey`,
+or `api_key`, applying can copy that value into the user `config.yaml`. The
+writer sets the resulting file mode to `0600`.
+
+<Callout type="warning">
+  Review the dry-run plan before apply. Keep user configuration private, and do
+  not copy its contents into logs or a repository. Project credential-like
+  values are omitted, but non-secret project preferences are written under the
+  current directory.
+</Callout>
+
+The legacy `.ck.json` files are always left in place. The migration is safe to
+rerun because existing AgentKit values take precedence.
+
+## Writes, journal, and rollback
+
+Dry-run reads both scopes and writes nothing. Apply creates missing config
+directories with user-only permissions and replaces each config atomically
+through a sibling temporary file.
+
+Before the first config write, AgentKit records all destination pre-images in
+one migration rollback journal. If any apply step fails, the journal remains so
+`ak migrate rollback` can restore the pre-apply files. After every write
+succeeds, the journal is discarded; a completed preference migration cannot be
+undone by `ak migrate rollback`.
+
+## Human and JSON output
+
+Human stdout reports each source and destination, counts for `migrate` and
+`keep_existing`, omitted credential counts, and unreadable sources. No source is
+a clean `nothing to migrate` result.
+
+One unreadable or malformed `.ck.json` is skipped while other readable scopes
+continue. Even when every discovered source is unreadable, the command reports
+the skips and exits `0`; treat `skipped` as part of the result, not as a fatal
+error signal.
+
+JSON stdout uses a command-specific map, not the shared `kind/data` envelope:
+
+```json
+{
+  "schema_version": 1,
+  "prefs": {
+    "schema_version": 1,
+    "status": "planned",
+    "plans": [
+      {
+        "schema_version": 1,
+        "scope": "global",
+        "source_path": "/home/you/.claude/.ck.json",
+        "config_path": "/home/you/.agentkit/config.yaml",
+        "entries": [
+          {"legacy_path":"statusline","config_path":"statusline","action":"migrate"}
+        ]
+      }
+    ]
+  }
+}
+```
+
+Possible status values are `no_sources`, `planned`, and `completed`. Plans do
+not include preference values, but human and JSON reports expose local paths;
+redact those paths before sharing logs. Command errors remain plain text rather
+than the shared JSON error envelope.
+
+## Exit status
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | Discovery/preview/apply completed, including no sources or skipped unreadable sources. | Inspect status, plans, and `skipped` before deciding the migration is complete. |
+| `1` | Home/config resolution, journal capture, config merge, or JSON encoding failed. | Preserve the journal and run `ak migrate rollback` if an apply partially wrote files. |
+| `2` | `--from` was not exactly `ck`, or a flag could not be parsed. | Correct the invocation. |
+| `3` | Apply was requested without `--yes`. No config write occurred. | Review the dry-run, then rerun with both apply flags. |
+
+## Related commands
+
+- [Complete migration command facts](../cli/ak_migrate)
+- [Migrate from ClaudeKit](../../guides/migrating-from-claudekit)
+- [Configuration troubleshooting](../../troubleshooting/configuration)

@@ -1,0 +1,130 @@
+---
+title: ak backups create
+description: Tạo và xác minh bản sao tạm của cơ sở dữ liệu vận hành AgentKit mà không xem đó là recovery snapshot đã commit.
+---
+
+Dùng `ak backups create` để tạo bản sao SQLite nhất quán của cơ sở dữ liệu vận
+hành AgentKit trước khi bảo trì hoặc xuất dữ liệu. Lệnh dùng SQLite
+`VACUUM INTO`, sau đó xác minh tệp đã đóng.
+
+## Cú pháp
+
+```bash
+ak backups create [--include-content]
+```
+
+## Trước khi chạy
+
+Đây là lệnh cục bộ: lệnh không liên hệ registry và không cần xác thực. Lệnh mở
+operational store với vai trò tiến trình ghi, nên có thể tạo store còn thiếu
+hoặc áp dụng schema migration đang chờ trước khi sao chép. Hãy để tiến trình ghi
+khác hoàn tất trước khi thử lại sau lỗi store đang bận.
+
+Đảm bảo thư mục tạm của hệ điều hành đủ chỗ cho một bản sao
+`operational.db`. Mỗi lần chạy thành công thay thế staging directory trước đó
+của lệnh.
+
+## Argument
+
+Lệnh không định nghĩa argument theo vị trí. Đừng truyền argument. Hiện tại lệnh
+không từ chối token dư, nên token đó không chọn cơ sở dữ liệu hoặc destination.
+
+## Tuỳ chọn
+
+| Tuỳ chọn | Mặc định | Tác động |
+| --- | --- | --- |
+| `--include-content` | `false` | Ghi nhận ý định gồm content có thể tái tạo trong kết quả. Ở bản phát hành này, tập tệp tạm vẫn chỉ có `operational.db`. |
+
+Các cờ dùng chung được mô tả trong [quy ước CLI](../cli-conventions). Lệnh
+không hỏi xác nhận, nên `--yes` và `--no-interactive` không thay đổi đường ghi.
+
+## Ví dụ
+
+Tạo bản sao cơ sở dữ liệu tạm và in kết quả ngắn:
+
+```bash
+ak backups create
+```
+
+Đọc đầy đủ kết quả cho máy:
+
+```bash
+ak backups create --json
+```
+
+Ghi nhận yêu cầu gồm content và kiểm tra tập tệp thực tế:
+
+```bash
+ak backups create --include-content --json | jq '{includeContent, files}'
+```
+
+## Đầu ra và luồng
+
+Đầu ra cho người dùng là một dòng trên stdout:
+
+```text
+operational snapshot ok schema=<schema-version> checksum=<sha256>
+```
+
+`--json` ghi object thô vào stdout, không dùng success envelope chung:
+
+```json
+{
+  "provider": "operationalstore",
+  "class": "operational-core",
+  "applicationId": "<hex-id>",
+  "schemaVersion": 4,
+  "checksum": "<sha256>",
+  "includeContent": false,
+  "files": [
+    {
+      "rel_path": "operational.db",
+      "src_abs": "<absolute-staged-path>",
+      "sha256": "<sha256>",
+      "mode": 384,
+      "size": 1234
+    }
+  ],
+  "verified": true
+}
+```
+
+Schema version và kích thước chính xác phụ thuộc store cục bộ. Khi thành công,
+lệnh chỉ dùng stdout và để stderr trống. `--quiet` không ẩn đầu ra stdout trực
+tiếp này. Lỗi runtime trong chế độ JSON có thể không trả JSON error object; lỗi
+phân tích cờ vẫn là hướng dẫn dùng dạng plain text trên stderr.
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Cơ sở dữ liệu tạm đã vượt qua kiểm tra application ID, schema, `quick_check` và SHA-256. |
+| `1` | Không thể mở, tạo, migrate, sao chép hoặc xác minh operational store. |
+| `2` | Không thể phân tích cờ. |
+
+Lệnh không có mã thoát riêng cho xác nhận, từ chối, backup lock hoặc không tìm
+thấy dữ liệu.
+
+## Tác động, an toàn và khôi phục
+
+Store nguồn thường nằm tại `~/.agentkit/operational/operational.db`. Kết quả
+được ghi thành `operational.db` dưới `agentkit-operational-backup` trong thư mục
+tạm của hệ điều hành, với quyền tệp riêng tư. Lệnh xoá staging directory này
+trước mỗi lần chạy. Lệnh không bao giờ sao chép thô database, WAL, SHM hoặc
+journal file đang hoạt động.
+
+Bản sao tạm không được commit dưới `~/.agentkit/backups/`: nó không có snapshot
+ID hoặc rollback manifest và không xuất hiện trong `ak backups list`, `show`,
+`verify` hay `restore`. Hãy tự sao chép sang nơi lưu trữ bền vững nếu cần giữ
+lại. Lần chạy sau có thể thay thế bản sao tạm.
+
+## Lệnh liên quan và giới hạn
+
+- [Liệt kê recovery snapshot đã commit](./backups-list)
+- [Kiểm tra rollback manifest](./backups-show)
+- [Xác minh recovery snapshot đã commit](./backups-verify)
+- [Nhóm lệnh backup](../cli/ak_backups)
+
+`--include-content` không thêm content-shard database vào `files` ở bản phát
+hành này. Hãy xem mảng JSON `files`, không phải tên tuỳ chọn, là phạm vi chính
+xác của artifact tạm.

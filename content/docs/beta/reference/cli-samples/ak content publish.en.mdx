@@ -1,0 +1,107 @@
+---
+title: ak content publish
+description: Validate, preview, publish, or persist a Discord webhook post with explicit credential and scheduling boundaries.
+---
+
+Use `ak content publish` to send one Discord webhook post immediately, preview
+its body, or store it for later delivery.
+
+## Usage
+
+```bash
+ak content publish --channel discord --body "Release ready" --webhook-url https://discord.com/api/webhooks/...
+```
+
+The documented command has no positional arguments. The implementation ignores
+extra positional tokens; do not rely on that behavior. There are no aliases.
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--channel <id>` | Empty | Required adapter ID. Only `discord` is implemented. |
+| `--body <text>` | Empty | Direct body; mutually exclusive with `--template`. |
+| `--title <text>` | Empty | For immediate Discord delivery, prepend a bold Markdown title. |
+| `--webhook-url <url>` | Empty | Per-call Discord credential and endpoint. |
+| `--template <path>` | Empty | Read and execute a Go text-template file. |
+| `--vars <json\|@path>` | Empty | Inline JSON object or a JSON file for the template. |
+| `--dry-run` | `false` | Preview an immediate post after validation. |
+| `--at <RFC3339>` | Empty | Enqueue for delivery at or after this timestamp. |
+
+Shared flags are described in [CLI conventions](../cli-conventions). The
+command never prompts; `--yes`, TTY state, and stdin do not gate publishing.
+
+## Credentials and validation
+
+The command registers a zero-config Discord adapter and does not load
+`channels.discord.webhook_url` from `config.yaml`, despite wording in the
+adapter error. Supply `--webhook-url` for preview, enqueue, and publish. A dry
+run without it fails validation.
+
+Direct bodies must be nonblank and at most 2,000 Unicode characters. A template
+uses `missingkey=error`; rendered output longer than 2,000 characters is
+truncated to 1,999 characters plus `…`. Immediate `--title` is added after the
+first validation pass, and the combined title and body must still fit.
+
+`--webhook-url` is a secret. It can be visible in process arguments. When used
+with `--at`, it is also stored unredacted in the queue metadata. Restrict access
+to your AgentKit home and do not paste queue JSON into logs or tickets.
+
+## Preview, enqueue, and publish
+
+```bash
+ak content publish --channel discord --body "Release ready" \
+  --webhook-url https://discord.com/api/webhooks/... --dry-run
+
+ak content publish --channel discord --body "Release ready" \
+  --webhook-url https://discord.com/api/webhooks/... \
+  --at 2026-08-03T02:00:00Z
+```
+
+- Immediate `--dry-run` performs adapter validation, prints the body, makes no
+  network request, and writes no queue state.
+- `--at` takes precedence over `--dry-run`. Combining them still appends an
+  entry to `~/.agentkit/content/queue.json` (or the equivalent under
+  `AGENTKIT_HOME`) and exits `0`.
+- Enqueue stores the fully rendered body and webhook metadata. It does not call
+  Discord. A scheduled `--title` is not stored and will not be published.
+- Immediate publish sends one HTTP `POST` with `?wait=true`. A transport error
+  may occur after Discord received the request, so retrying can duplicate a
+  post. The adapter cannot delete a post; use Discord for recovery.
+
+Queue writes use a `0700` directory and atomic replacement through a `0600`
+temporary file. No rollback copy is retained.
+
+## Output and streams
+
+Human success and previews go to stdout. JSON success is one envelope:
+
+```text
+kind=content.publish
+data={dry_run, channel, post_id?, url?, body}
+```
+
+Enqueue instead uses:
+
+```text
+kind=content.publish_enqueued
+data={id, channel, scheduled_at, body}
+```
+
+Validation, queue, and network errors are plain text on stderr even with
+`--json`; flag-parse errors are also plain text.
+
+## Exit status
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | Preview, enqueue, or publish completed. | For enqueue, record `data.id`; for publish, verify the destination. |
+| `1` | Required `--channel` validation, home/queue I/O, enqueue, or network publishing failed. | Check stderr and destination state before retrying. |
+| `2` | Body/template combination, channel, timestamp, or flag syntax was invalid. | Correct the invocation. |
+| `3` | Template rendering or adapter validation failed, including missing webhook or invalid body. | Fix content and credentials; rerun a preview. |
+
+## Related commands
+
+- [Inspect the queue](<./ak content queue list>)
+- [Cancel an entry](<./ak content queue cancel>)
+- [Complete `ak content publish` help facts](../cli/ak_content_publish)

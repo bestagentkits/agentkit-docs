@@ -1,0 +1,189 @@
+---
+title: Áp dụng reasoning dựa trên bằng chứng với ak:fable-thinking
+description: Xác định outcome thật, kiểm chứng claim quan trọng, so sánh hypothesis, phản biện conclusion và xác minh output có constraint bằng phép kiểm tra cơ học trước khi giao.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:fable-thinking` khi chất lượng conclusion quan trọng hơn tốc độ đưa ra
+câu trả lời hợp lý đầu tiên. Skill áp dụng reasoning protocol có thể tái sử dụng:
+kiểm tra goal thật, xác minh evidence, giữ nhiều hypothesis cạnh tranh, mô phỏng
+case cụ thể, phản biện conclusion và hiệu chỉnh claim cuối theo điều thực sự đã
+quan sát.
+
+## Chọn ak:fable-thinking để nâng chất lượng reasoning
+
+### Dùng ak:fable-thinking khi
+
+- Bạn đang chẩn đoán failure, review thay đổi rủi ro hoặc ra quyết định về
+  architecture, strategy, security, data hay tiền bạc.
+- Nguyên nhân do người dùng đề xuất có thể sai và cần evidence độc lập.
+- Câu hỏi trông đơn giản chứa detail có thể vô hiệu câu trả lời quen thuộc.
+- Output có constraint kiểm tra cơ học như số lượng chính xác, ký tự bị cấm,
+  acrostic hay format nghiêm ngặt.
+- Bạn muốn assessment dựa trên bằng chứng mà không tự động triển khai fix.
+
+### Chọn workflow khác khi
+
+- Bạn cần ideation rộng trước khi đánh giá một hướng. Dùng `ak:brainstorm`.
+- Bạn cần exploration có cấu trúc cho vấn đề khó. Dùng
+  [Problem solving](./problem-solving).
+- Bạn đã có bug cụ thể và muốn chẩn đoán cùng repair được cấp quyền. Dùng
+  `ak:debug` hoặc `ak:fix`.
+- Bạn cần implementation, testing hay review làm outcome chính. Dùng Skill
+  delivery phù hợp và yêu cầu Skill đó giữ reasoning dựa trên bằng chứng.
+
+## Chuẩn bị câu hỏi và evidence
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận Engineer
+  Kit đã được cài cho runtime cùng scope hiện tại.
+- Nêu decision hoặc deliverable, outcome dự kiến, mức độ rủi ro, time horizon,
+  authority boundary và điều kiện thành công.
+- Cung cấp evidence trực tiếp như tệp, log, measurement, output lỗi, requirement
+  hay primary documentation, cùng quyền cho các read-only check bổ sung.
+- Tách observation khỏi diagnosis. “Request timeout” là evidence; “cache bị hỏng”
+  là hypothesis cho tới khi được xác minh.
+- Với hard output constraint, cung cấp text được áp dụng chính xác, đơn vị đếm,
+  ngoại lệ được phép và format.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:fable-thinking ...` | Có thể dùng tool cùng project evidence khả dụng để xác minh claim. Reasoning nội bộ được tách khỏi conclusion ngắn gọn cho người dùng. |
+| Cursor | `/ak:fable-thinking ...` | Cách gọi bằng slash đã được người dùng xác minh. Protocol portable, nhưng verification tool cùng runtime parity rộng hơn phụ thuộc session. |
+| Codex | `$ak:fable-thinking ...` | Dùng native Skill discovery cùng Codex tool khả dụng. Khác biệt Hook projection không làm đổi reasoning protocol của Skill. |
+
+Xem [Runtime adapter](../../../concepts/runtime-adapters) để hiểu ranh giới
+delivery và component.
+
+## Chạy Skill
+
+Truyền câu hỏi hoặc task bằng ngôn ngữ tự nhiên. Skill chọn độ sâu từ mức độ rủi
+ro, tính khó đảo ngược và tính mới sau khi chạy check tối thiểu.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:fable-thinking "Assess whether the proposed retry change addresses Friday's checkout failures. Use the diff and incident logs, hold at least two hypotheses, do not edit files, and lead with a GO, CAUTION, or STOP recommendation plus the weakest link."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:fable-thinking "Assess whether the proposed retry change addresses Friday's checkout failures. Use the diff and incident logs, hold at least two hypotheses, do not edit files, and lead with a GO, CAUTION, or STOP recommendation plus the weakest link."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:fable-thinking "Assess whether the proposed retry change addresses Friday's checkout failures. Use the diff and incident logs, hold at least two hypotheses, do not edit files, and lead with a GO, CAUTION, or STOP recommendation plus the weakest link."
+```
+
+  </Tab>
+</Tabs>
+
+Với constrained writing, hãy ghi trực tiếp mechanical rule, ví dụ: “Return
+exactly 80 words; count whitespace-delimited words on the final text; the title
+is excluded.” Skill coi yêu cầu như vậy là verification work, không phải wording
+task thông thường.
+
+## Hiểu độ sâu thực thi
+
+| Độ sâu | Công việc phù hợp | Behavior bắt buộc |
+| --- | --- | --- |
+| Direct | Công việc nhỏ, đảo ngược được và quen thuộc | Goal, follow-through, leftover cùng claim đã hiệu chỉnh trước câu trả lời ngắn |
+| Standard | Diagnosis, review, analysis hay writing thông thường | Frame, ground, reason, attack và deliver, thường được áp dụng nội bộ |
+| Full | Công việc rủi ro cao, khó đảo ngược, mới hoặc gây tranh cãi | Cấu trúc evidence được viết ra và adversarial attack bắt buộc trước delivery |
+| Constraint loop | Mọi output constraint có thể kiểm tra cơ học | Draft, mechanical verification, repair, full re-check rồi giao nguyên văn |
+
+Protocol không yêu cầu phơi bày private chain-of-thought. Kết quả bình thường
+hiển thị conclusion, decisive evidence, mechanism, alternative đã cân nhắc,
+verification đã chạy, confidence boundary và câu hỏi chưa giải quyết.
+
+## Quan sát reasoning workflow
+
+1. **Lần chạy kiểm tra floor.** Skill nêu end state không chứa option, theo câu
+   trả lời đề xuất tới đúng outcome và tính tới mọi detail trong request.
+2. **Lần chạy chọn độ sâu tương xứng.** Mức độ rủi ro, khả năng đảo ngược, tính
+   mới cùng mọi hard output constraint quyết định bao nhiêu protocol được hiển thị.
+3. **Lần chạy định khung deliverable.** Skill tách literal request khỏi goal phía
+   sau, vẽ scope line và xác định load-bearing fact.
+4. **Lần chạy kiểm chứng claim.** Skill phân biệt thông tin observed, derived,
+   prior và assumed, rồi xác minh fact có thể làm conclusion sụp đổ.
+5. **Lần chạy so sánh mechanism.** Skill giữ ít nhất hai hypothesis cho diagnosis,
+   chọn discriminating check, trace case cụ thể và ghi điều thay đổi đề xuất giữ
+   nguyên, phá vỡ hay gây rủi ro.
+6. **Lần chạy phản biện conclusion.** Skill nêu objection mạnh nhất, chạy cheap
+   kill-test, audit lý do confidence thay đổi và chỉ ra weakest link.
+7. **Lần chạy đưa outcome lên trước.** Verdict đứng đầu; evidence cùng mechanism
+   theo sau; uncertainty và unresolved question vẫn hiển thị.
+
+## Giữ reasoning trong quyền hạn của task
+
+<Callout type="warn" title="Rigor không cấp thêm quyền hành động">
+  Conclusion có bằng chứng tốt hơn không cấp quyền sửa code, truy cập secret,
+  liên hệ người khác, chi tiền, chạy destructive test, publish finding hay deploy
+  fix. Đây vẫn là các quyết định riêng của người dùng.
+</Callout>
+
+- Ưu tiên check read-only và đảo ngược được nằm trong scope đã cung cấp.
+- Hỏi trước khi dùng sensitive data, external service, production system, paid
+  API, destructive probe hay simulation có hậu quả.
+- Không trình bày hypothesis như observed fact hoặc dùng prose trôi chảy để che
+  evidence còn thiếu.
+- Không claim certainty từ sample nhỏ, một screenshot, LLM judge hay chính
+  protocol.
+- Giữ ranh giới private reasoning. Cung cấp evidence summary để người dùng audit
+  thay vì yêu cầu hoặc phơi bày hidden token-by-token thought.
+- Trong quyết định medical, legal, financial, security hay safety-critical, dùng
+  current authoritative evidence và qualified human review khi bắt buộc.
+
+## Xác minh kết quả và evidence
+
+Một kết quả hoàn tất nên cung cấp:
+
+- Answer, verdict, assessment, artifact hoặc decision đưa outcome lên trước và
+  khớp deliverable được yêu cầu.
+- Load-bearing fact cùng evidence class: observed, derived, prior hay assumed.
+- Hypothesis hoặc alternative cạnh tranh đã cân nhắc cùng observation phân tách
+  chúng.
+- Mechanism phía sau conclusion, với mọi khoảng trống được đánh dấu rõ.
+- Kill-test hoặc mechanical check đã chạy, kết quả chính xác và check bị bỏ qua.
+- Weakest link, confidence boundary, rủi ro còn lại và evidence nào sẽ thay đổi
+  conclusion.
+
+Với constrained output, exact delivered text phải pass check đã định nghĩa sau
+edit cuối. Mọi thay đổi wording sau check làm evidence mất hiệu lực và yêu cầu
+full verification mới.
+
+## Xử lý sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Câu trả lời lặp lại diagnosis của người dùng | Nêu lại symptom đã quan sát, thêm hypothesis cạnh tranh và chọn check phân biệt chúng. |
+| Action đề xuất đạt milestone nhưng không đạt outcome | Chạy follow-through tới state cuối đã xác minh và tính đủ object cùng channel bắt buộc. |
+| Không có evidence | Hạ confidence của claim, nêu assumption và chỉ ra observation nhỏ nhất có thể giải quyết. |
+| Constrained output fail sau repair | Scan lại toàn bộ final text; replacement có thể tạo violation khác. |
+| Lần chạy quá phức tạp cho task nhỏ | Giữ minimum floor cùng claim discipline rồi trả lời trực tiếp. |
+| Hai hoặc ba probe thất bại trong cùng framing | Đổi altitude, đảo câu hỏi hoặc thu observation khác thay vì lặp probe. |
+| Runtime không nhận diện Skill | Xác nhận target cùng scope, khởi động lại session, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Tiếp tục với [Planning](./plan) khi decision cần implementation roadmap, hoặc
+dùng [Code review](./code-review) để review production risk.
+
+## Biết các giới hạn hiện tại
+
+- Skill là instruction protocol kèm reference example; Skill không bundle solver,
+  evaluator, benchmark, executable hay test suite.
+- Skill không thể bổ sung model capability, evidence, tool access, domain
+  expertise hay authority còn thiếu. Skill giảm process failure đã biết nhưng
+  không đảm bảo sự thật.
+- Tool-based check chỉ tốt bằng input, environment, sample cùng interpretation
+  của chúng.
+- Stable và beta chứa nội dung `ak:fable-thinking` giống nhau trong cặp release
+  này.

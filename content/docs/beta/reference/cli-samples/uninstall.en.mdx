@@ -1,0 +1,78 @@
+---
+title: ak uninstall
+description: Preview or remove AgentKit-owned project files while preserving orphans.
+---
+
+`ak uninstall` removes files tracked by an AgentKit project manifest. It does not delete unowned project content.
+
+## Syntax
+
+```bash
+ak uninstall [path] [options]
+```
+
+## Before you run
+
+- `--dry-run` always previews and exits `3`, even with `--yes`.
+- In a TTY, apply mode asks for confirmation unless `--yes` is set. Decline or end-of-input exits `3`.
+- JSON, quiet, and non-interactive execution do not prompt. Without `--yes`, they refuse mutation and exit `3`.
+- `--force` permits deletion of modified owned files, but still requires confirmation. It never deletes orphan files.
+
+## Arguments
+
+`[path]` selects the project directory and takes precedence over `--project-dir`. Without either, the command searches the current directory and its parents. The command has no aliases.
+
+## Options
+
+| Option | Default | Purpose |
+| --- | --- | --- |
+| `--dry-run` | `false` | Preview classified file actions. |
+| `--force` | `false` | Permit deletion of modified owned files. |
+| `--keep-registry` | `false` | Keep the global project registry entry. |
+| `--project-dir <path>` | Empty | Select the project directory. |
+
+## Examples
+
+Preview removal:
+
+```bash
+ak uninstall . --dry-run
+```
+
+Remove clean owned files without a prompt:
+
+```bash
+ak uninstall . --yes
+```
+
+Remove modified owned files after a snapshot:
+
+```bash
+ak uninstall . --force --yes
+```
+
+## Output and streams
+
+Human output lists clean, modified, orphan, and missing files. With `--json`, stdout uses the shared envelope with `"kind": "uninstall"`. Its `data` object contains `project_dir`, `dry_run`, `files`, `deleted`, `skipped`, and `orphans`, plus `snapshot_id` when created.
+
+Items in `files` currently use the exact keys `RelPath`, `Class`, `WillDelete`, `Deleted`, and `Skipped`. `Class` is numeric: `0` clean, `1` modified, `2` orphan, and `3` missing. Errors go to stderr. A modified-file refusal can include a human summary before the structured JSON error unless quiet mode is used.
+
+## Exit status
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Confirmed removal completed. |
+| `1` | Project discovery, snapshot, filesystem, or partial deletion failed. |
+| `2` | Flags or path arguments are invalid. |
+| `3` | Dry-run completed, confirmation was declined, or non-interactive apply lacked `--yes`. |
+| `6` | Modified owned files require `--force`. |
+
+## Effects, safety, and recovery
+
+The command classifies files twice before deletion. Clean owned files are deleted; modified files require `--force`; missing files are skipped; orphan files remain untouched. It removes the ownership manifest and lock, then removes `.agentkit` only when empty. Other files in that directory remain.
+
+Apply mode takes a bounded pre-uninstall AgentKit snapshot before deleting sequentially. A failure can therefore leave partial removal. Use the reported snapshot and inspect the filesystem before retrying. Project-registry removal is best effort and can be disabled with `--keep-registry`. The command performs no network, authentication, entitlement, cache, or child-process work.
+
+## Related commands and limitations
+
+Use [`ak init`](./init) to recreate project metadata and [`ak doctor`](./doctor) to inspect recovery state. The snapshot is not a full-project backup.

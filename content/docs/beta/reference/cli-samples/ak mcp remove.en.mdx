@@ -1,0 +1,77 @@
+---
+title: ak mcp remove
+description: Remove one entry from a selected Claude-style MCP JSON config with bounded backup behavior.
+---
+
+Use `ak mcp remove` to delete one named entry from a Claude-style MCP JSON
+file. The command edits the selected file directly; it does not remove an entry
+from Codex TOML and has no preview or confirmation phase.
+
+## Usage
+
+```bash
+ak mcp remove <name> [flags]
+```
+
+Supply exactly one server name.
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--source <path>` | Project `.mcp.json` | Select the Claude-style JSON file to edit. |
+| `--claude-home <dir>` | Environment or `~/.claude` | Change the parent discovery root. |
+| `--cwd <dir>` | Current directory | Change the default project directory. |
+
+Shared flags are described in [CLI conventions](../cli-conventions). `--yes`
+and `--no-interactive` do not change removal behavior because the command never
+prompts.
+
+## Apply and verify
+
+```bash
+ak mcp remove memory --source .mcp.json --json
+ak mcp list --cwd . --json
+```
+
+If the name is absent from the selected file, removal is an idempotent success
+with `changed=false`. The command does not search the merged inventory to pick
+a source and does not remove same-named entries from other files.
+
+## Disk effects and recovery
+
+When a removal changes a non-empty file, AgentKit copies the original under
+`~/.agentkit/backups/mcp-json/` (`AGENTKIT_HOME` changes the root), then writes
+the JSON atomically with mode `0600`. Unknown top-level keys and other servers
+are preserved by value.
+
+The success renderer does not expose the backup path. Create your own named
+copy before removal when you need a predictable rollback artifact. An unchanged
+removal does not write or create a backup. There is no `--force` boundary.
+
+## Output and streams
+
+Human success on stdout reports changed state, the selected path, and the
+removed server metadata. Environment values remain redacted to key names.
+
+JSON success is one envelope on stdout:
+
+```json
+{"schema_version":1,"kind":"mcp.remove","data":{"changed":true,"path":"/project/.mcp.json","server":{"name":"memory","command":"npx","args":[],"envKeys":[],"source":"/project/.mcp.json","sourceDescription":"","harness":"","enabled":false}}}
+```
+
+Flag-parse errors can remain plain text.
+
+## Exit status
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The entry was removed or was already absent. |
+| `1` | The path, JSON, backup, or atomic write failed. |
+| `2` | Arguments or flags were invalid. |
+
+## Related commands
+
+- [List discovered servers](../cli/ak_mcp_list)
+- [Add or replace an entry](../cli/ak_mcp_add)
+- [Complete `ak mcp remove` command facts](../cli/ak_mcp_remove)

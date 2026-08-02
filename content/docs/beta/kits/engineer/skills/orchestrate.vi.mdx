@@ -1,0 +1,204 @@
+---
+title: Điều phối agent job đã xác minh với ak:orchestrate
+description: Route job theo stage hoặc parallel qua runtime được xác minh trực tiếp, isolate writer, capture evidence, resume công việc gián đoạn và yêu cầu arbiter độc lập.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:orchestrate` khi một outcome hưởng lợi từ staged dependency, parallel
+work, runtime diversity hoặc arbiter độc lập. Skill xác minh từng runtime cùng
+control tại thời điểm chạy, isolate writer rủi ro, capture evidence có giới hạn
+và từ chối đánh dấu công việc chưa được xác minh là hoàn tất.
+
+## Chọn ak:orchestrate cho job graph
+
+### Dùng ak:orchestrate khi
+
+- Nhiều job độc lập có thể chạy parallel với ownership riêng.
+- Job sau phụ thuộc artifact hoặc check rõ từ job trước.
+- Bạn cần route research, implementation, test và review theo capability cùng
+  risk.
+- Lần chạy dài cần durable state và resume behavior có giới hạn.
+- Independent judgment pass nên hòa giải output mâu thuẫn.
+
+### Chọn workflow khác khi
+
+- Một agent có thể hoàn tất task mà không cần fan-out hay arbitration hữu ích.
+- Teammate cần thảo luận trực tiếp liên tục và shared multi-session state. Dùng
+  `ak:team` khi runtime hiện tại hỗ trợ.
+- Bạn chỉ cần code map read-only nhanh. Dùng `ak:scout`.
+- Bạn có một implementation plan đã chấp nhận. Dùng `ak:cook` trừ khi runtime
+  diversity hoặc isolation là quan trọng.
+
+## Chuẩn bị workspace và runtime
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận
+  Engineer Kit đã được cài cho runtime cùng scope đang dùng.
+- Dùng Git repository khi có job cần worktree isolation.
+- Xác định outcome, constraint, non-goal, acceptance evidence, allowed file và
+  external-effect boundary.
+- Bảo đảm từng candidate CLI runtime đã được cài và authenticated. Discovery
+  không install, update, login hay đổi configuration.
+- Không đưa credential và private data không liên quan vào prompt hay capture.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:orchestrate ...` | Skill có thể xét in-session subagent đang hoạt động cùng headless CLI đã xác minh. Route và control chính xác được khám phá trong lần chạy này. |
+| Cursor | `/ak:orchestrate ...` | Slash invocation theo cách gọi Engineer Skill do người dùng xác minh. Internal routing chỉ đủ điều kiện khi surface Cursor hiện tại chứng minh dispatch cùng control cần thiết. |
+| Codex | `$ak:orchestrate ...` | Native Skill discovery được hỗ trợ. In-session routing cần multi-agent capability được cung cấp; nếu không, dùng verified CLI route hoặc trả kết quả blocked. |
+
+Runtime gọi Skill không tự động là runtime được chọn cho mọi job.
+
+## Chạy Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:orchestrate "Map the session boundary, propose two designs, implement the accepted low-risk change in isolated ownership, then run an independent review"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:orchestrate "Map the session boundary, propose two designs, implement the accepted low-risk change in isolated ownership, then run an independent review"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:orchestrate "Map the session boundary, propose two designs, implement the accepted low-risk change in isolated ownership, then run an independent review"
+```
+
+  </Tab>
+</Tabs>
+
+Với công việc lặp lại, truyền đường dẫn YAML job spec. Với công việc bị gián
+đoạn, truyền run directory hiện có bằng `--resume`.
+
+| Input hoặc tùy chọn | Hành vi | Ranh giới |
+| --- | --- | --- |
+| Free-form task | Chuyển accepted outcome thành durable job graph trước dispatch | Graph được tạo vẫn phải qua validation cùng safety gate |
+| Đường dẫn job spec | Dùng job, dependency, timeout, ownership, check và expected output rõ | Runtime, model, Agent cùng control pin vẫn chưa được xác minh đến live preflight |
+| `--internal` | Ưu tiên in-session subagent đủ điều kiện cho job chưa pin | Đây là preference, không phải hard mode hay permission bypass |
+| `--yes` | Chỉ mang approval cho đúng destructive hoặc external scope đã mô tả | Không cấp quyền rộng hơn cho credential, file, release hay deployment |
+| `--resume <run-dir>` | Dùng lại successful output và redispatch interrupted work thành attempt mới | Route, authentication, control và approval được xác minh lại |
+
+## Mô tả job rõ ràng
+
+Mỗi job cần:
+
+- **Intent:** Task class như scout, architecture, implementation, review,
+  audit, security, test, documentation hoặc mechanical work.
+- **Workspace:** Working directory chính xác trong authorized workspace.
+- **Ownership:** Tệp được phép ghi hoặc read-only scope rõ ràng.
+- **Dependencies:** Job phải thành công trước khi job này bắt đầu.
+- **Expected output:** Report, diff, test result hoặc artifact có thể xác minh.
+- **Checks:** Command hoặc evidence arbiter phải kiểm tra.
+- **Risk:** Read-only, scoped write, isolated high-impact write hoặc
+  external/destructive effect.
+- **Bounds:** Timeout và runtime, model, Agent, tool hoặc budget constraint rõ.
+
+Runtime hoặc model pin là constraint, không phải bằng chứng nó hiện diện hay an
+toàn. Nếu live candidate không đạt capability cùng control floor, job block
+thay vì âm thầm hạ thấp yêu cầu.
+
+## Hiểu workflow
+
+1. **Skill chấp nhận contract.** Skill xác nhận outcome, boundary, expected
+   evidence, dependency và external intent.
+2. **Skill xây và validate graph.** Skill reject duplicate ID, dependency
+   cycle, working directory không an toàn, bound còn thiếu và parallel write
+   overlap.
+3. **Skill kiểm kê live candidate.** Skill xác minh executable hoặc Agent
+   availability, authentication readiness, command shape hiện tại, selectable
+   route, permission, isolation, timeout, capture, resume behavior và host
+   limitation.
+4. **Skill phân loại capability và risk.** Read-only extraction,
+   implementation và independent judgment có minimum floor khác nhau. Safety
+   control được lọc trước cost hay latency.
+5. **Skill áp dụng approval gate.** Destructive, release, deployment, deletion,
+   credentialed cùng external effect khác cần approval chính xác và recovery
+   plan.
+6. **Skill dispatch theo stage.** Independent job chỉ chạy cùng nhau trong
+   concurrency limit. Parallel writer dùng worktree riêng và ownership không
+   chồng lấn.
+7. **Skill capture durable evidence.** State transition, bounded output,
+   artifact, error, duration và usage được báo đáng tin vẫn sẵn sàng cho
+   diagnosis cùng resume.
+8. **Skill chạy arbiter.** Judgment route riêng kiểm tra expected output,
+   contradiction, safety gap, failed check, unsupported claim và unresolved
+   question.
+9. **Skill report mà không tự integration.** Worktree diff vẫn chờ review;
+   merge hoặc cherry-pick là action riêng.
+
+## Giữ quyền phê duyệt và an toàn ở bạn
+
+<Callout type="warn" title="Worktree isolate collision, không phải sandbox">
+  Worktree riêng giữ concurrent Git edit tách biệt. Chúng không chứa process,
+  network access, credential hay write ngoài worktree. Job vẫn cần runtime
+  control đáp ứng risk tier.
+</Callout>
+
+Mỗi CLI process có timeout do coordinator sở hữu. In-session timeout chỉ là
+accounting limit trừ khi live harness chứng minh cancellation; Skill không được
+launch writer khác vào cùng ownership khi timed-out Agent có thể vẫn chạy.
+
+Permission bypass mặc định tắt. Headless runtime auto-approve write bị giới hạn
+ở read/report work hoặc treatment isolate mạnh hơn. Không job nào được đặt
+token, cookie, private key, raw environment value hay secret argument vào
+request hoặc capture.
+
+## Xác minh kết quả
+
+Một lần chạy hoàn tất nên cung cấp:
+
+- Job graph đã validate với dependency, ownership, bound, expected output và
+  check.
+- Live runtime inventory cho candidate verified, constrained, unavailable và
+  unverified mà không chứa secret value.
+- Per-job status, resolved route, risk cùng capability classification,
+  artifact, error, timeout và attempt.
+- Failed hoặc interrupted evidence được giữ thay vì silent retry.
+- Arbiter verdict kiểm tra mọi required artifact cùng contradiction.
+- Final report nêu successful, failed và blocked job, check, worktree diff chờ
+  integration cùng unresolved question.
+
+Lần chạy chỉ thành công khi mọi required job thành công, check pass, claim có
+evidence, contradiction được giải quyết và arbiter pass.
+
+## Xử lý sự cố hoặc resume
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Runtime thiếu hoặc chưa authenticated | Đánh giá fallback đã khai báo qua cùng live gate, hoặc hoàn tất setup ngoài lần chạy rồi preflight lại. |
+| Model hoặc flag bị reject | Quay lại live help hoặc official documentation hiện tại; không đoán hay mang identifier sang runtime khác. |
+| Permission prompt xuất hiện | Dừng job và giải quyết approval boundary chính xác. Không retry với bypass. |
+| Job timeout | Giữ bounded partial evidence, đánh dấu job failed và block dependent đến khi có recovery decision. |
+| Parallel writer cần cùng tệp | Chạy tuần tự hoặc thiết kế lại ownership; worktree riêng không giải quyết integration conflict. |
+| Lần chạy bị gián đoạn | Resume từ durable state, xác minh lại live route và chỉ chạy lại interrupted work cùng arbiter bắt buộc. |
+| Arbiter fail | Xử lý missing artifact, failed check, contradiction hoặc unsupported claim trước integration. |
+| Runtime không nhận diện Skill | Xác nhận target cùng scope, mở lại runtime session, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+So sánh `ak:team` cho live multi-session collaboration, hoặc tiếp tục với
+[Engineer Kit](../../engineer) và
+[Runtime adapter](../../../concepts/runtime-adapters).
+
+## Biết các giới hạn hiện tại
+
+- Runtime cùng model catalog, authentication, flag và safety control thay đổi;
+  mỗi lần chạy phải xác minh trực tiếp.
+- In-session Agent có thể không cung cấp force cancellation, per-job sandboxing
+  hay selectable model.
+- Job không chia sẻ implicit memory; dependency phải truyền explicit artifact.
+- Worktree cần Git cùng disk headroom, và integration vẫn là action được review
+  riêng.
+- Usage cùng cost chỉ xuất hiện khi harness đã chọn báo đáng tin.
+- Skill điều phối runtime hiện có; Skill không tạo daemon, dashboard, account
+  pool hay provider adapter.
+- Stable và beta chứa policy cùng schema `ak:orchestrate` giống nhau.

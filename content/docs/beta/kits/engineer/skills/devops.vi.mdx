@@ -1,0 +1,191 @@
+---
+title: Lập kế hoạch và vận hành hạ tầng với ak:devops
+description: Chuẩn bị và xác minh công việc Cloudflare, Docker, Google Cloud, Kubernetes, CI/CD và GitOps với cổng phê duyệt rõ ràng cho triển khai và xóa tài nguyên.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:devops` để thiết kế, rà soát, triển khai hoặc xử lý sự cố hạ tầng và
+quy trình phát hành. Skill có thể tạo hướng dẫn, cấu hình và lệnh; khi bạn phê
+duyệt rõ đích và tác động, nó cũng có thể dùng công cụ sẵn có để build hoặc
+deploy.
+
+## Chọn ak:devops cho ranh giới vận hành
+
+### Dùng ak:devops khi
+
+- Cloudflare Workers, Pages, R2, D1, KV, Browser Rendering, Docker, Google
+  Cloud, Kubernetes, Helm, CI/CD hoặc GitOps là trọng tâm.
+- Bạn cần kế hoạch deploy nêu rõ môi trường, rollback, chi phí, secret và cách
+  xác minh.
+- Bạn cần kiểm tra hoặc cải thiện Dockerfile hay cấu hình triển khai.
+
+### Chọn quy trình khác khi
+
+- Bạn chỉ cần mã ứng dụng. Dùng `ak:backend-development` hoặc
+  `ak:frontend-development`, rồi chuyển artifact có thể deploy cho Skill này.
+- Database migration là rủi ro chính. Dùng `ak:databases` và giữ các cổng backup
+  và recovery của Skill đó.
+- Bạn cần chẩn đoán mà không thay đổi hạ tầng. Dùng `ak:fix` và chỉ cấp quyền đọc.
+- Bạn cần thực thi kế hoạch xuyên stack đã duyệt. Dùng `ak:cook` và giữ từng
+  thay đổi hạ tầng thành một bước cần phê duyệt riêng.
+
+## Chuẩn bị đích và thẩm quyền
+
+Trước khi bắt đầu:
+
+- Hoàn tất [Onboarding](../../../getting-started/onboarding), rồi xác nhận
+  Engineer Kit được cài cho runtime và scope hiện tại.
+- Nêu platform, account hoặc organization, project, region, environment,
+  service, owner và maintenance window được phép. Không tự suy đoán production.
+- Xác nhận CLI và danh tính phù hợp: Wrangler cho Cloudflare, Docker và Compose
+  cho container, `gcloud` cho Google Cloud, hoặc Kubernetes và Helm client đã
+  được phê duyệt cho cluster.
+- Kiểm kê cấu hình, secret, domain, data store, IAM, quota, dependency, traffic
+  hiện tại và đơn vị chịu chi phí. Không đưa giá trị secret vào prompt, log, file
+  sinh ra hoặc version control.
+- Xác định cách kiểm tra local, health check, observability, rollback hoặc
+  recovery và người có quyền phê duyệt thay đổi trên provider.
+
+| Platform | Bằng chứng cần có trước khi thay đổi |
+| --- | --- |
+| Cloudflare | Đúng account và environment, cấu hình Wrangler, binding, tên secret, compatibility date, route, limit, đường rollback và tác động chi phí |
+| Docker | Dockerfile hoặc Compose file đã rà soát, input được pin khi cần, build context, port, volume, xử lý secret, health check, image registry và image rollback |
+| Google Cloud | Account, project và region đang hoạt động, API được bật, IAM role, quota, tác động mạng và dữ liệu, chi phí ước tính và kế hoạch xóa hoặc rollback |
+| Kubernetes hoặc Helm | Context và namespace hiện tại, manifest đã render hoặc diff, RBAC, secret, tác động storage và disruption, kiểm tra rollout và lệnh rollback |
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:devops ...` | Có thể dùng hướng dẫn và công cụ local hoặc provider sẵn có; Engineer hỗ trợ delivery native và plugin tường minh. |
+| Cursor | `/ak:devops ...` | Dùng cú pháp slash đã được người dùng xác minh; chưa xác lập mức tương đương về công cụ provider và Hook. |
+| Codex | `$ak:devops ...` | Dùng cơ chế tìm Skill native; công cụ provider và Hook dự kiến phụ thuộc session. |
+
+## Chạy Skill
+
+Dạng đối số được khai báo là `[platform] [task]`. Skill không định nghĩa flag,
+platform mặc định, target environment hay quyền deploy mặc định.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:devops cloudflare "Rà soát cấu hình Worker này cho staging, lập checklist dry-run và rollback, rồi dừng trước khi tạo resource, upload secret, đổi route hoặc deploy."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:devops cloudflare "Rà soát cấu hình Worker này cho staging, lập checklist dry-run và rollback, rồi dừng trước khi tạo resource, upload secret, đổi route hoặc deploy."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:devops cloudflare "Rà soát cấu hình Worker này cho staging, lập checklist dry-run và rollback, rồi dừng trước khi tạo resource, upload secret, đổi route hoặc deploy."
+```
+
+  </Tab>
+</Tabs>
+
+### Hiểu các chế độ utility đi kèm
+
+Đây là script local riêng, không phải flag của `ak:devops`:
+
+| Utility | Input và chế độ | Tác động |
+| --- | --- | --- |
+| Cloudflare deploy | `--project` mặc định là `.`, `--env` nhận `production`, `staging` hoặc `dev`, cùng `--dry-run` và `--verbose` | Cần thư mục project, `wrangler.toml` và Wrangler đã cài, xác thực. Nếu không có `--dry-run`, utility chạy `wrangler deploy` vào environment đã chọn. |
+| Dockerfile analyzer | Đường dẫn Dockerfile, tùy chọn `--json` hoặc `--verbose` | Đọc một file local và báo lỗi, cảnh báo, gợi ý theo heuristic. Nó không build image, khởi động Docker hay sửa file. |
+
+Cloudflare dry run vẫn gọi Wrangler và đường build của project local. Đây là
+deployment preview, không bảo đảm build hook hay công cụ local tùy ý không có
+side effect.
+
+## Quan sát quy trình có kiểm soát
+
+1. **Lượt chạy phân giải đích.** Nó ghi provider identity, project, region,
+   environment, tên resource, trạng thái hiện tại và kết quả được yêu cầu.
+2. **Lượt chạy kiểm tra trước khi đổi.** Nó đọc cấu hình local và, khi được phép,
+   trạng thái provider hoặc cluster bằng quyền hẹp nhất có thể.
+3. **Lượt chạy đề xuất diff chính xác.** Nó nêu resource, lệnh, tham chiếu secret,
+   tác động vòng đời, chi phí dự kiến, rollback và bằng chứng.
+4. **Lượt chạy xác minh local.** Nó render hoặc lint cấu hình, build hoặc scan
+   artifact khi có công cụ và phân biệt kiểm tra mock với bằng chứng provider thật.
+5. **Lượt chạy xin quyền thực thi.** Login, tạo resource, upload secret, đổi
+   traffic, deploy, scale, migration và xóa vẫn là quyết định tường minh.
+6. **Lượt chạy xác minh thao tác.** Nó kiểm tra trạng thái deploy, health, log,
+   metric, route, version, khả năng truy cập dữ liệu và mức sẵn sàng rollback.
+
+## Giữ thay đổi provider sau cổng phê duyệt
+
+<Callout type="warn" title="Lập kế hoạch không cấp quyền deploy">
+  Một lần gọi Skill có thể chuẩn bị lệnh và cấu hình, nhưng không cấp quyền login
+  production, deploy, ghi secret, đổi IAM, chuyển traffic, xóa dữ liệu hay tạo
+  resource tính phí. Xác nhận đúng đích và tác động trước mỗi thao tác vượt ranh
+  giới đó.
+</Callout>
+
+Các tác động trực tiếp cần lưu ý:
+
+- Lệnh Wrangler có thể tạo hoặc deploy Worker và Pages project, ghi secret, tạo
+  hoặc thay đổi R2, D1, KV và đổi route.
+- Lệnh Docker có thể tải image, chạy bước build, khởi động process, bind port,
+  ghi cache và volume, publish image hoặc xóa vĩnh viễn image, container, network
+  và volume khi prune.
+- Lệnh Google Cloud có thể bật service; tạo, cập nhật, scale hoặc xóa compute,
+  cluster, Cloud Run service, database, bucket, firewall rule, registry và IAM
+  binding; đồng thời truyền dữ liệu qua mạng.
+- Thao tác Kubernetes và Helm có thể đổi workload, RBAC, ingress, secret,
+  persistent storage, availability và traffic trong context đang active.
+- Resource provider, build, storage, egress, logging, Browser Rendering,
+  database, cluster và registry có thể phát sinh chi phí liên tục. Bản thân Skill
+  không thiết lập giá hay hạn mức chi tiêu.
+
+Xem `--quiet`, flag non-interactive và automation credential là việc bỏ prompt,
+không phải cơ chế an toàn. Rà soát riêng các lệnh phá hủy như xóa resource trên
+provider, `docker system prune`, xóa volume của Compose và xóa namespace hoặc
+release.
+
+## Xác minh kết quả
+
+Một kết quả đầy đủ nên cung cấp:
+
+- Account, project, region, environment, resource, version và identity đã phân
+  giải, nhưng không làm lộ credential.
+- Cấu hình hoặc command diff đã rà soát và phép kiểm tra đã chạy.
+- Bằng chứng build, lint, image, manifest, deploy, health, log, metric và route
+  phù hợp với platform.
+- Hướng dẫn rollback hoặc recovery, artifact được giữ lại và mọi tác động dữ
+  liệu hay traffic không thể đảo ngược.
+- Resource nhạy cảm về chi phí, kiểm tra đã bỏ qua, rủi ro chưa giải quyết và
+  mọi thao tác còn chờ phê duyệt.
+
+## Khắc phục sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước an toàn tiếp theo |
+| --- | --- |
+| Target environment không rõ | Dừng và phân giải account, project, region, context, namespace và environment trước khi login hoặc thay đổi. |
+| Wrangler báo thiếu cấu hình hoặc xác thực | Xác minh project local và identity được phép; không tạo hoặc deploy vào account suy đoán. |
+| Dry run thành công | Rà soát bundle, cấu hình, build hook, binding, route và limit; đây không phải bằng chứng health thật. |
+| Docker analyzer không báo lỗi | Build, test, scan và chạy image riêng; analyzer chỉ dùng văn bản và heuristic. |
+| Lệnh provider đề xuất xóa | Ghi dependency, backup, hành vi retention và bằng chứng recovery, rồi xin phê duyệt tường minh cho đúng resource. |
+| Runtime không nhận diện Skill | Xác nhận target và scope, khởi động lại session, rồi xem [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Xem [Project, artifact và checkpoint](../../../concepts/projects-artifacts-checkpoints)
+trước công việc nhạy cảm với rollback hoặc tiếp tục với [Engineer Kit](../../engineer).
+
+## Biết các giới hạn hiện tại
+
+- Kubernetes và Helm là capability được nêu tên, nhưng bản phát hành Skill này
+  không kèm tài liệu platform chi tiết như Cloudflare, Docker và Google Cloud.
+  Hãy xác minh hành vi upstream hiện tại trước khi vận hành cluster.
+- Test đi kèm mock Wrangler và kiểm tra Docker analyzer bằng fixture local. Chúng
+  không chứng minh deploy thật, bảo mật image, an toàn cluster, quyền provider
+  hay rollback.
+- Thời lượng runtime không được định nghĩa. Rà soát cấu hình có thể mất vài
+  phút; build, upload, rollout, kéo image, thao tác database và recovery có thể
+  lâu hơn nhiều tùy kích thước artifact, health gate, region và tải provider.
+- Stable và beta có cùng Skill reference, utility và test cho cặp bản phát hành
+  này.

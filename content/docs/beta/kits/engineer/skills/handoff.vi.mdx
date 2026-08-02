@@ -1,0 +1,148 @@
+---
+title: Giữ ngữ cảnh phiên với ak:handoff
+description: Tạo handoff ngắn gọn đã biên tập, ghi lại mục tiêu, quyết định, bằng chứng, blocker và trạng thái mở cho phiên agent mới.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:handoff` khi một phiên agent mới cần tiếp tục cùng công việc mà không
+phải khám phá lại mục đích, quyết định, bằng chứng và blocker. Skill tạo handoff
+cuộc trò chuyện ngắn gọn, hiển thị nó trong phản hồi và lưu cùng nội dung đã biên
+tập dưới dạng report của project.
+
+## Chọn ak:handoff để duy trì phiên
+
+### Dùng ak:handoff khi
+
+- Bạn kết thúc phiên làm việc trước khi mục tiêu hoàn tất.
+- Bạn chuyển sang agent mới hoặc context window nhỏ hơn.
+- Quyết định quan trọng, phương án bị loại, blocker hoặc trạng thái xác minh có
+  thể bị mất.
+- Bạn muốn phiên sau xác minh trạng thái hiện tại với source artifact.
+
+### Chọn workflow khác khi
+
+- Bạn muốn status report rút từ Git trên branch, worktree, plan và lịch sử repo.
+  Dùng `ak:watzup`.
+- Bạn cần commit, push hoặc mở pull request. Dùng `ak:git`.
+- Bạn muốn implementation plan thay vì ngữ cảnh phiên. Dùng `ak:plan`.
+
+## Chuẩn bị project và runtime
+
+Trước khi bắt đầu:
+
+- Hoàn tất [Làm quen](../../../getting-started/onboarding), và xác nhận Engineer
+  Kit đã được cài cho runtime và scope bạn đang dùng.
+- Mở project và cung cấp chỉ dẫn cùng plan liên quan.
+- Xác định trọng tâm của phiên tiếp theo và mục tiêu hiện tại.
+- Tìm handoff trước đó cho cùng trọng tâm nếu có.
+- Review cuộc trò chuyện để tìm secret, URL riêng tư, dữ liệu khách hàng và dữ
+  liệu cá nhân không được đưa vào report.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:handoff ...` | Chạy như một Engineer Skill đã cài qua cơ chế native hoặc plugin tường minh. |
+| Cursor | `/ak:handoff ...` | Dùng cách viết slash đã được người dùng xác minh cho Engineer Skill; chưa xác lập tính tương đương rộng hơn của runtime. |
+| Codex | `$ak:handoff ...` | Dùng cơ chế khám phá native của Codex; tạo tệp vẫn phụ thuộc quyền workspace. |
+
+## Chạy Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:handoff "Continue the authentication migration after the failing integration test is diagnosed"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:handoff "Continue the authentication migration after the failing integration test is diagnosed"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:handoff "Continue the authentication migration after the failing integration test is diagnosed"
+```
+
+  </Tab>
+</Tabs>
+
+Đối số tùy chọn nêu trọng tâm của phiên tiếp theo. Skill không có mode flag đã
+công bố.
+
+## Hiểu những gì diễn ra trong một lần chạy
+
+1. **Skill đọc thẩm quyền project.** Skill kiểm tra chỉ dẫn repo, plan liên quan
+   và handoff trước đó cho cùng trọng tâm khi có.
+2. **Skill ghi lại mục tiêu và trạng thái hiện tại.** Skill phân biệt công việc
+   đã hoàn tất, đang làm, bị chặn và chưa xác minh.
+3. **Skill ghi quyết định.** Skill giữ lại lý do, phương án bị loại, dependency
+   và bẫy đã biết mà không tạo quyết định mới.
+4. **Skill trỏ tới bằng chứng.** Skill tham chiếu plan, issue, quyết định, commit,
+   diff, test và tệp thay vì sao chép chúng.
+5. **Skill biên tập nội dung nhạy cảm.** Skill xóa secret, credential, URL riêng
+   tư, dữ liệu khách hàng và dữ liệu cá nhân, chỉ giữ pointer vị trí an toàn khi
+   cần.
+6. **Skill viết hai output giống nhau.** Skill trả về một fenced Markdown block
+   và lưu cùng nội dung dưới dạng report có timestamp.
+7. **Skill chuẩn bị quay lại.** Skill kết thúc bằng prompt ngắn yêu cầu agent mới
+   đọc các tệp được liệt kê và xác minh handoff trước khi hành động.
+
+## Giữ report an toàn
+
+<Callout type="warn" title="Handoff luôn tạo artifact trong project">
+  Skill ghi
+  `plans/reports/handoff-YYYYMMDD-HHmm-&lt;slug&gt;.md`. Nếu project không có thư
+  mục `plans/`, Skill hỏi bạn vị trí output an toàn trước khi ghi.
+</Callout>
+
+Handoff phải nằm trong project hoặc vị trí report đã thỏa thuận. Nội dung không
+được lặp lại chỉ dẫn gốc, chứa credential hay dữ liệu riêng tư, tạo quyết định
+mới hoặc biến công việc mở thành lệnh chưa xác minh cho agent tiếp theo.
+
+Workflow trong source không yêu cầu thay đổi Git, truy cập network, xuất bản,
+provider bên ngoài hay dịch vụ trả phí.
+
+## Xác minh kết quả
+
+Handoff đầy đủ chứa:
+
+- Tiêu đề ngắn, thời gian tạo và trọng tâm phiên tiếp theo.
+- Mục tiêu và lý do quan trọng.
+- Trạng thái hiện tại theo sự thật.
+- Quyết định chính và lý do.
+- Phương án bị loại và bẫy đã biết.
+- Trạng thái xác minh, gồm check chưa chạy hoặc chưa pass.
+- Tệp và source pointer liên quan.
+- Công việc mở được diễn đạt thành trạng thái và dependency.
+- Prompt xác minh ngắn cho agent mới.
+
+Xác nhận phản hồi fenced và report đã lưu giống nhau, đồng thời giá trị đã biên
+tập không thể được dựng lại từ nội dung.
+
+## Khắc phục sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Handoff giống task list | Diễn đạt lại công việc mở thành trạng thái hiện tại, dependency và bằng chứng còn cần. |
+| Handoff lặp lại chỉ dẫn project | Thay quy tắc sao chép bằng pointer tới tệp chỉ dẫn sở hữu chúng. |
+| Handoff chứa secret hoặc URL riêng tư | Dừng, xóa giá trị nhạy cảm khỏi cả hai output và chỉ giữ pointer vị trí an toàn nếu cần. |
+| Không có thư mục `plans/` | Chọn và phê duyệt vị trí report an toàn trong project trước khi ghi. |
+| Thiếu trạng thái Git hiện tại | Dùng `ak:watzup` cho status report rút từ repo; đừng mở rộng handoff thành report đó. |
+| Runtime không nhận ra Skill | Xác nhận target và scope, khởi động lại phiên runtime, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+## Biết giới hạn hiện tại
+
+- Handoff phản ánh cuộc trò chuyện, plan đã đọc và bằng chứng khả dụng; phiên sau
+  phải xác minh lại với repo.
+- Redaction chỉ bảo vệ report khi nội dung nhạy cảm được nhận ra và xóa; hãy
+  review artifact trước khi chia sẻ.
+- Skill giữ ngữ cảnh phiên, không thực hiện audit repo đầy đủ.
+- Cách gọi slash trên Cursor là bằng chứng do người dùng xác minh, không chứng
+  minh tính tương đương đầy đủ của runtime.
+- Stable và beta đóng gói cùng workflow và cấu trúc report của `ak:handoff`.

@@ -1,0 +1,126 @@
+---
+title: ak changelog
+description: Read signature-verified CLI, app, and public-kit release history with exact range and cache semantics.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak changelog` to inspect public release summaries before updating or to
+compare releases newer than the installed CLI. The command verifies signed
+catalog metadata and verifies full bodies by digest before displaying them.
+
+## Usage
+
+```bash
+ak changelog
+```
+
+The command accepts no positional arguments and never prompts.
+
+## Command flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--channel <channel>` | Empty (`beta`) | Select `beta`, `stable`, or `staging`. |
+| `--target <target>` | `[]` (all public targets) | Filter `cli`, `app`, `kits`, `engineer`, or `marketing`; repeat or use comma-separated values. `all`, `kit`, `kit-engineer`, and `kit-marketing` are also accepted. |
+| `--kit <kit>` | Empty | Filter the documented public `engineer` or `marketing` kit. |
+| `--version <version>` | Empty | Select one exact semantic version. |
+| `--from <version>` | Empty | Set the exclusive lower bound; requires `--to`. |
+| `--to <version>` | Empty | Set the inclusive upper bound; requires `--from`. |
+| `--since-current` | `false` | Select versions newer than the running `ak` version. |
+| `--full` | `false` | Fetch and print verified component bodies instead of summaries only. |
+| `--registry-url <url>` | Empty | Override the catalog root; otherwise use `AGENTKIT_CHANGELOG_CATALOG_URL` or the release default. |
+
+Shared flags are described in [CLI conventions](../cli-conventions). `--yes`
+and `--no-interactive` do not change this read path.
+
+## Filter exact releases
+
+```bash
+ak changelog --target cli
+ak changelog --kit engineer
+ak changelog --version 2.6.0
+ak changelog --from 2.5.0 --to 2.6.0 --json
+ak changelog --since-current
+```
+
+`--version` cannot be combined with `--from`, `--to`, or `--since-current`.
+Both range flags are required together, and `--from` cannot be newer than
+`--to`. If you combine `--kit` with `--target`, the target selection must
+include `kits`, `kit`, or `all`.
+
+The current `--kit` implementation reuses the generic target normalizer and can
+accept other target aliases. Treat that as an implementation detail: use
+`--target` for non-kit filtering and keep `--kit` to `engineer` or `marketing`.
+
+<Callout type="warning">
+  Despite the help wording “from,” the current runtime excludes the exact
+  `--from` version and includes the exact `--to` version. Treat the interval as
+  `(--from, --to]`.
+</Callout>
+
+If the running binary version is unavailable or no longer retained in the
+catalog, `--since-current` can return a partial result with a reason instead of
+an exact newer-than set. Check completeness in JSON or the warning in human
+output.
+
+## Verification, network, and cache
+
+The default release-domain request is unauthenticated HTTPS; the command does
+not use an AgentKit session or kit entitlement. A custom `--registry-url`
+controls the catalog origin, so use only a trusted HTTPS endpoint. Component
+body URLs must be HTTPS, except loopback HTTP accepted for local use. The
+selected catalog must pass schema and Ed25519 signature verification. With
+`--full`, every component body must also match the SHA-256 digest recorded in
+that signed catalog.
+
+The primary signed-catalog query runs in read-only cache mode. If the network or
+new catalog is unavailable, AgentKit can read and reverify cached metadata and
+bodies. A legacy release-catalog compatibility fallback can populate verified
+catalog or body files under the AgentKit changelog cache, so do not treat every
+successful invocation as byte-for-byte disk-write-free.
+
+The command never changes installed versions, update state, credentials, or
+entitlements. There is no preview, apply, force, confirmation, backup, or
+rollback mode.
+
+## Human and JSON output
+
+Human output lists release version and publication date, then target summaries;
+`--full` adds verified bodies. No matches is a successful empty result.
+
+JSON stdout is one envelope with `kind=changelog` and these fields under `data`:
+
+```text
+status, reason, channel, fetchedAt, stale, source, completeness
+releases[].version, channel, publishedAt
+releases[].components[].target, summary, bodyUrl, body
+```
+
+`body` appears only when requested and available. `completeness` is `complete`,
+`partial`, or `unavailable`; `stale` identifies cache-backed data.
+
+When `--full` leaves `reason=changelog_body_unavailable`, the command exits `1`.
+If an earlier partial reason already occupies `reason`, a missing body can remain
+an exit-`0` partial result. Check `completeness`, `reason`, and each requested
+component's `body`; do not use exit status alone as a full-body completeness
+gate.
+
+Validation and availability failures occur before the renderer. With `--json`,
+they are not guaranteed to emit a JSON error envelope, so gate on the process
+exit as well as parsed output. Flag-parse errors can remain plain text.
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | Verified matching output, an empty match, or an allowed partial result was produced. | Inspect `completeness`, `reason`, and `stale` before relying on it. |
+| `1` | Signed catalog metadata was unavailable, AgentKit home resolution failed, `reason` was `changelog_body_unavailable` in full mode, or a positional argument was supplied. | Restore trusted network access, correct the invocation, or retry with an existing verified cache; do not bypass verification. |
+| `2` | Filters, channel, target, semantic versions, flags, or arguments were invalid. | Correct the query. |
+
+## Related commands
+
+- [Check or apply signed CLI updates](./self-update)
+- [List local and remote versions](./versions)
+- [Complete `ak changelog` command facts](../cli/ak_changelog)
+- [CLI conventions](../cli-conventions)

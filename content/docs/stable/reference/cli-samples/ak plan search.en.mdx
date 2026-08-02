@@ -1,0 +1,71 @@
+---
+title: ak plan search
+description: Run bounded ranked full-text search over the private local plan index with structured plan filters.
+---
+
+Use `ak plan search` to find indexed plan and phase text without scanning the
+repository on each query.
+
+## Usage
+
+```bash
+ak plan search <query> [flags]
+```
+
+One or more query tokens are joined with spaces.
+
+## Command flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--project <slug>` | Empty | Exact project-slug filter. |
+| `--branch <name>` | Empty | Exact branch filter. |
+| `--issue <number>` | `0` | Exact issue filter when positive. |
+| `--status <status>` | Empty | One of `pending`, `in-progress`, `completed`, `cancelled`, or `unknown`. |
+| `--limit <n>` | `0` | Maximum hits; zero or a negative value uses the effective default `50`. |
+| `--include-closed` | `false` | Include closed plans. |
+| `--include-archived` | `false` | Include archived plans. |
+
+## Search scope and limits
+
+SQLite FTS5 ranks matches across plan task titles plus phase titles, bodies,
+notes, evidence, and acceptance. Title matches have the highest weighting;
+the exported score is higher for a more relevant result.
+
+Input is bounded to 256 bytes and 16 whitespace-delimited tokens. Each retained
+token becomes a quoted literal phrase and terms are combined with AND.
+Control bytes, punctuation-only tokens, and trailing `*` operators are removed.
+If no searchable token remains, the command returns an empty result and exit
+`0`.
+
+Structured filters are exact SQL filters, not FTS terms. Search reads the
+existing index and does not freshen plan files. Run `ak plan reindex` after
+hand edits that have not already been synchronized.
+
+## Privacy and effects
+
+The index stores searchable copies of plan and phase content under
+`$AGENTKIT_HOME/plans/plans.db`. AgentKit enforces owner-only permissions on
+the store directory and files, but search results and snippets can still expose
+the indexed content to stdout or logs. Review automation destinations.
+
+The command makes no network, auth, provider, process, stdin, or prompt call.
+It does not mutate plan rows, although opening a missing or older store can
+create or forward-migrate it. There is no apply, force, confirmation, or backup.
+
+## Output
+
+Human output shows hit location, matched fields, and snippet. Plain output is
+tab-separated. JSON success uses `kind=plan.search`; each `data[]` hit includes
+`plan_id`, optional `phase_n`, `score`, snippet, matched fields, and plan summary
+fields. No match returns an empty array.
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | Search completed, including no matches or an all-dropped query. | Inspect the result array. |
+| `1` | The plan store or FTS query failed. | Repair store access; reindex if the index is stale or unusable. |
+| `2` | The status, flags, or argument count was invalid. | Correct the query or filter. |
+
+## Related commands

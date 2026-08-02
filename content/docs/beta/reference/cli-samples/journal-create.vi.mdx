@@ -1,0 +1,100 @@
+---
+title: ak journal create
+description: Tạo một bản ghi công việc Markdown atomic, tránh va chạm tên trong thư mục plans/journals của project.
+---
+
+Dùng `ak journal create` sau phần implementation, review hoặc xử lý incident
+đáng kể khi cần một bản ghi theo thời gian.
+
+## Cách dùng
+
+```bash
+ak journal create <title>
+```
+
+Lệnh yêu cầu đúng một title không rỗng.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--summary <text>` | Rỗng | Lưu summary ngắn trong frontmatter. Summary cũng trở thành body khi stdin không cung cấp body khác rỗng. |
+| `--date <YYYY-MM-DD>` | Ngày UTC hiện tại | Chọn ngày của entry. Giá trị khác định dạng sẽ thất bại trước khi commit file journal. |
+| `--project <name>` | Project đã đăng ký khớp cwd, sau đó là cwd | Chọn chính xác tên project đã đăng ký. |
+| `--stdin` | `false` | Đọc toàn bộ body từ stdin đến EOF. |
+
+Các cờ đầu ra dùng chung nằm trong [quy ước CLI](../cli-conventions).
+
+## Ví dụ
+
+Tạo entry với body ngắn lấy từ summary:
+
+```bash
+ak journal create "Fix install race" --summary "Root cause and fix"
+```
+
+Cung cấp body dài hơn:
+
+```bash
+printf '%s\n' 'Validated the lock ordering and added a regression test.' |
+  ak journal create "Fix install race" --stdin --date 2026-07-27
+```
+
+Chỉ dùng `--stdin` khi producer sẽ đóng stream. Lệnh đọc toàn bộ stream vào bộ
+nhớ và ghi nguyên văn sau khi bỏ whitespace ở đầu và cuối.
+
+## Hành vi file và ownership
+
+Đích là `<project>/plans/journals/`. AgentKit tạo thư mục với quyền cho owner và
+group khi cần, ghi qua file tạm rồi rename vào vị trí cuối. Entry hoàn tất cho
+phép owner đọc và ghi.
+
+Filename bắt đầu bằng ngày đã chọn và ASCII slug tạo từ title, ví dụ
+`2026-07-27-fix-install-race.md`. Nếu tên đã tồn tại, lệnh nối `-2`, `-3`, v.v.
+Lệnh không bao giờ ghi đè journal hiện có.
+
+File sinh ra chứa YAML frontmatter, H1 title, body và ghi chú rằng entry là lịch
+sử, không phải nguồn thẩm quyền bền vững. Khi không có cả body lẫn summary, body
+là `_No body provided._`.
+
+Lệnh không có preview, xác nhận, `--force`, backup hay rollback. Nếu ghi file
+tạm thất bại, file đó được dọn và không có `.md` dở dang được commit.
+
+## Đầu ra và JSON
+
+Đầu ra dành cho người dùng ghi đường dẫn tuyệt đối đã tạo lên stdout. Plain
+output chỉ có đường dẫn. JSON thành công dùng `kind=journal.create`; các field
+trong `data` hiện giữ tên Go viết hoa:
+
+```json
+{
+  "schema_version": 1,
+  "kind": "journal.create",
+  "data": {
+    "Filename": "2026-07-27-fix-install-race.md",
+    "Path": "/project/plans/journals/2026-07-27-fix-install-race.md",
+    "Slug": "fix-install-race",
+    "Date": "2026-07-27"
+  }
+}
+```
+
+Không công bố path hoặc nội dung journal trước khi kiểm tra tên project, chi
+tiết nội bộ hay secret. Lệnh không dùng mạng hoặc auth.
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Một file journal mới đã được commit. |
+| `1` | I/O của home, stdin, thư mục, ghi file tạm hoặc rename thất bại. |
+| `2` | Title, date, tên project hoặc số argument không hợp lệ. |
+
+Với `--json`, lỗi lệnh có thể thoát mà không có JSON error envelope. Hãy kiểm
+tra mã thoát ngoài việc parse stdout.
+
+## Lệnh liên quan
+
+- [Liệt kê entry](./journal-list)
+- [Validate entry mới](./journal-validate)
+- [Nhóm lệnh journal](./journal)

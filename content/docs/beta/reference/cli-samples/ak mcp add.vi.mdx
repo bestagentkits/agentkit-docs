@@ -1,0 +1,111 @@
+---
+title: ak mcp add
+description: Thêm hoặc thay một MCP entry kiểu Claude với output đã redaction và consent rõ ràng cho thực thi bên thứ ba.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak mcp add` để ghi một MCP server entry vào JSON config kiểu Claude.
+Lệnh áp dụng ngay sau validation; không có bước preview, dry-run, apply hay
+force.
+
+## Cách dùng
+
+```bash
+ak mcp add <name> [flags]
+```
+
+Truyền đúng một tên server.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--command <command>` | Trống | Đặt executable. Nếu bỏ qua, `<name>` phải có trong catalog tích hợp. |
+| `--arg <value>` | Trống | Thêm một argument; lặp lại để giữ thứ tự. |
+| `--env <KEY=VALUE>` | Trống | Thêm hoặc thay một environment key; có thể lặp. |
+| `--source <path>` | Project `.mcp.json` | Chọn tệp JSON kiểu Claude để chỉnh sửa. |
+| `--claude-home <dir>` | Biến môi trường hoặc `~/.claude` | Thay parent discovery root. |
+| `--cwd <dir>` | Thư mục hiện tại | Thay thư mục nguồn project mặc định. |
+
+Các cờ dùng chung nằm trong [quy ước CLI](../cli-conventions).
+
+## Thêm server thủ công
+
+```bash
+ak mcp add memory \
+  --command npx \
+  --arg -y \
+  --arg @modelcontextprotocol/server-memory \
+  --source .mcp.json
+```
+
+Entry thủ công không hỏi confirmation. Nếu tên đã tồn tại, command và danh
+sách argument bị thay. Environment key hiện có được giữ trừ khi bạn truyền lại
+chính key đó; field server không liên quan và top-level JSON key được giữ theo
+giá trị.
+
+<Callout type="warning">
+  Giá trị truyền qua `--env` có thể lộ trong shell history và process inspection
+  dù AgentKit không đưa nó vào output. Ưu tiên workflow cấu hình được bảo vệ và
+  dùng placeholder trong script hoặc support log.
+</Callout>
+
+Giá trị hiển thị đã mask như `********1234` bị từ chối nếu key chưa có giá trị
+thật trên disk. Assignment `--env` trống hoặc sai định dạng thất bại trước khi
+ghi.
+
+## Thêm server từ catalog
+
+Catalog tích hợp có `dataforseo`. Bỏ `--command` sẽ chọn package `npx` đã pin.
+AgentKit không tự ghi credential DataForSEO; hãy cấu hình môi trường bắt buộc
+riêng.
+
+```bash
+ak mcp add dataforseo --yes --source .mcp.json
+```
+
+Catalog add tương tác cảnh báo về thực thi bên thứ ba, data egress và chi phí
+có thể phát sinh, rồi hỏi `Proceed? [y/N]:` trên stderr. Enter trống, EOF hoặc
+câu trả lời khác `y`/`yes` sẽ từ chối với mã `3`.
+
+<Callout type="warning">
+  Chỉ `--json` không bỏ confirmation này trong command path hiện tại. Dùng
+  `--yes` để consent unattended rõ ràng. `--no-interactive` cũng tiếp tục ghi
+  mà không prompt; nó không phải preview. Chỉ non-TTY stdin không bỏ prompt.
+</Callout>
+
+## Hiệu ứng disk và khôi phục
+
+Tệp được ghi atomically với mode `0600`; parent directory thiếu sẽ được tạo.
+Trước khi thay tệp hiện có không rỗng, AgentKit copy nó vào
+`~/.agentkit/backups/mcp-json/` (`AGENTKIT_HOME` đổi root). Lệnh không in đường
+dẫn backup, vì vậy hãy tự tạo bản sao có tên nếu cần rollback rõ ràng. Tệp mới
+không có backup trước ghi.
+
+Chạy lại cùng một add hiệu dụng trả `changed=false`, không rewrite hay tạo
+backup mới. Manual add không có confirmation.
+
+## Output và luồng
+
+Human success ra stdout, gồm trạng thái changed, tên server, path, command,
+argument và tên environment key. Giá trị môi trường không bao giờ hiển thị.
+
+JSON success là một envelope trên stdout với `kind=mcp.add`; dùng
+`data.changed`, `data.path` và `data.server`. Flag-parse error có thể vẫn là
+plain text.
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Entry đã được thêm, cập nhật hoặc đã giống hệt. |
+| `1` | Catalog name, environment assignment, path, JSON, backup, validation hoặc ghi thất bại. |
+| `2` | Argument hoặc cờ không hợp lệ. |
+| `3` | Catalog confirmation bị từ chối hoặc stdin kết thúc. |
+
+## Lệnh liên quan
+
+- [Liệt kê server đã khám phá](../cli/ak_mcp_list)
+- [Xoá một entry](../cli/ak_mcp_remove)
+- [Thông tin đầy đủ của `ak mcp add`](../cli/ak_mcp_add)

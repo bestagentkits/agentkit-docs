@@ -1,0 +1,122 @@
+---
+title: ak backups verify
+description: Recompute snapshot hashes and require a command-local integrity exit before restore.
+---
+
+Use `ak backups verify` to check whether one committed rollback snapshot is
+intact before restoring it. The command validates manifest restore metadata,
+topology, file types, file presence, and every recorded SHA-256 hash.
+
+## Syntax
+
+```bash
+ak backups verify <id>
+```
+
+## Before you run
+
+Find the ID with `ak backups list` and inspect its scope with
+`ak backups show <id>`. A valid ID has the shape
+`YYYYMMDDTHHMMSSZ-8lowercasehex`.
+
+Verification is local and read-only. It can read every captured byte, so allow
+time proportional to the snapshot size. It does not require authentication or
+network access.
+
+## Arguments
+
+| Argument | Required | Meaning |
+| --- | --- | --- |
+| `<id>` | Yes | One committed snapshot ID to verify. |
+
+Exactly one argument is required.
+
+## Options
+
+There are no command-specific options. Shared `--json` selects structured
+output; the other shared flags are described in
+[CLI conventions](../cli-conventions). The command never prompts, and `--yes`
+has no effect.
+
+## Examples
+
+Verify one snapshot for a person:
+
+```bash
+ak backups verify 20260426T123005Z-deadbeef
+```
+
+Use the process status as the integrity gate:
+
+```bash
+if ak backups verify 20260426T123005Z-deadbeef --json; then
+  echo 'snapshot is intact'
+fi
+```
+
+Do not restore based only on a parsed `status` field; also require exit `0`.
+
+## Output and streams
+
+An intact human result on stdout has this shape:
+
+```text
+[ok] backup intact (<files> files, <size>)
+```
+
+A corrupt result prints a failure block with the ID, file count, size, and the
+first detected mismatch. Verification stops at the first corrupt entry rather
+than collecting every mismatch.
+
+JSON writes a result envelope to stdout:
+
+```json
+{
+  "schema_version": 1,
+  "kind": "backups.verify",
+  "data": {
+    "id": "20260426T123005Z-deadbeef",
+    "status": "ok"
+  }
+}
+```
+
+`data.status` is `ok` or `corrupt`; JSON omits the human file count, size, and
+mismatch path. A corrupt snapshot still gets the result envelope on stdout and
+then exits `1`. Failures that occur before a result, such as a missing snapshot,
+use a structured JSON error envelope on stderr. Flag-parse errors can remain
+plain text.
+
+## Exit status
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Manifest metadata and every captured file passed verification. |
+| `1` | The snapshot is corrupt, or another integrity/read/render operation failed. |
+| `2` | The ID shape, argument count, or flags were invalid. |
+| `5` | No readable manifest exists at the validated ID. |
+
+The command has no confirmation or backup-lock exit.
+
+## Effects, safety, and recovery
+
+Verification opens only regular files beneath the snapshot data root, checks
+anchored relative paths, recomputes hashes, and leaves both the snapshot and
+live destinations unchanged. It does not repair corruption.
+
+If verification exits `1`, do not restore that snapshot. Preserve its directory
+for investigation, inspect the reported path and storage health, and choose a
+different verified snapshot. Create a new recovery snapshot through the
+lifecycle operation that owns the affected state before making further changes
+when practical.
+
+## Related commands and limitations
+
+- [List snapshots](./backups-list)
+- [Inspect the manifest and authority roots](./backups-show)
+- [Preview and apply restore](./backups-restore)
+- [Equivalent recovery entry point](./recover)
+
+The mismatch list is intentionally bounded to the first detected problem. A
+successful hash check proves snapshot integrity, not that restoring it is the
+right operational choice.

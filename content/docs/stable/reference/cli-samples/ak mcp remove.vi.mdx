@@ -1,0 +1,69 @@
+---
+title: ak mcp remove
+description: Xoá một entry khỏi MCP JSON config kiểu Claude đã chọn với ranh giới backup giới hạn.
+---
+
+Dùng `ak mcp remove` để xoá một entry theo tên khỏi tệp MCP JSON kiểu Claude.
+Lệnh chỉnh trực tiếp tệp đã chọn; không xoá entry khỏi Codex TOML và không có
+preview hay confirmation.
+
+## Cách dùng
+
+```bash
+ak mcp remove <name> [flags]
+```
+
+Truyền đúng một tên server.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--source <path>` | Project `.mcp.json` | Chọn tệp JSON kiểu Claude để chỉnh. |
+| `--claude-home <dir>` | Biến môi trường hoặc `~/.claude` | Thay parent discovery root. |
+| `--cwd <dir>` | Thư mục hiện tại | Thay thư mục project mặc định. |
+
+Cờ dùng chung nằm trong [quy ước CLI](../cli-conventions). `--yes` và
+`--no-interactive` không đổi hành vi vì lệnh không prompt.
+
+## Áp dụng và kiểm tra
+
+```bash
+ak mcp remove memory --source .mcp.json --json
+ak mcp list --cwd . --json
+```
+
+Nếu tên không có trong tệp đã chọn, removal thành công idempotently với
+`changed=false`. Lệnh không tìm inventory đã merge để tự chọn nguồn và không
+xoá entry cùng tên ở tệp khác.
+
+## Hiệu ứng disk và khôi phục
+
+Khi removal thay đổi tệp không rỗng, AgentKit copy bản gốc vào
+`~/.agentkit/backups/mcp-json/` (`AGENTKIT_HOME` đổi root), rồi ghi JSON
+atomically với mode `0600`. Top-level key không liên quan và server khác được
+giữ theo giá trị.
+
+Success renderer không hiển thị backup path. Tự tạo bản sao có tên trước khi
+xoá nếu cần rollback dễ tìm. Removal không đổi dữ liệu sẽ không ghi hay tạo
+backup. Không có ranh giới `--force`.
+
+## Output và luồng
+
+Human success trên stdout báo changed state, path và metadata server đã xoá.
+Giá trị môi trường vẫn chỉ hiện thành key name. JSON success là một envelope
+với `kind=mcp.remove`. Flag-parse error có thể vẫn là plain text.
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Entry đã xoá hoặc vốn không tồn tại. |
+| `1` | Path, JSON, backup hoặc atomic write thất bại. |
+| `2` | Argument hoặc cờ không hợp lệ. |
+
+## Lệnh liên quan
+
+- [Liệt kê server](../cli/ak_mcp_list)
+- [Thêm hoặc thay entry](../cli/ak_mcp_add)
+- [Thông tin đầy đủ của `ak mcp remove`](../cli/ak_mcp_remove)

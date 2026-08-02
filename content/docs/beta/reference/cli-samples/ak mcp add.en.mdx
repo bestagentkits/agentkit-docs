@@ -1,0 +1,120 @@
+---
+title: ak mcp add
+description: Add or replace one Claude-style MCP entry with redacted output and explicit third-party execution consent.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak mcp add` to write one MCP server entry to a Claude-style JSON config.
+The command applies immediately after validation; it has no preview, dry-run,
+apply, or force phase.
+
+## Usage
+
+```bash
+ak mcp add <name> [flags]
+```
+
+Supply exactly one server name.
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--command <command>` | Empty | Set the executable. Without it, `<name>` must be in the built-in catalog. |
+| `--arg <value>` | Empty | Append one argument; repeat to preserve order. |
+| `--env <KEY=VALUE>` | Empty | Add or replace one environment key; repeat as needed. |
+| `--source <path>` | Project `.mcp.json` | Select the Claude-style JSON file to edit. |
+| `--claude-home <dir>` | Environment or `~/.claude` | Change the parent discovery root. |
+| `--cwd <dir>` | Current directory | Change the default project source directory. |
+
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+## Add a manual server
+
+```bash
+ak mcp add memory \
+  --command npx \
+  --arg -y \
+  --arg @modelcontextprotocol/server-memory \
+  --source .mcp.json
+```
+
+Manual entries do not ask for confirmation. If the name already exists, its
+command and argument list are replaced. Existing environment keys are
+preserved unless the same key is supplied again; unrelated server fields and
+top-level JSON keys are preserved by value.
+
+<Callout type="warning">
+  A value passed through `--env` can be exposed by shell history and process
+  inspection even though AgentKit never includes it in command output. Prefer
+  a protected config workflow and placeholders in saved scripts or support
+  logs.
+</Callout>
+
+Masked display values such as `********1234` are rejected when there is no
+real value already stored for that key. Empty or malformed `--env` assignments
+fail before a write.
+
+## Add the catalog server
+
+The built-in catalog contains `dataforseo`. Omitting `--command` selects its
+pinned `npx` package. AgentKit does not seed DataForSEO credentials; configure
+the required environment separately.
+
+```bash
+ak mcp add dataforseo --yes --source .mcp.json
+```
+
+An interactive catalog add warns about third-party execution, data egress, and
+possible billing, then asks `Proceed? [y/N]:` on stderr. Bare Enter, EOF, or any
+answer other than `y` or `yes` declines with exit `3`.
+
+<Callout type="warning">
+  `--json` alone does not suppress this catalog confirmation in the current
+  command path. Use `--yes` for explicit unattended consent.
+  `--no-interactive` also proceeds without prompting; it is not a preview.
+  Non-TTY stdin by itself does not suppress the prompt.
+</Callout>
+
+## Disk effects and recovery
+
+The file is written atomically with mode `0600`; a missing parent directory is
+created. Before changing a non-empty existing file, AgentKit copies it under
+`~/.agentkit/backups/mcp-json/` (`AGENTKIT_HOME` changes the root). The command
+does not print that backup path, so make your own named copy when you require a
+known rollback point. A new file has no pre-write backup.
+
+Running the same effective add again returns `changed=false` and does not
+rewrite or create another backup. There is no confirmation for a manual add.
+
+## Output and streams
+
+Human success is written to stdout and includes changed state, server name,
+path, command, arguments, and environment key names. Environment values are
+never displayed.
+
+JSON success is one envelope on stdout:
+
+```json
+{"schema_version":1,"kind":"mcp.add","data":{"changed":true,"path":"/project/.mcp.json","server":{"name":"memory","command":"npx","args":["-y","@modelcontextprotocol/server-memory"],"envKeys":[],"source":"/project/.mcp.json","sourceDescription":"","harness":"","enabled":false}}}
+```
+
+Treat optional/default server metadata as implementation detail; gate on
+`schema_version`, `kind`, `data.changed`, and the redacted fields you need.
+Flag-parse errors can remain plain text.
+
+## Exit status
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The entry was added, updated, or already identical. |
+| `1` | The catalog name, environment assignment, path, JSON, backup, validation, or write failed. |
+| `2` | Arguments or flags were invalid. |
+| `3` | The catalog confirmation was declined or stdin ended. |
+
+## Related commands
+
+- [List discovered servers](../cli/ak_mcp_list)
+- [Remove an entry](../cli/ak_mcp_remove)
+- [Complete `ak mcp add` command facts](../cli/ak_mcp_add)

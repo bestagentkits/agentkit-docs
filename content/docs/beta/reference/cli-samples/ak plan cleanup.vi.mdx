@@ -1,0 +1,76 @@
+---
+title: ak plan cleanup
+description: Xem trước hoặc archive các plan store row đã đóng và cũ mà không xoá tệp plan trong repository.
+---
+
+Dùng `ak plan cleanup` để quét retention các plan đã đóng trong plan store cục
+bộ riêng tư. Mặc định là preview; chỉ `--apply` mới đổi trạng thái vòng đời.
+
+## Cách dùng
+
+```bash
+ak plan cleanup --older-than <duration> [--apply]
+```
+
+## Tuỳ chọn của lệnh
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--older-than <duration>` | Bắt buộc | Chọn plan đã đóng có `updated_at` sớm hơn thời điểm hiện tại trừ Go duration này. |
+| `--apply` | `false` | Archive các row đã chọn. Khi thiếu cờ, chỉ báo candidate. |
+
+Go duration dùng đơn vị như `h`, `m`, `s`; `90d` không hợp lệ. Ví dụ, 30 ngày
+là `720h`. Giá trị zero được chấp nhận và có thể chọn mọi plan đã đóng được cập
+nhật trước lúc bắt đầu sweep; duration âm bị từ chối.
+
+## Preview rồi apply
+
+```bash
+ak plan cleanup --older-than 720h --json
+ak plan cleanup --older-than 720h --apply --json
+```
+
+Hãy xem candidate trong `data.archived` của kết quả đầu trước khi chạy lệnh
+thứ hai. `--apply` là quyền cho phép mutation: lệnh không prompt, đọc stdin hay
+yêu cầu thêm `--yes`.
+
+Cleanup có apply đổi row `closed` thành `archived`. Lệnh không bao giờ xoá plan
+row, mục full-text hay tệp plan trong repository, nên plan đã archive vẫn tìm
+kiếm được. Khi ít nhất một row thay đổi, AgentKit tạo một snapshot SQLite cho
+toàn store rồi cập nhật mọi candidate trong một transaction. Apply không có
+candidate sẽ không tạo snapshot.
+
+Việc mở plan store có thể tạo hoặc forward-migrate
+`$AGENTKIT_HOME/plans/plans.db` ngay cả khi preview. Không có mạng, xác thực,
+provider hay cache từ xa.
+
+## Đầu ra và quyền riêng tư
+
+JSON thành công dùng `kind=plan.cleanup` với:
+
+```text
+data.applied, data.older_than, data.cutoff,
+data.already_archived, data.archived[]
+```
+
+Mỗi phần tổng hợp có thể chứa URL repository và đường dẫn tuyệt đối cục bộ.
+Pretty output gồm cutoff và candidate. Plain output không tương tác chỉ là danh
+sách candidate phân tách bằng tab và có thể rỗng, vì vậy script nên dùng JSON.
+Thành công ở stdout; lỗi ở stderr. Không có chế độ NDJSON.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Preview hoàn tất hoặc các row đã chọn đã được archive. Tập rỗng vẫn thành công. | Kiểm tra `data.applied` và `data.archived`. |
+| `1` | Store, snapshot, query hoặc transaction thất bại. | Giữ nguyên store và thư mục recovery; đọc lỗi trước khi thử lại. |
+| `2` | `--older-than` bị thiếu, âm, không phải Go duration hoặc input khác không hợp lệ. | Sửa duration rồi preview lại. |
+
+Snapshot khôi phục plan store nằm trong
+`$AGENTKIT_HOME/plans/plans-recovery/`; đây là artifact toàn store và không được
+`ak backups` liệt kê.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak plan`](../cli/ak_plan)
+- [Quy ước CLI](../cli-conventions)

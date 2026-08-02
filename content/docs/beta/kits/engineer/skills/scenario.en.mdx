@@ -1,0 +1,202 @@
+---
+title: Expand edge cases with ak:scenario
+description: Decompose a feature across twelve dimensions and produce bounded, deduplicated scenario evidence for planning and tests.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:scenario` to turn a feature description or code path into concrete edge
+cases, failure paths, and test targets. Run one pass for a fast review, a fixed
+iteration count for a hard ceiling, or saturation mode to continue until two
+consecutive iterations add no new scenarios.
+
+## Choose ak:scenario for pre-implementation coverage
+
+### Use ak:scenario when
+
+- A complex or stateful feature needs edge cases before implementation.
+- You are planning regression tests, reviewing an API contract, or preparing a
+  release risk audit.
+- Timing, scale, authorization, data integrity, integrations, or partial failure
+  could change expected behavior.
+- You want each scenario classified and linked to an expected outcome.
+
+### Choose another workflow when
+
+- The change is trivial, cosmetic, or has no meaningful logic branch.
+- The target is mature and already has current evidence for the same risks.
+- You need to execute tests rather than generate targets. Use `ak:test`.
+- You need a five-perspective verdict on a proposed design. Use `ak:predict`.
+- You need implementation. Feed approved scenarios into `ak:plan` or `ak:cook`.
+
+## Prepare the target and bound
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Engineer Kit is installed for the current runtime and scope.
+- Provide a feature description or narrow file path and the behavior it should
+  preserve.
+- Name actors, state, data, integrations, constraints, and known failure modes.
+- Choose one-shot, `--iterations N`, or `--saturation` deliberately.
+- Prefer `--iterations N` when you require a hard count ceiling. Saturation mode
+  has a novelty stop but no separate numeric maximum in the shipped contract.
+- Exclude secrets and unrelated files from the evidence scope.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:scenario ...` | Runs as an installed Engineer Skill and can read authorized project evidence. |
+| Cursor | `/ak:scenario ...` | Uses the user-verified slash spelling for Engineer Skills; broader runtime parity is not established. |
+| Codex | `$ak:scenario ...` | Uses native Codex Skill discovery; file access and approval behavior follow the live host. |
+
+## Run a bounded exploration
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:scenario "Account recovery with expiring email links, active sessions, and organization SSO" --iterations 25 --domain security --focus failures --format test-scenarios
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:scenario "Account recovery with expiring email links, active sessions, and organization SSO" --iterations 25 --domain security --focus failures --format test-scenarios
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:scenario "Account recovery with expiring email links, active sessions, and organization SSO" --iterations 25 --domain security --focus failures --format test-scenarios
+```
+
+  </Tab>
+</Tabs>
+
+Use one-shot mode by omitting both `--iterations` and `--saturation`:
+
+```text
+/ak:scenario src/api/account-recovery.ts
+```
+
+For Codex, use `$ak:scenario src/api/account-recovery.ts`.
+
+## Choose the exploration controls
+
+| Input or option | Default | Effect |
+| --- | --- | --- |
+| Feature description or file path | Required | Defines the behavior and evidence scope |
+| `--iterations N` | — | Runs exactly `N` scenario iterations, then summarizes |
+| `--saturation` | Off | Stops after two consecutive iterations produce no `New` classification |
+| `--domain <type>` | Auto | Prioritizes `software`, `product`, `business`, `security`, or `marketing` context |
+| `--focus <dim>` | Auto | Prioritizes `edge-cases`, `failures`, `security`, or `scale` |
+| `--format <type>` | `table` | Selects `table`, `use-cases`, `test-scenarios`, or `threat-scenarios` |
+
+Do not combine a claim of exhaustive coverage with either mode. A fixed count is
+a budget, and saturation is a novelty heuristic—not proof that all behavior has
+been discovered.
+
+## Understand the twelve dimensions
+
+The Skill first filters for relevance rather than filling every category
+mechanically:
+
+| Dimension | Questions it surfaces |
+| --- | --- |
+| User types | Roles, guests, new users, banned users, automation, and abuse |
+| Input extremes | Empty, null, maximum, Unicode, malformed, and injection inputs |
+| Timing | Concurrency, races, timeouts, slow paths, and retry storms |
+| Scale | Zero, one, large sets, pagination, and cursor boundaries |
+| State transitions | First use, interruption, resume, crash, and partial completion |
+| Environment | Device, CPU, JavaScript, assistive technology, proxy, locale, and timezone |
+| Error cascades | Dependency outage, full disk, memory pressure, partition, and partial write |
+| Authorization | Expiry, role mismatch, sharing, CORS, CSRF, and privilege escalation |
+| Data integrity | Duplicates, orphans, encoding, and migration concurrency |
+| Integration | Replay, version mismatch, outage, and contract drift |
+| Compliance | Deletion, audit, retention, and PII exposure |
+| Business logic | Boundary prices, stacking, refunds, delivery state, and usage limits |
+
+Irrelevant dimensions should be listed with a reason, not silently counted as
+covered.
+
+## Observe the scenario loop
+
+1. **The Skill reads the target.** It identifies actors, components,
+   preconditions, state, and expected behavior.
+2. **The Skill filters dimensions.** Relevant dimensions become the exploration
+   plan; skipped dimensions remain visible.
+3. **The Skill proposes one situation per iteration.** A trigger, flow, and
+   expected outcome make the scenario testable.
+4. **The Skill classifies novelty.** `New` and useful `Variant` scenarios stay;
+   `Duplicate`, out-of-scope, and low-value cases are discarded with reasons.
+5. **The Skill expands kept cases.** Boundaries, interruptions, ordering, and
+   stale or missing data expose derived edge cases.
+6. **The Skill rotates exploration.** After three same-dimension iterations, it
+   moves through dimensions, combinations, negation, amplification, personas,
+   and temporal shifts.
+7. **The Skill checkpoints progress.** Every five iterations it summarizes kept
+   and discarded cases, dimensions, severity, and gaps.
+8. **The Skill stops and synthesizes.** The selected count or novelty condition
+   ends the run, followed by a grouped report and coverage matrix.
+
+## Keep the analysis within its authority
+
+<Callout type="warn" title="Scenarios are hypotheses, not verified defects">
+  A Critical or High row identifies a consequence worth testing. It does not
+  prove exploitability, production behavior, or compliance impact. Require
+  implementation evidence, tests, and specialist review before release action.
+</Callout>
+
+The workflow reads authorized evidence and may write `scenario-results.tsv` in
+iterative mode. It should not change product code, create test files, contact
+external systems, or execute attack payloads as part of scenario generation.
+
+Keep sensitive source and customer data out of the prompt and report. If a
+scenario implies a destructive test, credential use, production traffic, or an
+external cost, record it as a gated follow-up rather than running it.
+
+## Verify the scenario evidence
+
+A complete report should contain:
+
+- Target, assumptions, evidence scope, and selected mode.
+- Dimensions analyzed and dimensions skipped with reasons.
+- Scenarios with trigger, flow, expected behavior, severity, and dimension.
+- In iterative mode, `scenario-results.tsv` with novelty classification and
+  discard reasons.
+- Progress checkpoints for longer runs.
+- A coverage matrix and explicit gaps.
+- The halt reason: one-shot, fixed count, or two no-new iterations.
+- Follow-on test, plan, prediction, or security-review recommendations.
+
+The bundled composite score weights generated scenarios, edge cases,
+dimensions, actors, and severity. Treat it as an internal prioritization
+heuristic, not a coverage percentage or release threshold.
+
+## Troubleshoot or continue
+
+| Symptom | Safe next step |
+| --- | --- |
+| Scenarios are generic | Add actors, state transitions, integrations, constraints, and expected behavior. |
+| Too many duplicates appear | Narrow the target, inspect prior classifications, and switch dimension or trigger. |
+| One dimension dominates | Apply the source-defined rotation and report remaining gaps. |
+| Saturation runs longer than expected | Stop manually or restart with `--iterations N` for a hard ceiling. |
+| A Critical row lacks evidence | Keep it as a hypothesis and route it to focused testing or security review. |
+| The report claims exhaustive coverage | Replace the claim with analyzed dimensions, iteration count, novelty result, and known gaps. |
+| The runtime cannot find the Skill | Confirm installation and follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Pass testable rows to `ak:test`, Critical and High risks to `ak:plan`, or the
+most consequential proposal to `ak:predict`.
+
+## Know the current limits
+
+- Scenario generation does not prove runtime behavior or complete coverage.
+- Novelty classification and severity include model judgment and can be wrong.
+- `--saturation` has a two-iteration novelty stop but no source-defined maximum
+  iteration count; use `--iterations N` for a strict resource ceiling.
+- Composite score is heuristic and must not be presented as test coverage.
+- Runtime access controls what files and context the Skill can inspect.
+- Stable and beta contain identical `ak:scenario` dimensions and loop rules.

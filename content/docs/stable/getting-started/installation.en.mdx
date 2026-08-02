@@ -1,17 +1,27 @@
 ---
 title: Installation
-description: Install the ak command-line tool, verify the binary, and pick a release channel — about two minutes on any platform.
+description: Install and verify the ak CLI on macOS, Linux, or Windows.
 ---
 
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
-import { Step, Steps } from 'fumadocs-ui/components/steps';
-import { Accordion, Accordions } from 'fumadocs-ui/components/accordion';
 
-AgentKit ships as a single binary, `ak`. The installer detects your platform,
-fetches the signed binary for your channel, and puts `ak` on your `PATH`. It is
-idempotent — re-run it any time to upgrade in place.
+After this page, the `ak` command will be available in your terminal and ready
+for first-run setup.
 
-## Quick install
+## Supported environments
+
+AgentKit publishes 64-bit builds for:
+
+| Operating system | Architectures | Installer requirement |
+| --- | --- | --- |
+| macOS | Intel (`amd64`) and Apple silicon (`arm64`) | POSIX shell, `curl` or `wget`, and `tar` |
+| Linux | x64 (`amd64`) and ARM64 (`arm64`) | POSIX shell, `curl` or `wget`, and `tar` |
+| Windows | x64 (`amd64`) and ARM64 (`arm64`) | Windows PowerShell 5.1 or newer |
+
+You also need Claude Code or Codex installed and signed in before you can run a
+kit skill in that assistant. AgentKit account authentication is a separate step.
+
+## Install the CLI
 
 <Tabs items={['macOS / Linux', 'Windows']}>
   <Tab value="macOS / Linux">
@@ -20,7 +30,8 @@ idempotent — re-run it any time to upgrade in place.
 curl -fsSL https://agentkit.best/install.sh | sh
 ```
 
-Installs to `~/.local/bin` on the **stable** channel by default.
+The default destination is `~/.local/bin/ak`. The installer warns if that
+directory is not on `PATH` and prints a shell-profile command you can use.
 
   </Tab>
   <Tab value="Windows">
@@ -29,127 +40,134 @@ Installs to `~/.local/bin` on the **stable** channel by default.
 irm https://agentkit.best/install.ps1 | iex
 ```
 
-Installs to `%USERPROFILE%\bin`, adds it to your user `PATH`, and uses the
-**stable** channel by default. Open a new terminal afterward.
+The default destination is `%USERPROFILE%\bin\ak.exe`. If needed, the installer
+adds the directory to your user `PATH`; open a new terminal afterward.
 
   </Tab>
 </Tabs>
 
-<Callout type="info">
-  If a corporate network blocks the primary domain, the release host
-  `releases.agentkit.best` serves the byte-identical installer with the same
-  verification chain — swap it into either command above.
+Both commands install from the `stable` channel unless `AK_CHANNEL` is set.
+From Windows `cmd.exe`, invoke the same PowerShell installer with:
+
+```bat
+powershell -NoProfile -Command "irm https://agentkit.best/install.ps1 | iex"
+```
+
+## How the installer verifies the release
+
+The official installer refuses unverified downloads. For a channel pinned in
+the installer, it checks the archive byte size and SHA-256 digest against the
+immutable values carried by the installer. For an exact version, a custom
+release base, or another unpinned selection, it uses a hash-pinned verifier to
+authenticate the signed channel and release metadata, then checks the selected
+archive before returning its bytes.
+
+<Callout type="warn">
+  Keep checksum and signature verification enabled. If endpoint protection or a
+  corporate proxy blocks the download, do not create a security exception just
+  to complete the install.
 </Callout>
 
-## Verify and configure
+If only the primary domain is filtered, retry the byte-identical official entry
+point without changing the verification chain:
 
-<Steps>
-  <Step>
-    ### Verify the binary
-
-    Confirm the installed version and that `ak` resolves on your `PATH`:
-
-    ```bash
-    ak --version
-    ```
-
-    If you get `command not found`, make sure the install directory
-    (`~/.local/bin`, or `%USERPROFILE%\bin` on Windows) is on your `PATH`.
-  </Step>
-  <Step>
-    ### Choose a channel (optional)
-
-    The default is `stable`. To install the beta channel instead, set
-    `AK_CHANNEL` before piping the installer:
-
-    <Tabs items={['macOS / Linux', 'Windows']}>
-      <Tab value="macOS / Linux">
-
-    ```bash
-    curl -fsSL https://agentkit.best/install.sh | AK_CHANNEL=beta sh
-    ```
-
-      </Tab>
-      <Tab value="Windows">
-
-    ```powershell
-    $env:AK_CHANNEL = "beta"; irm https://agentkit.best/install.ps1 | iex
-    ```
-
-      </Tab>
-    </Tabs>
-  </Step>
-  <Step>
-    ### Clear the first-launch warning
-
-    AgentKit binaries are signed for release provenance but are not yet notarized
-    by Apple or Microsoft, so the OS may warn on first launch. See the note for
-    your platform below — it is a one-time step per install.
-  </Step>
-</Steps>
-
-## First launch by platform
-
-<Accordions type="single">
-  <Accordion title="macOS">
-    Binaries fetched with `curl` do not carry the quarantine flag, so the CLI
-    just runs. If you downloaded through a browser instead, clear the flag once:
-
-    ```bash
-    xattr -d com.apple.quarantine ~/.local/bin/ak
-    ```
-
-    No `sudo` needed — you own the file.
-  </Accordion>
-  <Accordion title="Linux">
-    No extra step for the CLI. Ensure your install directory is on `PATH`:
-
-    ```bash
-    echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-    ```
-  </Accordion>
-  <Accordion title="Windows">
-    The first time you run an unrecognized binary, SmartScreen may show
-    *"Windows protected your PC."* Click **More info → Run anyway**. Windows
-    records the approval for that binary on that machine; later runs are silent.
-  </Accordion>
-</Accordions>
-
-## Install-time overrides
-
-Set these before piping the installer to change its behavior.
-
-| Variable | Default | Effect |
-| --- | --- | --- |
-| `AK_CHANNEL` | `stable` | Release channel to install (`stable` or `beta`). |
-| `AK_VERSION` | latest | Pin an exact version, e.g. `AK_VERSION=1.0.0`. |
-| `AK_INSTALL_DIR` | `~/.local/bin` | Target install directory. |
-
-## Updating
-
-`ak` verifies signed release metadata and the target artifact before replacing
-itself:
+<Tabs items={['macOS / Linux', 'Windows']}>
+  <Tab value="macOS / Linux">
 
 ```bash
-ak self-update --check              # read-only: is a newer release available?
-ak self-update --channel stable --yes
+curl -fsSL https://releases.agentkit.best/install.sh | sh
 ```
 
-If `ak` was installed by a package manager, `self-update` reports the managed
-install and prints the manager-native command instead of replacing files.
+  </Tab>
+  <Tab value="Windows">
 
-## Uninstall
+```powershell
+irm https://releases.agentkit.best/install.ps1 | iex
+```
 
-Remove installed kits first so AgentKit can unregister them cleanly, then delete
-the binary and state:
+  </Tab>
+</Tabs>
+
+If the same object remains blocked, keep endpoint protection on and ask your
+administrator to review the refusal.
+
+## Verify the installation
+
+Open a new terminal if the installer changed `PATH`, then run:
 
 ```bash
-ak kit list
-ak kit uninstall <kit> --yes        # repeat per installed kit
-
-rm ~/.local/bin/ak                  # macOS / Linux
-rm -rf ~/.agentkit                  # project registry, kits, caches
+ak --version
+ak doctor --json
 ```
 
-On Windows, remove `ak.exe` from your install directory and delete
-`%USERPROFILE%\.agentkit`.
+You should see the installed version. In the doctor result, inspect
+`data.healthy`; a completed `ak doctor --json` normally exits `0` even when a
+health check fails. Use `ak doctor --exit-on-fail` when the process exit code
+must gate a script. If `ak` is not found, add the reported install directory to
+`PATH` and restart the terminal.
+
+## Select another release channel
+
+The default is `stable`. To select the latest `beta` release through the same
+verified installer path:
+
+<Tabs items={['macOS / Linux', 'Windows']}>
+  <Tab value="macOS / Linux">
+
+```bash
+curl -fsSL https://agentkit.best/install.sh | AK_CHANNEL=beta sh
+```
+
+  </Tab>
+  <Tab value="Windows">
+
+```powershell
+$env:AK_CHANNEL = 'beta'; irm https://agentkit.best/install.ps1 | iex
+```
+
+  </Tab>
+</Tabs>
+
+`AK_VERSION` pins a semantic version, and `AK_INSTALL_DIR` changes the target
+directory. Leave both unset unless you need that control.
+
+## Run first-time setup
+
+```bash
+ak setup
+```
+
+Setup detects available runtime login state and atomically updates
+`~/.agentkit/config.yaml`. Basic setup configures enabled adapters, the default
+kit, and telemetry without copying runtime credentials. It does not sign you in
+to AgentKit and does not install kit content. Continue with
+[Onboarding](./onboarding) to authenticate, check entitlement, and install your
+first kit.
+
+## Update or remove AgentKit safely
+
+Use `ak self-update --check` to check for a newer CLI without applying it. See
+[Updating ak](../guides/updating) before switching channels or updating an
+existing installation.
+
+Before removing anything, preview the managed cleanup that matches what you
+installed:
+
+```bash
+ak kit uninstall engineer --dry-run
+ak uninstall --dry-run
+```
+
+The first command previews removal of Engineer Kit. The second previews removal
+of the current AgentKit-managed project; it is not a CLI uninstaller. Re-run the
+appropriate command with `--yes` only after reviewing its plan. Both preserve
+unknown or modified files by default and snapshot supported changes before
+deletion. A completed uninstall preview exits `3` by design; a successful
+applied removal exits `0`.
+
+Finally, run `ak logout` to remove the local CLI session first. Remote revocation
+of a renewable email session is best-effort, so a registry outage does not leave
+the machine locally signed in. Then delete only the installed binary
+(`~/.local/bin/ak` or `%USERPROFILE%\bin\ak.exe`). Do not delete `~/.agentkit` or
+`%USERPROFILE%\.agentkit` wholesale unless you have reviewed and no longer need
+its project registry, App device session, caches, or recovery snapshots.

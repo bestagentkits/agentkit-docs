@@ -1,0 +1,127 @@
+---
+title: ak recover
+description: Dùng entry point khôi phục cấp cao để preview hoặc áp dụng cùng thao tác có giới hạn như ak backups restore.
+---
+
+Dùng `ak recover` khi bạn muốn product verb cho khôi phục. Đây là lệnh cấp cao
+riêng nhưng tái sử dụng chính xác engine, cờ, plan, mã thoát và tác động trên đĩa
+của `ak backups restore`.
+
+## Cú pháp
+
+```bash
+ak recover <id> [--allow-root <absolute-root>]... [--dry-run]
+ak recover --latest [--allow-root <absolute-root>]... [--dry-run]
+```
+
+## Trước khi chạy
+
+Dừng mutation vòng đời khác, rồi kiểm tra và xác minh recovery point:
+
+```bash
+ak backups show <id>
+ak backups verify <id>
+ak recover <id> --dry-run
+```
+
+Với project bundle, lặp lại mọi authorized root chính xác do `show` in. Tập
+canonical root cung cấp phải bằng tập đã lưu. Lệnh chạy cục bộ và không dùng
+mạng, cache, xác thực hoặc entitlement.
+
+Khi không có bundle authority, engine chỉ chấp nhận các scope home AgentKit,
+Claude và Codex cố định cùng đúng tệp cấu hình Claude runtime.
+
+Khi có thể, hãy chụp trạng thái hiện tại trước khi lùi về quá khứ. `ak recover`
+không tạo snapshot mới trước khi áp dụng snapshot cũ.
+
+## Argument
+
+| Argument | Bắt buộc | Ý nghĩa |
+| --- | --- | --- |
+| `<id>` | Trừ khi dùng `--latest` | Một snapshot ID dạng `YYYYMMDDTHHMMSSZ-8lowercasehex`. |
+
+Không thể dùng ID cùng `--latest`. Nhiều hơn một ID là không hợp lệ.
+
+## Tuỳ chọn
+
+| Tuỳ chọn | Mặc định | Tác động |
+| --- | --- | --- |
+| `--allow-root <absolute-root>` | Trống | Cấp quyền rõ ràng cho một project bundle root đã lưu; lặp lại cho toàn bộ tập. |
+| `--dry-run` | `false` | Chạy toàn bộ preflight và in tác động mà không live mutation. |
+| `--latest` | `false` | Chọn snapshot có thể đọc được mới nhất. |
+
+Lệnh không có `--force` hoặc `--apply`. Các cờ dùng chung được mô tả trong
+[quy ước CLI](../cli-conventions).
+
+## Hành vi xác nhận
+
+Thao tác áp dụng đọc prompt qua stdin trừ khi có `--yes`, `--no-interactive`
+hoặc `--json`. Chỉ `y` hoặc `yes` kèm newline mới xác nhận. Câu trả lời phủ định
+hoặc end-of-file thoát `3`; stdin được pipe có thể xác nhận.
+
+`--json` và `--no-interactive` bỏ xác nhận và có thể áp dụng mà không cần
+`--yes`. Dùng `--yes` để tự động hoá rõ chủ đích. `--dry-run` không hỏi.
+
+## Ví dụ
+
+```bash
+ak recover --latest
+ak recover --latest --yes
+ak recover 20260426T123005Z-deadbeef --dry-run --json
+ak recover <id> --yes --allow-root /absolute/project
+```
+
+## Đầu ra và luồng
+
+Dry-run cho người dùng và xác nhận tương tác dùng cùng restore plan trên stdout
+như `ak backups restore`, với các phần replace, exact-remove, recursive plugin
+remove, keep, skip và authorized root riêng. Prompt nằm trên stderr.
+
+`--dry-run --json` ghi `kind=backups.restore_plan` trên stdout với các trường
+dưới `data.plan`: `BackupID`, `Restore`, `Keep`, `Skip`, `Remove`,
+`RemoveTrees` và `AuthorizedRoots`.
+
+Applied success không ghi JSON success envelope. Stdout trống và stderr là:
+
+```text
+[OK] restored <id>
+```
+
+Dòng này vẫn là plain text với `--json` và vẫn hiện với `--quiet`. Lỗi thực thi
+trong chế độ JSON dùng error envelope có cấu trúc trên stderr; lỗi phân tích cờ
+có thể vẫn là hướng dẫn dùng dạng plain text.
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Dry-run hoàn tất hoặc mọi tác động đã duyệt được áp dụng. |
+| `1` | Lỗi integrity, quyền, destination, I/O hoặc restore một phần. |
+| `2` | ID thiếu hoặc sai dạng, argument dư, cờ sai hoặc ID dùng cùng `--latest`. |
+| `3` | Xác nhận bị từ chối hoặc gặp end-of-file. |
+| `4` | Backup mutation khác đang giữ apply lock. |
+| `5` | ID đúng dạng không tồn tại hoặc không có latest snapshot. |
+
+## Tác động, an toàn và khôi phục
+
+Preflight xác minh hash, topology manifest, quyền restore và destination đã
+anchor trước khi hỏi. Apply lấy lock, kiểm tra lại manifest và live effect đã
+duyệt, thay thế atomic từng tệp đã chụp, xoá exact path được ghi là vắng mặt và
+chỉ xoá đệ quy post-snapshot AgentKit plugin directory đã duyệt. Tệp không liên
+quan được tạo sau vẫn được giữ.
+
+Toàn bộ thao tác nhiều tệp không transactional. Mã `1` có thể xuất hiện sau
+partial success. Dừng ghi mới, giữ đầu ra, kiểm tra đường dẫn bị ảnh hưởng, rồi
+chạy lại `show` và `verify` trước khi chọn bước khôi phục tiếp theo.
+
+## Lệnh liên quan và giới hạn
+
+- [Lệnh lồng tương đương](./backups-restore)
+- [Liệt kê snapshot](./backups-list)
+- [Kiểm tra authority root](./backups-show)
+- [Xác minh integrity](./backups-verify)
+- [Thông tin đầy đủ của lệnh](../cli/ak_recover)
+
+Một số snapshot cục bộ trong project là dữ liệu khôi phục bằng cách sao chép
+thủ công và không thể cấp quyền qua lệnh này. Hãy làm theo hướng dẫn do thao tác
+vòng đời tạo snapshot phát ra.

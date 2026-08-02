@@ -1,4 +1,5 @@
 import { source } from '@/lib/source';
+import { buildDiscoveryIndex } from '@/lib/search-index.mjs';
 import { createFromSource } from 'fumadocs-core/search/server';
 
 export const revalidate = false;
@@ -10,6 +11,11 @@ export const revalidate = false;
 // works and the build stays green.
 // https://docs.orama.com/docs/orama-js/supported-languages
 export const { staticGET: GET } = createFromSource(source, {
+  // Keep static search focused on discovery. Full body chunks multiply into
+  // Orama's document, inverted-index, and sorting stores and can exceed the
+  // Cloudflare Workers 25 MiB per-asset limit. Titles, descriptions, and
+  // headings preserve page and section discovery without that payload.
+  buildIndex: buildDiscoveryIndex,
   localeMap: {
     en: 'english',
     vi: 'english',

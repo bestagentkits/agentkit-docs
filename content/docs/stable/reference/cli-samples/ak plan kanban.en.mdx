@@ -1,0 +1,72 @@
+---
+title: ak plan kanban
+description: Display file-derived phase columns as a terminal board, plain text, or one JSON envelope.
+---
+
+Use `ak plan kanban` for a read-only view of phases grouped into Todo, In
+Progress, and Done.
+
+## Usage
+
+```bash
+ak plan kanban [path]
+```
+
+The command has no command-specific flags. When `path` is omitted, it reads the
+current working directory. It does not resolve the current plan from the
+plan-store pointer, so either pass the plan directory or run from inside it.
+
+## Choose an output mode
+
+```bash
+ak plan kanban ./plans/260802-1030-release-docs
+ak plan kanban ./plans/260802-1030-release-docs --no-interactive
+ak plan kanban ./plans/260802-1030-release-docs --json
+```
+
+- On a TTY, the default opens a three-column alternate-screen board. Use Left,
+  Right, `h`, or `l` to move between columns; `q`, Escape, or Control-C closes
+  the board successfully.
+- `--no-interactive` skips the TUI and writes plain columns to stdout.
+- Non-TTY stdout also falls back to plain text.
+- `--json` emits one success envelope; it is not NDJSON.
+
+Phase state is parsed directly from `phase-NN-*.md`. When a phase contains
+checkboxes, their completion ratio determines its column. Front-matter status
+is used only for a phase with no checkboxes.
+
+## Effects and privacy
+
+The command reads `plan.md` and matching phase files. It does not open the plan
+store, modify files, use stdin as confirmation, contact a network, authenticate,
+or invoke a provider. The interactive board reads terminal key events only.
+
+JSON success uses `kind=plan.kanban` with:
+
+```text
+data.title
+data.todo[]
+data.in_progress[]
+data.done[]
+```
+
+Each phase item contains `number`, `title`, `status`, `total_tasks`, and
+`done_tasks`. Plan and phase titles may contain private project context.
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | The board or structured view completed; quitting the TUI is also success. | No action is required. |
+| `1` | The path did not contain a readable plan or the TUI failed. | Pass the exact directory and inspect its Markdown files. |
+| `2` | Too many arguments or invalid flags were supplied. | Pass zero or one path. |
+
+JSON execution errors are written as a structured envelope on stderr.
+Flag-parse errors can remain plain text.
+
+## Related commands
+
+- [Complete `ak plan kanban` command facts](../cli/ak_plan_kanban)
+- [Parse a structured plan view](../cli/ak_plan_parse)
+- [Show plan status](../cli/ak_plan_status)
+- [CLI conventions](../cli-conventions)

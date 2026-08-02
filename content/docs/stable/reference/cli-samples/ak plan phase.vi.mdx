@@ -1,0 +1,76 @@
+---
+title: ak plan phase
+description: Chọn giữa hoàn tất phase do tệp sở hữu và ghi chú chỉ có trong index mà không nhầm ranh giới sở hữu.
+---
+
+Dùng `ak plan phase` làm namespace cho mutation cấp phase trên plan đã được
+theo dõi trong plan store cục bộ. Lệnh cha chỉ in trợ giúp; chọn `update` hoặc
+`close` để thực hiện thao tác.
+
+## Cách dùng
+
+```bash
+ak plan phase
+```
+
+Lệnh cha không nhận argument theo vị trí và không có cờ riêng.
+`ak plan phase --json` vẫn hiển thị trợ giúp thay vì trả payload JSON của phase.
+
+## Chọn lệnh con
+
+| Mục tiêu | Lệnh | Nguồn sở hữu và hiệu ứng |
+| --- | --- | --- |
+| Ghi notes, evidence, acceptance text hoặc tracking comment ID | `ak plan phase update <plan-id> <n> [flags]` | Ghi trường phase do index sở hữu và dữ liệu tìm kiếm toàn văn; không bao giờ ghi phase file. |
+| Hoàn tất một phase | `ak plan phase close <plan-id> <n>` | Resolve và thay đổi nguyên tử phase file chuẩn, sau đó đồng bộ lại store. |
+
+### Cập nhật bookkeeping chỉ có trong index
+
+```bash
+ak plan phase update my-project/260722-1200 2 \
+  --notes "Blocked on review" \
+  --evidence "Release checklist complete" \
+  --json
+```
+
+Các cờ do index sở hữu được hỗ trợ là `--notes`, `--evidence`, `--acceptance`
+và `--comment-id`. Trợ giúp hiện tại của lệnh cha còn hiển thị
+`--status in-progress`, nhưng runtime và test từ chối `--status`, `--title` và
+`--content` với mã `2` vì các giá trị đó do phase file sở hữu và sẽ bị reindex
+ghi đè. Đừng sao chép ví dụ của trợ giúp lệnh cha vào tự động hoá.
+
+### Đóng thông qua tệp chuẩn
+
+```bash
+ak plan phase close my-project/260722-1200 1 --json
+```
+
+Với phase có checkbox, close đánh dấu hoàn tất mọi ô còn lại. Với phase không
+có checkbox, lệnh đặt front-matter status thành `done`. Tệp được ghi nguyên tử,
+sau đó store được làm mới. Lệnh không quiet có thể ghi note vào stderr cho biết
+số task box đã check.
+
+## An toàn và đầu ra
+
+Không lệnh con nào prompt, đọc xác nhận từ stdin, truy cập mạng hoặc dùng
+`--yes`. `phase close` có thể chạy lệnh `git` cục bộ khi resolve thư mục plan đã
+liên kết. `phase update` ghi trực tiếp vào SQLite store riêng tư. `phase close`
+ghi phase file trong repository mà không backup; nếu lần làm mới store sau đó
+thất bại, tệp vẫn là nguồn chuẩn và recovery dựa vào version control hoặc
+filesystem.
+
+JSON thành công của lệnh con dùng một envelope: `kind=plan.phase-update` hoặc
+`kind=plan.phase-close`. Không có NDJSON. Trợ giúp lệnh cha là plain text.
+
+## Kết quả và mã thoát
+
+Chạy trợ giúp lệnh cha thoát `0`; input lệnh cha không hợp lệ thoát `2`. Mã
+thoát của lệnh con phụ thuộc lệnh: lỗi runtime/store/tệp/not-found dùng `1`, còn
+số phase hoặc cờ update do tệp sở hữu không hợp lệ dùng `2`. `phase close` có
+thể đã thay đổi tệp trước khi lỗi đọc store sau đó được trả về, vì vậy hãy kiểm
+tra phase file trước khi thử lại sau mã `1`.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak plan`](../cli/ak_plan)
+- [Đánh dấu hoàn tất mọi checkbox của phase](../cli/ak_plan_check)
+- [Quy ước CLI](../cli-conventions)

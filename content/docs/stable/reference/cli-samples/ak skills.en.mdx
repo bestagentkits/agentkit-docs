@@ -1,0 +1,80 @@
+---
+title: ak skills
+description: Browse local skill content, install it into the user Claude plugin root, and keep that lifecycle separate from runtime environments.
+---
+
+Use `ak skills` for local skill content and catalog operations. This plural
+namespace is separate from `ak skill`, which manages Python and Node runtime
+records for one skill.
+
+## Usage
+
+```bash
+ak skills <command>
+```
+
+The group itself is read-only and prints help when no child is supplied.
+
+## Choose a command
+
+| Goal | Command |
+| --- | --- |
+| Inspect workflow relationships | `ak skills graph` |
+| Copy one local skill into the user install root | `ak skills install <kit>/<skill>` |
+| List installed and locally available skills | `ak skills list` |
+| Remove one installed copy | `ak skills remove <kit>/<skill>` |
+| Search local metadata | `ak skills search <query>` |
+| Show one installed or available record | `ak skills show <kit>/<skill>` |
+
+Use canonical `<kit>/<skill>` references in scripts. The `install`, `remove`,
+and `show` commands also accept the input shorthands `ak:<skill>`,
+`ake:<skill>`, and `akm:<skill>` for `core`, `engineer`, and `marketing`; these
+are reference shorthands, not Cobra command aliases.
+
+## Local source and destination
+
+This family does not resolve released kits from the remote AgentKit registry.
+It reads available content from `AGENTKIT_KITS_DIR` or `./kits`, and installed
+content from `AGENTKIT_PLUGIN_DIR` or `~/.claude/plugins`.
+
+`ak skills install` writes this user-level path regardless of the current
+project or runtime target:
+
+```text
+~/.claude/plugins/<kit>/skills/<skill>/
+```
+
+Use `ak kit init` or `ak kit install` when you need authenticated remote
+resolution, entitlement checks, project/global scope, or Claude/Codex/Cursor
+target selection.
+
+## Runtime handoff and safety
+
+Installing runtime-bearing content also calls the singular runtime manager
+unless `AGENTKIT_SKILL_RUNTIME=0`. Removing content removes the corresponding
+runtime record first, but always preserves the shared package cache.
+
+There are no confirmation prompts or recovery snapshots. `--force` deletes an
+existing content directory before copying; remove deletes directly. These
+multi-step operations are not rollback transactions.
+
+## Automation output
+
+Plural leaf commands use versioned JSON success envelopes on stdout:
+
+```text
+schema_version: 1
+kind: assets.list | assets.show | assets.install | assets.remove | skills.graph
+data: command-specific payload
+```
+
+Errors use stderr. For malformed references, not-found records, and install
+conflicts, the current JSON error envelope can report `exit_code: 1` even when
+the process exits `2`, `5`, or `6`; gate on process status.
+
+## Related commands
+
+- [Manage per-skill runtime environments](../cli/ak_skill)
+- [Install a reviewed kit route](./kit-init)
+- [Run a skill](../cli/ak_run)
+- [CLI conventions](../cli-conventions)

@@ -1,0 +1,79 @@
+---
+title: ak logout
+description: Remove the local AgentKit CLI session and renewable API-key credential without deleting the App device session.
+---
+
+Use `ak logout` before handing off a machine, after rotating a credential, or
+when you need the next registry operation to require a fresh CLI login.
+
+## Usage
+
+```bash
+ak logout
+```
+
+The documented command has no positional arguments or command-specific flags.
+The current implementation ignores extra positional tokens; do not rely on
+that behavior. Shared output flags are covered by
+[CLI conventions](../cli-conventions).
+
+## Before you run
+
+This command removes only the CLI authentication slot. It preserves a paid App
+device session stored beside it. If your goal is to remove a device activation
+from the account, `ak logout` is not that operation.
+
+The command has no prompt, preview, dry-run, or force mode. `--yes` and
+`--no-interactive` do not change its behavior.
+
+## Effects
+
+AgentKit atomically takes the CLI slot from
+`~/.agentkit/auth/session.json` and removes the sibling stored API-key file.
+`AGENTKIT_HOME` changes the base directory. A missing CLI session is treated as
+success, so the command is safe to repeat.
+
+For an email OTP session, AgentKit attempts remote session revocation only
+after local secrets are removed. If the access token is expired, it can use the
+rotating refresh credential once and retry revocation. Registry failure is
+best-effort and does not restore the local login.
+
+API-key and license-key logins do not use this remote email-session revocation
+path. The App slot created by license-key activation remains on disk.
+
+## Output and streams
+
+Human success output is written to stdout:
+
+```text
+[OK] logged out
+```
+
+JSON success is one envelope on stdout:
+
+```json
+{"schema_version":1,"kind":"auth.logout","data":{"success":true}}
+```
+
+Local storage errors use stderr; JSON mode emits the shared error envelope.
+Remote revocation failure is intentionally not reported as command failure.
+Flag-parse errors can remain plain text.
+
+## Exit status
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | The CLI slot is absent after the command, including when it was already absent; remote email-session revocation may still have failed. | Run `ak whoami` to confirm the locally resolved state. |
+| `1` | The auth store could not be read, locked, rewritten, or cleared. | Retry once, then inspect permissions with `ak doctor`; do not delete the whole AgentKit home. |
+| `2` | A flag could not be parsed. | Correct the invocation. |
+
+If exit `1` occurs after a partial local clear, run `ak logout` again. The
+operation does not create a backup and has no rollback; recovery is a fresh
+`ak login`.
+
+## Related commands and limitations
+
+- [Log in again](./login)
+- [Inspect the current account](./whoami)
+- [Complete `ak logout` command facts](../cli/ak_logout)
+- [Authentication troubleshooting](../../troubleshooting/authentication)

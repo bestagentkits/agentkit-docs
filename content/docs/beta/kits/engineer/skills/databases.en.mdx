@@ -1,0 +1,202 @@
+---
+title: Design and change databases with ak:databases
+description: Design MongoDB or PostgreSQL data structures, inspect query behavior, and prepare migrations, backups, or administration work behind explicit data-safety gates.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:databases` to design MongoDB or PostgreSQL models, write and explain
+queries, analyze indexes, or prepare database operations with visible recovery
+evidence. The Skill includes reference guidance plus optional Python utilities
+for migrations, backups, restores, cleanup, and performance analysis.
+
+## Choose ak:databases for the data boundary
+
+### Use ak:databases when
+
+- Schema, query, aggregation, index, migration, backup, replication, permission,
+  or database performance work is central.
+- You need to choose a relational, document, analytical, or event-history model
+  from workload and integrity requirements.
+- You need MongoDB or PostgreSQL administration guidance.
+
+### Choose another workflow when
+
+- The database change is incidental to a larger API implementation. Use
+  `ak:backend-development`, while keeping this Skill’s migration gates.
+- The task is mainly cloud infrastructure or deployment. Use `ak:devops`.
+- You only need root-cause diagnosis. Use `ak:fix` and keep database access
+  read-only until a correction is approved.
+- You need a cross-stack approved plan executed. Use `ak:cook` and isolate the
+  database phase and authority.
+
+## Prepare access and recovery
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Engineer Kit is installed for the current runtime and scope.
+- Identify the database engine and version, environment, owner, schema or
+  collection, workload, data sensitivity, retention, and consistency needs.
+- Use a least-privilege account and an explicit non-production target whenever
+  possible. Keep connection strings out of prompts, logs, shell history, and
+  committed files.
+- Capture representative reads and writes, invariants, expected volume, lock
+  tolerance, maintenance window, and compatibility requirements.
+- Require a current backup, tested restore route, forward plan, rollback or
+  compensating plan, and post-change verification before production mutation.
+
+Optional utility prerequisites depend on the operation:
+
+| Utility surface | Required locally |
+| --- | --- |
+| MongoDB migration or performance analysis | Python plus `pymongo`; a reachable database and suitable privileges |
+| PostgreSQL migration or performance analysis | Python plus `psycopg2`; a reachable database and suitable privileges |
+| MongoDB backup or restore | `mongodump` and `mongorestore` |
+| PostgreSQL backup or restore | `pg_dump`, `psql`, and `gzip` when compression is enabled |
+| Utility tests | `pytest` and the bundled test dependencies |
+
+The bundled runtime requirements file does not install `pymongo` or
+`psycopg2`, although the migration and performance utilities import them.
+Confirm these dependencies rather than assuming the utilities are ready.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:databases ...` | Can use the guidance and local database tools when available; Engineer supports native and explicit plugin delivery. |
+| Cursor | `/ak:databases ...` | Uses the user-verified slash spelling; equivalent database tooling and Hook parity are not established. |
+| Codex | `$ak:databases ...` | Uses native Skill discovery; database tools and projected Hooks depend on the session. |
+
+## Run the Skill
+
+The declared argument shape is `[query or schema task]`. It defines no Skill
+flags, database default, or automatic connection.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:databases "Design a backward-compatible PostgreSQL migration that adds order.external_id as nullable, backfills in batches, then adds uniqueness. Produce SQL, rollback limits, lock analysis, and verification queries; do not connect or apply it."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:databases "Design a backward-compatible PostgreSQL migration that adds order.external_id as nullable, backfills in batches, then adds uniqueness. Produce SQL, rollback limits, lock analysis, and verification queries; do not connect or apply it."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:databases "Design a backward-compatible PostgreSQL migration that adds order.external_id as nullable, backfills in batches, then adds uniqueness. Produce SQL, rollback limits, lock analysis, and verification queries; do not connect or apply it."
+```
+
+  </Tab>
+</Tabs>
+
+### Understand the bundled utility modes
+
+These are separate local scripts, not `ak:databases` flags:
+
+| Utility | Mode and required input | Defaults and effects |
+| --- | --- | --- |
+| Migration | `generate <name>` with `--db mongodb\|postgres` | Uses `./migrations`; writes a timestamped JSON template. `--dry-run` avoids the file but still creates the directory. |
+| Migration | `status`, `apply`, or `rollback <id>` with `--uri` | Connects to the database and uses a migration tracking table or collection. `apply` processes pending JSON files in name order. |
+| Backup | `backup --uri ...` with `--db`; PostgreSQL also requires `--database` | Uses `./backups`, compression on, basic verification on. `--no-compress` and `--no-verify` disable them. |
+| Restore | `restore <filename> --uri ...` | Restores through `mongorestore` or `psql`; `--dry-run` only checks and reports the local file. |
+| Cleanup | `cleanup` | Deletes non-JSON files older than `--retention-days`; retention defaults to `7`. `--dry-run` lists candidates. |
+| Performance | `--db`, `--uri` | Slow-query threshold defaults to `100` milliseconds; `--output` writes a JSON report. |
+
+Connection URIs are command arguments in these utilities. Prefer a protected
+execution environment and understand that command arguments may be visible to
+other local users or captured in shell history.
+
+## Observe a safe database workflow
+
+1. **The run classifies the workload.** It records access patterns, invariants,
+   growth, retention, reporting, consistency, and sensitive-data constraints.
+2. **The run inspects without mutation.** It reads schemas, indexes, query plans,
+   statistics, and representative data using the narrowest privileges possible.
+3. **The run designs the change.** It specifies forward steps, compatibility,
+   batching, locks, replication impact, backup, rollback or compensation, and
+   acceptance queries.
+4. **The run rehearses safely.** It uses generated scripts, dry runs, fixtures,
+   or a production-like isolated database and records limitations of each.
+5. **The run requests mutation authority.** Applying a migration, restoring,
+   cleaning backups, changing roles, enabling profiling, or altering production
+   configuration remains a separate decision.
+6. **The run verifies and reports.** It checks schema state, row or document
+   counts, constraints, query plans, application compatibility, replication,
+   and recovery evidence.
+
+## Keep destructive operations behind approval
+
+<Callout type="warn" title="A dry run is not always read-only">
+  Migration `status`, `apply --dry-run`, and `rollback --dry-run` connect first.
+  For PostgreSQL, the utility ensures and commits the migration tracking table
+  before handling the requested command. Do not point these modes at a database
+  unless that write is authorized.
+</Callout>
+
+Additional boundaries from the bundled utilities:
+
+- MongoDB migration rollback only removes the migration tracking record; it
+  does not reverse the recorded schema or index operation. Treat it as unsafe
+  for recovery without a separately verified compensating operation.
+- Backup “verification” checks only that the output exists and is non-empty. It
+  is not a checksum, content validation, or test restore.
+- Cleanup permanently unlinks every non-JSON file in the selected backup
+  directory older than the retention cutoff. Review the exact directory and a
+  dry-run listing first.
+- MongoDB performance analysis enables database profiling at the selected slow
+  query threshold when profiling is off. This changes database configuration
+  and can collect query contents.
+- Suggested indexes are heuristics. Explain plans, write overhead, storage,
+  uniqueness, locking, and workload evidence must be reviewed before creation.
+- Atlas, managed databases, storage, snapshots, replicas, cross-region traffic,
+  and restore operations can incur provider charges. The Skill itself requires
+  no paid provider.
+
+## Verify the result
+
+A complete design or query result should provide the proposed model or query,
+assumptions, expected plan, and validation path. A complete mutation result
+should also provide:
+
+- Exact target environment, database, schema or collection, and identity used.
+- Backup artifact and stronger restore evidence than the utility’s non-empty
+  check.
+- Forward operations, transaction and lock behavior, rollback or compensation,
+  and compatibility window.
+- Before-and-after counts, constraints, query plans, latency or throughput, and
+  application checks relevant to the change.
+- Every skipped test, unresolved risk, and production action still awaiting
+  approval.
+
+## Troubleshoot or continue
+
+| Symptom | Safe next step |
+| --- | --- |
+| A utility reports a missing Python driver | Install or expose the matching driver in an approved environment; the bundled runtime requirements do not provide it. |
+| A migration dry-run needs production access | Generate and inspect locally, then rehearse against an isolated copy before approving any production connection. |
+| MongoDB rollback reports success | Verify actual schema and indexes; the bundled rollback only deletes migration history. |
+| A backup is marked verified | Perform a checksum and test restore in an isolated target before treating it as recoverable. |
+| An index recommendation names a placeholder field | Analyze real query predicates and plans; do not execute the printed command. |
+| The runtime does not recognize the Skill | Confirm target and scope, restart the session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Review [Projects, artifacts, and checkpoints](../../../concepts/projects-artifacts-checkpoints)
+before recovery or continue with [Engineer Kit](../../engineer).
+
+## Know the current limits
+
+- Utility tests cover parser-level classes and mocked database or subprocess
+  behavior; they do not prove safety against live MongoDB or PostgreSQL systems.
+- The source quick examples do not match every utility parser option. The tables
+  above follow the executable argument definitions.
+- Runtime duration is not defined. Query advice may take minutes; backups,
+  restores, migrations, reindexing, and performance sampling depend on data
+  size, locks, network, storage, and provider limits.
+- Stable and beta contain identical Skill references, utilities, and tests for
+  this release pair.

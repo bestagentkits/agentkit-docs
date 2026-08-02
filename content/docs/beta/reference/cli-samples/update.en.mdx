@@ -1,0 +1,89 @@
+---
+title: ak update
+description: Preview or apply project and global kit updates with drift-aware backups.
+---
+
+`ak update` refreshes AgentKit-owned project files or global kit installations while preserving user-owned content.
+
+## Syntax
+
+```bash
+ak update [project-dir] [options]
+ak update --global [options]
+```
+
+## Before you run
+
+- An implicit non-interactive preview exits `3`. Add `--dry-run` for an explicit preview that exits `0`, or `--yes` to apply.
+- A bare command in a TTY opens a unified wizard. Each CLI, global-kit, and project-kit update defaults to no; `--yes` accepts applicable steps.
+- Remote preview can still authenticate, check entitlements, download kit content, and update the cache before it calculates the plan.
+- `--force` authorizes replacement only after a snapshot. It does not turn global installation into unconditional overwrite.
+- `--json`, `--quiet`, `--no-interactive`, or a non-TTY selects scripted behavior. In an interactive project or global run, declining every prompt exits `0`.
+
+## Arguments
+
+`[project-dir]` selects a project. Without it, project mode discovers the current project unless `--global` is set. The command has no aliases.
+
+## Options
+
+| Option | Default | Purpose |
+| --- | --- | --- |
+| `--beta` | `false` | Include beta CLI self-update behavior. |
+| `--channel <channel>` | `stable` | Select the kit channel. |
+| `--dry-run` | `false` | Preview without project or global installation writes. |
+| `--force` | `false` | Authorize drift replacement after backup. |
+| `-g, --global` | `false` | Update global kit installations. |
+| `--kits <names>` | Empty | Limit the comma-separated kit selection. |
+| `--kits-dir <path>` | Empty | Read kits from a local directory. |
+| `--local` | `false` | Use the local kit source. |
+| `--registry-url <url>` | Empty | Override the registry URL. |
+| `--remote` | `true` | Use the remote registry. |
+| `--runtime <runtime>` | `claude-code` | Select a global runtime. |
+| `--show-diff` | `false` | Include file diffs in the plan. |
+| `--target <target>` | Empty | Select an update target. |
+| `--version <version>` | Empty | Pin a kit version. |
+
+## Examples
+
+Preview a project update with a successful preview status:
+
+```bash
+ak update . --dry-run --show-diff
+```
+
+Apply a project update without prompting:
+
+```bash
+ak update . --yes
+```
+
+Preview global updates:
+
+```bash
+ak update --global --dry-run --kits core --runtime claude-code
+```
+
+## Output and streams
+
+With `--json`, stdout uses the shared envelope with `"kind": "update"`. Project `data` includes `project_dir`, `files_updated`, `files_skipped`, `files_new`, and `dry_run`; it can also include snapshot fields, `skipped`, `diffs`, `project_config`, `project_config_created`, and `scope`.
+
+Global output also includes `locations`, `kits`, and `skipped_targets`. Each kit result can report `kit`, `runtime`, `status`, `channel`, `reason`, `error`, `why`, `next`, snapshot fields, `locations`, and `warnings`. An implicit JSON preview prints a success envelope to stdout and then exits `3`. Structured command errors go to stderr; parse errors remain plain text.
+
+## Exit status
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Update applied, explicit dry-run completed, or an interactive prompt was declined. |
+| `1` | Runtime, lifecycle, source, snapshot, write, or partial global update failed. |
+| `2` | Flags, scope, target, or eligible global installation selection is invalid. |
+| `3` | A non-interactive implicit preview requires `--yes` to apply. |
+
+## Effects, safety, and recovery
+
+Project updates classify owned files. Clean files can be replaced; modified or newly occupied files are skipped unless `--force` is used. Apply mode takes a mandatory project snapshot before update writes. Some files outside its restore scope require manual recovery; follow `snapshot_data_dir` when reported. A missing project config can be created before classification and snapshot, even if a later step fails.
+
+Writes are sequential, so an error can leave a partial update. Global updates continue across kits, report per-kit failures, and can create a support bundle under `~/.agentkit/support`. Global force mode may archive authorized legacy Codex skills, but it still preserves user modifications.
+
+## Related commands and limitations
+
+Use [`ak new`](./new) for a new project, [`ak uninstall`](./uninstall) to remove owned files, and [`ak doctor`](./doctor) after a partial failure. See [CLI conventions](../cli-conventions) for shared flags.

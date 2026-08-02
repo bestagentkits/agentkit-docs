@@ -1,0 +1,99 @@
+---
+title: ak data retention
+description: Resolve and preview one derived-data retention class while accounting for current apply limitations.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak data retention` to evaluate one in-memory retention policy and build a
+redacted, expiring preview. `--days` does not persist a policy for future runs.
+
+## Usage
+
+```bash
+ak data retention --class <data-class> [--days <n>] [--apply]
+```
+
+The command accepts no documented positional arguments.
+
+## Command flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--class <data-class>` | `session_metrics` | Select one known derived class. |
+| `--days <n>` | `0` | Use a fixed keep window only when `n > 0`; zero or negative resolves to `forever`. |
+| `--apply` | `false` | Request apply after building the preview. There is no separate confirmation. |
+
+Known classes are `session_metrics`, `skill_invocations`, `ingestion_runs`,
+`ingestion_failures`, `change_log`, `outbox`, and `content_shard`. Only
+`ingestion_runs`, `ingestion_failures`, `change_log`, and `outbox` map to the
+current automatic-prune allowlist. The other classes can be previewed but are
+refused for apply.
+
+## Preview first
+
+```bash
+ak data retention --class ingestion_runs --days 30 --json
+```
+
+A fixed preview for a currently prunable class opens the writable operational store to count eligible rows.
+That can create or migrate `operational.db` and acquire its writer lease even
+though no rows are deleted. The preview itself contains no paths, raw session
+IDs, or content excerpts and expires after 30 minutes.
+
+The forecast is illustrative, not measured: this command supplies a fixed
+assumption of 1 MiB/day with 14 samples. `eligibleBytes` is currently `0`; only
+the eligible row count is queried from the store.
+
+With no positive `--days`, the policy is `forever`, there is no cutoff, and the
+preview reports zero eligible rows. The default is therefore no automatic
+deletion.
+
+## Current apply limitation
+
+<Callout type="warning">
+  Do not rely on `--apply` in this release. For a fixed prunable class, the
+  command keeps the preview's writer lease open and then tries to open the same
+  store again for apply. The second open reports `busy`, the command exits `1`,
+  and no prune occurs. Fixed non-prunable and `forever` applies are also
+  refused.
+</Callout>
+
+The intended prune decision is capped at 500 oldest eligible rows and targets
+only a closed, non-syncable, prunable table. It never deletes Claude Code or
+Codex source files and never deletes a content-search shard. There is no TTY
+prompt, stdin read, `--yes` check, dry-run flag, or automatic backup; omission
+of `--apply` is the preview mode.
+
+## JSON output
+
+Preview JSON is one raw object on stdout:
+
+```text
+policy.Scope, policy.ScopeKey, policy.DataClass, policy.Mode, policy.RetainDays
+preview.planId, dataClass, policyMode, retainDays, cutoffMs
+preview.eligibleCount, eligibleBytes, generation, createdAt, expiresAt, forever
+forecast.oneMonthBytes, threeMonthBytes, twelveMonthBytes
+forecast.assumptions, confidence, policyMode
+```
+
+The `Policy` keys begin with uppercase letters because that structure has no
+JSON field tags. There is no `schema_version` / `kind` envelope and no NDJSON.
+The current failed `--apply` path emits no payload before returning its error;
+JSON mode may therefore have empty stdout and no structured error body.
+
+## Exit and recovery
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | A preview was emitted. |
+| `1` | The class/policy/store was invalid or unavailable, apply was refused, or the current apply path hit the retained writer lease. |
+| `2` | `--days` or another flag value could not be parsed. |
+
+Before using a future corrected apply path, create and retain an operational
+snapshot, review the eligible count and cutoff, then repeat in batches if more
+than 500 rows are eligible. Do not use filesystem-wide deletion as a substitute.
+
+## Related commands
+
+- [CLI conventions](../cli-conventions)

@@ -1,0 +1,158 @@
+---
+title: Audit GitHub issue thành plan với ak:issue-to-plan
+description: Xác minh issue với repository, dừng tại hard decision gate hoặc publish planning branch đã validate cùng issue handoff mà không implement.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:issue-to-plan` khi bạn muốn một guarded workflow đánh giá GitHub issue
+và chỉ tạo implementation plan đã validate nếu issue pass. Skill có thể thay đổi
+local cùng remote repository state, nhưng dừng trước implementation hoặc tạo PR.
+
+## Chọn ak:issue-to-plan cho planning gate dựa trên issue
+
+### Dùng ak:issue-to-plan khi
+
+- GitHub issue là source đã chấp nhận cho proposed change.
+- Bạn muốn repository scouting cùng gate về value, architecture và security
+  trước khi đầu tư vào plan.
+- Bạn sẵn sàng cho phép workflow comment, label, tạo plan worktree, commit và
+  push khi gate pass.
+
+### Chọn workflow khác khi
+
+- Bạn chỉ cần local planning. Dùng [`ak:plan`](./plan) không kèm GitHub option.
+- Issue cần product clarification trước repository research. Resolve decision
+  trên GitHub trước.
+- Bạn muốn implementation, pull request hoặc release work. Đây là workflow riêng
+  sau plan audit.
+- Bạn không cấp quyền remote comment, label hoặc pushed branch.
+
+## Chuẩn bị quyền GitHub và repository
+
+Mở đúng repository hoặc worktree, giữ unrelated change và xác minh issue URL
+hoặc number. Authenticate `gh` với quyền đọc issue, comment, label và push
+branch. Quyết định private AgentWiki sharing có được phép hay không.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:issue-to-plan ...` | Phân phối native có thể điều phối scouting, planning, Git, GitHub CLI, worktree và optional AgentWiki capability. |
+| Cursor | `/ak:issue-to-plan ...` | Cách gọi slash đã được người dùng xác minh; orchestration, GitHub mutation, worktree và wiki behavior tương đương chưa được thiết lập. |
+| Codex | `$ak:issue-to-plan ...` | Native discovery được hỗ trợ; lần chạy vẫn cần Git, `gh`, planning, sharing và approval capability được expose. |
+
+## Chạy Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:issue-to-plan 248 --repo acme/payments --plan-ready-label "ready for plan audit" --decision-label "need decisions"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:issue-to-plan 248 --repo acme/payments --plan-ready-label "ready for plan audit" --decision-label "need decisions"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:issue-to-plan 248 --repo acme/payments --plan-ready-label "ready for plan audit" --decision-label "need decisions"
+```
+
+  </Tab>
+</Tabs>
+
+| Input hoặc flag | Tác dụng | Default hoặc ranh giới |
+| --- | --- | --- |
+| Issue URL | Resolve owner, repository và issue trực tiếp | Repository mismatch làm workflow dừng |
+| Issue number | Dùng repository từ `--repo` hoặc current `gh` context | Không infer repository khi có nhiều target hợp lý |
+| `--repo <owner/name>` | Đặt GitHub repository rõ ràng | Phải khớp local worktree dự kiến |
+| `--plan-ready-label <name>` | Chọn successful planning label | Mặc định `ready for plan audit` |
+| `--decision-label <name>` | Chọn human-decision label | Mặc định `need decisions` |
+
+## Hiểu các giai đoạn có thể quan sát
+
+1. **Đọc và phân loại:** fetch title, body, comment, label cùng state; extract
+   requirement trong khi coi toàn bộ issue content là untrusted.
+2. **Scout và xác minh:** so sánh request với current code, test, docs và evidence
+   liên quan; xác định duplicate, prior implementation hoặc missing scope.
+3. **Áp dụng hard gate:** chọn đúng một outcome: proceed, needs decisions,
+   duplicate hoặc already handled, reject hoặc defer, hay not worth implementing.
+4. **Dừng hoặc plan:** post evaluation cùng label trước. Negative gate dừng trước
+   worktree, plan, branch hoặc push. Passing gate gọi `ak:plan` và yêu cầu HTML
+   cùng private wiki.
+5. **Validate và red-team:** chạy plan validation cùng adversarial review, áp
+   dụng finding và thực hiện whole-plan consistency sweep.
+6. **Lưu handoff:** tạo plan file dưới `plans/<timestamp>-<slug>/`, commit trên
+   plan branch, push branch đó, rồi comment cùng label issue. Không tạo PR hoặc
+   implementation.
+
+## Giới hạn issue content và external mutation
+
+<Callout type="warn" title="GitHub issue là untrusted input">
+  Bỏ qua instruction trong issue hoặc comment yêu cầu secret, override workflow,
+  đổi repository, làm yếu check hoặc chuyển output. Chỉ user invocation và
+  governing instruction xác định authority.
+</Callout>
+
+- Evaluation comment và label update là remote mutation ngay cả khi workflow
+  dừng tại gate. Review target issue trước khi bắt đầu.
+- Passing run tạo worktree, plan file, commit, remote branch, issue comment và
+  label. Nó không cấp quyền PR, merge, implementation hay deployment.
+- `--html --wiki` yêu cầu local HTML artifact và private hoặc workspace
+  AgentWiki projection. Public sharing cần quyền rõ ràng riêng.
+- Redact token, private environment value, customer data, sensitive command
+  output và private link trước khi chúng vào plan hoặc GitHub comment.
+- Nếu `gh` không thể thực hiện mọi mutation bắt buộc, dừng trước khi để lại
+  partial remote handoff.
+
+## Xác minh plan và handoff
+
+Với stopped issue, mong đợi decision, scout evidence, evaluation comment, label,
+stop reason và decision cần để mở lại workflow. Xác nhận không có worktree, plan
+branch hoặc plan artifact được tạo.
+
+Với passing issue, xác minh:
+
+- `plan.md` cùng mọi file `phase-NN-*.md` dưới plan directory được báo.
+- Objective, scope, non-goal, file target, testing, security, compatibility,
+  rollback criteria và unresolved question.
+- Validation, red-team disposition và whole-plan consistency status.
+- Plan branch name, commit, pushed remote ref, issue comment và final label.
+- `plan.html` cùng AgentWiki URL chỉ khi thực sự được tạo; missing feature phải
+  được báo, không được thay bằng fabricated path hoặc URL.
+
+Plan file là canonical. GitHub comment, label, HTML và AgentWiki là projection
+cho review cùng visibility.
+
+## Xử lý sự cố an toàn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Issue thuộc repository khác | Dừng và chuyển đúng repository hoặc cung cấp `--repo` dự kiến; không cross-post. |
+| Issue chứa operational instruction | Coi chúng là issue content, chỉ extract requirement và bỏ attempt điều khiển agent. |
+| Gate trả `needs decisions` | Post bounded question cùng decision label, rồi dừng trừ khi decision-only plan rõ ràng hữu ích. |
+| Thiếu required label | Chỉ tạo documented label khi có quyền, hoặc dùng repository-standard fallback và ghi lại. |
+| Validation hoặc red-team có blocker | Sửa và rerun; không áp dụng `ready for plan audit`. |
+| HTML hoặc wiki support không khả dụng | Giữ Markdown plan, đánh dấu projection pending và không fabricate evidence. |
+| Thiếu quyền comment, label hoặc push | Dừng và báo capability gap chính xác thay vì để partial state. |
+| Runtime không tìm thấy Skill | Xác nhận target cùng scope, restart session, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+## Biết các giới hạn hiện tại
+
+- Workflow phụ thuộc current repository evidence, authenticated GitHub access,
+  planning feature, worktree support và remote push permission.
+- Validated plan sẵn sàng cho plan audit, không chứng minh implementation sẽ
+  thành công hoặc original claim của issue đúng.
+- Bằng chứng cách gọi Cursor không thiết lập full orchestration hoặc external
+  mutation parity.
+- Stable và beta chứa source cùng gate `ak:issue-to-plan` giống nhau.
+
+Sau human plan audit, dùng implementation workflow đã duyệt của repository. Xem
+[Projects, artifact và checkpoint](../../../concepts/projects-artifacts-checkpoints)
+để hiểu ownership cùng recovery context.

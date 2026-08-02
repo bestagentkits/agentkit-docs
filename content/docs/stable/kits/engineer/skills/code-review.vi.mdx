@@ -1,0 +1,199 @@
+---
+title: Review production risk với ak:code-review
+description: Chuyển diff, pull request, commit, pending workspace hoặc codebase thành review dựa trên bằng chứng với blocking finding và verification mới.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:code-review` để đánh giá code có khớp behavior được yêu cầu và sẵn
+sàng tiếp tục hay chưa. Skill xác định review target, đọc đầy đủ bằng chứng,
+scout edge case cùng consumer bị ảnh hưởng, tách spec compliance khỏi code
+quality và coi confidence chưa xác minh là review gap.
+
+## Chọn ak:code-review khi code đã tồn tại
+
+### Dùng ak:code-review khi
+
+- Bạn cần review pending change, pull request hoặc một commit.
+- Công việc đã hoàn tất phải được kiểm tra với plan, specification hoặc
+  acceptance criteria.
+- Shared refactor hoặc multi-file feature cần scouting edge case và regression.
+- Bạn muốn full-codebase scan hoặc parallel audit cho các khu vực độc lập.
+- Thay đổi pre-landing hoặc security-sensitive cần checklist có cấu trúc.
+
+### Chọn workflow khác khi
+
+- Bạn cần triển khai thay đổi được yêu cầu. Dùng `ak:cook`.
+- Lỗi cụ thể cần diagnosis root cause và repair. Dùng `ak:debug` cùng `ak:fix`.
+- Bạn chỉ cần chạy test hoặc browser validation. Dùng `ak:test`.
+- Bạn đang hỏi advice kỹ thuật chung mà không có code target để review. Dùng
+  advisory workflow.
+
+## Chuẩn bị target và bằng chứng
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận
+  Engineer Kit đã được cài cho đúng runtime cùng scope bạn đang dùng.
+- Mở repository và giữ nguyên pending state hoặc commit range cần review.
+- Cung cấp implementation intent, plan, specification hoặc acceptance criteria
+  khi có.
+- Bảo đảm instruction của project cùng test command liên quan khả dụng.
+- Với pull-request mode, cài và xác thực `gh`, đồng thời bảo đảm repository hiện
+  tại truy cập được pull request đích.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:code-review ...` | Phân phối native là mặc định; phân phối plugin rõ ràng cũng được hỗ trợ. |
+| Cursor | `/ak:code-review ...` | Cách gọi bằng slash đã được người dùng xác minh. Điều này không thiết lập runtime parity đầy đủ. |
+| Codex | `$ak:code-review ...` | Skill dùng discovery native của Codex; không suy ra parity rộng hơn cho Hook và statusline Engineer. |
+
+## Chọn review target
+
+Skill phát hiện mode từ input khớp đầu tiên. Khi không có argument, Skill dùng
+thay đổi gần đây đã có trong context; nếu không có, Skill hỏi bạn chọn target.
+
+| Input | Mode | Bằng chứng được review |
+| --- | --- | --- |
+| `#123` hoặc URL pull request | Pull request | Metadata, tệp đã đổi và full diff lấy bằng `gh` |
+| `abc1234` hoặc SHA hệ thập lục phân dài hơn | Commit | Commit metadata, parent context, tệp đã đổi và full diff từ `git show` |
+| `--pending` | Pending workspace | Staged cùng unstaged change so với `HEAD` và repository status |
+| Không có argument nhưng có context gần đây | Mặc định | Thay đổi gần đây đã được xác lập trong session |
+| `codebase` | Codebase | Full-codebase scan với research, review, verification và improvement plan |
+| `codebase parallel` | Parallel codebase audit | Edge case được nhóm thành reviewer scope độc lập, sau đó aggregate và verify |
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:code-review --pending
+```
+
+```text
+/ak:code-review #184
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:code-review --pending
+```
+
+```text
+/ak:code-review #184
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:code-review --pending
+```
+
+```text
+$ak:code-review #184
+```
+
+  </Tab>
+</Tabs>
+
+Với review dựa trên spec, hãy cung cấp plan hoặc requirement source cùng base
+dự kiến. Với codebase audit, nêu bề mặt business-critical, security boundary và
+giới hạn thời gian hoặc tệp để scan vẫn actionable.
+
+## Hiểu điều gì xảy ra trong một lần chạy
+
+1. **Skill xác định target.** Skill validate pull request, commit, pending diff
+   hoặc codebase mode trước khi review.
+2. **Skill đọc đầy đủ bằng chứng.** Skill tải toàn bộ diff cùng project rule để
+   một dòng sau không thể làm finding trước đó mất context.
+3. **Skill scout edge case.** Skill lần theo consumer, data flow, error path,
+   boundary value, concurrency, state mutation, compatibility cùng tệp bị ảnh
+   hưởng ngoài diff.
+4. **Skill kiểm tra spec compliance trước.** Khi có plan hoặc specification,
+   mọi requirement được đánh dấu Pass, Missing hoặc Extra. Công việc thiếu chặn
+   quality pass; extra không có lý do vẫn hiển thị.
+5. **Skill review code quality.** Skill kiểm tra correctness, security,
+   reliability, performance, maintainability, test cùng pattern hiện có mà
+   không rubber-stamp code trông bóng bẩy.
+6. **Skill thêm checklist khi cần.** Công việc significant, pre-landing hoặc
+   security-sensitive nhận base checklist cùng web hay API overlay được phát
+   hiện từ project.
+7. **Skill xử lý finding đã chấp nhận và verify.** Fix cycle chỉ bắt đầu sau khi
+   finding được chấp nhận. Test, build, lint hoặc reproduction liên quan chạy
+   lại trước mọi completion claim.
+
+Công việc nhiều tệp có thể theo dõi dependency chain
+`scout → review → fix → verify`. Parallel codebase mode trước hết liệt kê edge
+case candidate, giao khu vực độc lập, join mọi kết quả và kiểm tra lại blocking
+finding với full scope.
+
+## Giữ quyền review rõ ràng
+
+<Callout type="warn" title="Bằng chứng review không phải merge approval">
+  Diff trông sạch, happy-path test pass hoặc reviewer score không chứng minh
+  production readiness. Critical finding chặn tiến độ tới khi được sửa và
+  re-verify hoặc bạn đưa ra risk decision rõ ràng.
+</Callout>
+
+- Kiểm tra pull request dùng network access đã xác thực nhưng không tự cấp quyền
+  comment, commit, push, merge hay chạy lại CI.
+- Pending và commit mode chỉ đọc tới khi bạn chấp nhận finding để repair.
+- Checklist finding phải dẫn file cùng line cụ thể, mô tả risk và đề xuất fix có
+  giới hạn. Style preference cùng issue đã xử lý bị bỏ qua.
+- Review feedback được xác minh với codebase này trước implementation. Feedback
+  không rõ hoặc sai kỹ thuật sẽ được hỏi lại thay vì đồng ý hình thức.
+- Re-review loop giới hạn ba cycle trước escalation.
+- Codebase mode có thể ghi improvement plan; Git cùng publication vẫn là phê
+  duyệt riêng.
+- Parallel review phụ thuộc runtime coordination khả dụng cùng ownership độc
+  lập. Nó không làm review chồng lấn trở nên authoritative.
+
+## Xác minh kết quả
+
+Review hữu ích nên cung cấp:
+
+- Target đã xác định, base context, tệp đã đổi và implementation intent.
+- Edge-case finding cùng consumer bị ảnh hưởng được tìm thấy ngoài direct diff.
+- Kết quả spec compliance theo từng requirement khi có spec.
+- Finding theo severity, mỗi finding có location, production impact, bằng chứng
+  và hướng repair cụ thể.
+- Critical blocking finding tách khỏi informational checklist issue.
+- Cách xử lý mọi finding accepted, rejected hoặc deferred.
+- Test, build, lint hoặc reproduction evidence mới sau fix đã chấp nhận.
+- Verification gap và câu hỏi chưa giải quyết còn lại.
+
+“No findings” nghĩa không tìm thấy issue actionable trong bằng chứng đã kiểm
+tra. Nó không chứng minh code đúng ngoài scope đó. Completion cần cả review gate
+lẫn verification command mới liên quan.
+
+## Xử lý sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Không suy ra được target | Chọn pending change, pull request, commit, `codebase` hoặc `codebase parallel`. |
+| Không lấy được pull request | Xác nhận repository context, xác thực `gh` và visibility của pull request. |
+| Không tìm thấy commit | Xác minh SHA tồn tại local và chỉ fetch khi có quyền network phù hợp. |
+| Pending mode báo không có thay đổi | Kiểm tra repository status và chọn commit hoặc pull request khác. |
+| Finding chung chung | Thêm intent, acceptance criteria, project rule và base chính xác; yêu cầu file, line, impact cùng bằng chứng. |
+| Reviewer suggestion xung đột behavior đang hoạt động | Xác minh contract cùng test hiện tại, rồi accept, reject hoặc hỏi rõ bằng bằng chứng kỹ thuật. |
+| Fix tạo finding mới | Thêm re-review cycle, verify lại và escalate sau ba cycle. |
+| Runtime không nhận diện Skill | Xác nhận target cùng scope, mở runtime session mới, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Dùng `ak:test` cho execution evidence bổ sung hoặc bàn giao defect đã chấp nhận
+cho `ak:fix` khi cần repair root cause.
+
+## Biết các giới hạn hiện tại
+
+- Chất lượng review bị giới hạn bởi diff, specification, project context và
+  test mà Skill thực sự kiểm tra được.
+- Static review không chứng minh runtime behavior, load limit, exploitability
+  hoặc correctness của external system nếu thiếu bằng chứng tương ứng.
+- Pull-request cùng external verification path cần network access và có thể phát
+  sinh chi phí provider hoặc CI.
+- Cách gọi Cursor bằng slash là bằng chứng do người dùng xác minh, không phải
+  chứng minh runtime parity đầy đủ.
+- Package stable và beta chứa cùng input mode, review gate và checklist
+  `ak:code-review`.

@@ -1,0 +1,77 @@
+---
+title: ak plan phase
+description: Choose between file-owned phase completion and index-only notes without confusing their ownership boundaries.
+---
+
+Use `ak plan phase` as the namespace for phase-level mutations on plans that
+are already tracked in the local plan store. The parent command only prints
+help; select `update` or `close` to perform work.
+
+## Usage
+
+```bash
+ak plan phase
+```
+
+The parent accepts no positional arguments and has no command-specific flags.
+`ak plan phase --json` still shows help rather than returning a phase JSON
+payload.
+
+## Choose a child command
+
+| Goal | Command | Owner and effect |
+| --- | --- | --- |
+| Record notes, evidence, acceptance text, or a tracking comment ID | `ak plan phase update <plan-id> <n> [flags]` | Writes index-owned phase fields and full-text index data; never writes the phase file. |
+| Complete a phase | `ak plan phase close <plan-id> <n>` | Resolves and atomically changes the canonical phase file, then re-syncs the store. |
+
+### Update index-only bookkeeping
+
+```bash
+ak plan phase update my-project/260722-1200 2 \
+  --notes "Blocked on review" \
+  --evidence "Release checklist complete" \
+  --json
+```
+
+Supported index-owned flags are `--notes`, `--evidence`, `--acceptance`, and
+`--comment-id`. The parent help currently also shows `--status in-progress`, but
+the runtime and tests reject `--status`, `--title`, and `--content` with exit
+`2` because those values are owned by the phase file and would be overwritten
+on reindex. Do not copy that parent-help example into automation.
+
+### Close through the canonical file
+
+```bash
+ak plan phase close my-project/260722-1200 1 --json
+```
+
+For a phase with checkboxes, close marks every remaining box done. For a phase
+without checkboxes, it sets front-matter status to `done`. The file is written
+atomically, then the store is refreshed. A nonquiet command can write a note to
+stderr stating how many task boxes were checked.
+
+## Safety and output
+
+Neither child prompts, reads confirmation from stdin, contacts a network, or
+uses `--yes`. `phase close` can run local `git` commands while resolving the
+linked plan directory. `phase update` writes directly to the private SQLite store.
+`phase close` writes the repository phase file without a backup; if the later
+store refresh fails, the file remains authoritative and recovery is through
+version control or filesystem recovery.
+
+Child JSON success uses one envelope: `kind=plan.phase-update` or
+`kind=plan.phase-close`. There is no NDJSON. Parent help is plain text.
+
+## Exit behavior
+
+Running the parent help exits `0`; invalid parent input exits `2`. Child exits
+are command-local: runtime/store/file/not-found failures use `1`, while an
+invalid phase number or file-owned update flag uses `2`. `phase close` can
+change the file before a later store-read failure is returned, so inspect the
+phase file before retrying an exit `1`.
+
+## Related commands
+
+- [Complete `ak plan` command facts](../cli/ak_plan)
+- [Mark every phase checkbox done](../cli/ak_plan_check)
+- [CLI conventions](../cli-conventions)

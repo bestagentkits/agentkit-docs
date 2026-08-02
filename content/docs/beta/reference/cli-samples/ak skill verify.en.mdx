@@ -1,0 +1,65 @@
+---
+title: ak skill verify
+description: Classify one local skill environment as ok, missing, corrupt, or unknown and consume its raw JSON correctly.
+---
+
+Use `ak skill verify` to compare a local skill's current `runtime:` declaration
+with its per-skill record and expected cache markers.
+
+## Usage
+
+```bash
+ak skill verify <kit>/<skill>
+```
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--kits-dir <dir>` | `AGENTKIT_KITS_DIR` or `./kits` | Select the local source declaration. |
+
+The command is read-only, performs no network request, starts no package tool,
+and never prompts.
+
+## Interpret status
+
+| Status | Process exit | Meaning | Next step |
+| --- | --- | --- | --- |
+| `ok` | `0` | Manifest hash and environment kind match, and expected `pyvenv.cfg` or `node_modules` markers exist. | Use the skill. |
+| `missing` | `1` | No per-skill manifest exists. | Run `ak skill install <kit>/<skill>`. |
+| `corrupt` | `1` | The manifest is unreadable, hash/kind drifted, or expected cache markers are absent. | Run `ak skill repair <kit>/<skill>`, then verify again. |
+| `unknown` | `0` | Runtime management is opted out, or the loaded runtime type is not managed. | Check `AGENTKIT_SKILL_RUNTIME`; do not treat this as healthy. |
+
+Verification is a structural health check. It does not hash every installed
+package byte, contact registries, scan vulnerabilities, or execute the skill.
+
+## JSON and streams
+
+`--json` writes a raw object to stdout, not the shared success envelope:
+
+```json
+{"kit":"engineer","skill":"web-testing","status":"ok"}
+```
+
+For `missing` and `corrupt`, the object is still written before process exit
+`1`; there is no second JSON error envelope. Resolution and I/O failures that
+occur before a status use the structured error envelope on stderr.
+
+Human status is written to stderr. `--quiet` does not suppress the direct status
+line.
+
+## Other exits
+
+| Exit | Meaning |
+| --- | --- |
+| `1` | Status was `missing` or `corrupt`, or unexpected verification I/O failed. |
+| `2` | The single reference or flags were invalid. |
+| `4` | The source skill has no runtime block. |
+| `5` | The source kit or skill was not found. |
+
+Missing or extra positional arguments currently exit `1` through Cobra's
+pre-command validation path.
+
+## Related commands
+
+- [Complete `ak skill verify` facts](../cli/ak_skill_verify)
+- [Install a missing environment](../cli/ak_skill_install)
+- [Repair a corrupt environment](../cli/ak_skill_repair)

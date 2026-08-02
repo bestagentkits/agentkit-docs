@@ -1,0 +1,191 @@
+---
+title: Ship branch đã hoàn tất thành pull request với ak:ship
+description: Merge target branch, chạy release gate, cập nhật release artifact, commit mọi thay đổi chủ đích, push và tạo hoặc cập nhật PR giàu bằng chứng.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:ship` khi implementation trên feature branch đã hoàn tất và bạn muốn
+một workflow chuẩn bị branch cho review. Skill đồng bộ target branch, chạy test
+cùng review gate, cập nhật release artifact phù hợp, commit và push branch, rồi
+tạo hoặc cập nhật GitHub pull request giàu bằng chứng. Skill không merge hay
+deploy pull request đó.
+
+## Chọn ak:ship để chuẩn bị PR
+
+### Dùng ak:ship khi
+
+- Branch đã đủ hoàn chỉnh để bước vào official hoặc beta review.
+- Bạn muốn điều phối test, pre-landing review, versioning, changelog,
+  documentation, Git, issue linkage và PR creation trong một pipeline.
+- Repository dùng GitHub và branch có thể được push bình thường.
+- Bạn đã sẵn sàng để mọi thay đổi worktree hiện tại được xem xét đưa vào ship
+  commit.
+
+### Chọn workflow khác khi
+
+- Bạn vẫn cần implementation. Dùng `ak:cook`.
+- Bạn chỉ cần verification hoặc review local. Dùng `ak:test` hoặc
+  `ak:code-review`.
+- Pull request đã tồn tại và chỉ cần review, sửa, reply hoặc merge. Dùng
+  `ak:review-pr`.
+- Bạn muốn publish ứng dụng đã build. Dùng `ak:deploy` sau khi release gate và
+  policy repository cho phép.
+
+## Chuẩn bị branch và quyền GitHub
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận Engineer
+  Kit đã được cài cho runtime cùng scope hiện tại.
+- Chạy từ feature branch, không bao giờ từ target branch dự kiến.
+- Kiểm tra `git status`, gồm cả untracked file. Chuyển công việc không liên quan
+  ra khỏi worktree vì pipeline chủ động bao gồm mọi thay đổi.
+- Đảm bảo remote target branch và test command của project khả dụng.
+- Cài và xác thực `gh` với quyền issue cùng pull request, đồng thời xác nhận
+  quyền Git push bình thường lên feature branch.
+- Quyết định version, changelog, journal, docs, issue creation, plan state,
+  commit, push và PR write có đều đúng ý định hay không.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:ship ...` | Thực thi native có thể điều phối Git, GitHub CLI, file write, test, review và background journal hoặc docs task. |
+| Cursor | `/ak:ship ...` | Cách gọi bằng slash đã được người dùng xác minh; delegation, background task, prompt và hành vi GitHub dài tương đương phụ thuộc Cursor. |
+| Codex | `$ak:ship ...` | Hỗ trợ discovery native; không mặc nhiên có parity rộng cho Agent được ủy thác, background work, GitHub credential và approval prompt. |
+
+## Chọn release path và gate
+
+| Input hoặc tùy chọn | Tác động | Ranh giới quan trọng |
+| --- | --- | --- |
+| Không có mode | Suy ra official cho `feature/*`, `hotfix/*` hoặc `bugfix/*`; beta cho `dev/*`, `beta/*` hoặc `experiment/*` | Hỏi khi branch naming không rõ |
+| `official` | Nhắm tới default branch đã phát hiện và gồm hành vi docs cùng journal | Không merge PR tạo ra |
+| `beta` | Nhắm tới branch đầu tiên tìm thấy trong `dev`, `beta` hoặc `develop` | Tự động bỏ giai đoạn docs update |
+| `--skip-tests` | Bỏ test gate | Chỉ dùng khi đã có bằng chứng tương đương và ghi bằng chứng đó trong PR |
+| `--skip-review` | Bỏ pre-landing review | Giữ rủi ro review rõ ràng; không hàm ý đã approve |
+| `--skip-journal` | Bỏ technical journal chạy nền | Không ảnh hưởng gate code hoặc PR evidence |
+| `--skip-docs` | Bỏ docs-update task | Xác nhận thay đổi không có documentation impact bắt buộc |
+| `--dry-run` | Đọc trạng thái pre-flight, in pipeline dự kiến rồi dừng | Không fetch, merge, sửa, commit, push, tạo issue hay tạo PR |
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:ship official
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:ship official
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:ship official
+```
+
+  </Tab>
+</Tabs>
+
+Chạy `--dry-run` trước khi target detection hoặc tệp được bao gồm chưa chắc
+chắn. Request tốt nêu target branch dự kiến, test evidence hiện có, version
+policy, issue liên quan, tệp không được ship và có cho phép tạo issue mới không.
+
+## Theo dõi pipeline có thể quan sát
+
+1. **Pre-flight phân giải release.** Skill kiểm tra branch hiện tại, target mode,
+   status, diff và commit. Chạy trên target branch sẽ abort.
+2. **Issue linkage được thiết lập.** Issue hiện có được tìm từ bằng chứng branch
+   cùng commit; nếu không tìm thấy, workflow có thể tạo GitHub issue có cấu trúc
+   để truy vết.
+3. **Target được merge ở local.** Skill fetch và merge `origin/<target>` để các
+   check sau chạy trên trạng thái kết hợp. Conflict phức tạp sẽ dừng lần chạy.
+4. **Test và review chạy.** Test runner đã phát hiện chạy trừ khi bị skip, sau đó
+   là review hai lượt critical và informational trừ khi bị skip. Test failure
+   chặn ship. Finding critical cần fix, chấp nhận rủi ro rõ ràng hoặc quyết định
+   false-positive.
+5. **Release artifact được cập nhật.** Version source đã phát hiện nhận patch
+   bump mặc định; thay đổi đáng kể cần quyết định minor hay patch. Changelog hiện
+   có nhận entry được tạo.
+6. **Journal, docs và plan state được xử lý.** Journal và official docs task chạy
+   nền trừ khi bị skip. Plan đã resolve chỉ được check và đánh dấu completed khi
+   bằng chứng hỗ trợ; index vẫn active đến khi merge.
+7. **Mọi thay đổi chủ đích được commit và push.** `git add -A` stage mọi thay đổi
+   hiện tại, quét secret trong staged diff, tạo conventional commit và push bình
+   thường, không force.
+8. **PR được tạo hoặc cập nhật.** Body ghi end-to-end work, delegation, decision,
+   plan deviation, evidence, checklist, human action, linked issue và ship mode
+   bằng writing language đã cấu hình. Title vẫn là conventional commit tiếng Anh.
+9. **Plan linkage được ghi.** Khi plan đã finalize, index ghi số PR để merge
+   workflow sau này đóng plan an toàn.
+
+## Hiểu ranh giới write
+
+<Callout type="warn" title="Thay đổi chưa commit được tự động bao gồm">
+  `ak:ship` chủ động stage bằng `git add -A`. Làm sạch hoặc cô lập worktree trước
+  khi chạy. Nếu không, một untracked file không liên quan có thể bị commit và
+  push cùng release.
+</Callout>
+
+Pipeline có thể tạo hoặc sửa tất cả mục sau:
+
+- Local merge state, conflict resolution, source fix, version file, changelog,
+  journal, docs và plan file.
+- Một hoặc nhiều local commit, gồm review fix và ship commit cuối.
+- Remote feature branch qua push bình thường.
+- GitHub issue khi không tìm thấy issue liên quan.
+- Pull request mới hoặc title cùng body của pull request hiện có.
+
+Các safety gate vẫn còn:
+
+- Phát hiện secret đã stage sẽ dừng commit. Không bao giờ thêm credential chỉ để
+  pipeline tiếp tục.
+- Push không bao giờ force. Push bị từ chối có thể dùng một lần retry rebase có
+  chủ đích; rewrite history phá hủy nằm ngoài workflow.
+- Thiếu `gh` sẽ dừng sau push, vì vậy branch đã push không phải bằng chứng PR đã
+  tồn tại.
+- Background journal hoặc docs work có thể hoàn tất sau khi bước sau đã bắt đầu;
+  xác minh tệp của chúng có mặt trước khi chấp nhận final commit evidence.
+- `ak:ship` không merge PR, đóng plan index, publish release hay deploy ứng dụng.
+  Các việc đó cần workflow sau và quyền riêng.
+
+## Xác minh handoff
+
+Kết quả hoàn chỉnh nên có:
+
+- Mode, source branch, target branch, số commit và diff summary.
+- Số issue đã link hoặc tạo.
+- Kết quả target merge, test command cùng số lượng và review finding hoặc bằng
+  chứng skip rõ ràng.
+- Kết quả version change, changelog, journal, docs và plan khi phù hợp.
+- Final commit SHA, remote branch đã push và PR URL đã validate.
+- PR body giàu bằng chứng với marker `None`, `Not run` hoặc `Unavailable` trung
+  thực thay vì hoạt động được bịa ra.
+- Mọi human action, rủi ro critical đã chấp nhận, screenshot thiếu, CI pending
+  hoặc câu hỏi chưa giải quyết.
+
+Test release trực tiếp bao phủ writing-language resolution và contract section
+PR body EN/VI. Chúng không thực thi toàn pipeline fetch, merge, test, background
+task, commit, push, issue và PR trên repository live. Stable và beta đóng package
+cùng workflow `ak:ship`.
+
+## Khắc phục mà không bỏ qua gate
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Mode hoặc target sai | Dừng và chạy lại với `official` hoặc `beta`; không push khi target intent còn mơ hồ. |
+| Không phát hiện test runner | Cung cấp project command hoặc skip rõ ràng với bằng chứng trước đó; đừng claim test đã pass. |
+| Target merge conflict | Giải quyết conflict đã hiển thị với context repository, chạy lại check liên quan rồi tiếp tục. |
+| Xuất hiện finding review critical | Sửa và chạy lại test, chấp nhận rủi ro cụ thể rõ ràng hoặc ghi lý do đó là false positive. |
+| Phát hiện secret trong staged diff | Loại bỏ, rotate nếu đã lộ, cập nhật ignore rule và quét lại trước commit. |
+| Push bị từ chối | Kiểm tra remote history, dùng rebase không phá hủy khi phù hợp và retry một lần không force. |
+| Thiếu hoặc chưa xác thực `gh` | Branch có thể đã được push; cài hoặc xác thực `gh`, rồi tạo hoặc cập nhật PR theo body contract bắt buộc. |
+| Runtime không nhận ra Skill | Xác nhận target và scope, khởi động lại runtime session, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Sau khi PR tồn tại, dùng [`ak:review-pr`](./review-pr) cho review và merge
+readiness. Chỉ dùng [`ak:deploy`](./deploy) sau khi release gate của repository
+cho phép publish.

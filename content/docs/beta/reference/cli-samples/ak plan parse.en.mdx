@@ -1,0 +1,70 @@
+---
+title: ak plan parse
+description: Read a plan directory into a structured summary without opening or changing the local plan store.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak plan parse` to read `plan.md` and its `phase-NN-*.md` files directly
+from one directory and calculate phase/task progress.
+
+## Usage
+
+```bash
+ak plan parse <path>
+```
+
+The command requires exactly one directory path and has no command-specific
+flags.
+
+## Read a human or JSON summary
+
+```bash
+ak plan parse ./plans/260802-1030-release-docs
+ak plan parse ./plans/260802-1030-release-docs --json
+```
+
+The parser reads `title`, `description`, `status`, and `priority` from simple
+`plan.md` front matter. It scans direct child files whose names match
+`phase-NN-<slug>.md`, orders them by number, and reports checkbox totals and
+completion percentages.
+
+When a phase has checkboxes, they determine its status. A phase without
+checkboxes uses recognized front-matter status. Unknown plan fields are
+ignored.
+
+<Callout type="info">
+  Parsing is intentionally a structured read, not a full format validation.
+  A directory with a readable `plan.md` can parse even when metadata is
+  incomplete. Use `ak plan validate <path>` when validity must gate a workflow.
+</Callout>
+
+## Effects and privacy
+
+The command is read-only: it does not open or initialize the plan store, write
+files, prompt, read stdin, contact the network, authenticate, or invoke a
+provider.
+
+Human output is written to stdout. JSON success is one envelope with
+`kind=plan.parse`; `data` includes plan metadata, total/done counts,
+percentages, and a `phases` array. The `dir` and each phase's `file_path` are
+absolute paths, while titles and descriptions can contain private project
+context. Redact before sharing.
+
+There is no NDJSON mode. JSON execution errors use the structured envelope on
+stderr; flag-parse errors can remain plain text.
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | The directory was parsed and summarized. A plan with zero tasks is valid output with `0%`. | Inspect the returned fields or run validation separately. |
+| `1` | `plan.md` was missing/unreadable, the directory could not be scanned, or a matching phase could not be parsed. | Fix the named file or directory before retrying. |
+| `2` | The argument count or flags were invalid. | Supply exactly one plan-directory path. |
+
+## Related commands
+
+- [Complete `ak plan parse` command facts](../cli/ak_plan_parse)
+- [Validate a plan directory](../cli/ak_plan_validate)
+- [Display the plan kanban](../cli/ak_plan_kanban)
+- [CLI conventions](../cli-conventions)

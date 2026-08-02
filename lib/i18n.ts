@@ -6,8 +6,9 @@ import { defineI18n } from 'fumadocs-core/i18n';
 // so the two locale trees always resolve the same slugs — the tree shape stays
 // identical (a promotion/whole-copy invariant) even while VI prose is partial.
 //
-// hideLocale 'never': both locales carry an explicit URL prefix (/en, /vi).
-// parser 'dot': content files use `.en.mdx` / `.vi.mdx` suffixes.
+// Both locales stay URL-prefixed so explicit /en and /vi routes use the same
+// contract in local development and the static Cloudflare deployment. The bare
+// root redirects to English Stable separately. parser 'dot': .en.mdx / .vi.mdx.
 export const i18n = defineI18n({
   defaultLanguage: 'en',
   languages: ['en', 'vi'],

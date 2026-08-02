@@ -28,15 +28,31 @@ function extractHrefs(html) {
   return [...hrefs];
 }
 
+function internalCandidates(sitePath) {
+  const clean = sitePath.split('#')[0].split('?')[0];
+  return [clean];
+}
+
 // A site path resolves if any of these exist: the literal file (assets), or
 // path.html / path/index.html (Next static export emits page.html for /page).
 // Trying all three — rather than branching on a file extension — avoids
 // misclassifying a route segment that merely contains a dot (e.g. /docs/v1.2.3).
 function resolves(outDir, sitePath) {
-  const clean = sitePath.split('#')[0].split('?')[0];
-  if (clean === '' || clean === '/') return existsSync(join(outDir, 'index.html'));
-  const base = join(outDir, clean);
-  return existsSync(base) || existsSync(`${base}.html`) || existsSync(join(base, 'index.html'));
+  for (const candidate of internalCandidates(sitePath)) {
+    if (candidate === '' || candidate === '/') {
+      if (existsSync(join(outDir, 'index.html'))) return true;
+      continue;
+    }
+    const base = join(outDir, candidate);
+    if (
+      existsSync(base) ||
+      existsSync(`${base}.html`) ||
+      existsSync(join(base, 'index.html'))
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 async function main() {

@@ -1,0 +1,200 @@
+---
+title: Lập kế hoạch và sản xuất asset video với ak:video
+description: Tạo script, storyboard hoặc bộ video được sinh ra trong khi vẫn phê duyệt riêng chi phí provider, quyền media, render cục bộ và publication.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:video` để đưa video marketing từ brief thành script sẵn sàng cho sản
+xuất, storyboard có frame asset hoặc bộ video đã được tạo và assemble. Skill
+route một trong ba subcommand, đồng thời điều phối creative direction, scene
+prompt, audio directive, hình dạng theo platform, review gate và file output.
+Skill không mặc định làm media được tạo ra trở nên chính xác, có đầy đủ quyền
+hay đã được publish.
+
+## Chọn stage bạn cần
+
+### Dùng ak:video khi
+
+- Bạn cần video script có hướng dẫn scene, camera, visual, on-screen text, audio
+  và platform.
+- Bạn cần storyboard từ script đã duyệt hoặc concept có scope rõ ràng.
+- Bạn muốn tạo scene frame, video clip, voiceover, music, caption hoặc platform
+  export và có thể phê duyệt provider cùng tool cần thiết.
+- Bạn có goal, audience, platform, CTA và ranh giới quyền hạn rõ ràng.
+
+### Chọn workflow khác khi
+
+- Bạn chỉ cần thumbnail YouTube. Dùng `ak:youtube-thumbnail-design`.
+- Bạn muốn tái sử dụng nguồn YouTube hiện có thành content khác. Dùng
+  `ak:youtube`.
+- Bạn chỉ cần voice hoặc sound effect qua ElevenLabs. Dùng `ak:elevenlabs`.
+- Bạn chưa có quyền đối với script, source media, likeness, voice, music,
+  product claim hoặc provider processing mà lần chạy cần.
+
+## Chuẩn bị tuyến production
+
+Mỗi tuyến nên có goal, audience, platform, target length, CTA và constraint
+brand hoặc claim đã duyệt. Tuyến `create` còn cần các tool và service trong
+production plan đã chọn:
+
+- `GEMINI_API_KEY` và quyền truy cập mạng cho request Gemini frame, analysis,
+  speech hoặc Veo được workflow trong package sử dụng.
+- Python package `google-genai`, `python-dotenv` và `pillow` khi tuyến
+  multimodal cần.
+- Node.js và quyền chạy package command đã pin
+  `npx -y -p @mrgoonie/multix@0.2.0 multix`. Nếu package chưa được cache, thao
+  tác này có thể tải và chạy code bên ngoài.
+- `ffmpeg` khi clip hoặc audio layer sẽ được assemble hay export.
+- Tài khoản provider, credential, quota, billing hoặc license bổ sung cần cho
+  music, voice hay media khác được production plan chọn.
+- Project có quyền ghi và đủ storage cho artifact PNG, WAV, MP4, SRT, Markdown
+  và JSON.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:video ...` | Phân phối native là mặc định; phân phối plugin rõ ràng cũng được hỗ trợ. Production đầy đủ vẫn phụ thuộc media tool đã cài và quyền truy cập provider. |
+| Cursor | `/ak:video ...` | Cách gọi bằng slash đã được người dùng xác minh. Browser, media preview và behavior của tool hỗ trợ có thể khác theo thiết lập. |
+| Codex | `$ak:video ...` | Skill dùng discovery native của Codex. Hook chỉ được projection một phần; yêu cầu generation và FFmpeg không đổi. |
+
+Đọc [Runtime adapter](../../../concepts/runtime-adapters) trước khi giả định bề
+mặt production giống nhau ở mọi nơi.
+
+## Chạy Skill
+
+Đặt stage được route trước. Ví dụ này chỉ yêu cầu script pack, vì vậy tạo
+planning artifact mà không cấp quyền generation hay publication.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:video script-create reel "Product walkthrough 30 giây cho team analytics quan tâm privacy" Audience: technical founder. CTA: review demo cục bộ. Chỉ dùng product claim đã duyệt. Chỉ tạo script pack; không tạo media hoặc publish
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:video script-create reel "Product walkthrough 30 giây cho team analytics quan tâm privacy" Audience: technical founder. CTA: review demo cục bộ. Chỉ dùng product claim đã duyệt. Chỉ tạo script pack; không tạo media hoặc publish
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:video script-create reel "Product walkthrough 30 giây cho team analytics quan tâm privacy" Audience: technical founder. CTA: review demo cục bộ. Chỉ dùng product claim đã duyệt. Chỉ tạo script pack; không tạo media hoặc publish
+```
+
+  </Tab>
+</Tabs>
+
+### Chọn stage được route
+
+| Subcommand | Điểm bắt đầu được chấp nhận | Kết quả chính |
+| --- | --- | --- |
+| `script-create` | Video type và topic hoặc brief | `content/video/{type}/{date}-{slug}/script.md` |
+| `storyboard-create` | Path script hoặc concept dạng text | `assets/storyboards/{date}-{slug}/storyboard.md`, `storyboard.json` và scene frame |
+| `create` | Concept dạng text, path script hoặc path storyboard | Scene media được tạo, video đã assemble và export tùy chọn dưới `assets/videos/{date}-{slug}/` |
+
+`create` phát hiện path có vẻ là script hay storyboard rồi bắt đầu tại stage
+đó. Text prompt bắt đầu sớm hơn. Xác nhận tuyến đã phát hiện trước khi provider
+call hay tạo tệp bắt đầu.
+
+## Theo các giai đoạn production
+
+1. **Xác nhận brief.** Skill resolve platform, aspect ratio, goal, audience,
+   CTA, length, claim, art direction, quyền và điểm dừng.
+2. **Tạo hoặc tải script.** `script-create` tạo video brief, scene, prompt,
+   on-screen text, audio direction, platform pack, evaluation và quyết định chưa
+   được giải quyết.
+3. **Tạo hoặc tải storyboard.** `storyboard-create` biến scene thành dữ liệu máy
+   đọc được, prompt start/end frame, motion, audio, timing cùng character
+   portrait và frame image tùy chọn.
+4. **Tạo media đã duyệt.** Tuyến đầy đủ có thể yêu cầu frame image, voiceover,
+   music, sound effect và Veo clip. Veo wrapper trong package dùng model ID
+   `veo-3.1-generate-preview` và hỗ trợ hình dạng production `16:9`, `9:16` hoặc
+   `1:1` qua workflow.
+5. **Assemble và export.** FFmpeg có thể nối clip, ghép voiceover, mix music và
+   tạo `master.mp4`; helper tùy chọn có thể tạo platform export cùng
+   `captions.srt`.
+6. **Review bằng chứng.** Kiểm tra continuity, text, claim, likeness,
+   intelligibility, audio level, caption, quyền, aspect ratio và lỗi đã báo
+   trước mọi quyết định publish.
+
+## Giữ generation, chi phí và publish sau gate
+
+<Callout type="warn" title="Production brief không cấp quyền chi phí provider">
+  Phê duyệt riêng từng stage generation bên ngoài. Batch scene, retry, cặp
+  frame, voiceover, music và analysis có thể tạo nhiều provider request.
+  `npx -y` cũng có thể tải executable code khi chưa được cache.
+</Callout>
+
+| Nhóm công việc | Ranh giới thông thường |
+| --- | --- |
+| Hướng dẫn và lập kế hoạch | Brief, script, storyboard, prompt và review checklist có thể được chuẩn bị trước media generation. |
+| Thay đổi cục bộ | Workflow tạo content, storyboard, video, audio, caption, concat và analysis file. Xác nhận path cùng storage khả dụng. |
+| Tác động provider và mạng | Request Gemini, Veo, speech, music và analysis có thể gửi prompt cùng source media ra ngoài, tiêu quota, phát sinh chi phí hoặc bị policy provider chặn. |
+| Tác động publish và tài khoản | Skill không cấp quyền upload, schedule, tạo ad, đổi tài khoản, chi campaign budget hoặc phân phối lên platform. |
+
+Hãy có quyền và consent cho mọi script, logo, product image, actor, face, voice,
+recording, music track, sound effect và reference frame. Không clone hay mô
+phỏng một người khi chưa được phép. Xác minh testimonial, comparison,
+performance statement và product demonstration bằng bằng chứng đã duyệt.
+
+## Review output và bằng chứng
+
+Một production đầy đủ có thể tạo:
+
+```text
+content/video/{type}/{date}-{slug}/script.md
+assets/storyboards/{date}-{slug}/storyboard.md
+assets/storyboards/{date}-{slug}/storyboard.json
+assets/storyboards/{date}-{slug}/scene-01-start.png
+assets/storyboards/{date}-{slug}/scene-01-end.png
+assets/videos/{date}-{slug}/scene-01.mp4
+assets/videos/{date}-{slug}/voiceover-scene-01.wav
+assets/videos/{date}-{slug}/music.wav
+assets/videos/{date}-{slug}/master.mp4
+assets/videos/{date}-{slug}/captions.srt
+assets/videos/{date}-{slug}/analysis-marketing.md
+```
+
+Không phải tuyến nào cũng tạo mọi tệp. Báo cáo cuối nên nêu artifact thực tế,
+provider request và lỗi, setting generation, phát hiện review, record về source
+và consent, stage bị bỏ qua cùng hành động bên ngoài còn chờ. Hãy tự kiểm tra
+media; path hoặc automated analysis không chứng minh timing, continuity,
+speech, text hay claim là đúng.
+
+## Xử lý sự cố an toàn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Runtime không tìm thấy `ak:video` | Xác nhận target cùng scope, mở session mới, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+| Skill bắt đầu sai stage | Nêu `create`, `script-create` hoặc `storyboard-create` trước và xác định phần còn lại là prompt, path script hay path storyboard. |
+| Provider key, package hoặc model không khả dụng | Dừng trước generation, giữ brief cùng prompt và báo dependency còn thiếu. Không tự đổi provider. |
+| `npx` hoặc provider request cần mạng | Xin phê duyệt theo policy dependency và network của project trước khi fetch code hay gửi media. |
+| Thiếu FFmpeg hoặc assembly lỗi | Giữ source clip cùng audio, ghi command lỗi, sau đó cài hoặc sửa FFmpeg riêng. Không xóa source asset còn dùng được. |
+| Scene, voice hoặc caption sai | Từ chối artifact, truy về prompt hay source liên quan và chỉ regenerate khi ranh giới quyền cùng chi phí vẫn được duyệt. |
+| Output dùng storage ngoài dự kiến | Dừng generation tiếp theo, inventory path đã báo và hỏi trước khi xóa hay recompress material. |
+
+Tiếp tục với [Tổng quan Marketing Kit](../../marketing),
+[Projects, artifacts và checkpoints](../../../concepts/projects-artifacts-checkpoints)
+hoặc [Cài đặt Kit](../../../guides/installing-kits).
+
+## Biết các giới hạn hiện tại
+
+- Router công khai expose `create`, `script-create` và `storyboard-create`;
+  helper script là phần hỗ trợ implementation, không phải subcommand Skill bổ
+  sung.
+- Model ID, resolution, API behavior, quota, safety filter, billing và tính khả
+  dụng provider có thể thay đổi độc lập với workflow trong package.
+- Frame được tạo có thể drift giữa các scene; speech, music, caption và audio
+  mixing có thể chứa artifact hoặc lỗi timing.
+- Video đã được tạo hay review không tự động có license, accessible, truthful,
+  tuân thủ platform hoặc sẵn sàng publish.
+- Dimension, duration limit, metadata rule và posting guidance của platform có
+  thể thay đổi. Xác minh requirement hiện tại lúc distribution.
+- Workflow không bảo đảm watch time, ranking, engagement, conversion, revenue,
+  production quality hay provider acceptance.

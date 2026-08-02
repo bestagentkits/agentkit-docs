@@ -1,0 +1,89 @@
+---
+title: ak journal validate
+description: Check one journal file's readability, title, date, and extension while preserving a machine-readable invalid result.
+---
+
+Use `ak journal validate` after creating an entry or while auditing legacy
+journals. It validates one target per invocation and never edits the file.
+
+## Usage
+
+```bash
+ak journal validate [path-or-id]
+```
+
+Although help displays an optional argument, the implementation requires one
+path or ID and exits `2` when it is omitted.
+
+## Option
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--project <name>` | Project registered for the current working directory, then cwd | Select an exact registered project name before resolving a bare ID. |
+
+## Resolve the target
+
+A bare slug, filename stem, or filename is resolved safely under the selected
+project's `plans/journals/` directory. A value containing a path separator, or
+an absolute path, is read directly instead. Direct paths are not restricted to
+`plans/journals/`, so pass only a file you intend AgentKit to read and report.
+
+```bash
+ak journal validate 2026-07-27-fix-install-race
+ak journal validate ./plans/journals/legacy-entry.md
+ak journal validate /workspace/project/plans/journals/legacy-entry.md --json
+```
+
+Project selection happens before target handling. An invalid explicit
+`--project` therefore fails even when the target is an absolute path.
+
+## Validation rules
+
+The result is valid when all of these conditions hold:
+
+- the file can be read;
+- a title exists in frontmatter or the first H1;
+- any resolved date parses as `YYYY-MM-DD`;
+- the path ends in `.md`.
+
+The date comes from frontmatter first and then from a supported date-prefixed
+filename. A missing date is a warning, not a validation error. This command
+does not validate arbitrary journal prose or decide whether a historical note
+is still authoritative.
+
+## Output and exit behavior
+
+Human output prints `ok` or `fail`, the path, errors, and warnings. JSON success
+uses `kind=journal.validate`; `data` contains `path`, `ok`, optional `title` and
+`date`, plus optional `warnings` and `errors` arrays.
+
+An invalid but readable file is an important special case: the command first
+writes the complete validation result to stdout and then exits `3`. In JSON
+mode that result remains a success-shaped `journal.validate` envelope; no
+second JSON error object is emitted. Parse `data.ok` and also check the process
+exit code.
+
+An unreadable or missing direct path follows that same result-plus-exit-`3`
+contract. A bare ID that cannot be resolved fails earlier with exit `1` and no
+validation result.
+
+In human modes, the validation details remain on stdout and the top-level CLI
+also writes a final failure box to stderr for exit `3`. Keep the streams
+separate in automation.
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The target passed validation; warnings may still be present. |
+| `1` | A bare ID could not be resolved, AgentKit home failed, or resolution I/O failed. |
+| `2` | The target was omitted, project selection was invalid, or arguments could not be parsed. |
+| `3` | Validation completed and `data.ok` is `false`, including an unreadable direct path. |
+
+The command is local and read-only. It performs no network, auth, prompt,
+preview, apply, backup, or recovery operation. Validation output contains the
+target path and may reveal local project structure.
+
+## Related commands
+
+- [Create an entry](./journal-create)
+- [Show an entry](./journal-show)
+- [Journal command group](./journal)

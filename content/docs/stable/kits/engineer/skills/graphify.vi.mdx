@@ -1,0 +1,148 @@
+---
+title: Xây dựng knowledge graph có thể review với ak:graphify
+description: Biến code hoặc document set có giới hạn thành graph artifact có thể query, đồng thời giữ relationship extracted, inferred và ambiguous tách biệt.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:graphify` để biến code, document, paper, image hoặc local media thành
+relationship graph có thể query. Skill ghi visualization, report, JSON và cache
+artifact dùng lại được để bạn khám phá cấu trúc trước khi plan hay edit.
+
+## Chọn ak:graphify để khám phá relationship
+
+### Dùng ak:graphify khi
+
+- Bạn cần high-level map của codebase hoặc document collection chưa quen.
+- Bạn muốn khám phá dependency, connected concept, central node hoặc path.
+- Bạn cần persistent graph artifact có thể query qua MCP server tùy chọn.
+
+### Chọn workflow khác khi
+
+- Bạn cần go-to-definition hoặc find-usages ở mức symbol. Dùng
+  [`ak:gkg`](./gkg).
+- Bạn chỉ cần bounded file map. Dùng [`ak:scout`](./scout).
+- Bạn cần đóng gói raw context thay vì relationship extraction.
+- Bạn không thể gửi document hoặc image tới configured model provider và cũng
+  không thể loại chúng khỏi input.
+
+## Chuẩn bị input và runtime
+
+Cài Python 3.10 trở lên cùng package `graphifyy` được phân phối riêng. Chọn input
+path nhỏ nhất, review ignored cùng generated content, ước lượng disk và provider
+use, rồi quyết định ongoing watch process có được phép không.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:graphify ...` | Phân phối native có thể chạy CLI, kiểm tra generated artifact và dùng MCP server được cấu hình rõ. |
+| Cursor | `/ak:graphify ...` | Cách gọi slash đã được người dùng xác minh; CLI, provider và MCP parity chưa được thiết lập. |
+| Codex | `$ak:graphify ...` | Native discovery được hỗ trợ; Python package, provider credential, persistent process và MCP access phụ thuộc session. |
+
+## Chạy Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:graphify ./src --report "Map module dependencies, keep EXTRACTED and INFERRED edges separate, exclude secrets and generated files, and do not start a watch process or MCP server."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:graphify ./src --report "Map module dependencies, keep EXTRACTED and INFERRED edges separate, exclude secrets and generated files, and do not start a watch process or MCP server."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:graphify ./src --report "Map module dependencies, keep EXTRACTED and INFERRED edges separate, exclude secrets and generated files, and do not start a watch process or MCP server."
+```
+
+  </Tab>
+</Tabs>
+
+| Input hoặc option | Tác dụng | Ranh giới |
+| --- | --- | --- |
+| `<path>` | Xây graph từ folder đã chọn | Ghi `graphify-out/` tương đối với run location |
+| `--report` | Nhấn mạnh generated graph report | Report claim vẫn cần source review |
+| `--watch` | Rebuild tăng dần khi file thay đổi | Bắt đầu observation liên tục và repeated write |
+| `--mcp` | Cho MCP-backed query dùng persistent graph | Server installation và configuration là yêu cầu riêng |
+| Full package extras | Thêm document, media, community hoặc database feature | Có thể thêm dependency lớn cùng provider hoặc storage requirement |
+
+## Hiểu các giai đoạn có thể quan sát
+
+1. **Resolve scope:** inventory file đã chọn, exclusion, media type và repository
+   instruction trước processing.
+2. **Extract structure:** parse code được hỗ trợ bằng tree-sitter và gắn tag
+   `EXTRACTED` cho import, call hoặc inheritance trực tiếp.
+3. **Process media khác:** transcribe audio hoặc video được hỗ trợ cục bộ khi có
+   component cần thiết.
+4. **Extract semantic:** gửi document hoặc image đã chọn tới configured model
+   provider và gắn `INFERRED` hoặc `AMBIGUOUS` cho relationship dẫn xuất.
+5. **Assemble artifact:** ghi graph JSON, interactive HTML, report và incremental
+   cache dưới `graphify-out/`.
+6. **Review hoặc serve:** kiểm tra surprising path cùng confidence tag; chỉ khởi
+   động MCP server khi được cấp quyền riêng.
+
+## Giới hạn privacy và graph claim
+
+<Callout type="warn" title="Input type làm thay đổi data boundary">
+  Code AST extraction và supported media transcription được mô tả là local.
+  Document cùng image đã chọn được gửi tới configured model provider để semantic
+  extraction. Loại file nhạy cảm hoặc xin approval trước transfer đó.
+</Callout>
+
+- Không đưa secret store, credential, private customer material, build output
+  hoặc archive không liên quan vào chỉ vì chúng nằm dưới input path.
+- Edge `EXTRACTED` là parser evidence, không chứng minh runtime behavior hoặc
+  architectural intent. Edge `INFERRED` là model interpretation và cần source
+  review. Edge `AMBIGUOUS` phải giữ trạng thái chưa resolve rõ ràng.
+- Cài `graphifyy` hoặc extras làm thay đổi Python environment. Lệnh upstream
+  `graphify install` không cần để cài AgentKit Skill.
+- Khởi động watch hoặc MCP mode không cấp quyền persistent background service,
+  network exposure hoặc edit client configuration.
+- Review content `graphify-out/` hiện có trước overwrite hoặc clean; cache có
+  thể là evidence về cách graph trước đó được tạo.
+
+## Xác minh output và evidence
+
+Một lần chạy đầy đủ nên nêu input root, exclusion, file type đã process, stage
+local so với provider-backed, error hoặc skipped file và artifact chính xác:
+
+- `graphify-out/graph.html` để interactive exploration.
+- `graphify-out/GRAPH_REPORT.md` cho prominent node và suggested question.
+- `graphify-out/graph.json` cho persistent query hoặc MCP serving.
+- `graphify-out/cache/` cho incremental file-hash state.
+
+Mở HTML cùng report, đối chiếu sample node quan trọng với source và xác nhận JSON
+giữ provenance tag. Không báo graph đầy đủ khi vẫn có unsupported file, provider
+failure hoặc ambiguous relationship.
+
+## Xử lý sự cố an toàn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Thiếu `graphify` | Cài distribution `graphifyy` đã duyệt trong environment dự kiến và xác minh executable. |
+| First build chậm hoặc lớn | Thu hẹp path, loại generated material và ghi partial coverage thay vì âm thầm tăng resource. |
+| Document hoặc image extraction lỗi | Giữ local AST result, báo provider gap và không tạo semantic edge không có bằng chứng. |
+| Graph chứa connection bất ngờ | Kiểm tra provenance cùng source node; hạ mức hoặc bỏ unsupported inference. |
+| Watch mode tiếp tục ghi | Dừng process, kiểm tra changed artifact và rerun one-shot nếu không định continuous monitoring. |
+| MCP không query được graph | Xác nhận `graph.json` đã chọn, optional MCP package, process và client configuration. |
+| Runtime không tìm thấy Skill | Xác nhận target cùng scope, restart session, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+## Biết các giới hạn hiện tại
+
+- Language parsing, semantic extraction, transcription, clustering và MCP
+  feature phụ thuộc package extra được cài riêng.
+- Chất lượng model-derived graph phụ thuộc provider cùng model đã chọn; graph
+  proximity không chứng minh causation hay ownership.
+- Release evidence mô tả shipped workflow nhưng không thiết lập current upstream
+  package behavior hoặc end-to-end runtime parity.
+- Stable và beta chứa source `ak:graphify` giống nhau.
+
+Tiếp tục với [`ak:gkg`](./gkg) để symbol navigation hoặc [`ak:plan`](./plan) để
+biến graph evidence đã xác minh thành delivery roadmap.

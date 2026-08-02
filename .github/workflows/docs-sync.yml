@@ -31,6 +31,9 @@ jobs:
 
       - uses: actions/checkout@v4
         with:
+          # `dev` is the integration branch — all doc changes land here first and
+          # deploy to staging; `main` (prod) is updated by promoting dev → main.
+          ref: dev
           token: ${{ steps.bot.outputs.token }}
           fetch-depth: 0
 
@@ -59,7 +62,7 @@ jobs:
           git config user.name  'agentkit-docs-bot[bot]'
           git config user.email '${{ secrets.DOCS_BOT_APP_ID }}+agentkit-docs-bot[bot]@users.noreply.github.com'
 
-      # ---- Beta: direct commit + docs tag + push (production Worker deploys) ----
+      # ---- Beta: direct commit + docs tag + push to dev (staging Worker deploys) ----
       - name: Sync beta
         if: github.event.client_payload.channel == 'beta'
         id: beta
@@ -70,7 +73,7 @@ jobs:
           git add -A content/docs channels.json
           git commit -m "docs-sync: beta ${TAG}"
           git tag "docs/${TAG}"
-          git push origin HEAD "refs/tags/docs/${TAG}"
+          git push origin HEAD:dev "refs/tags/docs/${TAG}"
 
       # ---- Stable: open a promotion PR (never direct-commit to stable) ----
       - name: Promote stable
@@ -87,6 +90,6 @@ jobs:
           git add -A content/docs channels.json
           git commit -m "docs-promotion: ${TAG}"
           git push origin "$BRANCH"
-          gh pr create --base main --head "$BRANCH" --label docs-promotion \
+          gh pr create --base dev --head "$BRANCH" --label docs-promotion \
             --title "docs-promotion: ${TAG}" \
-            --body "Promotes \`${FROM}\` → stable \`${TAG}\`. Stable is now a whole-copy of that beta docs tag. Review the diff and merge."
+            --body "Promotes \`${FROM}\` → stable \`${TAG}\`. Stable is now a whole-copy of that beta docs tag. Review the diff and merge into dev (then dev → main ships it to prod)."

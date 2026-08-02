@@ -1,0 +1,143 @@
+---
+title: ak kit repair-install-mode
+description: Giữ đầu ra Claude Code project-native và deactivate AgentKit project plugin xung đột với recovery có giới hạn.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak kit repair-install-mode` sau khi `ak doctor` báo cùng một project có cả
+bản cài Claude Code native đang hoạt động và AgentKit project plugin đang hoạt
+động. Repair giữ native mode và chỉ deactivate trạng thái project-plugin có
+lifecycle evidence khớp với AgentKit.
+
+## Cú pháp
+
+```bash
+ak kit repair-install-mode --keep native --yes
+```
+
+Lệnh không nhận argument theo vị trí. Cả `--keep native` và `--yes` đều bắt
+buộc.
+
+## Trước khi chạy
+
+Hãy xem mixed-install-mode finding trước:
+
+```bash
+ak doctor
+```
+
+Repair mặc định dùng thư mục hiện tại. Lệnh chỉ hoạt động cục bộ trong project:
+nó không resolve nguồn Kit, liên hệ registry, kiểm tra entitlement hoặc cài lại
+native output.
+
+## Đối số
+
+Lệnh không nhận đối số vị trí. Chỉ chọn project khác bằng `--project-dir`.
+
+Lệnh không có alias.
+
+## Tuỳ chọn
+
+| Tuỳ chọn | Mặc định | Tác động |
+| --- | --- | --- |
+| `--keep <mode>` | Trống | Giá trị chính xác bắt buộc: `native`. Không hỗ trợ keep mode khác. |
+| `--project-dir <dir>` | Thư mục hiện tại | Chọn project có mixed mode. |
+
+Xem các cờ dùng chung tại [quy ước CLI](../cli-conventions).
+
+## Ví dụ
+
+```bash
+# Repair project hiện tại.
+ak kit repair-install-mode --keep native --yes
+
+# Repair project đã chỉ định và thu đầu ra có cấu trúc.
+ak kit repair-install-mode --keep native --project-dir ./app --yes --json
+```
+
+## Hành vi xác nhận và no-op
+
+Lệnh không có prompt tương tác, preview, dry-run, apply hoặc force mode. Khi
+thiếu `--yes`, lệnh phát lỗi và không repair. `--json`, `--no-interactive` và
+stdin không phải TTY không bỏ yêu cầu `--yes`.
+
+<Callout type="warning">
+  `--yes` áp dụng repair ngay sau khi evidence được phát hiện lại dưới lifecycle
+  lock. Chỉ chạy sau khi kiểm tra project path và doctor finding.
+</Callout>
+
+Nếu project đã chọn không có xung đột native-plus-project-plugin cùng scope,
+lệnh thoát `0`, không ghi repair snapshot và báo không tìm thấy mixed mode.
+
+## Đầu ra và stream
+
+Đầu ra thành công dành cho người dùng dùng stdout. No-op in
+`No mixed Claude Code install modes found.` Repair liệt kê tên Kit có project
+plugin đã bị deactivate và in từng recovery snapshot, lệnh verify cùng thao tác
+restore hoặc khôi phục thủ công.
+
+Với `--json`, stdout chứa envelope có phiên bản với
+`kind=kit.repair_install_mode`. `data` gồm:
+
+```text
+keep, projectDir, repaired, snapshots, recovery, warnings, success
+```
+
+Lỗi trong JSON mode dùng error envelope có phiên bản trên stderr. Mutation thất
+bại có thể thêm `recovery.snapshots` với thao tác khôi phục được giữ lại. Lỗi
+parse cờ có thể vẫn là hướng dẫn dùng plain text.
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Mixed project mode đã được repair, hoặc không có xung đột phù hợp. |
+| `1` | Thiếu `--keep native` hoặc `--yes`, discovery project/evidence thất bại, snapshot hay deactivation thất bại, hoặc automatic rollback bị từ chối. |
+| `2` | Cobra từ chối cờ hoặc argument theo vị trí. |
+| `4` | Một thao tác vòng đời Kit khác đang giữ khoá. |
+
+## Tác động và ranh giới ownership
+
+Lệnh tìm tên Kit từ install-mode evidence của project, sau đó kiểm tra từng Kit
+có route Claude project-native đang hoạt động và project plugin đang hoạt động
+trong cùng project hay không. Với mỗi xung đột được chứng minh, lệnh:
+
+1. Giữ Kit lifecycle lock.
+2. Tạo recovery snapshot cho nhiều root.
+3. Deactivate và xoá trạng thái AgentKit project-plugin có fingerprint.
+4. Giữ bản cài project-native.
+5. Chỉ commit transition sau khi mọi repair Kit đã chọn thành công.
+
+Repair không xoá Claude user plugin chỉ vì có bản project-native, và không xoá
+global-native state chỉ vì có project plugin. Cùng tồn tại khác scope không phải
+quyền cleanup. Tệp do người dùng sửa và tệp chưa được chứng minh vẫn được giữ.
+
+## Khôi phục và giới hạn
+
+Sau khi repair thành công, hãy chạy lại health check và xác minh native discovery:
+
+```bash
+ak doctor
+```
+
+Giữ mọi snapshot được báo cho đến khi Skill project-native hoạt động. Đầu ra
+recovery có `ak backups verify` cùng lệnh restore có giới hạn với các root bắt
+buộc hoặc đường dẫn dữ liệu thủ công.
+
+Nếu repair thất bại sau khi bắt đầu thay đổi, automatic rollback chỉ restore
+đường dẫn có live postimage còn chứng minh được. Thay đổi đồng thời có thể khiến
+rollback từ chối restoration phá huỷ; khi đó lệnh trả chi tiết snapshot được giữ
+lại để xem thủ công.
+
+Lệnh này chỉ hỗ trợ “keep native.” Để chủ động giữ plugin mode, hãy dùng
+install-mode transition rõ ràng được `ak kit install` hỗ trợ sau khi xem route;
+đừng đảo ngược repair này bằng cách xoá diện rộng.
+
+## Lệnh liên quan
+
+- [`ak doctor`](./doctor) phát hiện mixed install mode.
+- [`ak kit install`](./kit-install) thực hiện install-mode transition rõ ràng.
+- [`ak kit uninstall`](./kit-uninstall) preview hoặc xoá route đã chọn.
+- [Thông tin lệnh đầy đủ](../cli/ak_kit_repair-install-mode)
+- [Xử lý sự cố cài Kit](../../troubleshooting/kit-installation)

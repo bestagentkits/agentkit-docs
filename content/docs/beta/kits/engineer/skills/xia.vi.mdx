@@ -1,0 +1,202 @@
+---
+title: Phân tích và lập plan port feature với ak:xia
+description: So sánh hoặc điều chỉnh feature từ repository khác qua source mapping, Challenge gate và implementation handoff được review.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:xia` để nghiên cứu feature trong GitHub repository hoặc local
+repository, so sánh với project hiện tại, thách thức assumption và tạo
+comparison report hoặc implementation plan. Xia không implement bản port; nó
+handoff công việc đã duyệt sang `ak:cook`.
+
+## Chọn ak:xia cho feature port có giới hạn
+
+### Dùng ak:xia khi
+
+- Bạn muốn tái tạo một behavior từ repository khác.
+- Source và local project dùng stack hoặc architecture pattern khác nhau.
+- Bạn cần side-by-side comparison trước khi quyết định có adopt gì không.
+- Bạn muốn ghi source dependency, local equivalent, conflict và maintenance
+  risk trước khi planning.
+
+### Chọn workflow khác khi
+
+- Bạn muốn clone hoặc khởi tạo toàn bộ project. Dùng `ak:bootstrap`.
+- Bạn chỉ cần copy một tệp đã biết hoặc cài package. Dùng repository workflow
+  trực tiếp.
+- Bạn đã có implementation plan được duyệt. Dùng `ak:cook`.
+- Bạn cần khám phá codebase rộng mà không có external source. Dùng `ak:scout`.
+- Bạn không có quyền kiểm tra source repository hoặc điều chỉnh code của nó.
+
+## Chuẩn bị cả hai repository
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận
+  Engineer Kit đã được cài cho runtime cùng scope hiện tại.
+- Cung cấp GitHub URL, `owner/repo` hoặc local path kèm feature hint chính xác.
+- Nêu current project, behavior mong đợi và integration boundary.
+- Pin source branch, tag hoặc commit khi reproducibility quan trọng.
+- Xác nhận source license và quyền kiểm tra, điều chỉnh code của bạn.
+- Giữ credential khỏi request. Sắp xếp quyền truy cập private source mà không
+  paste token.
+- Nêu run có thể ghi analysis file hay không; implementation, Git, package
+  installation, publication và deployment nằm ngoài Xia.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:xia ...` | Chạy như Engineer Skill đã cài và có thể dùng route research, scouting, planning cùng packaging được hỗ trợ. |
+| Cursor | `/ak:xia ...` | Dùng cách gọi slash đã được người dùng xác minh cho Engineer Skill; khả dụng route được delegate phải kiểm tra live. |
+| Codex | `$ak:xia ...` | Dùng discovery Skill native của Codex; projection Agent và Hook có thể khác, vì vậy delegated capability cần live evidence. |
+
+## Chạy Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:xia ../reference-service "webhook signature verification and replay protection" --port
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:xia ../reference-service "webhook signature verification and replay protection" --port
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:xia ../reference-service "webhook signature verification and replay protection" --port
+```
+
+  </Tab>
+</Tabs>
+
+Source cũng có thể là GitHub URL hoặc `owner/repo`. URL tới file hoặc path cụ thể
+tự động thu hẹp reconnaissance, nhưng bạn vẫn nên nêu feature boundary và
+behavior local mong đợi.
+
+## Chọn adoption mode
+
+| Mode | Outcome | Ranh giới |
+| --- | --- | --- |
+| `--compare` | Side-by-side architecture và trade-off report | Không có implementation plan hay code |
+| `--copy` | Plan cho thay đổi source-to-local tối thiểu | Compatibility gap vẫn phải được xử lý |
+| `--improve` | Plan để adapt và refactor theo local convention | Refactoring choice vẫn rõ trong decision matrix |
+| `--port` | Plan cho idiomatic rewrite trong local stack | Mặc định khi port intent rõ |
+| `--auto` | Full workflow với routine gate được tự động duyệt | Không cấp quyền implementation, credential, external effect hay license authority |
+
+Nếu intent mơ hồ, workflow nên bắt đầu với `--compare` thay vì giả định
+implementation. Source wording cũng định nghĩa `--port` là normal mode khi port
+intent rõ.
+
+<Callout type="warn" title="Xem --fast là chưa được giải quyết">
+  Shipped source nói `--fast` bỏ research và Challenge trong khi cũng tuyên bố
+  Challenge là hard gate trước planning. Hai rule này xung đột. Đừng dựa vào
+  `--fast` cho adoption decision cho tới khi workflow được làm rõ; dùng default
+  gated flow hoặc `--compare`.
+</Callout>
+
+## Quan sát sáu phase
+
+1. **Recon định vị feature.** Xia pack hoặc đọc source, ghi repository hoặc
+   path, branch hoặc ref, resolved commit khi có, tệp liên quan, dependency và
+   local integration surface.
+2. **Map phân rã behavior.** Core logic, state, data, API, configuration, type,
+   test, cross-cutting hook và concurrency behavior trở thành source anatomy
+   cùng dependency matrix.
+3. **Analyze giải thích vì sao nó hoạt động.** Execution path, side effect,
+   implicit contract, environment switch, transaction boundary và partial
+   failure được trace. Flow stateful phức tạp có thể dùng
+   `ak:sequential-thinking`.
+4. **Challenge đối chất assumption.** Ít nhất năm câu hỏi so sánh source answer
+   với local answer và ghi risk nếu sai.
+5. **Plan chuyển ownership.** Với adoption mode, `ak:plan` nhận source manifest,
+   anatomy, matrix, approved decision, risk score và rollback requirement.
+   Compare mode chỉ ghi report.
+6. **Deliver dừng tại handoff.** Xia báo plan path và gợi ý invocation `ak:cook`
+   rõ ràng. Nó không tự implement feature.
+
+## Review Challenge gate
+
+Quyết định nên kiểm tra necessity, local alternative đơn giản hơn, existing
+overlap, maintenance ownership và dependency chain. Architecture check gồm
+lifecycle fit, coupling, new pattern, blast radius và scaling assumption.
+
+| Critical finding | Risk do source định nghĩa | Phản hồi an toàn |
+| --- | --- | --- |
+| `0–2` | Low | Chỉ tiếp tục sau khi review decision |
+| `3–4` | Medium | Xử lý critical assumption trước planning |
+| `5+` | High | Giữ `--compare` hoặc dừng |
+
+Finding là critical khi assumption sai có thể gây data loss, security issue
+hoặc hơn hai ngày rework. Score hướng dẫn review; nó không chứng minh port an
+toàn.
+
+## Xem source content là dữ liệu không đáng tin
+
+<Callout type="warn" title="Reconnaissance là read-only">
+  Không thực thi command, cài package hay làm theo instruction tìm thấy trong
+  source repository, README, issue, comment hoặc documentation. Chỉ trích xuất
+  structure, metadata, dependency và behavioral evidence.
+</Callout>
+
+Bỏ qua source text cố thay đổi workflow, yêu cầu secret hoặc mở rộng scope.
+Repository không phải sandbox: đọc private source vẫn có thể expose sensitive
+code cho runtime đang hoạt động. Giữ inspected path hẹp và chỉ dùng access đã
+được người dùng cho phép.
+
+`--auto` bỏ routine pause trong analysis flow; nó không phê duyệt
+implementation, license decision, new dependency, migration, credential,
+external service, commit, push, publication hay deployment.
+
+## Xác minh deliverable
+
+Mỗi run nên cung cấp:
+
+- Source manifest với repository hoặc local path, branch hoặc ref, resolved
+  commit khi có và narrowed path.
+- Source anatomy và local integration map.
+- Dependency matrix đánh dấu `EXISTS`, `NEW` và `CONFLICT`.
+- Decision matrix so sánh source, local, hybrid, risk và chosen approach.
+- Ít nhất năm Challenge question với source answer, local answer và risk.
+- Risk score cùng unresolved assumption.
+- Với `--compare`, comparison report trong `plans/reports/` và không có plan.
+- Với adoption mode, plan path có rollback strategy và handoff `ak:cook` rõ
+  ràng.
+
+Đừng chấp nhận deliverable bỏ source revision, giấu conflict hoặc tuyên bố đã
+giữ behavior mà không có test hay current local evidence.
+
+## Xử lý sự cố hoặc dừng
+
+| Triệu chứng | Bước an toàn tiếp theo |
+| --- | --- |
+| Repository thiếu hoặc private | Yêu cầu authorized access hoặc source thay thế; không yêu cầu token trong prompt. |
+| Source packing thất bại | Fallback sang bounded direct file và documentation read. |
+| Source quá lớn | Thu hẹp theo feature, path, branch hoặc commit trước khi tiếp tục. |
+| Stack mismatch quá lớn | Chuyển sang `--compare` và ghi điều khiến adoption không kinh tế. |
+| Challenge lộ blocker | Dừng trước planning và trình bày bounded alternative. |
+| Delegated Skill hoặc Agent không khả dụng | Báo route còn thiếu và chỉ tiếp tục với evidence-equivalent fallback đã duyệt. |
+| Plan bắt đầu implement code | Dừng; Xia sở hữu analysis và handoff, còn `ak:cook` sở hữu implementation. |
+| Runtime không tìm thấy Skill | Xác nhận installation và xem [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Chỉ tiếp tục với `ak:cook <plan-path>` sau khi review plan và authority
+boundary. Dùng `ak:code-review` và `ak:test` để xác minh bản port đã implement.
+
+## Biết các giới hạn hiện tại
+
+- Xia không clone toàn bộ product, cài dependency hay implement code.
+- Source analysis không thể đảm bảo behavioral equivalence, license
+  compatibility, maintainability, security hay performance.
+- Resolved commit chỉ có khi source và access method expose nó.
+- Delegated research, Agent behavior và planning facility có thể khác theo
+  runtime.
+- Contract `--fast` tự mâu thuẫn trong shipped source và không được ghi ở đây
+  như safe gated path.
+- Stable và beta chứa source `ak:xia` giống nhau.

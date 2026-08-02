@@ -1,0 +1,172 @@
+---
+title: Tạo diagram dựa trên bằng chứng với ak:tech-graph
+description: Biến mô tả hệ thống đã xác minh thành SVG và PNG được validation, rồi kiểm tra layout đã render trước khi bàn giao.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:tech-graph` để tạo technical diagram có chất lượng xuất bản dưới dạng
+SVG chỉnh sửa được và PNG độ phân giải cao. Skill biến mô tả hệ thống đã duyệt
+thành node, relationship, semantic arrow cùng layout, validate SVG, render cục
+bộ và báo cáo cả hai artifact.
+
+## Chọn ak:tech-graph cho visual artifact bền vững
+
+### Dùng ak:tech-graph khi
+
+- Bạn cần architecture, data-flow, sequence, process, UML, ER, network hoặc
+  agent-memory diagram để xuất bản.
+- Cặp SVG và PNG tĩnh hữu ích hơn inline diagram definition.
+- Ý nghĩa arrow, grouping, label và visual style phải review được.
+- Bạn muốn render structured JSON fixture qua template đi kèm.
+
+### Chọn workflow khác khi
+
+- Bạn cần diagram inline nhanh trong documentation. Dùng Mermaid workflow của
+  project.
+- Bạn cần raw source được đóng gói để phân tích. Dùng `ak:repomix`.
+- Bạn cần repository fact trước khi vẽ. Dùng `ak:scout` và coi source,
+  configuration, test cùng current docs là evidence của diagram.
+- Bạn cần image không phải technical graph. Dùng image hoặc preview workflow phù
+  hợp.
+
+## Chuẩn bị bằng chứng và renderer
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận Engineer
+  Kit đã được cài cho đúng runtime cùng scope.
+- Cung cấp audience, diagram type, component, boundary, relationship, flow
+  direction, label, style mong muốn và output destination.
+- Với hệ thống hiện có, xác định primary source chứng minh từng node và edge:
+  code, manifest, schema, deployment configuration, test hoặc official
+  architecture docs. Ghi assumption thay vì vẽ chúng như fact.
+- Xác minh `rsvg-convert` có sẵn. Tool này đến từ `librsvg` và cần cho PNG export.
+- Xác nhận destination chứa được cả SVG và PNG; publication hoặc upload nằm
+  ngoài lần chạy trừ khi được duyệt riêng.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:tech-graph ...` | Có thể tạo tệp, chạy local validator, render PNG và kiểm tra trực quan khi image reading có sẵn. |
+| Cursor | `/ak:tech-graph ...` | Dùng cách gọi slash đã được người dùng xác minh; parity về filesystem, renderer và image review phụ thuộc session Cursor. |
+| Codex | `$ak:tech-graph ...` | Dùng native discovery của Codex và chỉ thực hiện cùng workflow khi có local process, filesystem cùng image inspection. |
+
+## Chạy Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:tech-graph "Tạo data-flow diagram từ authentication docs và deployment config hiện tại. Hiện browser, gateway, auth service, session store và audit sink; ghi nhãn mọi payload cùng assumption; style 1; ghi ./artifacts/auth-flow.svg và PNG."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:tech-graph "Tạo data-flow diagram từ authentication docs và deployment config hiện tại. Hiện browser, gateway, auth service, session store và audit sink; ghi nhãn mọi payload cùng assumption; style 1; ghi ./artifacts/auth-flow.svg và PNG."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:tech-graph "Tạo data-flow diagram từ authentication docs và deployment config hiện tại. Hiện browser, gateway, auth service, session store và audit sink; ghi nhãn mọi payload cùng assumption; style 1; ghi ./artifacts/auth-flow.svg và PNG."
+```
+
+  </Tab>
+</Tabs>
+
+Skill nhận diagram type hoặc system description và không công bố mode flag.
+Style 1, Flat Icon, là mặc định; style 2–7 chọn Dark Terminal, Blueprint, Notion
+Clean, Glassmorphism, Claude Official hoặc OpenAI Official.
+
+### Chọn generation path
+
+| Đường đi | Input | Output và effect |
+| --- | --- | --- |
+| Direct SVG | Approved structure đơn giản và SVG content đầy đủ | Ghi `.svg` được yêu cầu, validate rồi ghi `.png` cùng tên |
+| Template generator | Template type, output path và JSON chứa style, container, node, arrow, legend cùng layout control tùy chọn | Ghi SVG starter với text đã escape và relationship được route; PNG export chạy riêng sau đó |
+| Validate SVG hiện có | SVG đã ghi cùng diagram type, style, width và output path | Đọc và validate SVG rồi ghi PNG; helper không tự tạo SVG content còn thiếu |
+| Style regression suite | Fixture đi kèm cho cả bảy style | Tạo SVG có timestamp cùng PNG tùy khả dụng trong `test-output/` và pass/fail summary |
+
+Khi không có custom path, deliverable theo source là
+`./[derived-name].svg` và `./[derived-name].png`. PNG export mặc định rộng 1920
+pixel. Template generator hỗ trợ structure architecture, flowchart, data-flow,
+sequence, comparison, timeline, mind-map, agent, memory, use-case, class,
+state-machine, ER và network-topology.
+
+## Hiểu các giai đoạn của lần chạy
+
+1. **Skill thiết lập factual scope.** Nó tách component cùng flow có source khỏi
+   abstraction được yêu cầu và assumption chưa giải quyết.
+2. **Skill phân loại diagram.** Type quyết định layer, lifeline, cardinality,
+   state, actor hoặc layout semantic khác.
+3. **Skill chọn style.** Style reference tương ứng cung cấp color, typography,
+   shape, spacing và arrow convention.
+4. **Skill lập graph.** Node, edge, group, port, legend, label và routing corridor
+   được bố trí trước khi tạo tệp.
+5. **Skill ghi và validate SVG.** Validation kiểm tra XML, tag balance, quote,
+   marker reference, collision arrow đơn giản, closing tag và renderer
+   compatibility khi tool có sẵn.
+6. **Skill export và review PNG.** `rsvg-convert` tạo raster artifact; runtime đọc
+   được image kiểm tra overlap, clipped text, crossing cùng legend placement,
+   rồi sửa và render lại khi cần.
+7. **Skill báo evidence và tệp.** Kết quả nêu cả hai path, validation, source
+   basis, assumption và mọi giới hạn visual review.
+
+## Giữ diagram chính xác và an toàn
+
+<Callout type="warn" title="Diagram đẹp vẫn có thể sai về fact">
+  SVG validation chứng minh structure và khả năng render, không chứng minh
+  architecture đúng. Truy từng node và edge quan trọng về primary project
+  evidence, đồng thời ghi nhãn relationship suy ra hoặc đề xuất.
+</Callout>
+
+- SVG và PNG là persistent file. Xác nhận trước khi ghi đè artifact hiện có hoặc
+  ghi ngoài project boundary.
+- Generation cùng rendering theo source chạy cục bộ, không cần provider,
+  credential, network call hay paid service. Cài `librsvg`, đọc remote source
+  hoặc publish output là effect riêng cần duyệt.
+- Không nhúng secret, private hostname, customer data, internal URL hoặc
+  credential vào label, metadata, file name hay screenshot.
+- Tránh external font import; chúng có thể làm lỗi local rendering và thêm
+  network dependency. Giữ font cùng SVG resource self-contained.
+- Bỏ validation hoặc visual review làm giảm chất lượng evidence. Nếu không đọc
+  được image, báo rằng visual correctness chưa được kiểm tra.
+
+## Xác minh kết quả
+
+Kết quả hoàn chỉnh gồm graph specification dựa trên source, exact SVG cùng PNG
+path, diagram type và style, render width, validator result, visual review
+statement và unresolved assumption. Kiểm tra mọi label vừa khung, arrow nối vào
+edge của component, crossing rõ nghĩa, legend giải thích nhiều flow type và
+output vẫn đọc được ở kích thước đích.
+
+Regression suite đi kèm render một fixture cho mỗi style, validate SVG và export
+PNG khi có `rsvg-convert`. Nó chứng minh coverage của generator cùng style, không
+chứng minh factual accuracy của diagram mới.
+
+## Khắc phục sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Thiếu `rsvg-convert` | Hỏi trước khi cài `librsvg`; có thể chuẩn bị SVG nhưng PNG delivery chưa hoàn tất. |
+| Helper báo thiếu SVG | Tạo hoặc cung cấp SVG content trước; export helper chỉ validate và render tệp hiện có. |
+| Arrow cắt box hoặc label | Tăng canvas hoặc gutter, dùng edge port cùng orthogonal corridor rồi render lại. |
+| Text bị cắt | Rút ngắn label, mở rộng node hoặc tăng viewBox mà không giảm text dưới mức hỗ trợ. |
+| Diagram xung đột với source | Sửa hoặc ghi nhãn node hay edge đang tranh chấp; không giữ nó chỉ vì symmetry. |
+| Runtime không nhận ra Skill | Xác nhận target và scope, khởi động lại runtime rồi xem [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+## Biết các giới hạn hiện tại
+
+- Skill không tự khám phá architecture hoặc dependency graph; nó cần description
+  được cung cấp hoặc project inspection đã duyệt.
+- Shell validation chỉ bắt một tập structural và routing problem có giới hạn;
+  không thay visual inspection hay accessibility review.
+- Runtime phụ thuộc graph complexity và revision cycle. Template render đơn giản
+  chạy cục bộ và nhanh; diagram xuất bản dày có thể cần nhiều vòng inspect và
+  rerender.
+- Stable và beta đóng package generator, fixture, style cùng validation workflow
+  `ak:tech-graph` giống nhau.

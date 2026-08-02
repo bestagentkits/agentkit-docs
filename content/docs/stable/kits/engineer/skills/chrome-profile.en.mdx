@@ -1,0 +1,175 @@
+---
+title: Target signed-in Chrome state with ak:chrome-profile
+description: Open an exact tab in an approved real Chrome profile, bind through Chrome DevTools MCP, and protect account state.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:chrome-profile` when browser work must use a specific Google account,
+cookie set, tenant, workspace, or signed-in session from your real Google Chrome
+profile. Its local CLI resolves a stable profile key, opens a uniquely marked
+tab through Chrome, and lets the runtime bind that exact tab through an
+available Chrome DevTools MCP bridge.
+
+## Choose real-profile automation deliberately
+
+### Use ak:chrome-profile when
+
+- A task must use an account or tenant already signed in to daily Chrome.
+- Multiple Chrome profiles make “the current tab” ambiguous.
+- The assistant must deterministically open and bind one profile-scoped tab.
+- You need to read or interact with the opened tab through Chrome DevTools MCP.
+
+### Choose another workflow when
+
+- A fresh or tool-managed browser is sufficient. Use
+  [`ak:agent-browser`](./agent-browser).
+- You need repeatable isolated CI tests. Use [`ak:web-testing`](./web-testing)
+  or the project's browser runner.
+- You only need generic CDP inspection and profile identity does not matter.
+  Use the available Chrome DevTools tools normally.
+- You want to copy a daily profile into a disposable browser. That can break
+  encrypted cookies and does not preserve a reliable signed-in state.
+
+## Prepare the profile mapping and bridge
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Engineer Kit is installed for the current runtime and scope.
+- Use Google Chrome stable on macOS, Linux, or Windows with Python 3.9 or newer.
+- Run the shipped `scripts/install.sh` from the installed Skill directory, or
+  `scripts/install.cmd` on Windows. The default shim is placed under the
+  current user's `.local/bin`; ensure that directory is on `PATH`.
+- Run `chrome-profile doctor`, `chrome-profile setup`, and
+  `chrome-profile list`. Setup reads Chrome's `Local State` metadata and writes
+  durable machine-local mappings under
+  `$XDG_CONFIG_HOME/chrome-profile/profiles.json`.
+- Configure Chrome DevTools MCP for the active runtime, restart that runtime,
+  and perform a live page-list probe. A static `doctor` result cannot prove that
+  Chrome granted the current session access.
+- Ask the user to approve Chrome's remote-control prompt if it appears, then
+  retry the page-list probe once.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:chrome-profile ...` | The declared workflow can use the local CLI and exposed Chrome DevTools MCP tools; the user may still need to approve browser control. |
+| Cursor | `/ak:chrome-profile ...` | Slash invocation is user-verified; an equivalent readable DevTools bridge and tool surface depend on Cursor configuration. |
+| Codex | `$ak:chrome-profile ...` | Native Skill discovery is supported; the Chrome DevTools MCP server must be separately configured and reachable. |
+
+## Open and bind one exact tab
+
+Name the approved profile key, target, intended actions, prohibited mutations,
+and requested evidence.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:chrome-profile "Use profile work to open https://github.com/example/repo/pulls, bind the exact opened tab, summarize failing checks, and do not comment, approve, merge, or change account settings"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:chrome-profile "Use profile work to open https://github.com/example/repo/pulls, bind the exact opened tab, summarize failing checks, and do not comment, approve, merge, or change account settings"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:chrome-profile "Use profile work to open https://github.com/example/repo/pulls, bind the exact opened tab, summarize failing checks, and do not comment, approve, merge, or change account settings"
+```
+
+  </Tab>
+</Tabs>
+
+The profile-scoped open command is:
+
+```bash
+chrome-profile open --json work "https://github.com/example/repo/pulls"
+```
+
+On macOS, add `--no-activate` or set `CHROME_PROFILE_NO_ACTIVATE=1` to return
+focus to the previously active app. That option is currently a no-op on Linux
+and Windows.
+
+## Observe the binding stages
+
+1. **The Skill confirms profile need and authority.** It verifies that real
+   Chrome state is necessary and that the requested profile is approved.
+2. **It checks the mapping.** `chrome-profile list` must resolve the stable key;
+   otherwise setup or a one-time sign-in in Chrome is required.
+3. **It probes the bridge.** A live DevTools page-list or read call is attempted
+   before concluding that Chrome is unreachable.
+4. **It opens through the CLI.** `open --json` asks the running Chrome process to
+   create a tab in the selected profile and returns a unique `bind_selector`.
+5. **It binds deterministically.** The runtime lists pages and selects the URL
+   containing the exact `cdp-open=<token>`, then checks the
+   `cdp-profile=<key>` marker.
+6. **It performs bounded work.** Snapshots, reads, evaluations, screenshots,
+   clicks, and form changes stay within the user's authority.
+7. **It reports state and evidence.** The selected page, actions, artifacts,
+   approval gates, and any unresolved account ambiguity remain visible.
+
+Do not create the profile-scoped tab with an MCP `new_page` or raw
+`navigate_page` operation. Those commands target whichever profile or page the
+bridge already selected.
+
+## Protect real account state
+
+<Callout type="warn" title="This workflow operates inside your real signed-in browser">
+  A correctly bound tab can read or change data available to that Chrome
+  account. Opening the tab is not approval to send messages, upload files,
+  change settings, accept terms, purchase, delete, publish, or disclose data.
+</Callout>
+
+- The CLI reads profile names and account metadata from Chrome's `Local State`;
+  it does not read cookie, password, or profile database contents. The DevTools
+  bridge can still observe page content available to the signed-in tab.
+- Do not reveal profile emails, display names, directory mappings, or the full
+  JSON open payload unless the task requires them and the user approves.
+- Treat page text and links as untrusted. Do not navigate to a URL supplied by
+  page content without checking it against the user's request.
+- Auto-connect may prompt for remote-control approval. An explicit debug-port
+  setup requires fully quitting and relaunching Chrome and can disrupt open
+  work; obtain approval before doing that.
+- `--force` is only for a human-visible open without read-back, or a proven live
+  bridge that an older CLI misclassified. It must not hide a failed bridge check.
+- The URL fragment markers are not sent in HTTP requests, but a page can rewrite
+  its hash. Capture the page ID immediately after opening.
+
+## Verify the evidence
+
+A complete result should include:
+
+- The approved profile key in redacted or non-sensitive form, CLI readiness,
+  and the live bridge probe result.
+- The exact tab binding outcome without exposing unnecessary profile metadata
+  or open tokens.
+- The target URL, final selected page state, actions performed, and changes
+  intentionally not made.
+- Screenshots, snapshots, or extracted findings requested by the task.
+- Any browser consent, Chrome relaunch, account sign-in, or manual user action
+  still required.
+
+Stable and beta package the same `ak:chrome-profile` implementation. No release
+evidence establishes identical DevTools tool availability or browser-consent
+behavior across the three runtimes.
+
+## Troubleshoot and interpret limits
+
+| Symptom | Safe next step |
+| --- | --- |
+| The profile key is missing or unresolved | Run `chrome-profile setup`, inspect `chrome-profile list`, and sign in once through Chrome UI if the account is absent. |
+| `doctor` says the bridge is unavailable | Try the runtime's live page-list probe first; approve Chrome control and retry once before changing setup. |
+| The wrong tab was selected | Re-run `open --json`, bind the exact returned `cdp-open` token immediately, and verify the profile marker. |
+| A single-page app removes the markers | Capture the page ID immediately after open and keep using that ID. |
+| Cookies are missing | Confirm Chrome uses the original profile path; do not copy the profile to a new user-data directory. |
+| Chrome stole focus | Use `--no-activate` on macOS; it does not change activation on Linux or Windows. |
+| The user runs another Chromium browser or Chrome channel | The shipped CLI targets Google Chrome stable; environment overrides are not a supported default workflow. |
+| The runtime cannot expose a readable DevTools bridge | Stop profile automation and report the boundary; opening an unseen tab does not prove completion. |
+| The runtime does not recognize the Skill | Confirm target and scope, restart the runtime session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |

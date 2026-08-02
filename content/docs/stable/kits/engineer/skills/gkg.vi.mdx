@@ -1,0 +1,136 @@
+---
+title: Điều hướng code theo semantic với ak:gkg
+description: Index Git repository bằng GitLab Knowledge Graph, query definition và reference, rồi định chuẩn impact claim theo language support.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:gkg` để xây dựng và query local semantic graph cho Git repository.
+Skill hỗ trợ definition search, reference lookup, repository map, impact
+analysis và graph exploration qua `gkg` CLI, local HTTP API hoặc MCP.
+
+## Chọn ak:gkg để điều hướng code theo semantic
+
+### Dùng ak:gkg khi
+
+- Bạn cần bằng chứng go-to-definition hoặc find-usages trước refactor.
+- Bạn muốn repository map dựa trên graph hoặc khám phá architecture.
+- Bạn phân tích Ruby, Java, Kotlin, Python, TypeScript hoặc JavaScript trong
+  local Git repository.
+
+### Chọn workflow khác khi
+
+- Bạn cần text bundle nhanh, snapshot remote repository, token count hoặc ngôn
+  ngữ ngoài packaged support matrix. Dùng repository tool hướng text.
+- Bạn cần implementation thay vì analysis. Chuyển finding đã xác minh cho
+  [`ak:plan`](./plan) hoặc [`ak:cook`](./cook).
+- Code search thông thường trả lời được câu hỏi mà không cần persistent index.
+
+## Chuẩn bị repository và runtime
+
+Cài `gkg` riêng, mở initialized Git repository và quyết định nơi được lưu local
+graph data. Dừng GKG server trước khi re-index.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:gkg ...` | Phân phối native có thể dùng `gkg` CLI và HTTP hoặc MCP tool đang exposed. |
+| Cursor | `/ak:gkg ...` | Cách gọi slash đã được người dùng xác minh; GKG installation và MCP registration vẫn phụ thuộc environment. |
+| Codex | `$ak:gkg ...` | Native discovery được hỗ trợ; CLI, local server và MCP access phụ thuộc Codex session. |
+
+## Chạy Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:gkg "Index this repository, find every reference to PaymentRouter, and report language-support gaps. Do not modify source or delete existing indexes."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:gkg "Index this repository, find every reference to PaymentRouter, and report language-support gaps. Do not modify source or delete existing indexes."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:gkg "Index this repository, find every reference to PaymentRouter, and report language-support gaps. Do not modify source or delete existing indexes."
+```
+
+  </Tab>
+</Tabs>
+
+| Operation | Tác động quan sát được | Ranh giới |
+| --- | --- | --- |
+| `gkg index [path] --stats` | Parse repository và ghi graph data dưới `~/.gkg/` | Dừng server trước; indexing dùng CPU, memory và disk |
+| `gkg server start --register-mcp` | Khởi động local HTTP/MCP service, thường ở port `27495` | Packaged API không có local authentication |
+| Definition và reference query | Trả symbol location, source body hoặc usage | Mức đầy đủ khác nhau theo language |
+| `repo_map` hoặc graph API | Trả compact tree hoặc connected graph data | Graph edge phản ánh parser output, không phải architectural intent |
+| `gkg remove` hoặc `gkg clean` | Xóa indexed workspace, project, orphan hoặc corrupt data | Review chính xác target; chạy `gkg clean --dry-run` trước |
+
+## Hiểu các giai đoạn có thể quan sát
+
+1. **Kiểm tra context:** xác nhận repository, language mix, GKG availability,
+   server status và index location được phép.
+2. **Index:** dừng server, chạy `gkg index` và ghi statistics hoặc error.
+3. **Serve:** khởi động local service khi cần HTTP hoặc MCP query.
+4. **Discover:** liệt kê project, search definition và resolve đúng symbol trước
+   khi lấy reference.
+5. **Đánh giá impact:** kiểm tra call site cùng definition, rồi corroborate gap
+   bằng code search thông thường khi language support chưa đầy đủ.
+6. **Báo cáo:** nêu indexed project, query, returned location, unsupported edge
+   và stale-index risk.
+
+## Bảo vệ source và index state
+
+<Callout type="warn" title="Local graph chứa knowledge của repository">
+  Coi `~/.gkg/` là data dẫn xuất từ source. Absolute path, definition và
+  relationship có thể làm lộ cấu trúc private code dù source file không được
+  copy vào final report.
+</Callout>
+
+- Không expose local HTTP hoặc MCP service không authentication ra ngoài máy
+  hoặc session đáng tin cậy.
+- Indexing ghi bên ngoài repository nhưng không cấp quyền sửa source.
+- `remove` và `clean` mutate index state. Đây là recovery operation, không phải
+  prerequisite thường lệ cho mọi query.
+- Re-index sau source change liên quan; nếu không, gắn nhãn result có thể stale.
+
+## Xác minh output và evidence
+
+Kết quả hữu ích nêu repository cùng index time, `gkg` command hoặc MCP tool,
+symbol definition ID hoặc location, reference location, language support level
+và corroborating search cho conclusion impact cao. Giữ “GKG không trả về” khác
+với “không tồn tại.”
+
+Ruby, Java và Kotlin được ghi có cross-file reference trong shipped support
+matrix. Python, TypeScript và JavaScript có definition, import cùng same-file
+reference, còn cross-file reference chưa đầy đủ. Xác minh refactor impact trong
+các language đó bằng independent search.
+
+## Xử lý sự cố an toàn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Thiếu `gkg` | Cài từ source được duyệt, xác minh `gkg --version`, rồi thử lại. |
+| Re-index lỗi khi server đang chạy | Chạy `gkg server stop`, index lại, rồi restart server. |
+| Default port đang bận | Kiểm tra `gkg server status` và fallback port được báo thay vì giả định `27495`. |
+| Thiếu reference trong Python hoặc TS/JS | Coi kết quả là partial và corroborate bằng repository search. |
+| Result không phản ánh edit gần đây | Re-index đúng project sau khi giữ lại index evidence cần thiết. |
+| Index data có vẻ corrupt | Preview `gkg clean --dry-run`; chỉ duyệt deletion cho index target đã resolve. |
+| Runtime không tìm thấy Skill | Xác nhận target cùng scope, restart session, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+## Biết các giới hạn hiện tại
+
+- Skill cần initialized local Git repository và executable `gkg` có sẵn riêng.
+- Cross-repository language connection không được ghi là hỗ trợ.
+- Local API và MCP availability không hàm ý authentication, remote access hoặc
+  client integration giống nhau.
+- Stable và beta chứa Skill cùng reference file `ak:gkg` giống nhau.
+
+Tiếp tục với [`ak:graphify`](./graphify) để tạo Mermaid view từ repository
+evidence hoặc [`ak:plan`](./plan) để lập implementation roadmap.

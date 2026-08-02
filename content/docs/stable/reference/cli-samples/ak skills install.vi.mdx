@@ -1,0 +1,90 @@
+---
+title: ak skills install
+description: Copy một local skill vào user Claude plugin tree, có thể provision runtime và hiểu giới hạn khôi phục của force.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak skills install` để copy một skill từ local kits tree vào user-level
+Claude plugin install root.
+
+## Cách dùng
+
+```bash
+ak skills install <kit>/<skill>
+```
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--force` | `false` | Xoá destination directory hiện có trước khi copy source. |
+
+Nên dùng reference chuẩn. Shorthand reference `ak:`, `ake:` và `akm:` cũng được
+chấp nhận. Source và destination root do `AGENTKIT_KITS_DIR` và
+`AGENTKIT_PLUGIN_DIR` điều khiển; lệnh không có cờ `--kits-dir`, target, scope
+hoặc channel.
+
+## Resolution và tác động trên đĩa
+
+Với `<kit>/<skill>`, source lookup thử cả `skills/<skill>` và
+`skills/ak-<skill>`. Lệnh copy regular file vào:
+
+```text
+~/.claude/plugins/<kit>/skills/<skill>/
+```
+
+Directory được tạo với mode `0750` và file copy với `0600`. Entry không phải
+regular file bị bỏ qua. Symlink chỉ được copy thành nội dung file khi regular-file
+target sau resolve vẫn ở trong source skill root; link ra ngoài sẽ fail closed.
+
+Nếu source có runtime Python hoặc Node và kill switch runtime không được đặt,
+lệnh tiếp tục provision singular runtime record và shared cache.
+
+## Ranh giới force và khôi phục
+
+<Callout type="warning">
+  `--force` xoá toàn bộ skill destination hiện có trước lần copy mới. Không có
+  confirmation, ownership classification, snapshot, backup hoặc rollback. Copy
+  hay runtime install thất bại có thể làm mất nội dung cũ và để lại nội dung mới
+  partial hoặc chưa có runtime sẵn sàng.
+</Callout>
+
+Hãy tự backup user change trước khi force. Khi thất bại, sửa local source hoặc
+runtime dependency, chỉ xoá partial destination đã review rồi chạy lại. Shared
+runtime cache không phải backup của nội dung skill.
+
+`--yes` và `--no-interactive` không đổi hành vi vì lệnh không hỏi xác nhận. Lệnh
+không truy cập AgentKit registry hoặc kiểm tra entitlement, dù runtime
+provisioning có thể truy cập PyPI hay npm qua `uv` hoặc `pnpm`.
+
+## Đầu ra
+
+JSON thành công dùng `kind=assets.install`:
+
+```text
+data.ref, data.kit, data.asset, data.files_written,
+data.env_installed, data.success
+```
+
+Human stdout báo reference, số file và runtime đã sẵn sàng hay chưa.
+`env_installed=false` có thể nghĩa là không có runtime declaration hoặc kill
+switch đã được đặt.
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Nội dung đã được copy và runtime provisioning được yêu cầu đã hoàn tất. |
+| `1` | Copy, path safety, runtime provisioning hoặc filesystem thất bại. |
+| `2` | Reference hoặc cờ không hợp lệ. |
+| `5` | Không tìm thấy local source skill khớp. |
+| `6` | Destination đã tồn tại mà không có `--force`. |
+
+Với mã `2`, `5` và `6`, JSON error envelope hiện có thể chứa `exit_code: 1`;
+hãy tin process status. Argument theo vị trí bị thiếu hoặc thừa bị từ chối trước
+phân loại và hiện thoát `1`.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skills install`](../cli/ak_skills_install)
+- [Chỉ cài runtime environment](../cli/ak_skill_install)
+- [Cài runtime route có scope](./kit-init)

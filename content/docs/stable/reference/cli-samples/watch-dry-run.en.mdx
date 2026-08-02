@@ -1,0 +1,75 @@
+---
+title: ak watch dry-run
+description: Preview GitHub issue matches and generated replies without posting comments or updating watch state.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak watch dry-run` to review filters and generated reply text before
+authorizing GitHub comments.
+
+## Usage
+
+```bash
+ak watch dry-run <owner/repo>
+```
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--label <labels>` | `[]` | Match an issue having any listed label. |
+| `--author <logins>` | `[]` | Match an issue from any listed login. |
+| `--keyword <terms>` | `[]` | Match title or body containing any term, case-insensitively. |
+| `--agent <kit/skill>` | `engineer/scout` | Generate each candidate response with this skill. |
+| `--max-per-hour <count>` | `10` | Evaluate the current persisted rolling-hour budget using this ceiling. |
+| `--kits-dir <path>` | `""` | Override the kit source used by `ak run`. |
+
+Comma-separated values and repeated uses follow Cobra string-slice behavior.
+Filter categories combine with AND; values inside one category combine with OR.
+Use a positive rate ceiling.
+
+## What the preview does
+
+```bash
+ak watch dry-run owner/repo --label needs-response --max-per-hour 5
+ak watch dry-run owner/repo --author octocat --keyword crash --json
+```
+
+The command asks `gh issue list` for at most 100 open issues, loads existing
+local watch state if present, applies filters, and invokes `ak run` for every
+allowed, not-previously-responded issue. It never calls `gh issue comment`, marks
+an issue responded, consumes the persisted bucket, or saves watch state.
+
+<Callout type="warning">
+  Dry-run prevents GitHub posting, not all external effects. It reads GitHub,
+  sends issue content to the configured agent/provider, and `ak run` can create
+  its normal local activity or runtime effects.
+</Callout>
+
+The current preview checks the existing rate bucket but does not reserve a slot
+for each simulated reply. When some budget remains, multiple candidates can all
+appear under `would_post_issues` even if a live run would hit the ceiling. Treat
+`rate_limit_remaining` as the starting budget, not a simulated final budget.
+
+## Output and exit status
+
+Human stdout shows target and first-line response previews; full generated text
+is also written to stderr in dry-run logs. JSON stdout uses
+`kind=watch.dry_run` with repository, match count, would-post IDs, would-skip
+IDs, and starting rate remainder; it omits generated response bodies.
+
+Per-issue agent and rate errors are logged to stderr but omitted from both ID
+arrays, and the command can still exit `0`.
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Polling and final rendering completed; inspect stderr for per-issue failures. |
+| `1` | Home/state loading, GitHub polling, or final rendering failed. |
+| `2` | Repository argument or flags were invalid. |
+
+## Related commands
+
+- [Start a live watch](./watch-start)
+- [Inspect persisted state](./watch-status)
+- [Complete `ak watch dry-run` command facts](../cli/ak_watch_dry-run)

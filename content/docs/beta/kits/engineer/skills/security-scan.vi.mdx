@@ -1,0 +1,155 @@
+---
+title: Quét secret, dependency và code pattern với ak:security-scan
+description: Chạy security scan nhẹ, chỉ đọc, xác minh match có khả năng trong context và nhận report đã che dữ liệu, xếp hạng theo severity.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:security-scan` để kiểm tra nhanh, chỉ đọc đối với credential hardcode,
+dependency advisory và vulnerable code pattern phổ biến. Skill kết hợp search
+pattern với phân tích code xung quanh để tách match có khả năng khỏi placeholder
+và false positive rõ ràng.
+
+## Chọn ak:security-scan để triage nhanh
+
+### Dùng ak:security-scan khi
+
+- Bạn muốn kiểm tra secret và dependency issue đã biết trước release.
+- Một thư mục cụ thể cần review nhanh theo pattern OWASP.
+- Bạn cần finding cùng đề xuất fix nhưng không thay đổi code.
+- Bạn muốn quyết định có cần audit sâu theo threat model hay không.
+
+### Chọn workflow khác khi
+
+- Bạn cần coverage STRIDE, attacker persona hoặc remediation theo iteration. Dùng
+  `ak:security`.
+- Bạn cần penetration testing, runtime security analysis, infrastructure
+  validation hoặc compliance audit; các việc này ngoài scope của Skill.
+- Bạn muốn tự động sửa finding. Bàn giao bằng chứng đã xác nhận cho `ak:fix` hoặc
+  chạy `ak:security` với quyền fix rõ ràng.
+
+## Chuẩn bị scan
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận Engineer
+  Kit đã được cài cho runtime cùng scope hiện tại.
+- Chạy từ project root hoặc cung cấp thư mục cụ thể như `src/api/`.
+- Đảm bảo manifest, lockfile, `.gitignore` và source liên quan có thể đọc.
+- Nếu bằng chứng dependency quan trọng, đảm bảo `npm audit` hoặc `pip audit` khả
+  dụng cho đường đi Node.js và Python đã được mô tả.
+- Chỉ duyệt network access nếu package audit đã chọn cần advisory service.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:security-scan ...` | Thực thi native dùng khả năng search, read, Git và shell của runtime. |
+| Cursor | `/ak:security-scan ...` | Cách gọi bằng slash đã được người dùng xác minh; hành vi search và package audit phụ thuộc session Cursor. |
+| Codex | `$ak:security-scan ...` | Hỗ trợ discovery native; không mặc nhiên có search tool, binary và approval tương đương. |
+
+## Chọn scan mode
+
+Không có argument, Skill quét project hiện tại. Secret scanning luôn chạy trước
+trong full workflow thông thường.
+
+| Input hoặc tùy chọn | Coverage | Tác động |
+| --- | --- | --- |
+| Không có argument | Secret, dependency khi phù hợp, code pattern và lộ `.env` | Đọc project hiện tại và có thể liên hệ advisory registry |
+| `<scope>` | Các category tương tự trong thư mục đã chọn | Giảm chi phí tệp, context và runtime |
+| `--secrets-only` | Credential và private-key pattern kèm context check | Chỉ đọc và search local |
+| `--deps-only` | Dependency advisory cho stack được hỗ trợ đã phát hiện | Chạy package audit command phù hợp; có thể dùng network và cache |
+| `--full` | Được khai báo là tùy chọn hỗ trợ | Source release không định nghĩa hành vi khác default full-project scan |
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:security-scan src/api/
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:security-scan src/api/
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:security-scan src/api/
+```
+
+  </Tab>
+</Tabs>
+
+Dùng `--secrets-only` khi lộ credential là câu hỏi duy nhất. Dùng `--deps-only`
+khi bạn chủ động chấp nhận hành vi network và process của package auditor.
+
+## Hiểu những gì scanner quan sát
+
+1. **Skill phát hiện loại project.** Skill kiểm tra manifest Node.js, Python, Go
+   và Rust để hiểu bề mặt repository.
+2. **Skill quét secret trước.** Pattern có cấu trúc và generic bao phủ provider
+   token, private key, connection string, password và bearer token, đồng thời
+   loại example, test, docs, dependency và build output rõ ràng.
+3. **Skill audit dependency được hỗ trợ.** Node.js dùng `npm audit`; Python dùng
+   `pip audit` khi khả dụng. Thất bại được nêu rõ thay vì biến thành kết quả sạch.
+4. **Skill tìm vulnerable pattern.** SQL injection, XSS, command injection, path
+   traversal, insecure randomness, dynamic evaluation, unsafe deserialization,
+   TLS bị tắt và log dữ liệu nhạy cảm đều có kiểm tra tập trung.
+5. **Skill đọc context.** Mỗi code match có khả năng được kiểm tra quanh vị trí
+   source để phân biệt vulnerability với cách dùng an toàn hoặc fixture.
+6. **Skill kiểm tra lộ `.env`.** Git tracking và pattern `.gitignore` được kiểm
+   tra cho các environment file phổ biến.
+7. **Skill trả về report.** Finding được nhóm theo category cùng severity, có vị
+   trí và đề xuất fix.
+
+## Giữ scan chỉ đọc và che bằng chứng
+
+<Callout type="warn" title="Không bao giờ chép credential phát hiện được vào report">
+  Report chỉ giữ bốn ký tự đầu và hai ký tự cuối của secret. Skill không bao giờ
+  thực thi credential và khuyến nghị rotate ngay khi xác nhận credential live.
+</Callout>
+
+- Standalone workflow không sửa code, commit, push, mở pull request, merge,
+  release hay deploy.
+- Khi một cook workflow tự động khác gọi scanner, Skill có thể lưu Markdown
+  report trong report path đã cấu hình của workflow đó; trường hợp khác report
+  được trả trực tiếp trong chat.
+- Package audit tool có thể đọc manifest cùng lockfile, liên hệ registry, tạo
+  cache và dùng provider resource. Skill không định nghĩa phí bên ngoài riêng.
+- Regex match không phải bằng chứng exploitability. Giữ pattern, vị trí, context
+  và reasoning đã dùng để phân loại.
+
+## Xác minh report
+
+Scan hoàn chỉnh nên cung cấp:
+
+- Danh tính project, ngày scan, scope và số tệp đã kiểm tra.
+- Số Critical, High, Medium và Low cho secret, dependency và code.
+- Finding đã che dữ liệu với category, vị trí source, context, severity và đề
+  xuất fix cụ thể.
+- Kết quả dependency audit hoặc lỗi thiếu tool hay network rõ ràng.
+- Bằng chứng Git tracking và ignore cho `.env`.
+- Ranh giới rõ ràng cho category, thư mục hoặc tool bị bỏ qua.
+
+Package release chứa cùng source và reference `ak:security-scan`. Không có test
+end-to-end trực tiếp chứng minh kết quả package registry live hay scanner parity
+giữa các runtime, vì vậy hãy coi report là bằng chứng từ command và tệp thực sự
+được quan sát trong lần chạy hiện tại.
+
+## Khắc phục và hiểu giới hạn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Xuất hiện quá nhiều placeholder match | Xác nhận exclusion và đọc context; không làm lộ giá trị match trong lúc phân loại. |
+| `npm audit` hoặc `pip audit` thất bại | Báo dependency coverage không khả dụng và giữ lỗi tool; đừng chuyển thành không có finding. |
+| Repository dùng dependency Go hoặc Rust | Skill phát hiện các loại project đó nhưng release này chỉ định nghĩa dependency command cho Node.js và Python; dùng native auditor được duyệt riêng. |
+| Finding phụ thuộc runtime configuration | Đánh dấu bằng chứng tĩnh chưa đủ và xác minh trong test environment được phép. |
+| Bạn cần kết luận infrastructure hoặc compliance | Dừng ở ranh giới đã nêu của scanner và dùng review chuyên biệt. |
+| Runtime không nhận ra Skill | Xác nhận target và scope, khởi động lại runtime session, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Tiếp tục với [`ak:security`](./security) khi triage cho thấy trust boundary cần
+threat modelling sâu hơn.

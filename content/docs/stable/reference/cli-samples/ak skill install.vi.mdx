@@ -1,0 +1,92 @@
+---
+title: ak skill install
+description: Provision môi trường Python hoặc Node đã pin, cache dùng chung và runtime record cục bộ cho một skill.
+---
+
+Dùng `ak skill install` sau khi nội dung skill đã có trong kits tree cục bộ và
+bạn cần môi trường Python hoặc Node mà skill khai báo.
+
+## Cách dùng
+
+```bash
+ak skill install <kit>/<skill>
+```
+
+Cần đúng một reference chuẩn. Lệnh đọc trực tiếp
+`<kits-dir>/<kit>/skills/<skill>/skill.yaml`; skill không cần có trong exports
+của `kit.yaml`.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--kits-dir <dir>` | `AGENTKIT_KITS_DIR` hoặc `./kits` | Chọn kits source cục bộ. |
+
+Các cờ dùng chung nằm trong [quy ước CLI](../cli-conventions). Lệnh không hỏi
+xác nhận; `--yes` và `--no-interactive` không đổi policy mutation.
+
+## Dữ liệu được ghi
+
+Với runtime hash mới, AgentKit stage môi trường cạnh cache rồi rename vào vị trí
+sau khi tool hoàn tất. Sau đó lệnh ghi manifest theo skill một cách atomic:
+
+```text
+~/.agentkit/cache/<runtime-hash>/{venv,node_modules}/
+~/.agentkit/skills/<kit>/<skill>/.manifest.json
+```
+
+Cache đã sẵn sàng sẽ được tái sử dụng. Không có backup hoặc rollback snapshot,
+nhưng lần populate cache mới thất bại sẽ xoá staging directory. `install.sh` cũ
+không được chạy; nếu tìm thấy, đường dẫn của nó được cảnh báo trên stderr.
+
+## Policy package và mạng
+
+Python dùng `uv`; Node dùng `pnpm`. `uv` còn có thể resolve Python runtime được
+yêu cầu trước khi cài package. Package spec phải pin chính xác như
+`pypdf==5.1.0` hoặc `zod@3.24.1`. AgentKit cố định source về public PyPI và npm,
+loại các biến môi trường ghi đè registry, từ chối URL/VCS, local file, flag
+injection và spec không an toàn, đồng thời truyền `--ignore-scripts` cho pnpm.
+
+Lệnh không truy cập AgentKit kit registry và không kiểm tra account hay
+entitlement. Package manager vẫn có thể dùng mạng.
+
+## Đầu ra và tự động hoá
+
+Khi thành công, lệnh ghi dạng sau ra stderr và để stdout trống:
+
+```text
+[OK] <kit>/<skill> env installed
+```
+
+Điều này vẫn đúng với `--json` và `--quiet`; không có JSON success envelope.
+Lỗi thực thi JSON dùng error envelope có cấu trúc trên stderr. Hãy thu hai stream
+riêng biệt.
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Record đã được ghi hoặc cache sẵn sàng được tái sử dụng. Opt-out và declaration chỉ có runtime chưa được hỗ trợ cũng có thể hoàn tất dưới dạng no-op. |
+| `1` | Parse, path validation, chạy tool, package policy hoặc filesystem thất bại. |
+| `2` | Reference đơn bị sai dạng hoặc cờ không hợp lệ. |
+| `4` | Thiếu `uv` hoặc `pnpm`, hay skill không khai báo runtime được hỗ trợ. |
+| `5` | Không tìm thấy local kit hoặc skill manifest. |
+
+Cobra từ chối argument theo vị trí bị thiếu hoặc thừa trước renderer có phân
+loại; đường này hiện thoát `1`. Đừng dùng nó làm contract validation argument.
+
+## Xác minh và khôi phục
+
+```bash
+ak skill verify <kit>/<skill>
+```
+
+Nếu cài đặt thất bại, hãy sửa declaration hoặc tool dependency rồi chạy lại.
+Đừng xoá shared cache hash trước khi kiểm tra liệu record skill khác còn tham
+chiếu nó hay không.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skill install`](../cli/ak_skill_install)
+- [Cài nội dung skill](../cli/ak_skills_install)
+- [Chạy một skill](../cli/ak_run)

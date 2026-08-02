@@ -1,0 +1,153 @@
+---
+title: ak backups restore
+description: Preflight, authorize, preview, and apply a bounded rollback snapshot with exact stream and recovery semantics.
+---
+
+Use `ak backups restore` to replay one committed rollback snapshot to its
+recorded destinations. It is a bounded, replace-oriented restore, not a
+full-machine rollback and not an all-or-nothing multi-file transaction.
+
+## Syntax
+
+```bash
+ak backups restore <id> [--allow-root <absolute-root>]... [--dry-run]
+ak backups restore --latest [--allow-root <absolute-root>]... [--dry-run]
+```
+
+## Before you run
+
+Stop other AgentKit lifecycle mutations. Inspect and verify the snapshot first:
+
+```bash
+ak backups show <id>
+ak backups verify <id>
+ak backups restore <id> --dry-run
+```
+
+For a project bundle, repeat `--allow-root` for every exact root printed by
+`show`. A broader ancestor, missing root, or unrelated root fails before a
+prompt or live write. The command is local and needs no network or
+authentication.
+
+Without bundle authority, restore accepts only its fixed AgentKit, Claude, and
+Codex home scopes plus the exact Claude runtime configuration file. A project
+path outside those scopes requires the persisted bundle-root contract.
+
+Take a new recovery snapshot of current state before rolling backward when
+practical. This command does not create a pre-restore snapshot automatically.
+
+## Arguments
+
+| Argument | Required | Meaning |
+| --- | --- | --- |
+| `<id>` | Unless `--latest` is used | Snapshot ID in `YYYYMMDDTHHMMSSZ-8lowercasehex` form. |
+
+At most one ID is accepted. An ID and `--latest` are mutually exclusive.
+
+## Options
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `--allow-root <absolute-root>` | Empty | Adds one explicit project bundle root. Repeat it until the canonical set exactly matches the persisted `bundle_roots`. |
+| `--dry-run` | `false` | Runs integrity, topology, authority, and destination preflight; prints the plan without live mutation. |
+| `--latest` | `false` | Selects the most recently created readable snapshot instead of an ID. |
+
+Shared flags are described in [CLI conventions](../cli-conventions). There is
+no `--force` or `--apply` flag.
+
+## Confirmation behavior
+
+Without `--yes`, `--no-interactive`, or `--json`, an applied restore prints the
+verified plan and reads stdin. Only `y` or `yes` followed by a newline confirms;
+any other answer or end-of-file declines with exit `3`. Piped stdin can answer
+the prompt.
+
+`--json` implies noninteractive mode. Both `--json` and `--no-interactive` skip
+the prompt and can mutate without `--yes`. Add `--yes` in automation to make
+the intent explicit. `--dry-run` never prompts or mutates.
+
+## Examples
+
+```bash
+ak backups restore 20260426T123005Z-deadbeef --dry-run
+ak backups restore 20260426T123005Z-deadbeef --yes
+ak backups restore --latest --yes
+ak backups restore <id> --dry-run \
+  --allow-root /absolute/project-a \
+  --allow-root /absolute/project-b
+```
+
+## Output and streams
+
+Human dry-run output on stdout separates `Restore`, `Remove exact paths`,
+`Remove plugin directories recursively`, `Keep`, `Skip`, and authorized roots.
+An interactive apply prints the same plan on stdout, then the prompt on stderr.
+An apply with `--yes`, `--json`, or `--no-interactive` skips that plan display.
+
+Dry-run JSON uses a success envelope on stdout:
+
+```text
+schema_version: 1
+kind: backups.restore_plan
+data.plan.BackupID
+data.plan.Restore
+data.plan.Keep
+data.plan.Skip
+data.plan.Remove
+data.plan.RemoveTrees
+data.plan.AuthorizedRoots
+```
+
+The plan field names are case-sensitive. Applied success has a deliberate
+exception: even with `--json`, stdout is empty and stderr contains a plain line:
+
+```text
+[OK] restored <id>
+```
+
+`--quiet` does not suppress that direct completion line. JSON execution errors
+use a structured error envelope on stderr; flag-parse errors can remain
+plain-text usage.
+
+## Exit status
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Dry-run preflight completed, or all approved effects were applied. |
+| `1` | Integrity, topology, authority, destination, I/O, or partial-restore failure. |
+| `2` | Missing or malformed ID, too many arguments, invalid flags, or ID combined with `--latest`. |
+| `3` | The stdin confirmation was declined or reached end-of-file. |
+| `4` | Another backup mutation holds the registry lock at apply time. |
+| `5` | A valid-shaped ID was not found, or `--latest` found no snapshot. |
+
+An exit `1` after live mutation may mean earlier files were already restored.
+
+## Effects, safety, and recovery
+
+Preflight verifies manifest metadata and every captured hash, validates scope,
+anchors destinations, and freezes the proposed live effects before asking for
+consent. Apply then acquires the backup registry lock, re-verifies the snapshot,
+manifest, authority, and approved live state, and fails closed if they changed.
+
+Each captured file is replaced through a sibling temporary file and rename.
+The command also removes exact paths recorded absent and recursively removes
+only post-snapshot AgentKit plugin directories explicitly listed in the
+approved plan. Unrelated later-created files remain. Excluded snapshot subtrees
+remain protected from recursive cleanup.
+
+Per-file replacement is atomic, but the complete restore is not transactional.
+After a partial failure, stop new mutations, preserve command output, rerun
+`show` and `verify`, inspect the affected paths, and decide whether to resume
+from the same verified snapshot or use a newer recovery point.
+
+## Related commands and limitations
+
+- [Top-level equivalent `ak recover`](./recover)
+- [List snapshots](./backups-list)
+- [Inspect manifest and authority](./backups-show)
+- [Verify integrity](./backups-verify)
+- [Complete command facts](../cli/ak_backups_restore)
+
+Some project-local lifecycle snapshots report only a manual snapshot-data path
+because they are outside normal restore authority. Follow the recovery method
+reported by the command that created the snapshot.

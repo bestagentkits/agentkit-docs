@@ -1,0 +1,91 @@
+---
+title: ak mcp verify
+description: Khởi động MCP command đã khám phá, test stdio initialize handshake và đọc timeout hoặc failure theo server.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak mcp verify` khi bạn có chủ đích muốn chạy MCP server command đã cấu
+hình và xác minh stdio initialization handshake. Đây không phải kiểm tra config
+thụ động.
+
+## Cách dùng
+
+```bash
+ak mcp verify [name] [flags]
+```
+
+Không có tên thì các server được verify tuần tự. Có một tên thì chọn entry khớp
+đầu tiên.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--timeout <duration>` | `3s` | Giới hạn initialize handshake cho từng server. Giá trị bằng hoặc dưới zero được normalize về `3s`. |
+| `--claude-home <dir>` | Biến môi trường hoặc `~/.claude` | Thay discovery Claude. |
+| `--cwd <dir>` | Thư mục hiện tại | Thay discovery project. |
+
+Cờ dùng chung nằm trong [quy ước CLI](../cli-conventions).
+
+## Ranh giới thực thi
+
+Với từng entry kiểu Claude được chọn, AgentKit:
+
+1. đọc lại command, argument và environment không redaction từ source;
+2. khởi động command với process environment hiện tại cộng environment của
+   server;
+3. gửi MCP `initialize` bằng protocol version `2024-11-05`;
+4. nhận framed response tối đa 1 MiB với result ID `1`;
+5. kill server sau success, failure, cancellation hoặc timeout.
+
+Trên Unix, termination nhắm cả subprocess group; trên Windows chỉ nhắm server
+process. Server stderr được drain rồi bỏ. Verification không gọi MCP tool.
+
+<Callout type="warning">
+  Khởi động command đã cấu hình có thể chạy code bên thứ ba, truy cập network,
+  tạo cache, đọc credential hoặc phát sinh chi phí ngay lúc startup. `--json`,
+  `--no-interactive` và non-TTY input không thêm safety gate; lệnh không hỏi
+  confirmation.
+</Callout>
+
+Yêu cầu environment của server trong catalog được kiểm tra theo key name. Giá
+trị rỗng trong config che process environment. Thiếu key bắt buộc làm result
+fail dù initialize handshake hoàn tất. Giá trị không xuất hiện trong output.
+
+## Giới hạn Codex hiện tại
+
+Entry Codex được khám phá từ `config.toml`, nhưng launch loader hiện chỉ hiểu
+JSON kiểu Claude. Chọn entry chỉ có ở Codex vì vậy thất bại khi parse source và
+không khởi động server. Hãy dùng nguồn Claude JSON hoặc native client cho tới
+khi path này hỗ trợ TOML.
+
+Nếu Claude và Codex có cùng tên, lookup theo một tên chọn Claude trước. Verify
+không tên sẽ thử cả hai entry inventory.
+
+## Output và automation
+
+Lệnh render toàn bộ report ra stdout trước khi trả status thất bại. Human output
+có totals, duration, result message và trạng thái environment theo key.
+
+JSON là một envelope `kind=mcp.verify`. Dưới `data`, dùng `results`, `total`,
+`passed`, `failed` và `timeout`. Mỗi result có server đã redaction, `status`,
+`ok`, `durationMs`, `message` và `envPresence`/`envDocsUrl` nếu có.
+
+Hãy capture stdout ngay cả khi process thoát `1`; chi tiết failure theo server
+nằm ở đó. Flag-parse error có thể vẫn là plain text.
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Mọi server đã chọn initialize thành công và pass environment check. Inventory rỗng cũng trả `0`. |
+| `1` | Discovery thất bại hoặc có server fail, timeout, không start được hay trả response invalid/rejected. |
+| `2` | Argument hoặc cờ không hợp lệ. |
+| `5` | Không khám phá được tên server đã yêu cầu. |
+
+## Lệnh liên quan
+
+- [Xem server config](../cli/ak_mcp_show)
+- [Liệt kê server](../cli/ak_mcp_list)
+- [Thông tin đầy đủ của `ak mcp verify`](../cli/ak_mcp_verify)

@@ -1,0 +1,214 @@
+---
+title: Read Markdown in a browser with ak:markdown-novel-viewer
+description: Serve one Markdown file or a directory through a calm local reader with navigation, syntax highlighting, Mermaid rendering, and explicit network boundaries.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:markdown-novel-viewer` to read a long Markdown file in a focused,
+book-like browser interface or browse a directory of documents. It starts a
+Node.js HTTP server, renders Markdown on request, resolves local images, and adds
+navigation, reading progress, syntax highlighting, and Mermaid diagrams.
+
+## Choose ak:markdown-novel-viewer for reading
+
+### Use ak:markdown-novel-viewer when
+
+- You want a distraction-free view of an RFC, runbook, design document, report,
+  specification, plan, or long-form manuscript.
+- You want to browse a document directory and follow Markdown links visually.
+- You want headings, a table of contents, code highlighting, theme and font
+  controls, reading progress, or plan-specific previous and next navigation.
+- You want browser-rendered Mermaid blocks and can allow the required CDN
+  request.
+
+### Choose another workflow when
+
+- You need a self-contained HTML file rather than a running server. Use the HTML
+  generation mode in `ak:preview`.
+- You need to edit or validate the Markdown content. Use `ak:docs` or the
+  relevant authoring Skill before previewing it.
+- You need a Mermaid source artifact that is validated independently of this
+  viewer. Use `ak:mermaidjs-v11`.
+- The content is untrusted or sensitive and cannot be safely rendered as HTML or
+  exposed through a local HTTP process.
+
+## Prepare Node, the source, and browser access
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Engineer Kit is installed for the current runtime and scope.
+- Provide one Markdown file or one directory. Relative paths resolve from the
+  current working directory.
+- Make Node.js and the Skill's npm dependencies available. The package declares
+  `marked`, `highlight.js`, and `gray-matter`; without installation, Markdown
+  rendering returns an HTTP 500 error.
+- Approve dependency installation separately. Running `npm install` in the Skill
+  directory writes dependency artifacts and uses the package registry.
+- Decide whether the browser may reach Google Fonts, cdnjs, and jsDelivr. The
+  rendered page loads fonts, Highlight.js theme CSS, and Mermaid 11 from those
+  public CDNs.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:markdown-novel-viewer ...` | Native delivery can start the packaged Node server and open a local browser when process and browser tools are available. |
+| Cursor | `/ak:markdown-novel-viewer ...` | Slash invocation is user-verified; background-process lifecycle and browser opening depend on Cursor. |
+| Codex | `$ak:markdown-novel-viewer ...` | Native Skill discovery is supported; browser availability, port exposure, and detached-process handling depend on the active session. |
+
+The declared input is `[file-or-directory]`. State the path, host, port policy,
+browser-opening preference, background or foreground lifecycle, network access,
+and stop behavior when those boundaries matter.
+
+## Start a local-only reader
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:markdown-novel-viewer ./docs/system-design.md "Serve on localhost, use the first available port from 3456, do not bind to the network, do not open a browser automatically, report the URL and PID state, and stop the server when I finish reviewing."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:markdown-novel-viewer ./docs/system-design.md "Serve on localhost, use the first available port from 3456, do not bind to the network, do not open a browser automatically, report the URL and PID state, and stop the server when I finish reviewing."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:markdown-novel-viewer ./docs/system-design.md "Serve on localhost, use the first available port from 3456, do not bind to the network, do not open a browser automatically, report the URL and PID state, and stop the server when I finish reviewing."
+```
+
+  </Tab>
+</Tabs>
+
+The Skill's documented integration also points to `ak:preview` for quick access.
+Use the dedicated viewer invocation when you want its server lifecycle and
+security boundary to be the explicit subject of the request.
+
+## Understand the server controls
+
+| Option | Effect | Important detail |
+| --- | --- | --- |
+| `--file <path>` | Serve a Markdown file at `/view?file=<path>` | The file's parent directory is added to the server's allowed paths. |
+| `--dir <path>` | Browse a directory at `/browse?dir=<path>` | Non-hidden files can be opened through `/file/*`; hidden entries and a directory named `deprecated` are omitted from the listing. |
+| `--port <number>` | Request a starting port | Default is `3456`; occupied ports are scanned upward through `3500`. |
+| `--host <addr>` | Choose the bind address | Default is `localhost`; `0.0.0.0` exposes the server on available network interfaces. |
+| `--no-open` | Do not launch a browser | The implementation actually opens the browser by default. Use this option for deterministic or headless runs. |
+| `--open` | Explicitly request browser launch | It is redundant with the implementation default despite the Skill's option table labelling the default as false. |
+| `--background` | Spawn a detached child and return JSON | The child writes PID state under the system temporary directory. |
+| `--foreground` | Keep the server attached | Intended for a runtime-managed background task and emits machine-readable startup JSON. |
+| `--stop` | Stop discovered viewer instances | This stops all instances represented by the viewer's PID files, not only the current document. |
+
+For direct script use, run the packaged `node scripts/server.cjs` entry point
+from an environment where its dependencies resolve. A successful attached start
+reports the URL, path, port, host, and file or directory mode. Background,
+foreground, child, and command-integrated paths emit JSON; a network URL is
+added when binding to `0.0.0.0` and a local IPv4 address is found.
+
+## Observe the reader stages
+
+1. **The Skill resolves the input.** It checks the current working directory,
+   determines file or directory mode, and rejects a missing or invalid path.
+2. **It prepares the runtime.** Required npm modules must resolve before the
+   first Markdown render.
+3. **It chooses an available port.** The requested port is used when free or the
+   next available port is reported.
+4. **It starts the HTTP server.** Assets, the current working directory, and the
+   target directory become allowed file roots for that process.
+5. **It renders the document or listing.** Markdown frontmatter, headings, local
+   images, code blocks, plan navigation, and directory entries become HTML.
+6. **The browser loads enhancements.** Local reader JavaScript adds theme, font,
+   sidebar, keyboard, mobile, and progress behavior; external CDN resources add
+   fonts, highlight themes, and Mermaid.
+7. **The run remains active until stopped.** PID files support discovery and
+   shutdown; the final report should confirm the process and port are gone.
+
+## Read Mermaid blocks and plan documents
+
+Fenced `mermaid` blocks are escaped on the server, then rendered in the browser
+with Mermaid 11 from jsDelivr. The diagram follows the light or dark reader
+theme, can expand to the main content width, and is re-rendered after theme
+changes. A render failure is shown inline with the source preview.
+
+This is rendering evidence, not a complete validation guarantee. The page must
+reach the CDN, the browser must execute modules, and the source must be valid for
+the fetched Mermaid 11 release. The reader initializes Mermaid with
+`securityLevel: 'loose'`; do not use untrusted diagram source.
+
+Plan navigation is inferred from recognized plan files and phase tables. When a
+document is not detected as a plan, it still receives standard headings and a
+table of contents, but phase badges and previous or next navigation may be
+absent. Reader preferences and accordion state are stored in browser
+`localStorage`.
+
+## Keep the HTTP and content boundary controlled
+
+<Callout type="warn" title="Localhost is the safe default">
+  Binding to `0.0.0.0` makes the directory browser, rendered Markdown, and
+  allowed local files reachable from other devices that can connect to the
+  machine. Use it only for a reviewed directory on a trusted network and stop
+  the server immediately after use.
+</Callout>
+
+- The Markdown renderer does not add a sanitization layer for raw HTML. Treat
+  Markdown, embedded HTML, links, filenames, and Mermaid source as trusted input
+  before opening the page.
+- Directory mode lists non-hidden files of many types and links them through the
+  local file route. Do not serve a broad project directory containing secrets,
+  private reports, source maps, exports, or credentials.
+- Local images are resolved relative to the Markdown file and served through the
+  same process. Remote image URLs remain remote and can disclose browser network
+  metadata to their hosts.
+- The reader contacts public font and script or stylesheet CDNs unless the
+  browser blocks them. Offline reading can lose fonts, highlight themes, and
+  Mermaid rendering even when plain Markdown still loads.
+- Browser launch uses the operating system opener. Keep `--no-open` when the
+  session should only report a URL or when opening a UI is not authorized.
+- Stopping by `--stop` targets every discovered viewer PID. Inspect active
+  instances first if other users or tasks may have a reader running.
+
+## Verify the live output
+
+A complete result should include:
+
+- Resolved source path, file or directory mode, bind host, actual port, local
+  URL, optional network URL, process mode, and PID-file state.
+- Confirmation that dependencies resolved and whether installation changed the
+  Skill directory.
+- HTTP results for the target page and local assets, plus browser confirmation
+  for headings, tables, code, images, navigation, theme, keyboard, and mobile
+  behavior requested by the user.
+- Mermaid source and render status for every diagram, with CDN or syntax errors
+  kept distinct from server-rendering failures.
+- Network requests made to fonts or CDNs, and the exact directories available
+  through browse or file routes.
+- Shutdown evidence showing the server process ended, the port closed, and stale
+  PID files were handled.
+
+The package contains unit-style and server helpers for ports, PID state, MIME
+types, path checks, Markdown image resolution, headings, tables of contents, and
+plan navigation. Those tests were not executed for this documentation batch.
+The pinned stable and beta releases contain the same viewer files.
+
+## Troubleshoot and interpret limits
+
+| Symptom | Safe next step |
+| --- | --- |
+| The page returns HTTP 500 while rendering Markdown | Install the declared npm dependencies in the Skill directory with approval, then restart; do not confuse dependency failure with invalid Markdown. |
+| The browser opens unexpectedly | Restart with `--no-open`; the implementation default is open even though the Skill option table says false. |
+| Port 3456 is occupied | Use the reported incremented port or choose an approved explicit port; the scanner stops at 3500. |
+| Images do not load | Verify a relative path from the Markdown file, the allowed directory, file existence, and URL encoding. |
+| Mermaid stays as text or reports an error | Check browser network access to jsDelivr, console errors, Mermaid v11 syntax, and source shown by the inline error panel. |
+| Fonts or syntax colors are missing offline | Continue with the local reader layout or approve the documented Google Fonts and cdnjs requests; these assets are not bundled. |
+| A directory exposes more than intended | Stop the server, select a narrower directory or one file, inspect its contents, and restart on localhost. |
+| The process persists after review | Inspect viewer PID files and running instances, then use the packaged stop path only after confirming it will not terminate another task's viewer. |
+| The runtime does not recognize the Skill | Confirm target and scope, restart the runtime session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Use [`ak:preview`](./preview) for a broader preview workflow or
+[`ak:mermaidjs-v11`](./mermaidjs-v11) to author and validate diagram source.

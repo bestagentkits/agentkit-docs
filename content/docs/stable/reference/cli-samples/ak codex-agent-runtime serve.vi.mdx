@@ -1,0 +1,87 @@
+---
+title: ak codex-agent-runtime serve
+description: Liệt kê Codex agent đã khám phá hoặc chạy stdio MCP server dài hạn dispatch codex exec subprocess mới.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `--list-only` để kiểm tra agent discovery. Nếu bỏ cờ này, lệnh chạy stdio
+MCP server đã đăng ký trong Codex config và block đến khi client disconnect hoặc
+process bị cancel.
+
+## Cách dùng
+
+```bash
+ak codex-agent-runtime serve [flags]
+```
+
+Lệnh không nhận argument theo vị trí.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--codex-home <dir>` | `CODEX_HOME` hoặc `~/.codex` | Chọn user agent dưới `<dir>/agents`. |
+| `--plugin-root <dir>` | `AGENTKIT_PLUGIN_DIR` hoặc `~/.claude/plugins` | Chọn staged Kit agent discovery. |
+| `--list-only` | `false` | In discovery rồi thoát mà không mở MCP transport. |
+
+Cờ dùng chung nằm trong [quy ước CLI](../cli-conventions), nhưng `--json`,
+`--quiet`, `--yes` và `--no-interactive` không đổi serve hoặc list renderer.
+
+## Kiểm tra discovery
+
+```bash
+ak codex-agent-runtime serve --list-only
+```
+
+List-only output là plain text trên stdout kể cả với `--json`. Nó in Codex home,
+plugin root, số lượng, agent slug và Kit sở hữu nếu biết. Path và tên có thể
+nhạy cảm trong support output.
+
+Discovery scan filename `*.toml` hợp lệ. User agent ưu tiên hơn staged agent
+cùng slug; conflict giữa staged Kit resolve theo thứ tự tên Kit. Root thiếu được
+chấp nhận là rỗng. Root không đọc được trả `1`. Tệp agent riêng lẻ không đọc
+được vẫn xuất hiện với parsed policy rỗng, tức permissive.
+
+## Serve qua stdio
+
+```bash
+ak codex-agent-runtime serve
+```
+
+Stdout chỉ dành cho MCP protocol frame. Không redirect log text vào luồng này.
+Startup line có server version và agent count đi stderr. Process không đọc input
+tương tác hay hỏi confirmation.
+
+Mỗi agent thành `agent_<slug>`. Tool call nhận `prompt` bắt buộc và `tool` có tên
+tuỳ chọn, đọc agent TOML đã cài, kiểm tra policy và start `codex exec` mới. Prompt
+được pipe vào subprocess stdin; stdout của nó thành MCP text content. Subprocess
+fail trả MCP result `isError=true` cùng stderr đã capture, còn server tiếp tục.
+
+<Callout type="warning">
+  Server process chỉ đọc lúc setup, nhưng `codex exec` được dispatch có thể truy
+  cập network và sửa tệp trong Codex sandbox hiệu dụng. Agent instruction và
+  user prompt có thể được gửi đến provider. Không có redaction ở command level.
+</Callout>
+
+Serve không preflight binary `codex`. Nó có thể start và list tool khi Codex
+chưa cài; tool call tương ứng fail lúc dispatch. Registration config đặt timeout
+600 giây cho mỗi MCP tool call, còn client kết nối thủ công có thể dùng timeout
+riêng.
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | List-only hoàn tất, client disconnect sạch hoặc command context bị cancel. |
+| `1` | Root resolution, agent discovery hoặc MCP transport thất bại. |
+| `2` | Argument hoặc cờ không hợp lệ. |
+
+Dependency/provider exit của dispatch nằm trong MCP result, không phải process
+exit của server dài hạn.
+
+## Lệnh liên quan
+
+- [Đăng ký automatic startup](../cli/ak_codex-agent-runtime_register)
+- [Thông tin serve](../cli/ak_codex-agent-runtime_serve)
+- [Chạy skill qua adapter](../cli/ak_run)

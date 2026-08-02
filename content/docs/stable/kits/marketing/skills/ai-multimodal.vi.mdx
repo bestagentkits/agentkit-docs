@@ -1,0 +1,147 @@
+---
+title: Phân tích và tạo media với ak:ai-multimodal
+description: Dùng Multix CLI được pin qua ak:ai-multimodal để phân tích, trích xuất, chuyển lời, chuyển đổi và tạo media qua provider.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:ai-multimodal` để biến image, audio, video hoặc document input thành
+analysis, transcript, structured extraction, document đã chuyển đổi hoặc media
+được tạo có thể review. Skill điều phối CLI
+`@mrgoonie/multix@0.2.0` được pin chính xác; provider catalog, không phải Skill,
+quyết định model, format, availability, limit và pricing hiện tại.
+
+## Chọn ak:ai-multimodal cho công việc media
+
+### Dùng ak:ai-multimodal khi
+
+- Bạn cần OCR, visual analysis, transcription, structured extraction hoặc
+  chuyển document sang Markdown.
+- Bạn muốn tạo hoặc biến đổi image, video, speech hay music asset qua provider
+  đã cấu hình.
+- Bạn có thể cung cấp media, output mong muốn, tiêu chí review và quyền gửi input
+  tới provider đã chọn.
+
+### Chọn workflow khác khi
+
+- Chỉ cần kiểm tra text và không cần upload tới provider.
+- Bạn cần tổ chức asset thay vì xử lý media.
+- Bạn không thể cho phép source media hoặc prompt rời environment hiện tại.
+- Bạn cần đảm bảo model, price, duration, format hoặc quality. Đây là thuộc tính
+  provider trực tiếp và phải được xác minh trước lần chạy.
+
+## Chuẩn bị Node, tool và quyền provider
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding), cài Marketing Kit
+  và dùng Node.js 20 trở lên.
+- Pre-warm pin chính xác bằng
+  `npx -y -p @mrgoonie/multix@0.2.0 multix --version` nếu lần chạy sau có thể
+  bị giới hạn network. Lần `npx` đầu có thể tải package.
+- Chạy `npx -y -p @mrgoonie/multix@0.2.0 multix check --verbose`.
+- Chỉ cung cấp key cần cho tuyến đã chọn: `GEMINI_API_KEY`,
+  `OPENROUTER_API_KEY` tùy chọn hoặc `MINIMAX_API_KEY` tùy chọn. Không đưa
+  giá trị thật vào prompt, file trong version control hoặc báo cáo cuối.
+- Kiểm tra catalog cùng pricing hiện tại của provider, rồi ghi model tương thích
+  rõ ràng khi cần reproducibility.
+- Xác nhận FFmpeg hoặc hỗ trợ media local khác được `multix check` báo cáo.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:ai-multimodal ...` | Delivery native hoặc plugin rõ ràng có thể expose Skill. Provider call và local write vẫn theo quyền session. |
+| Cursor | `/ak:ai-multimodal ...` | Cách gọi bằng slash đã được người dùng xác minh. Provider và tool availability có thể khác runtime khác. |
+| Codex | `$ak:ai-multimodal ...` | Native discovery expose Skill; tuyến `npx` được pin vẫn cần Node, cache hoặc network và provider credential. |
+
+Xem [Runtime adapter](../../../concepts/runtime-adapters) trước khi giả định
+behavior tool hoặc approval tương đương.
+
+## Chạy analysis có thể review
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:ai-multimodal Phân tích ./research/interview.mp4, tạo transcript Markdown có timestamp và evidence summary riêng, che personal identifier, không tạo hoặc publish media
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:ai-multimodal Phân tích ./research/interview.mp4, tạo transcript Markdown có timestamp và evidence summary riêng, che personal identifier, không tạo hoặc publish media
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:ai-multimodal Phân tích ./research/interview.mp4, tạo transcript Markdown có timestamp và evidence summary riêng, che personal identifier, không tạo hoặc publish media
+```
+
+  </Tab>
+</Tabs>
+
+Với generation, nêu modality, brief, output path, tiêu chí review, provider đã
+chọn và model đã xác minh với catalog trực tiếp. Không yêu cầu Skill suy ra
+“latest”, “default” hoặc “recommended”.
+
+## Theo các giai đoạn media
+
+1. **Xác định contract.** Nêu input path, modality, output mong đợi, privacy
+   constraint, provider và acceptance criteria.
+2. **Kiểm tra environment.** Xác minh Node, CLI được pin, provider key, media
+   tooling local, access và capability provider hiện tại.
+3. **Chọn operation.** Dùng analysis, transcription, extraction, document
+   conversion, generation hoặc media optimization phù hợp.
+4. **Xử lý với control rõ ràng.** Dùng command syntax được pin và model đã xác
+   minh rõ ràng cho generation. Chỉ chia media quá lớn sau khi kiểm tra input
+   cùng output limit hiện tại.
+5. **Kiểm tra artifact.** Kiểm tra tính đầy đủ, timestamp hoặc structure, factual
+   support, output format và provider error.
+6. **Báo cáo bằng chứng.** Nêu mọi output, tuyến provider, model đã xác minh khi
+   áp dụng, command result, redaction và limitation chưa xử lý.
+
+## Tách riêng upload, chi phí và publication
+
+<Callout type="warn" title="Provider execution cần quyền rõ ràng">
+  Prompt có thể kích hoạt network upload, provider processing, usage charge và
+  local artifact write. Xác nhận data được phép gửi, provider cùng account đã
+  duyệt và operation dự kiến nằm trong budget trước khi chạy. Generation không
+  cấp quyền publication.
+</Callout>
+
+Không retry provider error một cách mù quáng. Giữ chi tiết hữu ích, che
+credential và xử lý authentication, billing, quota, access hoặc request
+parameter trước. Review media được tạo về quyền sử dụng, privacy, brand fit,
+factual claim và unsafe content trước mọi external use.
+
+## Xác minh output
+
+Một lần chạy hoàn tất nên cung cấp:
+
+- Input và output path chính xác mà không lộ secret.
+- Operation, tuyến provider và model rõ ràng đã dùng cho generation.
+- Bằng chứng `multix check` hoặc environment tương đương.
+- Transcript, analysis, structured file, converted document hoặc media artifact
+  đạt format đã nêu.
+- Segment thiếu, chunk lỗi, redaction và provider limit hiện tại.
+- Xác nhận rõ publication, distribution hoặc downstream upload không xảy ra trừ
+  khi được duyệt riêng.
+
+## Xử lý sự cố và hiểu giới hạn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Node cũ hơn 20 | Nâng cấp Node rồi chạy lại command được pin chính xác. |
+| Lần `npx` đầu thất bại khi offline | Pre-warm package trong environment có network hoặc cung cấp cache đã duyệt; không thay pin bằng floating global install. |
+| Thiếu provider key | Đặt đúng environment variable cần thiết rồi chạy lại `multix check --verbose`. |
+| Model hoặc control bị từ chối | Kiểm tra lại provider catalog trực tiếp và help của command được pin; không đoán model ID khác. |
+| Input vượt limit hiện tại | Xác minh limit, tối ưu hoặc chia media, theo dõi chunk status, rồi chỉ ghép output đã review. |
+| Provider trả lỗi auth, billing hoặc quota | Dừng, che error và xử lý account access ngoài Skill trước khi retry. |
+
+CLI pin chính xác chỉ đổi khi Kit được refresh. Provider behavior có thể đổi độc
+lập và Skill không đảm bảo quality, availability, model, price hoặc performance.
+Dùng [vòng đời Marketing Kit](../lifecycle) khi packaged backend cần refresh đã
+duyệt.

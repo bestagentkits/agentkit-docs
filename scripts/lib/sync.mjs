@@ -1,11 +1,16 @@
-import { cp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseManifest } from './manifest.mjs';
+import { scrubPrivateLinks } from './hygiene.mjs';
+import { RAW_DIR, generateReference } from './generate.mjs';
 
 // Beta ingestion. A bundle directory laid out per the docs-bundle contract:
 //   manifest.json, reference/cli/**, release-notes.md
 // is applied to `content/docs/beta/` by WHOLESALE replacement (never merge), so
 // files deleted upstream disappear here and re-runs of the same tag are no-ops.
+// The bundle's raw pages become the committed source in reference-raw/; the
+// published pages under content/docs/beta/reference/cli are DERIVED from that
+// source + prose overlays by generateReference (so CI can prove them correct).
 
 async function readJson(path) {
   return JSON.parse(await readFile(path, 'utf8'));
@@ -36,20 +41,23 @@ export async function syncBetaRelease({ repoRoot, bundleDir }) {
   const cliDir = join(betaDir, 'reference', 'cli');
   const bundleCli = join(bundleDir, 'reference', 'cli');
 
-  // 1. Replace the generated pages wholesale, but PRESERVE human-owned nav meta.
-  // Delete previous generated pages + marker; keep meta.json / meta.vi.json.
-  await mkdir(cliDir, { recursive: true });
-  for (const e of await readdir(cliDir, { withFileTypes: true })) {
-    if (e.isFile() && isNavMeta(e.name)) continue;
-    await rm(join(cliDir, e.name), { recursive: true, force: true });
+  // 1. Refresh the raw source from the bundle, then derive the published pages.
+  // reference-raw/ holds the hygiene-scrubbed `ak --help` projection (wholesale
+  // replaced, so upstream deletions vanish); a bundle-provided meta is never
+  // stored there. generateReference then produces the derived pages under
+  // content/docs/beta/reference/cli from reference-raw + prose overlays,
+  // preserving the human-owned nav meta.
+  const rawDir = join(repoRoot, RAW_DIR);
+  await mkdir(rawDir, { recursive: true });
+  for (const e of await readdir(rawDir, { withFileTypes: true })) {
+    if (e.isFile() && /\.mdx?$/.test(e.name)) await rm(join(rawDir, e.name));
   }
-  // Copy bundle pages; a bundle-provided meta never clobbers the human nav meta.
-  let referenceFiles = 0;
   for (const e of await readdir(bundleCli, { withFileTypes: true })) {
-    if (isNavMeta(e.name)) continue;
-    await cp(join(bundleCli, e.name), join(cliDir, e.name), { recursive: true });
-    if (e.isFile()) referenceFiles++;
+    if (!e.isFile() || isNavMeta(e.name) || !/\.mdx?$/.test(e.name)) continue;
+    await writeFile(join(rawDir, e.name), scrubPrivateLinks(await readFile(join(bundleCli, e.name), 'utf8')));
   }
+  await mkdir(cliDir, { recursive: true });
+  const referenceFiles = await generateReference({ repoRoot, channel: 'beta' });
 
   // 2. Rewrite the machine-owned marker with this tag's provenance. No channel
   // field: the marker is copied verbatim during promotion, so it must carry

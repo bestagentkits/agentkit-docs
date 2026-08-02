@@ -1,0 +1,78 @@
+---
+title: ak uninstall
+description: Xem trước hoặc xóa tệp dự án thuộc quyền sở hữu của AgentKit và giữ nguyên orphan.
+---
+
+`ak uninstall` xóa các tệp được manifest dự án AgentKit theo dõi. Lệnh không xóa nội dung dự án không thuộc quyền sở hữu.
+
+## Cú pháp
+
+```bash
+ak uninstall [path] [options]
+```
+
+## Trước khi chạy
+
+- `--dry-run` luôn xem trước và thoát `3`, ngay cả khi có `--yes`.
+- Trong TTY, chế độ áp dụng yêu cầu xác nhận trừ khi đặt `--yes`. Từ chối hoặc hết đầu vào sẽ thoát `3`.
+- Chế độ JSON, quiet và không tương tác không hiển thị lời nhắc. Nếu thiếu `--yes`, lệnh từ chối thay đổi và thoát `3`.
+- `--force` cho phép xóa tệp thuộc quyền sở hữu đã sửa nhưng vẫn cần xác nhận. Tùy chọn này không bao giờ xóa tệp orphan.
+
+## Đối số
+
+`[path]` chọn thư mục dự án và được ưu tiên hơn `--project-dir`. Nếu không có cả hai, lệnh tìm từ thư mục hiện tại lên các thư mục cha. Lệnh không có alias.
+
+## Tùy chọn
+
+| Tùy chọn | Mặc định | Mục đích |
+| --- | --- | --- |
+| `--dry-run` | `false` | Xem trước các thao tác tệp đã phân loại. |
+| `--force` | `false` | Cho phép xóa tệp thuộc quyền sở hữu đã sửa. |
+| `--keep-registry` | `false` | Giữ mục dự án trong registry toàn cục. |
+| `--project-dir <path>` | Trống | Chọn thư mục dự án. |
+
+## Ví dụ
+
+Xem trước việc xóa:
+
+```bash
+ak uninstall . --dry-run
+```
+
+Xóa tệp sạch thuộc quyền sở hữu mà không hỏi:
+
+```bash
+ak uninstall . --yes
+```
+
+Xóa tệp thuộc quyền sở hữu đã sửa sau snapshot:
+
+```bash
+ak uninstall . --force --yes
+```
+
+## Đầu ra và luồng
+
+Đầu ra dễ đọc liệt kê tệp sạch, đã sửa, orphan và bị thiếu. Với `--json`, stdout dùng envelope chung có `"kind": "uninstall"`. Đối tượng `data` chứa `project_dir`, `dry_run`, `files`, `deleted`, `skipped` và `orphans`, cùng `snapshot_id` khi được tạo.
+
+Các phần tử trong `files` hiện dùng chính xác các khóa `RelPath`, `Class`, `WillDelete`, `Deleted` và `Skipped`. `Class` là số: `0` sạch, `1` đã sửa, `2` orphan và `3` bị thiếu. Lỗi đi tới stderr. Khi từ chối vì tệp đã sửa, stderr có thể chứa bản tóm tắt dễ đọc trước lỗi JSON có cấu trúc, trừ khi dùng chế độ quiet.
+
+## Trạng thái thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Xóa đã xác nhận hoàn tất. |
+| `1` | Tìm dự án, snapshot, hệ thống tệp hoặc xóa một phần thất bại. |
+| `2` | Cờ hoặc đối số đường dẫn không hợp lệ. |
+| `3` | Dry-run hoàn tất, xác nhận bị từ chối hoặc lần áp dụng không tương tác thiếu `--yes`. |
+| `6` | Tệp thuộc quyền sở hữu đã sửa cần `--force`. |
+
+## Tác động, an toàn và khôi phục
+
+Lệnh phân loại tệp hai lần trước khi xóa. Tệp sạch thuộc quyền sở hữu được xóa; tệp đã sửa cần `--force`; tệp bị thiếu được bỏ qua; tệp orphan được giữ nguyên. Lệnh xóa manifest quyền sở hữu và lock, sau đó chỉ xóa `.agentkit` khi thư mục rỗng. Các tệp khác trong thư mục đó vẫn còn.
+
+Chế độ áp dụng tạo snapshot AgentKit giới hạn trước khi gỡ rồi xóa tuần tự. Vì vậy, lỗi có thể để lại trạng thái xóa một phần. Dùng snapshot được báo cáo và kiểm tra hệ thống tệp trước khi thử lại. Việc xóa registry dự án là best effort và có thể tắt bằng `--keep-registry`. Lệnh không dùng mạng, xác thực, quyền sử dụng, cache hoặc tiến trình con.
+
+## Lệnh liên quan và giới hạn
+
+Dùng [`ak init`](./init) để tạo lại metadata dự án và [`ak doctor`](./doctor) để kiểm tra trạng thái khôi phục. Snapshot không phải backup toàn bộ dự án.

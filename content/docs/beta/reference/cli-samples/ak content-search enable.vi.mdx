@@ -1,0 +1,90 @@
+---
+title: ak content-search enable
+description: Chủ động chấp nhận lưu plaintext at rest và tạo hoặc bật lại shard của một project đã xác thực owner.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak content-search enable` để chọn cho một project tham gia tìm kiếm full
+text cục bộ. Thao tác không bao giờ ngầm diễn ra: owner hiện tại phải truyền
+`--yes`.
+
+## Cách dùng
+
+```bash
+ak content-search enable --project <uuid> --yes
+```
+
+Lệnh không nhận đối số theo vị trí trong cú pháp được công bố.
+
+## Quyền và cờ bắt buộc
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--project <uuid>` | Trống, bắt buộc | UUIDv7 chữ thường chuẩn của project trong `operational.db`. |
+| `--yes` | `false`, runtime yêu cầu | Chấp nhận công bố plaintext at rest và cho phép tạo hoặc bật lại. |
+
+Actor cục bộ hiện tại phải phân giải thành membership `owner` của project ở mỗi
+lần gọi. Login registry và kit entitlement không liên quan.
+
+<Callout type="warning">
+  Shard lưu nội dung có thể tìm kiếm dạng plaintext SQLite, trừ khi đĩa hệ điều
+  hành được mã hoá. Quyền tệp riêng tư giới hạn truy cập nhưng không mã hoá
+  title, body hoặc snippet.
+</Callout>
+
+Không có phương án tương tác dự phòng. TTY, pipe `y`, `--json` và
+`--no-interactive` không thay thế `--yes`; thiếu cờ này thoát `2` trước khi mở
+dịch vụ shard.
+
+## Tác động lên đĩa
+
+Ở lần opt in đầu tiên, lệnh tạo thư mục riêng tư dưới
+`AGENTKIT_HOME/operational/content/`, database SQLite AKC1 và các lifecycle
+sidecar. Home mặc định của `AGENTKIT_HOME` là `~/.agentkit`.
+
+Nếu shard đã tồn tại, enable đổi vòng đời thành `enabled` và giữ document đã
+index. Dùng `rebuild`, không lặp lại enable, để thay shard corrupt hoặc stale
+bằng shard rỗng.
+
+Lệnh chỉ chạy cục bộ. Nó không sync shard, không sao chép vào `operational.db`,
+không gọi network, không tự index runtime source và không tạo recovery snapshot.
+
+## Đầu ra
+
+Human stdout bắt đầu bằng `enabled:` rồi tới công bố plaintext chính xác. JSON
+stdout là status object thô:
+
+```text
+projectId: UUID chuẩn
+lifecycle: enabled
+health: ready
+documentCount: bỏ qua khi bằng 0
+logicalBytes: bỏ qua khi bằng 0
+disclosure: thông báo plaintext at rest
+```
+
+Đây không phải envelope dùng chung hay NDJSON. Lỗi runtime có thể không có
+error object JSON có cấu trúc.
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Shard đã enabled và status được phát. |
+| `1` | Thiếu project flag, xác thực UUID/store/owner thất bại hoặc không thể tạo/mở storage riêng tư an toàn. |
+| `2` | Thiếu `--yes` hoặc giá trị flag không phân tích được. |
+
+## Xác minh hoặc đảo ngược
+
+```bash
+ak content-search status --project <uuid> --json
+ak content-search disable --project <uuid>
+```
+
+Disable giữ dữ liệu. Để xoá tệp shard plaintext, dùng flow preview/apply của
+`delete`.
+
+## Lệnh liên quan
+
+- [Quy ước CLI](../cli-conventions)

@@ -1,0 +1,86 @@
+---
+title: ak api
+description: Choose and operate the foreground AgentKit API proxy while keeping bind, bearer-token, process-state, and stale-state limits explicit.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak api` to discover the commands for running and inspecting AgentKit's
+local HTTP API and provider proxy. The group command does not start a server;
+it prints help and exits.
+
+## Usage
+
+```bash
+ak api
+```
+
+The command accepts no positional arguments and has no command-specific flags.
+Shared flags are described in [CLI conventions](../cli-conventions), but output
+flags do not turn this group help into an API status result.
+
+## Choose a lifecycle command
+
+| Goal | Command | Result |
+| --- | --- | --- |
+| Start serving | `ak api start` | Runs the HTTP server in the foreground until it receives an interrupt or `SIGTERM`. |
+| Inspect recorded state | `ak api status` | Reads the local state file and reports the recorded process details. |
+| Request shutdown | `ak api stop` | Sends `SIGTERM` to the PID recorded in the state file. |
+
+<Callout type="warning">
+  The current parent help includes an `ak api start --daemon` example, but the
+  released `start` command has no `--daemon` flag. Run it under a process
+  supervisor or shell job manager when you need background lifecycle control.
+</Callout>
+
+## Server surface and network effects
+
+The server listens on `127.0.0.1:8765` by default. It exposes local JSON
+endpoints at `/health`, `/status`, and `/version`, plus reverse-proxy routes
+under `/anthropic/`, `/openai/`, and `/gemini/`. Proxy requests contact the
+corresponding provider and can inject provider credentials loaded from
+`~/.agentkit/config.yaml` (`AGENTKIT_HOME` changes the base directory).
+
+A bearer token, when configured, protects every route. A non-loopback bind is
+rejected with exit `7` unless a token resolves from `--auth-token`,
+`AK_API_TOKEN`, or `api.token` in the config.
+
+Proxy routes also reject a non-loopback `Host` header and reject browser
+origins that are non-loopback or do not match `Host`. Consequently, a
+non-loopback listener with a bearer token does not by itself make the provider
+proxy usable through a LAN hostname or address. Test the exact client route
+before relying on a remote integration.
+
+## Process state and recovery boundary
+
+While serving, AgentKit writes `~/.agentkit/api/state.json` with the PID, bound
+address, port, and start time. Clean shutdown removes it. The file contains no
+bearer token or provider key and is written atomically under a private
+directory.
+
+Status and stop trust this state record; they do not verify executable identity.
+A stale record can be reported as running, and PID reuse can make `ak api stop`
+signal an unrelated process. Before stopping an old-looking record, compare the
+reported PID and address with your operating system's process listing. If the
+record is stale, remove only `~/.agentkit/api/state.json`; do not delete the
+whole AgentKit home directory.
+
+## Output and exits
+
+Bare `ak api` prints Cobra help to stdout and normally exits `0`. It emits no
+`api.*` JSON success envelope because no lifecycle operation ran. Invalid
+flags exit `2` and can print plain-text usage even when `--json` is present.
+An unknown subcommand or extra positional token follows the generic runtime
+error path and exits `1` instead.
+
+Subcommands have command-local output and exit contracts. In particular,
+"not running" is success for both status and stop, while unsafe non-loopback
+start uses exit `7`.
+
+## Related commands
+
+- [Complete `ak api` command facts](../cli/ak_api)
+- [Complete `ak api start` command facts](../cli/ak_api_start)
+- [Complete `ak api status` command facts](../cli/ak_api_status)
+- [Complete `ak api stop` command facts](../cli/ak_api_stop)
+- [CLI conventions](../cli-conventions)

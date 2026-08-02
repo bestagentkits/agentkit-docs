@@ -1,0 +1,79 @@
+---
+title: ak content-search search
+description: Chạy truy vấn token cục bộ, có giới hạn và đã xác thực owner trên một shard plaintext đã opt in.
+---
+
+Dùng `ak content-search search` để truy vấn một shard của project đang enabled
+và healthy. Tìm kiếm chỉ đọc, chạy cục bộ; snippet kết quả có thể chứa đoạn
+plaintext từ nội dung đã index.
+
+## Cách dùng
+
+```bash
+ak content-search search --project <uuid> --query <tokens>
+```
+
+Lệnh không nhận đối số theo vị trí trong cú pháp được công bố.
+
+## Cờ của lệnh
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--project <uuid>` | Trống, bắt buộc | UUIDv7 chữ thường chuẩn của project do actor hiện tại sở hữu. |
+| `--query <tokens>` | Trống, bắt buộc | Các token tìm kiếm literal, phân tách bằng khoảng trắng. |
+| `--limit <n>` | `20` | Số hit tối đa yêu cầu; giá trị ngoài `1..50` được chuẩn hoá thành `50`. |
+
+Query giới hạn 512 rune Unicode và 32 token. Chữ cái, chữ số, khoảng trắng,
+`-` và `_` được chấp nhận. Dấu quote của phrase, wildcard, `^`, `:`, ngoặc và
+dấu câu khác bị từ chối. Token được bind vào query FTS thay vì nối vào SQL.
+
+```bash
+ak content-search search --project <uuid> --query 'release token' --limit 20
+ak content-search search --project <uuid> --query token --json
+```
+
+Quote của shell trong ví dụ đầu nhóm hai token; ký tự quote thực sự truyền vào
+nội dung query sẽ bị từ chối.
+
+## Quyền và tác động
+
+Lệnh phân giải lại actor và chỉ tìm sau khi xác nhận role `owner`. Nó đọc shard,
+không cập nhật vòng đời, document, checkpoint hay runtime source. Không có yêu
+cầu network, registry, provider, xác thực hay entitlement.
+
+Package content store không log snippet. Terminal, shell history, CI log và
+consumer JSON phía sau vẫn là các bề mặt công bố riêng.
+
+## Đầu ra
+
+Human stdout là `hits=<n>`. JSON stdout là page object thô:
+
+```text
+hits: array
+hits[].projectId: UUID project
+hits[].documentId: định danh document nguồn
+hits[].title: title tuỳ chọn
+hits[].snippet: đoạn FTS tuỳ chọn
+hits[].rank: số rank FTS
+nextCursor: cursor tuỳ chọn
+partial: true tuỳ chọn khi không thể tìm đầy đủ shard đã chọn
+```
+
+CLI hiện không có cursor flag, nên `nextCursor` chỉ mang tính thông tin trên bề
+mặt này. JSON không có envelope `schema_version` / `kind` và không phải NDJSON.
+
+Shard không khả dụng, disabled hoặc unhealthy có thể trả page rỗng thành công
+với `partial: true`; kết quả đó không chứng minh nội dung nguồn không khớp.
+Query không hợp lệ trả lỗi runtime.
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Query đã chạy và page được phát, kể cả page partial. |
+| `1` | Thiếu flag bắt buộc, UUID/owner/store không hợp lệ hoặc query rỗng, quá giới hạn hay sai cú pháp. |
+| `2` | Giá trị flag như `--limit` không phân tích được. |
+
+## Lệnh liên quan
+
+- [Quy ước CLI](../cli-conventions)

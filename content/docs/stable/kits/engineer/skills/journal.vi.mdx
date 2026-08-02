@@ -1,0 +1,197 @@
+---
+title: Giữ lịch sử kỹ thuật với ak:journal
+description: Biến một session quan trọng thành bản ghi theo thời gian ngắn gọn, persist an toàn dưới plans/journals và giữ authority hiện tại trong docs hoặc ADR.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:journal` để giữ lại điều đã xảy ra trong implementation, review,
+incident hoặc repair work quan trọng. Skill trích root cause, thay đổi, impact,
+decision cùng next step, rồi persist một Markdown entry collision-safe qua CLI
+`ak journal` mà không mở editor.
+
+## Chọn ak:journal cho lịch sử công việc theo thời gian
+
+### Dùng ak:journal khi
+
+- Session có technical decision, failed approach hoặc recovery step đáng lưu.
+- Bug repair hoặc incident cần bản ghi ngắn về cause, evidence và prevention.
+- Công việc đã ship hoặc review cần timeline hướng handoff cùng next step.
+- Bạn muốn project record local có thể list, show và validate bằng CLI.
+
+### Chọn workflow khác khi
+
+- Bạn cần hướng dẫn setup, behavior, architecture hoặc vận hành hiện tại. Hãy
+  cập nhật docs hay ADR sở hữu.
+- Bạn cần project status snapshot thay vì chronological narrative. Dùng
+  `ak:project-management`.
+- Bạn cần diagnose, implement, test hoặc review chính công việc đó. Dùng
+  Engineer workflow tương ứng trước khi ghi journal.
+- Bạn muốn publish hoặc chia sẻ entry bên ngoài. Hành động đó không thuộc Skill
+  này.
+
+## Chuẩn bị entry và project
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding), rồi xác nhận
+  Engineer Kit cùng CLI `ak` khả dụng cho runtime và scope bạn đang dùng.
+- Mở project có thư mục `plans/journals/` sẽ sở hữu entry hoặc biết registered
+  project name của project đó.
+- Thu thập error cụ thể, path liên quan, outcome, decision và công việc còn lại
+  từ session hiện tại.
+- Loại secret, credential, private payload hoặc personal data không cần thiết
+  khỏi material sẽ được ghi.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:journal ...` | Phân phối native là mặc định; phân phối plugin rõ ràng cũng được hỗ trợ. |
+| Cursor | `/ak:journal ...` | Cách gọi bằng slash đã được người dùng xác minh. Điều này không thiết lập runtime parity đầy đủ. |
+| Codex | `$ak:journal ...` | Skill dùng discovery native của Codex; persistence vẫn chạy qua CLI local `ak journal`. |
+
+## Mô tả reflection
+
+Skill nhận topic hoặc reflection. Skill không có mode flag được công bố.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:journal "Record today's session-cache repair: duplicate invalidation root cause, rejected timer workaround, affected API behavior, regression evidence, and follow-up monitoring."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:journal "Record today's session-cache repair: duplicate invalidation root cause, rejected timer workaround, affected API behavior, regression evidence, and follow-up monitoring."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:journal "Record today's session-cache repair: duplicate invalidation root cause, rejected timer workaround, affected API behavior, regression evidence, and follow-up monitoring."
+```
+
+  </Tab>
+</Tabs>
+
+Skill soạn title ngắn, summary một dòng cùng Markdown body, sau đó dùng dạng CLI
+có thể script:
+
+```bash
+ak journal create "Fix duplicate session invalidation" \
+  --summary "Root cause, repair, verification, and follow-up" \
+  --stdin <<'EOF'
+## What happened
+...
+
+## Decision
+...
+
+## Next steps
+...
+EOF
+```
+
+| Tùy chọn CLI | Behavior |
+| --- | --- |
+| `--summary <text>` | Lưu summary ngắn trong frontmatter; khi không có body, summary cũng trở thành body |
+| `--stdin` | Đọc Markdown body từ standard input nên không cần `$EDITOR` |
+| `--date YYYY-MM-DD` | Ghi đè ngày entry mặc định; mặc định là hôm nay theo UTC |
+| `--project <registered-name>` | Chọn registered project thay vì resolve current working directory |
+
+Nếu không cung cấp cả body lẫn summary, CLI ghi placeholder hiển thị thay vì
+entry rỗng.
+
+## Hiểu điều gì xảy ra trong một lần chạy
+
+1. **Skill thu thập lịch sử session.** Skill chọn root cause, thay đổi, impact,
+   decision, hướng thất bại, evidence cùng next step quan trọng.
+2. **Skill soạn bản ghi ngắn.** Error, path cùng outcome cụ thể được ưu tiên hơn
+   reflection mơ hồ. Entry phân biệt điều đã xảy ra với điều đang authoritative.
+3. **Skill resolve project.** Registered project rõ ràng được ưu tiên; nếu
+   không, CLI match current directory với registered project rồi fallback về
+   current directory cho local creation.
+4. **Skill persist atomically.** CLI tạo `plans/journals/` khi cần, ghi temporary
+   file rồi rename thành một Markdown entry mới. Entry hiện có không bao giờ bị
+   overwrite.
+5. **Skill validate khi cần.** `ak journal validate` kiểm tra Markdown đọc được,
+   title, date cùng file extension. Validation chỉ đọc.
+6. **Skill báo local result.** Skill trả created path và ghi chú external
+   publishing đã được skip.
+
+Tệp được tạo dùng `YYYY-MM-DD-<slug>.md`. Nếu cùng ngày và title đã tồn tại, CLI
+thêm suffix collision `-2`, `-3` và tiếp theo. Title không tạo được ASCII slug
+sẽ fallback thành `journal`.
+
+## Giữ historical record đúng vai trò
+
+<Callout type="warn" title="Journal không phải durable authority">
+  Journal ghi điều đã xảy ra. Nó không thay current product docs,
+  specification, runbook hoặc architecture decision record. Đặt lasting
+  decision trong authority surface sở hữu và link lịch sử khi hữu ích.
+</Callout>
+
+- Creation ghi một Markdown file local mới và không overwrite journal hiện có.
+- Filename allocation cùng path resolution chặn traversal ra ngoài journal
+  directory cho operation dựa trên ID.
+- `list`, `show` và `validate` chỉ đọc. Creation là disk mutation bắt buộc duy
+  nhất.
+- AgentWiki publishing được defer. Skill báo `AgentWiki publish skipped` và giữ
+  file local làm source of truth.
+- Workflow đã định nghĩa không cần network provider, credential hoặc paid
+  service.
+- Commit, push, publication, upload hoặc chia sẻ journal cần phê duyệt riêng.
+
+## Xác minh kết quả
+
+Một lần chạy hoàn tất nên cung cấp:
+
+- Một created path dưới thư mục `plans/journals/` của project đã chọn.
+- Frontmatter có title, date cùng summary đã cung cấp.
+- Body ngắn bao phủ điều đã xảy ra, decision và next step.
+- Filename collision-safe và không có entry cũ bị sửa.
+- Validation thành công khi được yêu cầu.
+- Ghi chú rõ AgentWiki publishing đã được skip.
+
+Bạn có thể kiểm tra lịch sử local bằng:
+
+```bash
+ak journal list
+ak journal list --query session --json
+ak journal show 2026-08-02-fix-duplicate-session-invalidation
+ak journal validate 2026-08-02-fix-duplicate-session-invalidation
+```
+
+`list` trả entry mới nhất trước và có thể filter theo inclusive date range hoặc
+text trong title, summary, slug cùng project.
+
+## Xử lý sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| `ak` không khả dụng | Cài hoặc expose CLI trước khi retry; persistence contract của Skill cần `ak journal create`. |
+| Chọn sai project | Chạy từ project dự kiến hoặc truyền registered name bằng `--project`. |
+| Date bị từ chối | Dùng giá trị `YYYY-MM-DD` chính xác; date bị bỏ trống mặc định là hôm nay theo UTC. |
+| Một slug khớp nhiều entry | Dùng full filename stem hoặc filename `.md` để xác định một entry. |
+| Validation exit failure | Sửa title thiếu, date không hợp lệ, tệp không đọc được hoặc extension không phải Markdown; validation failure dùng exit code 3. |
+| Title trùng tạo tệp khác | Đây là collision protection có chủ đích. Review entry có suffix thay vì overwrite lịch sử. |
+| Journal chứa lasting decision | Cập nhật docs, specification, runbook hoặc ADR sở hữu và giữ journal làm lịch sử. |
+| Runtime không nhận diện Skill | Xác nhận target cùng scope, mở runtime session mới, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Dùng `ak:project-management` khi bước tiếp theo là current status cùng plan
+sync-back. `ak:journal` là terminal workflow cho session đã ghi.
+
+## Biết các giới hạn hiện tại
+
+- Entry chỉ chính xác bằng session evidence được cung cấp và review.
+- Automatic slugging giữ chữ cái cùng chữ số ASCII; title khác có thể dùng
+  fallback slug.
+- Browse cùng show operation phụ thuộc project registry resolution; dùng
+  registered project name khi current-directory matching không đủ.
+- Cách gọi Cursor bằng slash là bằng chứng do người dùng xác minh, không phải
+  chứng minh runtime parity đầy đủ.
+- Package stable và beta chứa cùng workflow cùng CLI behavior `ak:journal`.

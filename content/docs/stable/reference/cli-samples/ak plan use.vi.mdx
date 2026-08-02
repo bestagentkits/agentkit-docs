@@ -1,0 +1,66 @@
+---
+title: ak plan use
+description: Ghi current-plan pointer owner-only, riêng cho worktree và hiểu reader nào sử dụng pointer đó.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak plan use` để chọn plan mà `ak plan show` sẽ mở mặc định trong một Git
+worktree.
+
+## Cách dùng
+
+```bash
+ak plan use <plan-dir|plan-id>
+```
+
+Lệnh không có cờ riêng.
+
+## Cách diễn giải target
+
+Nếu argument là thư mục đang tồn tại, AgentKit pin path đó. Path được resolve
+qua symlink và phải nằm trong Git worktree bao quanh. Dạng path không validate
+`plan.md` và không yêu cầu plan-store row, vì vậy hãy truyền đúng thư mục plan,
+không phải thư mục bất kỳ.
+
+Nếu argument không phải thư mục đang tồn tại, nó được xem là plan-store ID. Row
+phải có `plan_dir` liên kết resolve được bên trong worktree hiện tại.
+
+Giá trị lưu là path tương đối với worktree. JSON `plan_id` chỉ có giá trị khi
+dùng ID; nó rỗng với target là thư mục trực tiếp.
+
+## Ownership của pointer và consumer
+
+Lệnh atomically thay pointer có quyền owner-only `0600`, được resolve qua thư
+mục riêng của từng Git worktree. Main worktree và mỗi linked worktree vì vậy có
+pointer độc lập. Tệp nằm trong Git metadata và không được commit; tệp plan và
+plan-store row không bị đổi.
+
+<Callout type="warning">
+  Pointer được ưu tiên cho `ak plan show` không có ID. Dù help của lệnh mô tả
+  rộng hơn, `ak plan resolve` không đọc pointer này và vẫn resolve theo issue,
+  branch, worktree và project identity.
+</Callout>
+
+Chạy lại `ak plan use` sẽ thay pointer cũ. Không có cờ để clear và không có
+backup tự động. Pointer không hợp lệ bị reader bỏ qua thay vì xoá.
+
+Lệnh chạy Git probe cục bộ. Dạng ID còn mở store, có thể tạo hoặc
+forward-migrate store. Không dùng mạng, auth, provider, stdin, prompt, preview,
+apply hay force.
+
+## Đầu ra
+
+Human output báo relative path đã trở thành current; plain stdout chỉ có path.
+JSON thành công dùng `kind=plan.use` với `plan_id` và `plan_dir`. Lỗi runtime
+JSON dùng stderr; lỗi parse cờ có thể vẫn là plain text.
+
+## Kết quả, mã thoát và khôi phục
+
+| Mã | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Pointer đã được atomically thay thế. | Chạy `ak plan show` không ID để xác minh. |
+| `1` | Không resolve được thư mục/ID, không có Git worktree, target thoát worktree hoặc ghi pointer/store lỗi. | Dùng thư mục chính xác trong worktree hoặc plan ID có liên kết. |
+| `2` | Số argument hoặc cờ không hợp lệ. | Truyền đúng một target. |
+
+## Lệnh liên quan

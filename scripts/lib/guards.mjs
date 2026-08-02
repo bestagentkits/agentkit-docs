@@ -15,6 +15,19 @@ const AGENT_ALLOW_PREFIXES = [
 // Inputs are plain data (changed paths / statuses + the known generated dirs) so
 // they are trivially unit-testable; the CLI wrappers supply the git diff.
 
+// A generated dir whose contents are a pure function of committed sources
+// (reference-raw + reference-prose) is proven correct by the reproducibility CI
+// step (`generate-reference.mjs` + assert-no-diff) — strictly stronger than the
+// actor-based hand-edit check. So the hand-edit guard exempts it, letting a
+// generator-change PR update the derived pages without the sync-bot bypass.
+// (The agent-PR guard stays strict: agents may never touch the reference.)
+export const REPRODUCIBLE_DIRS = ['content/docs/beta/reference/cli'];
+
+/** Generated dirs still covered by the hand-edit guard (reproducible ones removed). */
+export function guardedDirs(generatedDirs) {
+  return generatedDirs.filter((d) => !REPRODUCIBLE_DIRS.includes(d));
+}
+
 /**
  * Generated-dir guard: which changed paths touch machine-owned dirs.
  * @param {string[]} changedPaths repo-relative paths

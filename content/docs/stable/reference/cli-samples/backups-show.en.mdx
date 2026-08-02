@@ -1,0 +1,129 @@
+---
+title: ak backups show
+description: Inspect one rollback manifest, its captured paths, hashes, and any project-root authority required for restore.
+---
+
+Use `ak backups show` to inspect what one committed rollback snapshot captured
+before you verify or restore it. The command also exposes persisted project
+bundle roots that must be authorized explicitly during restore.
+
+## Syntax
+
+```bash
+ak backups show <id>
+```
+
+## Before you run
+
+Find the ID with `ak backups list`. A valid ID has this exact shape:
+`YYYYMMDDTHHMMSSZ-8lowercasehex`, for example
+`20260426T123005Z-deadbeef`.
+
+The command is local and read-only. It does not need registry access or
+authentication. Manifest output contains absolute source paths; remove or
+redact them before sharing output outside the machine.
+
+## Arguments
+
+| Argument | Required | Meaning |
+| --- | --- | --- |
+| `<id>` | Yes | One validated committed snapshot ID. |
+
+Exactly one argument is required.
+
+## Options
+
+There are no command-specific options. Use shared `--json` for the full
+manifest. Other shared flags are described in
+[CLI conventions](../cli-conventions). The command never prompts.
+
+## Examples
+
+Read a compact human summary:
+
+```bash
+ak backups show 20260426T123005Z-deadbeef
+```
+
+Inspect persisted restore authority and captured file destinations:
+
+```bash
+ak backups show 20260426T123005Z-deadbeef --json |
+  jq '.data.snapshot | {bundle_roots, files, absent_files}'
+```
+
+## Output and streams
+
+Human output on stdout reports `ID`, snapshot `Path`, `When`, `Kind`, file
+count, total size, a best-effort `Verified` status, a short `Hash`, and any
+`Authorized bundle roots`. The displayed `Hash` is a 12-character fingerprint
+derived from the recorded per-file SHA-256 strings; it is not the manifest's
+`metadata_sha256` value.
+
+JSON success uses this envelope:
+
+```json
+{
+  "schema_version": 1,
+  "kind": "backups.show",
+  "data": {
+    "snapshot": {
+      "version": 2,
+      "id": "20260426T123005Z-deadbeef",
+      "created_at": "<rfc3339-time>",
+      "label": "<operation-label>",
+      "files": [
+        {
+          "rel_path": "<snapshot-relative-path>",
+          "src_abs": "<absolute-restore-destination>",
+          "sha256": "<sha256>",
+          "mode": 384,
+          "size": 1234
+        }
+      ],
+      "agentkit_home": "<captured-home>",
+      "metadata_sha256": "<sha256>"
+    }
+  }
+}
+```
+
+When present, the snapshot can also contain `absent_files`, `bundle_roots`,
+`exclude_rel`, and `protected`. Fields tagged as optional are omitted when
+empty. JSON does not include the derived human `Path`, `Verified`, total size,
+or short `Hash` fields.
+
+Success uses stdout. JSON runtime errors use a structured envelope on stderr;
+flag-parse errors can remain plain-text usage.
+
+## Exit status
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The manifest was decoded and displayed, even if the best-effort integrity check reports unverified. |
+| `1` | Rendering or another unclassified runtime operation failed. |
+| `2` | The ID shape, argument count, or flags were invalid. |
+| `5` | The manifest could not be read or decoded at the validated ID, including a missing snapshot. |
+
+The command does not acquire the backup mutation lock and has no decline exit.
+
+## Effects, safety, and recovery
+
+The command reads `manifest.json` and runs a best-effort full verification to
+decorate human output. It does not change snapshot data or live destinations.
+A displayed manifest is not proof that its data is safe to restore: use
+`ak backups verify <id>` and require exit `0`.
+
+For a project bundle, copy every printed authorized root exactly into repeated
+`--allow-root` options. Do not replace them with a broader ancestor. Restore
+canonicalizes the supplied set and requires it to equal the persisted set.
+
+## Related commands and limitations
+
+- [List snapshot IDs](./backups-list)
+- [Verify snapshot data](./backups-verify)
+- [Preview and apply restore](./backups-restore)
+- [Equivalent recovery entry point](./recover)
+
+`ak backups show` does not print a per-file mismatch report. Its human
+verification state is best-effort, while JSON is the stored manifest itself.

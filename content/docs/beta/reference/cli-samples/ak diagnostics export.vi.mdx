@@ -1,0 +1,94 @@
+---
+title: ak diagnostics export
+description: Xuất báo cáo doctor có phiên bản và đã redaction, đồng thời hiểu rõ ranh giới quyền riêng tư và mạng.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak diagnostics export` để tạo artifact hỗ trợ từ báo cáo sức khoẻ AgentKit
+hiện tại. Lệnh chạy doctor mà không sửa chữa, redaction các mẫu nhạy cảm đã biết
+và phát một tài liệu JSON lên stdout.
+
+## Cách dùng
+
+```bash
+ak diagnostics export
+```
+
+Lệnh không nhận argument theo vị trí. Đầu ra vẫn là JSON khi bạn bỏ `--json`.
+
+## Tuỳ chọn của lệnh
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--offline` | `false` | Bỏ qua các phép kiểm tra doctor `binary_version` và `network` trước khi xuất. |
+
+Các cờ dùng chung được mô tả trong [quy ước CLI](../cli-conventions). Export ép
+đầu ra JSON không tương tác và không áp dụng doctor fix, vì vậy `--yes` không
+thay đổi lệnh.
+
+## Tác động mạng và đĩa
+
+Khi không có `--offline`, bộ doctor bên trong gồm các phép kiểm tra phụ thuộc
+mạng. Lệnh không cần phiên AgentKit registry hay entitlement Kit. Lệnh đọc trạng
+thái diagnostics cục bộ nhưng không thay đổi tệp AgentKit hoặc runtime.
+
+CLI chỉ ghi stdout. Trong ví dụ này, shell—không phải AgentKit—tạo tệp đích theo
+quy tắc redirection và permission thông thường của shell:
+
+```bash
+ak diagnostics export --offline > agentkit-diagnostics.json
+```
+
+## Ranh giới redaction
+
+Exporter thay thế bearer token, AgentKit key và provider key phổ biến, JWT, URL
+có token, private-key block, phép gán secret, địa chỉ email và các tiền tố đường
+dẫn home hoặc AgentKit cục bộ đã nhận diện. Kết quả ghi số lần theo từng detector.
+
+<Callout type="warning">
+  Redaction dựa trên mẫu không thể bảo đảm mọi secret, identifier, tên tệp,
+  argument lệnh hay giá trị nghiệp vụ đều bị loại bỏ. Hãy mở JSON và xem bằng
+  chứng doctor bên trong trước khi đính kèm vào feedback hoặc issue.
+</Callout>
+
+## Schema JSON và stream
+
+Stdout thành công là một envelope có phiên bản, không phải NDJSON:
+
+```text
+schema_version: 1
+kind: diagnostics.export
+data.schema_version: 1
+data.generated_at: RFC 3339 UTC timestamp
+data.command: ak doctor --json, optionally followed by --offline
+data.redactions: detector-to-count object
+data.doctor: complete redacted doctor.report envelope
+```
+
+Báo cáo doctor lồng nhau giữ `schema_version`, `kind=doctor.report` và các trường
+`data` riêng. Một lần doctor chạy xong nhưng unhealthy thường vẫn là export thành
+công; hãy đọc `data.doctor.data.healthy` thay vì chỉ dựa vào mã thoát export.
+
+Lỗi thực thi xảy ra trước export renderer. Lỗi có `--json` rõ ràng không được bảo
+đảm phát JSON error envelope, vì vậy luôn kiểm tra mã thoát process. Lỗi phân
+tích cờ có thể vẫn là plain text.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước an toàn tiếp theo |
+| --- | --- | --- |
+| `0` | Doctor chạy xong và artifact JSON đã redaction được encode. | Xem số redaction và sức khoẻ lồng nhau trước khi chia sẻ. |
+| `1` | Thực thi doctor thất bại, redaction tạo JSON không hợp lệ, encode đầu ra thất bại hoặc có argument theo vị trí. | Chạy `ak doctor --json` cục bộ và xử lý lỗi thực thi/cách gọi; đừng tự động chia sẻ đầu ra thô. |
+| `2` | Không phân tích được cờ. | Sửa cách gọi. |
+
+Lệnh không có chế độ apply, fix, force, ghi cache, backup hoặc rollback. Nếu
+shell redirection tạo artifact không mong muốn, chỉ xoá đúng tệp đó sau khi bạn
+không còn cần.
+
+## Lệnh liên quan
+
+- [Nhóm lệnh diagnostics](<./ak diagnostics>)
+- [Chạy và đọc doctor](./doctor)
+- [Gửi hoặc xuất feedback sản phẩm](<./ak feedback>)
+- [Thông tin đầy đủ của lệnh `ak diagnostics export`](../cli/ak_diagnostics_export)

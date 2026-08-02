@@ -1,0 +1,106 @@
+---
+title: ak data ingest
+description: Refresh record session dẫn xuất cục bộ của Claude Code và Codex với ranh giới rõ ràng về nguồn, riêng tư và workload.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak data ingest` để chạy một lượt có thể resume qua các tệp session JSONL
+cục bộ của Claude Code và Codex, rồi refresh operational read model của
+AgentKit.
+
+## Cách dùng
+
+```bash
+ak data ingest
+```
+
+Lệnh không có cờ riêng và không nhận đối số theo vị trí trong cú pháp được công
+bố. Nó không prompt hay đọc stdin. `--yes` và `--no-interactive` không thay đổi
+hành vi ghi.
+
+## Thư mục nguồn
+
+| Runtime | Thư mục mặc định | Ghi đè |
+| --- | --- | --- |
+| Claude Code | `~/.claude/projects/` | Đặt `AGENTKIT_CLAUDE_HOME`; lệnh thêm `projects/`. |
+| Codex | `~/.codex/sessions/` | Đặt `AGENTKIT_CODEX_SESSIONS` thành thư mục sessions. |
+
+Discovery đệ quy, chỉ lấy tệp session `*.jsonl` regular đã xác thực và từ chối
+thoát root qua symlink. Root bị thiếu được xem là absent. Walk không đầy đủ được
+ghi là incomplete, không được dùng làm bằng chứng để xoá nguồn cũ.
+
+## Dữ liệu được ghi
+
+Lệnh lấy single-writer lease và có thể tạo hoặc migrate
+`AGENTKIT_HOME/operational/operational.db`. Nó chọn tenant cục bộ đầu tiên, ghi
+trạng thái runtime/run của Claude Code và Codex, rồi cập nhật transactional:
+
+- định danh runtime source opaque và absolute locator chỉ ở máy cục bộ;
+- checkpoint byte/record có thể resume và fingerprint có giới hạn;
+- thời điểm bắt đầu/kết thúc session và số message;
+- bộ đếm token, tool, skill và subagent;
+- tên, kit, status và thời điểm gọi skill;
+- failure code đóng đã lược bỏ dữ liệu nhạy cảm.
+
+Raw message body được parse nhưng không lưu trong các operational projection
+table này. Tệp runtime nguồn vẫn là nguồn chính và chỉ được mở để đọc; lệnh
+không repair, truncate, rename hay delete chúng. Nó không nạp content-search
+shard.
+
+## Ranh giới workload
+
+<Callout type="warning">
+  CLI constructor hiện không đặt giới hạn số source hoặc số record, byte, thời
+  gian cho mỗi lượt đọc. Mỗi source tối đa 64 projection batch, nhưng batch có
+  limit bằng 0 có thể đọc toàn bộ tệp. Hãy xem sweep trên nhiều tệp hoặc tệp lớn
+  là workload có thể đáng kể dù help gọi đây là “bounded ingest”.
+</Callout>
+
+Mỗi batch commit là transactional và chỉ tiến checkpoint sau khi ghi thành
+công. Source bị thay, truncate hoặc đổi parser version sẽ thay các row dẫn xuất
+ở batch reparse đầu tiên. Process bị ngắt có thể để lại run incomplete; lần gọi
+sau sẽ resume.
+
+Lỗi theo từng source được ghi lại và có thể làm run `incomplete` mà command tổng
+thể vẫn thành công. Vì vậy `ok: true` chỉ nghĩa engine trả về bình thường, không
+nghĩa mọi source đã xử lý xong.
+
+## Đầu ra
+
+Human stdout khi thành công là `ingest ok`; khi thất bại, lệnh ghi
+`ingest failed` ra stdout trước rồi trả lỗi. JSON stdout là một object thô:
+
+```text
+tenantId: UUID tenant đã chọn
+startedAt: timestamp UTC
+duration: chuỗi duration của Go
+ok: boolean
+error: chỉ có khi Engine.Run trả lỗi
+```
+
+Kết quả CLI không có số `discovered`, `processed`, `applied`, incomplete hay
+failure. Object không phải envelope có phiên bản và không phải NDJSON. Lần gọi
+JSON thất bại vẫn có thể phát object thô trên stdout trước exit `1`.
+
+## Mã thoát và khôi phục
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Engine trả về bình thường; cần kiểm tra run state riêng để phát hiện source incomplete. |
+| `1` | Phân giải home/store/tenant/root hoặc thao tác cấp engine thất bại. |
+| `2` | Giá trị cờ dùng chung không phân tích được. |
+
+Trước một lượt refresh lớn, có thể snapshot operational database:
+
+```bash
+ak backups create --json
+```
+
+Ingest không có dry-run và không tự tạo backup. Nếu thất bại, giữ nguyên source,
+xử lý điều kiện store/filesystem đã báo rồi chạy lại; checkpoint giúp retry
+thông thường có thể resume.
+
+## Lệnh liên quan
+
+- [Quy ước CLI](../cli-conventions)

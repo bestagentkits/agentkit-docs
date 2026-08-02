@@ -1,0 +1,83 @@
+---
+title: ak new
+description: Tạo dự án AgentKit và tùy chọn cài kit từ nguồn cục bộ hoặc từ xa.
+---
+
+`ak new` tạo thư mục dự án, ghi manifest quyền sở hữu và có thể đặt các kit đã chọn vào dự án.
+
+## Cú pháp
+
+```bash
+ak new <project-name> [options]
+```
+
+## Trước khi chạy
+
+- Chọn tên viết thường gồm chữ cái, chữ số, dấu gạch ngang hoặc dấu gạch dưới. Ký tự đầu phải là chữ cái hoặc chữ số.
+- Nguồn mặc định là registry từ xa. Quá trình phân giải từ xa có thể xác thực, kiểm tra quyền sử dụng, tải nội dung và cập nhật cache cục bộ trước khi thay đổi thư mục dự án.
+- Chỉ dùng `--local` cho nguồn phát triển được chỉ định rõ. Không thể kết hợp `--remote` và `--local`.
+- `--force` cho phép dùng đích đã có nội dung; tùy chọn này không dọn thư mục hoặc ghi đè tệp trùng.
+- Lệnh không hiển thị lời nhắc hoặc đọc stdin.
+
+## Đối số
+
+`<project-name>` vừa là tên dự án vừa là thư mục đích. Lệnh không có alias.
+
+## Tùy chọn
+
+| Tùy chọn | Mặc định | Mục đích |
+| --- | --- | --- |
+| `--channel <channel>` | `stable` | Chọn kênh phát hành. |
+| `--force` | `false` | Cho phép dùng đích đã có nội dung. Tệp hiện có vẫn được bảo vệ. |
+| `--kits <names>` | Trống | Cài danh sách kit phân tách bằng dấu phẩy. |
+| `--kits-dir <path>` | Trống | Đọc kit từ thư mục cục bộ. |
+| `--local` | `false` | Dùng nguồn kit cục bộ. |
+| `--registry-url <url>` | Trống | Ghi đè URL của registry từ xa. |
+| `--remote` | `true` | Dùng registry từ xa. |
+| `--template <name>` | Trống | Chọn mẫu dự án. |
+| `--version <version>` | Trống | Ghim phiên bản kit yêu cầu. |
+
+Không có chế độ dry-run. Các cờ toàn cục `--yes` và `--no-interactive` không nới lỏng cơ chế bảo vệ tệp.
+
+## Ví dụ
+
+Tạo dự án không có kit:
+
+```bash
+ak new sample-project
+```
+
+Tạo dự án từ các kit từ xa đã chọn:
+
+```bash
+ak new sample-project --kits core,review --channel stable
+```
+
+Dùng nguồn phát triển cục bộ:
+
+```bash
+ak new sample-project --local --kits-dir ./kits --kits core
+```
+
+## Đầu ra và luồng
+
+Đầu ra dễ đọc báo cáo các tệp đã tạo và snapshot nếu có. Với `--json`, stdout dùng envelope chung có `"kind": "new"`. Đối tượng `data` chứa `project`, `dir`, `files_written` và `manifest_version`; `snapshot` và `fallback_notes` xuất hiện khi phù hợp. Lỗi đi tới stderr. Lỗi phân tích cờ và đối số là văn bản thuần.
+
+## Trạng thái thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Tạo dự án hoàn tất. |
+| `1` | Nguồn, xác thực, quyền sử dụng, kiểm tra hợp lệ hoặc ghi tệp thất bại. Hiện tại mã này bao gồm tên dự án hoặc mẫu không hợp lệ. |
+| `2` | Cobra từ chối cờ hoặc số đối số, hoặc chế độ cục bộ và từ xa xung đột. |
+| `6` | Đích đã có nội dung và chưa truyền `--force`. |
+
+## Tác động, an toàn và khôi phục
+
+Tất cả kit từ xa được yêu cầu đều được phân giải trước khi thay đổi hệ thống tệp dự án. Sau đó lệnh ghi tuần tự bằng cơ chế tạo độc quyền, ghi nhận quyền sở hữu và có thể thêm dự án vào registry toàn cục. Lỗi khi ghi registry và bản ghi kiểm tra script không làm lệnh thất bại.
+
+Dự án AgentKit hiện có có thể nhận snapshot trước lần thử có `--force`. Thư mục không phải dự án AgentKit thì không. Vì vậy, tệp trùng có thể để lại dự án được tạo một phần ngay cả với `--force`; tệp không xác định được giữ nguyên và không có rollback tự động. Kiểm tra các tệp được báo cáo và snapshot nếu có trước khi thử lại.
+
+## Lệnh liên quan và giới hạn
+
+Dùng [`ak init`](./init) để khởi tạo thư mục hiện có và [`ak update`](./update) để làm mới tệp thuộc quyền sở hữu. Xem [quy ước CLI](../cli-conventions) về các điều khiển đầu ra dùng chung. `ak new` không chạy kit đã cài như runtime emitter.

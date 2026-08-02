@@ -1,0 +1,92 @@
+---
+title: ak commands install
+description: Làm phẳng và sao chép một template slash command cục bộ đáng tin cậy vào user plugin root với giới hạn ghi đè rõ ràng.
+---
+
+Dùng `ak commands install` để sao chép một template lệnh available cục bộ vào
+inventory command dạng phẳng theo Kit. Lệnh không tải package, activate plugin
+hay project command sang runtime khác.
+
+## Cách dùng
+
+```bash
+ak commands install <kit>/<command>
+```
+
+Command component là source path đã làm phẳng. Ví dụ,
+`marketing/commands/ckm/email.md` được cài bằng ref `marketing/ckm-email`, còn
+slash name available là `ckm:email`.
+
+Phải có đúng một ref hợp lệ. `ak:<command>`, `ake:<command>` và
+`akm:<command>` là dạng rút gọn được chấp nhận, nhưng ref chuẩn an toàn hơn
+trong automation.
+
+## Cờ của lệnh
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--force` | `false` | Xoá đúng destination entry dạng phẳng trước nếu tồn tại rồi sao chép source. |
+
+Lệnh không prompt. `--yes` không phải yêu cầu approval thứ hai, còn
+`--no-interactive` chỉ ảnh hưởng cách trình bày đầu ra.
+
+## Source và destination
+
+Với `marketing/ckm-email`, các path được resolve là:
+
+```text
+source:      ./kits/marketing/commands/ckm/email.md
+destination: ~/.claude/plugins/marketing/commands/ckm-email.md
+```
+
+Tên source lồng nhau được tìm đệ quy và làm phẳng bằng `-`. Nếu hai source path
+cho cùng một asset name, relative path đứng trước theo alphabet được chọn. Tệp
+source là symlink hoặc không phải regular file không thể cài.
+
+`AGENTKIT_KITS_DIR` và `AGENTKIT_PLUGIN_DIR` thay các root. Destination directory
+được tạo với mode `0750`; tệp destination mới dùng mode `0600`. Không có
+registry, authentication, entitlement, cache, subprocess, runtime env,
+ownership manifest hoặc backup.
+
+## Giới hạn của force và recovery
+
+Không có `--force`, destination entry đã tồn tại thoát `6` và không đổi. Có
+force, đúng entry đó bị xoá trước khi mở bản sao mới; directory rỗng có thể bị
+xoá, còn directory không rỗng làm thao tác thất bại. Không có drift classification,
+hash check, snapshot, atomic swap hay rollback. Copy thất bại sau khi xoá có
+thể để destination vắng mặt.
+
+Hãy giữ lại chỉnh sửa thủ công trước khi force. Không dùng source root hoặc
+plugin root mà process không tin cậy có thể thay thế hoặc thao túng bằng link.
+
+## Đầu ra
+
+Stdout thành công cho người dùng báo ref và một tệp đã ghi. JSON thành công:
+
+```text
+schema_version: 1
+kind: assets.install
+data.ref, data.kit, data.asset
+data.files_written: 1
+data.env_installed: false
+data.success: true
+```
+
+Đầu ra không bảo đảm runtime đã discover hoặc activate template. Hãy xác minh
+riêng trong môi trường Claude dự kiến.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Một tệp command dạng phẳng đã được sao chép. |
+| `1` | Discovery hoặc filesystem thất bại, hay sai số lượng argument theo vị trí. |
+| `2` | Ref sai dạng hoặc không phân tích được cờ. |
+| `5` | Không có source cục bộ có thể cài khớp với ref. |
+| `6` | Destination đã tồn tại mà không có `--force`. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak commands install`](../cli/ak_commands_install)
+- [Xem một command](../cli/ak_commands_show)
+- [Cài một route Kit hoàn chỉnh](./kit-init)

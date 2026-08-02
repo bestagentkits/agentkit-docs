@@ -1,0 +1,158 @@
+---
+title: Cô lập công việc repository với ak:worktree
+description: Kiểm tra, xem trước, tạo, audit và dọn Git worktree trong khi phê duyệt riêng tác động lên branch, tệp, dependency, network và cleanup phá hủy.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:worktree` để đặt task implementation hay validation Marketing vào Git
+checkout cô lập. Skill có thể kiểm tra hình dạng repository, chọn branch cùng vị
+trí worktree, xem trước việc tạo, báo cáo health và thực hiện cleanup được duyệt
+rõ ràng qua Node.js helper trong package.
+
+## Chọn ak:worktree để cô lập repository
+
+### Dùng ak:worktree khi
+
+- Thay đổi campaign site, dashboard, automation hay documentation cần tách khỏi
+  công việc repository hiện tại.
+- Các task độc lập cần branch và checkout riêng.
+- Bạn cần liệt kê worktree hoặc kiểm tra dirty state, độ lệch base branch, đường
+  dẫn đã normalize và metadata cũ.
+- Bạn muốn dry run trước khi tạo, remove hay prune trạng thái worktree.
+
+### Chọn workflow khác khi
+
+- Bạn chỉ cần một branch trong checkout hiện tại.
+- Task không đổi tệp repository và isolation không thêm giá trị.
+- Bạn muốn triển khai feature. Hãy tạo worktree trước rồi dùng Skill
+  implementation phù hợp bên trong đó.
+- Bạn không thể duyệt chính xác removal target. Đừng cleanup từ tên mơ hồ hay
+  partial match.
+
+## Chuẩn bị Git và target
+
+Trước khi bắt đầu:
+
+- Chạy từ Git repository có hỗ trợ worktree và Node.js 18 trở lên.
+- Giữ công việc không liên quan và kiểm tra tệp staged, modified, untracked.
+- Xác định repository là standalone, monorepo hay thuộc superproject; chọn
+  project khi monorepo match không duy nhất.
+- Nêu base branch dự kiến khi auto-detection không phù hợp.
+- Quyết định có cho phép dependency installation, remote fetch, submodule
+  checkout và copy environment template hay không.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:worktree ...` | Dùng helper trong package và có thể chạy workflow Claude tiếp theo trong checkout mới. |
+| Cursor | `/ak:worktree ...` | Dùng slash invocation; behavior repository và helper giữ nguyên, còn runtime behavior về sau có thể khác. |
+| Codex | `$ak:worktree ...` | Dùng native Skill discovery; worktree mutation vẫn diễn ra qua Git và helper trong package. |
+
+## Chạy Skill
+
+Yêu cầu dry run và nêu trực tiếp ranh giới cleanup:
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:worktree "Create an isolated docs worktree for launch-brief validation. Use a docs branch, preview first, and do not install dependencies or remove any worktree"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:worktree "Create an isolated docs worktree for launch-brief validation. Use a docs branch, preview first, and do not install dependencies or remove any worktree"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:worktree "Create an isolated docs worktree for launch-brief validation. Use a docs branch, preview first, and do not install dependencies or remove any worktree"
+```
+
+  </Tab>
+</Tabs>
+
+### Biết bề mặt helper
+
+| Command | Tác động | Điểm review an toàn |
+| --- | --- | --- |
+| `info` | Báo loại repository, project, base branch, worktree root và dirty state | Read-only; kiểm tra trước khi chọn target. |
+| `list` | Liệt kê worktree và branch đã biết | Read-only; dùng trước removal. |
+| `status` | Báo health, dirty state, base branch và số ahead/behind | Read-only; dùng trước handoff hay cleanup. |
+| `create [project] <feature>` | Tạo branch cùng worktree; có thể fetch remote branch và copy environment template | Chạy `--dry-run` trước và duyệt chính xác đường dẫn cùng branch. |
+| `remove <name-or-path>` | Force-remove worktree đã match rồi thử `git branch -d` | Phá hủy; duyệt một non-main worktree chính xác và kiểm tra dirty state trước. |
+| `prune` | Xóa metadata Git worktree cũ | Chạy `prune --dry-run` trước khi áp dụng. |
+
+Tùy chọn tạo gồm `--prefix <type>`, `--base <branch>`,
+`--checkout-submodules`, `--no-prefix`, `--worktree-root <path>`, `--json`,
+`--dry-run` và tùy chọn legacy `--env <files>`. Prefix chuẩn là `feat`, `fix`,
+`refactor`, `docs`, `test`, `chore` và `perf`. `--no-prefix` giữ nguyên tên
+branch chính xác đã duyệt, gồm chữ hoa thường và slash segment.
+
+## Hiểu các giai đoạn
+
+1. **Kiểm tra repository.** Helper báo `repoType`, `baseBranch`, `projects`,
+   `worktreeRoot`, `worktreeRootSource`, `dirtyState` và `dirtyDetails`.
+2. **Chọn branch semantics.** Skill giữ branch được nêu chính xác bằng
+   `--no-prefix`; nếu không, nó chọn loại và tạo slug kebab-case.
+3. **Resolve project và vị trí.** Skill xử lý layout standalone, monorepo và
+   superproject, hỏi khi project selection mơ hồ.
+4. **Xem trước mutation.** Kết quả `--dry-run --json` hiển thị đường dẫn, branch,
+   base, nguồn vị trí, lựa chọn submodule và trạng thái branch hiện có.
+5. **Chỉ tạo sau review.** Git thêm worktree cùng branch hoặc gắn branch hiện có.
+   Template `.env*.example` được copy với phần `.example` bị bỏ; legacy
+   environment file được nêu rõ cũng có thể được copy.
+6. **Xử lý setup riêng.** Dependency installation suy ra từ lockfile và
+   submodule checkout có thể dùng storage, compute, package registry và network;
+   chúng cần phê duyệt riêng.
+7. **Báo cáo và handoff.** Kết quả ghi worktree path, branch, base, template đã
+   copy, warning và action tiếp theo.
+
+## Kiểm soát tác động phá hủy và bên ngoài
+
+<Callout type="warn" title="Tạo và cleanup có quyền khác nhau">
+  Quyền tạo một worktree cô lập không cấp quyền cài dependency, remote fetch,
+  submodule checkout, copy secret file thật, force-remove worktree khác, xóa
+  branch, prune metadata, commit, push hay mở pull request. Duyệt riêng từng tác
+  động cần thiết và target chính xác.
+</Callout>
+
+Helper cảnh báo source checkout đang dirty nhưng không tự làm công việc đó an
+toàn. `remove` dùng forced worktree removal; công việc chưa commit trong target
+có thể mất. Không chọn removal từ match rộng hay mơ hồ.
+
+## Xác minh output và bằng chứng
+
+Một lần tạo thành công nên báo:
+
+- `worktreePath`, `worktreeRootSource`, `branch`, `baseBranch` và
+  `baseBranchSource`.
+- `checkoutSubmodules` có được chọn hay không và branch hiện có có được dùng lại
+  hay không.
+- Mọi `envTemplatesCopied`, legacy `envFilesCopied` và warning.
+- Trạng thái repository hiện tại cùng ranh giới ownership sạch cho task tiếp.
+
+Với audit, hãy review `currentWorktree`, `worktrees` đã normalize, dirty details
+và giá trị ahead/behind. Với prune, review `entries`. Với removal, xác nhận đường
+dẫn được báo và branch đã bị xóa hay được giữ.
+
+## Xử lý sự cố và tôn trọng giới hạn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Base branch sai | Chạy lại preview với `--base <branch>` chính xác; thứ tự thường là `dev`, `develop`, `main`, rồi `master`. |
+| Branch hoặc worktree đã tồn tại | Dùng `list` và `status`; chỉ dùng lại khi đúng branch cùng checkout dự kiến. |
+| Monorepo project mơ hồ | Chọn một project được báo bằng tên hay đường dẫn chính xác. |
+| Submodule checkout hoặc dependency setup thất bại | Giữ worktree đã tạo, báo partial state và xin duyệt trước khi thử lại network hay package operation. |
+| Removal báo nhiều match | Dừng và dùng full path chính xác. |
+
+Skill không triển khai feature, merge, push, publish hay deploy. Lựa chọn location
+và base tự động là heuristic, còn environment template đã copy vẫn cần review
+trước khi dùng. Xem [Projects, artifacts và
+checkpoints](../../../concepts/projects-artifacts-checkpoints) rồi tiếp tục với
+[Marketing Kit](../../marketing) sau khi xác minh isolation.

@@ -1,0 +1,99 @@
+---
+title: ak activity list
+description: Read a bounded newest-first snapshot from the local AgentKit activity log and consume its exact JSON event shape.
+---
+
+Use `ak activity list` when you need a finite snapshot of recent local
+skill-run events. The command reads the local append-only log and does not wait
+for new events.
+
+## Usage
+
+```bash
+ak activity list
+```
+
+The command accepts no positional arguments.
+
+## Command flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--limit <n>` | `100` | Return at most the most recent `n` matching events. Values at or below zero currently fall back to `100`. |
+| `--since <id>` | Empty | Keep events whose IDs are lexicographically greater than this cursor. |
+
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+## Read recent events
+
+```bash
+ak activity list --limit 20
+ak activity list --since 00000000000000000000-000000 --limit 20 --json
+```
+
+Filtering happens before the limit. The command keeps events after `--since`,
+takes the newest matching entries up to `--limit`, then returns them newest
+first. `--since` is an opaque cursor comparison; copy an exact `id` from an
+earlier result rather than inventing one.
+
+Missing logs produce an empty successful result. Empty or malformed NDJSON
+lines are skipped, so `total` counts only decoded events returned by this
+invocation.
+
+## Human output
+
+Human output prints a summary followed by each event's `id`, `kind`, `skill`,
+and timestamp. It does not display the optional runtime, duration, or exit code;
+use JSON when those fields matter.
+
+## JSON output
+
+Success writes one envelope to stdout:
+
+```text
+schema_version: 1
+kind: activity.list
+data.schema_version: 1
+data.total: integer
+data.events: array
+```
+
+Each event can contain:
+
+```text
+id, ts, kind, skill, runtime, duration_ms, exit_code
+```
+
+`kind` is currently `run.started`, `run.completed`, or `run.failed`. Fields
+marked optional by the event schema are omitted when empty or zero. Gate on the
+outer `schema_version` and `kind` before reading `data`.
+
+## Data and retention boundary
+
+The command reads `~/.agentkit/activity/events.ndjson`; `AGENTKIT_HOME`
+overrides the base. It does not create, rewrite, delete, or prune the log. The
+`--limit` and `--since` flags only bound this response and do not change data on
+disk.
+
+No network, authentication, entitlement, provider, subprocess, TTY, or stdin
+behavior is involved. `--yes` has no effect.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The snapshot was returned, including an empty snapshot. |
+| `1` | The local log could not be read, output failed, or a positional argument was supplied. |
+| `2` | A flag value could not be parsed. |
+
+In `--json` mode, command runtime and argument failures can produce no JSON
+error body. Flag-parse failures print plain-text usage to stderr.
+
+On macOS, the CLI-wide first-launch guard can also write
+`~/.agentkit/.first-run-darwin` and print a one-time hint to stderr before this
+command runs.
+
+## Related commands
+
+- [Complete `ak activity list` command facts](../cli/ak_activity_list)
+- [CLI conventions](../cli-conventions)

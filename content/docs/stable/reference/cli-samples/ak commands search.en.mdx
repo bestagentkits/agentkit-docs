@@ -1,0 +1,70 @@
+---
+title: ak commands search
+description: Search the merged local command-template inventory by flat name, slash name, description, and tags.
+---
+
+Use `ak commands search` to find a local Claude-style command template when you
+know a keyword or slash fragment but not its canonical flattened ref.
+
+## Usage
+
+```bash
+ak commands search <query>
+```
+
+One or more positional tokens are joined with spaces. A missing argument uses
+the current Cobra argument-count error path; a supplied whitespace-only query
+is rejected as empty.
+
+There are no command-specific flags. The command is read-only, never prompts,
+and performs no remote or runtime lookup.
+
+## Search and ranking
+
+Search uses the merged inventory from `ak commands list`, where installed
+records replace matching available records. The query is lowercased and split
+on whitespace. Each token adds:
+
+| Match field | Score |
+| --- | --- |
+| Flattened command name | `3` |
+| Slash name | `2` |
+| Each matching tag | `2` |
+| Description | `1` |
+
+A record is included when at least one token scores. Results sort by total
+score descending, then canonical `<kit>/<flat-name>` ascending.
+
+```bash
+ak commands search email
+ak commands search 'write good' --json
+```
+
+Installed records have already lost their source nesting, so their searchable
+slash name is the flat installed name. Search does not inspect the Markdown
+body, argument hint, or kit name as separate fields.
+
+## Output
+
+Human output is the same table as list. No matches is a successful empty state.
+
+JSON success shares `kind: assets.list` with list and returns
+`data.commands[]` with `kit`, `name`, `slash_name`, `rel_path`, `description`,
+`tags`, `installed`, and optional `argument_hint`.
+
+No NDJSON or secondary status stream is emitted. Errors use stderr; JSON
+execution errors use the shared error envelope.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Search completed, including no matches. |
+| `1` | Inventory discovery failed, or no positional query argument was supplied. |
+| `2` | The supplied query was whitespace-only or a flag could not be parsed. |
+
+## Related commands
+
+- [Complete `ak commands search` command facts](../cli/ak_commands_search)
+- [List commands](../cli/ak_commands_list)
+- [Show one command](../cli/ak_commands_show)

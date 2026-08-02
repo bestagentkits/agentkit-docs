@@ -1,0 +1,129 @@
+---
+title: ak config prefs validate
+description: Kiểm tra YAML AgentKit bằng schema nhúng trong CLI và dùng finding an toàn ở máy cục bộ hoặc CI.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak config prefs validate` sau khi chỉnh sửa config AgentKit hoặc khi một
+tuỳ chọn không có hiệu lực. Lệnh kiểm tra cấu trúc YAML và schema config được
+nhúng trong CLI đang cài; lệnh không tải schema từ mạng.
+
+## Cách dùng
+
+```bash
+ak config prefs validate
+```
+
+Lệnh không nhận argument theo vị trí.
+
+## Cờ của lệnh
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--file <path>` | Trống | Kiểm tra đúng một tệp được chỉ định thay vì config user và project hiện tại đang tồn tại. |
+
+Các cờ dùng chung như `--json`, `--no-interactive`, `--quiet`, `--verbose` và
+`--yes` được mô tả trong [quy ước CLI](../cli-conventions).
+
+## Chọn nội dung cần kiểm tra
+
+Khi không có `--file`, lệnh kiểm tra các tệp sau nếu chúng tồn tại, theo thứ tự:
+
+1. `$AGENTKIT_HOME/config.yaml`, hoặc mặc định là `~/.agentkit/config.yaml`.
+2. `.agentkit/config.yaml` trong thư mục làm việc hiện tại.
+
+```bash
+ak config prefs validate
+```
+
+Các tệp mặc định còn thiếu được bỏ qua. Nếu cả hai đều không tồn tại, kết quả
+cho người dùng cho biết không có gì cần kiểm tra và lệnh thoát `0`; JSON trả về
+mảng `files` rỗng. Lệnh không tìm config project trong các thư mục cha.
+
+Quá trình khám phá mặc định hiện bỏ qua mọi candidate khi phép kiểm tra trạng
+thái filesystem ban đầu thất bại; lệnh không phân biệt “không tồn tại” với lỗi
+status khác. Với phép kiểm tra CI nghiêm ngặt phải fail khi không truy cập được
+tệp dự kiến, hãy chỉ định rõ tệp bằng `--file`.
+
+Dùng `--file` khi CI cần kiểm tra một tệp đã commit hoặc khi tệp nằm ở nơi khác:
+
+```bash
+ak config prefs validate --file ./config.yaml
+```
+
+Tệp được chỉ định rõ nhưng không tồn tại hoặc không đọc được sẽ gây lỗi.
+`--file -` không đọc stdin; `-` được xem là đường dẫn tệp.
+
+## Đọc finding
+
+Validator báo tệp, severity, dòng, đường dẫn config và thông báo cho từng
+finding.
+
+- `error` nghĩa là YAML không parse được hoặc document sau chuẩn hoá vi phạm
+  schema nhúng. Chỉ cần một error là lệnh thoát `1`.
+- `warning` đánh dấu cách viết key cũ mà CLI này vẫn đọc được. Warning không
+  làm tệp invalid và không đổi mã thoát `0`.
+
+Tên hook và skill ID được xem là identifier, không phải cách viết field. Thông
+báo validation loại bỏ giá trị trong các phần credential và field có dạng
+secret trước khi ghi ra terminal hoặc log CI.
+
+<Callout type="info">
+  Kết quả mô tả khả năng tương thích với schema trong chính CLI đã chạy. Một
+  binary AgentKit mới hơn hoặc cũ hơn có thể nhúng schema khác, vì vậy hãy dùng
+  release sẽ đọc tệp để kiểm tra.
+</Callout>
+
+## Đầu ra cho tự động hoá
+
+```bash
+ak config prefs validate --json
+```
+
+Lệnh ghi một báo cáo JSON vào stdout, kể cả khi finding schema làm lệnh thoát
+`1`:
+
+```text
+schema_version: 1
+files: array
+files[].path: string
+files[].findings: array
+files[].findings[].severity: "warning" or "error"
+files[].findings[].line: integer
+files[].findings[].path: string
+files[].findings[].message: string
+```
+
+Đây là báo cáo riêng của lệnh thay vì envelope `kind`/`data` dùng chung, và
+không phải NDJSON. Lỗi parse không thể gắn với một key có thể dùng dòng `0` và
+đường dẫn finding rỗng.
+
+Lỗi đọc tệp hoặc lỗi validation nội bộ có thể trả về trước khi báo cáo được ghi
+và không được bảo đảm phát error JSON có cấu trúc. Lỗi parse cờ có thể vẫn là
+hướng dẫn dùng dạng plain text. Luôn kiểm tra trạng thái process trước khi đọc
+báo cáo.
+
+## Tác động và tương tác
+
+Lệnh chỉ đọc tệp cục bộ và schema được nhúng trong binary. Lệnh không ghi lại
+config, tạo bản sao lưu, khởi động process, liên hệ provider hay dùng xác thực
+AgentKit. Lệnh không bao giờ hiện prompt hoặc đọc stdin, vì vậy `--yes` và
+`--no-interactive` không thay đổi hành vi. `--quiet` không ẩn báo cáo riêng của
+lệnh này, còn `--verbose` không thêm diagnostic riêng. Lệnh không có chế độ
+preview, apply, dry-run hay force.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Mọi tệp đã kiểm tra đều không có error; warning vẫn có thể xuất hiện, hoặc không có tệp mặc định nào tồn tại. | Xem warning và cập nhật cách viết cũ khi thuận tiện. |
+| `1` | Tệp có error, không đọc được hoặc bản thân validation thất bại. | Sửa tệp được báo; đừng ghi đè tệp bằng đầu ra validator. |
+| `2` | Argument hoặc cờ không hợp lệ. | Sửa cách gọi lệnh. |
+
+Sau khi sửa thủ công, hãy chạy lại cùng lệnh. Để xác nhận giá trị nào thắng khi
+cả hai tệp đều hợp lệ, dùng `ak config prefs resolve`.
+
+## Lệnh liên quan
+
+- [Quy ước CLI](../cli-conventions)

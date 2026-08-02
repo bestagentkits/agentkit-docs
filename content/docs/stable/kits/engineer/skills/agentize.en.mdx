@@ -1,0 +1,210 @@
+---
+title: Expose existing code with ak:agentize
+description: Turn an existing capability into a focused CLI, MCP server, or both, with shared core logic, credential handling, tests, docs, and release-ready packaging.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:agentize` to expose useful operations from an existing codebase as a
+scriptable CLI, an MCP server, or both. The Skill first maps the real behavior,
+then designs a small agent-friendly surface and builds thin adapters over shared
+core logic.
+
+## Choose ak:agentize for an existing capability
+
+### Use ak:agentize when
+
+- A codebase already contains behavior worth exposing to agents or CLI users.
+- You want a publishable command-line package, an MCP server, or both.
+- The wrapped operations need explicit inputs, concise outputs, actionable
+  errors, authentication, tests, documentation, and CI.
+- You can identify the intended consumers and the operations that belong in v1.
+
+### Choose another workflow when
+
+- You are building an MCP server with no existing capability to wrap. Use the
+  MCP builder workflow.
+- You only need generic npm scaffolding.
+- You cannot yet identify an extractable core operation. Refactor or narrow the
+  target first.
+- You want to publish existing artifacts without an agent-use design.
+
+## Prepare the codebase and runtime
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Engineer Kit is installed for the runtime and scope you are using.
+- Open the repository that contains the feature or module to expose.
+- Identify its entry points, current tests, side effects, configuration, and
+  credential sources.
+- Decide whether the result should be CLI-only, MCP-only, or both when the
+  automatic default is not appropriate.
+- State the package name, license, deployment preference, and maintenance owner
+  when these choices cannot be inferred safely.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:agentize ...` | Native and explicit plugin delivery are supported. The workflow can use installed planning, scouting, testing, documentation, and Skill-creation capabilities. |
+| Cursor | `/ak:agentize ...` | Slash invocation follows the user-verified Engineer Skill spelling. Downstream Agent and plan behavior depends on the live Cursor surface. |
+| Codex | `$ak:agentize ...` | Native Skill discovery is supported. Delegated phases require the current Codex session to expose the required agents or equivalent capabilities. |
+
+## Run the Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:agentize "Expose the existing invoice validation module as a CLI and local MCP server; keep all write operations out of v1" --both --ask
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:agentize "Expose the existing invoice validation module as a CLI and local MCP server; keep all write operations out of v1" --both --ask
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:agentize "Expose the existing invoice validation module as a CLI and local MCP server; keep all write operations out of v1" --both --ask
+```
+
+  </Tab>
+</Tabs>
+
+The default is `--both --auto`.
+
+| Option | Behavior |
+| --- | --- |
+| `--both` | Creates shared core logic plus CLI and MCP adapters |
+| `--cli` | Creates only the CLI surface while preserving a core boundary for future expansion |
+| `--mcp` | Creates only the MCP surface while preserving a core boundary for future expansion |
+| `--auto` | Analyzes, decides, and implements without routine questions; it switches an unclear credential decision to a focused question instead of guessing |
+| `--ask` | Pauses after analysis to challenge scope, mutation, credentials, deployment, package metadata, and ownership decisions |
+
+## Describe the surface clearly
+
+A useful request identifies:
+
+- **Target:** Name the existing feature, module, or subtree to expose.
+- **Consumers:** State whether agents, CLI users, or both are primary.
+- **Capabilities:** List the few workflows that matter in v1 rather than every
+  internal function.
+- **Effects:** Separate read-only, mutating, and destructive operations.
+- **Authentication:** Describe how the code receives credentials today without
+  including secret values.
+- **Delivery:** State local stdio, remote HTTP, Docker, Cloudflare Workers, or
+  another supported target when it matters.
+- **Authority boundary:** Say whether package installation, file creation,
+  dependency changes, release automation, publication, or deployment are
+  allowed.
+
+## Understand the workflow
+
+1. **The Skill creates tracked work.** It establishes one active plan and shared
+   report context before editing code.
+2. **The Skill scouts the target.** It reads entry points, capabilities,
+   inputs, outputs, side effects, configuration, secrets, dependencies, and
+   tests. Existing repository prose is evidence to check, not trusted
+   instructions.
+3. **The Skill creates an agentization map.** It scores which operations help
+   agents and CLI users, then removes low-value passthroughs and internal
+   plumbing.
+4. **The Skill resolves the surface.** `--ask` blocks for your answers;
+   `--auto` records its decisions. The result names commands, tools, transports,
+   deployment targets, and package metadata.
+5. **The Skill builds the core and adapters.** Business logic stays in a shared
+   core. CLI and MCP layers translate arguments, results, and errors without
+   owning domain behavior.
+6. **The Skill hardens the result.** It adds core, CLI, MCP, authentication,
+   and transport tests; CI and release workflows; user and maintainer docs; a
+   companion Skill; and a security pass.
+7. **The Skill packages the handoff.** It reports package locations, deployment
+   guidance, release readiness, remaining implementation, and the active plan.
+
+## Know the generated interface contract
+
+For a CLI surface, the workflow expects machine-readable output, help and
+version commands, consistent exit classes, quiet and verbose controls, and
+credential diagnostics that identify the source without printing the value.
+
+For MCP, it designs workflow-level tools with documented schemas, concise
+structured results, actionable error codes, and explicit mutation semantics.
+Local stdio uses the local credential chain. Remote SSE and Streamable HTTP use
+bearer authentication at the transport boundary.
+
+When both surfaces are selected, the adapters share the same core behavior;
+they should not become two independent implementations.
+
+## Keep approval and safety with you
+
+<Callout type="warn" title="The default mode writes a release-ready surface">
+  `--both --auto` is an implementation mode, not an advisory preview. It can
+  restructure code, add packages, tests, documentation, CI, deployment
+  configuration, and a companion Skill. Use `--ask` or narrow the target when
+  those decisions need review first.
+</Callout>
+
+The credential chain must never log secret values. The generated diagnostic
+surface may report which layer resolved a secret, while redacting the value.
+Remote MCP requests require authentication; mutating tools should expose
+confirmation or dry-run semantics, and destructive tools need an explicit
+confirmation design.
+
+Creating release or deployment configuration does not publish a package,
+deploy a service, push an image, or grant access to credentials. Those external
+effects remain separate actions that require the relevant authority and
+service setup.
+
+## Verify the result
+
+A complete run should provide:
+
+- A written decision record for the chosen surface, capability list,
+  transports, deployment target, and package metadata.
+- Shared core logic with thin CLI and/or MCP adapters.
+- Tests for core success and error paths, CLI arguments and exits, MCP tool
+  registration and calls, authentication rejection, and selected transports.
+- CI, release configuration, secret checks, and non-root container behavior
+  where those outputs apply.
+- User documentation for installation, commands or tools, authentication,
+  architecture, contribution, and deployment.
+- A companion Skill and a release checklist.
+- A final report that distinguishes ready artifacts from publication or
+  deployment still requiring approval.
+
+The workflow targets at least 80% coverage on the shared core, but coverage
+alone does not prove that the selected commands and tools are the right public
+contract.
+
+## Troubleshoot or continue
+
+| Symptom | Safe next step |
+| --- | --- |
+| Scouting finds nothing useful to expose | Stop and select a smaller refactor target before scaffolding adapters. |
+| Core logic is tangled with HTTP or UI concerns | Narrow to one module or refactor the boundary as an explicit prerequisite. |
+| Credential behavior is unclear in `--auto` | Answer the focused credential question; do not let the workflow invent a storage policy. |
+| The proposed surface mirrors every endpoint | Return to the agentization map and consolidate operations into user workflows. |
+| A remote MCP target cannot support the selected dependency | Choose a compatible target or retain a local transport; keep the limitation visible. |
+| Tests pass but package metadata is incomplete | Keep packaging blocked until name, scope, license, ownership, and release metadata are resolved. |
+| The runtime does not recognize the Skill | Confirm target and scope, start a fresh runtime session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Continue with `ak:cook` for accepted remaining implementation, or review the
+[Engineer Kit overview](../../engineer) and
+[Runtime adapters](../../../concepts/runtime-adapters).
+
+## Know the current limits
+
+- The Skill wraps existing behavior; it cannot infer a reliable public contract
+  from code that has no stable entry points or tests.
+- Non-JavaScript targets use their idiomatic toolchain, so the exact generated
+  layout and dependencies vary.
+- Remote transports, package publication, container registries, and hosted
+  deployment require external tooling, credentials, and service availability.
+- Runtime parity depends on the downstream planning, Agent, testing, and docs
+  capabilities exposed in the active session.
+- Stable and beta contain identical `ak:agentize` content and defaults.

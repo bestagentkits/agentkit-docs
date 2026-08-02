@@ -1,0 +1,79 @@
+---
+title: ak sessions redact
+description: Preview hoặc áp dụng redaction thông tin xác thực theo best effort cho JSONL session Claude Code cục bộ, có backup.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak sessions redact` trước khi xem lại hoặc chia sẻ transcript Claude Code.
+Mặc định là scan chỉ đọc.
+
+## Cách dùng
+
+```bash
+ak sessions redact
+```
+
+Lệnh không nhận argument theo vị trí.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--project <name>` | `[]` | Chỉ scan project đã đăng ký này; có thể lặp. |
+| `--session <id>` | `[]` | Chỉ scan session ID gồm chữ, số, `_` hoặc `-`; có thể lặp. |
+| `--redact-emails` | `false` | Bao gồm pattern địa chỉ email. |
+| `--apply` | `false` | Ghi lại file thay đổi sau khi backup từng session root bị ảnh hưởng. |
+
+Apply cần cả `--apply` và cờ dùng chung `--yes`; không có fallback hỏi xác nhận
+tương tác. `--apply` thiếu `--yes` thoát `2` trước khi mutate.
+
+## Quy trình an toàn
+
+```bash
+ak sessions redact --project myapp --json
+ak sessions redact --project myapp --session session-1 --redact-emails --json
+ak sessions redact --project myapp --apply --yes --json
+```
+
+Lệnh chỉ scan project đã đăng ký và session root Claude Code. Nó không scan
+session Codex, không gọi network và không gửi nội dung transcript. Dry-run mặc
+định không tạo backup hay thay đổi file.
+
+<Callout type="warning">
+  Detection dựa trên pattern theo best effort. Report thành công không chứng
+  minh mọi secret hoặc dữ liệu cá nhân đã được tìm thấy. Hãy xem lại nội dung
+  trước khi chia sẻ.
+</Callout>
+
+Khi apply, mỗi session root bị ảnh hưởng được snapshot vào AgentKit backup store
+trước khi rewrite. JSONL thay đổi được ghi qua temp file cùng thư mục, sync, giữ
+permission rồi rename. Nếu session thay đổi giữa scan và replace, file đó không
+bị overwrite và lệnh thất bại. Lỗi sau khi root khác đã được rewrite không tạo
+rollback toàn giao dịch; mỗi backup được báo là một ranh giới recovery riêng.
+
+Dòng JSONL lỗi được đếm và giữ nguyên trừ khi raw text khớp pattern redaction.
+Lỗi scan từng file nằm trong `skipped` nhưng lệnh vẫn có thể thoát `0`; phải kiểm
+tra array này, không chỉ dựa vào mã thoát.
+
+## Output và mã thoát
+
+Human stdout báo mode, số file scan/thay đổi, số replacement và backup ID. JSON
+stdout dùng `kind=sessions.redact`; `data` có `schema_version`, `dry_run`, các
+count, `replacements`, `skipped`/`backups` tuỳ chọn và report từng file. Đường
+dẫn trong output cũng là dữ liệu cục bộ nhạy cảm.
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Pass hoàn tất; vẫn phải xem `skipped` và số replacement. |
+| `1` | Resolve target, backup, điều phối scan hoặc rewrite thất bại. |
+| `2` | Cờ không hợp lệ hoặc `--apply` thiếu `--yes`. |
+
+Để recover, dùng backup ID và root path được báo, rồi kiểm tra transcript đã
+restore trước khi tiếp tục writer đang hoạt động.
+
+## Lệnh liên quan
+
+- [Liệt kê session](./sessions-list)
+- [Hiển thị trang transcript](./sessions-show)
+- [Thông tin đầy đủ của lệnh `ak sessions redact`](../cli/ak_sessions_redact)

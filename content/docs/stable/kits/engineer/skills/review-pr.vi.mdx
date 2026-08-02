@@ -1,0 +1,172 @@
+---
+title: Review, sửa hoặc merge pull request với ak:review-pr
+description: Kiểm tra GitHub pull request, tùy chọn sửa finding, đăng review và chỉ merge sau khi các readiness gate rõ ràng đều đạt.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:review-pr` để đánh giá GitHub pull request dựa trên scope đã nêu, code
+xung quanh, quy tắc repository, test, ranh giới bảo mật và trạng thái sẵn sàng
+merge. Mode mặc định chỉ đọc. Các cờ tùy chọn lần lượt mở rộng workflow để sửa
+branch, đăng formal review hoặc merge rồi theo dõi CI sau merge.
+
+## Chọn ak:review-pr cho GitHub pull request hiện có
+
+### Dùng ak:review-pr khi
+
+- Bạn cần verdict dựa trên toàn bộ diff và các tệp đầy đủ liên quan.
+- Bạn muốn kiểm tra correctness, security, breaking change, test và chất lượng
+  code trong một review.
+- Bạn muốn vòng lặp sửa và review lại có giới hạn trên branch của pull request.
+- Bạn chủ động muốn đăng review cuối hoặc merge một pull request đã sẵn sàng.
+
+### Chọn workflow khác khi
+
+- Bạn chỉ cần review thay đổi local chưa gửi lên. Dùng `ak:code-review`.
+- Bạn đã biết defect và cần sửa root cause ngoài pull request workflow. Dùng
+  `ak:fix`.
+- Bạn cần chuẩn bị commit và mở hoặc cập nhật pull request. Dùng `ak:ship`.
+- Repository không nằm trên GitHub hoặc session không thể dùng GitHub CLI.
+
+## Chuẩn bị GitHub và repository
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận Kit đã
+  cài có thể dùng trong runtime hiện tại.
+- Chạy trong repository của pull request và cung cấp số hoặc URL của PR.
+- Cài đặt, xác thực `gh` với quyền đọc repository và pull request.
+- Với `--fix`, bắt đầu từ đúng head branch của pull request ở trạng thái sạch và
+  giữ nguyên thay đổi không liên quan của người dùng.
+- Chỉ cấp quyền write, review, merge và Actions cho các mode bạn định dùng.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:review-pr ...` | Phân phối native có thể dùng các công cụ GitHub, Git, tệp và workflow được ủy thác mà Skill khai báo. |
+| Cursor | `/ak:review-pr ...` | Cách gọi bằng slash đã được người dùng xác minh; approval công cụ và hành vi CI nền tương đương phụ thuộc vào session Cursor. |
+| Codex | `$ak:review-pr ...` | Hỗ trợ discovery native; công cụ GitHub, Git, chỉnh sửa và chờ hiện có vẫn quyết định phần nào chạy được. |
+
+## Chọn quyền hạn có chủ đích
+
+Các cờ có thể đứng theo thứ tự bất kỳ và kết hợp với nhau. Không có cờ, Skill
+chỉ in review ở local.
+
+| Input | Hành vi | Tác động bên ngoài hoặc local |
+| --- | --- | --- |
+| `<PR number or URL>` | Review và trả về verdict local | Đọc metadata GitHub, diff, check, context liên kết và các tệp repository liên quan |
+| `--fix` | Sửa finding có thể hành động, xác minh, commit, push và review lại | Thay đổi worktree cùng branch PR; có thể lặp đến khi hội tụ hoặc bị chặn |
+| `--reply` | Đăng kết quả cuối thành formal GitHub review | Tạo review event theo ngữ nghĩa approve, request-changes hoặc comment |
+| `--merge` | Chỉ merge sau khi readiness gate đạt, rồi theo dõi CI trên target branch | Có thể merge, bật auto-merge khi required check đang chờ và gửi follow-up fix cho CI |
+
+`--fix --reply` chỉ đăng lần review lại cuối. Thêm `--merge` sẽ chạy giai đoạn
+merge cuối cùng, sau hành vi sửa và reply.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:review-pr 482 --fix --reply
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:review-pr 482 --fix --reply
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:review-pr 482 --fix --reply
+```
+
+  </Tab>
+</Tabs>
+
+Để review chỉ đọc, bỏ mọi cờ. Để cấp quyền cho toàn bộ đường đi, dùng input như
+`482 --fix --reply --merge`; các cờ cấp quyền cho giai đoạn được nêu nhưng không
+bỏ qua readiness, verification hay bảo vệ của repository.
+
+## Hiểu review workflow
+
+1. **Skill phân giải context.** Skill đọc metadata, description, số tệp thay
+   đổi, toàn bộ diff và check hiện tại của pull request.
+2. **Skill xác minh công việc đã nêu.** Title, body, issue liên kết, scope và
+   completion evidence được so với thay đổi thực tế.
+3. **Skill kiểm tra implementation context.** Mọi tệp thay đổi và source xung
+   quanh có liên quan được đối chiếu với instruction hiện tại cùng pattern của
+   project.
+4. **Skill phân loại finding.** Finding về correctness, security, breaking
+   change, test và maintainability trở thành mục Critical, Important hoặc
+   Suggestion với bằng chứng cụ thể.
+5. **Skill trả về verdict.** Approve nghĩa là không có finding Critical hoặc
+   Important; Request changes nghĩa là còn blocker; Comment nghĩa là chỉ có gợi
+   ý nhỏ.
+6. **Các giai đoạn tùy chọn chạy theo thứ tự.** Fix loop sửa và review lại,
+   reply đăng review cuối, còn merge chỉ chạy sau khi mọi điều kiện readiness
+   đạt.
+
+Phần review prose dành cho người đọc dùng writing language đã cấu hình khi có
+thể phân giải. Command, path, identifier, GitHub keyword và bằng chứng trích dẫn
+được giữ nguyên.
+
+## Giữ quyền write và merge rõ ràng
+
+<Callout type="warn" title="Mặc định chỉ đọc; mỗi cờ bổ sung quyền hạn">
+  `--fix` cho phép sửa, commit và push lên branch của pull request. `--reply`
+  cho phép tạo GitHub review. `--merge` cho phép merge pull request đã sẵn sàng
+  và xử lý CI sau merge. Chỉ dùng các giai đoạn bạn thực sự muốn.
+</Callout>
+
+Các ranh giới quan trọng:
+
+- Nếu kiểm tra cài đặt hoặc xác thực `gh` thất bại trong reply mode, Skill quay
+  về output local; không âm thầm tuyên bố đã đăng review.
+- GitHub không cho bạn approve pull request của chính mình. Skill gửi lại một
+  self-review lẽ ra Approve dưới dạng comment trung lập và báo rõ việc hạ cấp.
+- Merge gate yêu cầu verdict Approve, không có blocker từ fix loop, PR đang mở
+  và mergeable, không còn changes request, đồng thời check đã pass hoặc chỉ đang
+  chờ. Workflow không ép qua conflict hay branch protection.
+- `--fix` không được commit hoặc push khi verification thất bại, phát hiện
+  secret hoặc sẽ bao gồm thay đổi không liên quan của người dùng.
+- Chạy lại `--reply` sẽ đăng thêm một review; workflow hiện tại không deduplicate
+  reply cũ.
+- `gh` dùng credential và network access hiện có của session. Policy repository,
+  hosted CI minute và third-party check có thể tạo tác động hoặc chi phí bên
+  ngoài; Skill không định nghĩa phí provider riêng.
+
+## Xác minh bằng chứng
+
+Kết quả hoàn chỉnh nên có:
+
+- Summary, risk level, finding theo severity và verdict cuối.
+- Bằng chứng tệp cùng dòng hoặc function cho mọi finding có thể hành động.
+- Số lần lặp fix loop, commit đã push và blocker còn lại khi chạy `--fix`.
+- `--reply` đã đăng, hạ self-approval xuống comment hay quay về output local.
+- Với `--merge`, kết quả merge, merge commit, kết luận CI đã theo dõi và mọi
+  follow-up fix.
+- Câu hỏi chưa giải quyết được nêu rõ thay vì claim hoàn tất thiếu căn cứ.
+
+Bằng chứng release bao phủ việc chuyển Skill sang adapter portable; stable và
+beta chứa cùng workflow `ak:review-pr`. Điều này không bảo đảm permission GitHub
+thực tế, quy tắc merge riêng của repository, thời lượng CI hay approval prompt
+giống nhau giữa các runtime.
+
+## Khắc phục an toàn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Không tải được pull request | Xác nhận repository, số hoặc URL PR, network access và `gh auth status`. |
+| Diff quá rộng để đánh giá chắc chắn | Chia review theo domain nhưng vẫn đọc mọi tệp thay đổi; đừng suy ra correctness từ summary. |
+| Fix loop lặp lại cùng finding | Dừng sau ba lần không thành công và báo bằng chứng chưa giải quyết để người dùng tiếp quản. |
+| Reply không tới GitHub | Dùng review local đầy đủ, sửa cài đặt hoặc xác thực `gh`, rồi chỉ chạy lại khi chủ động cấp quyền đăng. |
+| Merge bị từ chối | Xử lý verdict, conflict, review-decision, check hoặc branch-protection gate được nêu; không thêm force flag. |
+| CI sau merge vẫn đỏ | Giữ link run thất bại và các fix đã thử; merge workflow dừng sau số lần retry giới hạn hoặc khi có blocker bên ngoài. |
+| Runtime không nhận ra Skill | Xác nhận target và scope, khởi động lại runtime session, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Tiếp tục với [`ak:code-review`](./code-review) để review local,
+[`ak:ship`](./ship) để chuẩn bị pull request hoặc [`ak:git`](./git) cho Git
+workflow tập trung hơn.

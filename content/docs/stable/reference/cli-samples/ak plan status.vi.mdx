@@ -1,0 +1,59 @@
+---
+title: ak plan status
+description: Đọc progress của phase và task trực tiếp từ một thư mục plan theo ownership của tệp.
+---
+
+Dùng `ak plan status` để xem progress summary được tính từ `plan.md` và các tệp
+`phase-NN-*.md`.
+
+## Cách dùng
+
+```bash
+ak plan status [path]
+```
+
+Khi không có path, lệnh xem chính thư mục hiện tại là thư mục plan. Nó không
+đọc plan store, current-plan pointer, Git branch hay worktree context. Từ root
+repository có plan dưới `./plans/`, hãy truyền thư mục plan cụ thể.
+
+Lệnh không có cờ riêng. Xem cờ dùng chung trong
+[quy ước CLI](../cli-conventions).
+
+## Cách tính progress
+
+Parser đọc metadata của `plan.md` và mọi tệp khớp
+`phase-<number>-<slug>.md`, rồi sắp xếp theo số.
+
+- Phase có checkbox được xác định là `todo`, `in-progress` hoặc `done` theo số
+  checkbox đã đánh dấu; checkbox ghi đè status trong front matter.
+- Phase không có checkbox dùng status front matter đã biết, nếu không là `todo`.
+- Task progress tổng là số nguyên `(done * 100) / total`; không có task là `0%`.
+- Số phase hoàn tất đếm phase resolve thành `done`.
+
+Lệnh chỉ validate những gì parser cần. Dùng `ak plan validate` khi cần format
+gate rõ ràng.
+
+## Tác động và đầu ra
+
+Lệnh chỉ đọc tệp cục bộ. Nó không mở/refresh SQLite store, spawn Git, dùng
+mạng/auth/provider, đọc stdin hay prompt. Không có preview, apply, force, backup
+hoặc mutation cần khôi phục.
+
+Human/plain stdout là một summary line. JSON thành công dùng `kind=plan.status`
+với `name`, `title`, `status`, `phases_total`, `phases_done`, `total_tasks`,
+`done_tasks`, `progress_pct`. Lỗi runtime JSON dùng stderr; lỗi parse cờ có thể
+vẫn là plain text.
+
+## Kết quả và mã thoát
+
+| Mã | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Thư mục đã được parse và progress đã được báo. | Đọc counter; đừng xem status của plan front matter là task completion. |
+| `1` | Không parse được thư mục, `plan.md` hoặc phase file đã nhận diện. | Sửa path hoặc tệp plan rồi chạy lại. |
+| `2` | Quá nhiều argument hoặc cờ không hợp lệ. | Sửa cách gọi. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak plan status`](../cli/ak_plan_status)
+- [Validate thư mục plan](../cli/ak_plan_validate)
+- [Đánh dấu tệp phase hoàn tất](../cli/ak_plan_check)

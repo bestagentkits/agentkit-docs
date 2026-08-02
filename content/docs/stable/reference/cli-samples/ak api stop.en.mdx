@@ -1,0 +1,103 @@
+---
+title: ak api stop
+description: Signal the API PID recorded by AgentKit while accounting for stale state, PID reuse, asynchronous shutdown, and non-enveloped no-op output.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak api stop` to send `SIGTERM` to the PID recorded by `ak api start`. The
+command is idempotent when no state file exists, but it is not a process-identity
+or shutdown-completion check.
+
+## Usage
+
+```bash
+ak api stop
+```
+
+The command accepts no positional arguments and has no command-specific flags.
+Shared flags are described in [CLI conventions](../cli-conventions). It never
+prompts; `--yes` and `--no-interactive` do not change the signal operation.
+
+## Before you stop an old record
+
+The command reads `~/.agentkit/api/state.json` (`AGENTKIT_HOME` changes the
+base directory), finds the recorded PID, and sends `SIGTERM`.
+
+<Callout type="warning">
+  The state file is trusted without checking executable identity or process
+  start time. If the file is stale and the operating system has reused its PID,
+  this command can signal an unrelated process. For an old-looking record,
+  compare the reported PID with your process listing before running stop.
+</Callout>
+
+Use `ak api status` to read the record, then verify the PID with your operating
+system. If no matching AgentKit process exists, remove only
+`~/.agentkit/api/state.json` instead of invoking stop or deleting a broader
+directory.
+
+## Signal and cleanup behavior
+
+- If the state file is absent, the command writes a not-running warning to
+  stderr and exits `0`.
+- If `SIGTERM` is accepted, the command reports success immediately. It does
+  not wait for the target process to exit or for the state file to disappear.
+- The AgentKit server handles `SIGTERM` with a graceful drain of up to 30
+  seconds and removes its state file on clean return.
+- If sending the signal returns an error, stop treats the process as already
+  gone, tries to remove the state file, writes a warning, and exits `0` even if
+  that cleanup attempt fails.
+
+The command creates no backup or rollback. It does not contact the server over
+HTTP or make provider network requests.
+
+## Verify completion
+
+After a signalled stop, poll recorded state and, when necessary, the operating
+system rather than assuming the success line means the process has exited:
+
+```bash
+ak api status --json
+```
+
+A clean shutdown eventually returns `data.running: false`. Remember that status
+checks only the state file; confirm the PID separately if state remains.
+
+## Human and JSON output
+
+When `SIGTERM` is accepted, human success is written to stdout:
+
+```text
+[OK] api server stopped (pid 12345)
+```
+
+JSON success uses `kind=api.stop`:
+
+```json
+{"schema_version":1,"kind":"api.stop","data":{"pid":12345}}
+```
+
+When no state file exists, stdout is empty and stderr contains the plain warning
+`[!] api: server is not running`; `--json` does not add a success envelope for
+this no-op path. A signal error similarly uses a plain stderr warning and no
+JSON success object.
+
+State-read JSON errors are written to stderr with `schema_version`, `error`,
+`error_code`, and `exit_code`. Flag-parse errors can remain plain-text usage.
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | No state existed, `SIGTERM` was accepted, or signalling failed and stale-state cleanup was attempted. | Inspect stdout/stderr, then verify state and process identity. |
+| `1` | An unexpected positional argument was supplied, AgentKit home or state handling failed, or process lookup failed. | Correct any extra argument; otherwise inspect the exact PID and state path before retrying. |
+| `2` | Flag parsing failed. | Correct the flags. |
+
+There is no preview, dry-run, force, confirmation, or decline path.
+
+## Related commands
+
+- [Complete `ak api stop` command facts](../cli/ak_api_stop)
+- [Inspect recorded API state](../cli/ak_api_status)
+- [Start the API server](../cli/ak_api_start)
+- [CLI conventions](../cli-conventions)

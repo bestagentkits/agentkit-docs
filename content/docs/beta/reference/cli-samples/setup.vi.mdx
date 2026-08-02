@@ -1,0 +1,143 @@
+---
+title: ak setup
+description: Cấu hình runtime và tuỳ chọn AgentKit bằng wizard lần chạy đầu hoặc tệp đầu vào cho script.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak setup` để phát hiện runtime cục bộ rồi lưu tuỳ chọn adapter, Kit mặc
+định và telemetry của AgentKit. Basic setup không đăng nhập AgentKit registry
+và không cài nội dung Kit.
+
+## Cú pháp
+
+```bash
+ak setup [options]
+```
+
+## Đối số
+
+Lệnh không nhận đối số vị trí và không có alias.
+
+## Trước khi chạy
+
+Setup tương tác cần cả đầu vào và đầu ra terminal. Trong tự động hoá, hãy chọn
+adapter rõ ràng hoặc cung cấp tệp YAML chứa câu trả lời:
+
+```bash
+ak setup --adapter claude-code,codex --no-interactive
+ak setup --config setup.yaml --no-interactive
+```
+
+Basic setup phát hiện trạng thái đăng nhập native của runtime nhưng không sao
+chép credential. `--advanced` có thể lưu provider key trong
+`~/.agentkit/config.yaml`; tệp được ghi với mode `0600`, nhưng key vẫn là
+plaintext và phải được bảo vệ như secret.
+
+## Tuỳ chọn
+
+| Tuỳ chọn | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--adapter <ids>` | Runtime được phát hiện | Cấu hình tập adapter đã đăng ký, phân tách bằng dấu phẩy. |
+| `--no-adapter <ids>` | Trống | Loại tập adapter đã đăng ký, phân tách bằng dấu phẩy. |
+| `--advanced` | `false` | Bao gồm provider key, tuỳ chọn provider/model và ghi đè Codex. |
+| `--config <path>` | Trống | Đọc câu trả lời cho script từ tệp YAML có key là setup step ID. |
+| `--step <id>` | Trống | Chỉ cập nhật một trường setup thay vì xử lý toàn bộ tập step. |
+
+Step ID không tồn tại và lựa chọn adapter xung đột sẽ thất bại trước khi ghi cấu
+hình. Xem [quy ước CLI](../cli-conventions) để biết các cờ dùng chung như
+`--json`, `--no-interactive` và `--quiet`.
+
+## Ví dụ
+
+Chạy wizard trong terminal:
+
+```bash
+ak setup
+```
+
+Chỉ cập nhật adapter đang bật:
+
+```bash
+ak setup --step enabled_adapters
+```
+
+Áp dụng tệp cho script và trả về đầu ra có cấu trúc:
+
+```bash
+ak setup --json --no-interactive --config setup.yaml
+```
+
+## Hành vi terminal và script
+
+Khi stdin và stdout đều là terminal, lệnh mặc định mở wizard. Nhấn Esc hoặc
+Ctrl-C sẽ huỷ trước khi lưu và thoát `3`. `--json`, `--no-interactive` hoặc đầu
+ra không phải terminal sẽ chọn đường script; giá trị bắt buộc còn thiếu khi đó
+thoát `2` thay vì mở prompt.
+
+Lệnh không có cờ dry-run, apply, force hay xác nhận riêng. Lần gọi script thành
+công sẽ ghi ngay. Chạy lại có tính idempotent và giữ giá trị hiện có cho các
+step bạn không thay đổi.
+
+## Đầu ra và các luồng
+
+Đầu ra thành công dạng human nằm trên stdout. Nội dung báo trạng thái phiên của
+runtime native và AgentKit, đường dẫn cấu hình đã lưu cùng các step ID đã áp
+dụng. Wizard tương tác và thông báo huỷ/lỗi dùng terminal và stderr khi cần.
+
+JSON thành công là một envelope trên stdout:
+
+```text
+schema_version: 1
+kind: setup
+data.config_path: string
+data.steps_applied: array of setup step IDs
+data.partial: boolean, present for --step
+data.auth.agentkit: session_present, not_authenticated, or unknown
+data.auth.kit_entitlement: not_checked or login_required
+data.auth.runtimes: array of adapter, state, and optional action
+```
+
+Lỗi thực thi trong chế độ JSON dùng error envelope có cấu trúc trên stderr. Lỗi
+phân tích cờ xảy ra trước renderer và có thể vẫn là hướng dẫn dùng dạng plain
+text.
+
+## Mã thoát
+
+| Mã | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Cấu hình đã được lưu. | Xem lại đường dẫn được báo rồi cài Kit riêng nếu cần. |
+| `1` | Đọc/ghi cấu hình hoặc ghi cấu hình adapter thất bại. | Đọc lỗi và kiểm tra tệp hiện tại trước khi chạy lại cùng step. |
+| `2` | Argument, lựa chọn adapter, step ID hoặc đầu vào script bắt buộc không hợp lệ. | Sửa đầu vào; lệnh chưa tạo kết quả setup hợp lệ. |
+| `3` | Wizard trong terminal bị huỷ. | Chạy lại khi sẵn sàng; thao tác huỷ không lưu form. |
+
+## Tác động, an toàn và khôi phục
+
+Lệnh đọc cấu hình AgentKit hiện có và phiên AgentKit cục bộ. Lệnh có thể chạy
+probe `claude auth status --json` và `codex login status` với timeout ngắn để
+phân loại trạng thái đăng nhập native. Lệnh không liên hệ AgentKit registry,
+không xác minh entitlement Kit trả phí, không ghi cache Kit và không cài Kit.
+
+Basic setup tạo hoặc cập nhật atomically `~/.agentkit/config.yaml`, đồng thời
+giữ các trường YAML mà phiên bản này không quản lý. Advanced step còn có thể
+ghi atomically cấu hình adapter native đã chọn. Setup không tạo recovery
+snapshot.
+
+<Callout type="warning">
+  Cấu hình AgentKit được lưu trước khi ghi adapter ở chế độ advanced. Nếu lần
+  ghi adapter sau đó thất bại, mã `1` có thể để lại cấu hình AgentKit đã cập
+  nhật trong khi cấu hình runtime chưa đổi. Hãy kiểm tra cả hai tệp, xử lý
+  nguyên nhân được báo rồi chạy lại cùng `--step`; không xoá toàn bộ thư mục
+  home của runtime.
+</Callout>
+
+## Lệnh liên quan và giới hạn
+
+- [Cài Kit sau setup](./kit-init)
+- [Đăng ký project hiện có](./init)
+- [Tạo project mới](./new)
+- [Kiểm tra tình trạng cài đặt](./doctor)
+- [Quy ước CLI](../cli-conventions)
+
+Setup chỉ báo trạng thái đăng nhập cục bộ. Dùng `ak login`, `ak whoami` và
+`ak licenses` cho quy trình tài khoản và entitlement AgentKit.

@@ -1,0 +1,88 @@
+---
+title: ak watch start
+description: Poll issue GitHub, sinh reply, post comment và vận hành rolling-rate cùng watcher state cục bộ an toàn.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Chỉ dùng `ak watch start` sau khi xem cùng filter bằng `dry-run`. Candidate thành
+công sẽ tạo comment GitHub bên ngoài.
+
+## Cách dùng
+
+```bash
+ak watch start <owner/repo>
+```
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--label <labels>` | `[]` | Khớp bất kỳ label nào đã liệt kê. |
+| `--author <logins>` | `[]` | Khớp bất kỳ GitHub login nào đã liệt kê. |
+| `--keyword <terms>` | `[]` | Khớp bất kỳ term nào trong title/body, không phân biệt hoa thường. |
+| `--agent <kit/skill>` | `engineer/scout` | Skill truyền cho `ak run` để sinh response. |
+| `--max-per-hour <count>` | `10` | Số post đã ghi nhận tối đa trong rolling hour. |
+| `--poll-interval <seconds>` | `60` | Khoảng cách giữa các lần poll ở daemon mode. |
+| `--daemon` | `false` | Lặp trong process hiện tại đến khi bị ngắt. |
+| `--kits-dir <path>` | `""` | Override nguồn Kit dùng bởi `ak run`. |
+
+Dùng giá trị dương cho cả hai cờ số. Implementation không validate đầy đủ range
+trước khi bắt đầu.
+
+## Tác động bên ngoài và cục bộ
+
+```bash
+ak watch dry-run owner/repo --label needs-response
+ak watch start owner/repo --label needs-response --max-per-hour 5
+```
+
+Mỗi pass lấy tối đa 100 issue mở qua `gh` đã authenticate, áp dụng AND giữa
+category/OR trong category, bỏ qua ID đã ghi nhận, kiểm tra rolling-hour bucket,
+gửi nội dung issue cho `ak run`, rồi post stdout được sinh qua
+`gh issue comment`.
+
+Sau post thành công, issue ID và timestamp được save atomically dưới
+`~/.agentkit/watch/<repo-slug>/state.json`; `AGENTKIT_HOME` thay root. Nếu save
+thất bại sau khi GitHub nhận comment, lỗi chỉ được log và lần chạy sau có thể
+post lại. Kiểm tra stderr và state đã lưu sau mỗi live run.
+
+<Callout type="warning">
+  Lệnh không hỏi xác nhận. `--json`, `--no-interactive` và non-TTY không làm
+  posting an toàn hơn; chúng vẫn cho phép comment bên ngoài.
+</Callout>
+
+## Daemon mode
+
+`--daemon` không fork hoặc đưa watcher vào background. Nó giữ process hiện tại,
+ghi `daemon.log` và `cli-meta.json`, poll ngay rồi lặp theo interval. Dừng process
+bằng Ctrl-C, SIGTERM hoặc process supervisor.
+
+`ak watch stop` không signal process, còn loop đang chạy không đọc lại trường
+`active`. Không dựa vào `stop` riêng lẻ để chặn post tiếp theo.
+
+## Output và mã thoát
+
+Human stdout one-shot tóm tắt responded, skipped và remaining. JSON dùng một
+envelope `kind=watch.start`. Lỗi agent, rate và post từng issue đi stderr, không
+nằm trong hai array ID.
+
+Output daemon `--json` là mixed: một human start line trước, sau đó một object
+`watch.start` mỗi tick thành công. Lỗi poll về sau được log và loop tiếp tục.
+Không đưa toàn stream thẳng vào NDJSON parser nếu chưa bỏ dòng đầu.
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | One-shot render xong hoặc daemon kết thúc do huỷ; vẫn có thể có lỗi từng issue. |
+| `1` | State, poll đầu, render hoặc setup daemon thất bại. |
+| `2` | Argument repository hoặc cờ không hợp lệ. |
+
+Dù help lệnh cha khai báo exit `3` cho rate limit one-shot, loop hiện tại hấp
+thụ lỗi từng issue đó và có thể trả `0`.
+
+## Lệnh liên quan
+
+- [Preview không post](./watch-dry-run)
+- [Kiểm tra state và PID metadata](./watch-status)
+- [Đặt state thành inactive](./watch-stop)
+- [Thông tin đầy đủ của lệnh `ak watch start`](../cli/ak_watch_start)

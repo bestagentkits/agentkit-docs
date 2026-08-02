@@ -1,0 +1,187 @@
+---
+title: Reconcile delivery progress with ak:project-management
+description: Hydrate optional runtime work tracking from durable plans, sync verified progress back across every phase, and produce concise status reports.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:project-management` to understand and preserve the state of multi-phase
+work. The Skill reads durable plan files, mirrors remaining work into a live
+task surface when one is actually available, reconciles verified completion
+back across every phase, and produces traceable status reports for the next
+session or handoff.
+
+## Choose ak:project-management for oversight and continuity
+
+### Use ak:project-management when
+
+- You need status across one or more implementation plans.
+- A session must resume from remaining plan work without trusting ephemeral
+  runtime state.
+- Completed runtime items need to be mapped back to phase checkboxes and plan
+  status.
+- Dependencies, blockers, or parallel ownership need coordination.
+- A milestone needs a concise session, completion, or multi-plan report.
+- You need an explicit decision about whether changed behavior requires docs.
+
+### Choose another workflow when
+
+- You need to create or validate an implementation roadmap. Use `ak:plan`.
+- You want to implement the next phase. Use `ak:cook`.
+- You need to diagnose and repair a concrete failure. Use `ak:debug` and
+  `ak:fix`.
+- You want chronological reflection rather than current project status. Use
+  `ak:journal`.
+
+## Prepare the plan state
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Engineer Kit is installed for the runtime and scope you are using.
+- Open the project containing the target `plans/` directory.
+- Preserve `plan.md` and every `phase-XX-*.md` file; they are the durable source
+  of truth.
+- Provide verification evidence for work you expect to mark complete.
+- Identify the target plan when several plans overlap or share files.
+- Make the `ak` CLI available when possible so the Skill can consult live
+  `ak plan --help` before using CLI-managed status operations.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:project-management ...` | Native delivery is the default; explicit plugin delivery is also supported. |
+| Cursor | `/ak:project-management ...` | Slash invocation is user-verified. This does not establish full runtime parity or a particular task API. |
+| Codex | `$ak:project-management ...` | The Skill uses native Codex discovery and discovers task-management capabilities at runtime. |
+
+## Request the oversight operation
+
+The Skill accepts a task such as status, hydrate, sync, or report. These are
+workflow intents rather than published mode flags.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:project-management "Sync verified work back to the active plan, report any unmapped completed items, then create a concise session status report."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:project-management "Sync verified work back to the active plan, report any unmapped completed items, then create a concise session status report."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:project-management "Sync verified work back to the active plan, report any unmapped completed items, then create a concise session status report."
+```
+
+  </Tab>
+</Tabs>
+
+| Intent | Observable outcome |
+| --- | --- |
+| Status | Scans plans and phase checkboxes, calculates progress, and highlights blockers, stale dependencies, and next actions |
+| Hydrate | Reads unchecked plan items and mirrors remaining work into the live task surface when runtime discovery confirms one exists |
+| Sync | Reconciles completed runtime work with every phase file, backfills stale earlier checkboxes, and derives plan status from actual completion |
+| Report | Writes a concise session, plan-completion, or multi-plan report in the configured reports location |
+
+A good request names the target plan, the session or milestone boundary, known
+completed items, verification evidence, expected report type, and any runtime
+work items that may not yet map cleanly to the plan.
+
+## Understand what happens during a run
+
+1. **The Skill reads the durable plan.** It loads `plan.md` and every phase
+   file, parses existing frontmatter, and identifies checked, unchecked, and
+   blocked work.
+2. **The Skill discovers runtime tracking.** It uses a live task-management
+   surface only when runtime discovery confirms the capability. It never infers
+   support from the client name or a cached tool list.
+3. **The Skill hydrates remaining work.** When the live view is available, it
+   mirrors only unchecked work with dependencies, ownership, acceptance
+   criteria, and a durable source-plan mapping.
+4. **The Skill tracks progress.** Items move through pending, active, blocked,
+   and completed states when supported; otherwise the active plan is updated
+   directly. Parallel ownership stays non-overlapping.
+5. **The Skill performs full-plan sync-back.** It sweeps every phase, maps
+   verified completed items, backfills stale earlier phases, recalculates
+   progress, and updates plan status only when checkbox evidence supports it.
+6. **The Skill reports project state.** It summarizes progress, achievements,
+   blockers, risks, tests, and next actions with metrics and tables.
+7. **The Skill evaluates documentation impact.** User-visible behavior, public
+   contracts, architecture, security, or recovery changes are routed to the
+   smallest owning docs surface; mere task completion is not copied into
+   evergreen documentation.
+
+## Keep plan authority intact
+
+<Callout type="warn" title="Runtime state is a working view">
+  A live task marked complete is not completion evidence. Plan files remain
+  authoritative across sessions, and every completed runtime item must map to a
+  verified phase checklist entry before full completion can be reported.
+</Callout>
+
+- The Skill never marks only the current phase and ignores stale earlier work.
+- If a completed item cannot be mapped to a phase file, it is reported as
+  unresolved and the plan is not claimed complete.
+- Existing plan frontmatter is preserved. The Skill does not invent fields for
+  a particular runtime task system.
+- Status changes require acceptance criteria, test or review evidence, and
+  intact dependencies; runtime state alone is insufficient.
+- Documentation updates are a separate authority surface. A docs workflow may
+  edit files only after a confirmed documentation-impact decision.
+- Reports and plan updates are local file effects. Commit, push, publication,
+  external task-system mutation, and deployment remain separate approvals.
+
+## Verify the result
+
+A complete run should give you:
+
+- The target plans, frontmatter state, phase counts, and calculated progress.
+- A list of hydrated runtime items and their source-plan mappings when a live
+  surface exists.
+- Reconciled checkboxes across every phase, including backfilled earlier work.
+- Plan status derived from real checkbox state: pending, in progress, or
+  completed.
+- Verified acceptance criteria and the evidence behind completed work.
+- Blockers, stale dependencies, unmapped items, and risks kept visible.
+- A concise report with achievements, next actions, and unresolved questions.
+- An explicit documentation-impact decision and any routed follow-up.
+
+Treat sync-back as complete only when every completed item maps to a durable
+phase entry and the plan status agrees with the full checkbox sweep. Treat the
+runtime view as disposable once that durable state is current.
+
+## Troubleshoot or continue
+
+| Symptom | Safe next step |
+| --- | --- |
+| No live task surface is available | Continue directly in the active plan; runtime tracking is optional. |
+| The live view is empty after a new session | Re-hydrate only unchecked plan items and preserve their dependencies and source mappings. |
+| A later phase is complete but earlier checkboxes are stale | Sweep every phase and backfill verified earlier work in the same sync pass. |
+| A completed task has no plan mapping | Report the unmapped item and do not claim full completion until it is reconciled or explicitly resolved. |
+| Plan and runtime status disagree | Prefer the plan after checking verification evidence, then rebuild the optional runtime view. |
+| `ak plan` syntax is uncertain | Run live `ak plan --help` and the selected subcommand help; do not use remembered syntax. |
+| A docs update was suggested only because a phase ended | Record no docs impact unless user-visible behavior, a contract, architecture, security, or recovery changed. |
+| The runtime does not recognize the Skill | Confirm target and scope, restart the runtime session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Continue with `ak:cook` for remaining implementation or `ak:journal` for a
+chronological session record.
+
+## Know the current limits
+
+- Progress quality depends on accurate plan checklists and fresh verification
+  evidence.
+- Runtime task-management capabilities are discovered dynamically and may not
+  exist or persist across sessions.
+- The Skill coordinates and reports work; it does not itself prove code quality
+  without test and review evidence from the owning workflows.
+- Cursor slash invocation is user-verified evidence, not proof of full runtime
+  parity.
+- Stable and beta package the same `ak:project-management` hydration, sync-back,
+  and reporting references.

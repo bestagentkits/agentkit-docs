@@ -1,0 +1,104 @@
+---
+title: ak login
+description: Xác thực với registry AgentKit bằng license key, email OTP hoặc user API key, đồng thời hiểu rõ ranh giới lưu credential.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak login` trước khi cài hoặc cập nhật Kit remote có license. Bạn phải chọn
+một phương thức xác thực; `ak login` trần không mở trình chọn phương thức tương
+tác.
+
+## Cách dùng
+
+```bash
+ak login [flags]
+```
+
+Lệnh được công bố không có argument theo vị trí. Implementation hiện tại bỏ qua
+token theo vị trí thừa; đừng dựa vào hành vi này trong script.
+
+## Trước khi chạy
+
+Chọn một phương thức:
+
+```bash
+ak login --api-key ak_live_... --no-interactive
+ak login --email you@example.com
+ak login --license-key ak_license_... --no-interactive
+```
+
+Hãy dùng placeholder trong script được lưu hoặc đầu ra hỗ trợ. Kết quả thành
+công không in API key, license key, OTP, access token hay refresh credential.
+
+<Callout type="warning">
+  Đăng nhập bằng email luôn đọc OTP từ stdin sau khi in `Enter OTP code:` ra
+  stdout. `--json` và `--no-interactive` không bỏ prompt này. Vì vậy, trong chế
+  độ email JSON, prompt xuất hiện trước object JSON trên stdout.
+</Callout>
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--api-key <key>` | Trống | Xác thực bằng user API key từ web profile. |
+| `--device-name <name>` | Hostname | Đặt tên device do `--license-key` tạo. |
+| `--email <address>` | Trống | Bắt đầu đăng nhập email OTP rồi đọc code từ stdin. |
+| `--license-key <key>` | Trống | Kích hoạt phiên App device bằng license key. |
+| `--registry-url <url>` | Biến môi trường hoặc mặc định của bản phát hành | Ghi đè registry dùng để xác thực và kiểm tra phiên sau này. |
+
+Các cờ dùng chung được mô tả trong [quy ước CLI](../cli-conventions). `--yes`
+không có tác dụng với lệnh này. Nếu truyền nhiều cờ phương thức, thứ tự ưu tiên
+hiện tại là license key, rồi API key, rồi email; hãy chỉ truyền đúng một cờ.
+
+## Lưu credential
+
+Sau khi registry chấp nhận credential, AgentKit ghi các tệp riêng tư dưới
+`~/.agentkit/auth/` (`AGENTKIT_HOME` thay đổi thư mục gốc):
+
+| Phương thức | Slot được lưu | Secret có thể gia hạn được giữ cục bộ |
+| --- | --- | --- |
+| API key | CLI slot trong `session.json` | API key trong tệp `api-key` cùng cấp để mint lại phiên. |
+| Email OTP | CLI slot trong `session.json` | Refresh credential luân phiên; OTP dùng một lần không được lưu. |
+| License key | App slot trong `session.json` | Phiên device được trả về; license key không được lưu. |
+
+Credential được ghi atomically, dùng bảo vệ đường dẫn riêng tư và từ chối ghi
+qua symlink tại tệp credential. CLI slot và App slot có thể cùng tồn tại; đăng
+nhập CLI không thay thế phiên App device hiện có.
+
+## Đầu ra và luồng
+
+Đầu ra thành công dành cho người dùng được ghi ra stdout:
+
+```text
+[OK] logged in as you@example.com
+```
+
+JSON thành công là một envelope có phiên bản trên stdout:
+
+```json
+{"schema_version":1,"kind":"auth.login","data":{"email":"you@example.com","authMethod":"api_key","success":true}}
+```
+
+Lỗi runtime và xác thực dùng stderr; chế độ JSON phát error envelope dùng chung.
+Lỗi parse cờ xảy ra sớm hơn và có thể vẫn là hướng dẫn dùng dạng plain text.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Xác thực registry thành công và slot cục bộ đã chọn đã được lưu. | Chạy `ak whoami` và `ak licenses`. |
+| `1` | Chưa chọn phương thức, stdin OTP kết thúc, registry từ chối request, response thiếu dữ liệu hoặc lưu riêng tư thất bại. | Sửa phương thức hoặc credential rồi thử lại; không đưa secret vào log. |
+| `2` | Không parse được cờ. | Sửa cách gọi. |
+
+Lệnh không có preview, dry-run, confirmation hay đường từ chối. Dữ liệu chỉ
+được lưu sau khi response đăng nhập từ xa hợp lệ. Chạy lại login sẽ thay slot đã
+chọn; dùng `ak logout` để xoá CLI slot.
+
+## Lệnh liên quan và giới hạn
+
+- [Kiểm tra tài khoản hiện tại](./whoami)
+- [Kiểm tra Kit được cấp quyền](./licenses)
+- [Xoá credential CLI](./logout)
+- [Thông tin đầy đủ của lệnh `ak login`](../cli/ak_login)
+- [Xử lý sự cố xác thực](../../troubleshooting/authentication)
