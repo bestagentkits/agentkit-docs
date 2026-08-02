@@ -1,0 +1,155 @@
+---
+title: Engineer Kit
+description: Lập kế hoạch, triển khai, kiểm thử và review thay đổi phần mềm bằng workflow AgentKit do con người kiểm soát.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Engineer Kit giúp bạn biến một yêu cầu phần mềm chưa rõ thành thay đổi đã được
+triển khai, kiểm thử và review. Kit dành cho developer và team muốn có workflow
+lặp lại được để khám phá, lập kế hoạch, viết code, debug, xác minh và bàn giao,
+trong khi quyền phê duyệt vẫn thuộc về con người.
+
+Bạn cài một Kit cho coding assistant đã chọn, sau đó gọi Skill phù hợp với kết
+quả cần đạt. Kit cũng cung cấp Agent chuyên biệt, automation theo runtime, rules
+và các tệp hỗ trợ mà những workflow đó sử dụng.
+
+## Đây có phải Kit phù hợp?
+
+Chọn Engineer Kit khi kết quả chính là một thay đổi phần mềm hoặc công việc bảo
+trì kỹ thuật, chẳng hạn:
+
+- làm rõ yêu cầu và so sánh các hướng triển khai;
+- lập kế hoạch cho feature, bản sửa lỗi, migration hoặc refactor;
+- triển khai và xác minh một thay đổi đã được phê duyệt;
+- debug lỗi hoặc review một diff hiện có;
+- chuẩn bị công việc đã được kiểm thử cho bước bàn giao hoặc phát hành được cho
+  phép rõ ràng.
+
+Engineer Kit không thay thế coding assistant, quy ước của project, hệ thống quản
+lý phiên bản hay phán đoán của con người. Kit không làm output của model đúng
+mặc định, không tự duyệt plan, cũng không cấp quyền commit, merge, deploy hoặc
+thực hiện hành động bên ngoài. Với thay đổi nhỏ đã có acceptance criteria rõ
+ràng, bạn có thể bắt đầu từ workflow triển khai thay vì chạy mọi bước khám phá.
+
+## Một workflow điển hình do con người kiểm soát
+
+Dùng trình tự này khi yêu cầu vẫn cần được khám phá trước khi triển khai:
+
+1. Chạy `ak:brainstorm` để làm rõ outcome, constraints và hướng phù hợp.
+2. Chạy `ak:plan` để biến hướng đã chọn thành implementation plan và tiêu chí
+   xác minh.
+3. Review plan. Một người quyết định scope và rủi ro có chấp nhận được hay không.
+4. Chỉ chạy `ak:cook` sau khi phê duyệt để triển khai plan.
+
+Trong workflow thông thường, `ak:cook` đã bao gồm kiểm thử tập trung và một lượt
+code review bắt buộc. Dùng riêng `ak:test` khi cần một lượt QA rộng hơn hoặc độc
+lập, chẳng hạn UI, accessibility, end-to-end hay coverage. Dùng riêng
+`ak:code-review` để có lượt review độc lập cho thay đổi staged hoặc unstaged,
+commit, pull request hay code được tạo bên ngoài `ak:cook`.
+
+## Thành phần đi kèm
+
+Package Engineer đã resolve gồm nội dung dùng chung được kế thừa và nội dung
+riêng của Engineer. Bạn chỉ cài Engineer Kit một lần; phần nền được kế thừa là
+cơ chế composition của package, không phải một Kit công khai khác hay một lần
+cài thứ hai.
+
+| Thành phần | Số lượng đã resolve | Ranh giới composition |
+| --- | ---: | --- |
+| Agents | 16 | 10 kế thừa và 6 riêng của Engineer |
+| Skills | 98 | 59 kế thừa và 39 riêng của Engineer; đây không phải 98 Skill chỉ Engineer mới có |
+| Commands | 0 | Skill là bề mặt invocation của người dùng; Kit không có catalog command |
+| Entry trong package Hook | 44 | Tập export Hook của Engineer gồm manifest, event handler và thư viện hỗ trợ; 44 entry không có nghĩa là 44 behavior hoạt động độc lập |
+| Rules | 8 | Operating guidance được kế thừa và chuyển sang runtime khi được hỗ trợ |
+| Output styles | 6 | Hỗ trợ được kế thừa trong package; không phải style picker hoạt động trên mọi runtime |
+| Schema | 1 | Schema hỗ trợ được kế thừa |
+| Scripts | 5 | Helper hỗ trợ và lifecycle của Engineer, không phải năm command cho người dùng |
+| Statusline | 1 | Riêng của Engineer và chỉ dành cho Claude Code |
+
+Đây là số lượng trong package đã resolve. Các tệp lồng bên trong một Skill, như
+reference, template, script hoặc asset, thuộc Skill đó thay vì trở thành entry
+catalog riêng.
+
+## Khả dụng theo runtime
+
+| Runtime | Cách phân phối và ranh giới hoạt động | Cách gọi Skill |
+| --- | --- | --- |
+| Claude Code | Phân phối native là mặc định. Phân phối plugin là lựa chọn rõ ràng. Skill, Agent, rule, Hook và statusline Engineer được hỗ trợ có thể hoạt động. | `/ak:<name>` |
+| Codex | Native projection cài Skill và chuyển đổi Agent, rule cùng Hook được hỗ trợ. Hook chỉ được hỗ trợ một phần, group không được hỗ trợ có thể bị bỏ qua kèm cảnh báo và không có statusline Engineer. | `$ak:<name>` |
+| Cursor | Target được đóng package chuyển các Skill, Agent, rule và Hook được hỗ trợ. Không có statusline Engineer và phạm vi xác minh trực tiếp có thể khác nhau giữa các thiết lập provider. | Dùng bề mặt khám phá của Cursor; tài liệu này không tuyên bố một cú pháp gọi thủ công phổ quát. |
+
+Tính khả dụng phụ thuộc từng capability. Cài đặt thành công không có nghĩa mọi
+runtime có thể kích hoạt mọi thành phần trong package theo cùng một cách. Hãy
+đọc [Runtime adapter](../concepts/runtime-adapters) trước khi chọn target không
+phải mặc định hoặc giả định parity.
+
+## Cài và thử Engineer Kit
+
+Trước tiên, hãy hoàn thành [Làm quen](../getting-started/onboarding) để `ak` đã
+được cấu hình, bạn đã đăng nhập AgentKit và `ak licenses` hiển thị quyền
+Engineer Kit. Từ một project do bạn kiểm soát, cài target Claude Code native ở
+scope project:
+
+```bash
+ak kit init engineer --target claude-code
+```
+
+Review đích và phần tóm tắt cài đặt, sau đó mở một phiên Claude Code mới trong
+project đó.
+
+Với workflow đầu tiên, hãy bắt đầu bằng một feature nhỏ có kết quả mà bạn có thể
+kiểm thử:
+
+```text
+/ak:brainstorm Add a health-check endpoint with a minimal response contract
+```
+
+Khi outcome đã rõ, hãy tạo plan:
+
+```text
+/ak:plan Plan the approved health-check endpoint
+```
+
+Đọc các tệp được đề xuất, rủi ro và tiêu chí xác minh. Nếu bạn phê duyệt plan,
+hãy tiếp tục:
+
+```text
+/ak:cook Implement the approved health-check endpoint plan
+```
+
+Workflow chỉ hoàn tất sau khi bạn kiểm tra các tệp đã thay đổi, xác nhận những
+test liên quan và chấp nhận kết quả. Với scope khác, phân phối Claude plugin,
+Codex, Cursor hoặc lựa chọn Skill, hãy dùng [Cài đặt Kit](../guides/installing-kits)
+để biết chính xác các tùy chọn được hỗ trợ.
+
+## Khám phá tiếp
+
+- [Kits, Skills, Agents và Hooks](../concepts/building-blocks) giải thích cách
+  các thành phần trong package phối hợp.
+- [Runtime adapter](../concepts/runtime-adapters) so sánh ranh giới phân phối
+  của Claude Code, Codex và Cursor.
+- [Cài đặt Kit](../guides/installing-kits) trình bày scope project và người dùng,
+  phân phối Claude native và plugin, lựa chọn Skill, refresh và uninstall.
+- [Projects, artifacts và checkpoints](../concepts/projects-artifacts-checkpoints)
+  giải thích ownership, checkpoint của con người và snapshot khôi phục.
+- [Lỗi cài Kit](../troubleshooting/kit-installation) cung cấp hướng chẩn đoán an
+  toàn khi cài đặt hoặc discovery thất bại.
+- [Tham chiếu CLI](../reference/cli) cung cấp cú pháp command và flag chính xác.
+
+<Callout type="info" title="Giữ đúng scope ownership và khôi phục">
+  AgentKit chỉ quản lý các tệp cài đặt mà nó xác định được là của mình và giữ
+  nội dung không rõ nguồn gốc hoặc đã được người dùng sửa trong các thao tác
+  lifecycle thông thường. Hãy đọc [ownership và snapshot khôi
+  phục](../concepts/projects-artifacts-checkpoints) trước khi đổi delivery mode,
+  refresh hay uninstall, và dùng [Cập nhật và khôi
+  phục](../troubleshooting/updates) nếu một thao tác để lại trạng thái ngoài dự
+  kiến.
+</Callout>
+
+<Callout type="info" title="Ranh giới khả dụng">
+  Package Engineer Kit đã phát hành yêu cầu quyền sử dụng. CLI kiểm tra grant
+  Engineer Kit của tài khoản đang đăng nhập trước khi resolve package đã ký.
+  Dùng `ak licenses` để xác minh quyền truy cập. Trang tổng quan này mô tả
+  capability của package và không đưa ra tuyên bố về khả dụng thương mại.
+</Callout>
