@@ -1,0 +1,133 @@
+---
+title: Kit installation problems
+description: Diagnose Kit access, source verification, runtime targets, scope, ownership conflicts, and partial installs in a safe order.
+---
+
+Use this page when `ak kit init` or `ak kit install` fails before the target
+runtime can use the Kit.
+
+## Confirm the prerequisites
+
+```bash
+ak --version
+ak whoami --json
+ak licenses --json
+```
+
+The expected results are the intended CLI version, the intended account,
+and a grant for the Kit. A successful sign-in without the Kit in `ak licenses`
+is an access problem, not an install problem. See [Sign-in and Kit
+access](./authentication) first.
+
+## Confirm target and scope
+
+Run the install from the project that should own project-scoped content. Name
+the runtime explicitly so the destination is unambiguous:
+
+```bash
+ak kit init engineer --target claude-code
+ak kit init engineer --target codex
+```
+
+The default scope is the current project. `--global` selects the runtime's user
+scope. Installing successfully in one scope does not make the Kit visible in a
+different project or user profile.
+
+For Claude Code, project-native delivery is the default. Plugin delivery is a
+separate choice:
+
+```bash
+ak kit init engineer --target claude-code --switch-to-plugin
+ak kit init engineer --target claude-code --global --switch-to-plugin
+```
+
+The first command selects a project plugin; the second selects a user plugin.
+Do not add `--switch-to-plugin` to a Codex install.
+
+For release installs, the authenticated remote registry is the default source.
+`--local` is for an explicit development or CI source and requires `--kits-dir`
+or `AGENTKIT_KITS_DIR`; it is not a fallback for a registry failure.
+
+## Read the failure class
+
+| Result | Meaning | Next action |
+| --- | --- | --- |
+| Exit `1` | Authentication, download, verification, I/O, runtime, or another operational failure | Keep the error text and run the checks below. |
+| Exit `2` | Invalid flags, arguments, target, or destination combination | Correct the command; no install recovery is needed. |
+| Exit `3` | You declined or cancelled the install | Nothing was applied; review the preview before retrying. |
+| Exit `5` | The requested Kit was not found | Check the Kit name and selected source. |
+| Exit `6` | The existing target cannot be overwritten safely | Inspect ownership, delivery mode, and scope before changing anything. |
+
+A Codex install may still succeed while warning that an unsupported Hook group
+was omitted. This is a partial-projection warning, not an exit failure. Review
+the named event and matcher rather than retrying with `--force`. See [Runtime
+cannot find a Skill or Agent](./runtime-cannot-find-skill-or-agent) for the
+supported boundaries.
+
+When the target already contains files, do not immediately retry with
+`--force`. First determine whether the content is AgentKit-owned, belongs to
+another install mode, or contains user changes.
+
+## Check runtime health and recorded content
+
+```bash
+ak doctor --adapter claude-code --json
+ak doctor --adapter codex --json
+```
+
+Run only the adapter you targeted. Pass one of the documented adapter values:
+`claude-code`, `codex`, or `cursor`.
+An unknown `--check` name is a command error; use `ak doctor --list` for the
+names supported by the installed CLI. The `claude-code` filter also retains
+shared checks.
+
+For Claude Code content, audit the matching delivery mode:
+
+```bash
+ak audit engineer
+ak audit engineer --project-dir .
+ak audit engineer --plugin-mode --project-dir ./ak-engineer
+```
+
+The first command audits the user plugin, the second a project-native install,
+and the third a project plugin whose plugin root is `./ak-engineer`. `ak audit`
+is read-only: exit `0` is clean; exit `1` means drift or an audit failure; an
+invalid Kit argument exits `2`. Use `--strict` when a missing or unreadable
+manifest must also fail the check.
+
+## Recover a failed install
+
+Refreshes and overwrite paths use recovery snapshots. If the command prints a
+snapshot or recovery ID, inspect it before restoring:
+
+```bash
+ak backups list
+ak backups show <id>
+ak backups verify <id>
+ak backups restore <id> --dry-run
+```
+
+Only restore after the preview names the state you intend to replace. If an
+install completed but `ak audit` proves shipped content drifted, treat its
+Kit-specific refresh command as a starting point. Audit does not reconstruct
+the original runtime, scope, or Claude delivery mode: add the matching
+`--target`, `--global`, and, where applicable, `--switch-to-plugin` selectors
+before confirming. Do not add `--no-backup`, change channels, or delete a
+runtime home as a repair.
+
+Restore is replace-only, preserves unrelated files created later, and is not
+transactionally all-or-nothing. Review [Updates and recovery](./updates) before
+applying a snapshot.
+
+## Verify the result
+
+Run the adapter-specific doctor check again. Then start a new runtime session
+in the same project and verify that the expected Skill or Agent is available.
+If the install is healthy but runtime discovery still fails, continue with
+[Runtime cannot find a Skill or Agent](./runtime-cannot-find-skill-or-agent).
+
+## Related pages
+
+- [Installing Kits](../guides/installing-kits)
+- [Sign-in and Kit access](./authentication)
+- [Updates and recovery](./updates)

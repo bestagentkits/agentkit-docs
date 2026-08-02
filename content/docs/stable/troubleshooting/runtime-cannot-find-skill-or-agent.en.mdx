@@ -1,0 +1,120 @@
+---
+title: Runtime cannot find a Skill or Agent
+description: Verify the runtime, project or global scope, installed content, and supported projection when a successful install is not discoverable.
+---
+
+Use this page when Kit installation succeeds but the runtime does not list or
+recognize an expected Skill or Agent.
+
+## Match the runtime session to the install
+
+Confirm all four details from the original install output:
+
+1. Kit name.
+2. Target runtime: `claude-code` or `codex`.
+3. Scope: the current project or `--global`.
+4. Selected Skills, including any `--skills` or `--exclude-skills` filter.
+
+A project install is discovered from that project. A global install is
+discovered from the runtime's user profile. Start a new runtime session after
+installation so it loads the current inventory, and use that runtime's documented
+discovery surface.
+
+For example, invoke a Skill named `ak:cook` with the runtime-specific syntax:
+
+```text
+/ak:cook Check this project   # Claude Code
+$ak:cook Check this project   # Codex
+```
+
+Agents use a different surface. Claude Code dispatches installed subagents;
+Codex loads TOML-defined Agents and exposes their `agent_<slug>` runtime tools.
+The absence of `/` or `$` invocation syntax does not mean an Agent is missing.
+
+Check the destination that matches the selected delivery:
+
+| Delivery | Project scope | Global/user scope |
+| --- | --- | --- |
+| Claude native | `<project>/.claude/` | `~/.claude/` |
+| Claude plugin | `<project>/ak-<kit>/` | `${AGENTKIT_PLUGIN_DIR:-~/.claude/plugins}/ak-<kit>/` |
+| Codex Skills | `<project>/.agents/skills/<name>/` | `~/.agents/skills/<name>/` |
+| Codex Agents, config, and hooks | Project `.codex/` surfaces | `~/.codex/` |
+
+## Check the adapter, not only file presence
+
+```bash
+ak doctor --adapter claude-code --json
+ak doctor --adapter codex --json
+```
+
+Run the command for the target you installed. File presence alone does not prove
+that runtime registration or configuration is valid. Inspect the report's
+adapter checks and `data.healthy`; the default doctor command still exits `0`
+for an unhealthy report. On Codex, use doctor as an adapter-health signal, not
+as the only proof of the installed Skill inventory; verify discovery inside the
+runtime too.
+
+For Claude Code installs, use the matching read-only audit described in [Kit
+installation problems](./kit-installation). If audit exits `1`, resolve the
+reported drift before debugging runtime discovery.
+
+## If the install warns about an unsupported Hook
+
+On a Codex target, a successful install can warn that a Hook group uses a
+matcher for Claude tools with no equivalent in the Codex tool namespace. That
+group is not projected. This is a supported partial-projection diagnostic, not
+a hidden install failure. Other compatible Hooks and installed Skills or Agents
+remain separate results; check the rest of the install summary.
+
+For Engineer, the `PostToolUse` group with matcher
+`Agent|Task|TodoWrite|TodoRead` invoking `session-state.cjs` is not projected,
+so there is no mid-session task-state refresh from that group. Compatible
+`Edit|Write` and `*` groups remain, and task-state refresh still runs at the
+supported `Stop` and `SubagentStop` turn and subagent boundaries. Do not retry
+with `--force`, copy Claude hook configuration into Codex, or delete either
+runtime home to remove the warning.
+
+## A Codex Hook fails on Windows
+
+A Codex Hook command whose path contains spaces or `cmd.exe` metacharacters
+does not run reliably on Windows and produces a warning. Use a Codex home and
+Hook path without those characters. Do not hand-edit generated Hook
+configuration or weaken the path checks as a workaround. Keep the warning with
+your redacted diagnostics.
+
+At global scope, AgentKit merges only its owned registrations into the shared
+`~/.codex/hooks.json` and preserves foreign or user structures. Do not hand-edit
+ownership sidecars or broadly delete the shared Hooks file.
+
+## Check configuration scope
+
+From the same project directory as the runtime session, run:
+
+```bash
+ak config prefs resolve
+ak config prefs validate
+```
+
+The project file overrides user preferences. A disabled hook preference can
+change hook behavior, but it does not install a missing Skill or Agent. See
+[Configuration problems](./configuration) before editing a file.
+
+## Verify the result
+
+The issue is resolved when the adapter-specific doctor report is healthy, any
+applicable audit is clean, and a new runtime session in the intended scope lists
+or recognizes the expected item. If those checks pass but discovery still
+fails, export a redacted bundle:
+
+```bash
+ak diagnostics export --json > agentkit-diagnostics.json
+```
+
+Record the Kit, target, scope, selected Skills, and runtime version with the
+report.
+
+## Related pages
+
+- [Kit installation problems](./kit-installation)
+- [Installing Kits](../guides/installing-kits)
+- [Configuration problems](./configuration)

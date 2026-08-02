@@ -1,0 +1,93 @@
+---
+title: Runtime adapter
+description: So sánh cách AgentKit cung cấp capability được hỗ trợ cho Claude Code, Codex và Cursor.
+---
+
+Các coding assistant không dùng chung cấu trúc tệp, bộ công cụ hay mô hình
+lifecycle event. Runtime adapter chuyển một Kit thành những bề mặt mà assistant
+được chọn thực sự có thể khám phá và sử dụng.
+
+Adapter là ranh giới tương thích, không phải lời hứa về hành vi giống hệt nhau.
+Nếu runtime không có thành phần tương đương, AgentKit có thể giữ nội dung đó như
+tài liệu hỗ trợ không hoạt động, bỏ qua kèm cảnh báo hoặc báo là không được hỗ
+trợ.
+
+## Scope project và người dùng
+
+Scope trả lời câu hỏi **bản cài có hiệu lực ở đâu**:
+
+| Scope | Phạm vi khả dụng | Khi nên dùng |
+| --- | --- | --- |
+| Project | Workspace hiện tại | Kit chỉ nên đi cùng hoặc áp dụng cho một project. Đây là mặc định. |
+| Người dùng | Các thư mục người dùng của runtime | Bạn muốn Kit khả dụng trong nhiều project cho tài khoản người dùng của mình. CLI chọn scope này bằng `--global`. |
+
+Scope không quyết định quyền sở hữu repository. Bản cài theo project cho phép
+AgentKit quản lý các tệp cài đặt mà nó đã ghi nhận trong project đó; nó không làm
+cho mọi tệp trong project thuộc sở hữu của AgentKit.
+
+Bản cài theo project và người dùng có thể cùng tồn tại. Khi đó, runtime có thể
+che khuất hoặc làm trùng command hay Hook; cập nhật hoặc gỡ một scope không tự
+xóa scope còn lại. Hãy kiểm tra cả hai scope khi hành vi xuất hiện hai lần hoặc
+runtime tải một bản khác với mong đợi.
+
+## Cách phân phối native và plugin
+
+Cách phân phối trả lời câu hỏi **runtime tải bản cài như thế nào**:
+
+- **Phân phối native** ghi các thành phần được hỗ trợ vào vị trí project hoặc
+  người dùng thông thường của runtime. Đây là chế độ cài mặc định.
+- **Phân phối plugin** đóng gói và kích hoạt Kit qua cơ chế plugin của runtime.
+  Trong mô hình hiện được hỗ trợ, đây là lựa chọn riêng cho Claude Code bằng
+  `--switch-to-plugin`, ở scope project hoặc người dùng.
+
+Scope và cách phân phối độc lập với nhau. Vì vậy, Claude Code có thể dùng native
+theo project, native theo người dùng, plugin theo project hoặc plugin theo người
+dùng. Bản cài Codex và Cursor dùng cấu trúc native theo project hoặc người dùng;
+`--switch-to-plugin` không chọn cách phân phối plugin cho hai runtime này.
+
+Trong cùng một scope, phân phối native và plugin cho cùng một Claude Code Kit
+loại trừ lẫn nhau. Chọn mode còn lại sẽ bắt đầu một lần chuyển đổi rõ ràng; thao
+tác đó không để cả hai bản do AgentKit sở hữu cùng hoạt động trong scope đó.
+
+Chuyển cách phân phối là một thay đổi lifecycle. Hãy review phần preview vì
+AgentKit có thể cần hủy đăng ký cũ rồi tạo đăng ký mới trong khi vẫn giữ nội dung
+ngoài quyền sở hữu hoặc đã được sửa.
+
+## Khác biệt về capability
+
+Các adapter được hỗ trợ có chung những workflow tệp và công cụ cốt lõi, nhưng
+các bề mặt hoạt động khác nhau:
+
+| Runtime | Điều bạn nên mong đợi |
+| --- | --- |
+| Claude Code | Phân phối native hoặc plugin được chọn rõ ràng. Skills, agents, slash commands, rules, hooks và status line của AgentKit có thể hoạt động ở scope project hoặc người dùng. |
+| Codex | Khám phá Skill theo cơ chế native, rules và giao việc cho Agent qua AgentKit runtime cục bộ. Hook chỉ được hỗ trợ một phần; group không được hỗ trợ sẽ không được chuyển sang runtime, còn trạng thái task được làm mới tại ranh giới lượt làm việc và subagent được hỗ trợ thay vì sau mọi lần gọi công cụ task. Tệp command của Kit chỉ được giữ làm nội dung hỗ trợ không hoạt động và Codex không có bề mặt status line của AgentKit. |
+| Cursor | Adapter chuyển Skills, agents, rules và hooks sang scope project hoặc người dùng. Tệp command của Kit chỉ được giữ làm nội dung hỗ trợ không hoạt động, không có bề mặt status line của AgentKit và adapter không cung cấp công cụ quản lý plan chuyên biệt. Phạm vi xác minh cài đặt, cập nhật và invocation trực tiếp chưa đầy đủ trên mọi thiết lập provider, vì vậy không suy ra parity hoàn toàn chỉ từ việc source có hỗ trợ. |
+
+Một group Codex Hook không thể chuyển đổi sẽ bị bỏ qua kèm cảnh báo và không làm
+cho cài đặt thất bại. Với group trạng thái task của Engineer mà Codex không thể
+biểu diễn, việc refresh vẫn chạy tại ranh giới lượt làm việc và subagent được hỗ
+trợ, không chạy giữa phiên sau mỗi lần gọi công cụ task.
+
+Trên Windows, Codex không thể chạy ổn định lệnh Hook có đường dẫn chứa khoảng
+trắng hoặc ký tự đặc biệt của `cmd.exe`. AgentKit phát cảnh báo thay vì tạo một
+lệnh mà nó biết sẽ không chạy. Hãy giữ Codex home và đường dẫn Hook không chứa
+những ký tự đó; đừng tắt cảnh báo hoặc sửa tay cấu hình Hook được tạo ra.
+
+Không suy ra runtime được hỗ trợ chỉ từ tên tệp hoặc hành vi của runtime khác.
+Hãy dùng phần tóm tắt sau khi cài và tài liệu Skill liên quan làm căn cứ cho nội
+dung nào đã hoạt động. Cảnh báo về nội dung được giữ lại hoặc bị bỏ qua là kết
+quả capability, không nhất thiết là cài đặt thất bại.
+
+## Chọn adapter
+
+1. Chọn assistant nơi bạn sẽ chạy workflow.
+2. Chọn scope project hoặc người dùng theo nơi workflow cần khả dụng.
+3. Với Claude Code, giữ cách phân phối native trừ khi bạn chủ động muốn cơ chế
+   kích hoạt và lifecycle của plugin.
+4. Review cảnh báo của adapter sau khi cài, đặc biệt với Hooks và các bề mặt UI
+   chỉ có ở một số runtime.
+5. Bắt đầu một phiên runtime mới nếu assistant chưa tải lại nội dung vừa cài.
+
+Xem [Cài đặt Kit](../guides/installing-kits) để biết lệnh cài đặt. Xem
+[Kits, Skills, Agents và Hooks](./building-blocks) để hiểu mô hình thành phần.

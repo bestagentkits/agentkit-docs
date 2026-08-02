@@ -13,12 +13,12 @@ const copy = {
       v ? (
         <>
           You are reading docs for the <b>beta</b> channel (
-          <code>{v}</code>) — updated automatically on every beta release.
+          <code>{v}</code>). Features may change before the next stable release.
         </>
       ) : (
         <>
-          You are reading docs for the <b>beta</b> channel — updated
-          automatically on every beta release.
+          You are reading docs for the <b>beta</b> channel. Features may change
+          before the next stable release.
         </>
       ),
     link: 'Switch to stable →',
@@ -28,13 +28,13 @@ const copy = {
     lead: (v: string | null) =>
       v ? (
         <>
-          Bạn đang đọc tài liệu kênh <b>beta</b> (<code>{v}</code>) — tự động
-          cập nhật theo mỗi bản phát hành beta.
+          Bạn đang đọc tài liệu kênh <b>beta</b> (<code>{v}</code>). Tính năng
+          có thể thay đổi trước bản stable tiếp theo.
         </>
       ) : (
         <>
-          Bạn đang đọc tài liệu kênh <b>beta</b> — tự động cập nhật theo mỗi
-          bản phát hành beta.
+          Bạn đang đọc tài liệu kênh <b>beta</b>. Tính năng có thể thay đổi
+          trước bản stable tiếp theo.
         </>
       ),
     link: 'Chuyển sang stable →',

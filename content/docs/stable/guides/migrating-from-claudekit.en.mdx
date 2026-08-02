@@ -1,0 +1,165 @@
+---
+title: Migrating from ClaudeKit
+description: Preview, apply, verify, and roll back a ClaudeKit migration while preserving custom work.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Migration discovers an existing ClaudeKit setup, classifies what ClaudeKit
+owns, preserves custom content, and moves supported kits into AgentKit's managed
+lifecycle. It is a planned transition, not a broad delete-and-reinstall.
+
+## Before you start
+
+1. Run the migration from the project whose ClaudeKit content you want AgentKit
+   to inspect.
+2. Commit or back up custom instructions, skills, hooks, and other work you need
+   to keep.
+3. Close Claude Code and Codex sessions that may be using the affected files.
+4. Confirm that `ak` is authenticated and that your account has the required kit
+   entitlements with `ak whoami` and `ak licenses`.
+
+The migration scans the current project and the standard ClaudeKit user
+locations, including `~/.claude` and `~/.claudekit`. It can discover both
+project and global content, including supported Claude Code and Codex kit
+surfaces.
+
+<Callout type="warn">
+  Do not delete `~/.claude`, `~/.codex`, `~/.agentkit`, or the project's
+  `.claude` directory before migrating. Those locations may contain custom or
+  unrelated runtime state that the migration is designed to preserve.
+</Callout>
+
+## Preview the migration
+
+`ak migrate` is a dry run by default. State the source explicitly so the intent
+is clear:
+
+```bash
+ak migrate --from=ck
+```
+
+For a machine-readable report:
+
+```bash
+ak migrate --from=ck --json
+```
+
+The preview performs discovery and prints a migration plan without writing
+files. Review:
+
+- detected runtime and project/global scope;
+- ClaudeKit-owned content that can be archived, quarantined, or neutralized;
+- custom or unknown content that will be preserved;
+- AgentKit kits that will be installed;
+- conflicts that require resolution before apply.
+
+An apply is blocked while the plan contains conflicts. Resolve them and run the
+dry run again; do not bypass the review with a forced reinstall.
+
+## Choose Claude Code delivery
+
+Migration uses native Claude Code delivery unless you explicitly authorize a
+project plugin transition. If the preview and your intended install mode require
+a project plugin, use `--switch-to-plugin` in both preview and apply:
+
+```bash
+ak migrate --from=ck --switch-to-plugin
+```
+
+Do not add this flag merely because ClaudeKit used plugin-like files. Choose it
+only when the resulting AgentKit install should be a Claude Code project plugin.
+
+## Apply the reviewed plan
+
+Apply requires both `--dry-run=false` and `--yes`:
+
+```bash
+ak migrate --from=ck --dry-run=false --yes
+```
+
+For the explicitly reviewed project-plugin route:
+
+```bash
+ak migrate --from=ck --switch-to-plugin --dry-run=false --yes
+```
+
+Before replacement installation, AgentKit preflights every requested kit
+install. The operation migrates supported preferences, archives or
+quarantines authorized ClaudeKit directories, neutralizes owned integration
+surfaces, preserves custom or unknown content, and installs the corresponding
+AgentKit kits. It records recovery state before mutation.
+
+Existing AgentKit configuration values win when preferences are migrated, and
+credentials are never copied from ClaudeKit.
+
+If an apply fails, the migration is resumable by default. Read the reported
+state before choosing whether to rerun apply or roll it back.
+
+## Migrate preferences only
+
+Use the preference-only flow when you are not ready to transition kit content:
+
+```bash
+ak migrate prefs --dry-run
+ak migrate prefs --dry-run=false --yes
+```
+
+This copies supported values, keeps existing AgentKit values, excludes
+credentials, and does not delete the legacy `.ck.json` file.
+
+## Verify the result
+
+After a successful apply:
+
+1. Read the summary and confirm the expected runtime, scope, and installed kits.
+2. Reopen the affected runtime.
+3. Invoke one important Skill from each migrated kit.
+4. Review custom project instructions and hooks you expected to keep.
+5. Keep the migration recovery information until you have completed those
+   checks.
+
+A file's presence alone does not prove that a hook is registered or executing.
+Verify the observable runtime behavior before removing any preserved legacy
+content.
+
+## Roll back
+
+Use rollback to undo the newest pending migration or legacy transition:
+
+```bash
+ak migrate rollback
+```
+
+Rollback restores the newest pending legacy quarantine first, or otherwise the
+latest migration journal. If neither pending state exists, the command reports
+that there is nothing to roll back. It restores only the content recorded by
+that state; it does not reconstruct the entire pre-apply environment. Rollback
+also does not remove an installed AgentKit replacement. Preview and uninstall
+that replacement through the matching target, scope, and delivery route if you
+no longer want it.
+
+Before rollback, copy aside unrelated work created after the migration. The
+operation is not a selective undo for later edits.
+
+## If migration is interrupted
+
+Run the default dry run again first. If AgentKit reports a pending transition,
+choose one recovery path:
+
+- rerun the reviewed apply so the resumable operation can recover and finish;
+- run `ak migrate rollback` to restore the recorded pending state.
+
+A pending journal blocks a different migration transition until you resume or
+roll back the current one. A successful dry run exits `0`; invalid source or
+flags exit `2`, cancellation or missing apply confirmation exits `3`, and a
+runtime or apply failure exits `1`.
+
+Use `--force-unlock` only when the CLI specifically reports a stale migration
+lock left by a crashed process and no migration is still running. It does not
+resolve file conflicts or replace the rollback workflow.
+
+## See also
+
+- [Installing kits](./installing-kits)
+- [Updating AgentKit and kits](./updating)

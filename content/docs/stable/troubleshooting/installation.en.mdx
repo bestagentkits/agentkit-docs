@@ -1,0 +1,102 @@
+---
+title: Installation problems
+description: Diagnose installer failures, PATH problems, duplicate binaries, and unhealthy first launches without removing AgentKit state.
+---
+
+Use this page when the installer stops, `ak` is not found, the wrong binary
+runs, or the first health check fails.
+
+## The installer stops before completion
+
+Keep endpoint protection and TLS verification enabled. Retry the verified
+installer once from the release host if the primary domain is filtered:
+
+```bash
+curl -fsSL https://releases.agentkit.best/install.sh | sh
+```
+
+On Windows:
+
+```powershell
+irm https://releases.agentkit.best/install.ps1 | iex
+```
+
+From `cmd.exe`, invoke the same PowerShell installer explicitly:
+
+```bat
+powershell -NoProfile -Command "irm https://releases.agentkit.best/install.ps1 | iex"
+```
+
+The fallback uses the same verification chain. If a proxy, antivirus product,
+or network filter rejects the release object again, stop retrying and ask the
+administrator to review the block. Do not add a security exclusion or disable
+checksum verification.
+
+The supported platforms are macOS, Linux, and Windows on `amd64` or `arm64`.
+An unsupported OS, architecture, channel, or version exits the installer with
+an error before installing a binary. Installer controls such as `AK_CHANNEL`,
+`AK_VERSION`, and `AK_INSTALL_DIR` are environment variables, not installer
+flags; `AK_CHANNEL` defaults to `stable`.
+
+## The shell cannot find `ak`
+
+The default install directory is `~/.local/bin` on macOS and Linux, and
+`%USERPROFILE%\bin` on Windows. Open a new terminal, then inspect command
+resolution:
+
+```bash
+command -v ak
+ak --version
+```
+
+On Windows:
+
+```powershell
+Get-Command ak -All
+ak --version
+```
+
+If the binary exists but is not on `PATH`, add only its install directory to
+your user `PATH`. Do not move or delete AgentKit state. A successful result
+is one resolved binary and a version line from `ak --version`.
+
+## The wrong version runs
+
+Multiple old binaries on `PATH` can hide the new install. Compare every path
+reported by `Get-Command ak -All` on Windows or your shell's command lookup with
+the directory printed by the installer. Change `PATH` ordering so the intended
+binary resolves first, then open a new terminal and run:
+
+```bash
+ak --version
+ak doctor --check binary_version
+```
+
+An unknown `--check` name is a command error and exits `1`; use
+`ak doctor --list` to see the names supported by your installed release.
+
+## The binary runs but the setup is unhealthy
+
+```bash
+ak doctor --offline
+ak doctor --json
+```
+
+Start with `--offline` when network access is the suspected cause, then run the
+full check. Remember that an unhealthy default doctor report still exits `0`.
+Use the reported status and suggested action, or add `--exit-on-fail` when you
+need a failing exit code.
+
+## Recover safely
+
+Re-running the same verified installer is the supported in-place repair for the
+binary. Keep the same channel unless you intentionally want to switch. Do not
+delete `~/.agentkit` or either runtime home; they contain authentication,
+configuration, installed content, and recovery data that a binary reinstall
+does not need to replace.
+
+## Related pages
+
+- [Installation](../getting-started/installation)
+- [Updates and recovery](./updates)
+- [Configuration problems](./configuration)

@@ -1,0 +1,82 @@
+---
+title: Lỗi cấu hình
+description: Tìm preference AgentKit có hiệu lực, validate cả hai scope và chỉ bỏ override gây lỗi.
+---
+
+Dùng trang này khi một thiết lập bị bỏ qua, hoạt động khác nhau theo project
+hoặc làm hook thất bại.
+
+## Biết tệp nào được ưu tiên
+
+Preference AgentKit có thể đến từ hai tệp YAML:
+
+| Scope | Đường dẫn |
+| --- | --- |
+| User | `$AGENTKIT_HOME/config.yaml`, mặc định `~/.agentkit/config.yaml` |
+| Project | `<project>/.agentkit/config.yaml` |
+
+AgentKit deep-merge hai tệp và giá trị project được ưu tiên cho cùng key. Scope
+project được resolve từ working directory hiện tại, nên hãy chạy lệnh chẩn đoán
+từ cùng project với runtime session bị ảnh hưởng.
+
+`ak config` mở dashboard cục bộ. Nó không in preference có hiệu lực, và
+`ak config status` báo process dashboard thay vì giá trị cấu hình.
+
+## Resolve giá trị có hiệu lực
+
+```bash
+ak config prefs resolve
+ak config prefs resolve --json
+```
+
+Output nêu nguồn user và project rồi hiển thị preference đã merge. Nếu không có
+preference nào được đặt, hook dùng default tích hợp. Mã thoát `1` nghĩa là không
+thể đọc hoặc parse một tệp cấu hình.
+
+## Validate trước khi sửa
+
+```bash
+ak config prefs validate
+ak config prefs validate --file ./config.yaml
+```
+
+Lệnh đầu validate các tệp user và project đang tồn tại bằng schema nhúng trong
+CLI đã cài. Không có tệp cấu hình nào vẫn là trạng thái hợp lệ. Lệnh thứ hai
+validate một tệp được chỉ định. Thoát `0` nghĩa là không có lỗi; thoát `1` nghĩa
+là cấu hình không hợp lệ hoặc không đọc được; flag không hợp lệ thoát `2`.
+
+Warning có thể nêu cách viết cũ vẫn resolve được. Error nêu giá trị không thể
+dùng như hiện tại. Sửa dòng được báo và validate lại trước khi khởi động lại
+runtime.
+
+## Đổi một hook preference được hỗ trợ
+
+Dùng CLI thay vì xóa hoặc thay toàn bộ tệp cấu hình:
+
+```bash
+ak config prefs set hooks.simplify-gate false --scope project
+ak config prefs unset hooks.simplify-gate --scope project
+```
+
+Ví dụ này thay đổi một hook preference được phát hành. `set` nhận một key
+`hooks.*` được hỗ trợ và giá trị boolean. `unset` chỉ xóa
+override đó để giá trị fallback về scope còn lại hoặc default tích hợp. Chọn rõ
+`--scope user` hoặc `--scope project`. Các lệnh này backup rồi ghi lại
+`config.yaml` đã chọn; key không hỗ trợ, giá trị không phải boolean hoặc schema
+thất bại sẽ thoát `1`.
+
+## Khôi phục an toàn
+
+Nếu chỉnh tay làm lỗi parse, hãy giữ một bản sao tệp, chỉ sửa các dòng mà
+`validate` báo rồi chạy lại cả `validate` và `resolve`. Nếu một hook override gây
+lỗi, dùng `unset` cho key đó thay vì xóa `~/.agentkit`, `.agentkit`, `~/.claude`
+hoặc `~/.codex`.
+
+Sự cố được giải quyết khi validation thoát `0`, `resolve` hiển thị đúng nguồn và
+giá trị, và session runtime mới hoạt động như mong đợi.
+
+## Trang liên quan
+
+- [Runtime không tìm thấy Skill hoặc Agent](./runtime-cannot-find-skill-or-agent)
+- [Lỗi cài Kit](./kit-installation)
+- [Tham chiếu CLI](../reference/cli)
