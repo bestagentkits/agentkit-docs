@@ -1,7 +1,13 @@
 import type { LayoutTab } from 'fumadocs-ui/layouts/shared';
 import type * as PageTree from 'fumadocs-core/page-tree';
 
-export const productKeys = ['docs', 'kits', 'cli', 'desktop'] as const;
+export const productKeys = [
+  'docs',
+  'kits',
+  'cli',
+  'desktop',
+  'changelog',
+] as const;
 
 export type ProductKey = (typeof productKeys)[number];
 
@@ -11,12 +17,14 @@ const productLabels: Record<'en' | 'vi', Record<ProductKey, string>> = {
     kits: 'Kits',
     cli: 'CLI Reference',
     desktop: 'Desktop App',
+    changelog: 'Changelog',
   },
   vi: {
     docs: 'Tài liệu',
     kits: 'Bộ kit',
     cli: 'Tham chiếu CLI',
     desktop: 'Ứng dụng Desktop',
+    changelog: 'Nhật ký thay đổi',
   },
 };
 
@@ -26,6 +34,7 @@ function productFromUrl(url: string): ProductKey {
   if (section === 'kits') return 'kits';
   if (section === 'reference') return 'cli';
   if (section === 'desktop-app') return 'desktop';
+  if (section === 'changelog') return 'changelog';
   return 'docs';
 }
 
@@ -122,6 +131,11 @@ export function productTabs(
       title: labels.desktop,
       url: `${prefix}/desktop-app`,
       urls: urls.desktop,
+    },
+    {
+      title: labels.changelog,
+      url: `${prefix}/changelog`,
+      urls: urls.changelog,
     },
   ];
 }
