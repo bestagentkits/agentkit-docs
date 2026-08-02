@@ -1,0 +1,68 @@
+---
+title: ak skill repair
+description: Repair a verified corrupt skill runtime with a per-skill lock and explicit shared-cache recovery limits.
+---
+
+Use `ak skill repair` only after `ak skill verify` reports `corrupt`.
+
+## Usage
+
+```bash
+ak skill repair <kit>/<skill>
+```
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--kits-dir <dir>` | `AGENTKIT_KITS_DIR` or `./kits` | Select the local skill declaration. |
+
+## What repair does
+
+The command takes a non-blocking lock at
+`~/.agentkit/skills/<kit>/<skill>.lock`, verifies the environment, and acts only
+for `corrupt`:
+
+| Verified state | Behavior |
+| --- | --- |
+| `corrupt` | Remove the per-skill record, then run the install primitive. |
+| `ok` | No-op. |
+| `missing` | No-op; use `ak skill install`. |
+| `unknown` | No-op, including when `AGENTKIT_SKILL_RUNTIME=0`. |
+
+Every successful path prints `repair complete`, so verify again to distinguish a
+repair from a no-op.
+
+Repair does not delete the content-addressed cache, make a snapshot, or roll back
+the removed record if reinstall fails. It can fix a bad manifest by pointing the
+record at a ready cache. A damaged cache directory is preserved and can cause the
+reinstall to fail; there is no cache-prune command in this family. Before moving
+any reported cache hash aside, check that no other manifest references it.
+
+## Prompts, output, and exits
+
+The command never prompts and has no dry-run or force mode. Success writes
+`[OK] <kit>/<skill> repair complete` to stderr; `--json` still has no success
+object and `--quiet` does not hide the line.
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Repair completed or the verified state required no action. |
+| `1` | The lock was busy, verification failed, or remove/reinstall failed. Missing `uv` or `pnpm` during reinstall also uses `1`. |
+| `2` | The reference or flags were invalid. |
+| `4` | The source skill has no runtime block. |
+| `5` | The source kit or skill was not found. |
+
+JSON errors are structured on stderr. A busy repair also writes a human `[!]`
+line before the error envelope. Missing or extra positional arguments currently
+exit `1` through Cobra's pre-command path.
+
+## Verify after repair
+
+```bash
+ak skill verify <kit>/<skill>
+```
+
+## Related commands
+
+- [Complete `ak skill repair` facts](../cli/ak_skill_repair)
+- [Install a missing environment](../cli/ak_skill_install)
+- [Verify environment health](../cli/ak_skill_verify)

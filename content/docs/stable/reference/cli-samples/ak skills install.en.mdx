@@ -1,0 +1,91 @@
+---
+title: ak skills install
+description: Copy one local skill into the user Claude plugin tree, optionally provision its runtime, and understand force recovery limits.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak skills install` to copy one skill from a local kits tree into the
+user-level Claude plugin install root.
+
+## Usage
+
+```bash
+ak skills install <kit>/<skill>
+```
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--force` | `false` | Delete an existing destination directory before copying the source. |
+
+The canonical reference is recommended. Reference shorthands `ak:`, `ake:`, and
+`akm:` are also accepted. Source and destination roots are controlled by
+`AGENTKIT_KITS_DIR` and `AGENTKIT_PLUGIN_DIR`; this command has no
+`--kits-dir`, target, scope, or channel flag.
+
+## Resolution and disk effects
+
+For `<kit>/<skill>`, source lookup tries both `skills/<skill>` and
+`skills/ak-<skill>`. It copies regular files into:
+
+```text
+~/.claude/plugins/<kit>/skills/<skill>/
+```
+
+Directories are created with mode `0750` and copied files with `0600`.
+Non-regular entries are skipped. Symlinks are copied as file contents only when
+their resolved regular-file target stays inside the source skill root; an
+outside link fails closed.
+
+If the source has a Python or Node runtime and the runtime kill switch is not
+set, the command then provisions the singular runtime record and shared cache.
+
+## Force and recovery boundary
+
+<Callout type="warning">
+  `--force` removes the entire existing skill destination before the new copy.
+  There is no confirmation, ownership classification, snapshot, backup, or
+  rollback. A copy or runtime-install failure can leave the old content gone and
+  the new content partial or present without a ready runtime.
+</Callout>
+
+Back up user changes yourself before force. On failure, fix the local source or
+runtime dependency, remove only the partial destination you reviewed, and rerun.
+The shared runtime cache is not a backup of skill content.
+
+`--yes` and `--no-interactive` do not change behavior because the command never
+prompts. It does not contact the AgentKit registry or check entitlement, though
+runtime provisioning can contact PyPI or npm through `uv` or `pnpm`.
+
+## Output
+
+JSON success uses `kind=assets.install`:
+
+```text
+data.ref, data.kit, data.asset, data.files_written,
+data.env_installed, data.success
+```
+
+Human stdout reports the reference, file count, and whether the runtime is
+ready. `env_installed=false` can mean no runtime declaration or the kill switch
+was set.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Content was copied and any requested runtime provisioning completed. |
+| `1` | Copying, path safety, runtime provisioning, or filesystem work failed. |
+| `2` | The reference or flags were invalid. |
+| `5` | No matching local source skill was found. |
+| `6` | The destination already existed without `--force`. |
+
+For exits `2`, `5`, and `6`, the current JSON error envelope can contain
+`exit_code: 1`; trust process status. Missing or extra positional arguments are
+rejected before classification and currently exit `1`.
+
+## Related commands
+
+- [Complete `ak skills install` facts](../cli/ak_skills_install)
+- [Install only a runtime environment](../cli/ak_skill_install)
+- [Install a scoped runtime route](./kit-init)

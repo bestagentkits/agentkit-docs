@@ -1,0 +1,94 @@
+---
+title: ak skill install
+description: Provision one skill's pinned Python or Node environment, shared cache, and local runtime record.
+---
+
+Use `ak skill install` after the skill content already exists in a local kits
+tree and you need its declared Python or Node environment.
+
+## Usage
+
+```bash
+ak skill install <kit>/<skill>
+```
+
+Exactly one canonical reference is required. The command reads
+`<kits-dir>/<kit>/skills/<skill>/skill.yaml` directly; the skill does not need
+to be listed in `kit.yaml` exports.
+
+## Option
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--kits-dir <dir>` | `AGENTKIT_KITS_DIR` or `./kits` | Select the local kits source. |
+
+Shared flags are described in [CLI conventions](../cli-conventions). The command
+never prompts; `--yes` and `--no-interactive` do not change its mutation policy.
+
+## What it writes
+
+For a new runtime hash, AgentKit stages the environment beside the cache and
+renames it into place after the tools complete. It then writes the per-skill
+manifest atomically:
+
+```text
+~/.agentkit/cache/<runtime-hash>/{venv,node_modules}/
+~/.agentkit/skills/<kit>/<skill>/.manifest.json
+```
+
+A ready cache is reused. There is no backup or rollback snapshot, but a failed
+new cache population removes its staging directory. A legacy `install.sh` is
+not executed; when found, its path is reported as a warning on stderr.
+
+## Package and network policy
+
+Python uses `uv`; Node uses `pnpm`. `uv` can also resolve the requested Python
+runtime before package installation. Package specs must be exact pins such as
+`pypdf==5.1.0` or `zod@3.24.1`. AgentKit fixes package sources to public PyPI
+and npm, removes common registry override variables, rejects URL/VCS, local-file,
+flag-injection, and unsafe specs, and passes `--ignore-scripts` to pnpm.
+
+The command does not contact the AgentKit kit registry and performs no account
+or entitlement check. Package-manager network access is still possible.
+
+## Output and automation
+
+Success writes this form to stderr and leaves stdout empty:
+
+```text
+[OK] <kit>/<skill> env installed
+```
+
+This remains true with `--json` and `--quiet`; there is no JSON success envelope.
+JSON execution failures use a structured error envelope on stderr. Capture the
+two streams separately.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The record was written or a ready cache was reused. Opt-out and unsupported-only runtime declarations can also complete as no-ops. |
+| `1` | Parsing, path validation, tool execution, package policy, or filesystem work failed. |
+| `2` | The single reference was malformed, or flags were invalid. |
+| `4` | `uv` or `pnpm` was missing, or the skill declared no supported runtime block. |
+| `5` | The local kit or skill manifest was not found. |
+
+Cobra rejects a missing or extra positional argument before the command's
+classified renderer; that path currently exits `1`. Do not use it as an
+argument-validation contract.
+
+## Verify and recover
+
+```bash
+ak skill verify <kit>/<skill>
+```
+
+If installation fails, correct the declaration or tool dependency and rerun.
+Do not delete a shared cache hash until you have checked whether other skill
+records reference it.
+
+## Related commands
+
+- [Complete `ak skill install` facts](../cli/ak_skill_install)
+- [Install skill content](../cli/ak_skills_install)
+- [Run a skill](../cli/ak_run)

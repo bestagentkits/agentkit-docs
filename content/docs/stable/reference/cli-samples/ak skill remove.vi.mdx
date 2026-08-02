@@ -1,0 +1,66 @@
+---
+title: ak skill remove
+description: Xoá runtime record của một skill nhưng giữ shared package cache và nêu rõ giới hạn với record mồ côi.
+---
+
+Dùng `ak skill remove` để tách một skill khỏi runtime cache cục bộ mà không xoá
+dữ liệu cache có thể đang được skill khác dùng chung.
+
+## Cách dùng
+
+```bash
+ak skill remove <kit>/<skill>
+```
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--kits-dir <dir>` | `AGENTKIT_KITS_DIR` hoặc `./kits` | Chọn local source dùng để xác minh skill và block `runtime:`. |
+
+Lệnh resolve source `skill.yaml` trước. Vì vậy, lệnh không thể dọn orphan record
+sau khi source skill biến mất hoặc mất block runtime; các trạng thái đó trả về
+`5` hoặc `4` trước khi xoá.
+
+## Hành vi trên đĩa và khôi phục
+
+Thao tác xoá có tính idempotent và chỉ giới hạn ở:
+
+```text
+~/.agentkit/skills/<kit>/<skill>/
+```
+
+Lệnh không xoá `~/.agentkit/cache/<runtime-hash>/`, nội dung skill hay tệp Kit.
+Không có prompt, preview, backup hoặc rollback. Với
+`AGENTKIT_SKILL_RUNTIME=0`, runtime deletion bị bỏ qua nhưng lệnh vẫn báo hoàn
+tất.
+
+Để khôi phục record đã xoá, hãy cài lại từ local declaration không đổi:
+
+```bash
+ak skill install <kit>/<skill>
+ak skill verify <kit>/<skill>
+```
+
+Install có thể tái sử dụng cache còn được giữ.
+
+## Đầu ra và mã thoát
+
+Khi thành công, lệnh ghi `[OK] <kit>/<skill> record removed` ra stderr và để
+stdout trống, kể cả với `--json` hoặc `--quiet`. Lỗi JSON dùng error envelope có
+cấu trúc trên stderr.
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Record đã bị xoá hoặc vốn không tồn tại; kill-switch no-op cũng trả `0`. |
+| `1` | Parse hoặc thao tác filesystem thất bại. |
+| `2` | Reference hoặc cờ không hợp lệ. |
+| `4` | Source skill không có block runtime. |
+| `5` | Không tìm thấy source kit hoặc skill. |
+
+Argument theo vị trí bị thiếu hoặc thừa được Cobra từ chối trước đường có phân
+loại và hiện thoát `1`.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skill remove`](../cli/ak_skill_remove)
+- [Xoá nội dung skill đã cài](../cli/ak_skills_remove)
+- [Xác minh runtime environment](../cli/ak_skill_verify)

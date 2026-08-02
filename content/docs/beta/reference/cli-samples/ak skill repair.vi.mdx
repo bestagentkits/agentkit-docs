@@ -1,0 +1,68 @@
+---
+title: ak skill repair
+description: Sửa runtime của skill đã được xác minh là corrupt bằng lock theo skill và ranh giới khôi phục shared cache rõ ràng.
+---
+
+Chỉ dùng `ak skill repair` sau khi `ak skill verify` trả về `corrupt`.
+
+## Cách dùng
+
+```bash
+ak skill repair <kit>/<skill>
+```
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--kits-dir <dir>` | `AGENTKIT_KITS_DIR` hoặc `./kits` | Chọn declaration cục bộ của skill. |
+
+## Repair làm gì
+
+Lệnh lấy non-blocking lock tại `~/.agentkit/skills/<kit>/<skill>.lock`, verify
+môi trường và chỉ hành động với `corrupt`:
+
+| Trạng thái verify | Hành vi |
+| --- | --- |
+| `corrupt` | Xoá record theo skill, rồi chạy primitive install. |
+| `ok` | No-op. |
+| `missing` | No-op; hãy dùng `ak skill install`. |
+| `unknown` | No-op, kể cả khi có `AGENTKIT_SKILL_RUNTIME=0`. |
+
+Mọi đường thành công đều in `repair complete`, vì vậy hãy verify lại để phân
+biệt repair thật với no-op.
+
+Repair không xoá content-addressed cache, không tạo snapshot và không rollback
+record đã xoá nếu reinstall thất bại. Lệnh có thể sửa manifest sai bằng cách trỏ
+record đến cache sẵn sàng. Cache directory bị hỏng vẫn được giữ và có thể làm
+reinstall thất bại; family này chưa có lệnh cache-prune. Trước khi chuyển một
+cache hash được báo cáo sang nơi khác, hãy kiểm tra không còn manifest nào tham
+chiếu nó.
+
+## Prompt, đầu ra và mã thoát
+
+Lệnh không hỏi xác nhận và không có dry-run hay force mode. Khi thành công, lệnh
+ghi `[OK] <kit>/<skill> repair complete` ra stderr; `--json` vẫn không có success
+object và `--quiet` không ẩn dòng này.
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Repair hoàn tất hoặc trạng thái verify không cần hành động. |
+| `1` | Lock đang bận, verify thất bại hoặc remove/reinstall thất bại. Thiếu `uv` hay `pnpm` khi reinstall cũng dùng `1`. |
+| `2` | Reference hoặc cờ không hợp lệ. |
+| `4` | Source skill không có block runtime. |
+| `5` | Không tìm thấy source kit hoặc skill. |
+
+Lỗi JSON có cấu trúc trên stderr. Repair đang bận còn ghi một dòng `[!]` cho
+người dùng trước error envelope. Argument theo vị trí bị thiếu hoặc thừa hiện
+thoát `1` qua đường pre-command của Cobra.
+
+## Xác minh sau repair
+
+```bash
+ak skill verify <kit>/<skill>
+```
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skill repair`](../cli/ak_skill_repair)
+- [Cài môi trường còn thiếu](../cli/ak_skill_install)
+- [Xác minh sức khoẻ môi trường](../cli/ak_skill_verify)

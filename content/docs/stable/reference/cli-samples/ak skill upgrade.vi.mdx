@@ -1,0 +1,63 @@
+---
+title: ak skill upgrade
+description: Tính lại hash của runtime declaration đã sửa, provision cache entry mới và giữ dữ liệu shared cache cũ.
+---
+
+Dùng `ak skill upgrade` sau khi thay đổi declaration `runtime:` của skill.
+
+## Cách dùng
+
+```bash
+ak skill upgrade <kit>/<skill>
+```
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--kits-dir <dir>` | `AGENTKIT_KITS_DIR` hoặc `./kits` | Chọn local declaration cần tính hash. |
+
+## Ngữ nghĩa upgrade
+
+Runtime hash bao gồm version/package Python và version/package Node sau chuẩn
+hoá. Thứ tự package không ảnh hưởng hash.
+
+- Manifest khớp là no-op.
+- Manifest còn thiếu được xử lý như lần cài đầu.
+- Declaration thay đổi sẽ provision hoặc tái sử dụng hash mới rồi cập nhật
+  `.manifest.json` một cách atomic.
+- Cache hash cũ được giữ vì skill khác có thể đang dùng.
+
+Lệnh không hỏi package registry về release mới nếu declaration không đổi. Hãy
+đổi exact package pin trong `skill.yaml` trước. Provisioning dùng cùng source
+PyPI/npm cố định và package-policy gate như `ak skill install`.
+
+Không có prompt, dry-run, force, backup, rollback hoặc per-skill upgrade lock.
+Lần populate cache mới thất bại sẽ dọn staging directory, còn record trước đó
+được giữ trừ khi bước refresh manifest cuối đã thành công.
+
+## Đầu ra và mã thoát
+
+Khi thành công, lệnh ghi `[OK] <kit>/<skill> upgrade complete` ra stderr và để
+stdout trống, kể cả với `--json` hoặc `--quiet`.
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Declaration mới đã active, vốn đã khớp hoặc runtime management đang opt out. |
+| `1` | Manifest hiện tại không đọc được, hoặc validation, tool, package hay filesystem thất bại. |
+| `2` | Reference hoặc cờ không hợp lệ. |
+| `4` | Thiếu tool cần thiết hoặc source skill không có block runtime. |
+| `5` | Không tìm thấy source kit hoặc skill. |
+
+Lỗi JSON dùng envelope có cấu trúc trên stderr. Argument theo vị trí bị thiếu
+hoặc thừa bị từ chối trước phân loại và hiện thoát `1`.
+
+## Xác minh record mới
+
+```bash
+ak skill verify <kit>/<skill>
+```
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skill upgrade`](../cli/ak_skill_upgrade)
+- [Cài runtime environment](../cli/ak_skill_install)
+- [Sửa corruption](../cli/ak_skill_repair)

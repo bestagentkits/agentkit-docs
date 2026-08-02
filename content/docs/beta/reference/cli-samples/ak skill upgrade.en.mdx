@@ -1,0 +1,64 @@
+---
+title: ak skill upgrade
+description: Re-hash an edited runtime declaration, provision its new cache entry, and preserve old shared cache data.
+---
+
+Use `ak skill upgrade` after changing a skill's `runtime:` declaration.
+
+## Usage
+
+```bash
+ak skill upgrade <kit>/<skill>
+```
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--kits-dir <dir>` | `AGENTKIT_KITS_DIR` or `./kits` | Select the local declaration to hash. |
+
+## Upgrade semantics
+
+The runtime hash covers normalized Python version/packages and Node
+version/packages. Package order does not affect it.
+
+- A matching manifest is a no-op.
+- A missing manifest behaves like first-time install.
+- A changed declaration provisions or reuses the new hash and atomically
+  refreshes `.manifest.json`.
+- The old cache hash is preserved because other skills may use it.
+
+This command does not ask a package registry for a newer release when the
+declaration is unchanged. Change the exact package pin in `skill.yaml` first.
+Provisioning uses the same fixed PyPI/npm sources and package-policy gates as
+`ak skill install`.
+
+There is no prompt, dry-run, force, backup, rollback, or per-skill upgrade lock.
+A failed new-cache population cleans its staging directory, but the previous
+record remains unless the final manifest refresh succeeded.
+
+## Output and exits
+
+Success writes `[OK] <kit>/<skill> upgrade complete` to stderr and leaves stdout
+empty, including under `--json` or `--quiet`.
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The new declaration is active, already matched, or runtime management was opted out. |
+| `1` | The existing manifest was unreadable, or validation, tool, package, or filesystem work failed. |
+| `2` | The reference or flags were invalid. |
+| `4` | A required tool was missing or the source skill has no runtime block. |
+| `5` | The source kit or skill was not found. |
+
+JSON errors use a structured envelope on stderr. Missing or extra positional
+arguments are rejected before classification and currently exit `1`.
+
+## Verify the new record
+
+```bash
+ak skill verify <kit>/<skill>
+```
+
+## Related commands
+
+- [Complete `ak skill upgrade` facts](../cli/ak_skill_upgrade)
+- [Install a runtime environment](../cli/ak_skill_install)
+- [Repair corruption](../cli/ak_skill_repair)

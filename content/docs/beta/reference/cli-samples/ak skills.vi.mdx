@@ -1,0 +1,79 @@
+---
+title: ak skills
+description: Duyệt nội dung skill cục bộ, cài vào user Claude plugin root và tách vòng đời đó khỏi runtime environment.
+---
+
+Dùng `ak skills` cho nội dung skill cục bộ và thao tác catalog. Namespace số
+nhiều này tách biệt với `ak skill`, nơi quản lý Python và Node runtime record
+cho một skill.
+
+## Cách dùng
+
+```bash
+ak skills <command>
+```
+
+Bản thân group chỉ đọc và in help khi không có lệnh con.
+
+## Chọn lệnh
+
+| Mục tiêu | Lệnh |
+| --- | --- |
+| Xem quan hệ workflow | `ak skills graph` |
+| Copy một local skill vào user install root | `ak skills install <kit>/<skill>` |
+| Liệt kê skill đã cài và có sẵn cục bộ | `ak skills list` |
+| Xoá một bản đã cài | `ak skills remove <kit>/<skill>` |
+| Tìm metadata cục bộ | `ak skills search <query>` |
+| Xem một record đã cài hoặc có sẵn | `ak skills show <kit>/<skill>` |
+
+Hãy dùng reference chuẩn `<kit>/<skill>` trong script. Các lệnh `install`,
+`remove` và `show` cũng nhận shorthand đầu vào `ak:<skill>`, `ake:<skill>` và
+`akm:<skill>` cho `core`, `engineer` và `marketing`; đây là shorthand reference,
+không phải Cobra command alias.
+
+## Source và destination cục bộ
+
+Family này không resolve Kit release từ AgentKit registry từ xa. Nó đọc nội
+dung có sẵn từ `AGENTKIT_KITS_DIR` hoặc `./kits`, và nội dung đã cài từ
+`AGENTKIT_PLUGIN_DIR` hoặc `~/.claude/plugins`.
+
+`ak skills install` ghi đường dẫn user-level sau bất kể project hoặc runtime
+target hiện tại:
+
+```text
+~/.claude/plugins/<kit>/skills/<skill>/
+```
+
+Hãy dùng `ak kit init` hoặc `ak kit install` khi cần remote resolution có xác
+thực, entitlement, project/global scope hoặc chọn target Claude/Codex/Cursor.
+
+## Runtime handoff và an toàn
+
+Cài nội dung có runtime cũng gọi singular runtime manager trừ khi
+`AGENTKIT_SKILL_RUNTIME=0`. Xoá nội dung sẽ xoá runtime record tương ứng trước,
+nhưng luôn giữ shared package cache.
+
+Không có prompt xác nhận hay recovery snapshot. `--force` xoá content directory
+hiện tại trước khi copy; remove xoá trực tiếp. Các thao tác nhiều bước này không
+phải rollback transaction.
+
+## Đầu ra tự động hoá
+
+Các lệnh lá số nhiều dùng JSON success envelope có version trên stdout:
+
+```text
+schema_version: 1
+kind: assets.list | assets.show | assets.install | assets.remove | skills.graph
+data: command-specific payload
+```
+
+Lỗi dùng stderr. Với reference sai dạng, record không tồn tại và install
+conflict, JSON error envelope hiện có thể ghi `exit_code: 1` dù process thoát
+`2`, `5` hoặc `6`; hãy gate bằng process status.
+
+## Lệnh liên quan
+
+- [Quản lý runtime environment theo skill](../cli/ak_skill)
+- [Cài một Kit route đã review](./kit-init)
+- [Chạy một skill](../cli/ak_run)
+- [Quy ước CLI](../cli-conventions)
