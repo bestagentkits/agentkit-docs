@@ -1,0 +1,83 @@
+---
+title: ak new
+description: Create an AgentKit project and optionally install kits from local or remote sources.
+---
+
+`ak new` creates a project directory, writes its ownership manifest, and can place selected kits in the project.
+
+## Syntax
+
+```bash
+ak new <project-name> [options]
+```
+
+## Before you run
+
+- Choose a lowercase name containing letters, digits, hyphens, or underscores. It must start with a letter or digit.
+- The default source is the remote registry. Remote resolution can authenticate, check entitlements, download content, and update the local cache before the project directory is changed.
+- Use `--local` only for an explicit development source. `--remote` and `--local` cannot be combined.
+- `--force` permits an occupied destination; it does not clear the directory or overwrite colliding files.
+- The command does not prompt or read stdin.
+
+## Arguments
+
+`<project-name>` is both the project name and the destination directory. The command has no aliases.
+
+## Options
+
+| Option | Default | Purpose |
+| --- | --- | --- |
+| `--channel <channel>` | `stable` | Select the release channel. |
+| `--force` | `false` | Permit an occupied destination. Existing files remain protected. |
+| `--kits <names>` | Empty | Install a comma-separated kit selection. |
+| `--kits-dir <path>` | Empty | Read kits from a local directory. |
+| `--local` | `false` | Use the local kit source. |
+| `--registry-url <url>` | Empty | Override the remote registry URL. |
+| `--remote` | `true` | Use the remote registry. |
+| `--template <name>` | Empty | Select a project template. |
+| `--version <version>` | Empty | Pin the requested kit version. |
+
+There is no dry-run mode. Global `--yes` and `--no-interactive` do not relax file protection.
+
+## Examples
+
+Create a project without kits:
+
+```bash
+ak new sample-project
+```
+
+Create one from selected remote kits:
+
+```bash
+ak new sample-project --kits core,review --channel stable
+```
+
+Use a local development source:
+
+```bash
+ak new sample-project --local --kits-dir ./kits --kits core
+```
+
+## Output and streams
+
+Human output reports created files and any snapshot. With `--json`, stdout uses the shared envelope with `"kind": "new"`. Its `data` object contains `project`, `dir`, `files_written`, and `manifest_version`; `snapshot` and `fallback_notes` appear when applicable. Errors go to stderr. Flag and argument parsing errors are plain text.
+
+## Exit status
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Project creation completed. |
+| `1` | Source, authentication, entitlement, validation, or file writing failed. This currently includes an invalid project or template name. |
+| `2` | Cobra rejected flags or argument count, or local and remote modes conflict. |
+| `6` | The destination is occupied and `--force` was not supplied. |
+
+## Effects, safety, and recovery
+
+All requested remote kits are resolved before project filesystem mutation. The command then writes files sequentially with exclusive creation, records ownership, and may add the project to the global registry. Registry and script-audit recording failures do not fail creation.
+
+An existing AgentKit project can receive a snapshot before a forced attempt. A non-AgentKit directory does not. Collisions can therefore leave a partially created project even with `--force`; unknown files are preserved and there is no automatic rollback. Inspect the reported files and any snapshot before retrying.
+
+## Related commands and limitations
+
+Use [`ak init`](./init) to initialize an existing directory and [`ak update`](./update) to refresh owned files. See [CLI conventions](../cli-conventions) for shared output controls. `ak new` does not run installed kits as runtime emitters.

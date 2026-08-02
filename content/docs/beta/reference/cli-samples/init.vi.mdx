@@ -1,0 +1,140 @@
+---
+title: ak init
+description: Đăng ký ownership cho project hiện có, preview việc tiếp nhận và xử lý drift mà không ghi đè nội dung project.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak init` để đăng ký một thư mục hiện có làm project AgentKit. Lệnh phát
+hiện tệp do AgentKit quản lý, ghi hash vào `.agentkit/ownership.json` và không
+cài Kit.
+
+## Cú pháp
+
+```bash
+ak init [dir] [options]
+```
+
+## Đối số
+
+`dir` là đối số tuỳ chọn và được phân giải thành đường dẫn tuyệt đối; nếu bỏ
+qua, lệnh dùng thư mục hiện tại. Thư mục phải tồn tại. Dùng
+[`ak new`](./new) để tạo thư mục mới. Lệnh không có alias.
+
+## Trước khi chạy
+
+Hãy preview trước khi tiếp nhận tệp hiện có:
+
+```bash
+ak init ./my-project --dry-run
+```
+
+Lệnh phát hiện tệp regular trên các bề mặt AgentKit, `kits` và `.claude` của
+project. AgentKit home toàn cục nằm lồng trong project sẽ bị loại khỏi ownership.
+
+## Tuỳ chọn
+
+| Tuỳ chọn | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--dry-run` | `false` | Phân loại và báo việc tiếp nhận mà không ghi snapshot, manifest, audit hay registry. |
+| `--force` | `false` | Chấp nhận drift hiện có rồi tiếp tục cập nhật bản ghi ownership. |
+| `--no-backup` | `false` | Bỏ qua protected pre-init snapshot của Claude home không rỗng. |
+| `--project-id <id>` | Tên thư mục | Đặt project ID trong lần khởi tạo đầu tiên. |
+
+Xem [quy ước CLI](../cli-conventions) để biết các cờ dùng chung về đầu ra và
+tương tác.
+
+## Ví dụ
+
+```bash
+ak init
+ak init ./my-project
+ak init ./my-project --dry-run --json
+ak init ./my-project --force --no-interactive
+```
+
+## Hành vi TTY và xác nhận
+
+TTY dành cho người dùng mở wizard một bước, trừ khi có `--json`, `--quiet`
+hoặc `--no-interactive`. Enter xác nhận; `q`, Esc hoặc Ctrl-C huỷ trước khi
+khởi tạo và hiện thoát `1`.
+
+<Callout type="warning">
+  Chỉ `--yes` không bỏ qua wizard. Chế độ JSON, quiet, noninteractive và đầu
+  ra không phải TTY bỏ qua prompt rồi ghi ngay, trừ khi có `--dry-run`.
+</Callout>
+
+## Drift, force và dry-run
+
+Lần chạy lại xác minh hash của mọi tệp được theo dõi. Drift thoát `6` nếu thiếu
+`--force`. Force chấp nhận và báo drift; cờ này không ghi đè tệp đã sửa. Tệp
+managed mới được phát hiện sau đó có thể được thêm vào ownership.
+
+Dry-run không ghi dữ liệu và không tạo snapshot. Với project đã có manifest,
+lần chạy thường tạo pre-init snapshot trước khi xác minh drift, nên mã `6` vẫn
+có thể để lại recovery snapshot mới.
+
+## Đầu ra và các luồng
+
+Kết quả thành công dạng human/script nằm trên stdout và báo project ID, đường
+dẫn, số tệp tracked/adopted, drift cùng snapshot ID nếu có. `--no-backup` ghi
+cảnh báo trên stderr. Frame TUI dùng terminal; thông báo huỷ ghi trên stderr.
+
+JSON thành công là một envelope trên stdout:
+
+```text
+schema_version: 1
+kind: init
+data.dir: string
+data.project_id: string
+data.manifest_version: integer
+data.files_adopted: integer
+data.files_tracked: integer
+data.drifted_files: array, optional
+data.snapshot: string, optional
+data.claude_snapshot: string, optional
+data.dry_run: boolean, optional
+```
+
+Lỗi thực thi trong chế độ JSON dùng error envelope có cấu trúc trên stderr. Lỗi
+phân tích cờ có thể vẫn là plain text.
+
+## Mã thoát
+
+| Mã | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Khởi tạo hoặc dry-run rõ ràng đã hoàn tất. | Xem lại đường dẫn được tiếp nhận và manifest. |
+| `1` | Lỗi thư mục, I/O, manifest, snapshot hoặc huỷ TTY. | Đọc lỗi và kiểm tra snapshot đã tạo trước khi thử lại. |
+| `2` | Argument hoặc cờ không hợp lệ. | Sửa cách gọi lệnh. |
+| `6` | Tệp tracked bị drift và thiếu `--force`. | Xem lại tệp được nêu; chỉ dùng `--force` để chấp nhận nội dung hiện tại. |
+
+## Tác động, ownership và khôi phục
+
+Lần chạy đầu tạo atomically ownership manifest và ghi nhận tệp được phát hiện
+mà không đổi nội dung của chúng. Lần chạy non-dry thành công còn ghi local
+script-audit snapshot và thử thêm project vào global project registry. Hai thao
+tác sau là best-effort: lỗi của chúng không đổi mã thoát `0`.
+
+Với manifest hiện có, AgentKit tạo pre-init state snapshot. Lệnh còn tạo
+protected full-scope snapshot của Claude home không rỗng, trừ khi có
+`--no-backup`. Hãy kiểm tra ID được báo trước khi khôi phục:
+
+```bash
+ak backups show <id>
+ak backups verify <id>
+```
+
+Snapshot chỉ bao phủ các bề mặt AgentKit/Claude được ghi nhận, không phải toàn
+bộ máy. Không xoá project hoặc runtime home để khôi phục.
+
+## Lệnh liên quan và giới hạn
+
+- [Cấu hình AgentKit](./setup)
+- [Tạo project mới](./new)
+- [Cài Kit](./kit-init)
+- [Cập nhật tệp project thuộc quyền quản lý](./update)
+- [Gỡ project AgentKit](./uninstall)
+
+`ak init` chỉ ghi ownership. Lệnh không xác thực, không liên hệ Kit registry,
+không resolve entitlement, không tải artifact, không ghi Kit cache và không
+khởi chạy process bên ngoài.

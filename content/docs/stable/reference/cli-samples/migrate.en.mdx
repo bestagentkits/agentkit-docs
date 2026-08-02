@@ -1,0 +1,79 @@
+---
+title: ak migrate
+description: Plan, apply, or roll back migration from supported legacy AgentKit layouts.
+---
+
+`ak migrate` discovers supported legacy content, plans a transition, and applies it only after explicit authorization.
+
+## Syntax
+
+```bash
+ak migrate [options]
+ak migrate rollback
+```
+
+## Arguments
+
+The documented command has no positional arguments or aliases. Extra positional tokens are currently ignored.
+
+## Before you run
+
+- Dry-run is the default. Apply requires both `--dry-run=false` and global `--yes`.
+- The command never prompts or opens a TTY wizard. JSON and `--no-interactive` do not change mutation rules.
+- Apply mode can migrate preferences before later discovery or conflict checks. A later failure can therefore leave a partial migration.
+- A remote replacement kit can authenticate, check entitlement, use the network, and update the cache. Dry-run does not materialize the remote kit.
+
+## Options
+
+| Option | Default | Purpose |
+| --- | --- | --- |
+| `--dry-run` | `true` | Plan without applying the main transition. |
+| `--force-unlock` | `false` | Remove a stale migration lock during apply. |
+| `--from <source>` | `ck` | Select the supported legacy source. |
+| `--switch-to-plugin` | `false` | Authorize project Claude plugin delivery. |
+
+## Examples
+
+Preview migration:
+
+```bash
+ak migrate
+```
+
+Apply the plan:
+
+```bash
+ak migrate --dry-run=false --yes
+```
+
+Roll back the newest recoverable transition:
+
+```bash
+ak migrate rollback
+```
+
+## Output and streams
+
+JSON output is a command-specific object, not the shared envelope. Stdout contains `schema_version: 1` and a `status` object with `from`, `dry_run`, `status`, `message`, `schema_version`, and optional `backup_id`. Generic migrations add `discovery`, optional `plan`, `transition_preview`, `terminal`, and `prefs`. Legacy migrations use `legacy_discovery`, `legacy_plan`, optional `legacy_terminal`, and `prefs`.
+
+Status values include `planned`, `completed`, `failed`, and `no_candidates`. A failed apply can print the failed JSON status to stdout and a human failure line to stderr. Errors that occur before result construction can be plain text on stderr without a JSON error object. Human progress uses stdout; failures use stderr.
+
+## Exit status
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Preview, migration, preference-only migration, rollback, or no-op rollback completed. |
+| `1` | Discovery, snapshot, runtime, apply, or partial migration failed. |
+| `2` | Flags or the migration source are invalid. |
+| `3` | Apply lacked `--yes`, or unresolved conflicts block the transition. |
+| `5` | Apply found neither a migratable source nor preferences to migrate. |
+
+## Effects, safety, and recovery
+
+Apply mode first recovers a pending legacy transition when possible, then discovers content in supported Claude, ClaudeKit, project, and Codex locations. A generic transition snapshots the AgentKit target, excluding its backups root, before sequential writes and preserves its journal. A legacy transition can archive, quarantine, or neutralize authorized legacy content and install an AgentKit replacement.
+
+Failures preserve pending state or a journal for resume or rollback. `ak migrate rollback` acts immediately without prompting, chooses the newest recoverable transition, restores recorded content, and removes a completed journal. It does not remove an AgentKit replacement installed during a legacy transition. There is no option to select a backup or journal by ID.
+
+## Related commands and limitations
+
+Run [`ak doctor`](./doctor) after a partial transition. Use [`ak setup`](./setup) to review configuration and authentication after migration. `--force-unlock` only affects apply mode and should be reserved for a verified stale lock.

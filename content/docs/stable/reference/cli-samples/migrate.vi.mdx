@@ -1,0 +1,79 @@
+---
+title: ak migrate
+description: Lập kế hoạch, áp dụng hoặc rollback việc di chuyển từ bố cục AgentKit cũ được hỗ trợ.
+---
+
+`ak migrate` phát hiện nội dung cũ được hỗ trợ, lập kế hoạch chuyển đổi và chỉ áp dụng sau khi được cho phép rõ ràng.
+
+## Cú pháp
+
+```bash
+ak migrate [options]
+ak migrate rollback
+```
+
+## Đối số
+
+Lệnh được tài liệu hóa không có đối số vị trí hoặc alias. Hiện tại, token vị trí bổ sung bị bỏ qua.
+
+## Trước khi chạy
+
+- Dry-run là mặc định. Áp dụng cần cả `--dry-run=false` và cờ toàn cục `--yes`.
+- Lệnh không bao giờ hiển thị lời nhắc hoặc mở trình hướng dẫn TTY. JSON và `--no-interactive` không thay đổi quy tắc ghi.
+- Chế độ áp dụng có thể di chuyển tùy chọn trước bước phát hiện hoặc kiểm tra xung đột sau đó. Vì vậy, lỗi ở bước sau có thể để lại di chuyển một phần.
+- Kit thay thế từ xa có thể xác thực, kiểm tra quyền sử dụng, dùng mạng và cập nhật cache. Dry-run không hiện thực hóa kit từ xa.
+
+## Tùy chọn
+
+| Tùy chọn | Mặc định | Mục đích |
+| --- | --- | --- |
+| `--dry-run` | `true` | Lập kế hoạch mà không áp dụng chuyển đổi chính. |
+| `--force-unlock` | `false` | Xóa lock di chuyển cũ trong chế độ áp dụng. |
+| `--from <source>` | `ck` | Chọn nguồn cũ được hỗ trợ. |
+| `--switch-to-plugin` | `false` | Cho phép phân phối plugin Claude cho dự án. |
+
+## Ví dụ
+
+Xem trước di chuyển:
+
+```bash
+ak migrate
+```
+
+Áp dụng kế hoạch:
+
+```bash
+ak migrate --dry-run=false --yes
+```
+
+Rollback chuyển đổi có thể khôi phục mới nhất:
+
+```bash
+ak migrate rollback
+```
+
+## Đầu ra và luồng
+
+Đầu ra JSON là đối tượng riêng của lệnh, không phải envelope chung. Stdout chứa `schema_version: 1` và đối tượng `status` với `from`, `dry_run`, `status`, `message`, `schema_version` và `backup_id` tùy chọn. Di chuyển chung thêm `discovery`, `plan` tùy chọn, `transition_preview`, `terminal` và `prefs`. Di chuyển cũ dùng `legacy_discovery`, `legacy_plan`, `legacy_terminal` tùy chọn và `prefs`.
+
+Các giá trị trạng thái gồm `planned`, `completed`, `failed` và `no_candidates`. Lần áp dụng thất bại có thể in trạng thái JSON thất bại ra stdout và một dòng lỗi dễ đọc ra stderr. Lỗi xảy ra trước khi tạo kết quả có thể là văn bản thuần trên stderr mà không có đối tượng lỗi JSON. Tiến trình dễ đọc dùng stdout; lỗi dùng stderr.
+
+## Trạng thái thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Xem trước, di chuyển, di chuyển chỉ tùy chọn, rollback hoặc rollback không có việc hoàn tất. |
+| `1` | Phát hiện, snapshot, runtime, áp dụng hoặc di chuyển một phần thất bại. |
+| `2` | Cờ hoặc nguồn di chuyển không hợp lệ. |
+| `3` | Lần áp dụng thiếu `--yes` hoặc xung đột chưa xử lý chặn chuyển đổi. |
+| `5` | Lần áp dụng không tìm thấy nguồn có thể di chuyển hoặc tùy chọn cần di chuyển. |
+
+## Tác động, an toàn và khôi phục
+
+Chế độ áp dụng trước tiên khôi phục chuyển đổi cũ đang chờ khi có thể, rồi phát hiện nội dung ở các vị trí Claude, ClaudeKit, dự án và Codex được hỗ trợ. Chuyển đổi chung tạo snapshot đích AgentKit, ngoại trừ thư mục gốc chứa backup, trước khi ghi tuần tự và giữ journal. Chuyển đổi cũ có thể lưu trữ, cách ly hoặc vô hiệu hóa nội dung cũ được cho phép và cài bản thay thế AgentKit.
+
+Lỗi giữ trạng thái đang chờ hoặc journal để tiếp tục hay rollback. `ak migrate rollback` thực thi ngay mà không hỏi, chọn chuyển đổi có thể khôi phục mới nhất, phục hồi nội dung đã ghi nhận và xóa journal đã hoàn tất. Lệnh không xóa bản thay thế AgentKit đã cài trong chuyển đổi cũ. Không có tùy chọn chọn backup hoặc journal theo ID.
+
+## Lệnh liên quan và giới hạn
+
+Chạy [`ak doctor`](./doctor) sau chuyển đổi một phần. Dùng [`ak setup`](./setup) để xem lại cấu hình và xác thực sau khi di chuyển. `--force-unlock` chỉ ảnh hưởng chế độ áp dụng và chỉ nên dùng cho lock đã xác minh là cũ.
