@@ -4,6 +4,7 @@ description: Xem trước, áp dụng, xác minh và rollback quá trình chuy�
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
 Migration tìm một bản cài ClaudeKit hiện có, phân loại nội dung thuộc quyền sở
 hữu ClaudeKit, giữ lại nội dung tùy chỉnh và đưa các Kit được hỗ trợ vào vòng đời
@@ -13,8 +14,8 @@ rộng rồi cài lại.
 ## Trước khi bắt đầu
 
 1. Chạy migration từ project có nội dung ClaudeKit mà bạn muốn AgentKit kiểm tra.
-2. Commit hoặc sao lưu instructions, Skill, hook tùy chỉnh và những nội dung khác
-   bạn cần giữ.
+2. Hoàn tất gate **Sao lưu trước khi apply** bên dưới. Không chỉ dựa vào version
+   control hoặc trạng thái khôi phục của AgentKit.
 3. Đóng các phiên Claude Code và Codex có thể đang dùng những file bị ảnh hưởng.
 4. Xác nhận `ak` đã đăng nhập và tài khoản có quyền dùng Kit cần thiết bằng
    `ak whoami` và `ak licenses`.
@@ -68,6 +69,240 @@ ak migrate --from=ck --switch-to-plugin
 
 Không thêm flag này chỉ vì ClaudeKit đã dùng các file có hình dạng plugin. Chỉ
 chọn khi bản cài AgentKit sau cùng phải là plugin Claude Code trong project.
+
+## Sao lưu trước khi apply
+
+<Callout type="warn" title="Bắt buộc trước khi apply">
+  Bạn có thể chạy bản xem trước chỉ đọc trước. Không chạy với `--dry-run=false
+  --yes` cho đến khi đã tạo và xác minh bản sao lưu độc lập bên dưới.
+</Callout>
+
+Apply có thể archive, quarantine hoặc neutralize các bề mặt ClaudeKit được phép
+thay đổi và cài nội dung thay thế. AgentKit được thiết kế để giữ nội dung tùy
+chỉnh, nhưng một bản sao độc lập bảo vệ bạn khi giả định về quyền sở hữu hoặc
+phạm vi không đúng, khi thao tác bị gián đoạn và khi cần khôi phục thủ công sau
+này.
+
+Chạy lệnh cho nền tảng của bạn từ cùng thư mục project nơi bạn đã chạy bản xem
+trước. Lệnh tạo thư mục mới có timestamp trong `AgentKitMigrationBackups` ở thư
+mục home của người dùng, nằm ngoài các root migration mặc định. Lệnh chỉ sao
+chép những file settings và cấu hình hiện có mà migration hoặc bước cài thay thế
+có thể đọc hay cập nhật; không sao chép toàn bộ runtime home, cây Kit, cache,
+session hoặc kho credential.
+
+<Tabs items={['macOS / Linux', 'Windows']}>
+  <Tab value="macOS / Linux">
+
+```bash
+set -eu
+umask 077
+
+project_root=$PWD
+backup_root="$HOME/AgentKitMigrationBackups"
+stamp=$(date -u +%Y%m%dT%H%M%SZ)
+backup_dir="$backup_root/$stamp"
+claude_home=${AGENTKIT_CLAUDE_HOME:-"$HOME/.claude"}
+codex_home=${CODEX_HOME:-"$HOME/.codex"}
+agentkit_home=${AGENTKIT_HOME:-"$HOME/.agentkit"}
+codex_skills=${AGENTKIT_CODEX_SKILLS_ROOT:-"$HOME/.agents/skills"}
+default_claude_home="$HOME/.claude"
+default_codex_home="$HOME/.codex"
+default_agentkit_home="$HOME/.agentkit"
+
+for unsafe_root in \
+  "$claude_home" "$codex_home" "$agentkit_home" "$codex_skills" \
+  "$HOME/.claudekit" "$project_root/.claude" \
+  "$project_root/.claudekit" "$project_root/.codex" \
+  "$project_root/.agentkit" "$project_root/.agents/skills"
+do
+  case "$backup_root/" in
+    "$unsafe_root/"*)
+      printf 'Choose a backup_root outside migration root: %s\n' "$unsafe_root" >&2
+      exit 1
+      ;;
+  esac
+done
+
+mkdir -m 700 -p "$backup_root"
+mkdir -m 700 "$backup_dir"
+: > "$backup_dir/files.tsv"
+
+copy_backup_file() {
+  source_path=$1
+  relative_path=$2
+  if [ -f "$source_path" ]; then
+    destination="$backup_dir/$relative_path"
+    mkdir -p "$(dirname "$destination")"
+    cp -p "$source_path" "$destination"
+    printf '%s\t%s\n' "$source_path" "$relative_path" >> "$backup_dir/files.tsv"
+  fi
+}
+
+for name in .ck.json settings.json settings.local.json; do
+  copy_backup_file "$claude_home/$name" "user/claude/$name"
+  copy_backup_file "$HOME/.claudekit/$name" "user/claudekit/$name"
+  copy_backup_file "$project_root/.claude/$name" "project/claude/$name"
+  copy_backup_file "$project_root/.claudekit/$name" "project/claudekit/$name"
+done
+copy_backup_file "$codex_home/config.toml" "user/codex/config.toml"
+copy_backup_file "$codex_home/hooks.json" "user/codex/hooks.json"
+copy_backup_file "$agentkit_home/config.yaml" "user/agentkit/config.yaml"
+copy_backup_file "$agentkit_home/ownership.json" "user/agentkit/ownership.json"
+if [ "$claude_home" != "$default_claude_home" ]; then
+  copy_backup_file "$default_claude_home/.ck.json" "user/default-claude/.ck.json"
+  copy_backup_file "$default_claude_home/settings.json" "user/default-claude/settings.json"
+  copy_backup_file "$default_claude_home/settings.local.json" "user/default-claude/settings.local.json"
+fi
+if [ "$codex_home" != "$default_codex_home" ]; then
+  copy_backup_file "$default_codex_home/config.toml" "user/default-codex/config.toml"
+  copy_backup_file "$default_codex_home/hooks.json" "user/default-codex/hooks.json"
+fi
+if [ "$agentkit_home" != "$default_agentkit_home" ]; then
+  copy_backup_file "$default_agentkit_home/config.yaml" "user/default-agentkit/config.yaml"
+  copy_backup_file "$default_agentkit_home/ownership.json" "user/default-agentkit/ownership.json"
+fi
+copy_backup_file "$project_root/.codex/config.toml" "project/codex/config.toml"
+copy_backup_file "$project_root/.codex/hooks.json" "project/codex/hooks.json"
+copy_backup_file "$project_root/.agentkit/config.yaml" "project/agentkit/config.yaml"
+copy_backup_file "$project_root/.agentkit/ownership.json" "project/agentkit/ownership.json"
+
+if [ ! -s "$backup_dir/files.tsv" ]; then
+  printf 'No recognized settings files found; inspect the preview before apply.\n' >&2
+  exit 1
+fi
+
+tab=$(printf '\t')
+while IFS="$tab" read -r source_path relative_path; do
+  test -f "$backup_dir/$relative_path"
+  cmp -s "$source_path" "$backup_dir/$relative_path"
+done < "$backup_dir/files.tsv"
+
+count=$(wc -l < "$backup_dir/files.tsv" | tr -d ' ')
+printf 'Verified %s files in %s\n' "$count" "$backup_dir"
+```
+
+  </Tab>
+  <Tab value="Windows">
+
+Chạy đoạn này trong PowerShell. Từ `cmd.exe`, hãy mở PowerShell và dùng quy
+trình này thay vì chuyển nó thành batch script.
+
+```powershell
+$ErrorActionPreference = 'Stop'
+$ProjectRoot = (Get-Location).Path
+$BackupRoot = Join-Path $HOME 'AgentKitMigrationBackups'
+$Stamp = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ')
+$BackupDir = Join-Path $BackupRoot $Stamp
+$ClaudeHome = if ($env:AGENTKIT_CLAUDE_HOME) { $env:AGENTKIT_CLAUDE_HOME } else { Join-Path $HOME '.claude' }
+$CodexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME '.codex' }
+$AgentKitHome = if ($env:AGENTKIT_HOME) { $env:AGENTKIT_HOME } else { Join-Path $HOME '.agentkit' }
+$CodexSkills = if ($env:AGENTKIT_CODEX_SKILLS_ROOT) { $env:AGENTKIT_CODEX_SKILLS_ROOT } else { Join-Path $HOME '.agents\skills' }
+$DefaultClaudeHome = Join-Path $HOME '.claude'
+$DefaultCodexHome = Join-Path $HOME '.codex'
+$DefaultAgentKitHome = Join-Path $HOME '.agentkit'
+
+$UnsafeRoots = @(
+  $ClaudeHome, $CodexHome, $AgentKitHome, $CodexSkills,
+  (Join-Path $HOME '.claudekit'),
+  (Join-Path $ProjectRoot '.claude'),
+  (Join-Path $ProjectRoot '.claudekit'),
+  (Join-Path $ProjectRoot '.codex'),
+  (Join-Path $ProjectRoot '.agentkit'),
+  (Join-Path $ProjectRoot '.agents\skills')
+)
+$BackupFull = [IO.Path]::GetFullPath($BackupRoot).TrimEnd('\') + '\'
+foreach ($Root in $UnsafeRoots) {
+  $RootFull = [IO.Path]::GetFullPath($Root).TrimEnd('\') + '\'
+  if ($BackupFull.StartsWith($RootFull, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "Choose a BackupRoot outside migration root: $Root"
+  }
+}
+
+New-Item -ItemType Directory -Path $BackupDir | Out-Null
+$Identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+& icacls.exe $BackupDir '/inheritance:r' '/grant:r' ("{0}:(OI)(CI)F" -f $Identity) | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Could not restrict backup directory access.' }
+
+$Copied = [Collections.Generic.List[object]]::new()
+function Copy-BackupFile([string]$Source, [string]$Relative) {
+  if (Test-Path -LiteralPath $Source -PathType Leaf) {
+    $Destination = Join-Path $BackupDir $Relative
+    New-Item -ItemType Directory -Force -Path (Split-Path $Destination) | Out-Null
+    Copy-Item -LiteralPath $Source -Destination $Destination
+    $Copied.Add([pscustomobject]@{ Source = $Source; Relative = $Relative })
+  }
+}
+
+foreach ($Name in '.ck.json', 'settings.json', 'settings.local.json') {
+  Copy-BackupFile (Join-Path $ClaudeHome $Name) "user\claude\$Name"
+  Copy-BackupFile (Join-Path (Join-Path $HOME '.claudekit') $Name) "user\claudekit\$Name"
+  Copy-BackupFile (Join-Path (Join-Path $ProjectRoot '.claude') $Name) "project\claude\$Name"
+  Copy-BackupFile (Join-Path (Join-Path $ProjectRoot '.claudekit') $Name) "project\claudekit\$Name"
+}
+Copy-BackupFile (Join-Path $CodexHome 'config.toml') 'user\codex\config.toml'
+Copy-BackupFile (Join-Path $CodexHome 'hooks.json') 'user\codex\hooks.json'
+Copy-BackupFile (Join-Path $AgentKitHome 'config.yaml') 'user\agentkit\config.yaml'
+Copy-BackupFile (Join-Path $AgentKitHome 'ownership.json') 'user\agentkit\ownership.json'
+if ($ClaudeHome -ne $DefaultClaudeHome) {
+  Copy-BackupFile (Join-Path $DefaultClaudeHome '.ck.json') 'user\default-claude\.ck.json'
+  Copy-BackupFile (Join-Path $DefaultClaudeHome 'settings.json') 'user\default-claude\settings.json'
+  Copy-BackupFile (Join-Path $DefaultClaudeHome 'settings.local.json') 'user\default-claude\settings.local.json'
+}
+if ($CodexHome -ne $DefaultCodexHome) {
+  Copy-BackupFile (Join-Path $DefaultCodexHome 'config.toml') 'user\default-codex\config.toml'
+  Copy-BackupFile (Join-Path $DefaultCodexHome 'hooks.json') 'user\default-codex\hooks.json'
+}
+if ($AgentKitHome -ne $DefaultAgentKitHome) {
+  Copy-BackupFile (Join-Path $DefaultAgentKitHome 'config.yaml') 'user\default-agentkit\config.yaml'
+  Copy-BackupFile (Join-Path $DefaultAgentKitHome 'ownership.json') 'user\default-agentkit\ownership.json'
+}
+Copy-BackupFile (Join-Path $ProjectRoot '.codex\config.toml') 'project\codex\config.toml'
+Copy-BackupFile (Join-Path $ProjectRoot '.codex\hooks.json') 'project\codex\hooks.json'
+Copy-BackupFile (Join-Path $ProjectRoot '.agentkit\config.yaml') 'project\agentkit\config.yaml'
+Copy-BackupFile (Join-Path $ProjectRoot '.agentkit\ownership.json') 'project\agentkit\ownership.json'
+
+if ($Copied.Count -eq 0) {
+  throw 'No recognized settings files found; inspect the preview before apply.'
+}
+
+$Copied | ForEach-Object { "{0}`t{1}" -f $_.Source, $_.Relative } |
+  Set-Content -LiteralPath (Join-Path $BackupDir 'files.tsv')
+foreach ($File in $Copied) {
+  $Destination = Join-Path $BackupDir $File.Relative
+  if (-not (Test-Path -LiteralPath $Destination -PathType Leaf)) {
+    throw "Missing backup file: $($File.Relative)"
+  }
+  if ((Get-FileHash -LiteralPath $File.Source).Hash -ne
+      (Get-FileHash -LiteralPath $Destination).Hash) {
+    throw "Backup verification failed: $($File.Relative)"
+  }
+}
+
+Write-Host "Verified $($Copied.Count) files in $BackupDir"
+```
+
+  </Tab>
+</Tabs>
+
+Dòng cuối phải in `Verified` và đường dẫn đích. Nếu lệnh báo không tìm thấy file
+được nhận diện, hãy dừng và kiểm tra bản xem trước thay vì coi thư mục rỗng là
+một bản sao lưu. Các file đã chọn có thể chứa giá trị provider hoặc MCP nhạy
+cảm. Hãy giữ thư mục ở máy cục bộ với quyền truy cập hạn chế; không upload hoặc
+commit nó vào version control.
+
+Danh sách này được giới hạn có chủ đích. Root Skill Codex tùy chỉnh, thư mục
+plugin và nội dung Kit được chọn theo runtime, phạm vi, tuyến phân phối và bản
+xem trước thực tế; chúng không phải root cấu hình chung cho mọi máy. Nếu bản xem
+trước cho biết một đường dẫn hiện có khác sẽ bị archive, quarantine, neutralize
+hoặc ghi đè, hãy sao chép riêng đúng đường dẫn đó vào thư mục backup rồi xác
+minh bản sao. Đừng đoán bằng cách sao chép toàn bộ `~/.claude`, `~/.codex`,
+`~/.agentkit` hoặc runtime home khác.
+
+Bản sao do bạn tạo độc lập với recovery snapshot và journal riêng cho thao tác
+mà AgentKit ghi ngay trước các thay đổi của chính nó. Hai lớp phục vụ các đường
+khôi phục khác nhau. Không lớp nào là bản sao lưu toàn bộ máy; rollback migration
+chỉ khôi phục trạng thái đã ghi nhận, không dựng lại mọi thứ hoặc gỡ bản thay thế
+đã cài.
 
 ## Áp dụng kế hoạch đã review
 
