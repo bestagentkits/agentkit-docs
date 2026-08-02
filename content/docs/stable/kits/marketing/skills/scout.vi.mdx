@@ -1,0 +1,155 @@
+---
+title: Lập bản đồ context của project với ak:scout
+description: Tìm tệp repository và mối quan hệ liên quan bằng local search có giới hạn, delegation tùy chọn đã duyệt hoặc read-only external probe được cấp quyền riêng.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:scout` để trả lời câu hỏi tập trung về nơi code, content, configuration,
+test hay asset liên quan Marketing nằm trong project. Skill bắt đầu bằng native
+local search và trả về file map ngắn gọn. Delegated Explore work cùng external
+OpenCode probe là route tùy chọn với permission gate riêng.
+
+## Chọn ak:scout cho reconnaissance có giới hạn
+
+### Dùng ak:scout khi
+
+- Bạn cần tìm tệp trước khi thay đổi campaign site, tracking flow, content
+  system, dashboard hay automation.
+- Task trải qua nhiều directory và bạn cần relationship, convention cùng test có
+  khả năng liên quan trước khi lập plan.
+- Bạn bắt đầu diagnosis và cần bằng chứng behavior được triển khai ở đâu.
+- Bạn muốn read-only discovery với đường dẫn cùng relevance note thay vì edit.
+
+### Chọn workflow khác khi
+
+- Bạn đã biết tệp chính xác và chỉ cần một scoped read nhỏ.
+- Bạn cần external market, competitor, audience hay web research. Dùng Marketing
+  research workflow hoặc Agent `scout-external`, không dùng repository scouting.
+- Bạn muốn implementation, debugging, review hay test execution. Scout trước,
+  rồi chuyển bằng chứng cho workflow phù hợp.
+- Bạn muốn subagent chỉ để tăng tốc nhưng chưa cấp quyền delegation. Main agent
+  có thể scout local mà không cần chúng.
+
+## Chuẩn bị câu hỏi có thể search
+
+Trước khi bắt đầu:
+
+- Xác nhận Marketing Kit đã được cài đúng runtime cùng scope hiện tại.
+- Nêu feature, symbol, behavior, file type hay directory boundary cần tìm.
+- Nêu exclusion như generated directory, vendor code, asset lớn, secret, customer
+  data hay package không liên quan.
+- Quyết định local read-only search có đủ hay không.
+- Nếu muốn delegation hay external probe, cấp quyền rõ ràng cho route đó và xác
+  định directory không chồng lấp.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:scout ...` | Dùng native search và chỉ có thể dùng Explore khi delegation được phép cùng runtime cung cấp capability đó. |
+| Cursor | `/ak:scout ...` | Dùng slash invocation; ưu tiên local search còn delegated capability phụ thuộc setup đang hoạt động. |
+| Codex | `$ak:scout ...` | Dùng native Skill discovery; Codex Desktop cần user request rõ ràng trước multi-agent scouting. |
+
+## Chạy Skill
+
+Route mặc định giữ local và read-only:
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:scout "Find the pricing-page source, analytics events, related tests, and content schema. Read only; exclude generated and vendor directories"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:scout "Find the pricing-page source, analytics events, related tests, and content schema. Read only; exclude generated and vendor directories"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:scout "Find the pricing-page source, analytics events, related tests, and content schema. Read only; exclude generated and vendor directories"
+```
+
+  </Tab>
+</Tabs>
+
+### Chọn search route có chủ đích
+
+| Route | Khi nào áp dụng | Ranh giới |
+| --- | --- | --- |
+| Default local route | Native file search, scoped read, `rg`, `wc` hay `sed` có thể trả lời câu hỏi | Read-only và do main agent xử lý trừ khi delegation được yêu cầu rõ. |
+| Internal Explore route | User yêu cầu subagent rõ ràng, runtime cung cấp delegation và mỗi Agent có scope hữu ích riêng | Không spawn cho directory chồng lấp hay chỉ vì Skill nhắc Explore. |
+| Route `ext` | Local search không đủ và user cho phép OpenCode probe | Kiểm tra `command -v opencode`; giữ prompt read-only cùng đúng scope. Không tự cài tool. |
+
+External reference dùng `opencode run ... --model opencode/grok-code`. Đây là
+provider-specific probe, không phải model bắt buộc hay bảo đảm OpenCode đã được
+cài, authenticated, khả dụng hoặc phù hợp với private source.
+
+## Hiểu các giai đoạn
+
+1. **Parse câu hỏi.** Skill xác định search target, directory, pattern, file
+   type, relationship, exclusion và completion criteria.
+2. **Ước lượng quy mô tại local.** Skill search filename cùng content trước để
+   tránh broad read và delegation không cần thiết.
+3. **Chọn route.** Local main-agent scouting là mặc định. Internal hay external
+   parallelism chỉ được chọn khi thỏa permission và utility gate.
+4. **Chia không chồng lấp khi được duyệt.** Mỗi delegated scope nêu directory
+   hay tệp chính xác cùng report contract ngắn gọn.
+5. **Đọc content có giới hạn.** Tệp dưới 500 dòng có thể đọc trực tiếp; tệp lớn
+   hơn được chia thành chunk khoảng 500 dòng thay vì gửi toàn bộ tới external
+   tool.
+6. **Thu kết quả có sẵn.** Delegated scope dùng timeout ba phút; non-responder bị
+   skip và ghi lại thay vì restart vô hạn.
+7. **Tổng hợp bản đồ.** Đường dẫn được deduplicate, relationship được tóm tắt,
+   gap được nêu và câu hỏi chưa giải quyết nằm cuối.
+
+## Kiểm soát delegation và external access
+
+<Callout type="warn" title="Scouting chỉ có quyền read-only">
+  Quyền search repository không cấp quyền edit, generated output, dependency
+  installation, network access, gửi private file tới provider, subagent
+  delegation, commit hay publication. Duyệt riêng delegation và route `ext`.
+  External prompt phải giữ đúng scope và read-only.
+</Callout>
+
+Không dùng external CLI để lách local context limit. Không gửi toàn bộ private
+file khi local chunking đã đủ. External exit khác zero là failure; sau hai lần
+external failure, quay lại local search và báo gap.
+
+`ak:scout` là Skill workflow, không phải cùng component với Agent `scout` trong
+[Marketing Kit Agents](../agents). Skill invocation không bảo đảm standalone
+Agent route tồn tại trong mọi runtime.
+
+## Xác minh output và bằng chứng
+
+Scout report hữu ích nên gồm:
+
+- Đường dẫn tệp tương đối với repository cùng relevance note một dòng.
+- Symbol, import, configuration link, test và data flow chính cần cho câu hỏi.
+- Search scope cùng exclusion, gồm directory chưa được bao phủ.
+- Route đã dùng cùng delegated timeout hay external failure.
+- Nhóm pattern hoặc risk ngắn gọn cho plan tiếp theo.
+- Câu hỏi chưa giải quyết nằm cuối.
+
+Chỉ coi report là đủ khi một người khác có thể xác định nơi tiếp tục mà không
+lặp lại broad search tương tự.
+
+## Xử lý sự cố và tôn trọng giới hạn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Kết quả quá rộng | Thu hẹp behavior, directory, symbol, extension và exclusion. |
+| Delegation không được phép hay không khả dụng | Tiếp tục trong main agent bằng local search; không force spawn. |
+| OpenCode vắng mặt | Giữ local; installation cần request cùng phê duyệt riêng. |
+| External probe thất bại hai lần | Dừng retry, quay lại local search và báo coverage chưa đủ. |
+| Tệp lớn sẽ chiếm hết context | Đếm dòng và đọc bounded chunk quanh match liên quan. |
+
+Skill định vị bằng chứng; nó không chứng minh runtime behavior, chạy test hay tạo
+thay đổi. Độ đầy đủ của search bị giới hạn bởi scope, tool, quyền, ignored file
+và thời gian có sẵn. Tiếp tục với [Marketing Kit](../../marketing) khi file map
+được chấp nhận.
