@@ -28,8 +28,9 @@ ak setup
 ```
 
 The wizard detects Claude Code and Codex login state, lets you choose enabled
-runtime adapters, and saves AgentKit preferences. Re-running it is idempotent.
-It does not copy runtime credentials and does not install a kit.
+runtime adapters, and atomically updates `~/.agentkit/config.yaml` with the
+default kit and telemetry preference. Re-running it is idempotent. Basic setup
+does not copy runtime credentials and does not install a kit.
 
 Use these commands for different jobs:
 
@@ -78,8 +79,10 @@ the account that owns the kit.
 ak login --license-key ak_license_... --no-interactive
 ```
 
-This activates the current device. Add `--device-name <name>` only when you need
-an explicit device label. Kit grants are still checked separately.
+This activates the current device and stores an App device session separately
+from the CLI session created by API-key or email login. Add
+`--device-name <name>` only when you need an explicit device label. Kit grants
+are still checked separately.
 
 <Callout type="warn">
   Never put a real API key, license key, OTP, session file, or provider
@@ -98,7 +101,9 @@ ak licenses
 `ak whoami` confirms the current account and live authentication state.
 `ak licenses` lists its per-kit grants. Continue only when Engineer Kit appears.
 Sign-in and entitlement are separate checks: logging in successfully does not
-create a missing grant.
+create a missing grant. With no local session, `ak whoami` reports an
+unauthenticated state and exits `0`; scripts must inspect the result instead of
+treating a zero exit code as proof of login.
 
 ## Install Engineer Kit
 
@@ -122,11 +127,16 @@ ak kit init engineer --target codex
   </Tab>
 </Tabs>
 
-These commands install at project scope by default. Add `--global` only when you
-want the kit in the runtime's user scope across projects. A successful summary
-names `engineer`, the output location, install mode, scope, and number of files
-written. Review any hook or compatibility warnings instead of treating them as
-part of the success marker.
+These are project-native installs from the authenticated remote registry and
+the `stable` kit channel by default. For Claude Code, plugin delivery requires
+`--switch-to-plugin`; independently, `--global` selects the runtime's user scope
+instead of project scope. A successful summary names `engineer`, the output
+location, install mode, scope, and number of files written.
+
+On Codex, success can include `Hooks dropped (unsupported on this target)`. The
+disclosed Engineer task-state group is not projected because Codex cannot
+represent its matcher; supported refresh at `Stop` and `SubagentStop` boundaries
+remains. The disclosure is a runtime limitation, not an install failure.
 
 ## Run and verify the first skill
 
@@ -162,17 +172,27 @@ prefix is Claude Code syntax; `$ak:...` is Codex syntax.
 - **Runtime missing or logged out:** install it and use `claude auth login` or
   `codex login`, then re-run `ak setup`.
 - **The skill is not recognized:** confirm the install summary named the intended
-  target, restart the assistant, and run `ak doctor` before reinstalling.
+  target, restart the assistant, and run `ak doctor --exit-on-fail` before
+  reinstalling.
 - **The destination conflicts with existing content:** stop and review the
   ownership warning. Do not add `--force` as a first response.
 
 AgentKit preserves unknown and user-modified files during normal kit operations.
 When a supported destructive change needs a recovery snapshot, the CLI prints a
-backup ID. Keep it until you have verified the result; restore that snapshot with:
+backup ID. Keep it until you have verified the result. Inspect, verify, and
+preview the snapshot before applying it:
 
 ```bash
-ak backups restore <backup-id>
+ak backups show <backup-id>
+ak backups verify <backup-id>
+ak recover <backup-id> --dry-run
+ak recover <backup-id>
 ```
+
+Restore is replace-only: it restores captured paths but normally preserves
+unrelated files created later. A multi-file restore is not transactional and can
+stop after some writes if the host fails. For a project bundle, repeat the exact
+`--allow-root` values shown by `ak backups show` when the restore requests them.
 
 Continue with the focused [Quickstart](./quickstart), or read
 [Installing kits](../guides/installing-kits) before changing scope, selecting

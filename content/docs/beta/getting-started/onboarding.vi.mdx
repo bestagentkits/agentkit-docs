@@ -29,8 +29,9 @@ ak setup
 ```
 
 Wizard phát hiện trạng thái đăng nhập Claude Code và Codex, cho phép chọn runtime
-adapter đang bật và lưu tùy chọn AgentKit. Chạy lại lệnh là an toàn và cho cùng
-kết quả. Lệnh không sao chép credential của runtime và không cài kit.
+adapter đang bật và cập nhật nguyên tử `~/.agentkit/config.yaml` với kit mặc định
+cùng tùy chọn telemetry. Chạy lại lệnh là an toàn và cho cùng kết quả. Thiết lập
+cơ bản không sao chép credential của runtime và không cài kit.
 
 Dùng các lệnh sau cho những mục đích khác nhau:
 
@@ -80,8 +81,10 @@ hữu kit.
 ak login --license-key ak_license_... --no-interactive
 ```
 
-Lệnh này kích hoạt thiết bị hiện tại. Chỉ thêm `--device-name <name>` khi bạn cần
-nhãn thiết bị rõ ràng. Quyền sử dụng kit vẫn được kiểm tra riêng.
+Lệnh này kích hoạt thiết bị hiện tại và lưu một phiên thiết bị của ứng dụng tách
+biệt với phiên CLI do đăng nhập bằng API key hoặc email tạo ra. Chỉ thêm
+`--device-name <name>` khi bạn cần nhãn thiết bị rõ ràng. Quyền sử dụng kit vẫn
+được kiểm tra riêng.
 
 <Callout type="warn">
   Không bao giờ đưa API key, license key, OTP, tệp phiên hoặc credential provider
@@ -100,7 +103,9 @@ ak licenses
 `ak whoami` xác nhận tài khoản hiện tại và trạng thái xác thực trực tiếp.
 `ak licenses` liệt kê quyền theo từng kit. Chỉ tiếp tục khi Engineer Kit xuất
 hiện. Đăng nhập và quyền sử dụng là hai phép kiểm tra riêng: đăng nhập thành công
-không tạo ra quyền còn thiếu.
+không tạo ra quyền còn thiếu. Khi không có phiên cục bộ, `ak whoami` báo trạng
+thái chưa xác thực và trả exit code `0`; script phải kiểm tra kết quả thay vì xem
+exit code bằng không là bằng chứng đã đăng nhập.
 
 ## Cài Engineer Kit
 
@@ -124,11 +129,17 @@ ak kit init engineer --target codex
   </Tab>
 </Tabs>
 
-Mặc định, các lệnh này cài ở scope project. Chỉ thêm `--global` khi bạn muốn kit
-ở scope người dùng của runtime cho nhiều project. Phần tóm tắt thành công nêu
-`engineer`, vị trí đầu ra, install mode, scope và số tệp đã ghi. Hãy đọc mọi cảnh
-báo về hook hoặc khả năng tương thích thay vì xem chúng là một phần của dấu hiệu
-thành công.
+Mặc định, đây là các bản cài native ở scope project từ remote registry đã xác
+thực và kênh kit `stable`. Với Claude Code, delivery dạng plugin yêu cầu
+`--switch-to-plugin`; độc lập với lựa chọn đó, `--global` chọn scope người dùng
+của runtime thay vì scope project. Phần tóm tắt thành công nêu `engineer`, vị trí
+đầu ra, install mode, scope và số tệp đã ghi.
+
+Trên Codex, kết quả thành công có thể kèm `Hooks dropped (unsupported on this
+target)`. Nhóm task-state của Engineer được nêu trong cảnh báo không được ánh xạ
+vì Codex không thể biểu diễn matcher của nhóm; refresh được hỗ trợ tại các ranh
+giới `Stop` và `SubagentStop` vẫn còn. Đây là giới hạn runtime, không phải lỗi cài
+đặt.
 
 ## Chạy và xác minh skill đầu tiên
 
@@ -163,18 +174,27 @@ Code; `$ak:...` là cú pháp Codex.
 - **Runtime chưa có hoặc chưa đăng nhập:** cài runtime và dùng `claude auth login`
   hoặc `codex login`, rồi chạy lại `ak setup`.
 - **Skill không được nhận diện:** xác nhận phần tóm tắt cài đặt ghi đúng target,
-  khởi động lại trợ lý và chạy `ak doctor` trước khi cài lại.
+  khởi động lại trợ lý và chạy `ak doctor --exit-on-fail` trước khi cài lại.
 - **Đích xung đột với nội dung hiện có:** dừng lại và xem cảnh báo quyền sở hữu.
   Đừng dùng `--force` như phản ứng đầu tiên.
 
 AgentKit giữ các tệp không rõ nguồn gốc và tệp người dùng đã sửa trong thao tác
 kit thông thường. Khi một thay đổi phá hủy được hỗ trợ cần snapshot khôi phục,
-CLI sẽ in backup ID. Hãy giữ ID tới khi đã xác minh kết quả; khôi phục snapshot
-đó bằng:
+CLI sẽ in backup ID. Hãy giữ ID tới khi đã xác minh kết quả. Kiểm tra thông tin,
+xác minh và xem trước snapshot trước khi áp dụng:
 
 ```bash
-ak backups restore <backup-id>
+ak backups show <backup-id>
+ak backups verify <backup-id>
+ak recover <backup-id> --dry-run
+ak recover <backup-id>
 ```
+
+Restore là replace-only: nó khôi phục các path đã có trong snapshot nhưng thường
+giữ những tệp không liên quan được tạo sau đó. Quy trình restore nhiều tệp không
+có tính giao dịch và có thể dừng sau một số lần ghi nếu host gặp sự cố. Với
+project bundle, hãy lặp lại chính xác các giá trị `--allow-root` do
+`ak backups show` hiển thị khi thao tác khôi phục yêu cầu.
 
 Tiếp tục với [Khởi động nhanh](./quickstart), hoặc đọc
 [Cài đặt kit](../guides/installing-kits) trước khi đổi scope, chọn skill hay
