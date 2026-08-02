@@ -1,0 +1,116 @@
+---
+title: ak kit validate
+description: Validate a local Kits authoring tree and gate CI on schema, inheritance, Hook, and capability rules.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak kit validate` to check local `kit.yaml` files and related authoring
+contracts before installing or publishing Kit changes. The command is read-only
+and designed for Kit authors and CI.
+
+## Syntax
+
+```bash
+ak kit validate [kits-dir]
+```
+
+`[kits-dir]` is optional and defaults to `./kits`. At most one positional
+directory is accepted.
+
+## Before you run
+
+The command validates only the selected local tree. It does not query the
+registry, check account entitlement, use verified cache, or inspect an installed
+runtime route.
+
+Validation loads every discovered `kit.yaml`, checks schema and inheritance,
+checks single-source override rules and Skill capability declarations, and
+requires `hooks/hooks.json` when a Kit exports top-level Hook entrypoints.
+Library-only Hook helpers under supported subdirectories do not require that
+event manifest.
+
+## Arguments
+
+`[kits-dir]` is an optional local Kits directory and defaults to `./kits`. The
+command accepts at most one positional argument.
+
+The command has no alias.
+
+## Options
+
+There are no command-specific flags. Shared flags are documented in
+[CLI conventions](../cli-conventions). `--yes` and `--no-interactive` do not
+change validation behavior.
+
+## Examples
+
+```bash
+# Validate ./kits.
+ak kit validate
+
+# Validate an explicit authoring tree.
+ak kit validate ./fixtures/kits
+
+# Read violations in CI.
+ak kit validate ./kits --json | jq '.data.violations'
+```
+
+## Output and streams
+
+Human mode writes its full report to stderr; stdout stays empty. The report
+shows the number of discovered Kits, each violation as
+`kit_path: category: message`, and a final valid or invalid summary.
+
+With `--json`, stdout contains a versioned envelope:
+
+```text
+schema_version: 1
+kind: kit.validate
+data.kits_dir: string
+data.kit_count: integer
+data.violations: array
+data.valid: boolean
+```
+
+Each violation has `kit_path`, `category`, and `message`. Validation findings
+are returned in this success-shaped report; the process then exits non-zero.
+They are not emitted as a JSON error envelope.
+
+## Exit status
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | All discovered Kits were valid, or no `kit.yaml` files were found. A missing or non-directory path is also treated as an empty successful check. |
+| `1` | One or more validation violations or directory/walk errors were reported. |
+| `2` | Cobra rejected flags/arguments, or the validator recovered an internal panic. |
+
+The command help groups an internal validator panic under exit `1`, but the
+runtime explicitly exits `2` for that condition.
+
+<Callout type="warning">
+  A misspelled or missing directory exits `0` with “nothing to validate.” In CI,
+  verify the intended path exists before relying on this command as a gate.
+</Callout>
+
+## Effects, safety, and limitations
+
+The command walks the local tree and reads Kit manifests and referenced files.
+It does not write files, spawn provider processes, contact the network, mutate
+authentication, or update cache.
+
+Directory entries that report a per-entry walk error are skipped. A top-level
+walk error becomes a violation, but an unreadable nested entry may be absent
+from the report. Keep filesystem permissions deterministic in CI.
+
+Validation proves authoring structure for the selected local source. It does
+not prove registry entitlement, remote package signatures, target projection,
+or install-time ownership safety.
+
+## Related commands
+
+- [`ak kit list-kits`](./kit-list-kits) summarizes the same kind of local source.
+- [`ak kit install`](./kit-install) resolves and installs a Kit route.
+- [`ak kit refresh`](./kit-refresh) reconciles an installed route.
+- [Complete command facts](../cli/ak_kit_validate)
+- [Install kits safely](../../guides/installing-kits)

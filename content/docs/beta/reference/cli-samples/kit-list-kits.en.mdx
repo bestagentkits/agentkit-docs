@@ -1,0 +1,114 @@
+---
+title: ak kit list-kits
+description: Inspect installable kits from an explicit local authoring source without registry or disk mutation.
+---
+
+Use `ak kit list-kits` to inspect Kit metadata and export counts in a local Kits
+directory. This command is for local authoring, development, and CI discovery;
+it does not query the release registry.
+
+## Syntax
+
+```bash
+ak kit list-kits
+```
+
+The command accepts no positional arguments.
+
+## Before you run
+
+Source resolution uses this order:
+
+1. `--kits-dir <dir>`
+2. `AGENTKIT_KITS_DIR`
+3. `./kits`
+
+The selected directory must be readable as a local Kit source. The command does
+not use authentication, entitlement, network access, verified cache, project
+scope, user scope, or runtime delivery mode.
+
+## Arguments
+
+This command accepts no positional arguments. Select the source with
+`--kits-dir` or the documented environment/default resolution.
+
+The command has no alias.
+
+## Options
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `--kits-dir <dir>` | `AGENTKIT_KITS_DIR` or `./kits` | Select the local Kits directory. |
+
+Shared flags are documented in [CLI conventions](../cli-conventions).
+`--yes` and `--no-interactive` do not change this read-only operation.
+
+## Examples
+
+```bash
+# Read ./kits.
+ak kit list-kits
+
+# Read an explicit local authoring tree.
+ak kit list-kits --kits-dir ./fixtures/kits
+
+# Consume the versioned JSON envelope.
+ak kit list-kits --kits-dir ./kits --json | jq '.data.kits'
+```
+
+## Output and streams
+
+Human output on stdout is a sorted table with these columns:
+
+```text
+NAME VERSION TIER EXTENDS AGENTS SKILLS COMMANDS HOOKS RULES OUTPUT-STYLES SCRIPTS
+```
+
+The internal composition Kit is excluded from the public list. If the selected
+source is empty, human mode writes `No kits found` to stderr and exits `0`.
+
+With `--json`, stdout contains:
+
+```text
+schema_version: 1
+kind: kit.list
+data.kits: array
+```
+
+Each Kit object has `name`, `version`, `extends`, `tier`, and `counts`. The
+`counts` object has `agents`, `skills`, `commands`, `hooks`, `rules`,
+`output_styles`, and `scripts`. An empty source produces `data.kits=[]`.
+
+If one discovered Kit fails to load, the command writes a warning for that Kit
+to stderr, skips it, and continues. JSON can therefore be valid and exit `0`
+while omitting a broken Kit; inspect stderr in CI.
+
+## Exit status
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The local source was listed, including an empty source or a source with individual skipped load errors. |
+| `1` | The selected source could not be opened or listed, or another runtime read error occurred. |
+| `2` | Cobra rejected flags or positional arguments. |
+
+Command help reserves exit `5` for a missing Kits directory, but the current
+implementation returns an unclassified source error, so the process exits `1`.
+Do not branch on `5` for this command until runtime classification changes.
+
+## Effects, safety, and limitations
+
+The command reads directory entries, `kit.yaml` files, inherited Kit metadata,
+and referenced exports to compute counts. It does not write files, spawn a
+runtime, contact a provider, or change authentication or cache state.
+
+This is not a licensed remote catalog. A Kit absent from the selected local
+directory is absent from the result even if your account can install it from the
+registry. Conversely, local visibility does not prove registry entitlement or
+that an install will succeed for a target runtime.
+
+## Related commands
+
+- [`ak kit validate`](./kit-validate) validates the local authoring tree.
+- [`ak kit install`](./kit-install) resolves and installs one Kit.
+- [Complete command facts](../cli/ak_kit_list-kits)
+- [Install kits safely](../../guides/installing-kits)

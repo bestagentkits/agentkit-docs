@@ -1,0 +1,180 @@
+---
+title: ak kit refresh
+description: Reconcile an installed kit route, remove stale clean owned output, and preserve user changes.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak kit refresh` to re-emit an installed kit after its exported content
+changes. Refresh removes retired generated files only when AgentKit can prove
+they are clean and owned; it preserves unknown and user-modified content.
+
+## Syntax
+
+```bash
+ak kit refresh <kit-name>
+```
+
+`<kit-name>` is required. The command refreshes an existing route; use
+`ak kit install` when no route exists.
+
+## Before you run
+
+Remote registry resolution is the default and uses the `stable` kit channel.
+Paid kits require a valid CLI session and entitlement. Resolution can refresh
+saved authentication, contact the registry, download an artifact, and update
+the verified cache before lifecycle writes begin.
+
+```bash
+ak whoami
+ak licenses
+```
+
+Use `--local --kits-dir <dir>` only for an explicit development or CI source.
+Refresh has no dry-run flag. Run `ak audit` first when you need to inspect drift.
+
+## Arguments
+
+`<kit-name>` is the single installed Kit ID to reconcile. It is required; the
+command does not prompt for a Kit.
+
+The command has no alias.
+
+## Options
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `--channel <channel>` | `stable` | Select the remote kit channel. |
+| `-g, --global` | `false` | Refresh user-scope routes instead of the current project. |
+| `--kits-dir <dir>` | Empty | Select an explicit local kit source. |
+| `--local` | `false` | Use the explicit local source instead of the registry. |
+| `--no-backup` | `false` | Skip the pre-refresh recovery snapshot. |
+| `--registry-url <url>` | Environment or release default | Override the registry base URL. |
+| `--remote` | `true` | Use the authenticated remote registry; explicit use is unnecessary. |
+| `--switch-to-plugin` | `false` | Select Claude Code plugin delivery at project or user scope. |
+| `--target <ids>` | Detected installed targets | Select one or more comma-separated emitter targets. |
+| `--version <version>` | Channel latest | Select a remote kit version. |
+
+Shared flags are documented in [CLI conventions](../cli-conventions).
+
+## Target, scope, and mode resolution
+
+When `--target` is omitted, refresh inspects lifecycle markers for the chosen
+scope. Project scope detects project-native Claude Code, project Cursor, and
+recognized project output. User scope scans registered user lifecycle targets.
+If no target is detected, the command exits `6` and asks you to pass `--target`
+or install the kit first.
+
+Claude plugin delivery must always be explicit:
+
+```bash
+# Project Claude plugin.
+ak kit refresh engineer --switch-to-plugin --yes
+
+# User Claude plugin.
+ak kit refresh engineer --global --switch-to-plugin --yes
+```
+
+An installed Claude plugin is not silently treated as native output, even when
+another target is also present. Project and user scopes remain independent.
+
+## Examples
+
+```bash
+# Auto-detect an installed project route.
+ak kit refresh engineer --yes
+
+# Refresh one Codex route explicitly.
+ak kit refresh engineer --target codex --yes
+
+# Refresh from an explicit local development source.
+ak kit refresh engineer --local --kits-dir ./kits --target codex --yes
+
+# Intentional unattended refresh.
+ak kit refresh engineer --target codex --yes --no-interactive --json
+```
+
+## Confirmation behavior
+
+Refresh uses the install destination preview and asks `Continue? [y/N]:` on an
+interactive TTY. Only `y` or `yes` proceeds.
+
+<Callout type="warning">
+  `--json`, `--no-interactive`, and non-TTY stdin skip the prompt and can refresh
+  without `--yes`. Include `--yes` in automation to make the write explicit.
+</Callout>
+
+A TTY decline currently exits `1`, not `3`.
+
+## Output and streams
+
+Human progress, destination preview, and confirmation use stderr. The final
+summary uses stdout. It reports the kit, route, file count, install mode, scope,
+Hook result, warnings, preserved changes, and recovery information.
+
+With `--json`, stdout uses the versioned `kind=kit.init` envelope because
+refresh reuses the installation result model. Data includes `kit`, `target`,
+optional `targets`, `mode`, `installMode`, `scope`, `outDir`, `filesWritten`,
+`success`, and optional Skill, Hook, warning, transition, and snapshot fields.
+Unless `--quiet` is set, stderr also emits raw `preview` and `complete` status
+records with `action=install`.
+
+JSON execution errors are written to stderr with `schema_version`, `error`,
+`error_code`, and `exit_code`. Flag-parse errors can remain plain-text usage.
+
+## Exit status
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The selected route was reconciled successfully. |
+| `1` | Validation, source, authentication, entitlement, mode, ownership, emission, snapshot, write, or TTY-decline failure. Current runtime also uses `1` for most local-kit-not-found and unsafe-target errors. |
+| `2` | Cobra rejected flags, arguments, or a flag combination. |
+| `3` | A shared cancellation or interrupt path returned cancellation. |
+| `4` | Another kit lifecycle mutation holds the lock. |
+| `6` | No installed target could be detected for the selected scope. |
+
+Command help reserves `5` for a missing local kit and describes `6` more
+broadly, but only the no-detected-target path is explicitly classified as `6`;
+do not assume every source or ownership error uses the help-reserved code.
+
+## Effects and stale-file safety
+
+Refresh runs the force re-emission path internally. It snapshots affected owned
+surfaces unless `--no-backup`, writes current output, updates lifecycle
+manifests, and removes stale paths whose recorded hashes still match disk.
+
+- Clean owned stale paths can be removed.
+- Current clean owned paths can be replaced.
+- Modified owned paths are preserved and reported.
+- Unknown files are preserved and are not adopted into ownership.
+- Unsafe linked paths and empty intended-output sets fail closed or are skipped
+  with warnings instead of triggering broad deletion.
+
+The previous Skill selection is retained when the refreshed route has selection
+metadata. Refresh is not permission to delete custom runtime content.
+
+## Recovery and limitations
+
+Keep every reported snapshot until the runtime has rediscovered the refreshed
+Kit and an installed Skill works.
+
+```bash
+ak backups show <id>
+ak backups verify <id>
+```
+
+Use the reported restore command when the snapshot is in restore scope;
+otherwise use the reported manual recovery directory. Recovery is bounded and
+multi-file restore is not guaranteed to be transactional.
+
+Codex does not project every Claude command, Hook matcher, or status-line
+feature. A successful refresh can still contain target-projection warnings.
+
+## Related commands
+
+- [`ak kit install`](./kit-install) installs a new route.
+- [`ak kit uninstall`](./kit-uninstall) previews or removes an installed route.
+- [`ak kit validate`](./kit-validate) validates a local authoring tree.
+- [Complete command facts](../cli/ak_kit_refresh)
+- [Install and refresh kits](../../guides/installing-kits)
+- [Kit installation troubleshooting](../../troubleshooting/kit-installation)

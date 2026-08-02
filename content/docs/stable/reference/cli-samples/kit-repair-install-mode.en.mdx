@@ -1,0 +1,146 @@
+---
+title: ak kit repair-install-mode
+description: Keep project-native Claude Code output and deactivate conflicting AgentKit project plugins with bounded recovery.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak kit repair-install-mode` after `ak doctor` reports that the same project
+has both an active native Claude Code install and an active AgentKit project
+plugin. The repair keeps native mode and deactivates only project-plugin state
+with matching AgentKit lifecycle evidence.
+
+## Syntax
+
+```bash
+ak kit repair-install-mode --keep native --yes
+```
+
+The command accepts no positional arguments. Both `--keep native` and `--yes`
+are required.
+
+## Before you run
+
+Review the mixed-install-mode finding first:
+
+```bash
+ak doctor
+```
+
+The repair defaults to the current directory. It is project-scoped and local:
+it does not resolve a Kit source, contact the registry, check entitlement, or
+reinstall native output.
+
+## Arguments
+
+This command accepts no positional arguments. Select another project only with
+`--project-dir`.
+
+The command has no alias.
+
+## Options
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `--keep <mode>` | Empty | Required exact value: `native`. No other keep mode is supported. |
+| `--project-dir <dir>` | Current directory | Select the project containing the mixed mode. |
+
+Shared flags are documented in [CLI conventions](../cli-conventions).
+
+## Examples
+
+```bash
+# Repair the current project.
+ak kit repair-install-mode --keep native --yes
+
+# Repair a specified project and capture structured output.
+ak kit repair-install-mode --keep native --project-dir ./app --yes --json
+```
+
+## Confirmation and no-op behavior
+
+The command has no interactive prompt, preview, dry-run, apply, or force mode.
+Without `--yes`, it emits an error and makes no repair. `--json`,
+`--no-interactive`, and non-TTY stdin do not waive the `--yes` requirement.
+
+<Callout type="warning">
+  `--yes` applies the repair immediately after evidence is re-detected under the
+  lifecycle lock. Run it only after checking the project path and doctor finding.
+</Callout>
+
+If the selected project has no same-scope native-plus-project-plugin conflict,
+the command exits `0`, writes no repair snapshot, and reports that no mixed modes
+were found.
+
+## Output and streams
+
+Human success output uses stdout. A no-op prints
+`No mixed Claude Code install modes found.` A repair lists the Kit names whose
+project plugins were deactivated and prints each recovery snapshot, verify
+command, and restore or manual recovery action.
+
+With `--json`, stdout contains a versioned envelope with
+`kind=kit.repair_install_mode`. Its `data` includes:
+
+```text
+keep, projectDir, repaired, snapshots, recovery, warnings, success
+```
+
+Errors in JSON mode use a versioned error envelope on stderr. A failed mutation
+can add `recovery.snapshots` with retained recovery actions. Flag-parse errors
+can remain plain-text usage.
+
+## Exit status
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The mixed project modes were repaired, or no matching conflict existed. |
+| `1` | `--keep native` or `--yes` was missing, project/evidence discovery failed, snapshot or deactivation failed, or automatic rollback was refused. |
+| `2` | Cobra rejected flags or positional arguments. |
+| `4` | Another Kit lifecycle mutation holds the lock. |
+
+## Effects and ownership boundaries
+
+The command discovers Kit names from project install-mode evidence, then checks
+each Kit for an active project-native Claude route and an active project plugin
+in the same project. For each proven conflict it:
+
+1. Acquires the Kit lifecycle lock.
+2. Captures a multi-root recovery snapshot.
+3. Deactivates and removes fingerprinted AgentKit project-plugin state.
+4. Preserves the project-native install.
+5. Commits the transition only after all selected Kit repairs succeed.
+
+The repair does not remove a Claude user plugin merely because a project-native
+copy exists, and it does not remove global-native state merely because a project
+plugin exists. Cross-scope coexistence is not authorization for cleanup.
+User-modified and unproven files remain preserved.
+
+## Recovery and limitations
+
+After a successful repair, rerun the health check and verify native discovery:
+
+```bash
+ak doctor
+```
+
+Keep every reported snapshot until the project-native Skills work. Recovery
+output includes `ak backups verify` and either a bounded restore command with
+the required roots or a manual data path.
+
+If a repair fails after mutation starts, automatic rollback only restores paths
+whose live postimages can still be proved. A concurrent change can make rollback
+refuse destructive restoration; the command then returns retained snapshot
+details for manual review.
+
+This command supports only “keep native.” To intentionally keep plugin mode,
+use the explicit install-mode transition supported by `ak kit install` after
+reviewing that route; do not invert this repair with broad deletion.
+
+## Related commands
+
+- [`ak doctor`](./doctor) detects mixed install modes.
+- [`ak kit install`](./kit-install) performs explicit install-mode transitions.
+- [`ak kit uninstall`](./kit-uninstall) previews or removes a selected route.
+- [Complete command facts](../cli/ak_kit_repair-install-mode)
+- [Kit installation troubleshooting](../../troubleshooting/kit-installation)

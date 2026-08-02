@@ -1,0 +1,116 @@
+---
+title: ak kit validate
+description: Kiểm tra authoring tree Kits cục bộ và gate CI theo schema, inheritance, Hook cùng capability rule.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak kit validate` để kiểm tra tệp `kit.yaml` cục bộ và các authoring
+contract liên quan trước khi cài hoặc phát hành thay đổi của Kit. Lệnh read-only
+này dành cho Kit author và CI.
+
+## Cú pháp
+
+```bash
+ak kit validate [kits-dir]
+```
+
+`[kits-dir]` là tuỳ chọn và mặc định là `./kits`. Lệnh nhận tối đa một thư mục
+theo vị trí.
+
+## Trước khi chạy
+
+Lệnh chỉ kiểm tra tree cục bộ đã chọn. Nó không truy vấn registry, kiểm tra
+entitlement của tài khoản, dùng verified cache hoặc kiểm tra route runtime đã
+cài.
+
+Validation load mọi `kit.yaml` được tìm thấy, kiểm tra schema và inheritance,
+kiểm tra single-source override rule cùng khai báo Skill capability, đồng thời
+yêu cầu `hooks/hooks.json` khi Kit export Hook entrypoint cấp cao nhất. Hook
+helper chỉ dùng như library trong subdirectory được hỗ trợ không cần event
+manifest này.
+
+## Đối số
+
+`[kits-dir]` là thư mục Kits cục bộ tuỳ chọn, mặc định là `./kits`. Lệnh nhận tối
+đa một đối số vị trí.
+
+Lệnh không có alias.
+
+## Tuỳ chọn
+
+Lệnh không có cờ riêng. Xem các cờ dùng chung tại
+[quy ước CLI](../cli-conventions). `--yes` và `--no-interactive` không thay đổi
+hành vi validation.
+
+## Ví dụ
+
+```bash
+# Validate ./kits.
+ak kit validate
+
+# Validate authoring tree tường minh.
+ak kit validate ./fixtures/kits
+
+# Đọc violation trong CI.
+ak kit validate ./kits --json | jq '.data.violations'
+```
+
+## Đầu ra và stream
+
+Human mode ghi toàn bộ báo cáo lên stderr; stdout để trống. Báo cáo hiển thị số
+Kit được tìm thấy, từng violation theo dạng `kit_path: category: message` cùng
+phần tổng hợp hợp lệ hoặc không hợp lệ.
+
+Với `--json`, stdout chứa envelope có phiên bản:
+
+```text
+schema_version: 1
+kind: kit.validate
+data.kits_dir: string
+data.kit_count: integer
+data.violations: array
+data.valid: boolean
+```
+
+Mỗi violation có `kit_path`, `category` và `message`. Kết quả validation nằm
+trong report có dạng thành công này; sau đó process thoát khác không. Chúng không
+được phát như JSON error envelope.
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Mọi Kit được tìm thấy đều hợp lệ, hoặc không tìm thấy `kit.yaml`. Đường dẫn không tồn tại hoặc không phải thư mục cũng được xem là phép kiểm tra rỗng thành công. |
+| `1` | Một hoặc nhiều validation violation hoặc lỗi directory/walk được báo. |
+| `2` | Cobra từ chối cờ/argument, hoặc validator recover một internal panic. |
+
+Phần help xếp internal validator panic vào mã `1`, nhưng runtime thoát `2` rõ
+ràng cho trường hợp này.
+
+<Callout type="warning">
+  Thư mục gõ sai hoặc không tồn tại thoát `0` với thông báo “nothing to
+  validate.” Trong CI, hãy xác minh đường dẫn dự kiến tồn tại trước khi dùng
+  lệnh này làm gate.
+</Callout>
+
+## Tác động, an toàn và giới hạn
+
+Lệnh duyệt tree cục bộ rồi đọc Kit manifest và tệp được tham chiếu. Nó không ghi
+tệp, spawn provider process, liên hệ mạng, thay đổi xác thực hoặc cập nhật cache.
+
+Directory entry báo lỗi walk riêng lẻ sẽ bị bỏ qua. Lỗi walk cấp cao nhất trở
+thành violation, nhưng nested entry không đọc được có thể vắng mặt trong báo
+cáo. Hãy giữ quyền filesystem ổn định trong CI.
+
+Validation chứng minh cấu trúc authoring của nguồn cục bộ đã chọn. Nó không
+chứng minh entitlement trên registry, chữ ký package từ xa, target projection
+hoặc an toàn ownership lúc cài.
+
+## Lệnh liên quan
+
+- [`ak kit list-kits`](./kit-list-kits) tổng hợp cùng loại nguồn cục bộ.
+- [`ak kit install`](./kit-install) resolve và cài route Kit.
+- [`ak kit refresh`](./kit-refresh) đồng bộ route đã cài.
+- [Thông tin lệnh đầy đủ](../cli/ak_kit_validate)
+- [Cài Kit an toàn](../../guides/installing-kits)

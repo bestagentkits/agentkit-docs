@@ -1,0 +1,168 @@
+---
+title: ak kit uninstall
+description: Preview hoặc xoá đầu ra runtime owned của một Kit trong khi giữ trạng thái của người dùng và Kit khác.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak kit uninstall` để lập kế hoạch hoặc áp dụng việc gỡ một Kit đã cài.
+Lệnh phân loại đường dẫn đã cài dựa trên lifecycle evidence, xoá trạng thái clean
+thuộc ownership của AgentKit và giữ nội dung do người dùng sửa, không xác định
+hoặc thuộc Kit khác.
+
+## Cú pháp
+
+```bash
+ak kit uninstall <kit-name>
+```
+
+`<kit-name>` là bắt buộc và phải là Kit ID có thể cài.
+
+## Trước khi chạy
+
+Uninstall chỉ hoạt động cục bộ, không liên hệ registry và không cần xác thực hay
+entitlement. Lệnh đọc install manifest, ownership index, runtime setting và
+provider state của route đã chọn.
+
+Lệnh chỉ preview nếu thiếu `--yes`. Nó không mở prompt xác nhận tương tác.
+
+<Callout type="warning">
+  `--json`, `--no-interactive` và TTY không cho phép xoá. Chỉ `--yes` mới áp
+  dụng kế hoạch. `--dry-run` luôn giữ lệnh ở chế độ preview.
+</Callout>
+
+## Đối số
+
+`<kit-name>` là Kit ID đã cài duy nhất có route được lập kế hoạch hoặc gỡ bỏ. Đối
+số này bắt buộc; lệnh không mở prompt để chọn Kit.
+
+Lệnh không có alias.
+
+## Tuỳ chọn
+
+| Tuỳ chọn | Mặc định | Tác động |
+| --- | --- | --- |
+| `--dry-run` | `false` | Hiển thị kế hoạch xoá mà không thay đổi tệp đã cài. |
+| `-g, --global` | `false` | Chọn user/global native lifecycle root. |
+| `--kits-dir <dir>` | Trống | Cung cấp nguồn cục bộ để phân loại fallback cho bản cài cũ khi không có manifest đã ghi. |
+| `--plugin-mode` | `false` | Chọn Claude Code plugin delivery thay cho native route. |
+| `--project-dir <dir>` | Trống | Chọn route project-native, hoặc project plugin khi dùng cùng `--plugin-mode`. |
+
+Xem các cờ dùng chung tại [quy ước CLI](../cli-conventions).
+
+## Chọn chính xác scope và mode
+
+| Selector | Route |
+| --- | --- |
+| Không có cờ scope hoặc mode | Cleanup diện rộng ở user scope: user plugin/legacy root được nhận diện cùng global native lifecycle root đã đăng ký của Kit. Không chọn route project-native trong project hiện tại. |
+| `--global` | Các user/global native lifecycle root đã đăng ký. |
+| `--global --plugin-mode` | Chỉ Claude Code user plugin. |
+| `--project-dir <dir>` | Project-native lifecycle root của project đã chọn. |
+| `--plugin-mode` | Claude Code project plugin trong thư mục hiện tại. |
+| `--plugin-mode --project-dir <dir>` | Claude Code project plugin trong project đã chỉ định. |
+
+Không thể kết hợp `--global` với `--project-dir`. Trạng thái project và user độc
+lập; gỡ project plugin không cho phép cleanup user plugin hoặc native output.
+
+## Ví dụ
+
+```bash
+# Preview kế hoạch user-scope rộng mặc định.
+ak kit uninstall engineer --dry-run
+
+# Áp dụng kế hoạch mặc định đã rà soát.
+ak kit uninstall engineer --yes
+
+# Chỉ xoá Claude user plugin.
+ak kit uninstall engineer --global --plugin-mode --yes
+
+# Preview một route project-native dưới dạng JSON.
+ak kit uninstall engineer --project-dir ./app --json
+
+# Xoá một project plugin.
+ak kit uninstall engineer --plugin-mode --project-dir ./app --yes
+```
+
+## Ngữ nghĩa preview, apply và từ chối
+
+Nếu thiếu `--yes`, lệnh tính và render toàn bộ kế hoạch, không thay đổi bề mặt
+owned rồi thoát `3`. `--dry-run` cũng làm như vậy kể cả khi có `--yes`. Mã thoát
+này biểu thị preview đã hoàn tất, không phải lỗi phân loại.
+
+Uninstall được áp dụng giữ khoá vòng đời Kit từ lúc lập kế hoạch đến khi thay
+đổi xong. Dry-run không giữ khoá vì không thay đổi bề mặt owned.
+
+## Đầu ra và stream
+
+Đầu ra dành cho người dùng đi tới stdout. Nó báo `dry-run` hoặc `uninstalled`,
+số lượng delete, preserve và skip, cảnh báo cùng mọi recovery snapshot có thể
+thực hiện.
+
+Với `--json`, stdout chứa envelope có phiên bản với `kind=kit.uninstall`.
+`data` gồm:
+
+```text
+kit, dryRun, pluginDir, pluginDirs
+snapshotId, snapshotIds, recovery
+removedPaths, preservedPaths, skippedPaths, configPaths
+deactivationSteps, warnings, manifestResult
+deleted, preserved, skipped, success
+```
+
+Preview thành công có `data.success=true` và `data.dryRun=true`, sau đó process
+thoát `3`. Lỗi thay đổi trong JSON mode ghi error envelope lên stderr cùng
+`recovery.snapshots` tuỳ chọn. Lỗi parse cờ có thể vẫn là hướng dẫn dùng plain
+text.
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Kế hoạch uninstall đã xem được áp dụng thành công. |
+| `1` | Kit hoặc route không hợp lệ, ownership state không đọc được hoặc không an toàn, lỗi snapshot, provider/config, mutation hoặc automatic rollback bị từ chối. |
+| `2` | Cobra từ chối cờ hoặc argument. |
+| `3` | Preview hoàn tất vì thiếu `--yes` hoặc có `--dry-run`. |
+| `4` | Một thao tác vòng đời Kit khác đang giữ khoá. |
+
+## Tác động và an toàn ownership
+
+Tuỳ route đã chọn, uninstall được áp dụng có thể xoá tệp runtime clean và owned
+cùng lifecycle metadata, deactivate Claude plugin, cập nhật runtime setting
+dùng chung, xoá đăng ký Codex thuộc Kit và dọn trạng thái manifest đã ghi.
+
+Phân loại dựa trên đường dẫn và hash tại thời điểm cài, không dựa trên Kit source
+hiện tại được build lại:
+
+- Đường dẫn đã ghi còn khớp byte có thể bị xoá.
+- Đường dẫn đã ghi nhưng do người dùng sửa được giữ lại.
+- Tệp không xác định được giữ lại.
+- Tệp dùng chung và entry thuộc Kit khác hoặc người dùng được giữ lại.
+- Symlink không an toàn, mutation boundary đã đổi, ownership evidence hỏng và
+  trạng thái dùng chung mơ hồ đều fail closed.
+
+Kế hoạch mặc định có thể trải qua nhiều provider ở user scope. Luôn xem
+`removedPaths`, `configPaths` và `preservedPaths` trước khi thêm `--yes`.
+
+## Khôi phục và giới hạn
+
+Trước khi ghi, AgentKit tạo snapshot cho root bị ảnh hưởng và tệp provider dùng
+chung chính xác. Đầu ra cung cấp `ak backups verify`, lệnh restore có giới hạn
+hoặc đường dẫn khôi phục thủ công cho snapshot ngoài restore scope thông thường.
+
+```bash
+ak backups verify <id>
+ak backups show <id>
+```
+
+Rollback bảo vệ thay đổi đồng thời và có thể từ chối automatic restore phá huỷ
+khi không chứng minh được live postimage. Khi đó, hãy giữ recovery data được báo
+và kiểm tra trạng thái thủ công. Snapshot không phải backup toàn máy, và thao tác
+nhiều tệp không được đảm bảo có tính giao dịch khi process bị dừng.
+
+## Lệnh liên quan
+
+- [`ak kit install`](./kit-install) cài route.
+- [`ak kit refresh`](./kit-refresh) đồng bộ đầu ra owned mà không gỡ route.
+- [`ak kit repair-install-mode`](./kit-repair-install-mode) xử lý một mixed Claude project mode trong khi giữ native output.
+- [Thông tin lệnh đầy đủ](../cli/ak_kit_uninstall)
+- [Xử lý sự cố cài Kit](../../troubleshooting/kit-installation)

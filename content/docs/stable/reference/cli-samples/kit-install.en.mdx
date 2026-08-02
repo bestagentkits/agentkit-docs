@@ -1,0 +1,180 @@
+---
+title: ak kit install
+description: Install a kit into an explicit runtime, scope, and delivery mode with reviewed output and recovery.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak kit install` to resolve a kit and emit it into a runtime or build
+directory. It is the install-oriented entry point for the same implementation
+used by `ak kit init`.
+
+## Syntax
+
+```bash
+ak kit install <kit-name>
+```
+
+`<kit-name>` is the single installable kit ID. On an interactive TTY, omitting
+it can open the setup wizard; a scripted invocation without it fails.
+
+## Before you run
+
+Released kits resolve from the authenticated remote registry by default. The
+kit channel defaults to `stable`; paid kits require a valid CLI session and
+entitlement before preview or writes.
+
+```bash
+ak whoami
+ak licenses
+```
+
+Remote resolution can contact the registry, refresh saved authentication,
+download a runtime-specific artifact, and populate the verified cache. A fully
+verified warm cache can cover some offline failures, but an explicit
+entitlement denial does not fall back to cached content.
+
+Use `--local --kits-dir <dir>` only for an intentional development or CI source.
+
+## Arguments
+
+`<kit-name>` is the single installable Kit ID. It is required in scripted or
+non-interactive use; an interactive TTY can open the setup wizard when it is
+omitted.
+
+The command has no alias.
+
+## Options
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `--build-only` | `false` | Build into a local output directory instead of installing. |
+| `--channel <channel>` | `stable` | Select the remote kit channel. |
+| `--exclude-skills <names>` | Empty | Install every Skill except a comma-separated set. |
+| `--force` | `false` | Authorize a bounded overwrite of an occupied target. |
+| `-g, --global` | `false` | Use the runtime's user scope instead of the current project. |
+| `--kits-dir <dir>` | Empty | Select an explicit local kit source. |
+| `--local` | `false` | Use the explicit local source instead of the registry. |
+| `--no-backup` | `false` | Skip applicable pre-install snapshots and takeover protection. |
+| `--out <dir>` | Empty | Set the build or export output root. |
+| `--registry-url <url>` | Environment or release default | Override the registry base URL. |
+| `--remote` | `true` | Use the authenticated remote registry; passing it explicitly is unnecessary. |
+| `--select-skills` | `false` | Choose Skills interactively; requires a TTY. |
+| `--skills <names>` | Empty | Install only a comma-separated set of Skills. |
+| `--switch-to-plugin` | `false` | Select Claude Code plugin delivery at the chosen scope. |
+| `--target <ids>` | `claude-code` | Select one or more comma-separated emitter targets. |
+| `--version <version>` | Channel latest | Select a remote kit version. |
+
+`--skills`, `--exclude-skills`, and `--select-skills` are alternative selection
+modes. `--out` requires `--build-only` for production targets. Export-only
+targets such as `portable` imply build mode when `--out` is set. Shared flags
+are documented in [CLI conventions](../cli-conventions).
+
+## Choose the route
+
+| Route | Selector | Main destination |
+| --- | --- | --- |
+| Project-native Claude Code | `--target claude-code` | Project `.claude` surfaces plus `.agentkit` lifecycle metadata. |
+| User-native Claude Code | `--target claude-code --global` | User Claude surfaces plus AgentKit lifecycle data. |
+| Project Claude plugin | `--target claude-code --switch-to-plugin` | Project `ak-<kit>` plugin. |
+| User Claude plugin | `--target claude-code --global --switch-to-plugin` | `ak-<kit>` under the configured user plugin root. |
+| Project or user Codex | `--target codex` with optional `--global` | Project or user `.agents` and `.codex` surfaces. |
+| Project or user Cursor | `--target cursor` with optional `--global` | Project or user `.cursor` surfaces. |
+| Build or export | `--build-only --out <dir>` or `--target portable --out <dir>` | The selected output directory. |
+
+Project and user installs can coexist. Claude native and plugin delivery are
+separate modes within one scope; switching modes is an explicit,
+snapshot-backed transition.
+
+## Examples
+
+```bash
+# Project-native Codex install from the release source.
+ak kit install engineer --target codex
+
+# Explicit user Claude plugin install.
+ak kit install engineer --target claude-code --global --switch-to-plugin
+
+# Intentional unattended install.
+ak kit install engineer --target codex --yes --no-interactive --json
+
+# Local development source with a selected Skill set.
+ak kit install engineer --local --kits-dir ./kits --skills ak-cook,ak-plan --yes
+```
+
+## Confirmation behavior
+
+On an interactive TTY, install mode previews the destination and asks
+`Continue? [y/N]:`. Only `y` or `yes` proceeds.
+
+<Callout type="warning">
+  `--json`, `--no-interactive`, and non-TTY stdin skip the prompt and can write
+  without `--yes`. Use `--yes` in automation to make mutation intent explicit.
+</Callout>
+
+A TTY decline currently exits `1`. Build and export routes do not show the
+install preview.
+
+## Output and streams
+
+Human progress, destination preview, and confirmation use stderr. The final
+summary uses stdout and reports the kit, output path, file count, install mode,
+scope, Hook summary, warnings, and recovery information when present.
+
+With `--json`, stdout contains a versioned envelope with `kind=kit.init` and
+command data under `data`. Unless `--quiet` is set, stderr also contains raw
+status records with `action`, `kit`, `destination`, and `status`; `status` is
+`preview` before writes and `complete` after success.
+
+Success data includes `kit`, `target`, optional `targets`, `mode`,
+`installMode`, `scope`, `outDir`, `filesWritten`, `success`, and optional Skill,
+Hook, warning, transition, configuration, and recovery fields. JSON execution
+errors use `schema_version`, `error`, `error_code`, and `exit_code` on stderr.
+Flag-parse errors can remain plain-text usage.
+
+## Exit status
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The selected install, build, or export completed. |
+| `1` | Validation, source, authentication, entitlement, destination, emission, write, or TTY-decline failure. Current runtime also uses `1` for local-kit-not-found and occupied-target cases. |
+| `2` | Cobra rejected flags, arguments, or a flag combination. |
+| `3` | A shared cancellation or interrupt path returned cancellation. |
+| `4` | Another kit lifecycle mutation holds the lock. |
+
+Command help reserves `5` for a missing local kit and `6` for an occupied
+target, but those two install errors currently fall through to exit `1`. Do not
+branch on `5` or `6` for this command until runtime classification changes.
+
+## Effects, safety, and recovery
+
+Installation can write runtime-native files, ownership and lifecycle metadata,
+project configuration, Hook scripts, Skill directories, mode-transition state,
+and user runtime configuration. A user-scope Codex install can register the
+AgentKit MCP runtime.
+
+Unknown and user-modified files are preserved unless a supported operation and
+`--force` authorize a bounded overwrite. AgentKit normally snapshots affected
+owned surfaces before forced overwrites or mode transitions. Some snapshots can
+be restored with `ak backups restore`; project-local output can instead report
+a manual snapshot data directory outside normal restore scope.
+
+```bash
+ak backups show <id>
+ak backups verify <id>
+```
+
+Follow the reported recovery command or manual path. Do not delete a runtime
+home or assume every snapshot is a full or transactional backup.
+
+## Limitations and related commands
+
+Codex cannot project every Claude command, Hook matcher, or status-line feature.
+Review warnings after a successful install.
+
+- [`ak kit init`](./kit-init) uses the same installation implementation.
+- [`ak kit refresh`](./kit-refresh) reconciles an existing route and removes stale clean owned output.
+- [`ak kit uninstall`](./kit-uninstall) previews or removes installed owned output.
+- [Complete command facts](../cli/ak_kit_install)
+- [Install kits safely](../../guides/installing-kits)
+- [Kit installation troubleshooting](../../troubleshooting/kit-installation)

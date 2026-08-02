@@ -1,0 +1,192 @@
+---
+title: ak kit install
+description: Cài Kit vào runtime, scope và delivery mode rõ ràng với đầu ra cùng đường khôi phục đã được rà soát.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak kit install` để resolve một Kit rồi tạo đầu ra cho runtime hoặc thư mục
+build. Đây là entry point hướng đến thao tác cài, dùng cùng implementation với
+`ak kit init`.
+
+## Cú pháp
+
+```bash
+ak kit install <kit-name>
+```
+
+`<kit-name>` là một Kit ID có thể cài. Trên TTY tương tác, bỏ trống giá trị này
+có thể mở setup wizard; lần gọi từ script thiếu giá trị sẽ thất bại.
+
+## Trước khi chạy
+
+Theo mặc định, Kit phát hành được resolve từ remote registry có xác thực. Kit
+channel mặc định là `stable`; Kit trả phí cần phiên CLI hợp lệ và entitlement
+trước khi preview hoặc ghi dữ liệu.
+
+```bash
+ak whoami
+ak licenses
+```
+
+Quá trình resolve từ xa có thể liên hệ registry, làm mới xác thực đã lưu, tải
+artifact dành cho runtime và ghi verified cache. Cache đã xác minh đầy đủ có thể
+xử lý một số lỗi offline, nhưng lỗi từ chối entitlement rõ ràng không fallback
+sang cache.
+
+Chỉ dùng `--local --kits-dir <dir>` cho nguồn development hoặc CI có chủ đích.
+
+## Đối số
+
+`<kit-name>` là Kit ID có thể cài đặt duy nhất. Đối số này bắt buộc khi chạy
+script hoặc non-interactive; TTY tương tác có thể mở setup wizard khi bỏ qua.
+
+Lệnh không có alias.
+
+## Tuỳ chọn
+
+| Tuỳ chọn | Mặc định | Tác động |
+| --- | --- | --- |
+| `--build-only` | `false` | Build vào thư mục đầu ra cục bộ thay vì cài. |
+| `--channel <channel>` | `stable` | Chọn remote kit channel. |
+| `--exclude-skills <names>` | Trống | Cài mọi Skill ngoại trừ tập phân tách bằng dấu phẩy. |
+| `--force` | `false` | Cho phép ghi đè có giới hạn lên target đã có dữ liệu. |
+| `-g, --global` | `false` | Dùng user scope của runtime thay cho project hiện tại. |
+| `--kits-dir <dir>` | Trống | Chọn nguồn Kit cục bộ rõ ràng. |
+| `--local` | `false` | Dùng nguồn cục bộ rõ ràng thay cho registry. |
+| `--no-backup` | `false` | Bỏ qua snapshot trước khi cài và bảo vệ takeover khi áp dụng. |
+| `--out <dir>` | Trống | Đặt thư mục gốc cho build hoặc export. |
+| `--registry-url <url>` | Biến môi trường hoặc mặc định bản phát hành | Ghi đè URL gốc của registry. |
+| `--remote` | `true` | Dùng remote registry có xác thực; không cần truyền rõ cờ này. |
+| `--select-skills` | `false` | Chọn Skill tương tác; cần TTY. |
+| `--skills <names>` | Trống | Chỉ cài tập Skill phân tách bằng dấu phẩy. |
+| `--switch-to-plugin` | `false` | Chọn Claude Code plugin delivery tại scope đã chọn. |
+| `--target <ids>` | `claude-code` | Chọn một hoặc nhiều emitter target phân tách bằng dấu phẩy. |
+| `--version <version>` | Phiên bản mới nhất của channel | Chọn phiên bản Kit từ xa. |
+
+`--skills`, `--exclude-skills` và `--select-skills` là các chế độ lựa chọn thay
+thế nhau. `--out` cần `--build-only` với production target. Export-only target
+như `portable` ngầm bật build mode khi có `--out`. Xem các cờ dùng chung tại
+[quy ước CLI](../cli-conventions).
+
+## Chọn route
+
+| Route | Selector | Destination chính |
+| --- | --- | --- |
+| Claude Code native trong project | `--target claude-code` | Các bề mặt `.claude` của project cùng lifecycle metadata trong `.agentkit`. |
+| Claude Code native của user | `--target claude-code --global` | Các bề mặt Claude của user cùng lifecycle data của AgentKit. |
+| Claude plugin trong project | `--target claude-code --switch-to-plugin` | Plugin `ak-<kit>` trong project. |
+| Claude plugin của user | `--target claude-code --global --switch-to-plugin` | `ak-<kit>` dưới user plugin root đã cấu hình. |
+| Codex trong project hoặc user | `--target codex` cùng `--global` nếu cần | Các bề mặt `.agents` và `.codex` trong project hoặc user. |
+| Cursor trong project hoặc user | `--target cursor` cùng `--global` nếu cần | Các bề mặt `.cursor` trong project hoặc user. |
+| Build hoặc export | `--build-only --out <dir>` hoặc `--target portable --out <dir>` | Thư mục đầu ra đã chọn. |
+
+Bản cài trong project và user có thể cùng tồn tại. Claude native và plugin là
+hai delivery mode riêng trong một scope; chuyển mode là thao tác rõ ràng, có
+snapshot bảo vệ.
+
+## Ví dụ
+
+```bash
+# Cài Codex project-native từ nguồn release.
+ak kit install engineer --target codex
+
+# Cài Claude user plugin một cách tường minh.
+ak kit install engineer --target claude-code --global --switch-to-plugin
+
+# Cài unattended có chủ đích.
+ak kit install engineer --target codex --yes --no-interactive --json
+
+# Nguồn development cục bộ với tập Skill đã chọn.
+ak kit install engineer --local --kits-dir ./kits --skills ak-cook,ak-plan --yes
+```
+
+## Hành vi xác nhận
+
+Trên TTY tương tác, install mode preview destination rồi hỏi
+`Continue? [y/N]:`. Chỉ `y` hoặc `yes` mới tiếp tục.
+
+<Callout type="warning">
+  `--json`, `--no-interactive` và stdin không phải TTY sẽ bỏ qua prompt và có
+  thể ghi dữ liệu khi thiếu `--yes`. Trong tự động hoá, hãy dùng `--yes` để thể
+  hiện rõ chủ đích thay đổi.
+</Callout>
+
+Từ chối trên TTY hiện thoát với mã `1`. Route build và export không hiển thị
+install preview.
+
+## Đầu ra và stream
+
+Tiến trình, destination preview và xác nhận dành cho người dùng dùng stderr.
+Phần tổng hợp cuối dùng stdout và báo Kit, đường dẫn đầu ra, số tệp, install
+mode, scope, tổng hợp Hook, cảnh báo cùng thông tin khôi phục khi có.
+
+Với `--json`, stdout chứa envelope có phiên bản với `kind=kit.init` và dữ liệu
+lệnh dưới `data`. Trừ khi có `--quiet`, stderr còn chứa các status record thô
+với `action`, `kit`, `destination` và `status`; `status` là `preview` trước khi
+ghi và `complete` sau khi thành công.
+
+Dữ liệu thành công gồm `kit`, `target`, `targets` tuỳ chọn, `mode`,
+`installMode`, `scope`, `outDir`, `filesWritten`, `success` cùng các trường Skill,
+Hook, warning, transition, configuration và recovery tuỳ chọn. Lỗi thực thi JSON
+dùng `schema_version`, `error`, `error_code` và `exit_code` trên stderr. Lỗi parse
+cờ có thể vẫn là hướng dẫn dùng plain text.
+
+Khi target không thể chiếu một nhóm Hook, `data` còn có thể chứa số đếm tuỳ chọn
+`hooksDropped` và mảng `droppedHookSummaries`. Đầu ra dành cho người dùng in
+`Hooks dropped (unsupported on this target): <count> groups - see warnings`
+cùng phần tổng hợp nêu hành động cho từng nhóm. Một nhóm bị loại đã được thông
+báo không làm quá trình cài thất bại.
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Install, build hoặc export đã chọn hoàn tất. |
+| `1` | Lỗi validation, nguồn, xác thực, entitlement, destination, emission, ghi dữ liệu hoặc từ chối trên TTY. Runtime hiện cũng dùng `1` khi không tìm thấy Kit cục bộ hoặc target đã có dữ liệu. |
+| `2` | Cobra từ chối cờ, argument hoặc tổ hợp cờ. |
+| `3` | Đường huỷ hoặc interrupt dùng chung trả về trạng thái huỷ. |
+| `4` | Một thao tác vòng đời Kit khác đang giữ khoá. |
+
+Phần help dành mã `5` cho Kit cục bộ không tồn tại và `6` cho target đã có dữ
+liệu, nhưng hai lỗi install này hiện rơi về mã `1`. Đừng rẽ nhánh theo `5` hoặc
+`6` cho lệnh này cho đến khi runtime thay đổi cách phân loại.
+
+## Tác động, an toàn và khôi phục
+
+Quá trình cài có thể ghi tệp native của runtime, ownership và lifecycle metadata,
+cấu hình project, Hook script, thư mục Skill, trạng thái chuyển mode cùng cấu
+hình runtime của user. Bản cài Codex ở user scope có thể đăng ký AgentKit MCP
+runtime.
+
+Tệp không xác định và tệp do người dùng sửa được giữ nguyên, trừ khi thao tác hỗ
+trợ và `--force` cho phép ghi đè có giới hạn. AgentKit thường tạo snapshot cho
+bề mặt owned bị ảnh hưởng trước khi buộc ghi đè hoặc chuyển mode. Một số snapshot
+có thể dùng với `ak backups restore`; đầu ra project-local có thể chỉ báo thư mục
+dữ liệu snapshot thủ công nằm ngoài restore scope thông thường.
+
+```bash
+ak backups show <id>
+ak backups verify <id>
+```
+
+Hãy làm theo lệnh khôi phục hoặc đường dẫn thủ công được báo. Không xoá toàn bộ
+runtime home hoặc giả định mọi snapshot là backup toàn phần hay có tính giao dịch.
+
+## Giới hạn và lệnh liên quan
+
+Codex không thể chiếu mọi Claude command, Hook matcher hoặc status-line feature.
+Hãy xem cảnh báo sau một lần cài thành công. Ví dụ, matcher `PostToolUse` cho
+vòng đời task của Claude có thể được báo là không được chiếu, trong khi các nhóm
+Hook tương thích cùng ranh giới refresh `Stop` và `SubagentStop` được hỗ trợ vẫn
+hoạt động. Trên Windows, Hook Codex `.cjs` đủ điều kiện nằm trong Codex home có
+thể dùng `.cmd` shim thuộc ownership của AgentKit cho đường dẫn có khoảng trắng;
+đường dẫn bên ngoài, có metacharacter hoặc non-ASCII không an toàn vẫn bị giới
+hạn và được báo rõ.
+
+- [`ak kit init`](./kit-init) dùng cùng implementation cài đặt.
+- [`ak kit refresh`](./kit-refresh) đồng bộ lại route hiện có và xoá đầu ra cũ còn clean và owned.
+- [`ak kit uninstall`](./kit-uninstall) preview hoặc xoá đầu ra đã cài còn owned.
+- [Thông tin lệnh đầy đủ](../cli/ak_kit_install)
+- [Cài Kit an toàn](../../guides/installing-kits)
+- [Xử lý sự cố cài Kit](../../troubleshooting/kit-installation)

@@ -1,0 +1,182 @@
+---
+title: ak kit refresh
+description: Đồng bộ lại route Kit đã cài, xoá đầu ra cũ còn clean và owned, đồng thời giữ thay đổi của người dùng.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak kit refresh` để tạo lại đầu ra cho Kit đã cài sau khi nội dung export
+thay đổi. Refresh chỉ xoá tệp generated đã ngừng dùng khi AgentKit chứng minh
+được chúng còn clean và owned; nội dung không xác định hoặc do người dùng sửa
+được giữ nguyên.
+
+## Cú pháp
+
+```bash
+ak kit refresh <kit-name>
+```
+
+`<kit-name>` là bắt buộc. Lệnh này refresh route hiện có; hãy dùng
+`ak kit install` khi chưa có route.
+
+## Trước khi chạy
+
+Theo mặc định, lệnh resolve từ remote registry và dùng kit channel `stable`.
+Kit trả phí cần phiên CLI hợp lệ và entitlement. Quá trình resolve có thể làm
+mới xác thực đã lưu, liên hệ registry, tải artifact và cập nhật verified cache
+trước khi bắt đầu ghi lifecycle.
+
+```bash
+ak whoami
+ak licenses
+```
+
+Chỉ dùng `--local --kits-dir <dir>` cho nguồn development hoặc CI rõ ràng.
+Refresh không có cờ dry-run. Hãy chạy `ak audit` trước nếu cần kiểm tra drift.
+
+## Đối số
+
+`<kit-name>` là Kit ID đã cài duy nhất cần đồng bộ lại. Đối số này bắt buộc; lệnh
+không mở prompt để chọn Kit.
+
+Lệnh không có alias.
+
+## Tuỳ chọn
+
+| Tuỳ chọn | Mặc định | Tác động |
+| --- | --- | --- |
+| `--channel <channel>` | `stable` | Chọn remote kit channel. |
+| `-g, --global` | `false` | Refresh route ở user scope thay cho project hiện tại. |
+| `--kits-dir <dir>` | Trống | Chọn nguồn Kit cục bộ rõ ràng. |
+| `--local` | `false` | Dùng nguồn cục bộ rõ ràng thay cho registry. |
+| `--no-backup` | `false` | Bỏ qua recovery snapshot trước khi refresh. |
+| `--registry-url <url>` | Biến môi trường hoặc mặc định bản phát hành | Ghi đè URL gốc của registry. |
+| `--remote` | `true` | Dùng remote registry có xác thực; không cần truyền rõ. |
+| `--switch-to-plugin` | `false` | Chọn Claude Code plugin delivery tại project hoặc user scope. |
+| `--target <ids>` | Các target đã cài được phát hiện | Chọn một hoặc nhiều emitter target phân tách bằng dấu phẩy. |
+| `--version <version>` | Phiên bản mới nhất của channel | Chọn phiên bản Kit từ xa. |
+
+Xem các cờ dùng chung tại [quy ước CLI](../cli-conventions).
+
+## Resolve target, scope và mode
+
+Khi không có `--target`, refresh đọc lifecycle marker trong scope đã chọn.
+Project scope phát hiện Claude Code project-native, Cursor trong project và đầu
+ra project được nhận diện. User scope quét các user lifecycle target đã đăng ký.
+Nếu không phát hiện target, lệnh thoát `6` và yêu cầu truyền `--target` hoặc cài
+Kit trước.
+
+Claude plugin delivery luôn phải được chọn rõ ràng:
+
+```bash
+# Claude project plugin.
+ak kit refresh engineer --switch-to-plugin --yes
+
+# Claude user plugin.
+ak kit refresh engineer --global --switch-to-plugin --yes
+```
+
+Claude plugin đã cài không bị âm thầm xem là đầu ra native, kể cả khi có target
+khác cùng tồn tại. Project scope và user scope vẫn độc lập.
+
+## Ví dụ
+
+```bash
+# Tự phát hiện route project đã cài.
+ak kit refresh engineer --yes
+
+# Refresh tường minh một route Codex.
+ak kit refresh engineer --target codex --yes
+
+# Refresh từ nguồn development cục bộ tường minh.
+ak kit refresh engineer --local --kits-dir ./kits --target codex --yes
+
+# Refresh unattended có chủ đích.
+ak kit refresh engineer --target codex --yes --no-interactive --json
+```
+
+## Hành vi xác nhận
+
+Refresh dùng install destination preview và hỏi `Continue? [y/N]:` trên TTY
+tương tác. Chỉ `y` hoặc `yes` mới tiếp tục.
+
+<Callout type="warning">
+  `--json`, `--no-interactive` và stdin không phải TTY sẽ bỏ qua prompt và có
+  thể refresh khi thiếu `--yes`. Hãy thêm `--yes` trong tự động hoá để thể hiện
+  rõ thao tác ghi.
+</Callout>
+
+Từ chối trên TTY hiện thoát với mã `1`, không phải `3`.
+
+## Đầu ra và stream
+
+Tiến trình, destination preview và xác nhận dành cho người dùng dùng stderr.
+Phần tổng hợp cuối dùng stdout. Nó báo Kit, route, số tệp, install mode, scope,
+kết quả Hook, cảnh báo, thay đổi được giữ lại và thông tin khôi phục.
+
+Với `--json`, stdout dùng envelope có phiên bản `kind=kit.init` vì refresh dùng
+lại result model của cài đặt. Dữ liệu gồm `kit`, `target`, `targets` tuỳ chọn,
+`mode`, `installMode`, `scope`, `outDir`, `filesWritten`, `success` cùng các
+trường Skill, Hook, warning, transition và snapshot tuỳ chọn. Trừ khi có
+`--quiet`, stderr còn phát status record thô `preview` và `complete` với
+`action=install`.
+
+Lỗi thực thi JSON được ghi lên stderr với `schema_version`, `error`,
+`error_code` và `exit_code`. Lỗi parse cờ có thể vẫn là hướng dẫn dùng plain text.
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Route đã chọn được đồng bộ thành công. |
+| `1` | Lỗi validation, nguồn, xác thực, entitlement, mode, ownership, emission, snapshot, ghi dữ liệu hoặc từ chối trên TTY. Runtime hiện cũng dùng `1` cho phần lớn lỗi không tìm thấy Kit cục bộ và target không an toàn. |
+| `2` | Cobra từ chối cờ, argument hoặc tổ hợp cờ. |
+| `3` | Đường huỷ hoặc interrupt dùng chung trả về trạng thái huỷ. |
+| `4` | Một thao tác vòng đời Kit khác đang giữ khoá. |
+| `6` | Không phát hiện target đã cài trong scope đã chọn. |
+
+Phần help dành mã `5` cho Kit cục bộ không tồn tại và mô tả mã `6` rộng hơn,
+nhưng chỉ đường không phát hiện target được phân loại rõ là `6`; đừng giả định
+mọi lỗi nguồn hoặc ownership dùng mã dành sẵn trong help.
+
+## Tác động và an toàn khi xoá tệp cũ
+
+Refresh dùng force re-emission path bên trong. Lệnh tạo snapshot cho bề mặt
+owned bị ảnh hưởng trừ khi có `--no-backup`, ghi đầu ra hiện tại, cập nhật
+lifecycle manifest và xoá đường dẫn cũ có hash đã ghi vẫn khớp dữ liệu trên đĩa.
+
+- Đường dẫn cũ còn clean và owned có thể bị xoá.
+- Đường dẫn hiện tại còn clean và owned có thể bị thay thế.
+- Đường dẫn owned đã sửa được giữ lại và báo rõ.
+- Tệp không xác định được giữ lại và không bị nhận vào ownership.
+- Đường dẫn liên kết không an toàn và tập đầu ra dự kiến rỗng sẽ fail closed
+  hoặc bị bỏ qua kèm cảnh báo thay vì gây xoá diện rộng.
+
+Skill selection trước đó được giữ khi route refresh có selection metadata.
+Refresh không phải quyền xoá nội dung runtime tuỳ chỉnh.
+
+## Khôi phục và giới hạn
+
+Giữ mọi snapshot được báo cho đến khi runtime tìm lại Kit đã refresh và một
+Skill đã cài hoạt động.
+
+```bash
+ak backups show <id>
+ak backups verify <id>
+```
+
+Dùng lệnh restore được báo khi snapshot nằm trong restore scope; nếu không, dùng
+thư mục khôi phục thủ công được báo. Khôi phục có giới hạn và restore nhiều tệp
+không được đảm bảo có tính giao dịch.
+
+Codex không thể chiếu mọi Claude command, Hook matcher hoặc status-line feature.
+Một lần refresh thành công vẫn có thể chứa cảnh báo về giới hạn của target.
+
+## Lệnh liên quan
+
+- [`ak kit install`](./kit-install) cài route mới.
+- [`ak kit uninstall`](./kit-uninstall) preview hoặc xoá route đã cài.
+- [`ak kit validate`](./kit-validate) kiểm tra authoring tree cục bộ.
+- [Thông tin lệnh đầy đủ](../cli/ak_kit_refresh)
+- [Cài và refresh Kit](../../guides/installing-kits)
+- [Xử lý sự cố cài Kit](../../troubleshooting/kit-installation)
