@@ -1,0 +1,126 @@
+---
+title: Cài ứng dụng Desktop
+description: Tải, xác minh và mở đúng gói AgentKit Desktop v2.7.0 cho nền tảng được hỗ trợ.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Sau trang này, bạn sẽ mở một gói AgentKit Desktop v2.7.0 đã được xác minh
+checksum. Desktop được tải thủ công trong bản phát hành này; trình cài CLI không
+cài ứng dụng.
+
+## Tải gói phù hợp
+
+Tải artifact và sidecar `.sha256` của nó từ [bản phát hành AgentKit
+v2.7.0](https://github.com/bestagentkits/agentkit/releases/tag/v2.7.0) chính thức.
+
+| Nền tảng | Artifact | Byte | SHA-256 |
+| --- | --- | ---: | --- |
+| macOS Intel | `ak-gui_2.7.0_darwin_amd64.zip` | 12,791,844 | `b135966000e8b16e936dd58aac8ab2703c2bb9bedd71fa50ad940685d0136a6c` |
+| macOS Apple silicon | `ak-gui_2.7.0_darwin_arm64.zip` | 11,823,347 | `28202008c4b7da879ac6ed63c94851744eea62e76a8fecddc0937535341649d2` |
+| Linux x64 | `ak-gui_2.7.0_linux_amd64.AppImage` | 84,687,352 | `0e603ce177d2a773944ff315474d6a7543de29689fe1e31ba290b1a22bb9c5e0` |
+| Windows x64 | `ak-gui_2.7.0_windows_amd64.zip` | 12,889,457 | `5a9e954c4f8a9ff7ebdcc476273bfee66bf4fbb9418d1c4c39734cb27567cbb9` |
+
+Không có artifact Desktop cho Linux ARM64 hoặc Windows ARM64 trong v2.7.0.
+Đừng thay bằng archive có tên gần giống `ak_2.7.0_*`: đó là artifact CLI và
+không chứa cửa sổ Wails.
+
+## Xác minh tệp tải xuống
+
+Tính digest của chính artifact rồi so sánh đủ 64 ký tự thập lục phân với bảng
+và sidecar đã tải. Dừng lại nếu kích thước tệp hoặc digest khác.
+
+### macOS
+
+```bash
+shasum -a 256 ak-gui_2.7.0_darwin_arm64.zip
+```
+
+Thay `arm64` bằng `amd64` trên máy Mac Intel.
+
+### Linux
+
+```bash
+sha256sum ak-gui_2.7.0_linux_amd64.AppImage
+```
+
+### Windows PowerShell
+
+```powershell
+Get-FileHash .\ak-gui_2.7.0_windows_amd64.zip -Algorithm SHA256
+```
+
+<Callout type="warn">
+  Sidecar macOS và Linux chứa đường dẫn tuyệt đối ban đầu trên build runner. Hãy
+  so sánh chính giá trị digest; đừng kỳ vọng kiểm tra trực tiếp bằng `-c` với
+  các sidecar đó sẽ tìm thấy tệp bạn tải.
+</Callout>
+
+## Cài và mở ứng dụng
+
+### macOS
+
+1. Giải nén zip phù hợp.
+2. Di chuyển `agentkit.app` vào `/Applications`.
+3. Mở `agentkit.app`.
+
+Nếu Gatekeeper chặn lần khởi chạy đầu, hãy xác nhận digest trước. Sau đó thử mở
+ứng dụng một lần rồi dùng **System Settings → Privacy & Security → Open Anyway**
+cho chính ứng dụng đó. Nếu bạn chủ động dùng phương án command-line cho bundle
+đã xác minh, hãy chạy:
+
+```bash
+xattr -rd com.apple.quarantine /Applications/agentkit.app
+```
+
+Xác minh SHA-256 xác nhận byte đã tải nhưng không thay thế Apple notarization.
+Đừng giả định gói này đã được notarize. Hãy giữ Gatekeeper bật; đừng tạo ngoại
+lệ cho toàn hệ thống.
+
+### Linux
+
+Giữ AppImage trong thư mục ứng dụng do người dùng kiểm soát, rồi chạy:
+
+```bash
+chmod +x ak-gui_2.7.0_linux_amd64.AppImage
+./ak-gui_2.7.0_linux_amd64.AppImage
+```
+
+Nếu có lỗi FUSE, hãy cài gói tương thích FUSE của distribution rồi thử lại cùng
+AppImage đã xác minh. Đừng chạy ứng dụng bằng root.
+
+### Windows
+
+1. Giải nén `ak-gui_2.7.0_windows_amd64.zip` vào thư mục ứng dụng do người dùng
+   kiểm soát.
+2. Chạy `ak-gui.exe` trong thư mục đã giải nén.
+
+Nếu SmartScreen xuất hiện, hãy kiểm tra lại SHA-256 trước. Với artifact chính
+thức khớp checksum, chọn **More info → Run anyway**. Giữ endpoint protection bật.
+
+## Cài CLI riêng khi cần
+
+Desktop có thể quản lý giao diện mà không cần HTTP port, nhưng lệnh terminal và
+paired updater của Desktop cần CLI `ak` tiêu chuẩn được cài riêng. Làm theo
+[Cài CLI](../getting-started/installation), rồi xác nhận:
+
+```bash
+ak --version
+```
+
+CLI và Desktop nên báo cùng bản phát hành trước khi bạn bật auto-update Desktop.
+Chạy `ak gui` từ CLI tiêu chuẩn không khởi chạy bản cài Desktop riêng.
+
+## Gỡ Desktop
+
+Không có trình gỡ Desktop trong v2.7.0. Hãy thoát ứng dụng, tuỳ chọn đăng xuất
+trong **Profile** để xoá App session cục bộ, rồi chỉ xoá mục bạn đã cài:
+
+- `/Applications/agentkit.app` trên macOS;
+- đúng tệp `ak-gui_2.7.0_linux_amd64.AppImage` trên Linux; hoặc
+- thư mục Desktop đã giải nén chứa `ak-gui.exe` trên Windows.
+
+Thao tác này không gỡ CLI, Kit đã cài, tệp runtime hay trạng thái AgentKit.
+`ak uninstall` là lệnh gỡ project được quản lý, không phải trình gỡ Desktop.
+Đừng xoá toàn bộ `~/.agentkit`, `%USERPROFILE%\.agentkit`, `.claude` hoặc
+`.codex`. Tiếp tục với [Lần khởi chạy đầu tiên](./getting-started).

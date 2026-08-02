@@ -1,0 +1,116 @@
+---
+title: Troubleshoot the Desktop app
+description: Diagnose first-launch, license, local-data, platform, and staged-update problems without deleting user state.
+---
+
+Start with the symptom below. Keep the verified v2.7.0 artifact and preserve
+AgentKit state while you diagnose the issue.
+
+## The window does not open
+
+| Symptom | Meaning | Safe next step |
+| --- | --- | --- |
+| `ak gui` prints a Desktop download hint and exits `1` | You ran the standard non-Wails CLI artifact | Run the verified Desktop artifact directly |
+| Linux ARM64 or Windows ARM64 prints an availability warning and exits `0` | v2.7.0 has no Desktop package for that architecture | Use the CLI or browser dashboard; do not substitute an x64 binary |
+| macOS blocks the app | Gatekeeper has not allowed this bundle | Recheck SHA-256, then use the allow-once flow in [Installation](./installation) |
+| Linux reports permission denied | The AppImage is not executable | Run `chmod +x ak-gui_2.7.0_linux_amd64.AppImage` as your user |
+| Linux reports a FUSE error | The host lacks the AppImage FUSE compatibility layer | Install the distribution's compatibility package; do not run as root |
+| Windows shows SmartScreen | Windows is evaluating the downloaded executable | Recheck SHA-256 before choosing **More info → Run anyway** for the matching release artifact |
+
+Desktop requires a graphical session. `--no-interactive` does not suppress the
+window, and `--json` and `--quiet` do not create a structured or silent launch.
+For a headless host, use CLI commands or start the separate browser dashboard
+without opening a local browser:
+
+```bash
+ak config start --no-open
+```
+
+Expose that server beyond its default loopback bind only after applying the
+appropriate authentication and network controls.
+
+## Desktop remains on the license screen
+
+A successful CLI login does not activate Desktop. Enter a valid App license in
+Desktop while online. If the 72-hour offline grace period has expired, reconnect
+so Desktop can verify it again.
+
+If Desktop reports that it cannot read or save the session, inspect ownership
+and permissions of `$AGENTKIT_HOME/auth/session.json`. Do not paste the file
+into a support request and do not delete the whole AgentKit home. **Profile →
+Sign out** clears only the local App slot; `ak logout` clears only the CLI slot.
+
+## Kits, Activity, or Sessions look empty
+
+- Refresh the App session and network connection when the entitled Kit catalog
+  is unavailable. A Kit appears installable only when the App session grants it.
+- Rerun the local scan when a newly installed coding assistant or registered
+  project is missing. After installing a Kit, restart that assistant or open a
+  new runtime session.
+- Activity reads `$AGENTKIT_HOME/activity/events.ndjson`. Sessions reconcile
+  supported Claude Code and Codex sources into
+  `$AGENTKIT_HOME/analytics/analytics.db` while Desktop is open. An empty view
+  can mean there is no supported local evidence yet; it does not prove files
+  were deleted.
+- Removing a project in Desktop removes only its AgentKit registry entry. It
+  does not delete the project directory.
+
+Desktop v2.7.0 does not launch Kit skills or agent runs. Run the skill in its
+coding assistant before expecting new Activity or session evidence.
+
+## A port is busy
+
+Desktop itself binds no HTTP port. A conflict on `127.0.0.1:8766` belongs to
+the separately started browser dashboard; a conflict on `127.0.0.1:8765`
+belongs to the separately started API server. Check those processes with:
+
+```bash
+ak config status
+ak api status
+```
+
+Closing Desktop stops its in-process services, streams, and reconciler, but it
+does not stop a dashboard or API server started separately.
+
+## An update will not complete
+
+- Windows x64 rejects paired Desktop apply in v2.7.0. Download and verify the
+  replacement Desktop zip manually.
+- On macOS or Linux x64, keep the matching standard CLI installed and preserve
+  `$AGENTKIT_HOME/updater/pending-binary-update.json` plus its reported staging
+  directory.
+- Free disk space, fix ownership or permissions, close processes holding the
+  executable, then reopen the same Desktop app to retry.
+- If rollback also failed, stop. Preserve the installed, staged, pending, and
+  backup paths from the error instead of manually swapping files.
+
+Read [Update the Desktop app](./updating) for the transaction boundary and the
+[authored `ak self-update` reference](../reference/cli-samples/self-update) for
+CLI output and exit behavior.
+
+## Capture safe diagnostics
+
+Quit Desktop, open a terminal, and launch the exact installed executable:
+
+```bash
+/Applications/agentkit.app/Contents/MacOS/ak-gui
+```
+
+```bash
+./ak-gui_2.7.0_linux_amd64.AppImage
+```
+
+```powershell
+.\ak-gui.exe
+```
+
+Desktop runtime, update, and launch diagnostics can appear as plain text on
+stderr. There is no guaranteed structured JSON envelope or dedicated Desktop
+log file in v2.7.0. Record the symptom, operating system, architecture, artifact
+name, SHA-256 result, and the relevant stderr line. Remove license keys,
+session content, private project paths, and unmasked configuration values
+before sharing diagnostics.
+
+Reinstalling the same verified Desktop package can replace the app without
+removing AgentKit data. Delete only the installed app item described in
+[Installation](./installation), never the entire AgentKit or runtime home.

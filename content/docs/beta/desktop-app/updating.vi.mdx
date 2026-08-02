@@ -1,0 +1,93 @@
+---
+title: Cập nhật ứng dụng Desktop
+description: Dùng quy trình paired update có chữ ký của AgentKit, restart an toàn và khôi phục mà không bỏ qua xác minh.
+---
+
+Desktop auto-update là opt-in trong v2.7.0. Trước khi bật, hãy cài CLI `ak` tiêu
+chuẩn riêng và giữ CLI cùng Desktop ở một bản phát hành.
+
+```bash
+ak --version
+ak self-update --check
+```
+
+Lệnh check dùng update channel đã lưu, đọc metadata phát hành có chữ ký và không
+cài update. Hãy xác nhận channel được báo là channel bạn muốn theo. Nếu CLI
+thuộc Homebrew hoặc Scoop, hãy dùng lệnh của package manager mà AgentKit báo
+thay vì thay CLI đó tại chỗ.
+
+## Biết ranh giới nền tảng
+
+| Nền tảng Desktop | Paired update trong v2.7.0 |
+| --- | --- |
+| macOS Intel và Apple silicon | Hỗ trợ transaction CLI và Desktop khớp nhau |
+| Linux x64 | Hỗ trợ transaction CLI và Desktop khớp nhau |
+| Windows x64 | Paired Desktop apply bị từ chối; hãy tải và xác minh zip Desktop mới theo cách thủ công |
+| Linux ARM64 và Windows ARM64 | Không có gói Desktop v2.7.0 để update |
+
+Windows có thể dùng trusted helper của CLI cho update chỉ CLI, nhưng thao tác đó
+không update ứng dụng Desktop đã giải nén.
+
+## Quy trình có chữ ký xác minh gì
+
+Trước khi stage candidate, AgentKit xác minh channel pointer có chữ ký,
+immutable manifest và digest của nó, khả năng tương thích của bản phát hành,
+cùng kích thước và SHA-256 được khai báo cho từng artifact đã chọn. Candidate
+CLI và Desktop khớp nhau được stage dưới:
+
+```text
+$AGENTKIT_HOME/cache/binaries/<version>
+```
+
+Paired transaction được ghi tại:
+
+```text
+$AGENTKIT_HOME/updater/pending-binary-update.json
+```
+
+`$AGENTKIT_HOME` mặc định là `~/.agentkit` trên macOS và Linux, và
+`%USERPROFILE%\.agentkit` trên Windows.
+
+## Áp dụng và restart
+
+1. Trong thiết lập update của Desktop, chỉ opt in vào kiểm tra auto-update và
+   staged apply nếu bạn muốn hành vi đó.
+2. Để Desktop stage artifact CLI và Desktop khớp nhau qua quy trình có chữ ký.
+3. Thoát Desktop bình thường khi ứng dụng báo cần restart.
+4. Mở lại chính ứng dụng Desktop đã cài đó.
+
+Ở lần khởi chạy Desktop tiếp theo, AgentKit đọc lại pending transaction, xác
+minh lại kích thước và SHA-256 đã stage, rồi thay CLI và Desktop trong cùng một
+transaction trước khi mở cửa sổ. Backup tạm được xoá sau khi commit thành công.
+Sau đó không có bản rollback dành cho người dùng được giữ lại.
+
+Bạn cũng có thể điều khiển cùng quy trình paired không dành cho Windows từ CLI:
+
+```bash
+ak self-update --include-desktop --yes
+```
+
+Restart Desktop để hoàn tất staged transaction. Xem [tham chiếu `ak
+self-update` được biên soạn](../reference/cli-samples/self-update) để biết quyền
+sở hữu của package manager, dry-run, output và exit behavior.
+
+## Khôi phục staged update
+
+Nếu xác minh hoặc thay thế thất bại:
+
+1. Đừng xoá pending file, thư mục staged hay backup tạm được nêu trong lỗi.
+2. Giữ nguyên bản cài CLI và Desktop đang hoạt động.
+3. Sửa nguyên nhân thông thường như thiếu dung lượng, quyền file hoặc process
+   khác đang giữ executable.
+4. Mở lại chính ứng dụng Desktop đó để retry pending transaction vẫn được xác
+   minh.
+
+Nếu bước thay thế sau đó thất bại, AgentKit cố khôi phục cả hai binary đã cài.
+Khi khôi phục thành công, ứng dụng giữ pending transaction để retry. Nếu lỗi nói
+rollback cũng thất bại, hãy dừng và giữ nguyên mọi đường dẫn được báo; đừng tự
+trộn binary từ các version khác nhau.
+
+Trên Windows, hoặc khi không có pending transaction, hãy dùng quy trình gói thủ
+công đã xác minh trong [Cài đặt](./installation). Chỉ thay gói Desktop sẽ giữ
+nguyên trạng thái AgentKit. Đừng bao giờ sửa update bằng cách xoá toàn bộ
+AgentKit home.
