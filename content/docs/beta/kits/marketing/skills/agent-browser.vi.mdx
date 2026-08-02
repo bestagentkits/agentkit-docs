@@ -1,0 +1,138 @@
+---
+title: Tự động hóa browser độc lập với ak:agent-browser
+description: Dùng ak:agent-browser cho snapshot, tương tác, screenshot, scraping và exploratory QA mà không phụ thuộc profile Chrome hằng ngày của bạn.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:agent-browser` khi outcome cần một browser hoặc desktop app được hỗ
+trợ mà assistant có thể điều khiển qua CLI `agent-browser`. Skill định tuyến
+navigation không phụ thuộc profile, accessibility snapshot, tương tác element,
+screenshot, scraping, exploratory QA và cloud browser tới workflow content đi
+kèm CLI đã cài.
+
+## Chọn ak:agent-browser cho session độc lập
+
+### Dùng ak:agent-browser khi
+
+- Một browser session mới hoặc do tool quản lý là phù hợp.
+- Bạn cần snapshot gọn và element reference ổn định cho flow dài.
+- Task gồm screenshot, chuẩn bị form, scraping, exploratory QA hoặc workflow
+  Electron hay cloud browser được hỗ trợ.
+- Bạn có thể xác minh kết quả mà không phụ thuộc cookie hoặc account đang mở
+  trong profile Chrome hằng ngày.
+
+### Chọn workflow khác khi
+
+- Task cần cookie Chrome thật, account đã đăng nhập, tenant hoặc một profile cụ
+  thể hiện có. Dùng workflow browser nhận biết profile có trong bản cài.
+- Bạn cần test suite lặp lại được thay vì exploratory run. Dùng workflow web
+  testing và test runner của project.
+- Bạn chỉ cần chẩn đoán Chrome DevTools cấp thấp. Dùng integration DevTools khả
+  dụng và nêu rõ profile đang được chọn.
+
+## Chuẩn bị browser environment
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và cài Marketing Kit
+  cho đúng runtime cùng scope đang dùng.
+- Cài hoặc cập nhật `agent-browser` bằng `npm install -g agent-browser`, rồi
+  chạy `agent-browser install` một lần để tải Chromium. Environment Linux có
+  thể cần `agent-browser install --with-deps`.
+- Chạy `agent-browser skills get core` trước browser command để workflow khớp
+  CLI đã cài. Dùng `--full` khi cần command reference.
+- Chọn session local hay cloud-hosted. Browserbase yêu cầu
+  `BROWSERBASE_API_KEY` và `BROWSERBASE_PROJECT_ID`; không đưa chúng vào
+  prompt, log, screenshot hoặc version control.
+- Xác định origin được phép, ranh giới account, form action được phép và việc
+  submit hay upload có được duyệt hay không.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:agent-browser ...` | Phân phối native là mặc định; phân phối plugin rõ ràng cũng được hỗ trợ. Skill có thể gọi CLI đã cài trong phạm vi quyền của Claude Code. |
+| Cursor | `/ak:agent-browser ...` | Cách gọi bằng slash đã được người dùng xác minh. Projection Cursor không thiết lập behavior Hook, tool hoặc approval giống nhau. |
+| Codex | `$ak:agent-browser ...` | Skill dùng native discovery của Codex. Việc chạy CLI vẫn phụ thuộc sandbox, network và quyền command hiện tại. |
+
+Xem [Runtime adapter](../../../concepts/runtime-adapters) để hiểu khác biệt về
+delivery và từng loại component.
+
+## Chạy browser task có giới hạn
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:agent-browser Mở https://example.com trong session độc lập, chụp interactive snapshot và screenshot, báo cáo page title, không submit form hoặc đăng nhập
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:agent-browser Mở https://example.com trong session độc lập, chụp interactive snapshot và screenshot, báo cáo page title, không submit form hoặc đăng nhập
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:agent-browser Mở https://example.com trong session độc lập, chụp interactive snapshot và screenshot, báo cáo page title, không submit form hoặc đăng nhập
+```
+
+  </Tab>
+</Tabs>
+
+## Theo các giai đoạn session
+
+1. **Xác nhận ranh giới state.** Chọn browser độc lập có đủ hay không. Nếu cần
+   Chrome state hiện có, hãy dừng và đổi workflow.
+2. **Nạp hướng dẫn đã cài.** Skill đọc workflow `core` trực tiếp, hoặc workflow
+   `electron`, `slack`, `dogfood`, `vercel-sandbox` hay `agentcore` khi
+   task cần.
+3. **Mở và quan sát.** Bắt đầu session, điều hướng tới URL đã duyệt, lấy snapshot
+   hiện tại và xác định element từ bằng chứng đó.
+4. **Chỉ hành động trong scope.** Click, fill, upload hoặc navigate trong task đã
+   duyệt. Làm mới snapshot sau khi trang đổi thay vì dùng ref cũ.
+5. **Xác minh và đóng.** Thu bằng chứng được yêu cầu, báo cáo browser state chưa
+   xử lý và đóng session. Đóng Browserbase session cũng kết thúc remote session.
+
+## Giữ rõ tác động account và bên ngoài
+
+<Callout type="warn" title="Browser action có thể là hành động ngoài đời thực">
+  Mở và kiểm tra trang khác với đăng nhập, submit form, upload data, gửi message,
+  chấp nhận điều khoản, mua hàng hoặc đổi account. Duyệt riêng các mutation đó
+  trước khi thực hiện.
+</Callout>
+
+Cài CLI hoặc Chromium làm thay đổi local environment và có thể cần network.
+Cloud browser gửi traffic cùng session data tới provider và có thể phát sinh
+usage. Dùng Chromium local khi phù hợp, đóng remote session sớm và không đặt
+provider key trong command text có thể được lưu lại.
+
+## Xác minh bằng chứng
+
+Một lần chạy hoàn tất nên nêu:
+
+- Loại session cùng origin hoặc app đã duyệt.
+- Snapshot, screenshot, data trích xuất hoặc phát hiện QA đã tạo.
+- Mỗi mutation đã thực hiện, gồm form submission, upload hoặc account change.
+- State quan sát cuối cùng và session đã đóng hay chưa.
+- Mọi giới hạn về provider, permission, authentication hoặc page state.
+
+## Xử lý sự cố và hiểu giới hạn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Runtime không tìm thấy Skill | Xác nhận target và scope, khởi động lại runtime, rồi dùng [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+| Thiếu `agent-browser` | Cài bằng npm, xác minh `agent-browser --version`, rồi nạp `agent-browser skills get core`. |
+| Thiếu Chromium hoặc thư viện Linux | Chạy `agent-browser install` hoặc `agent-browser install --with-deps`. |
+| Element ref không còn hoạt động | Lấy interactive snapshot mới sau khi trang cập nhật. |
+| Site cần Chrome login hiện có | Dừng. Session độc lập sai ranh giới state; chuyển sang workflow nhận biết profile. |
+| Browserbase lỗi authentication hoặc quota | Giữ provider error nhưng không lộ key, đóng session còn mở và kiểm tra quyền provider ngoài Skill. |
+
+Skill phụ thuộc CLI đã cài, browser khả dụng, behavior hiện tại của site, network
+và giới hạn provider. Skill không đảm bảo site cho phép automation hoặc một
+flow an toàn để submit. Tiếp tục với [Marketing Hook](../hooks) để hiểu
+guardrail nền hoặc [vòng đời Marketing Kit](../lifecycle) để khôi phục bản cài.

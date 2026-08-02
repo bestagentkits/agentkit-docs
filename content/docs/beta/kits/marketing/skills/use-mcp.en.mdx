@@ -1,0 +1,147 @@
+---
+title: Discover and call integrations with ak:use-mcp
+description: Use ak:use-mcp to inspect runtime-native MCP tools or call configured servers through the bundled deterministic client.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:use-mcp` when a task needs a capability exposed by a Model Context
+Protocol server. The Skill prefers MCP tools already registered with the active
+runtime, then offers a bundled direct client for servers declared only in
+`.claude/.mcp.json`. It separates discovery from execution so you can review
+the server, tool, schema, and effects before a call.
+
+## Choose ak:use-mcp for an existing integration
+
+### Use ak:use-mcp when
+
+- Claude Code or Codex already exposes the required MCP server or a deferred
+  discovery mechanism can find it.
+- A project has an approved stdio server in `.claude/.mcp.json` and you need a
+  deterministic tool name and JSON argument shape.
+- You want to list tools, prompts, or resources before selecting an operation.
+
+### Choose another workflow when
+
+- You need to create a new MCP server rather than consume one.
+- The task can be completed safely without an external integration.
+- The only browser route depends on your real Chrome cookies or profile; bind a
+  profile-aware browser session before using profile-blind DevTools tooling.
+- The server, credentials, allowed data, or mutation authority has not been
+  approved.
+
+## Prepare the MCP boundary
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding) and install
+  Marketing Kit for the active runtime and scope.
+- Inventory the tools and resources actually visible in the current session.
+  Do not assume Claude Code and Codex use the same native tool names.
+- For the direct path, review `.claude/.mcp.json`, every server command,
+  argument, environment entry, and its filesystem or network reach.
+- Keep tokens and connection strings in approved environment handling. Do not
+  copy credentials into another runtime's global configuration.
+- The bundled direct client needs its local npm dependencies. Installing them
+  changes the Skill's scripts directory and requires package-registry access.
+- Define whether the task is discovery-only, read-only, or mutation-capable.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:use-mcp ...` | Prefer MCP tools registered with Claude Code. Use the bundled direct client only for an approved project config that native discovery cannot see. |
+| Cursor | `/ak:use-mcp ...` | Slash invocation is user-verified, but this Skill does not establish a Cursor-native MCP discovery contract. Use only capabilities visible in the session or the reviewed direct path. |
+| Codex | `$ak:use-mcp ...` | Prefer visible or deferred native tools. Tool names and permission prompts are runtime-specific; direct scripts remain a separate local process. |
+
+See [Runtime adapters](../../../concepts/runtime-adapters) for projection
+boundaries.
+
+## Discover before execution
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:use-mcp List the MCP tools visible in this session for the approved analytics server, identify the narrowest read-only tool for campaign totals, show its required arguments, and do not call it yet
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:use-mcp List the MCP tools visible in this session for the approved analytics server, identify the narrowest read-only tool for campaign totals, show its required arguments, and do not call it yet
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:use-mcp List the MCP tools visible in this session for the approved analytics server, identify the narrowest read-only tool for campaign totals, show its required arguments, and do not call it yet
+```
+
+  </Tab>
+</Tabs>
+
+After review, authorize one named server, tool, and JSON argument object. Avoid
+blanket approval for a server that exposes both reads and writes.
+
+## Follow the MCP stages
+
+1. **State the intended outcome.** Name the data or action needed and whether
+   mutation, network access, or external account use is permitted.
+2. **Inventory live capability.** Search registered tools and resources before
+   concluding the server is missing.
+3. **Choose the narrowest path.** Prefer one runtime-native tool. Use the direct
+   client only when an approved server exists solely in the project config or a
+   deterministic scripted call is required.
+4. **Validate the schema.** Inspect required arguments and server identity. On
+   the direct path, `list-tools` persists full schemas to
+   `assets/tools.json`.
+5. **Review effects and call once.** Confirm data scope, external mutation,
+   account, and retry behavior before executing the selected tool.
+6. **Capture result and cleanup.** Record the tool result or error, close direct
+   client transports, and avoid repeating a non-idempotent call without knowing
+   whether the first one succeeded.
+
+## Keep discovery and mutation distinct
+
+<Callout type="warn" title="An MCP call can change an external system">
+  A tool may read sensitive data, write files, change a database, send a
+  message, publish content, or spend provider quota. Tool discovery is not
+  approval to call it. Review the server, schema, target account, and expected
+  effects first.
+</Callout>
+
+The direct `list-tools` command connects sequentially to every server in
+`.claude/.mcp.json` and rewrites the bundled `assets/tools.json` catalog.
+That is a local write plus server process and possible network activity. A
+`call-tool` operation may have additional provider effects defined by the
+selected server. Keep full provider errors, but redact secrets.
+
+## Verify the evidence
+
+A complete run should report:
+
+- The path used: runtime-native or bundled direct client.
+- The exact server and tool name, with the reviewed argument shape.
+- Whether the operation was discovery-only, read-only, or mutating.
+- The returned content or structured error, with secrets removed.
+- Any local catalog write, spawned server process, network request, or external
+  mutation.
+- Whether cleanup completed and whether a retry could duplicate effects.
+
+## Troubleshoot and understand limits
+
+| Symptom | Safe next step |
+| --- | --- |
+| No native tool is visible | Use deferred discovery if supported, then verify runtime registration before switching to direct scripts. |
+| The direct client cannot find config | Run from the project whose approved `.claude/.mcp.json` defines the server. |
+| npm dependencies are missing | Install them only in the bundled scripts directory after reviewing package access and local writes. |
+| One configured server fails to connect | Preserve its error; other servers may still connect. Do not treat a partial catalog as complete. |
+| Tool name or arguments are rejected | Regenerate and review `assets/tools.json`; do not infer schemas from memory. |
+| A call times out | Determine whether the server may have completed the action before retrying. |
+
+Runtime-native visibility is limited to registered servers. The direct client
+supports the packaged stdio configuration and is not a general guarantee for
+every transport or provider. The retired Gemini CLI path is not supported.
+Use [Marketing Hooks](../hooks) to understand background guardrails.
