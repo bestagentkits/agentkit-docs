@@ -1,0 +1,142 @@
+---
+title: ak self-update
+description: Check, verify, stage, or apply signed AgentKit CLI and optional Desktop updates with explicit ownership and recovery limits.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak self-update` for the AgentKit binary lifecycle. It does not refresh
+project or user Kit files; use `ak update` or `ak kit refresh` for those layers.
+
+## Usage
+
+```bash
+ak self-update
+```
+
+The command accepts no positional arguments.
+
+## Before you run
+
+Without `--yes`, the command checks availability and does not download an
+artifact. It never asks an interactive question, regardless of TTY or stdin.
+The default binary channel is the persisted update channel, or `beta` when no
+preference exists; select `--channel stable` when that is your intended track.
+
+AgentKit first detects ownership of the running executable. A verified Homebrew
+or Scoop install is not replaced in place; the result reports `brew upgrade ak`
+or `scoop update ak` and makes no release request. Uncertain manager ownership
+fails closed.
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--beta` | `false` | Shorthand for `--channel beta`; conflicts with an explicit non-beta channel. |
+| `--changelog` | `false` | Print the verified release changelog without checking or applying an update. |
+| `--channel <channel>` | Config or `beta` | Select `dev`, `beta`, or `stable`. |
+| `--check` | `false` | Check signed metadata without downloading artifacts. |
+| `--disable-auto-update` | `false` | Set Desktop auto-update checks and staged apply to disabled. |
+| `--dry-run` | `false` | Download and verify selected artifacts in a temporary directory without replacing the install. |
+| `--enable-auto-update` | `false` | Opt in to Desktop auto-update checks and staged apply. |
+| `--include-desktop` | `false` | Require matching CLI and Desktop artifacts for the current platform. |
+| `--kit <name>` | Empty | With `--changelog`, filter one public Kit: `engineer` or `marketing`. |
+| `--registry-url <url>` | Environment or release default | Override the signed binary release root. |
+| `--target <targets>` | Empty | With `--changelog`, filter `all`, `cli`, `app`, `kits`, `engineer`, or `marketing`; repeatable/comma-separated. |
+| `--version <version>` | Channel pointer | Resolve an exact binary version. |
+
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+## Check, dry-run, and apply
+
+```bash
+ak self-update --check --channel stable
+ak self-update --dry-run --channel stable
+ak self-update --channel stable --yes
+```
+
+- Check fetches and verifies the signed channel pointer and immutable manifest,
+  but does not download artifacts. Availability failures become
+  `status=unknown`, usually with `reason=release_check_unavailable`, and still
+  exit `0`.
+- Dry-run downloads the platform artifacts, verifies them, writes a temporary
+  staging directory, and removes it. It does not replace the CLI or write the
+  persistent binary cache/pending state.
+- Apply requires `--yes`. It verifies Ed25519 signatures, the channel pointer's
+  manifest digest, manifest compatibility, and each artifact's declared size
+  and SHA-256 before replacement.
+
+<Callout type="warning">
+  `--enable-auto-update` and `--disable-auto-update` write
+  `~/.agentkit/config.yaml` without requiring `--yes`, then continue with a
+  check unless `--dry-run` was also selected. They do not apply the binary in
+  the same invocation, even when `--yes` is also present.
+</Callout>
+
+## Replacement and Desktop behavior
+
+For an unmanaged CLI-only update, artifacts are staged under
+`~/.agentkit/cache/binaries/<version>` (`AGENTKIT_HOME` changes the base):
+
+- On macOS and Linux, AgentKit writes a sibling temporary executable, renames
+  the old executable to a temporary backup, installs the candidate, and removes
+  the backup after success. If the final rename fails, it attempts immediate
+  restoration.
+- On Windows, CLI-only replacement is staged for a detached trusted helper to
+  finish after the current process exits.
+- With `--include-desktop --yes` on a supported non-Windows platform, matching
+  CLI and GUI artifacts are staged as one pending transaction. Restart the
+  AgentKit Desktop app to reverify and complete it. Windows rejects paired
+  Desktop apply.
+
+After successful replacement there is no retained user-facing rollback copy.
+If verification or replacement fails, keep the reported staging/pending paths,
+rerun the check, and use the package manager when ownership is reported. Do not
+manually swap unverified bytes.
+
+## Changelog mode
+
+```bash
+ak self-update --changelog
+ak self-update --changelog --target cli --json
+```
+
+Changelog mode fetches verified catalog/body data and is read-only. It cannot
+be combined with update, settings, `--version`, or `--yes` flags.
+
+## Output and streams
+
+Human results are written to stdout. Normal JSON success uses
+`kind=self_update` with these `data` fields:
+
+```text
+available, status, reason, current_version, latest_version,
+auto_update, channel, applied, restart_required, message,
+updated_paths, pending_path, staging_dir, install_manager, upgrade_command
+```
+
+Optional fields are omitted when empty. Changelog JSON instead uses
+`kind=self_update.changelog`.
+
+Command-level validation and apply failures return before the success renderer;
+do not require a structured error envelope in `--json` mode. Flag-parse errors
+remain plain text. Treat process status as the failure signal and capture stderr
+for human mode.
+
+## Exit status
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | Check, managed-install report, settings change plus check, verified dry-run, changelog, or apply completed. `status=unknown` is also exit `0`. | Inspect `status`, `reason`, `applied`, and `restart_required`. |
+| `1` | Config, manager detection, network apply, signature/digest, compatibility, artifact, staging, replacement, or changelog availability failed. | Do not bypass verification; use the reported manager command or retry the signed flow. |
+| `2` | Arguments, flags, channel combinations, or changelog filters were invalid. | Correct the invocation. |
+
+There is no decline exit because the command never prompts.
+
+## Related commands and limitations
+
+- [Inspect local and cached versions](./versions)
+- [Unified CLI and Kit update facts](../cli/ak_update)
+- [Refresh one Kit route](../cli/ak_kit_refresh)
+- [Complete `ak self-update` command facts](../cli/ak_self-update)
+- [Update troubleshooting](../../troubleshooting/updates)
