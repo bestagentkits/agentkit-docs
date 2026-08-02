@@ -1,0 +1,179 @@
+---
+title: Sửa lỗi đã chứng minh với ak:fix
+description: Scout và chẩn đoán một lỗi cụ thể, triển khai repair nhỏ nhất đúng nguyên nhân và chứng minh repair không có side effect ẩn.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:fix` để đưa một bug, error, test thất bại, lỗi CI hoặc UI defect cụ thể
+từ bằng chứng tới repair đã xác minh. Skill xác định behavior mong đợi, scout
+project hiện tại, chứng minh root cause, chọn workflow từ blast radius thực tế
+và không coi symptom patch là hoàn tất.
+
+## Chọn ak:fix cho một lỗi cụ thể
+
+### Dùng ak:fix khi
+
+- Bạn có error, reproduction, assertion thất bại hoặc behavior hỏng chính xác.
+- Lỗi type, lint, test, log, CI hoặc UI cần thay đổi code.
+- Nhiều tệp có thể dùng chung một root cause và cần verification được điều phối.
+- Bạn muốn diagnosis, implementation, regression protection và review trong
+  cùng workflow.
+
+### Chọn workflow khác khi
+
+- Bạn vẫn cần chứng minh root cause mà chưa muốn cam kết repair. Bắt đầu với
+  `ak:debug`.
+- Bạn đang giao feature hoặc refactor thay vì sửa lỗi. Dùng `ak:cook`.
+- Bạn chỉ cần chạy test hoặc review độc lập. Dùng `ak:test` hoặc
+  `ak:code-review`.
+- Diagnosis phức tạp còn lựa chọn architecture quan trọng. Dùng
+  `ak:brainstorm` và `ak:plan` trước implementation.
+
+## Chuẩn bị repair contract
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận
+  Engineer Kit đã được cài cho đúng runtime cùng scope bạn đang dùng.
+- Cung cấp triệu chứng, reproduction tối thiểu, behavior mong đợi, behavior
+  thực tế và environment liên quan chính xác.
+- Nêu constraint, non-goal, acceptance criteria cùng ranh giới quyền hạn cho
+  Git, hệ thống bên ngoài, production data và publication.
+- Giữ nguyên công việc không liên quan và cung cấp commit gần đây, test bị ảnh
+  hưởng cùng instruction của project.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:fix ...` | Phân phối native là mặc định; phân phối plugin rõ ràng cũng được hỗ trợ. |
+| Cursor | `/ak:fix ...` | Cách gọi bằng slash đã được người dùng xác minh. Điều này không thiết lập runtime parity đầy đủ. |
+| Codex | `$ak:fix ...` | Skill dùng discovery native của Codex; không suy ra parity rộng hơn cho Hook và statusline Engineer. |
+
+## Chạy Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:fix "POST /api/sessions returns 500 when expiresAt is absent. Reproduce with the focused API test, preserve the response contract, and do not commit or deploy." --review
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:fix "POST /api/sessions returns 500 when expiresAt is absent. Reproduce with the focused API test, preserve the response contract, and do not commit or deploy." --review
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:fix "POST /api/sessions returns 500 when expiresAt is absent. Reproduce with the focused API test, preserve the response contract, and do not commit or deploy." --review
+```
+
+  </Tab>
+</Tabs>
+
+`--auto` là mặc định. Chọn mode khác khi rủi ro hoặc hình dạng issue yêu cầu:
+
+| Tùy chọn | Behavior | Ranh giới quan trọng |
+| --- | --- | --- |
+| `--auto` | Chạy tự động và chỉ auto-approve review khi điểm từ 9.5 trở lên, không có Critical finding | Blocker, regression và quyết định quyền hạn chưa xử lý vẫn được escalate |
+| `--review` | Dừng để con người review tại mỗi bước chính | Phù hợp cho production, security-sensitive hoặc public-contract work |
+| `--quick` | Dùng cycle scout, diagnosis, repair, verification và review ngắn | Chỉ dành cho lỗi type, lint, syntax hoặc defect trực tiếp trong một tệp; bằng chứng root cause vẫn bắt buộc |
+| `--parallel` | Chuyển issue độc lập vào workstream có ownership riêng | Issue phải độc lập, ownership không chồng lấn và runtime delegation phải khả dụng cùng được cho phép |
+| `--advice` | Thêm checkpoint tư vấn sau mỗi phase, khi bị kẹt và trước quyết định rủi ro cao | Adviser chỉ đưa counsel; không thể edit, approve hay mở rộng quyền hạn |
+
+Với nhiều lỗi không liên quan, hãy liệt kê riêng từng triệu chứng và
+reproduction. Với một lỗi có nhiều triệu chứng, nêu lý do bạn nghĩ chúng có thể
+chung nguyên nhân nhưng để diagnosis chứng minh hoặc bác bỏ việc nhóm đó.
+
+## Hiểu điều gì xảy ra trong một lần chạy
+
+1. **Skill xác định repair contract.** Skill ghi nhận outcome, constraint,
+   non-goal cùng acceptance criteria trước khi chọn mode.
+2. **Skill scout project.** Skill xác định stack, tệp có triệu chứng, caller và
+   dependent, test liên quan, commit gần đây cùng pattern hiện có.
+3. **Skill chứng minh diagnosis.** Skill ghi error cùng reproduction chính xác,
+   lần theo root cause, giải thích vì sao issue xuất hiện lúc này và lập bản đồ
+   mọi path trong blast radius.
+4. **Skill phân loại công việc.** Công việc đơn giản dùng quick route; công việc
+   vừa theo dõi sáu phase phụ thuộc; công việc phức tạp thêm research, so sánh
+   solution sau diagnosis và plan. Các lỗi độc lập có thể dùng parallel tree
+   riêng.
+5. **Skill triển khai repair đã chọn.** Skill thay đổi root cause bằng diff nhỏ
+   nhất phù hợp project và giữ non-goal ngoài scope.
+6. **Skill xác minh và ngăn tái diễn.** Skill lặp đúng command trước fix, thêm
+   regression test, kiểm tra caller bị ảnh hưởng, kiểm tra public contract và áp
+   dụng validation layer phù hợp.
+7. **Skill review và hoàn tất.** Finding được chấp nhận sẽ được sửa rồi
+   re-verify. Tiến độ plan được đối chiếu, ảnh hưởng tài liệu được đánh giá và
+   journal local ghi lại lịch sử kỹ thuật.
+
+## Giữ nguyên các hard gate
+
+<Callout type="warn" title="Automation không cho phép đoán">
+  Không mode nào được đề xuất hoặc triển khai repair trước scouting và
+  diagnosis. Bản ghi root cause phải nêu triệu chứng, reproduction, expected so
+  với actual behavior, defect cụ thể, lý do lỗi lộ ra lúc này và blast radius.
+</Callout>
+
+- `--auto` bỏ các lần dừng thường lệ; nó không cấp quyền cho secret, production
+  write, chi phí bên ngoài, publication, deployment hoặc hành động phá hủy.
+- Regression hoặc contract change sẽ dừng workflow. Bạn chọn revert, thu hẹp
+  repair, cập nhật dependent hoặc chấp nhận rõ behavior đã đổi.
+- Regression test phải chứng minh scenario đã sửa và reproduction ban đầu phải
+  pass với output mới.
+- Critical review finding chặn completion. Automatic review cycle có giới hạn;
+  lỗi lặp lại sẽ escalate thay vì chạy vô hạn.
+- Sau ba repair attempt thất bại, Skill dừng và yêu cầu bạn xem lại architecture
+  hoặc scope.
+- Commit, push, pull request, chạy lại CI, comment bên ngoài và deployment là
+  hành động riêng cần quyền riêng.
+
+## Xác minh kết quả
+
+Một lần chạy hoàn tất nên cung cấp:
+
+- Repair contract đã chấp nhận cùng baseline trước fix chính xác.
+- Scout summary gồm tệp bị ảnh hưởng, dependent, test và thay đổi gần đây.
+- Câu root-cause cụ thể với bằng chứng, điều kiện làm lộ lỗi và blast radius.
+- Implementation diff tối thiểu cùng biện pháp ngăn regression.
+- Kết quả reproduction before-and-after cùng check tập trung và blast-radius.
+- Code-review finding, điểm số và cách xử lý mọi blocker hoặc warning.
+- Xác nhận public contract không đổi hoặc quyết định rõ cho mỗi thay đổi có chủ
+  đích.
+- Trạng thái plan được cập nhật khi áp dụng, quyết định docs-impact và technical
+  journal ngắn gọn.
+
+Đừng coi lần chạy hoàn tất khi bất kỳ trường root-cause nào còn mơ hồ,
+triệu chứng ban đầu vẫn tái hiện, blast-radius check thất bại hoặc review blocker
+đã chấp nhận chưa được xử lý.
+
+## Xử lý sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Skill hỏi log hoặc chi tiết reproduction | Cung cấp output, command, input, environment và expected behavior chính xác. Đừng thay bằng nguyên nhân có vẻ đúng. |
+| `--quick` phát hiện nhiều tệp hoặc lựa chọn design | Escalate sang standard hoặc deep route trước implementation. |
+| Nhiều fix thất bại | Giữ các hypothesis bị bác bỏ và dừng sau cycle thứ ba để đánh giá lại architecture hoặc scope. |
+| Một test pass nhưng dependent workflow hỏng | Giữ regression hiển thị và chọn revert, scope hẹp hơn, cập nhật dependent hoặc chấp nhận rõ. |
+| Parallel work chồng lấn tệp | Dừng workstream bị ảnh hưởng, xác định lại exclusive ownership và kiểm tra lại integration point chung. |
+| Review luôn thấp hơn automatic threshold | Xử lý Critical finding, review warning hoặc chuyển sang quyết định rõ của con người; đừng tạo điểm pass giả. |
+| Runtime không nhận diện Skill | Xác nhận target cùng scope, mở runtime session mới, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Dùng `ak:test` cho validation độc lập và `ak:code-review` cho review riêng sau
+repair.
+
+## Biết các giới hạn hiện tại
+
+- Skill chỉ có thể tái hiện environment và chạy check có trong session hiện tại.
+- Mode parallel và advice phụ thuộc capability runtime cùng delegation được phép.
+- Công việc CI, production, browser profile và provider bên ngoài có thể cần
+  credential và phát sinh chi phí vận hành.
+- Cách gọi Cursor bằng slash là bằng chứng do người dùng xác minh, không phải
+  chứng minh runtime parity đầy đủ.
+- Package stable và beta chứa cùng mode, hard gate và workflow reference
+  `ak:fix`.

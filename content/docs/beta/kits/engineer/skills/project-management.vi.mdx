@@ -1,0 +1,185 @@
+---
+title: Đối chiếu tiến độ delivery với ak:project-management
+description: Hydrate runtime work tracking tùy chọn từ plan bền vững, sync tiến độ đã xác minh về mọi phase và tạo status report ngắn gọn.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:project-management` để hiểu và giữ trạng thái của công việc nhiều
+phase. Skill đọc plan file bền vững, mirror công việc còn lại vào live task
+surface khi surface đó thực sự khả dụng, đối chiếu completion đã xác minh về
+mọi phase và tạo status report có traceability cho session hoặc handoff tiếp
+theo.
+
+## Chọn ak:project-management cho oversight và continuity
+
+### Dùng ak:project-management khi
+
+- Bạn cần status trên một hoặc nhiều implementation plan.
+- Session phải tiếp tục từ phần plan còn lại mà không tin ephemeral runtime
+  state.
+- Runtime item đã hoàn tất cần được map về phase checkbox cùng plan status.
+- Dependency, blocker hoặc parallel ownership cần được điều phối.
+- Milestone cần session report, completion report hoặc multi-plan report ngắn.
+- Bạn cần quyết định rõ behavior đã đổi có yêu cầu cập nhật docs hay không.
+
+### Chọn workflow khác khi
+
+- Bạn cần tạo hoặc validate implementation roadmap. Dùng `ak:plan`.
+- Bạn muốn triển khai phase tiếp theo. Dùng `ak:cook`.
+- Bạn cần chẩn đoán và sửa một lỗi cụ thể. Dùng `ak:debug` cùng `ak:fix`.
+- Bạn muốn chronological reflection thay vì project status hiện tại. Dùng
+  `ak:journal`.
+
+## Chuẩn bị trạng thái plan
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận
+  Engineer Kit đã được cài cho đúng runtime cùng scope bạn đang dùng.
+- Mở project chứa thư mục `plans/` đích.
+- Giữ nguyên `plan.md` cùng mọi tệp `phase-XX-*.md`; đây là durable source of
+  truth.
+- Cung cấp verification evidence cho công việc bạn muốn đánh dấu hoàn tất.
+- Xác định target plan khi nhiều plan chồng lấn hoặc dùng chung tệp.
+- Làm cho CLI `ak` khả dụng khi có thể để Skill tham khảo
+  `ak plan --help` live trước khi dùng status operation do CLI quản lý.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:project-management ...` | Phân phối native là mặc định; phân phối plugin rõ ràng cũng được hỗ trợ. |
+| Cursor | `/ak:project-management ...` | Cách gọi bằng slash đã được người dùng xác minh. Điều này không thiết lập runtime parity đầy đủ hay một task API cụ thể. |
+| Codex | `$ak:project-management ...` | Skill dùng discovery native của Codex và khám phá task-management capability lúc chạy. |
+
+## Yêu cầu oversight operation
+
+Skill nhận task như status, hydrate, sync hoặc report. Đây là workflow intent,
+không phải mode flag được công bố.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:project-management "Sync verified work back to the active plan, report any unmapped completed items, then create a concise session status report."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:project-management "Sync verified work back to the active plan, report any unmapped completed items, then create a concise session status report."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:project-management "Sync verified work back to the active plan, report any unmapped completed items, then create a concise session status report."
+```
+
+  </Tab>
+</Tabs>
+
+| Intent | Outcome có thể quan sát |
+| --- | --- |
+| Status | Scan plan cùng phase checkbox, tính progress và nêu blocker, stale dependency cùng next action |
+| Hydrate | Đọc plan item chưa check và mirror công việc còn lại vào live task surface khi runtime discovery xác nhận surface tồn tại |
+| Sync | Đối chiếu runtime work đã hoàn tất với mọi phase file, backfill checkbox cũ ở phase trước và suy ra plan status từ completion thực |
+| Report | Ghi session report, plan-completion report hoặc multi-plan report ngắn trong reports location được cấu hình |
+
+Request tốt nêu target plan, boundary session hoặc milestone, item đã hoàn tất,
+verification evidence, loại report mong đợi và runtime work item có thể chưa map
+rõ với plan.
+
+## Hiểu điều gì xảy ra trong một lần chạy
+
+1. **Skill đọc durable plan.** Skill tải `plan.md` cùng mọi phase file, parse
+   frontmatter hiện có và xác định work đã check, chưa check cùng bị block.
+2. **Skill khám phá runtime tracking.** Skill chỉ dùng live task-management
+   surface khi runtime discovery xác nhận capability. Skill không suy ra hỗ trợ
+   từ client name hoặc tool list cache.
+3. **Skill hydrate công việc còn lại.** Khi live view khả dụng, Skill chỉ mirror
+   work chưa check với dependency, ownership, acceptance criteria cùng durable
+   source-plan mapping.
+4. **Skill theo dõi tiến độ.** Item chuyển qua pending, active, blocked và
+   completed khi được hỗ trợ; nếu không, active plan được cập nhật trực tiếp.
+   Parallel ownership giữ không chồng lấn.
+5. **Skill thực hiện full-plan sync-back.** Skill quét mọi phase, map completed
+   item đã xác minh, backfill phase trước bị stale, tính lại progress và chỉ cập
+   nhật plan status khi checkbox evidence hỗ trợ.
+6. **Skill báo cáo project state.** Skill tóm tắt progress, achievement,
+   blocker, risk, test và next action bằng metric cùng table.
+7. **Skill đánh giá documentation impact.** Thay đổi user-visible behavior,
+   public contract, architecture, security hoặc recovery được route tới docs
+   surface sở hữu nhỏ nhất; task completion đơn thuần không được chép vào
+   evergreen documentation.
+
+## Giữ nguyên quyền của plan
+
+<Callout type="warn" title="Runtime state là working view">
+  Live task được đánh dấu complete không phải completion evidence. Plan file vẫn
+  authoritative qua các session và mọi runtime item hoàn tất phải map tới phase
+  checklist entry đã xác minh trước khi báo full completion.
+</Callout>
+
+- Skill không bao giờ chỉ đánh dấu phase hiện tại rồi bỏ qua work cũ ở phase
+  trước.
+- Nếu completed item không map được tới phase file, item được báo unresolved và
+  plan không được tuyên bố complete.
+- Frontmatter plan hiện có được giữ nguyên. Skill không tạo field cho một
+  runtime task system cụ thể.
+- Status change cần acceptance criteria, test hoặc review evidence cùng
+  dependency nguyên vẹn; riêng runtime state là chưa đủ.
+- Documentation update là authority surface riêng. Docs workflow chỉ có thể sửa
+  tệp sau quyết định documentation-impact đã xác nhận.
+- Report cùng plan update là local file effect. Commit, push, publication,
+  external task-system mutation và deployment vẫn cần phê duyệt riêng.
+
+## Xác minh kết quả
+
+Một lần chạy hoàn tất nên cung cấp:
+
+- Target plan, frontmatter state, số lượng phase item và progress đã tính.
+- Danh sách runtime item đã hydrate cùng source-plan mapping khi có live
+  surface.
+- Checkbox đã đối chiếu trên mọi phase, gồm work cũ được backfill.
+- Plan status suy ra từ checkbox state thực: pending, in progress hoặc
+  completed.
+- Acceptance criteria đã xác minh cùng bằng chứng đứng sau completed work.
+- Blocker, stale dependency, unmapped item và risk vẫn hiển thị.
+- Report ngắn với achievement, next action và câu hỏi chưa giải quyết.
+- Quyết định documentation-impact rõ cùng follow-up đã route.
+
+Chỉ coi sync-back hoàn tất khi mọi completed item map tới durable phase entry và
+plan status khớp full checkbox sweep. Coi runtime view là disposable sau khi
+durable state đã cập nhật.
+
+## Xử lý sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Không có live task surface | Tiếp tục trực tiếp trong active plan; runtime tracking là tùy chọn. |
+| Live view trống sau session mới | Re-hydrate chỉ plan item chưa check và giữ dependency cùng source mapping. |
+| Phase sau complete nhưng checkbox phase trước stale | Quét mọi phase và backfill work trước đã xác minh trong cùng sync pass. |
+| Completed task không có plan mapping | Báo unmapped item và đừng claim full completion tới khi được đối chiếu hoặc giải quyết rõ. |
+| Plan và runtime status không khớp | Ưu tiên plan sau khi kiểm tra verification evidence, rồi dựng lại optional runtime view. |
+| Không chắc cú pháp `ak plan` | Chạy `ak plan --help` live cùng help của subcommand đã chọn; đừng dùng cú pháp nhớ lại. |
+| Docs update được đề xuất chỉ vì phase kết thúc | Ghi no docs impact trừ khi user-visible behavior, contract, architecture, security hoặc recovery thay đổi. |
+| Runtime không nhận diện Skill | Xác nhận target cùng scope, mở runtime session mới, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Tiếp tục với `ak:cook` cho implementation còn lại hoặc `ak:journal` để tạo bản
+ghi session theo thời gian.
+
+## Biết các giới hạn hiện tại
+
+- Chất lượng progress phụ thuộc plan checklist chính xác cùng verification
+  evidence mới.
+- Runtime task-management capability được khám phá động và có thể không tồn tại
+  hoặc không tồn tại qua nhiều session.
+- Skill điều phối và báo cáo work; Skill không tự chứng minh code quality nếu
+  thiếu test cùng review evidence từ workflow sở hữu.
+- Cách gọi Cursor bằng slash là bằng chứng do người dùng xác minh, không phải
+  chứng minh runtime parity đầy đủ.
+- Package stable và beta chứa cùng reference hydration, sync-back cùng reporting
+  của `ak:project-management`.
