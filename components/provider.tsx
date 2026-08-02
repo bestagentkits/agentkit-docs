@@ -35,6 +35,16 @@ const { provider } = defineI18nUI(i18n, {
   },
 });
 
+function useDecodedPathname(): string {
+  const pathname = useNextPathname();
+
+  try {
+    return decodeURI(pathname);
+  } catch {
+    return pathname;
+  }
+}
+
 export function Provider({
   children,
   locale,
@@ -47,7 +57,7 @@ export function Provider({
       Link={FrameworkLink}
       Image={FrameworkImage}
       useParams={useParams}
-      usePathname={useNextPathname}
+      usePathname={useDecodedPathname}
       useRouter={useRouter}
     >
       <RootProvider

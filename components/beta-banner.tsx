@@ -51,7 +51,13 @@ export function BetaBanner({
   const t = copy[locale as keyof typeof copy] ?? copy.en;
   const version = getChannelVersion('beta');
   // Same page on the stable channel = swap the leading `beta` segment.
-  const stableHref = localePath(locale, 'stable', ...slug.slice(1));
+  // Static params retain percent-encoded spaces; pass decoded segments to
+  // Next's Link so it applies URL encoding exactly once.
+  const stableHref = localePath(
+    locale,
+    'stable',
+    ...slug.slice(1).map((segment) => decodeURI(segment)),
+  );
 
   return (
     <div className="not-prose -mx-2 mb-6 flex flex-wrap items-center gap-x-2.5 gap-y-1 rounded-md border border-fd-border border-l-2 border-l-fd-primary bg-fd-primary/5 px-3.5 py-2 text-sm text-fd-muted-foreground">
