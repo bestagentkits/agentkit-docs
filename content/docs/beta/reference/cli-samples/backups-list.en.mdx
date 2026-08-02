@@ -1,0 +1,111 @@
+---
+title: ak backups list
+description: List committed rollback snapshots newest first and understand which integrity details are available in each output mode.
+---
+
+Use `ak backups list` to discover committed rollback snapshot IDs before you
+inspect, verify, prune, or restore one. Results are ordered newest first.
+
+## Syntax
+
+```bash
+ak backups list
+```
+
+## Before you run
+
+The command reads the local backup store under `~/.agentkit/backups/`. It does
+not require authentication or network access. Each readable manifest is also
+verified against its data while the list is built, so a large backup set can
+take longer than a directory listing.
+
+Malformed directory names, non-directory entries, and unreadable or invalid
+manifests are skipped. A missing backup root is treated as an empty list.
+
+## Arguments
+
+The command accepts no positional arguments. An extra argument is invalid.
+
+## Options
+
+There are no command-specific options. Shared flags, including `--json`,
+`--quiet`, and `--no-interactive`, are described in
+[CLI conventions](../cli-conventions). The command never prompts; `--yes` has
+no effect.
+
+## Examples
+
+List snapshots for a person:
+
+```bash
+ak backups list
+```
+
+Select the newest visible ID for a script:
+
+```bash
+ak backups list --json | jq -r '.data.backups[0].id'
+```
+
+An empty array means no readable committed snapshot was found.
+
+## Output and streams
+
+Human output on stdout contains `ID`, `WHEN`, `KIND`, `SIZE`, and `STATUS`
+columns plus verified and unverified totals. With no records, it prints a
+`No backups found.` empty state.
+
+JSON success uses the shared envelope on stdout:
+
+```json
+{
+  "schema_version": 1,
+  "kind": "backups.list",
+  "data": {
+    "backups": [
+      {
+        "id": "20260426T123005Z-deadbeef",
+        "created_at": "<rfc3339-time>",
+        "label": "<operation-label>",
+        "files": 3
+      }
+    ]
+  }
+}
+```
+
+The JSON entry intentionally omits the human table's byte size and verification
+status. An empty result is `"backups": []`. Runtime errors in JSON mode use a
+structured error envelope on stderr. Flag-parse errors can remain plain-text
+usage.
+
+## Exit status
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Listing completed, including when no readable snapshots exist. |
+| `1` | The backup root could not be read, listing was interrupted, or rendering failed. |
+| `2` | A positional argument or flag was invalid. |
+
+The command does not use exits `3`, `4`, or `5` for individual skipped entries.
+
+## Effects, safety, and recovery
+
+The command is read-only. It does not acquire the mutation lock, change a
+manifest, delete a snapshot, or modify live runtime files. Verification reads
+every manifest-listed regular file and recomputes hashes.
+
+An `unverified` human row can mean corruption or another verification error;
+run `ak backups verify <id>` for a classified result. A corrupt manifest can be
+absent from the list entirely, so an empty or shorter list is not proof that no
+snapshot directory exists on disk.
+
+## Related commands and limitations
+
+- [Inspect one snapshot](./backups-show)
+- [Verify one snapshot](./backups-verify)
+- [Preview a restore](./backups-restore)
+- [Backup command group](../cli/ak_backups)
+
+The staged database produced by [`ak backups create`](./backups-create) has no
+committed snapshot ID and therefore does not appear here.

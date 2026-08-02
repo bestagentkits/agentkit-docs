@@ -1,0 +1,120 @@
+---
+title: ak backups verify
+description: Tính lại hash của snapshot và dùng mã thoát riêng của lệnh để kiểm soát integrity trước khi restore.
+---
+
+Dùng `ak backups verify` để kiểm tra một recovery snapshot đã commit còn nguyên
+vẹn trước khi khôi phục. Lệnh xác minh metadata về quyền restore trong manifest,
+topology, loại tệp, sự tồn tại của tệp và mọi SHA-256 đã ghi.
+
+## Cú pháp
+
+```bash
+ak backups verify <id>
+```
+
+## Trước khi chạy
+
+Tìm ID bằng `ak backups list` và kiểm tra phạm vi bằng
+`ak backups show <id>`. ID hợp lệ có dạng
+`YYYYMMDDTHHMMSSZ-8lowercasehex`.
+
+Quá trình xác minh chạy cục bộ và chỉ đọc. Lệnh có thể đọc từng byte đã chụp,
+nên thời gian chạy tăng theo kích thước snapshot. Lệnh không cần xác thực hoặc
+mạng.
+
+## Argument
+
+| Argument | Bắt buộc | Ý nghĩa |
+| --- | --- | --- |
+| `<id>` | Có | Một snapshot ID đã commit cần xác minh. |
+
+Lệnh yêu cầu đúng một argument.
+
+## Tuỳ chọn
+
+Lệnh không có tuỳ chọn riêng. Cờ chung `--json` chọn đầu ra có cấu trúc; các cờ
+chung khác được mô tả trong [quy ước CLI](../cli-conventions). Lệnh không hỏi
+xác nhận và `--yes` không có tác dụng.
+
+## Ví dụ
+
+Xác minh một snapshot cho người dùng:
+
+```bash
+ak backups verify 20260426T123005Z-deadbeef
+```
+
+Dùng trạng thái process làm chốt integrity:
+
+```bash
+if ak backups verify 20260426T123005Z-deadbeef --json; then
+  echo 'snapshot is intact'
+fi
+```
+
+Đừng restore chỉ dựa trên trường `status` đã parse; hãy yêu cầu cả mã thoát `0`.
+
+## Đầu ra và luồng
+
+Kết quả nguyên vẹn cho người dùng trên stdout có dạng:
+
+```text
+[ok] backup intact (<files> files, <size>)
+```
+
+Kết quả corrupt in block thất bại với ID, số tệp, kích thước và mismatch đầu
+tiên được phát hiện. Lệnh dừng ở entry corrupt đầu tiên thay vì thu thập mọi
+mismatch.
+
+JSON ghi result envelope vào stdout:
+
+```json
+{
+  "schema_version": 1,
+  "kind": "backups.verify",
+  "data": {
+    "id": "20260426T123005Z-deadbeef",
+    "status": "ok"
+  }
+}
+```
+
+`data.status` là `ok` hoặc `corrupt`; JSON không chứa số tệp, kích thước và
+đường dẫn mismatch có trong đầu ra người dùng. Snapshot corrupt vẫn nhận result
+envelope trên stdout rồi thoát `1`. Lỗi xảy ra trước khi có kết quả, chẳng hạn
+snapshot không tồn tại, dùng JSON error envelope có cấu trúc trên stderr. Lỗi
+phân tích cờ có thể vẫn là plain text.
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Metadata manifest và mọi tệp đã chụp vượt qua xác minh. |
+| `1` | Snapshot corrupt hoặc thao tác integrity, đọc hay render khác thất bại. |
+| `2` | Dạng ID, số argument hoặc cờ không hợp lệ. |
+| `5` | Không có manifest có thể đọc tại ID hợp lệ. |
+
+Lệnh không có mã thoát cho xác nhận hoặc backup lock.
+
+## Tác động, an toàn và khôi phục
+
+Quá trình xác minh chỉ mở regular file dưới snapshot data root, kiểm tra đường
+dẫn tương đối đã anchor, tính lại hash và không thay đổi snapshot hoặc
+destination đang hoạt động. Lệnh không sửa dữ liệu corrupt.
+
+Nếu xác minh thoát `1`, đừng restore snapshot đó. Giữ nguyên thư mục snapshot
+để điều tra, kiểm tra đường dẫn được báo và tình trạng lưu trữ, rồi chọn snapshot
+khác đã xác minh. Khi có thể, hãy tạo recovery snapshot mới qua thao tác vòng đời
+sở hữu state liên quan trước khi thay đổi thêm.
+
+## Lệnh liên quan và giới hạn
+
+- [Liệt kê snapshot](./backups-list)
+- [Kiểm tra manifest và authority root](./backups-show)
+- [Preview và áp dụng restore](./backups-restore)
+- [Entry point khôi phục tương đương](./recover)
+
+Danh sách mismatch chủ động giới hạn ở vấn đề đầu tiên được phát hiện. Hash hợp
+lệ chứng minh integrity của snapshot, không chứng minh restore là lựa chọn vận
+hành phù hợp.

@@ -1,0 +1,111 @@
+---
+title: ak backups list
+description: Liệt kê recovery snapshot đã commit theo thứ tự mới nhất trước và hiểu thông tin integrity có trong từng chế độ đầu ra.
+---
+
+Dùng `ak backups list` để tìm ID của recovery snapshot đã commit trước khi kiểm
+tra, xác minh, prune hoặc khôi phục. Kết quả được xếp mới nhất trước.
+
+## Cú pháp
+
+```bash
+ak backups list
+```
+
+## Trước khi chạy
+
+Lệnh đọc backup store cục bộ dưới `~/.agentkit/backups/`. Lệnh không cần xác
+thực hoặc mạng. Trong lúc tạo danh sách, lệnh cũng xác minh từng manifest có thể
+đọc với dữ liệu tương ứng, vì vậy tập backup lớn có thể mất nhiều thời gian hơn
+việc chỉ liệt kê thư mục.
+
+Tên thư mục sai định dạng, entry không phải thư mục và manifest không đọc được
+hoặc không hợp lệ đều bị bỏ qua. Backup root chưa tồn tại được xem là danh sách
+trống.
+
+## Argument
+
+Lệnh không nhận argument theo vị trí. Argument dư là không hợp lệ.
+
+## Tuỳ chọn
+
+Lệnh không có tuỳ chọn riêng. Các cờ dùng chung, gồm `--json`, `--quiet` và
+`--no-interactive`, được mô tả trong [quy ước CLI](../cli-conventions). Lệnh
+không hỏi xác nhận; `--yes` không có tác dụng.
+
+## Ví dụ
+
+Liệt kê snapshot cho người dùng:
+
+```bash
+ak backups list
+```
+
+Chọn ID mới nhất đang hiển thị cho script:
+
+```bash
+ak backups list --json | jq -r '.data.backups[0].id'
+```
+
+Mảng trống nghĩa là không tìm thấy recovery snapshot đã commit có thể đọc.
+
+## Đầu ra và luồng
+
+Đầu ra cho người dùng trên stdout có các cột `ID`, `WHEN`, `KIND`, `SIZE` và
+`STATUS`, cùng tổng số verified và unverified. Khi không có bản ghi, lệnh in
+trạng thái trống `No backups found.`.
+
+JSON thành công dùng envelope chung trên stdout:
+
+```json
+{
+  "schema_version": 1,
+  "kind": "backups.list",
+  "data": {
+    "backups": [
+      {
+        "id": "20260426T123005Z-deadbeef",
+        "created_at": "<rfc3339-time>",
+        "label": "<operation-label>",
+        "files": 3
+      }
+    ]
+  }
+}
+```
+
+Entry JSON chủ động không chứa kích thước byte và trạng thái xác minh có trong
+bảng cho người dùng. Kết quả trống là `"backups": []`. Lỗi runtime trong chế
+độ JSON dùng error envelope có cấu trúc trên stderr. Lỗi phân tích cờ có thể vẫn
+là hướng dẫn dùng dạng plain text.
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Đã liệt kê xong, kể cả khi không có snapshot nào có thể đọc. |
+| `1` | Không thể đọc backup root, quá trình liệt kê bị gián đoạn hoặc render thất bại. |
+| `2` | Argument theo vị trí hoặc cờ không hợp lệ. |
+
+Lệnh không dùng mã `3`, `4` hoặc `5` cho từng entry bị bỏ qua.
+
+## Tác động, an toàn và khôi phục
+
+Lệnh chỉ đọc. Lệnh không lấy mutation lock, thay đổi manifest, xoá snapshot hay
+thay đổi tệp runtime đang hoạt động. Bước xác minh đọc từng tệp regular có trong
+manifest và tính lại hash.
+
+Dòng `unverified` ở đầu ra cho người dùng có thể nghĩa là corrupt hoặc một lỗi
+xác minh khác; hãy chạy `ak backups verify <id>` để nhận kết quả đã phân loại.
+Manifest corrupt có thể biến mất hoàn toàn khỏi danh sách, nên danh sách trống
+hoặc ngắn hơn không chứng minh trên đĩa không còn thư mục snapshot.
+
+## Lệnh liên quan và giới hạn
+
+- [Kiểm tra một snapshot](./backups-show)
+- [Xác minh một snapshot](./backups-verify)
+- [Preview thao tác khôi phục](./backups-restore)
+- [Nhóm lệnh backup](../cli/ak_backups)
+
+Bản sao database tạm do [`ak backups create`](./backups-create) tạo không có
+snapshot ID đã commit, nên không xuất hiện ở đây.

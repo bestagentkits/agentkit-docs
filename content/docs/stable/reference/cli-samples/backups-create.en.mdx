@@ -1,0 +1,131 @@
+---
+title: ak backups create
+description: Create and verify a staged copy of the AgentKit operational database without treating it as a committed rollback snapshot.
+---
+
+Use `ak backups create` to produce a consistent SQLite copy of AgentKit's
+operational database before database maintenance or an export. The command
+uses SQLite `VACUUM INTO`, then verifies the closed copy.
+
+## Syntax
+
+```bash
+ak backups create [--include-content]
+```
+
+## Before you run
+
+The command is local: it does not contact a registry or require authentication.
+It opens the operational store as its write owner, so it can create a missing
+store or apply pending schema migrations before making the copy. Let another
+operational-store writer finish before retrying a busy-store error.
+
+Make sure the OS temporary directory has enough space for another copy of
+`operational.db`. A successful run replaces the command's previous staging
+directory.
+
+## Arguments
+
+No positional arguments are defined. Do not pass any. The current command does
+not reject surplus positional tokens, so their presence does not select a
+database or destination.
+
+## Options
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `--include-content` | `false` | Records an intent to include rebuildable content in the result. In this release, the staged file set still contains only `operational.db`. |
+
+Shared flags are described in [CLI conventions](../cli-conventions). This
+command does not prompt, so `--yes` and `--no-interactive` do not change its
+write path.
+
+## Examples
+
+Create a staged database copy and print a short result:
+
+```bash
+ak backups create
+```
+
+Inspect the full machine-readable result:
+
+```bash
+ak backups create --json
+```
+
+Record the content-inclusion request while checking the actual file list:
+
+```bash
+ak backups create --include-content --json | jq '{includeContent, files}'
+```
+
+## Output and streams
+
+Human output is one line on stdout:
+
+```text
+operational snapshot ok schema=<schema-version> checksum=<sha256>
+```
+
+`--json` writes a raw object to stdout, not the shared success envelope:
+
+```json
+{
+  "provider": "operationalstore",
+  "class": "operational-core",
+  "applicationId": "<hex-id>",
+  "schemaVersion": 4,
+  "checksum": "<sha256>",
+  "includeContent": false,
+  "files": [
+    {
+      "rel_path": "operational.db",
+      "src_abs": "<absolute-staged-path>",
+      "sha256": "<sha256>",
+      "mode": 384,
+      "size": 1234
+    }
+  ],
+  "verified": true
+}
+```
+
+The exact schema version and size depend on the local store. Successful output
+uses stdout and leaves stderr empty. `--quiet` does not suppress this command's
+direct stdout output. A runtime failure in JSON mode can return no JSON error
+object; flag-parse failures remain plain-text usage on stderr.
+
+## Exit status
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The staged database passed application ID, schema, `quick_check`, and SHA-256 verification. |
+| `1` | Opening, creating, migrating, copying, or verifying the operational store failed. |
+| `2` | A flag could not be parsed. |
+
+This command has no confirmation, decline, backup-lock, or not-found exit.
+
+## Effects, safety, and recovery
+
+The source store normally lives at `~/.agentkit/operational/operational.db`.
+The result is written as `operational.db` beneath
+`agentkit-operational-backup` in the OS temporary directory, with private file
+permissions. The command removes that staging directory before each run. It
+never raw-copies live database, WAL, SHM, or journal files.
+
+The staged copy is not committed under `~/.agentkit/backups/`: it has no
+snapshot ID or rollback manifest and will not appear in `ak backups list`,
+`show`, `verify`, or `restore`. Copy it to durable storage yourself if you need
+to keep it. A later run can replace the staged copy.
+
+## Related commands and limitations
+
+- [List committed rollback snapshots](./backups-list)
+- [Inspect a rollback manifest](./backups-show)
+- [Verify a committed rollback snapshot](./backups-verify)
+- [Backup command group](../cli/ak_backups)
+
+`--include-content` does not add content-shard databases to `files` in this
+release. Treat the JSON `files` array, not the option name, as the exact scope
+of the staged artifact.

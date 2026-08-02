@@ -1,0 +1,127 @@
+---
+title: ak recover
+description: Use the top-level recovery entry point to preview or apply the same bounded operation as ak backups restore.
+---
+
+Use `ak recover` when you want the product-level recovery verb. It is a
+separate top-level command that reuses the exact `ak backups restore` engine,
+flags, plans, exits, and disk effects.
+
+## Syntax
+
+```bash
+ak recover <id> [--allow-root <absolute-root>]... [--dry-run]
+ak recover --latest [--allow-root <absolute-root>]... [--dry-run]
+```
+
+## Before you run
+
+Stop concurrent lifecycle mutations, then inspect and verify the recovery point:
+
+```bash
+ak backups show <id>
+ak backups verify <id>
+ak recover <id> --dry-run
+```
+
+For a project bundle, repeat every exact authorized root printed by `show`.
+The supplied canonical root set must equal the persisted set. The command is
+local and does not use network, cache, authentication, or entitlements.
+
+Without bundle authority, the engine accepts only fixed AgentKit, Claude, and
+Codex home scopes plus the exact Claude runtime configuration file.
+
+When practical, capture current state before rolling backward. `ak recover`
+does not create a new snapshot before applying the old one.
+
+## Arguments
+
+| Argument | Required | Meaning |
+| --- | --- | --- |
+| `<id>` | Unless `--latest` is used | One snapshot ID in `YYYYMMDDTHHMMSSZ-8lowercasehex` form. |
+
+An ID and `--latest` cannot be combined. More than one ID is invalid.
+
+## Options
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `--allow-root <absolute-root>` | Empty | Explicitly authorizes one persisted project bundle root; repeat for the complete set. |
+| `--dry-run` | `false` | Runs the full preflight and prints effects without live mutation. |
+| `--latest` | `false` | Selects the newest readable snapshot. |
+
+There is no `--force` or `--apply`. Shared flags are described in
+[CLI conventions](../cli-conventions).
+
+## Confirmation behavior
+
+An applied run prompts through stdin unless `--yes`, `--no-interactive`, or
+`--json` is present. Only `y` or `yes` plus newline confirms. A negative answer
+or end-of-file exits `3`; piped stdin can confirm.
+
+`--json` and `--no-interactive` skip confirmation and can apply without
+`--yes`. Use `--yes` for explicit automation. `--dry-run` does not prompt.
+
+## Examples
+
+```bash
+ak recover --latest
+ak recover --latest --yes
+ak recover 20260426T123005Z-deadbeef --dry-run --json
+ak recover <id> --yes --allow-root /absolute/project
+```
+
+## Output and streams
+
+Human dry-run and interactive confirmation use the same stdout restore plan as
+`ak backups restore`, with separate replace, exact-remove, recursive plugin
+remove, keep, skip, and authorized-root sections. The prompt is on stderr.
+
+`--dry-run --json` writes `kind=backups.restore_plan` on stdout with fields
+under `data.plan`: `BackupID`, `Restore`, `Keep`, `Skip`, `Remove`,
+`RemoveTrees`, and `AuthorizedRoots`.
+
+Applied success writes no JSON success envelope. Stdout is empty and stderr is:
+
+```text
+[OK] restored <id>
+```
+
+This remains plain text with `--json` and remains visible with `--quiet`.
+Execution failures in JSON mode use a structured error envelope on stderr;
+flag-parse errors can remain plain-text usage.
+
+## Exit status
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Dry-run completed or all approved effects were applied. |
+| `1` | Integrity, authority, destination, I/O, or partial-restore failure. |
+| `2` | Missing or malformed ID, extra arguments, invalid flags, or ID plus `--latest`. |
+| `3` | Confirmation was declined or reached end-of-file. |
+| `4` | Another backup mutation holds the apply lock. |
+| `5` | The valid-shaped ID was absent, or no latest snapshot exists. |
+
+## Effects, safety, and recovery
+
+Preflight verifies hashes, manifest topology, restore authority, and anchored
+destinations before consent. Apply locks, rechecks the approved manifest and
+live effects, atomically replaces individual captured files, removes exact
+paths recorded absent, and recursively removes only approved post-snapshot
+AgentKit plugin directories. Unrelated later-created files remain.
+
+The complete multi-file operation is not transactional. Exit `1` can follow
+partial success. Stop new writes, keep the output, inspect affected paths, and
+re-run `show` and `verify` before deciding the next recovery step.
+
+## Related commands and limitations
+
+- [Equivalent nested command](./backups-restore)
+- [List snapshots](./backups-list)
+- [Inspect authority roots](./backups-show)
+- [Verify integrity](./backups-verify)
+- [Complete command facts](../cli/ak_recover)
+
+Some project-local snapshots are manual-copy recovery data and cannot be
+authorized through this command. Follow the recovery instruction emitted by
+the lifecycle operation that created them.

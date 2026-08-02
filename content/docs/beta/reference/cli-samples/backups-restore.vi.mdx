@@ -1,0 +1,151 @@
+---
+title: ak backups restore
+description: Preflight, cấp quyền, preview và áp dụng rollback snapshot có giới hạn với đúng hành vi luồng và khôi phục.
+---
+
+Dùng `ak backups restore` để phát lại một recovery snapshot đã commit tới các
+destination được ghi trong manifest. Đây là restore theo hướng thay thế có giới
+hạn, không phải rollback toàn bộ máy và không phải transaction nhiều tệp tất cả
+hoặc không có gì.
+
+## Cú pháp
+
+```bash
+ak backups restore <id> [--allow-root <absolute-root>]... [--dry-run]
+ak backups restore --latest [--allow-root <absolute-root>]... [--dry-run]
+```
+
+## Trước khi chạy
+
+Dừng các thao tác vòng đời AgentKit khác. Kiểm tra và xác minh snapshot trước:
+
+```bash
+ak backups show <id>
+ak backups verify <id>
+ak backups restore <id> --dry-run
+```
+
+Với project bundle, lặp `--allow-root` cho từng root chính xác do `show` in.
+Ancestor rộng hơn, root bị thiếu hoặc root không liên quan đều thất bại trước
+prompt hoặc live write. Lệnh chạy cục bộ, không cần mạng hoặc xác thực.
+
+Khi không có bundle authority, restore chỉ chấp nhận các scope home AgentKit,
+Claude và Codex cố định cùng đúng tệp cấu hình Claude runtime. Project path nằm
+ngoài các scope đó cần hợp đồng bundle root đã lưu.
+
+Khi có thể, hãy tạo recovery snapshot mới của trạng thái hiện tại trước khi lùi
+về quá khứ. Lệnh này không tự tạo snapshot trước restore.
+
+## Argument
+
+| Argument | Bắt buộc | Ý nghĩa |
+| --- | --- | --- |
+| `<id>` | Trừ khi dùng `--latest` | Snapshot ID dạng `YYYYMMDDTHHMMSSZ-8lowercasehex`. |
+
+Lệnh nhận tối đa một ID. ID và `--latest` loại trừ lẫn nhau.
+
+## Tuỳ chọn
+
+| Tuỳ chọn | Mặc định | Tác động |
+| --- | --- | --- |
+| `--allow-root <absolute-root>` | Trống | Thêm một project bundle root rõ ràng. Lặp lại đến khi tập canonical khớp chính xác `bundle_roots` đã lưu. |
+| `--dry-run` | `false` | Chạy preflight integrity, topology, quyền và destination; in kế hoạch mà không live mutation. |
+| `--latest` | `false` | Chọn snapshot có thể đọc được tạo gần nhất thay cho ID. |
+
+Các cờ dùng chung được mô tả trong [quy ước CLI](../cli-conventions). Lệnh
+không có `--force` hoặc `--apply`.
+
+## Hành vi xác nhận
+
+Khi thiếu `--yes`, `--no-interactive` và `--json`, thao tác áp dụng sẽ in kế
+hoạch đã xác minh rồi đọc stdin. Chỉ `y` hoặc `yes` kèm newline mới xác nhận;
+câu trả lời khác hoặc end-of-file sẽ từ chối với mã `3`. Stdin được pipe có thể
+trả lời prompt.
+
+`--json` ngầm bật chế độ không tương tác. Cả `--json` và `--no-interactive` đều
+bỏ prompt và có thể thay đổi dữ liệu mà không cần `--yes`. Trong tự động hoá,
+hãy thêm `--yes` để thể hiện chủ đích. `--dry-run` không hỏi và không thay đổi.
+
+## Ví dụ
+
+```bash
+ak backups restore 20260426T123005Z-deadbeef --dry-run
+ak backups restore 20260426T123005Z-deadbeef --yes
+ak backups restore --latest --yes
+ak backups restore <id> --dry-run \
+  --allow-root /absolute/project-a \
+  --allow-root /absolute/project-b
+```
+
+## Đầu ra và luồng
+
+Dry-run cho người dùng trên stdout tách riêng `Restore`, `Remove exact paths`,
+`Remove plugin directories recursively`, `Keep`, `Skip` và authorized root.
+Thao tác tương tác in cùng kế hoạch trên stdout, sau đó in prompt trên stderr.
+Thao tác có `--yes`, `--json` hoặc `--no-interactive` bỏ phần hiển thị kế hoạch.
+
+JSON dry-run dùng success envelope trên stdout:
+
+```text
+schema_version: 1
+kind: backups.restore_plan
+data.plan.BackupID
+data.plan.Restore
+data.plan.Keep
+data.plan.Skip
+data.plan.Remove
+data.plan.RemoveTrees
+data.plan.AuthorizedRoots
+```
+
+Tên trường trong plan phân biệt chữ hoa chữ thường. Applied success là ngoại
+lệ: ngay cả với `--json`, stdout trống và stderr có dòng plain text:
+
+```text
+[OK] restored <id>
+```
+
+`--quiet` không ẩn dòng hoàn tất trực tiếp này. Lỗi thực thi JSON dùng error
+envelope có cấu trúc trên stderr; lỗi phân tích cờ có thể vẫn là plain text.
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Dry-run preflight hoàn tất hoặc mọi tác động đã duyệt được áp dụng. |
+| `1` | Lỗi integrity, topology, quyền, destination, I/O hoặc restore một phần. |
+| `2` | ID thiếu hoặc sai dạng, quá nhiều argument, cờ sai hoặc dùng ID cùng `--latest`. |
+| `3` | Xác nhận qua stdin bị từ chối hoặc gặp end-of-file. |
+| `4` | Backup mutation khác đang giữ registry lock lúc apply. |
+| `5` | ID đúng dạng không tồn tại hoặc `--latest` không tìm thấy snapshot. |
+
+Mã `1` sau live mutation có thể nghĩa là các tệp trước đó đã được restore.
+
+## Tác động, an toàn và khôi phục
+
+Preflight xác minh metadata manifest và mọi hash đã chụp, kiểm tra scope, anchor
+destination và đóng băng tác động live được đề xuất trước khi hỏi. Apply sau đó
+lấy backup registry lock, xác minh lại snapshot, manifest, quyền và live state
+đã duyệt, rồi dừng an toàn nếu chúng thay đổi.
+
+Mỗi tệp đã chụp được thay thế qua sibling temp file và rename. Lệnh còn xoá
+exact path được ghi là vắng mặt và chỉ xoá đệ quy post-snapshot AgentKit plugin
+directory có trong kế hoạch đã duyệt. Tệp không liên quan được tạo sau vẫn được
+giữ. Subtree bị loại khỏi snapshot được bảo vệ khỏi recursive cleanup.
+
+Thay thế từng tệp là atomic, nhưng toàn bộ restore không transactional. Sau lỗi
+một phần, dừng mutation mới, giữ đầu ra lệnh, chạy lại `show` và `verify`, kiểm
+tra đường dẫn bị ảnh hưởng rồi quyết định tiếp tục từ cùng snapshot đã xác minh
+hay dùng recovery point mới hơn.
+
+## Lệnh liên quan và giới hạn
+
+- [Lệnh tương đương cấp cao `ak recover`](./recover)
+- [Liệt kê snapshot](./backups-list)
+- [Kiểm tra manifest và quyền](./backups-show)
+- [Xác minh integrity](./backups-verify)
+- [Thông tin đầy đủ của lệnh](../cli/ak_backups_restore)
+
+Một số snapshot vòng đời trong project chỉ báo manual snapshot-data path vì nằm
+ngoài quyền restore thông thường. Hãy làm theo phương thức khôi phục do lệnh tạo
+snapshot báo cáo.
