@@ -1,0 +1,226 @@
+---
+title: Implement approved work with ak:cook
+description: Give ak:cook a clear task or approved plan, keep control at review gates, and verify the resulting implementation.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:cook` to turn clear requirements or an approved implementation plan
+into a tested, reviewed code change. The Skill inspects the current project,
+keeps the implementation tied to observable acceptance criteria, and reports
+the evidence you need to decide whether the result is complete.
+
+## Choose ak:cook when the scope is ready
+
+### Use ak:cook when
+
+- You have a feature, refactor, or maintenance task with a defined outcome.
+- The important constraints, non-goals, and acceptance criteria are known.
+- You have an approved plan and want to execute it against the current codebase.
+- You want implementation, focused testing, and code review in one coordinated
+  workflow.
+
+### Choose another workflow when
+
+- The desired outcome or solution is still unclear. Start with `ak:brainstorm`,
+  then use `ak:plan` when the direction is settled.
+- You are investigating a concrete bug, failing test, or CI failure. Use
+  `ak:fix`, which requires root-cause evidence before choosing a correction.
+- You only need independent verification. Use `ak:test` for testing or
+  `ak:code-review` for review without starting a new implementation.
+- You need advice rather than workspace changes. Use an advisory or question
+  workflow first.
+
+## Prepare the project and runtime
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Engineer Kit is installed for the runtime and scope you are using.
+- Open a project where you are comfortable allowing the assistant to edit files
+  and run the project's validation commands.
+- Preserve unrelated work, and make the intended file or module boundary clear.
+- Provide either concrete requirements or the path to an approved plan.
+- Read the repository instructions and any project-specific safety requirements
+  that should govern the run.
+
+`ak:cook` is packaged for all three supported Engineer targets:
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:cook ...` | Native delivery is the default; explicit plugin delivery is also supported. The full supported Claude Hook surface and the Engineer statusline can be active. |
+| Cursor | `/ak:cook ...` | The Skill is projected to Cursor's native Skill location, and slash invocation is user-verified. Cursor has no Engineer statusline, and this evidence does not establish broader runtime parity. |
+| Codex | `$ak:cook ...` | The Skill uses native Codex discovery. Hook projection is partial, and Codex has no Engineer statusline. |
+
+See [Runtime adapters](../../../concepts/runtime-adapters) for scope, delivery,
+and component-level differences.
+
+## Run the Skill
+
+The default mode is interactive. It pauses at major review gates so you can
+inspect findings, approve the plan, request changes, or stop.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:cook "Add POST /api/feedback with existing authentication, return 202, store no new data, add focused tests, and do not commit or deploy"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:cook "Add POST /api/feedback with existing authentication, return 202, store no new data, add focused tests, and do not commit or deploy"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:cook "Add POST /api/feedback with existing authentication, return 202, store no new data, add focused tests, and do not commit or deploy"
+```
+
+  </Tab>
+</Tabs>
+
+You can also pass an approved plan path. Use
+`/ak:cook ./plans/feedback-endpoint/plan.md` in Claude Code or Cursor, and
+`$ak:cook ./plans/feedback-endpoint/plan.md` in Codex. The Skill reuses the
+plan's outcome and acceptance criteria, then checks the current project evidence
+before making changes.
+
+### Choose an execution mode deliberately
+
+| Input or option | What changes | What remains enforced |
+| --- | --- | --- |
+| Default or `--interactive` | Runs the full workflow and pauses between major stages | Plan, testing, code review, and human decisions |
+| Approved plan path | Reuses the existing plan instead of creating another one | Current-project inspection, implementation checks, testing, and review |
+| `--fast` | Skips the research stage and moves from project inspection to a concise plan | A plan still exists before coding; testing and review still run |
+| `--parallel` | Allows independent implementation phases to run concurrently | Dependencies and file ownership must remain explicit; testing and review still run |
+| `--auto` | Removes routine human pauses and applies the workflow's automatic review decisions | Testing, mandatory code review, security policy, and escalation on unresolved blockers |
+| `--no-test` | Omits the testing stage | Mandatory code review remains, and the unverified-test risk must be surfaced |
+| `--tdd` | Adds tests-first behavior within relevant implementation phases | The selected base mode, review, and completion checks |
+| `--advice` | Adds advisory checkpoints for phase results, blockers, and high-stakes decisions | Advice does not write code, approve gates, or replace the main implementation workflow |
+
+Use explicit options when execution shape matters. Do not use `--auto` or
+`--no-test` merely to move past an unresolved decision or failure.
+
+## Describe the work clearly
+
+A useful request gives the Skill five things:
+
+- **Outcome:** State the user-visible or system-visible behavior to deliver.
+- **Constraints:** Name the patterns, modules, compatibility requirements, or
+  tools the implementation must preserve.
+- **Non-goals:** Exclude tempting adjacent work that would expand the scope.
+- **Acceptance criteria:** Give observable checks for success, including
+  expected errors and edge cases.
+- **Authority boundary:** State whether Git, publication, deployment, external
+  services, sensitive data, or destructive actions are outside the run.
+
+For the feedback endpoint example, a strong input says to reuse current
+authentication and API patterns, return `202`, avoid a new persistence layer,
+cover authorized and unauthorized requests, and stop before commit or deploy.
+That is more actionable than “build a feedback API” because it defines both the
+result and the boundaries.
+
+## Understand what happens during a run
+
+You should observe a concise progression rather than an unexplained block of
+edits:
+
+1. **The Skill confirms the contract.** It captures or reuses the outcome,
+   constraints, non-goals, and acceptance criteria, and asks only about a
+   material missing decision.
+2. **The Skill inspects the project.** It identifies the stack, relevant files,
+   existing patterns, project instructions, nearby documentation, and public
+   contracts that the change could affect.
+3. **The Skill creates or loads a plan.** Research is included when the selected
+   mode needs it. In interactive modes, you review the plan before implementation.
+4. **The Skill implements the approved scope.** Work follows plan order and
+   discovered project conventions, with progress tied back to the active plan
+   when one exists.
+5. **The Skill verifies the change.** Testing runs by default, and code review is
+   mandatory in every mode. Failures, regressions, or contract changes remain
+   visible rather than being silently worked around.
+6. **The Skill finalizes the evidence.** It reconciles plan progress, evaluates
+   documentation impact, summarizes changed files and checks, and asks before
+   entering a separate Git workflow.
+
+The workflow may use specialized Agents to inspect, implement, test, debug, or
+review parts of the task. Their internal instructions are not the deliverable;
+the user-facing result is the scoped change and its evidence.
+
+## Keep approval and safety with you
+
+<Callout type="warn" title="Automation does not expand authority">
+  `--auto` removes routine review pauses. It does not authorize secret access,
+  external cost, publication, deployment, destructive operations, a breaking
+  public-contract change, or accepting a regression. Give those permissions
+  separately and only when you intend them.
+</Callout>
+
+The Skill will not decide these matters for you:
+
+- Whether a changed requirement or public contract is acceptable.
+- Whether a failing or skipped test is an acceptable release risk.
+- Whether a regression should be fixed, reverted, isolated behind
+  compatibility behavior, or explicitly accepted.
+- Whether credentials or sensitive data may be sent to an external service.
+- Whether the result should be committed, pushed, opened as a pull request,
+  merged, published, or deployed.
+
+If verification finds an unintended side effect, the run should stop and show
+what changed, why it happened, and bounded recovery choices. Do not use
+`--no-test`, `--auto`, or a broad force operation to hide that evidence.
+
+## Verify the result
+
+A complete run should give you:
+
+- A scoped implementation diff that follows the project's existing patterns.
+- Tests added or updated where needed, plus the commands and results used for
+  verification unless you explicitly selected `--no-test`.
+- Mandatory code-review findings and the disposition of any blocker or warning.
+- Evidence that acceptance criteria were checked and nearby behavior did not
+  regress.
+- Updated plan progress when the run started from or created a plan.
+- A concise final report naming changed files, validation, remaining risks, and
+  any action that still needs your approval.
+
+Treat the run as complete only when the acceptance criteria are met, relevant
+tests and repository checks pass, code review has no unresolved blocker, and
+you accept the resulting diff. With `--no-test`, completion must explicitly
+record that test evidence is missing; code review alone does not prove the
+implementation works.
+
+## Troubleshoot or continue
+
+| Symptom | Safe next step |
+| --- | --- |
+| The runtime does not recognize `ak:cook` | Confirm target and scope, start a fresh runtime session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+| The Skill asks for clarification | Add the missing outcome, constraint, non-goal, acceptance criterion, or authority decision. Do not answer with blanket approval if the choice changes behavior or safety. |
+| The run pauses after research, planning, implementation, or testing | This is expected in the default interactive workflow. Review the evidence, request changes, approve the next step, or stop. |
+| Tests or review reveal a regression | Keep the failure visible and choose whether to fix, re-plan, restore compatibility, or stop. Do not skip verification as a repair. |
+| Files outside the intended scope changed | Stop, inspect the diff, and preserve unrelated work. Review [Projects, artifacts, and checkpoints](../../../concepts/projects-artifacts-checkpoints) before recovery. |
+| Installation or ownership state looks wrong | Use [Installing kits](../../../guides/installing-kits) and [Kit installation problems](../../../troubleshooting/kit-installation) before reinstalling or forcing a write. |
+
+Continue with the [Engineer Kit overview](../../engineer), compare
+[Runtime adapters](../../../concepts/runtime-adapters), or use the
+[CLI reference](../../../reference/cli) for exact AgentKit lifecycle commands.
+
+## Know the current limits
+
+- The Skill can only use tools, credentials, runtimes, and project access that
+  are available in the current session.
+- Runtime projection is capability-specific. The same Skill workflow does not
+  imply identical Hooks, Agent behavior, plan tooling, or UI across runtimes.
+- Cursor slash invocation is user-verified evidence. It does not establish full
+  Cursor parity, and the Engineer statusline remains unavailable there.
+- Codex runs the Skill through native discovery, but some Engineer Hook groups
+  cannot be projected and its statusline is unavailable.
+- The current stable and beta packages contain identical `ak:cook`
+  content and invocations. Beta changes to Codex Hook reporting and projection
+  do not change this Skill's workflow.

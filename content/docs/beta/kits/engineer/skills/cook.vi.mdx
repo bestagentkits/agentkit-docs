@@ -1,0 +1,226 @@
+---
+title: Triển khai công việc đã duyệt với ak:cook
+description: Cung cấp cho ak:cook một task rõ ràng hoặc plan đã duyệt, giữ quyền kiểm soát tại các review gate và xác minh implementation tạo ra.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:cook` để biến yêu cầu rõ ràng hoặc implementation plan đã duyệt thành
+thay đổi code được kiểm thử và review. Skill kiểm tra project hiện tại, giữ
+implementation gắn với acceptance criteria có thể quan sát và báo cáo bằng
+chứng bạn cần để quyết định kết quả đã hoàn tất hay chưa.
+
+## Chọn ak:cook khi scope đã sẵn sàng
+
+### Dùng ak:cook khi
+
+- Bạn có feature, refactor hoặc maintenance task với outcome đã xác định.
+- Các constraint, non-goal và acceptance criteria quan trọng đã rõ.
+- Bạn có plan đã duyệt và muốn thực thi plan đó trên codebase hiện tại.
+- Bạn muốn kết hợp implementation, kiểm thử tập trung và code review trong một
+  workflow được điều phối.
+
+### Chọn workflow khác khi
+
+- Outcome hoặc solution mong muốn vẫn chưa rõ. Bắt đầu với `ak:brainstorm`, sau
+  đó dùng `ak:plan` khi đã thống nhất hướng đi.
+- Bạn đang điều tra một bug cụ thể, test thất bại hoặc lỗi CI. Dùng `ak:fix`,
+  workflow yêu cầu bằng chứng root cause trước khi chọn cách sửa.
+- Bạn chỉ cần verification độc lập. Dùng `ak:test` để kiểm thử hoặc
+  `ak:code-review` để review mà không bắt đầu implementation mới.
+- Bạn cần lời khuyên thay vì thay đổi workspace. Hãy dùng workflow tư vấn hoặc
+  hỏi đáp trước.
+
+## Chuẩn bị project và runtime
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận
+  Engineer Kit đã được cài cho đúng runtime cùng scope bạn đang dùng.
+- Mở một project nơi bạn chấp nhận để assistant sửa tệp và chạy các lệnh
+  validation của project.
+- Giữ nguyên công việc không liên quan và nêu rõ ranh giới tệp hoặc module dự
+  kiến.
+- Cung cấp yêu cầu cụ thể hoặc đường dẫn tới plan đã duyệt.
+- Đọc instruction của repository và mọi yêu cầu an toàn riêng của project sẽ
+  chi phối lần chạy.
+
+`ak:cook` được đóng package cho cả ba target Engineer được hỗ trợ:
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:cook ...` | Phân phối native là mặc định; phân phối plugin rõ ràng cũng được hỗ trợ. Toàn bộ bề mặt Claude Hook được hỗ trợ và statusline Engineer có thể hoạt động. |
+| Cursor | `/ak:cook ...` | Skill được chuyển vào vị trí Skill native của Cursor và cách gọi bằng slash đã được người dùng xác minh. Cursor không có statusline Engineer; bằng chứng này không thiết lập runtime parity rộng hơn. |
+| Codex | `$ak:cook ...` | Skill dùng cơ chế discovery native của Codex. Hook chỉ được chuyển đổi một phần và Codex không có statusline Engineer. |
+
+Xem [Runtime adapter](../../../concepts/runtime-adapters) để hiểu khác biệt về
+scope, cách phân phối và từng loại component.
+
+## Chạy Skill
+
+Mode mặc định là interactive. Skill dừng tại các review gate chính để bạn kiểm
+tra phát hiện, duyệt plan, yêu cầu chỉnh sửa hoặc dừng workflow.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:cook "Add POST /api/feedback with existing authentication, return 202, store no new data, add focused tests, and do not commit or deploy"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:cook "Add POST /api/feedback with existing authentication, return 202, store no new data, add focused tests, and do not commit or deploy"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:cook "Add POST /api/feedback with existing authentication, return 202, store no new data, add focused tests, and do not commit or deploy"
+```
+
+  </Tab>
+</Tabs>
+
+Bạn cũng có thể truyền đường dẫn tới plan đã duyệt. Dùng
+`/ak:cook ./plans/feedback-endpoint/plan.md` trong Claude Code hoặc Cursor và
+`$ak:cook ./plans/feedback-endpoint/plan.md` trong Codex. Skill dùng lại outcome
+cùng acceptance criteria của plan, rồi kiểm tra bằng chứng hiện tại trong
+project trước khi thay đổi.
+
+### Chọn mode thực thi có chủ đích
+
+| Input hoặc tùy chọn | Thay đổi điều gì | Điều vẫn được thực thi |
+| --- | --- | --- |
+| Mặc định hoặc `--interactive` | Chạy workflow đầy đủ và dừng giữa các giai đoạn chính | Plan, kiểm thử, code review và quyết định của con người |
+| Đường dẫn plan đã duyệt | Dùng lại plan hiện có thay vì tạo plan khác | Kiểm tra project hiện tại, implementation check, kiểm thử và review |
+| `--fast` | Bỏ giai đoạn research và chuyển từ kiểm tra project sang plan ngắn gọn | Vẫn có plan trước khi viết code; kiểm thử và review vẫn chạy |
+| `--parallel` | Cho phép các implementation phase độc lập chạy đồng thời | Dependency và ownership tệp phải rõ ràng; kiểm thử và review vẫn chạy |
+| `--auto` | Bỏ các lần dừng thường lệ cho con người và áp dụng quyết định review tự động của workflow | Kiểm thử, code review bắt buộc, security policy và escalation khi blocker chưa được xử lý |
+| `--no-test` | Bỏ giai đoạn kiểm thử | Code review bắt buộc vẫn còn và rủi ro chưa có test phải được nêu rõ |
+| `--tdd` | Thêm cách làm tests-first trong implementation phase phù hợp | Base mode đã chọn, review và completion check |
+| `--advice` | Thêm checkpoint tư vấn cho kết quả phase, blocker và quyết định rủi ro cao | Lời khuyên không viết code, duyệt gate hay thay thế workflow implementation chính |
+
+Dùng tùy chọn rõ ràng khi execution shape quan trọng. Đừng dùng `--auto` hoặc
+`--no-test` chỉ để vượt qua quyết định hay lỗi chưa được xử lý.
+
+## Mô tả công việc rõ ràng
+
+Một yêu cầu hữu ích cung cấp cho Skill năm điều:
+
+- **Outcome:** Nêu hành vi người dùng hoặc hệ thống cần được cung cấp.
+- **Constraints:** Nêu pattern, module, yêu cầu compatibility hoặc công cụ mà
+  implementation phải giữ nguyên.
+- **Non-goals:** Loại trừ công việc gần kề dễ làm scope phình ra.
+- **Acceptance criteria:** Đưa ra phép kiểm tra có thể quan sát cho thành công,
+  gồm cả lỗi dự kiến và edge case.
+- **Authority boundary:** Nêu Git, publication, deployment, dịch vụ bên ngoài,
+  dữ liệu nhạy cảm hoặc hành động phá hủy có nằm ngoài lần chạy hay không.
+
+Với ví dụ feedback endpoint, input tốt sẽ yêu cầu dùng lại pattern xác thực và
+API hiện có, trả `202`, không thêm persistence layer, bao phủ request được và
+không được xác thực, rồi dừng trước commit hoặc deploy. Input này hữu ích hơn
+“build a feedback API” vì nó xác định cả kết quả lẫn ranh giới.
+
+## Hiểu điều gì xảy ra trong một lần chạy
+
+Bạn nên thấy một tiến trình ngắn gọn thay vì một khối chỉnh sửa không được giải
+thích:
+
+1. **Skill xác nhận contract.** Skill ghi nhận hoặc dùng lại outcome,
+   constraint, non-goal cùng acceptance criteria và chỉ hỏi về quyết định quan
+   trọng còn thiếu.
+2. **Skill kiểm tra project.** Skill xác định stack, tệp liên quan, pattern hiện
+   có, instruction của project, tài liệu gần đó và public contract có thể bị
+   ảnh hưởng.
+3. **Skill tạo hoặc tải plan.** Research được thực hiện khi mode đã chọn cần.
+   Trong mode interactive, bạn review plan trước implementation.
+4. **Skill triển khai scope đã duyệt.** Công việc theo thứ tự plan và quy ước
+   project đã tìm thấy, còn tiến độ được đồng bộ với active plan khi có.
+5. **Skill xác minh thay đổi.** Kiểm thử chạy theo mặc định và code review là bắt
+   buộc trong mọi mode. Lỗi, regression hoặc thay đổi contract vẫn hiển thị thay
+   vì bị lách qua âm thầm.
+6. **Skill hoàn tất bằng chứng.** Skill đối chiếu tiến độ plan, đánh giá ảnh
+   hưởng tới tài liệu, tóm tắt tệp cùng check và hỏi trước khi đi vào workflow
+   Git riêng.
+
+Workflow có thể dùng Agent chuyên biệt để kiểm tra, triển khai, test, debug hoặc
+review từng phần của task. Instruction nội bộ của chúng không phải deliverable;
+kết quả cho người dùng là thay đổi đúng scope cùng bằng chứng của nó.
+
+## Giữ quyền phê duyệt và an toàn ở bạn
+
+<Callout type="warn" title="Automation không mở rộng quyền hạn">
+  `--auto` bỏ các lần dừng review thường lệ. Nó không cấp quyền truy cập secret,
+  phát sinh chi phí bên ngoài, publication, deployment, hành động phá hủy, thay
+  đổi public contract gây breaking hoặc chấp nhận regression. Hãy cấp riêng
+  những quyền đó và chỉ khi bạn thực sự muốn.
+</Callout>
+
+Skill sẽ không quyết định các vấn đề sau thay bạn:
+
+- Một requirement hay public contract đã đổi có chấp nhận được hay không.
+- Một test thất bại hoặc bị bỏ qua có phải release risk chấp nhận được không.
+- Một regression nên được sửa, revert, cô lập sau compatibility behavior hay
+  chấp nhận rõ ràng.
+- Credential hoặc dữ liệu nhạy cảm có được gửi tới dịch vụ bên ngoài không.
+- Kết quả có nên được commit, push, mở pull request, merge, publish hay deploy
+  không.
+
+Nếu verification tìm thấy side effect ngoài ý muốn, lần chạy nên dừng và hiển
+thị điều đã thay đổi, nguyên nhân cùng lựa chọn khôi phục có giới hạn. Đừng dùng
+`--no-test`, `--auto` hay force operation diện rộng để che bằng chứng đó.
+
+## Xác minh kết quả
+
+Một lần chạy hoàn tất nên cung cấp:
+
+- Một implementation diff đúng scope và theo pattern hiện có của project.
+- Test được thêm hoặc cập nhật khi cần, cùng lệnh và kết quả dùng để verification
+  trừ khi bạn chủ động chọn `--no-test`.
+- Phát hiện từ code review bắt buộc và cách xử lý từng blocker hoặc warning.
+- Bằng chứng acceptance criteria đã được kiểm tra và behavior gần đó không
+  regression.
+- Tiến độ plan được cập nhật khi lần chạy bắt đầu từ hoặc tạo một plan.
+- Báo cáo cuối ngắn gọn nêu tệp đã đổi, validation, rủi ro còn lại và hành động
+  vẫn cần bạn phê duyệt.
+
+Chỉ coi lần chạy hoàn tất khi acceptance criteria đã đạt, các test và repository
+check liên quan đã pass, code review không còn blocker chưa xử lý và bạn chấp
+nhận diff. Với `--no-test`, completion phải ghi rõ thiếu bằng chứng test; riêng
+code review không chứng minh implementation hoạt động.
+
+## Xử lý sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Runtime không nhận diện `ak:cook` | Xác nhận target cùng scope, mở runtime session mới, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+| Skill hỏi để làm rõ | Bổ sung outcome, constraint, non-goal, acceptance criterion hoặc quyết định quyền hạn còn thiếu. Đừng trả lời bằng blanket approval nếu lựa chọn làm thay đổi behavior hay an toàn. |
+| Lần chạy dừng sau research, planning, implementation hoặc testing | Đây là hành vi mong đợi trong workflow interactive mặc định. Review bằng chứng, yêu cầu thay đổi, duyệt bước tiếp theo hoặc dừng. |
+| Test hoặc review phát hiện regression | Giữ lỗi hiển thị và chọn sửa, lập lại plan, khôi phục compatibility hoặc dừng. Không bỏ verification để coi như đã sửa. |
+| Tệp ngoài scope dự kiến bị thay đổi | Dừng, kiểm tra diff và giữ công việc không liên quan. Xem [Projects, artifacts và checkpoints](../../../concepts/projects-artifacts-checkpoints) trước khi khôi phục. |
+| Trạng thái cài đặt hoặc ownership có vẻ sai | Dùng [Cài đặt Kit](../../../guides/installing-kits) và [Lỗi cài Kit](../../../troubleshooting/kit-installation) trước khi cài lại hoặc force write. |
+
+Tiếp tục với [Tổng quan Engineer Kit](../../engineer), so sánh
+[Runtime adapter](../../../concepts/runtime-adapters) hoặc dùng
+[Tham chiếu CLI](../../../reference/cli) để tra cứu lệnh lifecycle AgentKit chính
+xác.
+
+## Biết các giới hạn hiện tại
+
+- Skill chỉ có thể dùng tool, credential, runtime và quyền truy cập project có
+  trong session hiện tại.
+- Runtime projection phụ thuộc từng capability. Cùng một workflow Skill không
+  có nghĩa Hook, behavior của Agent, plan tooling hay UI giống nhau trên mọi
+  runtime.
+- Cách gọi Cursor bằng slash là bằng chứng do người dùng xác minh. Nó không
+  thiết lập Cursor parity đầy đủ và statusline Engineer vẫn không khả dụng ở đó.
+- Codex chạy Skill bằng native discovery, nhưng một số group Engineer Hook không
+  thể được chuyển sang runtime và statusline không khả dụng.
+- Package stable và beta hiện tại chứa nội dung cùng cách gọi `ak:cook`
+  giống nhau. Thay đổi beta về báo cáo cùng projection Codex Hook không thay đổi
+  workflow của Skill này.
