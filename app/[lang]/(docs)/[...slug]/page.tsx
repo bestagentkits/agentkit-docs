@@ -56,33 +56,35 @@ export default async function Page(props: PageProps<'/[lang]/[...slug]'>) {
   const channel = channelFromSlug(params.slug);
 
   return (
-    <DocsPage toc={page.data.toc} full={page.data.full}>
-      {channel === 'beta' && (
-        <BetaBanner locale={params.lang} slug={params.slug ?? []} />
-      )}
-      {eyebrow && (
-        <p className="mb-3 font-mono text-xs font-medium uppercase tracking-[0.09em] text-fd-primary">
-          {eyebrow}
-        </p>
-      )}
-      <DocsTitle>{page.data.title}</DocsTitle>
-      <DocsDescription className="mb-0">{page.data.description}</DocsDescription>
-      <div className="flex flex-row gap-2 items-center border-b pb-6">
-        <MarkdownCopyButton markdownUrl={markdownUrl} />
-        <ViewOptionsPopover
-          markdownUrl={markdownUrl}
-          githubUrl={`https://github.com/${gitConfig.user}/${gitConfig.repo}/blob/${gitConfig.branch}/content/docs/${page.path}`}
-        />
-      </div>
-      <DocsBody>
-        <MDX
-          components={getMDXComponents({
-            // Relative MDX links (including extensionless ./path) → locale URLs
-            a: createDocsRelativeLink(source, page),
-          })}
-        />
-      </DocsBody>
-    </DocsPage>
+    <main className="contents">
+      <DocsPage toc={page.data.toc} full={page.data.full}>
+        {channel === 'beta' && (
+          <BetaBanner locale={params.lang} slug={params.slug ?? []} />
+        )}
+        {eyebrow && (
+          <p className="mb-3 font-mono text-xs font-medium uppercase tracking-[0.09em] text-fd-primary">
+            {eyebrow}
+          </p>
+        )}
+        <DocsTitle>{page.data.title}</DocsTitle>
+        <DocsDescription className="mb-0">{page.data.description}</DocsDescription>
+        <div className="flex flex-row gap-2 items-center border-b pb-6">
+          <MarkdownCopyButton markdownUrl={markdownUrl} />
+          <ViewOptionsPopover
+            markdownUrl={markdownUrl}
+            githubUrl={`https://github.com/${gitConfig.user}/${gitConfig.repo}/blob/${gitConfig.branch}/content/docs/${page.path}`}
+          />
+        </div>
+        <DocsBody>
+          <MDX
+            components={getMDXComponents({
+              // Relative MDX links (including extensionless ./path) → locale URLs
+              a: createDocsRelativeLink(source, page),
+            })}
+          />
+        </DocsBody>
+      </DocsPage>
+    </main>
   );
 }
 

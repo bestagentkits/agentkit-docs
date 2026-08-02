@@ -1,4 +1,9 @@
 import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
+import {
+  AccessibleFullSearchTrigger,
+  AccessibleSearchTrigger,
+} from '@/components/accessible-search-trigger';
+import { AccessibleThemeSwitch } from '@/components/accessible-theme-switch';
 import { localePath } from './locale-path';
 import { appName, gitConfig } from './shared';
 
@@ -22,6 +27,13 @@ export function baseOptions(locale: string): BaseLayoutProps {
           <span className="font-medium">{appName}</span>
         </>
       ),
+    },
+    slots: {
+      searchTrigger: {
+        sm: AccessibleSearchTrigger,
+        full: AccessibleFullSearchTrigger,
+      },
+      themeSwitch: AccessibleThemeSwitch,
     },
     githubUrl: `https://github.com/${gitConfig.user}/${gitConfig.repo}`,
   };
