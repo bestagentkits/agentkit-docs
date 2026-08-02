@@ -52,11 +52,20 @@ or `AGENTKIT_KITS_DIR`; it is not a fallback for a registry failure.
 
 | Result | Meaning | Next action |
 | --- | --- | --- |
-| Exit `1` | Authentication, download, verification, I/O, runtime, or another operational failure | Keep the error text and run the checks below. |
+| Exit `1` | You declined the TTY preview, or authentication, download, verification, source, I/O, runtime, or another unclassified operation failed | A preview decline happens before install writes. For any other error, keep the output and inspect the target before retrying. |
 | Exit `2` | Invalid flags, arguments, target, or destination combination | Correct the command; no install recovery is needed. |
-| Exit `3` | You declined or cancelled the install | Nothing was applied; review the preview before retrying. |
-| Exit `5` | The requested Kit was not found | Check the Kit name and selected source. |
-| Exit `6` | The existing target cannot be overwritten safely | Inspect ownership, delivery mode, and scope before changing anything. |
+| Exit `3` | A lifecycle action was cancelled, interrupted, or stopped for missing confirmation | Do not treat the code as proof that nothing changed; inspect the reported recovery state. |
+| Exit `4` | Another AgentKit operation holds the Kit lifecycle lock | Let the other install or update finish, then retry. Do not delete the lock file. |
+| Exit `5` | The documented not-found class for a Kit missing from an explicit local `--kits-dir` | Check the Kit name and selected local source; this path can still surface as exit `1` in v2.7.0. |
+| Exit `6` | A refresh cannot detect an installed target, or the command reports an unsafe/conflicting target state | Inspect ownership, delivery mode, scope, and any explicit target requested by the error. An occupied init target can still surface as exit `1`. |
+
+Use the error text together with the exit code; v2.7.0 does not attach the more
+specific class to every missing-source or occupied-target path. A TTY decline
+or bare Enter also exits `1`, but it occurs at the preview gate before source
+resolution or install
+mutation. By contrast, a later cancellation or interruption does not guarantee
+an untouched target: a snapshot, journal, cache entry, or staged write may
+already exist. Keep any recovery ID and audit the target before retrying.
 
 A Codex install may still succeed while printing
 `Hooks dropped (unsupported on this target)`. This is a disclosed partial

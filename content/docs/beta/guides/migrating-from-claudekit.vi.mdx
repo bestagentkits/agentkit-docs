@@ -88,7 +88,9 @@ trước. Lệnh tạo thư mục mới có timestamp trong `AgentKitMigrationBa
 mục home của người dùng, nằm ngoài các root migration mặc định. Lệnh chỉ sao
 chép những file settings và cấu hình hiện có mà migration hoặc bước cài thay thế
 có thể đọc hay cập nhật; không sao chép toàn bộ runtime home, cây Kit, cache,
-session hoặc kho credential.
+session hoặc kho credential độc lập. Một số file settings được chọn vẫn có thể
+chứa giá trị giống credential, vì vậy hãy giữ bản sao lưu riêng tư dù danh sách
+đã được giới hạn.
 
 <Tabs items={['macOS / Linux', 'Windows']}>
   <Tab value="macOS / Linux">
@@ -324,8 +326,13 @@ ClaudeKit được phép thay đổi, neutralize các bề mặt tích hợp có
 nội dung tùy chỉnh hoặc không rõ nguồn gốc và cài các Kit AgentKit tương ứng.
 AgentKit ghi trạng thái khôi phục trước khi thay đổi.
 
-Khi chuyển tùy chọn, giá trị cấu hình AgentKit hiện có được ưu tiên và thông tin
-xác thực không bao giờ được sao chép từ ClaudeKit.
+Khi chuyển preference, giá trị cấu hình AgentKit hiện có được ưu tiên. Giá trị
+giống credential trong `.ck.json` của project bị bỏ qua để không đi vào
+`.agentkit/config.yaml` của project. Giá trị giống credential trong
+`~/.claude/.ck.json` ở user hoặc global có thể được chuyển vào `config.yaml` của
+user khi AgentKit chưa đặt giá trị tương ứng. AgentKit ghi config kết quả với
+mode `0600` trên hệ thống áp dụng quyền POSIX. Hãy review kế hoạch preference
+trong dry run và giữ riêng tư output, file nguồn cùng config kết quả.
 
 Nếu apply thất bại, migration mặc định có thể tiếp tục lại. Hãy đọc trạng thái
 được báo trước khi chọn chạy lại apply hay rollback.
@@ -339,8 +346,9 @@ ak migrate prefs --dry-run
 ak migrate prefs --dry-run=false --yes
 ```
 
-Luồng này sao chép các giá trị được hỗ trợ, giữ giá trị AgentKit hiện có, loại
-trừ thông tin xác thực và không xóa file `.ck.json` cũ.
+Luồng này sao chép các giá trị được hỗ trợ, giữ giá trị AgentKit hiện có, bỏ qua
+giá trị giống credential ở project và có thể chuyển giá trị giống credential ở
+user/global vào config user riêng tư. Luồng không xóa file `.ck.json` cũ.
 
 ## Xác minh kết quả
 
@@ -358,21 +366,31 @@ xác minh hành vi quan sát được trong runtime trước khi gỡ nội dung
 
 ## Rollback
 
-Dùng rollback để hoàn tác migration hoặc transition legacy đang chờ gần nhất:
+<Callout type="warn" title="Rollback bắt đầu ngay">
+  `ak migrate rollback` không có dry run, prompt xác nhận, yêu cầu `--yes`,
+  `--force` hay selector cho journal. Lệnh lập tức reconcile trạng thái khôi phục
+  mới nhất và có thể hoàn tất việc xóa quarantine thay vì khôi phục nó.
+</Callout>
+
+Chỉ chạy rollback sau khi kiểm tra bản sao lưu độc lập và sao chép riêng công
+việc không liên quan được tạo sau migration:
 
 ```bash
 ak migrate rollback
 ```
 
-Rollback ưu tiên khôi phục vùng cách ly legacy đang chờ gần nhất, nếu không thì
-khôi phục journal migration mới nhất. Nếu không có trạng thái nào đang chờ, lệnh
-báo không có gì để rollback. Lệnh chỉ khôi phục nội dung được trạng thái đó ghi
-nhận; nó không dựng lại toàn bộ môi trường trước khi áp dụng. Rollback cũng không
-gỡ bản thay thế AgentKit đã cài; nếu không còn muốn dùng, hãy xem trước rồi gỡ
-bản đó bằng đúng target, phạm vi và tuyến phân phối.
+Với legacy transition, hành vi phụ thuộc phase đã ghi nhận. Trước khi bản cài
+thay thế được chứng minh, rollback khôi phục quarantine đã ghi. Ở phase
+`installed` hoặc `finalize_pending`, lệnh xác minh receipt của bản cài AgentKit,
+sau đó finalize và xóa quarantine; lệnh không khôi phục ClaudeKit. Chỉ khi không
+có legacy transition đang chờ, lệnh mới khôi phục generic file journal mới nhất.
+Nếu không có cả hai trạng thái, lệnh báo không có gì để rollback và thoát thành
+công.
 
-Trước rollback, hãy sao chép riêng công việc không liên quan được tạo sau
-migration. Thao tác này không hoàn tác có chọn lọc các chỉnh sửa về sau.
+Rollback chỉ xử lý trạng thái đã ghi nhận. Đây không phải thao tác hoàn tác có
+chọn lọc các chỉnh sửa về sau, không dựng lại toàn bộ môi trường trước apply và
+không gỡ bản thay thế AgentKit đã cài. Nếu không còn muốn bản thay thế, hãy
+preview rồi uninstall bằng đúng target, scope và delivery route.
 
 ## Nếu migration bị gián đoạn
 

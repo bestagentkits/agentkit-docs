@@ -37,7 +37,7 @@ Kiểm tra destination khớp delivery đã chọn:
 | Claude native | `<project>/.claude/` | `~/.claude/` |
 | Claude plugin | `<project>/ak-<kit>/` | `${AGENTKIT_PLUGIN_DIR:-~/.claude/plugins}/ak-<kit>/` |
 | Codex Skill | `<project>/.agents/skills/<name>/` | `~/.agents/skills/<name>/` |
-| Codex Agent, config và hook | Các surface `.codex/` của project | `~/.codex/` |
+| Codex Agent, config và hook | `<project>/<kit>/.codex/` | `${CODEX_HOME:-~/.codex}/` |
 
 ## Kiểm tra adapter, không chỉ sự tồn tại của tệp
 
@@ -55,6 +55,52 @@ inventory đã cài; hãy xác minh discovery ngay trong runtime.
 Với bản cài Claude Code, dùng audit chỉ đọc đúng mode như mô tả trong [Lỗi cài
 Kit](./kit-installation). Nếu audit thoát `1`, hãy xử lý drift được báo trước khi
 debug runtime discovery.
+
+## Khôi phục activation plugin Claude
+
+Chỉ có file plugin chưa đủ để activate plugin Claude Code. Nếu bản cài cảnh báo
+không tìm thấy CLI `claude`, hãy chạy theo thứ tự hai lệnh đầy đủ được in trong
+cảnh báo:
+
+```text
+claude plugin marketplace add "<marketplace-source>" --scope <project-or-user>
+claude plugin install <kit>@<marketplace> --scope <project-or-user>
+```
+
+Dùng đúng source, plugin reference và cùng scope trong output cài đặt. Lệnh đầu
+đăng ký marketplace; lệnh thứ hai ghi nhận bản cài plugin trong Claude Code.
+Sau đó đóng và mở lại Claude Code trong đúng project. Cũng phải mở session Claude
+Code mới sau khi chuyển giữa native delivery và plugin delivery; session đang
+chạy không tải lại mode đó.
+
+## Khôi phục tool Agent của Codex
+
+Skill và Agent Codex có đường discovery riêng. Skill là file native dưới
+`.agents/skills` và không cần AgentKit MCP server. Agent là file TOML được
+AgentKit runtime đã đăng ký cung cấp thành tool `agent_<slug>`.
+
+Kiểm tra `codex_mcp_registration` trong báo cáo doctor Codex. Nếu check này báo
+thiếu `[mcp_servers.ak-agent-runtime]`, hãy đăng ký một lần:
+
+```bash
+ak doctor --adapter codex --json
+ak codex-agent-runtime register
+ak codex-agent-runtime serve --list-only
+```
+
+Registration cập nhật `${CODEX_HOME:-~/.codex}/config.toml` theo cách
+idempotent và giữ các MCP server entry khác. Lệnh list-only chỉ đọc và phải liệt
+kê các Agent mong đợi trước khi tiếp tục. Với Agent được stage trong project,
+chạy check từ project root và dùng project làm staging root:
+
+```bash
+ak codex-agent-runtime serve --list-only --plugin-root .
+```
+
+Override này xác minh `<project>/<kit>/.codex/agents/`; nó không chuyển Agent
+sang user scope hoặc viết lại server đã đăng ký. Nếu chỉ check có override tìm
+thấy Agent, hãy xử lý scope mismatch thay vì sao chép file TOML. Sau khi đăng ký
+hoặc sửa scope, đóng và mở session Codex mới để tải lại cấu hình MCP.
 
 ## Nếu bản cài báo Hooks bị bỏ
 
@@ -111,6 +157,10 @@ ak config prefs validate
 Tệp project ghi đè preference người dùng. Preference tắt hook có thể thay đổi
 hành vi hook, nhưng không cài Skill hoặc Agent đang thiếu. Xem [Lỗi cấu
 hình](./configuration) trước khi sửa tệp.
+
+Sau khi đổi nơi lưu hook state hoặc cài lại hook registration, hãy restart các
+session Claude Code và Codex đang chạy trước khi kiểm tra. Session cũ có thể vẫn
+giữ hook inventory và state path trước đó.
 
 ## Xác minh kết quả
 

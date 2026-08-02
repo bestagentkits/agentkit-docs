@@ -88,7 +88,9 @@ the preview. It creates a new timestamped directory under
 `AgentKitMigrationBackups` in your user home, outside the default migration
 roots. It copies only existing settings and configuration files that migration
 or replacement installation can read or update; it does not copy entire runtime
-homes, kit trees, caches, sessions, or credential stores.
+homes, kit trees, caches, sessions, or standalone credential stores. Some of the
+selected settings files can themselves contain credential-like values, so keep
+the backup private even though the list is bounded.
 
 <Tabs items={['macOS / Linux', 'Windows']}>
   <Tab value="macOS / Linux">
@@ -325,8 +327,13 @@ quarantines authorized ClaudeKit directories, neutralizes owned integration
 surfaces, preserves custom or unknown content, and installs the corresponding
 AgentKit kits. It records recovery state before mutation.
 
-Existing AgentKit configuration values win when preferences are migrated, and
-credentials are never copied from ClaudeKit.
+Existing AgentKit configuration values win when preferences are migrated.
+Credential-like values in a project `.ck.json` are omitted so they do not reach
+project `.agentkit/config.yaml`. Credential-like values in a user or global
+`~/.claude/.ck.json` can migrate into the user `config.yaml` when AgentKit does
+not already define them. AgentKit writes the resulting config with mode `0600`
+on systems that enforce POSIX permissions. Review the dry-run preference plan,
+and keep its output, the source file, and the resulting config private.
 
 If an apply fails, the migration is resumable by default. Read the reported
 state before choosing whether to rerun apply or roll it back.
@@ -340,8 +347,10 @@ ak migrate prefs --dry-run
 ak migrate prefs --dry-run=false --yes
 ```
 
-This copies supported values, keeps existing AgentKit values, excludes
-credentials, and does not delete the legacy `.ck.json` file.
+This copies supported values, keeps existing AgentKit values, omits
+credential-like project values, and can carry credential-like user/global
+values into the private user config. It does not delete the legacy `.ck.json`
+file.
 
 ## Verify the result
 
@@ -360,22 +369,32 @@ content.
 
 ## Roll back
 
-Use rollback to undo the newest pending migration or legacy transition:
+<Callout type="warn" title="Rollback starts immediately">
+  `ak migrate rollback` has no dry-run, confirmation prompt, required `--yes`,
+  `--force`, or journal selector. It immediately reconciles the newest recovery
+  state and can finalize deletion of a quarantine instead of restoring it.
+</Callout>
+
+Run rollback only after checking the independent backup and copying aside
+unrelated work created after migration:
 
 ```bash
 ak migrate rollback
 ```
 
-Rollback restores the newest pending legacy quarantine first, or otherwise the
-latest migration journal. If neither pending state exists, the command reports
-that there is nothing to roll back. It restores only the content recorded by
-that state; it does not reconstruct the entire pre-apply environment. Rollback
-also does not remove an installed AgentKit replacement. Preview and uninstall
-that replacement through the matching target, scope, and delivery route if you
-no longer want it.
+For a legacy transition, behavior depends on the recorded phase. Before a
+replacement install is proven, rollback restores the recorded quarantine. At
+`installed` or `finalize_pending`, it verifies the AgentKit install receipts and
+then finalizes and deletes the quarantine; it does not restore ClaudeKit. Only
+when no pending legacy transition exists does the command restore the latest
+generic file journal. If neither state exists, it reports that there is nothing
+to roll back and exits successfully.
 
-Before rollback, copy aside unrelated work created after the migration. The
-operation is not a selective undo for later edits.
+Rollback handles only the recorded state. It is not a selective undo for later
+edits, does not reconstruct the entire pre-apply environment, and does not
+remove an installed AgentKit replacement. Preview and uninstall that
+replacement through the matching target, scope, and delivery route if you no
+longer want it.
 
 ## If migration is interrupted
 

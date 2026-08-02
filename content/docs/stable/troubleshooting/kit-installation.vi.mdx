@@ -52,17 +52,27 @@ dành cho nguồn development hoặc CI rõ ràng và yêu cầu `--kits-dir` ho
 
 | Kết quả | Ý nghĩa | Hành động tiếp theo |
 | --- | --- | --- |
-| Thoát `1` | Lỗi xác thực, tải, xác minh, I/O, runtime hoặc lỗi vận hành khác | Giữ lại thông báo lỗi và chạy các kiểm tra bên dưới. |
+| Thoát `1` | Bạn từ chối preview trên TTY, hoặc có lỗi xác thực, tải, xác minh, nguồn, I/O, runtime hay lỗi vận hành chưa được phân loại khác | Nếu từ chối preview thì lệnh dừng trước khi ghi bản cài. Với lỗi khác, giữ output và kiểm tra target trước khi thử lại. |
 | Thoát `2` | Flag, argument, target hoặc tổ hợp đích không hợp lệ | Sửa lệnh; không cần khôi phục cài đặt. |
-| Thoát `3` | Bạn từ chối hoặc hủy cài đặt | Không có gì được áp dụng; xem lại bản xem trước trước khi thử lại. |
-| Thoát `5` | Không tìm thấy Kit được yêu cầu | Kiểm tra tên Kit và nguồn đã chọn. |
-| Thoát `6` | Không thể ghi đè target hiện có một cách an toàn | Kiểm tra ownership, delivery mode và scope trước khi thay đổi. |
+| Thoát `3` | Một thao tác lifecycle bị hủy, gián đoạn hoặc dừng do thiếu xác nhận | Không coi mã này là bằng chứng rằng chưa có gì thay đổi; hãy kiểm tra trạng thái khôi phục được báo. |
+| Thoát `4` | Một thao tác AgentKit khác đang giữ Kit lifecycle lock | Chờ lượt cài hoặc cập nhật kia hoàn tất rồi thử lại. Không xóa lock file. |
+| Thoát `5` | Nhóm not-found trong help cho trường hợp thiếu Kit trong `--kits-dir` local được chỉ định rõ | Kiểm tra tên Kit và nguồn local; trong v2.7.0 đường này vẫn có thể trả mã `1`. |
+| Thoát `6` | Refresh không detect được target đã cài, hoặc lệnh báo trạng thái target không an toàn hay xung đột | Kiểm tra ownership, delivery mode, scope và target cụ thể mà lỗi yêu cầu. Target init đã có nội dung vẫn có thể trả mã `1`. |
 
-Bản cài Codex vẫn có thể thành công khi cảnh báo rằng một nhóm Hook không được hỗ
-trợ đã bị bỏ qua. Đây là cảnh báo partial projection, không phải lỗi exit. Hãy
-xem event và matcher được nêu thay vì thử lại với `--force`. Xem [Runtime không
-tìm thấy Skill hoặc Agent](./runtime-cannot-find-skill-or-agent) để biết các
-ranh giới được hỗ trợ.
+Hãy dùng cả nội dung lỗi và mã thoát; v2.7.0 không gắn nhóm cụ thể hơn vào mọi
+đường lỗi thiếu nguồn hoặc target đã có nội dung. Từ chối trên TTY hoặc nhấn
+Enter cũng thoát `1`, nhưng
+xảy ra tại preview gate trước khi resolve nguồn hoặc thay đổi bản cài. Ngược
+lại, hủy hay gián đoạn muộn hơn không bảo đảm target còn nguyên: snapshot,
+journal, cache entry hoặc staged write có thể đã tồn tại. Giữ mọi recovery ID
+và audit target trước khi thử lại.
+
+Bản cài Codex vẫn có thể thành công khi in
+`Hooks dropped (unsupported on this target)`. Đây là partial projection được
+công bố, không phải lỗi exit. JSON báo `hooksDropped` và
+`droppedHookSummaries`; hãy xem event, matcher và handler được nêu thay vì thử
+lại với `--force`. Xem [Runtime không tìm thấy Skill hoặc
+Agent](./runtime-cannot-find-skill-or-agent) để biết các ranh giới được hỗ trợ.
 
 Khi đích đã có tệp, không thử lại ngay với `--force`. Trước tiên hãy xác định
 nội dung do AgentKit sở hữu, thuộc install mode khác hay chứa thay đổi của người

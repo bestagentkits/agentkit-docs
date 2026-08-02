@@ -38,7 +38,7 @@ Check the destination that matches the selected delivery:
 | Claude native | `<project>/.claude/` | `~/.claude/` |
 | Claude plugin | `<project>/ak-<kit>/` | `${AGENTKIT_PLUGIN_DIR:-~/.claude/plugins}/ak-<kit>/` |
 | Codex Skills | `<project>/.agents/skills/<name>/` | `~/.agents/skills/<name>/` |
-| Codex Agents, config, and hooks | Project `.codex/` surfaces | `~/.codex/` |
+| Codex Agents, config, and hooks | `<project>/<kit>/.codex/` | `${CODEX_HOME:-~/.codex}/` |
 
 ## Check the adapter, not only file presence
 
@@ -57,6 +57,53 @@ runtime too.
 For Claude Code installs, use the matching read-only audit described in [Kit
 installation problems](./kit-installation). If audit exits `1`, resolve the
 reported drift before debugging runtime discovery.
+
+## Recover Claude plugin activation
+
+Plugin files are not enough to activate a Claude Code plugin. If the install
+warns that the `claude` CLI was not found, run the two complete commands printed
+in that warning, in order:
+
+```text
+claude plugin marketplace add "<marketplace-source>" --scope <project-or-user>
+claude plugin install <kit>@<marketplace> --scope <project-or-user>
+```
+
+Use the exact source, plugin reference, and identical scope from the install
+output. The first command registers the marketplace; the second records the
+plugin installation in Claude Code. Then close and reopen Claude Code in the
+intended project. Also start a fresh Claude Code session after switching between
+native and plugin delivery; an existing session does not reload that mode.
+
+## Recover Codex Agent tools
+
+Codex Skills and Agents have separate discovery paths. Skills are native files
+under `.agents/skills` and do not require the AgentKit MCP server. Agents are
+TOML files exposed as `agent_<slug>` tools by the registered AgentKit runtime.
+
+Inspect `codex_mcp_registration` in the Codex doctor report. If it says
+`[mcp_servers.ak-agent-runtime]` is missing, register it once:
+
+```bash
+ak doctor --adapter codex --json
+ak codex-agent-runtime register
+ak codex-agent-runtime serve --list-only
+```
+
+Registration idempotently updates `${CODEX_HOME:-~/.codex}/config.toml` and
+preserves other MCP server entries. The list-only command is read-only and must
+name the expected Agents before you continue. For project-staged Agents, run
+the check from the project root with the project as the staging root:
+
+```bash
+ak codex-agent-runtime serve --list-only --plugin-root .
+```
+
+This override verifies `<project>/<kit>/.codex/agents/`; it does not move those
+Agents into user scope or rewrite the registered server. If only the overridden
+check finds them, resolve the scope mismatch instead of copying TOML files.
+After registration or scope correction, close and start a fresh Codex session
+so it reloads MCP configuration.
 
 ## If the install says Hooks were dropped
 
@@ -112,6 +159,10 @@ ak config prefs validate
 The project file overrides user preferences. A disabled hook preference can
 change hook behavior, but it does not install a missing Skill or Agent. See
 [Configuration problems](./configuration) before editing a file.
+
+After changing hook state storage or reinstalling hook registrations, restart
+active Claude Code and Codex sessions before testing. Existing sessions can
+retain the earlier hook inventory and state paths.
 
 ## Verify the result
 
