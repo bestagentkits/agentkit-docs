@@ -1,5 +1,6 @@
 import { source } from '@/lib/source';
 import { createFromSource } from 'fumadocs-core/search/server';
+import { createPublicDiscoverySource } from '@/lib/public-discovery.mjs';
 
 export const revalidate = false;
 
@@ -9,7 +10,9 @@ export const revalidate = false;
 // the English analyzer. It won't stem Vietnamese, but substring matching still
 // works and the build stays green.
 // https://docs.orama.com/docs/orama-js/supported-languages
-export const { staticGET: GET } = createFromSource(source, {
+const publicSearchSource = createPublicDiscoverySource(source);
+
+export const { staticGET: GET } = createFromSource(publicSearchSource, {
   localeMap: {
     en: 'english',
     vi: 'english',

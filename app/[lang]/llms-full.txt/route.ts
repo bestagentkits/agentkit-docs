@@ -1,5 +1,6 @@
 import { getLLMText, source } from '@/lib/source';
 import { i18n } from '@/lib/i18n';
+import { filterPublicDiscoveryPages } from '@/lib/public-discovery.mjs';
 
 export const revalidate = false;
 
@@ -8,7 +9,7 @@ export async function GET(
   { params }: RouteContext<'/[lang]/llms-full.txt'>,
 ) {
   const { lang } = await params;
-  const scan = source.getPages(lang).map(getLLMText);
+  const scan = filterPublicDiscoveryPages(source.getPages(lang)).map(getLLMText);
   const scanned = await Promise.all(scan);
 
   return new Response(scanned.join('\n\n'), {

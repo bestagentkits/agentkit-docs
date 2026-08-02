@@ -1,5 +1,9 @@
 import { getLLMText, getPageMarkdownUrl, source } from '@/lib/source';
 import { i18n } from '@/lib/i18n';
+import {
+  filterPublicDiscoveryPages,
+  isPubliclyDiscoverablePage,
+} from '@/lib/public-discovery.mjs';
 import { notFound } from 'next/navigation';
 
 export const revalidate = false;
@@ -11,7 +15,7 @@ export async function GET(
   const { lang, slug } = await params;
   // remove the appended "content.md"
   const page = source.getPage(slug?.slice(0, -1), lang);
-  if (!page) notFound();
+  if (!page || !isPubliclyDiscoverablePage(page)) notFound();
 
   return new Response(await getLLMText(page), {
     headers: {
@@ -22,7 +26,7 @@ export async function GET(
 
 export function generateStaticParams() {
   return i18n.languages.flatMap((lang) =>
-    source.getPages(lang).map((page) => ({
+    filterPublicDiscoveryPages(source.getPages(lang)).map((page) => ({
       lang,
       slug: getPageMarkdownUrl(page).segments,
     })),

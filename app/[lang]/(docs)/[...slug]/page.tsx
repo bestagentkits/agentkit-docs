@@ -18,6 +18,7 @@ import type { Metadata } from 'next';
 import { createDocsRelativeLink } from '@/lib/docs-relative-link';
 import { docsPageMetadata } from '@/lib/metadata';
 import { gitConfig } from '@/lib/shared';
+import { isPubliclyDiscoverablePage } from '@/lib/public-discovery.mjs';
 
 const channels = ['stable', 'beta'] as const;
 
@@ -119,5 +120,8 @@ export async function generateMetadata(
     openGraph: {
       images: getPageImage(page).url,
     },
+    robots: isPubliclyDiscoverablePage(page)
+      ? undefined
+      : { index: false, follow: false },
   });
 }
