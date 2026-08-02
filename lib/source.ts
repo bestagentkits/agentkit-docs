@@ -26,13 +26,17 @@ function canonicalCliReference(): LoaderPlugin {
   };
 }
 
-function hideUnapprovedChangelog(): LoaderPlugin {
+function hideUnapprovedGeneratedContent(): LoaderPlugin {
   return {
-    name: 'agentkit:hide-unapproved-changelog',
+    name: 'agentkit:hide-unapproved-generated-content',
     enforce: 'post',
     transformStorage({ storage }) {
       storage.delete('stable/changelog', true);
       storage.delete('beta/changelog', true);
+      storage.delete('stable/reference/release-notes.mdx');
+      storage.delete('stable/reference/release-notes.vi.mdx');
+      storage.delete('beta/reference/release-notes.mdx');
+      storage.delete('beta/reference/release-notes.vi.mdx');
     },
   };
 }
@@ -42,7 +46,7 @@ export const source = loader({
   baseUrl: docsRoute,
   i18n,
   source: docs.toFumadocsSource(),
-  plugins: [canonicalCliReference(), hideUnapprovedChangelog()],
+  plugins: [canonicalCliReference(), hideUnapprovedGeneratedContent()],
 });
 
 // The OG-image and raw-markdown route handlers live under the `[lang]` segment,
