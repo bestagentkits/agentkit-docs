@@ -1,0 +1,181 @@
+---
+title: Lập bản đồ code liên quan nhanh với ak:scout
+description: Tìm tệp, symbol, test và relationship quan trọng cho một câu hỏi codebase có giới hạn mà không bắt đầu implementation.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng \`ak:scout\` để reconnaissance project nhanh và có giới hạn. Skill biến
+search target cụ thể thành bản đồ ngắn gọn về tệp cùng pattern liên quan, ưu tiên
+local search và chỉ dùng delegated hoặc external probe tùy chọn khi được phép.
+
+## Chọn ak:scout khi bạn cần bản đồ codebase
+
+### Dùng ak:scout khi
+
+- Bạn cần tìm feature, interface, configuration hoặc behavior nằm ở đâu.
+- Task trải trên nhiều directory và bạn cần ranh giới tệp cùng test.
+- Workflow debugging hoặc review cần entry point và relationship trước.
+- Bạn cần bằng chứng về cấu trúc project mà không thay đổi implementation.
+
+### Chọn workflow khác khi
+
+- Bạn cần root-cause diagnosis sau khi đã tìm được affected path. Dùng workflow
+  debug hoặc fix của Engineer.
+- Bạn cần so sánh solution approach. Dùng \`ak:brainstorm\`.
+- Bạn cần implementation roadmap theo phase. Dùng \`ak:plan\`.
+- Bạn đã biết tệp và muốn thực hiện thay đổi. Dùng \`ak:cook\`.
+
+## Chuẩn bị project và runtime
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận
+  Engineer Kit đã được cài cho runtime cùng scope đang dùng.
+- Mở project hoặc directory tree cần kiểm tra.
+- Đưa ra một search target có giới hạn, cùng directory hoặc file type cần gồm
+  hay loại trừ khi quan trọng.
+- Cấp quyền rõ ràng cho subagent, delegation hoặc parallel agent work nếu bạn
+  muốn Explore agent. Skill không tự suy ra permission đó.
+- Cấp quyền rõ ràng cho external path trước khi dùng \`ext\`.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | \`/ak:scout ...\` | Local search native khả dụng; Explore delegation phụ thuộc policy hiện tại và permission của người dùng. |
+| Cursor | \`/ak:scout ...\` | Slash invocation theo cách gọi Engineer Skill do người dùng xác minh; tool parity rộng hơn chưa được thiết lập. |
+| Codex | \`$ak:scout ...\` | Native discovery được hỗ trợ. Trong Codex Desktop, subagent cần yêu cầu rõ của người dùng và multi-agent capability hiển thị. |
+
+## Chạy Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+\`\`\`text
+/ak:scout "Find the editor draft persistence entry points, storage adapter, recovery UI, and focused tests. Search src/ and tests/ only."
+\`\`\`
+
+  </Tab>
+  <Tab value="Cursor">
+
+\`\`\`text
+/ak:scout "Find the editor draft persistence entry points, storage adapter, recovery UI, and focused tests. Search src/ and tests/ only."
+\`\`\`
+
+  </Tab>
+  <Tab value="Codex">
+
+\`\`\`text
+$ak:scout "Find the editor draft persistence entry points, storage adapter, recovery UI, and focused tests. Search src/ and tests/ only."
+\`\`\`
+
+  </Tab>
+</Tabs>
+
+Mode mặc định dùng local search cùng scoped file read. Chỉ thêm \`ext\` khi
+native search không đủ và bạn cho phép OpenCode probe có giới hạn:
+
+\`\`\`text
+/ak:scout "Find payment webhook ownership across api/ and lib/; read-only" ext
+\`\`\`
+
+| Input | Hành vi | Ranh giới |
+| --- | --- | --- |
+| Search target | Dùng local file search, read và shell tool như \`rg\`, \`wc\` hoặc \`sed\` | Mặc định reconnaissance read-only |
+| Yêu cầu delegation rõ ràng | Có thể chia directory không chồng lấn cho Explore agent | Runtime policy và concurrency khả dụng vẫn áp dụng |
+| \`ext\` | Có thể chạy OpenCode probe read-only trên scope đã nêu | Cần user permission, tooling đã cài và provider khả dụng |
+
+## Mô tả search rõ ràng
+
+Scout request hữu ích nêu:
+
+- **Target:** behavior, symbol, feature, configuration hoặc relationship cần tìm.
+- **Scope:** directory, package, file type hoặc repository cần bao gồm.
+- **Exclusions:** generated file, vendor tree, fixture hoặc subsystem không liên
+  quan.
+- **Expected evidence:** entry point, caller, test, configuration, data flow hoặc
+  file count.
+- **Authority boundary:** có cho phép delegation hoặc external provider không.
+
+Với ví dụ draft recovery, yêu cầu persistence entry point, storage adapter,
+recovery UI cùng focused test tạo bản đồ hữu ích hơn “search the editor.”
+
+## Hiểu điều gì xảy ra trong một lần chạy
+
+1. **Skill phân tích target.** Skill xác định search term, directory có khả năng
+   liên quan, file type và bằng chứng workflow tiếp theo cần.
+2. **Skill ước lượng search surface.** Skill dùng local pattern rộng để hiểu
+   scale của project trước khi đọc content.
+3. **Skill search cục bộ.** Skill ưu tiên native file search cùng bounded read.
+   Tệp lớn được đọc theo chunk phù hợp thay vì copy toàn bộ.
+4. **Skill quyết định delegation có được phép không.** Không có user permission
+   rõ hoặc runtime capability, scouting ở main agent. Khi có quyền, directory
+   riêng biệt có thể được giao cho Explore scope không chồng lấn.
+5. **Skill có thể dùng external path.** Với \`ext\`, user permission và OpenCode
+   tooling khả dụng, Skill chạy bounded read-only probe. Failure chuyển về local
+   search và vẫn hiển thị.
+6. **Skill tổng hợp bằng chứng.** Skill deduplicate path, ghi relationship cùng
+   pattern quan trọng, nêu timeout hoặc scope chưa bao phủ và liệt kê câu hỏi
+   chưa giải quyết ở cuối.
+
+## Giữ quyền phê duyệt và an toàn ở bạn
+
+<Callout type="warn" title="External scouting có thể đi qua ranh giới provider">
+  Chỉ dùng \`ext\` cho scope bạn được phép gửi tới OpenCode provider đã cấu hình.
+  Không gửi secret, tệp riêng tư không liên quan hoặc toàn bộ tệp lớn chỉ để
+  tránh local context limit.
+</Callout>
+
+Scouting mặc định là read-only đối với project content. Skill không nên sửa
+product code, cài tool hoặc biến reconnaissance thành implementation. Runtime
+có thể ghi transient task progress hoặc report scout ngắn tại vị trí report đã
+cấu hình của project; artifact tổ chức đó không cấp quyền cho thay đổi workspace
+khác.
+
+Explore agent chỉ chạy khi bạn yêu cầu hoặc cho phép delegation rõ ràng và mỗi
+agent có scope hữu ích riêng. External probe có thể phụ thuộc provider
+authentication, network access, model availability và cost. External probe thất
+bại không được retry vô hạn hay dùng làm lý do mở rộng dữ liệu được chia sẻ.
+
+## Xác minh kết quả
+
+Scout result hoàn tất nên cung cấp:
+
+- Relevant file path cùng giải thích một dòng.
+- Key symbol, entry point, test, configuration và relationship được yêu cầu.
+- Existing pattern quan trọng workflow tiếp theo nên giữ.
+- Coverage boundary, gồm scope bị loại trừ hoặc timeout.
+- Phát biểu ngắn về điều chưa được xác nhận.
+- Câu hỏi chưa giải quyết được liệt kê cuối cùng.
+
+Coi kết quả là reconnaissance, không phải bằng chứng runtime behavior hay root
+cause. Khi claim cần chắc chắn về behavior, hãy trace hoặc test trong workflow
+có ownership.
+
+## Xử lý sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Kết quả quá rộng | Thu hẹp target vào một behavior và nêu directory, file type cùng bằng chứng mong đợi. |
+| Thiếu relationship quan trọng | Yêu cầu caller, import, test và configuration quanh entry point đã xác nhận. |
+| Delegation không bắt đầu | Xác nhận bạn đã yêu cầu subagent rõ ràng và runtime có capability đó; nếu không, tiếp tục search ở main agent. |
+| \`ext\` không khả dụng hoặc thất bại | Kiểm tra OpenCode availability cùng provider access hoặc tiếp tục local search mà không mở rộng scope. |
+| Tệp lớn chỉ được đọc một phần | Yêu cầu symbol hoặc line range liên quan thay vì toàn bộ tệp. |
+| Runtime không nhận diện Skill | Xác nhận target cùng scope, mở runtime session mới, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Chuyển scout report cho debugging, \`ak:brainstorm\`, \`ak:plan\` hoặc
+\`ak:cook\` tùy bước tiếp theo là diagnosis, decision, planning hay
+implementation.
+
+## Biết các giới hạn hiện tại
+
+- Skill chỉ báo tệp cùng relationship hiển thị trong checkout hiện tại và
+  external scope được cấp quyền.
+- Parallel coverage không khả dụng khi người dùng chưa yêu cầu delegation hoặc
+  runtime không cung cấp capability.
+- External result phụ thuộc OpenCode cùng provider đã cấu hình; local evidence
+  nên xác minh claim quan trọng cho delivery.
+- Cursor invocation được người dùng xác minh ở mức Engineer Skill và không
+  thiết lập tool parity.
+- Package stable và beta chứa cùng mode cùng reference \`ak:scout\`. Thay đổi
+  runtime ở beta không làm đổi workflow này.

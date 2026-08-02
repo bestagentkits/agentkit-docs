@@ -1,0 +1,190 @@
+---
+title: Định hình hướng triển khai với ak:brainstorm
+description: Biến ý định chưa đầy đủ thành outcome có giới hạn, so sánh các hướng khả thi và chuyển giao quyết định dựa trên bằng chứng.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng \`ak:brainstorm\` để biến yêu cầu chưa rõ về product, code, documentation
+hoặc maintenance thành delivery contract cùng hướng được đề xuất. Skill tách
+outcome mong muốn khỏi bằng chứng hiện tại, chỉ so sánh lựa chọn có ý nghĩa và
+dừng trước implementation.
+
+## Chọn ak:brainstorm khi hướng đi cần được làm rõ
+
+### Dùng ak:brainstorm khi
+
+- Yêu cầu nhiều bước còn thiếu outcome, constraint, non-goal hoặc acceptance
+  criterion rõ ràng.
+- Có nhiều hơn một hướng kỹ thuật hoặc product khả thi cần so sánh.
+- Một bug đã được chẩn đoán vẫn còn lựa chọn quan trọng về kiến trúc hoặc cách
+  sửa.
+- Bạn muốn recommendation dựa trên bằng chứng trước planning hoặc
+  implementation.
+
+### Chọn workflow khác khi
+
+- Contract và hướng đi đã được duyệt. Dùng \`ak:plan\` để tạo implementation
+  plan hoặc \`ak:cook\` để thực thi công việc đã duyệt.
+- Bạn cần câu trả lời kỹ thuật trực tiếp thay vì quyết định delivery. Dùng
+  workflow tư vấn hoặc hỏi đáp.
+- Bạn cần bản đồ codebase có giới hạn. Dùng \`ak:scout\`.
+- Bạn mới chỉ có triệu chứng lỗi. Hãy chẩn đoán root cause trước khi chọn cách
+  sửa; brainstorming không thay thế debugging.
+
+## Chuẩn bị project và runtime
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận
+  Engineer Kit đã được cài cho đúng runtime cùng scope.
+- Nêu vấn đề, người dùng hoặc hệ thống bị ảnh hưởng, constraint đã biết và quyết
+  định đã chốt.
+- Mở project liên quan khi tính khả thi phụ thuộc code, test, documentation hoặc
+  design guideline của project.
+- Xác định lần chạy có được tạo brief cục bộ hoặc dùng advisory supervision hay
+  không.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | \`/ak:brainstorm ...\` | Phân phối native là mặc định; phân phối plugin rõ ràng cũng được hỗ trợ. |
+| Cursor | \`/ak:brainstorm ...\` | Cách gọi bằng slash đã được người dùng xác minh. Điều này không chứng minh runtime parity đầy đủ. |
+| Codex | \`$ak:brainstorm ...\` | Skill dùng discovery native của Codex; không suy ra parity rộng hơn cho Engineer Hook và statusline. |
+
+Xem [Runtime adapter](../../../concepts/runtime-adapters) để hiểu khác biệt giữa
+các target.
+
+## Chạy Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+\`\`\`text
+/ak:brainstorm "Choose how to add offline draft recovery to the editor. Preserve current storage formats, avoid a new service, and define observable recovery behavior."
+\`\`\`
+
+  </Tab>
+  <Tab value="Cursor">
+
+\`\`\`text
+/ak:brainstorm "Choose how to add offline draft recovery to the editor. Preserve current storage formats, avoid a new service, and define observable recovery behavior."
+\`\`\`
+
+  </Tab>
+  <Tab value="Codex">
+
+\`\`\`text
+$ak:brainstorm "Choose how to add offline draft recovery to the editor. Preserve current storage formats, avoid a new service, and define observable recovery behavior."
+\`\`\`
+
+  </Tab>
+</Tabs>
+
+Topic hoặc problem là input mặc định. Hai tùy chọn thay đổi output hoặc cách
+supervision:
+
+| Tùy chọn | Tác dụng | Ranh giới quan trọng |
+| --- | --- | --- |
+| \`--html\` | Thêm brief \`brainstorm.html\` self-contained vào vị trí report đã cấu hình của project | Tệp này bổ sung handoff, không thay thế delivery contract |
+| \`--advice\` | Thêm advisory checkpoint sau quyết định, khi bị chặn và trước lựa chọn rủi ro cao | Adviser chỉ đưa counsel, không thể sửa, phê duyệt hoặc mở rộng quyền hạn |
+
+Khi topic liên quan UI hoặc UX, \`--html\` gồm mockup giao diện có chú thích và
+sơ đồ delivery flow. Nếu không có image generation đầy đủ, Skill có thể dùng
+HTML, CSS hoặc SVG cục bộ và báo giới hạn đó.
+
+## Mô tả quyết định rõ ràng
+
+Input hữu ích nêu:
+
+- **Outcome:** trạng thái người dùng hoặc hệ thống bạn muốn đạt được.
+- **Constraints:** giới hạn compatibility, an toàn, thời gian, công nghệ hoặc
+  ownership.
+- **Non-goals:** công việc gần kề mà quyết định không được mở rộng sang.
+- **Acceptance criteria:** bằng chứng quan sát được để chứng minh hướng đi thành
+  công.
+- **Known evidence:** behavior hiện tại, quyết định trước đây, hướng đã thất bại
+  hoặc vùng repository nên kiểm tra.
+
+Với ví dụ draft recovery, hãy nêu editor state nào phải được giữ, khi nào recovery
+xuất hiện, format hiện có nào phải tiếp tục đọc được và không được thêm network
+service. Skill khi đó có thể so sánh lựa chọn có giới hạn thay vì tự tạo một nền
+tảng synchronization rộng hơn.
+
+## Hiểu điều gì xảy ra trong một lần chạy
+
+1. **Skill định hình contract.** Skill ghi nhận outcome, constraint, non-goal và
+   acceptance criteria, đồng thời dùng lại contract đã duyệt nếu có.
+2. **Skill kiểm tra mức độ tương xứng.** Yêu cầu cụ thể chỉ nhận phần xác nhận
+   ngắn. Skill chỉ hỏi khi quyết định còn thiếu làm thay đổi đáng kể kết quả,
+   ranh giới an toàn hoặc public contract.
+3. **Skill kiểm tra bằng chứng liên quan.** Skill đọc tập source, test,
+   documentation, plan hoặc live state nhỏ nhất cần thiết trước khi khẳng định
+   một hướng khả thi.
+4. **Skill đưa lỗi qua chẩn đoán.** Với bug, Skill ghi lại trạng thái thất bại và
+   root cause trước khi so sánh cách sửa bám theo nguyên nhân.
+5. **Skill so sánh các hướng khả thi.** Skill đưa ra tối đa ba lựa chọn có ý
+   nghĩa, trade-off, khoảng trống bằng chứng và recommendation nhỏ nhất đáp ứng
+   contract.
+6. **Skill chuẩn bị handoff.** Skill chuyển contract đã duyệt, hướng đã chọn,
+   bằng chứng và rủi ro chưa xử lý sang planning, implementation hoặc bug-fix
+   workflow.
+
+## Giữ quyền phê duyệt và an toàn ở bạn
+
+<Callout type="warn" title="Recommendation không phải approval để implementation">
+  \`ak:brainstorm\` định hình ý định và lựa chọn. Skill không triển khai solution,
+  thay đổi public contract, cấp quyền truy cập secret hay phê duyệt hành động
+  không thể đảo ngược.
+</Callout>
+
+Bạn quyết định có chấp nhận recommendation và bất đồng quan trọng đã được giải
+quyết hay chưa. Advisory supervision không nắm quyền này. Skill không nên đọc
+tệp riêng tư không liên quan, khẳng định behavior hiện tại chỉ từ ý định hoặc
+tạo thêm component và migration để design trông đầy đủ.
+
+Brief HTML cục bộ là file effect rõ ràng. Brief không cần network asset và phải
+mở trực tiếp được từ disk. Mọi commit, push, pull request, publication,
+deployment, sử dụng credential hoặc dịch vụ tính phí ở downstream đều cần quyền
+riêng trong workflow thực hiện hành động đó.
+
+## Xác minh kết quả
+
+Một lần chạy hoàn tất nên cung cấp:
+
+- Outcome, constraint, non-goal và acceptance criteria đã được chấp nhận.
+- Bằng chứng đã xác nhận cùng khoảng trống hoặc bất định được ghi rõ.
+- Tối đa ba hướng khả thi khi thực sự có lựa chọn.
+- Hướng được đề xuất với lý do và trade-off có ý nghĩa.
+- Handoff target như \`ak:plan\`, \`ak:cook\` hoặc bug workflow đã chẩn đoán.
+- Rủi ro hoặc câu hỏi chưa giải quyết được liệt kê cuối cùng.
+- Khi được yêu cầu, brief \`brainstorm.html\` self-contained chứa cùng decision
+  record và phần giải thích trực quan bắt buộc.
+
+Lần chạy hoàn tất khi bạn có thể giải thích điều sẽ được cung cấp, điều ngoài
+scope, vì sao hướng đã chọn phù hợp bằng chứng và check quan sát nào chứng minh
+thành công. Đây không phải bằng chứng solution đã được implementation.
+
+## Xử lý sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Skill hỏi quá nhiều | Cung cấp bốn trường contract và nêu các quyết định đã chốt. Yêu cầu rõ nên được tóm tắt, không bị mở lại. |
+| Các lựa chọn quá chung chung | Bổ sung bằng chứng project, compatibility constraint, hướng đã thất bại và acceptance test cụ thể. |
+| Thảo luận bug nhảy từ triệu chứng sang solution | Dừng và dùng scouting cùng diagnosis để chứng minh root cause trước khi so sánh cách sửa. |
+| Thiếu \`brainstorm.html\` | Xác nhận đã truyền \`--html\` và project có vị trí report đã cấu hình, cho phép ghi. |
+| Runtime không nhận diện Skill | Xác nhận target cùng scope, mở runtime session mới, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Sau khi chấp nhận hướng đi, tiếp tục với \`ak:plan\` để có implementation plan
+bền vững hoặc \`ak:cook\` để thực thi đã duyệt. Dùng [Tổng quan Engineer
+Kit](../../engineer) để so sánh workflow gần đó.
+
+## Biết các giới hạn hiện tại
+
+- Skill chỉ có thể kiểm tra project state, tool và credential có trong session.
+- Skill có thể xác lập decision contract, không thể chứng minh tính khả thi của
+  implementation vượt quá bằng chứng thực sự đã kiểm tra.
+- Cách gọi Cursor bằng slash là bằng chứng do người dùng xác minh, không chứng
+  minh runtime parity đầy đủ.
+- Package stable và beta chứa cùng nội dung cùng tùy chọn \`ak:brainstorm\`.
+  Thay đổi runtime ở beta không làm đổi workflow này.
