@@ -25,6 +25,22 @@ intended channel.
 The examples below use `stable`. Replace it with `beta` as a complete decision,
 not as a one-off troubleshooting step.
 
+## Use the unified updater when appropriate
+
+In an interactive terminal, bare `ak update` walks through the signed CLI
+update, global kits, then project kits. Every step defaults to No:
+
+```bash
+ak update
+ak update --yes
+```
+
+`--yes` accepts the offered steps, but the signed CLI update or minimum-version
+check remains a hard gate before any kit mutation. Use the scoped commands below
+when you want to update only one layer. A CLI hard-gate failure, partial kit
+failure, or interruption after mutation exits `1`; an invalid target or scope
+exits `2`.
+
 ## Review the CLI release
 
 Read the verified changelog, check availability, or fully verify an update
@@ -74,11 +90,14 @@ kit, and channel so the plan is unambiguous:
 
 ```bash
 ak update . --kits engineer --channel stable --show-diff
+ak update . --kits engineer --channel stable --show-diff --dry-run
 ```
 
 The preview does not write files or create a snapshot. It classifies incoming
-files and shows which user-modified files would be skipped. Apply the reviewed
-plan with:
+files and shows which user-modified files would be skipped. Without `--yes`, an
+implicit scripted preview exits `3`; explicit `--dry-run` performs the same
+non-mutating preview and exits `0`, which is more convenient in CI. Apply the
+reviewed plan with:
 
 ```bash
 ak update . --kits engineer --channel stable --yes
@@ -106,7 +125,9 @@ ak update --global --kits engineer --target codex --channel stable --yes
 ```
 
 Global update is preserve-only for user-modified files. A runtime you selected
-but have not installed globally is reported as skipped rather than created.
+but have not installed globally is reported as skipped rather than created. The
+same implicit-preview exit `3` and explicit-dry-run exit `0` distinction applies
+at global scope.
 
 <Callout type="info">
   `ak update --global` reports Claude Code user-plugin-only installs instead of
@@ -120,13 +141,15 @@ Use `ak kit refresh` when you need to preserve an existing target, scope, or
 Claude Code delivery route exactly:
 
 ```bash
-ak kit refresh engineer --target codex --channel stable
-ak kit refresh engineer --global --switch-to-plugin --channel stable
+ak kit refresh engineer --target codex --channel stable --yes
+ak kit refresh engineer --global --switch-to-plugin --channel stable --yes
 ```
 
 Refresh creates a recovery snapshot, rewrites current AgentKit output, removes
-stale generated files, and preserves the previous selected-skill subset. Review
-the confirmation preview; avoid `--no-backup`.
+stale generated and owned paths only while ownership evidence still matches,
+and preserves the previous selected-skill subset. Modified, unsafe, linked, and
+shared paths remain in place. Review the confirmation preview; avoid
+`--no-backup`.
 
 ## Verify the update
 
@@ -148,17 +171,39 @@ snapshot before restoring it:
 ```bash
 ak backups list
 ak backups show <id>
-ak backups restore <id> --dry-run
+ak backups verify <id>
+ak recover <id> --dry-run
 ```
+
+`ak recover` is an exact alias for `ak backups restore`. Restore is
+replace-only: it overwrites captured files, removes only exact absent paths or
+explicitly approved AgentKit plugin directories, and normally leaves unrelated
+files created after the snapshot in place.
+
+If `ak backups show <id>` lists project bundle roots, repeat every exact root in
+the recovery command:
+
+```bash
+ak recover <id> --allow-root /absolute/project --dry-run
+ak recover <id> --allow-root /absolute/project
+```
+
+When more than one root is listed, repeat `--allow-root` with every exact path
+in both commands.
 
 If the operation says the project snapshot is outside `ak backups restore`, use
 the printed snapshot-files directory and copy back only the affected files.
-Otherwise, apply the reviewed restore plan with `ak backups restore <id>` and
-confirm the prompt.
+Otherwise, apply the reviewed restore plan with `ak recover <id>` and confirm
+the prompt. For a project bundle, retain every reviewed `--allow-root` flag in
+that apply command.
 
-Preserve unrelated work created after the snapshot before restoring. Do not
-restore `--latest` blindly, delete an entire runtime directory, or rerun the
-failed update with `--force` before you understand the current state.
+Restore is not transactional across multiple files; an interruption can leave
+an intermediate state. Preserve unrelated work and take a new snapshot before
+rolling backward when practical. Do not recover `--latest` blindly, delete an
+entire runtime directory, or rerun the failed update with `--force` before you
+understand the current state. Declining restore exits `3`, a held backup lock
+exits `4`, an invalid or missing snapshot exits `5`, and other failures exit
+`1`.
 
 ## See also
 

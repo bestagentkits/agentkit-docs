@@ -18,6 +18,10 @@ ak whoami
 ak licenses
 ```
 
+An unauthenticated local state can still exit `0`; read the command output
+rather than treating a successful exit as proof of authentication or
+entitlement.
+
 Released kits come from the authenticated AgentKit registry by default. You do
 not need `--remote`. Local kit sources are for development and CI, not the
 normal installation flow.
@@ -33,17 +37,33 @@ in the runtime's user directory and available beyond one project.
 
 | Goal | Command |
 | --- | --- |
-| Claude Code in this project | `ak kit init engineer --target claude-code` |
-| Claude Code for your user | `ak kit init engineer --target claude-code --global` |
-| Codex in this project | `ak kit init engineer --target codex` |
-| Codex for your user | `ak kit init engineer --target codex --global` |
-| Cursor in this project | `ak kit init engineer --target cursor` |
-| Cursor for your user | `ak kit init engineer --target cursor --global` |
+| Claude Code in this project | `ak kit install engineer --target claude-code` |
+| Claude Code for your user | `ak kit install engineer --target claude-code --global` |
+| Codex in this project | `ak kit install engineer --target codex` |
+| Codex for your user | `ak kit install engineer --target codex --global` |
+| Cursor in this project | `ak kit install engineer --target cursor` |
+| Cursor for your user | `ak kit install engineer --target cursor --global` |
 
 Project-scoped installs write runtime content in the current project and keep
 AgentKit lifecycle metadata there. Global installs write into the selected
 runtime's user scope. Review the destination shown in the install preview
 before confirming.
+
+For Codex, native skills go to `.agents/skills` in a project or
+`~/.agents/skills` at user scope; other Codex resources use the corresponding
+project or user `.codex` surfaces. Cursor uses the corresponding `.cursor`
+scope.
+
+Project and global copies can coexist. Installing one does not remove the
+other: project commands or rules may shadow user entries, and hooks from both
+scopes may run. Remove an unwanted copy through the matching uninstall route.
+
+<Callout type="info">
+  Cursor is a registered production target, but this release does not claim the
+  same end-to-end install, update, and invocation verification as Claude Code
+  and Codex. Verify skill discovery in Cursor after installation before relying
+  on it.
+</Callout>
 
 ## Choose Claude Code delivery
 
@@ -55,16 +75,18 @@ Claude Code supports two delivery modes:
 
 ```bash
 # project plugin
-ak kit init engineer --target claude-code --switch-to-plugin
+ak kit install engineer --target claude-code --switch-to-plugin
 
 # user plugin
-ak kit init engineer --target claude-code --global --switch-to-plugin
+ak kit install engineer --target claude-code --global --switch-to-plugin
 ```
 
+Native Claude Code content goes to `<project>/.claude` or `~/.claude`.
 The user plugin is installed as `ak-<kit>` under the Claude Code plugin root;
 for example, the default Engineer Kit path is
 `~/.claude/plugins/ak-engineer`. Keep the same delivery and scope flags when
-you later refresh or uninstall it.
+you later refresh it. For uninstall, match the same route with `--plugin-mode`
+instead of `--switch-to-plugin`.
 
 <Callout type="info">
   Native and plugin delivery are different install modes, not interchangeable
@@ -99,7 +121,7 @@ try a prerelease kit, opt into `beta` explicitly and keep the CLI on a
 compatible channel:
 
 ```bash
-ak kit init engineer --target claude-code --channel beta
+ak kit install engineer --target claude-code --channel beta
 ```
 
 Do not mix channels as a troubleshooting shortcut. If a kit reports that it
@@ -108,19 +130,21 @@ operation.
 
 ## Refresh an installed kit
 
-Refresh re-emits the current release and removes stale AgentKit-generated files.
-It uses the remote registry by default and creates a snapshot before destructive
-writes:
+Refresh re-emits the current release and removes stale generated or owned paths
+only when they still match AgentKit's ownership evidence. Modified, unsafe,
+linked, or other-kit-shared paths are preserved. Refresh uses the remote
+registry by default and creates a snapshot before destructive writes:
 
 ```bash
 ak kit refresh engineer --target codex
 ak kit refresh engineer --global --switch-to-plugin
 ```
 
-The refresh preview is a confirmation screen, not a dry run. In a script,
-JSON mode, or another non-interactive session, the prompt is skipped. Use the
-preview-only `ak update` flow from the [update guide](./updating) when you need a
-plan that cannot apply changes.
+The refresh preview is a confirmation screen, not a dry run. In a script, JSON
+mode, or another non-interactive session, the prompt is skipped and the
+operation can proceed to writes. Use `--yes` for an intentional scripted
+refresh. Use the preview-only `ak update` flow from the
+[update guide](./updating) when you need a plan that cannot apply changes.
 
 If the previous install selected only some skills, refresh reuses that selected
 set. Skills removed from the new release do not make the refresh fail, and new
@@ -130,6 +154,19 @@ Review the preview before confirming. Do not add `--no-backup`, and do not use a
 broad `--force` reinstall as routine recovery. First resolve an incorrect
 target, scope, delivery mode, or ownership conflict.
 
+## Read Codex hook disclosures
+
+A successful Codex install can report
+`Hooks dropped (unsupported on this target)`. In this release, Codex cannot
+represent the Engineer Kit's `PostToolUse` task-state matcher
+`Agent|Task|TodoWrite|TodoRead`, so that group is not projected. Compatible hook
+groups remain installed, and task-state refresh still runs at the supported
+`Stop` and `SubagentStop` boundaries.
+
+In JSON output, inspect `hooksDropped` and `droppedHookSummaries`. A disclosed
+drop is a runtime capability limit, not an install failure; reinstalling with
+`--force` does not add the unsupported matcher.
+
 ## Verify the result
 
 After installation or refresh:
@@ -137,7 +174,8 @@ After installation or refresh:
 1. Confirm the command reports the expected target, scope, delivery mode, and
    selected-skill count.
 2. Reopen the target runtime if it was already running.
-3. Invoke one of the skills you installed.
+3. Invoke one of the skills you installed. For example, use `/ak:cook` in
+   Claude Code and `$ak:cook` in Codex.
 
 If the runtime cannot find the skill, check the target, scope, and Claude Code
 delivery mode before reinstalling.
@@ -151,6 +189,9 @@ examples below select a Claude Code user plugin:
 ak kit uninstall engineer --global --plugin-mode --dry-run
 ak kit uninstall engineer --global --plugin-mode --yes
 ```
+
+The dry run changes nothing and exits `3`. This is expected preview behavior;
+apply only after reviewing the preserved and removed paths.
 
 For a project plugin, replace `--global` with `--project-dir .`. For a native
 project install, use `--project-dir .` without `--plugin-mode`; for a native

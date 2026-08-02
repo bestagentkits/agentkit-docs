@@ -18,6 +18,10 @@ ak whoami
 ak licenses
 ```
 
+Trạng thái cục bộ chưa đăng nhập vẫn có thể trả mã `0`; hãy đọc output của lệnh
+thay vì coi mã thoát thành công là bằng chứng đã đăng nhập hoặc có quyền dùng
+Kit.
+
 Theo mặc định, AgentKit lấy Kit đã phát hành từ registry có xác thực. Bạn không
 cần thêm `--remote`. Nguồn Kit cục bộ dành cho phát triển và CI, không phải luồng
 cài đặt thông thường.
@@ -33,16 +37,33 @@ thư mục người dùng của runtime để dùng ngoài một project.
 
 | Mục tiêu | Lệnh |
 | --- | --- |
-| Claude Code trong project này | `ak kit init engineer --target claude-code` |
-| Claude Code cho người dùng hiện tại | `ak kit init engineer --target claude-code --global` |
-| Codex trong project này | `ak kit init engineer --target codex` |
-| Codex cho người dùng hiện tại | `ak kit init engineer --target codex --global` |
-| Cursor trong project này | `ak kit init engineer --target cursor` |
-| Cursor cho người dùng hiện tại | `ak kit init engineer --target cursor --global` |
+| Claude Code trong project này | `ak kit install engineer --target claude-code` |
+| Claude Code cho người dùng hiện tại | `ak kit install engineer --target claude-code --global` |
+| Codex trong project này | `ak kit install engineer --target codex` |
+| Codex cho người dùng hiện tại | `ak kit install engineer --target codex --global` |
+| Cursor trong project này | `ak kit install engineer --target cursor` |
+| Cursor cho người dùng hiện tại | `ak kit install engineer --target cursor --global` |
 
 Cài đặt theo project ghi nội dung runtime và metadata vòng đời của AgentKit vào
 project hiện tại. Cài đặt global ghi vào phạm vi người dùng của runtime đã chọn.
 Hãy kiểm tra đích đến trong bản xem trước trước khi xác nhận.
+
+Với Codex, Skill native được ghi vào `.agents/skills` trong project hoặc
+`~/.agents/skills` ở phạm vi người dùng; các tài nguyên Codex khác dùng các bề
+mặt `.codex` tương ứng của project hoặc người dùng. Cursor dùng phạm vi `.cursor`
+tương ứng.
+
+Bản cài project và global có thể cùng tồn tại. Cài một bản không gỡ bản còn lại:
+lệnh hoặc quy tắc trong project có thể che mục của người dùng, còn hook từ cả
+hai phạm vi có thể cùng chạy. Hãy gỡ bản không cần thiết bằng đúng tuyến gỡ cài
+đặt.
+
+<Callout type="info">
+  Cursor là target dùng trong production đã đăng ký, nhưng bản phát hành này
+  không tuyên bố mức xác minh đầu cuối cho cài đặt, cập nhật và gọi Skill giống
+  Claude Code và Codex. Hãy xác minh Cursor tìm thấy Skill sau khi cài trước khi
+  phụ thuộc vào target này.
+</Callout>
 
 ## Chọn cách phân phối cho Claude Code
 
@@ -55,16 +76,18 @@ Claude Code hỗ trợ hai cách phân phối:
 
 ```bash
 # plugin trong project
-ak kit init engineer --target claude-code --switch-to-plugin
+ak kit install engineer --target claude-code --switch-to-plugin
 
 # plugin cho người dùng
-ak kit init engineer --target claude-code --global --switch-to-plugin
+ak kit install engineer --target claude-code --global --switch-to-plugin
 ```
 
+Nội dung Claude Code native được ghi vào `<project>/.claude` hoặc `~/.claude`.
 Plugin người dùng được cài với tên `ak-<kit>` bên dưới thư mục plugin của Claude
 Code; ví dụ, đường dẫn mặc định của Engineer Kit là
-`~/.claude/plugins/ak-engineer`. Khi làm mới hoặc gỡ Kit, hãy giữ nguyên các flag
-về cách phân phối và phạm vi.
+`~/.claude/plugins/ak-engineer`. Khi làm mới, hãy giữ nguyên các flag về cách
+phân phối và phạm vi. Khi gỡ, hãy khớp đúng tuyến bằng `--plugin-mode` thay vì
+`--switch-to-plugin`.
 
 <Callout type="info">
   Native và plugin là hai chế độ cài đặt khác nhau, không phải hai tên gọi cho
@@ -98,7 +121,7 @@ Cài đặt và làm mới Kit dùng kênh registry `stable` theo mặc định.
 prerelease, hãy chủ động chọn `beta` và giữ CLI trên kênh tương thích:
 
 ```bash
-ak kit init engineer --target claude-code --channel beta
+ak kit install engineer --target claude-code --channel beta
 ```
 
 Không trộn kênh như một cách xử lý sự cố. Nếu Kit báo cần phiên bản `ak` mới
@@ -106,9 +129,11 @@ hơn, hãy cập nhật CLI trên cùng kênh rồi chạy lại thao tác với
 
 ## Làm mới Kit đã cài
 
-Làm mới sẽ phát lại bản phát hành hiện tại và gỡ các file cũ do AgentKit tạo.
-Lệnh dùng remote registry theo mặc định và tạo snapshot trước các thay đổi phá
-hủy:
+Làm mới sẽ phát lại bản phát hành hiện tại và chỉ gỡ đường dẫn sinh tự động hoặc
+thuộc quyền sở hữu đã cũ khi đường dẫn vẫn khớp bằng chứng quyền sở hữu của
+AgentKit. Đường dẫn đã sửa, không an toàn, là liên kết hoặc được Kit khác dùng
+chung sẽ được giữ lại. Lệnh dùng remote registry theo mặc định và tạo snapshot
+trước các thay đổi phá hủy:
 
 ```bash
 ak kit refresh engineer --target codex
@@ -116,9 +141,10 @@ ak kit refresh engineer --global --switch-to-plugin
 ```
 
 Bản xem trước của refresh là màn hình xác nhận, không phải dry run. Trong script,
-chế độ JSON hoặc phiên không tương tác khác, prompt sẽ được bỏ qua. Hãy dùng
-luồng chỉ xem trước `ak update` trong [hướng dẫn cập nhật](./updating) khi bạn cần
-một kế hoạch không thể áp dụng thay đổi.
+chế độ JSON hoặc phiên không tương tác khác, prompt sẽ được bỏ qua và thao tác có
+thể tiếp tục ghi dữ liệu. Hãy dùng `--yes` khi chủ động làm mới trong script.
+Dùng luồng chỉ xem trước `ak update` trong [hướng dẫn cập nhật](./updating) khi
+bạn cần một kế hoạch không thể áp dụng thay đổi.
 
 Nếu lần cài trước chỉ chọn một số Skill, thao tác làm mới dùng lại tập Skill đó.
 Skill đã bị gỡ khỏi bản phát hành mới không làm thao tác thất bại, còn Skill mới
@@ -128,13 +154,27 @@ Hãy xem bản xem trước trước khi xác nhận. Không thêm `--no-backup`
 cài lại diện rộng với `--force` như cách khôi phục thông thường. Trước tiên hãy
 xử lý sai target, phạm vi, chế độ phân phối hoặc xung đột quyền sở hữu.
 
+## Đọc thông báo về hook Codex
+
+Một lần cài Codex thành công có thể báo
+`Hooks dropped (unsupported on this target)`. Trong bản phát hành này, Codex
+không biểu diễn được nhóm hook `PostToolUse` của Engineer Kit với matcher trạng
+thái task `Agent|Task|TodoWrite|TodoRead`, nên nhóm đó không được phát sang
+Codex. Các nhóm hook tương thích vẫn được cài, còn việc làm mới trạng thái task
+vẫn chạy ở các ranh giới `Stop` và `SubagentStop` được hỗ trợ.
+
+Trong output JSON, hãy kiểm tra `hooksDropped` và `droppedHookSummaries`. Hook bị
+bỏ có thông báo là giới hạn capability của runtime, không phải lỗi cài đặt; cài
+lại với `--force` không bổ sung matcher chưa được hỗ trợ.
+
 ## Xác minh kết quả
 
 Sau khi cài đặt hoặc làm mới:
 
 1. Xác nhận lệnh báo đúng target, phạm vi, chế độ phân phối và số Skill đã chọn.
 2. Mở lại runtime đích nếu runtime đang chạy.
-3. Gọi một Skill đã cài.
+3. Gọi một Skill đã cài. Ví dụ, dùng `/ak:cook` trong Claude Code và `$ak:cook`
+   trong Codex.
 
 Nếu runtime không tìm thấy Skill, hãy kiểm tra target, phạm vi và chế độ phân
 phối của Claude Code trước khi cài lại.
@@ -148,6 +188,9 @@ ví dụ sau chọn plugin Claude Code cho người dùng:
 ak kit uninstall engineer --global --plugin-mode --dry-run
 ak kit uninstall engineer --global --plugin-mode --yes
 ```
+
+Dry run không thay đổi gì và trả mã thoát `3`. Đây là hành vi xem trước mong đợi;
+chỉ áp dụng sau khi xem lại các đường dẫn sẽ được giữ và gỡ.
 
 Với plugin trong project, thay `--global` bằng `--project-dir .`. Với cài đặt
 native trong project, dùng `--project-dir .` mà không có `--plugin-mode`; với cài

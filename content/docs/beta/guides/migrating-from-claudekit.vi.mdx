@@ -49,7 +49,7 @@ review:
 - runtime và phạm vi project/global đã phát hiện;
 - nội dung thuộc ClaudeKit có thể được archive, quarantine hoặc neutralize;
 - nội dung tùy chỉnh hoặc không rõ nguồn gốc sẽ được giữ lại;
-- AgentKit Kit sẽ được cài;
+- Kit AgentKit sẽ được cài;
 - xung đột phải được xử lý trước khi áp dụng.
 
 Không thể áp dụng khi kế hoạch còn xung đột. Hãy xử lý chúng và chạy lại dry run;
@@ -86,11 +86,26 @@ ak migrate --from=ck --switch-to-plugin --dry-run=false --yes
 Trước khi cài bản thay thế, AgentKit preflight mọi lượt cài Kit được yêu cầu.
 Thao tác chuyển các preference được hỗ trợ, archive hoặc quarantine các thư mục
 ClaudeKit được phép thay đổi, neutralize các bề mặt tích hợp có quyền sở hữu, giữ
-nội dung tùy chỉnh hoặc không rõ nguồn gốc và cài các AgentKit Kit tương ứng.
+nội dung tùy chỉnh hoặc không rõ nguồn gốc và cài các Kit AgentKit tương ứng.
 AgentKit ghi trạng thái khôi phục trước khi thay đổi.
+
+Khi chuyển tùy chọn, giá trị cấu hình AgentKit hiện có được ưu tiên và thông tin
+xác thực không bao giờ được sao chép từ ClaudeKit.
 
 Nếu apply thất bại, migration mặc định có thể tiếp tục lại. Hãy đọc trạng thái
 được báo trước khi chọn chạy lại apply hay rollback.
+
+## Chỉ chuyển tùy chọn
+
+Dùng luồng chỉ chuyển tùy chọn khi bạn chưa sẵn sàng chuyển nội dung Kit:
+
+```bash
+ak migrate prefs --dry-run
+ak migrate prefs --dry-run=false --yes
+```
+
+Luồng này sao chép các giá trị được hỗ trợ, giữ giá trị AgentKit hiện có, loại
+trừ thông tin xác thực và không xóa file `.ck.json` cũ.
 
 ## Xác minh kết quả
 
@@ -108,23 +123,21 @@ xác minh hành vi quan sát được trong runtime trước khi gỡ nội dung
 
 ## Rollback
 
-Dùng rollback sau một lần apply thất bại hoặc khi kết quả migration không mong
-muốn:
+Dùng rollback để hoàn tác migration hoặc transition legacy đang chờ gần nhất:
 
 ```bash
 ak migrate rollback
 ```
 
-Rollback khôi phục transition legacy đang chờ gần nhất hoặc migration journal về
-trạng thái trước apply, sau đó xóa journal đã hoàn tất. Nếu không có journal,
-lệnh báo không có gì để rollback. Sau khi transition Kit legacy đã hoàn tất,
-trạng thái ClaudeKit được khôi phục có thể cùng tồn tại với bản thay thế
-AgentKit đã cài; hãy xem trước rồi gỡ riêng bản thay thế đó nếu bạn không còn
-muốn dùng.
+Rollback ưu tiên khôi phục vùng cách ly legacy đang chờ gần nhất, nếu không thì
+khôi phục journal migration mới nhất. Nếu không có trạng thái nào đang chờ, lệnh
+báo không có gì để rollback. Lệnh chỉ khôi phục nội dung được trạng thái đó ghi
+nhận; nó không dựng lại toàn bộ môi trường trước khi áp dụng. Rollback cũng không
+gỡ bản thay thế AgentKit đã cài; nếu không còn muốn dùng, hãy xem trước rồi gỡ
+bản đó bằng đúng target, phạm vi và tuyến phân phối.
 
 Trước rollback, hãy sao chép riêng công việc không liên quan được tạo sau
-migration. Rollback khôi phục trạng thái trước apply của thao tác; đây không phải
-undo có chọn lọc cho các chỉnh sửa về sau.
+migration. Thao tác này không hoàn tác có chọn lọc các chỉnh sửa về sau.
 
 ## Nếu migration bị gián đoạn
 
@@ -132,7 +145,12 @@ Trước tiên, chạy lại dry run mặc định. Nếu AgentKit báo có tran
 hãy chọn một đường khôi phục:
 
 - chạy lại apply đã review để thao tác có thể tiếp tục tự khôi phục và hoàn tất;
-- chạy `ak migrate rollback` để quay về trạng thái trước apply.
+- chạy `ak migrate rollback` để khôi phục trạng thái đang chờ đã ghi nhận.
+
+Journal đang chờ chặn một transition migration khác cho đến khi bạn tiếp tục
+hoặc rollback thao tác hiện tại. Dry run thành công trả mã `0`; source hoặc flag
+không hợp lệ trả `2`, hủy thao tác hoặc thiếu xác nhận apply trả `3`, còn lỗi
+runtime hoặc apply trả `1`.
 
 Chỉ dùng `--force-unlock` khi CLI báo rõ có migration lock cũ do process bị crash
 để lại và không còn migration nào đang chạy. Flag này không xử lý xung đột file

@@ -17,13 +17,30 @@ AgentKit phát hành qua hai kênh `stable` và `beta`:
 - Chọn `beta` khi bạn chủ động thử hành vi prerelease và có thể review các thay
   đổi về tương thích.
 
-Các lệnh Kit mặc định dùng `stable`; `beta` cần được chọn rõ ràng. Trình tự cập
-nhật CLI có thể kế thừa kênh đã lưu, vì vậy hãy truyền `--channel stable` hoặc
-`--channel beta` khi lựa chọn này quan trọng. Giữ CLI và Kit trên cùng kênh bạn
-đã chọn.
+Các lệnh Kit mặc định dùng `stable`; `beta` cần được chọn rõ ràng. Lệnh
+`ak self-update` có thể kế thừa kênh đã lưu, vì vậy hãy truyền `--channel stable`
+hoặc `--channel beta` khi lựa chọn này quan trọng. Giữ CLI và Kit trên cùng kênh
+bạn đã chọn.
 
 Các ví dụ bên dưới dùng `stable`. Chỉ thay bằng `beta` như một quyết định đầy đủ,
 không phải cách xử lý sự cố nhất thời.
+
+## Dùng trình cập nhật hợp nhất khi phù hợp
+
+Trong terminal tương tác, lệnh `ak update` không có flag sẽ lần lượt xử lý cập
+nhật CLI đã ký, các Kit global rồi các Kit trong project. Mỗi bước mặc định là
+Không:
+
+```bash
+ak update
+ak update --yes
+```
+
+`--yes` chấp nhận các bước được đề xuất, nhưng kiểm tra bản cập nhật CLI đã ký
+hoặc phiên bản tối thiểu vẫn là cổng bắt buộc trước mọi thay đổi Kit. Dùng các
+lệnh có phạm vi bên dưới khi bạn chỉ muốn cập nhật một lớp. Lỗi ở cổng CLI, lỗi
+một phần khi cập nhật Kit hoặc gián đoạn sau khi đã thay đổi trả mã `1`; target
+hoặc phạm vi không hợp lệ trả `2`.
 
 ## Xem lại bản phát hành CLI
 
@@ -73,11 +90,14 @@ project, Kit và kênh để kế hoạch không mơ hồ:
 
 ```bash
 ak update . --kits engineer --channel stable --show-diff
+ak update . --kits engineer --channel stable --show-diff --dry-run
 ```
 
 Bản xem trước không ghi file và không tạo snapshot. Lệnh phân loại các file sắp
-đến và hiển thị file do người dùng sửa sẽ được bỏ qua. Áp dụng kế hoạch đã
-review bằng:
+đến và hiển thị file do người dùng sửa sẽ được bỏ qua. Nếu không có `--yes`, bản
+xem trước ngầm định trong script trả mã thoát `3`; `--dry-run` thực hiện cùng bản
+xem trước không thay đổi dữ liệu và trả `0`, thuận tiện hơn cho CI. Áp dụng kế
+hoạch đã review bằng:
 
 ```bash
 ak update . --kits engineer --channel stable --yes
@@ -105,7 +125,8 @@ ak update --global --kits engineer --target codex --channel stable --yes
 ```
 
 Cập nhật global luôn giữ file do người dùng sửa. Runtime bạn đã chọn nhưng chưa
-cài global được báo là bỏ qua thay vì được tạo mới.
+cài global được báo là bỏ qua thay vì được tạo mới. Phân biệt giữa bản xem trước
+ngầm định trả `3` và dry run rõ ràng trả `0` cũng áp dụng ở phạm vi global.
 
 <Callout type="info">
   `ak update --global` chỉ báo cáo các bản cài chỉ có plugin Claude Code cho
@@ -119,13 +140,15 @@ Dùng `ak kit refresh` khi cần giữ chính xác target, phạm vi hoặc các
 Claude Code của bản cài hiện có:
 
 ```bash
-ak kit refresh engineer --target codex --channel stable
-ak kit refresh engineer --global --switch-to-plugin --channel stable
+ak kit refresh engineer --target codex --channel stable --yes
+ak kit refresh engineer --global --switch-to-plugin --channel stable --yes
 ```
 
-Refresh tạo snapshot khôi phục, ghi lại output AgentKit hiện tại, gỡ file sinh tự
-động đã cũ và giữ tập Skill được chọn trước đó. Hãy review bản xem trước xác nhận
-và tránh dùng `--no-backup`.
+Refresh tạo snapshot khôi phục, ghi lại output AgentKit hiện tại, và chỉ gỡ các
+đường dẫn sinh tự động hoặc thuộc quyền sở hữu đã cũ khi bằng chứng quyền sở hữu
+vẫn khớp. Lệnh giữ tập Skill được chọn trước đó và giữ nguyên đường dẫn đã sửa,
+không an toàn, là liên kết hoặc được dùng chung. Hãy xem lại màn hình xác nhận và
+tránh dùng `--no-backup`.
 
 ## Xác minh cập nhật
 
@@ -147,17 +170,38 @@ snapshot trước khi restore:
 ```bash
 ak backups list
 ak backups show <id>
-ak backups restore <id> --dry-run
+ak backups verify <id>
+ak recover <id> --dry-run
 ```
+
+`ak recover` là alias chính xác của `ak backups restore`. Restore theo cơ chế
+replace-only: lệnh ghi đè các file đã capture, chỉ gỡ chính xác các đường dẫn
+được ghi nhận là không tồn tại hoặc thư mục plugin AgentKit đã phê duyệt rõ
+ràng, và thường giữ nguyên file không liên quan được tạo sau snapshot.
+
+Nếu `ak backups show <id>` liệt kê các root của project bundle, hãy lặp lại mọi
+root chính xác trong lệnh khôi phục:
+
+```bash
+ak recover <id> --allow-root /absolute/project --dry-run
+ak recover <id> --allow-root /absolute/project
+```
+
+Khi có nhiều root, hãy lặp lại `--allow-root` với mọi đường dẫn chính xác trong
+cả hai lệnh.
 
 Nếu thao tác báo snapshot của project nằm ngoài phạm vi `ak backups restore`,
 hãy dùng thư mục chứa file snapshot được in ra và chỉ sao chép lại các file bị
-ảnh hưởng. Nếu không, áp dụng kế hoạch restore đã review bằng
-`ak backups restore <id>` và xác nhận prompt.
+ảnh hưởng. Nếu không, áp dụng kế hoạch restore đã review bằng `ak recover <id>`
+và xác nhận prompt. Với project bundle, hãy giữ mọi flag `--allow-root` đã xem
+lại trong lệnh áp dụng đó.
 
-Hãy giữ riêng công việc không liên quan được tạo sau snapshot trước khi restore.
-Không restore `--latest` một cách mù quáng, xóa toàn bộ thư mục runtime hoặc chạy
-lại cập nhật lỗi với `--force` trước khi hiểu trạng thái hiện tại.
+Restore nhiều file không có tính transaction; nếu bị gián đoạn, trạng thái có
+thể dở dang. Hãy giữ riêng công việc không liên quan và tạo snapshot mới trước
+khi quay lui nếu thực tế cho phép. Không recover `--latest` một cách mù quáng,
+xóa toàn bộ thư mục runtime hoặc chạy lại cập nhật lỗi với `--force` trước khi
+hiểu trạng thái hiện tại. Từ chối restore trả mã `3`, backup lock đang bị giữ trả
+`4`, snapshot không hợp lệ hoặc không tồn tại trả `5`, còn lỗi khác trả `1`.
 
 ## Xem thêm
 
