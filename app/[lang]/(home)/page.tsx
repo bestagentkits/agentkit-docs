@@ -6,6 +6,7 @@ import { i18n } from '@/lib/i18n';
 import { localeAlternates, localePath } from '@/lib/locale-path';
 import { HomeTerminal, type TerminalLine } from '@/components/home-terminal';
 import channels from '@/channels.json';
+import { cliCommandSegmentsFromTitle } from '@/lib/cli-reference-routes.mjs';
 import type { Metadata } from 'next';
 
 const installCommand = 'curl -fsSL https://agentkit.best/install.sh | sh';
@@ -37,12 +38,11 @@ for (const file of cliPages) {
   const title = /^title:\s+ak(?:\s+(.+))?$/m.exec(content)?.[1];
   if (!title) throw new Error(`Missing canonical ak title in ${file}`);
 
-  const [group, ...rest] = title.split(/\s+/);
-  const slug = encodeURI(file.slice(0, -'.en.mdx'.length));
+  const [group] = cliCommandSegmentsFromTitle(`ak ${title}`);
   const current = commandGroupMap.get(group);
   commandGroupMap.set(group, {
     count: (current?.count ?? 0) + 1,
-    slug: rest.length === 0 ? slug : (current?.slug ?? slug),
+    slug: group,
   });
 }
 

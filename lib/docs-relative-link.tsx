@@ -1,6 +1,6 @@
 import { createElement, type ComponentProps } from 'react';
 import defaultMdxComponents from 'fumadocs-ui/mdx';
-import { resolveLegacyCliReferenceHref } from '@/lib/cli-reference-links';
+import { resolveCanonicalCliReferenceHref } from '@/lib/cli-reference-links';
 import { resolveDocsRelativeHref } from '@/lib/relative-href';
 
 /**
@@ -12,6 +12,7 @@ export function createDocsRelativeLink(
   source: {
     getPages: (locale?: string) => Array<{
       data: { title?: unknown };
+      path?: string;
       url: string;
     }>;
     resolveHref: (href: string, parent: never) => string;
@@ -22,7 +23,7 @@ export function createDocsRelativeLink(
   const pages = source.getPages(page.locale);
   return function DocsRelativeLink({ href, ...props }: ComponentProps<'a'>) {
     const resolved =
-      resolveLegacyCliReferenceHref(href, pages) ??
+      resolveCanonicalCliReferenceHref(href, pages, page.path) ??
       resolveDocsRelativeHref(
         {
           resolveHref: (h, parent) =>
