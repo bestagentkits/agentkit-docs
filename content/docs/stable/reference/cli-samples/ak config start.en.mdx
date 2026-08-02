@@ -1,0 +1,168 @@
+---
+title: ak config start
+description: Run the local AgentKit dashboard safely, automate its startup event, and understand its foreground lifecycle and state file.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak config start` to run the browser-based AgentKit dashboard. It serves
+the UI and local API over HTTP, writes lifecycle state for `status` and `stop`,
+and stays attached to the current process until it receives a shutdown signal
+or encounters a server error.
+
+## Usage
+
+```bash
+ak config start
+```
+
+The command accepts no positional arguments.
+
+## Command flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--auth-token <token>` | Empty or `AK_DASHBOARD_TOKEN` | Require this bearer token on dashboard requests. It is mandatory for a non-loopback bind. |
+| `--bind <address>` | `127.0.0.1` | Select the listen address. Unknown hostnames are treated as non-loopback. |
+| `--no-open` | `false` | Do not launch the default browser after startup. |
+| `--port <port>` | `8766` | Select the listen port. Use `0` to let the OS assign one. |
+
+Shared flags such as `--json`, `--no-interactive`, `--quiet`, `--verbose`, and
+`--yes` are described in [CLI conventions](../cli-conventions).
+
+## Start the local dashboard
+
+```bash
+ak config start
+```
+
+The default URL is `http://127.0.0.1:8766`. The command prints the actual URL
+and PID after the listener is bound, then blocks in the foreground. It is not a
+detached daemon and has no `--daemon` flag. Keep that process alive; `Ctrl-C`,
+`SIGINT`, `SIGTERM`, or `ak config stop` initiates graceful shutdown.
+
+Use an OS-assigned port for an isolated session:
+
+```bash
+ak config start --port 0 --no-open
+```
+
+Read the actual port from the startup result rather than assuming `8766`.
+
+Browser launch is best-effort and does not determine whether startup succeeds.
+It is suppressed by `--no-open`, `--no-interactive`, `--json`, or `--quiet`.
+Piping stdout by itself does not suppress the browser attempt, so scripted
+human-output runs should pass `--no-open` explicitly.
+
+## Bind and authentication safety
+
+The default loopback bind does not require a bearer token. A non-loopback IP or
+an unknown hostname is rejected before listening unless a token is supplied:
+
+```bash
+AK_DASHBOARD_TOKEN='<secret>' \
+  ak config start --bind 0.0.0.0 --no-open
+```
+
+The token protects every dashboard route. Prefer `AK_DASHBOARD_TOKEN` over
+`--auth-token` when shell history or process listings could expose arguments.
+The token is not included in the startup JSON or lifecycle state file.
+
+<Callout type="warning">
+  Loopback limits network exposure but is not an authorization boundary for
+  other local processes. The dashboard includes mutating configuration, kit,
+  update, migration, and account actions. Run it only while needed, and do not
+  expose it through a proxy or tunnel without an authentication design beyond
+  the local default.
+</Callout>
+
+The HTTP server also rejects unsafe Host and cross-origin Origin headers. These
+guards complement bearer authentication; they are not a reason to omit the
+token on a non-loopback bind.
+
+## Process and filesystem effects
+
+After a successful bind, AgentKit atomically writes
+`$AGENTKIT_HOME/dashboard/state.json`, normally
+`~/.agentkit/dashboard/state.json`. It records version `1`, PID, port, bound
+address, and UTC start time. Clean shutdown removes the file.
+
+Writing lifecycle state is best-effort. If it fails, the server can continue
+running while `status` and `stop` cannot discover it. Stop that foreground
+process with its terminal signal in this case.
+
+The host starts automatic local analytics reconciliation for the lifetime of
+the dashboard. Depending on your analytics settings, it can read local coding
+session sources and refresh the private local index. Opening and using the UI
+can also read or mutate the local surfaces represented by its actions and can
+contact release, registry, or provider services for features that require
+them. Starting the listener itself does not authenticate you to AgentKit or
+grant an entitlement.
+
+Avoid concurrent dashboard processes. The lifecycle file tracks only one PID;
+a later server on another port can replace the state used by `status` and
+`stop`.
+
+## Output for automation
+
+```bash
+ak config start --port 0 --no-open --json
+```
+
+On successful bind, stdout receives one versioned startup envelope and then the
+process remains running:
+
+```text
+schema_version: 1
+kind: config.start
+data.status: "running"
+data.bind_addr: string
+data.url: string
+data.pid: integer
+```
+
+This is one startup event, not an NDJSON event stream. Capture the first stdout
+line, keep the process handle, and terminate that process during teardown.
+
+Server diagnostics are written to stderr and can include plain-text lifecycle
+logs even with `--json`. A command error emitted through the JSON renderer uses
+a structured error envelope, but do not require every stderr line to be JSON.
+Flag-parse errors occur before that renderer and can remain plain-text usage.
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | The server shut down cleanly after running. | Confirm `status` reports stopped. |
+| `1` | Home/config resolution, server construction, bind, startup timeout, or serving failed. | Check stderr, the selected port, permissions, and the foreground process. |
+| `2` | Arguments or flags were invalid. | Correct the invocation. |
+| `7` | A non-loopback bind was requested without an auth token. | Return to loopback or configure a strong token. |
+
+There is no confirmation, preview, apply, dry-run, or force mode. `--yes` does
+nothing for this command; `--no-interactive` suppresses browser launch but does
+not make the long-running process detach.
+
+## Verify and recover
+
+From another terminal, inspect the tracked process:
+
+```bash
+ak config status
+```
+
+When finished:
+
+```bash
+ak config stop
+ak config status
+```
+
+If a crash leaves lifecycle state behind, `status` can still report the tracked
+PID as running because it does not inspect the process. Do not delete unrelated
+AgentKit state or kill a PID copied from an old file without verifying the
+current process identity.
+
+## Related commands
+
+- [Complete `ak config start` command facts](../cli/ak_config_start)
+- [CLI conventions](../cli-conventions)

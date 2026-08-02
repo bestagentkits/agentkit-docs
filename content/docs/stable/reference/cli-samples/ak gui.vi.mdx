@@ -1,0 +1,129 @@
+---
+title: ak gui
+description: Khởi chạy artifact desktop Wails với ranh giới chính xác về packaging, hoàn tất update, đầu ra và nền tảng.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Chỉ dùng `ak gui` khi executable đang chạy được build cùng desktop runtime
+Wails. Release CLI `ak` tiêu chuẩn là một GUI stub; lệnh không tìm hoặc khởi
+chạy artifact `ak-gui` đã cài riêng.
+
+## Cách dùng
+
+```bash
+ak gui
+```
+
+Lệnh được ghi nhận không có argument theo vị trí và không có cờ riêng. Phần
+triển khai Cobra hiện tại không cài argument validator, vì vậy token theo vị trí
+dư thừa được chấp nhận rồi bỏ qua. Đừng phụ thuộc hành vi tình cờ này.
+
+Các cờ dùng chung được đăng ký nhưng lệnh không đọc chúng. Cụ thể,
+`--no-interactive`, `--json`, `--quiet`, `--yes` và `--verbose` không thay đổi
+việc mở GUI hoặc đầu ra lệnh trong release này.
+
+## Artifact CLI và artifact desktop
+
+AgentKit phát hành hai build executable khác nhau:
+
+| Build | Runtime | Kết quả `gui` |
+| --- | --- | --- |
+| CLI `ak` tiêu chuẩn | Không link code Wails | Ghi gợi ý tải xuống dạng plain text vào stderr và thoát `1`. |
+| Artifact desktop `ak-gui` | Nhúng Wails và frontend | Mở cửa sổ native và block đến khi cửa sổ đóng. |
+
+Artifact desktop nhận diện tên executable `ak-gui`. Khởi chạy không có argument,
+kể cả double-click, sẽ tự chọn lệnh `gui`. Thông thường bạn chạy trực tiếp
+artifact desktop thay vì gõ `ak gui` trong binary CLI riêng.
+
+<Callout type="warning">
+  Help theo tag khai báo mã thoát `4` khi Wails chưa được link và nói
+  `--no-interactive` sẽ fail fast. Runtime hiện tại không làm cả hai: stub rơi
+  vào mã thoát chung `1`, còn build có Wails vẫn mở và chờ cửa sổ khi có
+  `--no-interactive`.
+</Callout>
+
+## Ma trận đóng gói release
+
+Source release khai báo các gói desktop sau:
+
+| Nền tảng | Artifact được khai báo | Khởi chạy |
+| --- | --- | --- |
+| macOS arm64 | `ak-gui_<ver>_darwin_arm64.zip` | Giải nén `agentkit.app`, rồi mở app. |
+| macOS amd64 | `ak-gui_<ver>_darwin_amd64.zip` | Giải nén `agentkit.app`, rồi mở app. |
+| Linux amd64 | `ak-gui_<ver>_linux_amd64.AppImage` | Đặt quyền executable, rồi chạy AppImage. |
+| Linux arm64 | Không có gói desktop | `ak gui` in cảnh báo availability và thoát `0`. |
+| Windows amd64 | `ak-gui_<ver>_windows_amd64.zip` | Giải nén rồi chạy `ak-gui.exe`. |
+| Windows arm64 | Không có gói desktop | `ak gui` in cảnh báo availability và thoát `0`. |
+
+Các revision release được kiểm tra dùng cùng phần triển khai lệnh và ma trận
+đóng gói. Hãy xác nhận artifact tương ứng và sidecar `.sha256` tồn tại cho đúng
+release sẽ chạy; kiểm tra source không chứng minh upload release trực tiếp đã
+hoàn tất.
+
+Xác minh artifact đã tải với sidecar trước khi mở. macOS có thể cần thao tác
+allow-once của Gatekeeper, chạy AppImage trên Linux có thể cần gói tương thích
+FUSE, và gói Windows có thể kích hoạt SmartScreen. Hãy giữ các cơ chế bảo mật
+nền tảng hoạt động.
+
+## Vòng đời khởi chạy và tác động
+
+Trên build có Wails, trước tiên lệnh kiểm tra
+`$AGENTKIT_HOME/updater/pending-binary-update.json`. Nếu có transaction desktop
+đã stage, AgentKit kiểm tra lại kích thước và SHA-256 đã khai báo của từng
+artifact rồi thử hoàn tất thay thế CLI/desktop đang chờ trước khi mở cửa sổ.
+
+Quá trình hoàn tất đó có thể thay thế CLI hiện tại, app bundle hoặc AppImage;
+nó dùng đường dẫn backup tạm thời trong transaction và xoá chúng sau commit
+thành công. Lỗi hoàn tất được báo trên stderr nhưng không ngăn GUI mở. Pending
+transaction vẫn còn để thử lại khi replacement đã rollback thành công.
+
+<Callout type="warning">
+  Vì vậy, mở GUI không hoàn toàn chỉ đọc dù help của lệnh nói như vậy. Update
+  đã stage từ trước có thể thay đổi binary đã cài trước khi cửa sổ mở. Đừng tự
+  xoá tệp staging hoặc pending; hãy dùng quy trình update có chữ ký và giữ mọi
+  đường khôi phục được báo sau lỗi.
+</Callout>
+
+Sau startup, desktop bắt đầu tự động đồng bộ analytics cục bộ trong suốt vòng
+đời cửa sổ. Tuỳ thiết lập, tác vụ này có thể đọc nguồn coding session cục bộ và
+refresh private local index. Thao tác trong UI có thể đọc hoặc thay đổi tệp
+AgentKit và runtime, đồng thời có thể liên hệ dịch vụ release, registry, xác
+thực hoặc provider. Chỉ mở app không cấp entitlement hoặc xác thực người dùng
+chưa đăng nhập.
+
+Đường Wails không khởi động HTTP dashboard server và không ghi
+`dashboard/state.json`. Đóng cửa sổ hoặc huỷ parent process sẽ dừng desktop API
+và analytics reconciler.
+
+## Đầu ra và ranh giới tự động hoá
+
+`ak gui` không có contract JSON thành công và không ghi envelope có version.
+Lần khởi chạy có Wails block đến khi cửa sổ đóng; sau đó process thoát. Log
+desktop runtime, thông báo pending update và diagnostic thời gian khởi chạy có
+thể xuất hiện dạng plain text trên stderr.
+
+`--json` không làm các stream đó có cấu trúc, `--quiet` không ẩn chúng và
+`--no-interactive` không ngăn mở cửa sổ. Đừng dùng lệnh này làm bề mặt automation
+headless. Hãy dùng lệnh CLI tương ứng cho thao tác bằng script.
+
+Lỗi parse cờ vẫn xảy ra trước khi thực thi lệnh và thoát `2`. Argument theo vị
+trí dư thừa hiện không phải lỗi parse.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Cửa sổ Wails đóng bình thường hoặc nền tảng không được đóng gói rõ ràng (`linux/arm64`, `windows/arm64`). | Phân biệt GUI hoàn tất bình thường với cảnh báo availability plain text trên stderr. |
+| `1` | Executable là CLI tiêu chuẩn không có Wails hoặc khởi tạo/runtime desktop thất bại. | Chạy trực tiếp artifact desktop nền tảng đã xác minh; kiểm tra stderr khi launch thất bại. |
+| `2` | Không parse được cờ. | Sửa cách gọi lệnh. |
+
+Phần triển khai hiện tại không phát mã thoát `4` dù help khai báo. Chỉ lỗi hoàn
+tất pending update không phải fatal và vẫn có thể theo sau bởi phiên GUI thành
+công cùng mã thoát `0`.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của lệnh `ak gui`](../cli/ak_gui)
+- [Kiểm tra hoặc stage update desktop có chữ ký](./self-update)
+- [Quy ước CLI](../cli-conventions)

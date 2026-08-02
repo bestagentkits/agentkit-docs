@@ -1,0 +1,121 @@
+---
+title: ak config prefs unset
+description: Xoá một tuỳ chọn hook theo scope, hiểu cơ chế fallback và khôi phục từ bản sao lưu config được báo cáo.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak config prefs unset` để xoá một toggle `hooks.<name>` đã đặt rõ ràng
+khỏi một scope config. Sau đó hook kế thừa giá trị từ scope còn lại nếu có,
+hoặc dùng giá trị mặc định tích hợp.
+
+## Cách dùng
+
+```bash
+ak config prefs unset <key>
+```
+
+Lệnh yêu cầu đúng một argument theo vị trí. Key phải có dạng `hooks.<name>`,
+trong đó `<name>` là tên script hook chữ thường theo kebab-case. Lệnh không thể
+xoá credential hoặc giá trị thuộc phần config khác.
+
+## Cờ của lệnh
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--scope <scope>` | `user` | Chọn `user` hoặc `project`. |
+
+Các cờ dùng chung như `--json`, `--no-interactive`, `--quiet`, `--verbose` và
+`--yes` được mô tả trong [quy ước CLI](../cli-conventions).
+
+## Chọn scope
+
+| Scope | Tệp config | Kết quả sau khi xoá |
+| --- | --- | --- |
+| `user` | `$AGENTKIT_HOME/config.yaml`, hoặc mặc định là `~/.agentkit/config.yaml` | Giá trị project vẫn có thể override hook; nếu không có, giá trị mặc định tích hợp được áp dụng. |
+| `project` | `.agentkit/config.yaml` trong thư mục làm việc hiện tại | Giá trị user được áp dụng nếu có; nếu không có, giá trị mặc định tích hợp được áp dụng. |
+
+Xoá một tuỳ chọn user:
+
+```bash
+ak config prefs unset hooks.simplify-gate
+```
+
+Chỉ xoá tuỳ chọn của project hiện tại:
+
+```bash
+ak config prefs unset hooks.simplify-gate --scope project
+```
+
+Lệnh không tìm config project trong các thư mục cha. Hãy chạy lệnh từ thư mục
+project có `.agentkit/config.yaml` mà bạn muốn chỉnh sửa.
+
+## Tệp, bản sao lưu và ranh giới schema
+
+Khi key đã tồn tại trong scope được chọn, AgentKit sao lưu config trước đó bên
+dưới AgentKit home, chỉ xoá leaf tương ứng, dọn phần `hooks` nếu phần này trở
+thành rỗng rồi ghi lại config theo cách atomic. Đầu ra thành công báo đường dẫn
+bản sao lưu. Các key khác, comment, thứ tự và editor directive được giữ nguyên.
+
+Nếu key hoặc tệp config đã không tồn tại, lệnh vẫn thành công dưới dạng no-op:
+lệnh không tạo, ghi lại hay sao lưu tệp. Lệnh không hỏi xác nhận, không đọc
+stdin và không dùng mạng.
+
+<Callout type="info">
+  `unset` kiểm tra dạng key được phép và phải parse YAML cần chỉnh sửa, nhưng
+  không chạy kiểm tra schema cho toàn bộ document. Việc xoá một leaf không thể
+  tạo ra vi phạm schema mới. Dùng `ak config prefs validate` để kiểm tra phần
+  còn lại, nhất là khi tệp đã được sửa thủ công.
+</Callout>
+
+## Đầu ra cho tự động hoá
+
+Với `--json`, khi thành công lệnh ghi một object JSON không bọc envelope vào
+stdout. Đây không phải envelope CLI dùng chung có version.
+
+```text
+action: "unset"
+key: string
+scope: "user" or "project"
+config_path: string
+backup_path: string, omitted when no backup was created
+found: boolean
+```
+
+Dùng `found` để phân biệt một lần xoá với no-op khi key đã vắng mặt. Lệnh không
+phát NDJSON.
+
+Lỗi runtime trong chế độ JSON không được bảo đảm tạo error object có cấu trúc.
+Hãy kiểm tra trạng thái process và không parse stdout như kết quả thành công sau
+mã thoát khác `0`. Lỗi parse cờ xảy ra trước renderer của lệnh và có thể vẫn là
+hướng dẫn dùng dạng plain text.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Key đã được xoá hoặc vốn đã vắng mặt. | Kiểm tra `found`, rồi resolve giá trị effective. |
+| `1` | Key hoặc scope không hợp lệ, hay thao tác đọc config, sao lưu hoặc ghi thất bại. | Sửa key hoặc scope; khôi phục bản sao lưu được báo nếu bước xác minh sau đó thất bại. |
+| `2` | Số argument hoặc cờ không hợp lệ. | Sửa cách gọi lệnh. |
+
+`--yes` và `--no-interactive` không thay đổi policy này vì `unset` không bao giờ
+hiện prompt. `--quiet` không ẩn stdout riêng của lệnh này, còn `--verbose` không
+thêm diagnostic riêng. Lệnh không có chế độ preview, dry-run, apply hay force.
+
+## Xác minh và khôi phục
+
+Xác minh giá trị effective và kiểm tra các tệp còn lại:
+
+```bash
+ak config prefs resolve
+ak config prefs validate
+```
+
+Nếu kết quả không đúng ý định, hãy đặt lại giá trị rõ ràng hoặc khôi phục đúng
+đường dẫn bản sao lưu mà lệnh đã in. Đừng thay thế toàn bộ AgentKit home: bản
+sao lưu chỉ bao phủ tệp config trước đó.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của lệnh `ak config prefs unset`](../cli/ak_config_prefs_unset)
+- [Quy ước CLI](../cli-conventions)

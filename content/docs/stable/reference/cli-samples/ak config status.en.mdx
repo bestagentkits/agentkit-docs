@@ -1,0 +1,113 @@
+---
+title: ak config status
+description: Inspect the dashboard lifecycle record without confusing recorded state with a live health check.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak config status` to read the lifecycle record written by `ak config
+start`. It reports the recorded PID, address, URL, start time, and calculated
+uptime when a valid state file exists.
+
+## Usage
+
+```bash
+ak config status
+```
+
+The command accepts no positional arguments and has no command-specific flags.
+Shared flags such as `--json`, `--no-interactive`, `--quiet`, `--verbose`, and
+`--yes` are described in [CLI conventions](../cli-conventions).
+
+## Read the result
+
+```bash
+ak config status
+```
+
+The command reads `$AGENTKIT_HOME/dashboard/state.json`, normally
+`~/.agentkit/dashboard/state.json`.
+
+- If the file is absent, it reports that the dashboard is not running and
+  exits `0`.
+- If a version-`1` state file can be read and parsed, it reports `running` with
+  the stored PID, port, bind address, and start time. Uptime is calculated from
+  that stored time.
+- An unreadable, malformed, or unsupported-version state file is a command
+  error rather than a stopped result.
+
+<Callout type="warning">
+  `status` does not inspect the operating-system process or call the dashboard
+  health endpoint. A crash or forced kill can leave a valid-looking state file,
+  so `running: true` means “tracked as running,” not “PID identity and HTTP
+  health verified.”
+</Callout>
+
+The command does not remove stale state. Before sending a manual signal, verify
+that the recorded PID still belongs to the intended `ak config start` process;
+operating systems can reuse PIDs.
+
+## Output for automation
+
+```bash
+ak config status --json
+```
+
+Success writes one versioned envelope to stdout:
+
+```text
+schema_version: 1
+kind: config.status
+data.running: boolean
+```
+
+When `data.running` is `true`, `data` also contains:
+
+```text
+pid: integer
+port: integer
+bind_addr: string
+url: string
+started_at: RFC 3339 timestamp
+uptime: duration string
+```
+
+Branch only on `.data.running`. When it is `false`, ignore every other field,
+whether the encoder omits it or represents a zero value. This is a single JSON
+document, not NDJSON.
+
+Runtime failures in JSON mode write a structured error envelope to stderr.
+Flag-parse errors occur before the command renderer and can remain plain-text
+usage.
+
+## Effects and interaction
+
+The command is read-only. It does not connect to the recorded address, inspect
+or signal the PID, rewrite or remove state, open a browser, contact a provider,
+or use AgentKit authentication. It never prompts or reads stdin, so `--yes` and
+`--no-interactive` do not change its result. `--quiet` suppresses normal human
+stdout; JSON still takes precedence over quiet.
+
+There is no preview, apply, dry-run, or force mode.
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | Status was read successfully, including the normal stopped result. | Branch on `.data.running`, not the process code. |
+| `1` | AgentKit home could not be resolved, the state file was unreadable/malformed/unsupported, or output failed. | Inspect the state file and process independently; do not assume stopped. |
+| `2` | Arguments or flags were invalid. | Correct the invocation. |
+
+## Verify a tracked server
+
+For a server your automation started, retain its process handle and verify the
+reported PID and URL against that handle. For a human session, check the process
+with OS tools or open the recorded loopback URL before treating it as healthy.
+
+Use `ak config stop` only after accepting its signal semantics and the stale-PID
+boundary.
+
+## Related commands
+
+- [Complete `ak config status` command facts](../cli/ak_config_status)
+- [CLI conventions](../cli-conventions)

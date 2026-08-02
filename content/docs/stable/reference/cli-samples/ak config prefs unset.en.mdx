@@ -1,0 +1,122 @@
+---
+title: ak config prefs unset
+description: Remove one scoped hook preference, understand fallback behavior, and recover from the reported config backup.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak config prefs unset` to remove an explicit `hooks.<name>` toggle from
+one config scope. The hook then inherits the value from the other scope when
+one exists, or uses its built-in default.
+
+## Usage
+
+```bash
+ak config prefs unset <key>
+```
+
+The command requires exactly one positional argument. The key must have the
+form `hooks.<name>`, where `<name>` is a lowercase kebab-case hook script name.
+It cannot remove credentials or values from other config sections.
+
+## Command flag
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--scope <scope>` | `user` | Select `user` or `project`. |
+
+Shared flags such as `--json`, `--no-interactive`, `--quiet`, `--verbose`, and
+`--yes` are described in [CLI conventions](../cli-conventions).
+
+## Choose the scope
+
+| Scope | Config file | Result after removal |
+| --- | --- | --- |
+| `user` | `$AGENTKIT_HOME/config.yaml`, or `~/.agentkit/config.yaml` by default | A project value can still override the hook; otherwise the built-in default applies. |
+| `project` | `.agentkit/config.yaml` under the current working directory | The user value applies when present; otherwise the built-in default applies. |
+
+Unset a user preference:
+
+```bash
+ak config prefs unset hooks.simplify-gate
+```
+
+Unset only the current project's preference:
+
+```bash
+ak config prefs unset hooks.simplify-gate --scope project
+```
+
+The command does not search parent directories for a project config. Run it
+from the project directory whose `.agentkit/config.yaml` you intend to edit.
+
+## Files, backups, and schema boundary
+
+When the selected key exists, AgentKit backs up the previous config under the
+AgentKit home, removes only that leaf, prunes an empty `hooks` section, and
+atomically rewrites the config. The success output reports the backup path.
+Other keys, comments, ordering, and the editor directive are preserved.
+
+If the key or config file is already absent, the command succeeds as a no-op:
+it does not create, rewrite, or back up a file. There is no confirmation prompt,
+and the command does not read stdin or use the network.
+
+<Callout type="info">
+  `unset` validates the allowed key shape and must parse the YAML it edits, but
+  it does not run a whole-document schema validation. Removing a leaf cannot
+  introduce a new schema violation. Use `ak config prefs validate` to check the
+  remaining document, especially when it was edited by hand.
+</Callout>
+
+## Output for automation
+
+With `--json`, success writes one unwrapped JSON object to stdout. It is not the
+shared versioned CLI envelope.
+
+```text
+action: "unset"
+key: string
+scope: "user" or "project"
+config_path: string
+backup_path: string, omitted when no backup was created
+found: boolean
+```
+
+Use `found` to distinguish a removal from an already-absent no-op. The command
+does not emit NDJSON.
+
+Runtime failures in JSON mode are not guaranteed to produce a structured error
+object. Check the process exit status and do not parse stdout as success after a
+non-zero exit. Flag-parse errors occur before command rendering and can remain
+plain-text usage.
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | The key was removed, or it was already absent. | Inspect `found`, then resolve the effective value. |
+| `1` | The key or scope was invalid, or the config/backup/write operation failed. | Correct the key or scope; restore the reported backup if a later verification fails. |
+| `2` | The argument count or flags were invalid. | Correct the invocation. |
+
+`--yes` and `--no-interactive` do not change this policy because `unset` never
+prompts. `--quiet` does not suppress this command-specific stdout, and
+`--verbose` adds no command-specific diagnostics. There is no preview, dry-run,
+apply, or force mode.
+
+## Verify and recover
+
+Verify the effective value and validate the remaining files:
+
+```bash
+ak config prefs resolve
+ak config prefs validate
+```
+
+If the result is not what you intended, either set the explicit value again or
+restore the exact backup path printed by the command. Do not replace the whole
+AgentKit home: the backup covers only the previous config file.
+
+## Related commands
+
+- [Complete `ak config prefs unset` command facts](../cli/ak_config_prefs_unset)
+- [CLI conventions](../cli-conventions)
