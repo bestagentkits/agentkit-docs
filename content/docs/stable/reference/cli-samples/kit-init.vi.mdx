@@ -1,0 +1,196 @@
+---
+title: ak kit init
+description: Cài hoặc build Kit với runtime, scope, delivery mode và đường khôi phục được chọn rõ ràng.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak kit init` khi bạn muốn resolve một Kit và chuyển các capability của Kit
+đó sang runtime hoặc thư mục build. Hãy chọn target, scope và delivery mode trước
+khi chạy, vì các lựa chọn này quyết định cả hoạt động mạng lẫn thay đổi trên
+đĩa.
+
+## Chọn đúng lệnh vòng đời
+
+| Mục tiêu | Lệnh | Kết quả |
+| --- | --- | --- |
+| Đăng ký thư mục hiện có | `ak init [path]` | Ghi nhận ownership cho project hiện có; lệnh không cài Kit. |
+| Tạo project mới | `ak new <project-name>` | Tạo thư mục project mới và có thể cài template hoặc Kit. |
+| Cài một route của Kit | `ak kit init <kit-name>` | Resolve rồi tạo đầu ra của Kit cho runtime, scope và mode đã chọn. |
+| Cài qua entry point tương đương | `ak kit install <kit-name>` | Dùng cùng hành vi cài đặt với tên lệnh hướng đến thao tác cài. |
+| Đồng bộ lại route đã cài | `ak kit refresh <kit-name>` | Tạo lại đầu ra cho route và xoá đầu ra cũ còn thuộc quyền quản lý theo quy tắc vòng đời. |
+
+Khi mục tiêu là cập nhật route hiện có, hãy dùng `ak kit refresh` thay vì thực
+hiện một bản cài mới buộc ghi đè.
+
+## Trước khi bắt đầu
+
+Theo mặc định, Kit phát hành dùng remote registry có xác thực và dùng channel
+Kit `stable` khi bạn không truyền `--channel`. Kit trả phí yêu cầu phiên CLI hợp
+lệ và entitlement trước khi hiển thị preview hoặc ghi dữ liệu.
+
+```bash
+ak whoami
+ak licenses
+```
+
+Quá trình resolve từ xa có thể gia hạn trạng thái xác thực cục bộ, liên hệ
+registry, tải artifact dành riêng cho runtime và ghi verified cache. Cache đã
+được xác minh đầy đủ có thể đáp ứng một số trường hợp lỗi offline; cache chưa có
+hoặc không xác minh được sẽ bị từ chối an toàn.
+
+Chỉ dùng `--local --kits-dir <dir>` khi chủ động chọn nguồn development hoặc
+CI. Đây không phải phương án dự phòng khi xác thực hoặc entitlement thất bại.
+
+## Cách dùng
+
+```bash
+ak kit init <kit-name>
+```
+
+Trong script, hãy cung cấp một tên Kit có thể cài. Trên TTY tương tác, việc bỏ
+trống tên có thể mở wizard thiết lập; lần gọi từ script thiếu tên sẽ thất bại.
+
+## Tuỳ chọn của lệnh
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--build-only` | `false` | Build vào thư mục cục bộ thay vì cài đặt. |
+| `--channel <channel>` | `stable` | Chọn channel remote registry; beta cần được chọn rõ ràng. |
+| `--exclude-skills <names>` | Trống | Cài toàn bộ Skill của Kit ngoại trừ tập tên phân tách bằng dấu phẩy. |
+| `--force` | `false` | Cho phép ghi đè đầu ra hiện có trong phạm vi vòng đời và snapshot. |
+| `-g, --global` | `false` | Dùng thư mục user của adapter thay cho project hiện tại. |
+| `--kits-dir <dir>` | Trống | Chọn thư mục Kit cục bộ rõ ràng cho development, CI hoặc local build. |
+| `--local` | `false` | Dùng nguồn cục bộ đã chỉ định thay cho remote registry. |
+| `--no-backup` | `false` | Bỏ qua recovery snapshot trước khi cài và biện pháp bảo vệ liên quan khi tiếp quản Claude native-global. |
+| `--out <dir>` | Trống | Đặt thư mục gốc đầu ra cho route build hoặc export. |
+| `--registry-url <url>` | Biến môi trường hoặc mặc định của bản phát hành | Ghi đè URL gốc của AgentKit registry. |
+| `--remote` | `true` | Dùng remote registry có xác thực; không cần truyền rõ vì đây là mặc định. |
+| `--select-skills` | `false` | Chọn Skill của Kit bằng giao diện tương tác. |
+| `--skills <names>` | Trống | Chỉ cài tập Skill phân tách bằng dấu phẩy. |
+| `--switch-to-plugin` | `false` | Chọn Claude Code plugin delivery tại scope đã chọn. |
+| `--target <ids>` | `claude-code` | Chọn một hoặc nhiều emitter target ID phân tách bằng dấu phẩy. |
+| `--version <version>` | Phiên bản mới nhất của channel | Chọn phiên bản Kit từ xa. |
+
+`--skills`, `--exclude-skills` và `--select-skills` là các chế độ lựa chọn thay
+thế nhau. `--select-skills` cần terminal tương tác. Các cờ dùng chung được liệt
+kê trong [quy ước CLI](../cli-conventions).
+
+## Chọn target, scope và mode
+
+| Route | Project scope | User scope | Selector |
+| --- | --- | --- | --- |
+| Claude Code native | Tệp runtime trong `.claude` cùng metadata vòng đời trong `.agentkit` | Tệp runtime trong `~/.claude` cùng dữ liệu vòng đời AgentKit | `--target claude-code`; thêm `--global` cho user scope. |
+| Claude Code plugin | `ak-<kit>` trong project | `ak-<kit>` dưới thư mục gốc Claude plugin đã cấu hình | Thêm `--switch-to-plugin`; thêm `--global` cho user scope. |
+| Codex native | Skill trong `.agents/skills` và các bề mặt `.codex` khác của project | Skill trong `~/.agents/skills` và các bề mặt `~/.codex` khác | `--target codex`; thêm `--global` cho user scope. |
+| Cursor | Các bề mặt `.cursor` của project | Các bề mặt `.cursor` của user | `--target cursor`; thêm `--global` cho user scope. |
+| Local build | Thư mục `--out` đã chọn | Không phải install scope | Dùng `--build-only --out <dir>`. |
+| Portable export | Thư mục `--out` đã chọn | Không phải install scope | Dùng `--target portable --out <dir>`; build mode được ngầm chọn. |
+
+Bản cài ở project scope và user scope có thể cùng tồn tại. Claude native và
+plugin delivery là hai mode riêng trong cùng scope; việc chuyển mode là thao tác rõ ràng, có
+snapshot bảo vệ. Codex không có đầy đủ mức tương đương với Claude về command,
+Hook hoặc status line, vì vậy hãy xem kỹ cảnh báo thay vì giả định mọi
+component đều được chiếu sang runtime.
+
+## Xem lại hành vi xác nhận
+
+Trên TTY tương tác, install mode hiển thị preview destination và hỏi
+`Continue? [y/N]:`. Nhấn Enter mà không nhập gì, hoặc nhập câu trả lời khác `y`
+hay `yes`, đều là từ chối.
+
+<Callout type="warning">
+  `--json`, `--no-interactive` và stdin không phải TTY sẽ bỏ qua prompt cài đặt
+  và có thể tiếp tục ghi dữ liệu mà không cần `--yes`. Trong tự động hoá, hãy
+  dùng `--yes` để thể hiện chủ đích rõ ràng; đừng xem việc không có prompt là
+  một chốt an toàn.
+</Callout>
+
+Hiện tại, từ chối trên TTY thoát với mã `1`, không phải `3`. Route build và
+export không hiển thị install preview vì chúng ghi vào thư mục đầu ra đã chọn,
+không phải install destination.
+
+Khi chủ động tự động hoá, hãy chỉ định rõ route và xác nhận:
+
+```bash
+ak kit init engineer --target codex --yes --no-interactive --json
+```
+
+## Hiểu tác động trên đĩa
+
+Một lần cài có thể ghi tệp native của runtime, metadata về ownership và vòng đời
+AgentKit, cấu hình project, Hook script, thư mục Skill native và bản ghi chuyển
+mode. Bản cài Codex global còn có thể đăng ký AgentKit MCP runtime trong cấu
+hình Codex của user.
+
+Tệp không xác định và tệp do người dùng sửa được giữ nguyên, trừ khi thao tác
+được hỗ trợ cùng `--force` rõ ràng cho phép ghi đè có giới hạn. Trước khi refresh
+phá huỷ hoặc ghi để chuyển mode, AgentKit thường tạo recovery snapshot. Không
+dùng `--no-backup` cho cài đặt thông thường.
+
+## Đọc đầu ra dành cho người dùng và JSON
+
+Ở chế độ hiển thị cho người dùng, tiến trình, preview destination và prompt xác
+nhận xuất hiện trên stderr. Phần tổng hợp kết quả cuối cùng xuất hiện trên stdout
+và báo Kit, đường dẫn đầu ra, số tệp, install mode, scope, tổng hợp Hook, cảnh
+báo cùng thông tin khôi phục liên quan.
+
+Với `--json`, stdout chứa một envelope thành công có phiên bản với
+`kind=kit.init` và kết quả lệnh dưới `data`. Trừ khi đặt `--quiet`, stderr còn
+nhận các bản ghi trạng thái thô với `status=preview` trước khi ghi và
+`status=complete` sau khi ghi. Hãy xử lý stdout và stderr riêng biệt.
+
+Dữ liệu thành công có thể bao gồm Kit và target đã chọn, mode, install mode,
+scope, thư mục đầu ra, số lượng tệp và Skill, tổng hợp Hook đã cài, cảnh báo,
+trạng thái cấu hình project, chuyển mode và các trường recovery snapshot có
+giới hạn.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bạn nên làm gì |
+| --- | --- | --- |
+| `0` | Route build hoặc cài đặt đã chọn hoàn tất. | Xác minh target, scope, mode, tệp và cảnh báo được báo cáo. |
+| `1` | Xảy ra lỗi runtime, kiểm tra dữ liệu, xác thực, quyền sử dụng, nguồn Kit, quá trình tạo đầu ra hoặc ghi dữ liệu; thao tác từ chối trên TTY hiện cũng dùng mã này. | Đọc lỗi và trường khôi phục trước khi thử lại. |
+| `2` | Cờ, argument hoặc tổ hợp cờ không hợp lệ. | Sửa route hoặc cờ lựa chọn. |
+| `3` | Lệnh bị ngắt hoặc huỷ qua đường xử lý huỷ dùng chung. | Kiểm tra trạng thái hiện tại và mọi đầu ra khôi phục trước khi thử lại. |
+| `4` | Một thao tác vòng đời Kit khác đang giữ khoá thay đổi. | Đợi thao tác đó hoàn tất rồi thử lại sau vài giây. |
+| `5` | Không tìm thấy Kit trong thư mục Kit cục bộ đã chọn. | Kiểm tra tên Kit và nguồn cục bộ rõ ràng. |
+| `6` | Target đã tồn tại và không thể thay thế nếu thiếu `--force`. | Xác minh ownership và route; chỉ dùng `--force` sau khi xem lại phạm vi ghi đè. |
+
+Ý nghĩa mã thoát phụ thuộc từng lệnh. Đặc biệt, đừng diễn giải việc từ chối trên
+TTY theo cam kết mã thoát dùng chung `3`.
+
+## Khôi phục sau bản cài thất bại hoặc buộc ghi đè
+
+Khi đầu ra có recovery snapshot, hãy kiểm tra snapshot trước khi thay đổi thêm
+tệp:
+
+```bash
+ak backups show <id>
+ak backups verify <id>
+```
+
+Một số snapshot nằm dưới restore root do AgentKit quản lý có thể được áp dụng
+bằng `ak backups restore <id>`. Ngược lại, bản cài buộc ghi đè trong project có
+thể báo một thư mục dữ liệu snapshot để khôi phục thủ công vì đầu ra đó nằm ngoài
+restore scope thông thường. Hãy làm theo phương thức khôi phục trong kết quả;
+đừng giả định mọi snapshot đều dùng cùng một lệnh restore.
+
+Sau khi khôi phục hoặc cài đặt, hãy mở lại runtime đích và gọi một Skill đã cài.
+Nếu runtime không tìm thấy Skill, hãy kiểm tra target, project scope hay user
+scope, và Claude native hay plugin mode trước khi cài lại.
+
+## Đọc kết quả chiếu Hook
+
+Phần tổng hợp thành công báo các Hook event và script đã cài khi có. Hãy xem kỹ
+mọi cảnh báo về Hook: một lần cài thành công vẫn có thể giữ lại hoặc bỏ qua hành
+vi mà target đã chọn không thể biểu diễn.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của lệnh `ak kit init`](../cli/ak_kit_init)
+- [Cài Kit an toàn](../../guides/installing-kits)
+- [Xử lý sự cố cài Kit](../../troubleshooting/kit-installation)
+- [Đăng ký project hiện có bằng `ak init`](../cli/ak_init)
+- [Tạo project bằng `ak new`](../cli/ak_new)
+- [Refresh route đã cài](../cli/ak_kit_refresh)

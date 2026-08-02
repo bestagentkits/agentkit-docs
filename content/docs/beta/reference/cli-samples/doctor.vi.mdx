@@ -1,0 +1,151 @@
+---
+title: ak doctor
+description: Kiểm tra sức khoẻ AgentKit, đọc đúng báo cáo JSON lồng nhau và chủ động chọn sửa chữa hoặc kiểm soát bằng mã thoát.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak doctor` để kiểm tra bản cài AgentKit sau khi thiết lập hoặc cập nhật,
+hay khi runtime, Kit, phiên registry hoặc thành phần phụ thuộc cục bộ hoạt động bất
+thường. Theo mặc định, lệnh chỉ báo cáo sức khoẻ và không thay đổi dữ liệu trên
+đĩa.
+
+## Cách dùng
+
+```bash
+ak doctor
+```
+
+Lệnh không nhận argument theo vị trí.
+
+## Tuỳ chọn của lệnh
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--adapter <name>` | Trống | Chỉ chạy các phép kiểm tra cho `codex`, `claude-code` hoặc `cursor`. |
+| `--check <names>` | Trống | Chạy các phép kiểm tra được chỉ định bằng danh sách phân tách bởi dấu phẩy, chẳng hạn `binary_version,codex_binary_present`. |
+| `--exit-on-fail` | `false` | Thoát với mã `1` khi bất kỳ phép kiểm tra đã chạy nào thất bại. |
+| `--fix` | `false` | Thử các cách sửa có sẵn cho những phép kiểm tra thất bại. |
+| `--list` | `false` | Liệt kê tên các phép kiểm tra đã đăng ký rồi thoát. |
+| `--offline` | `false` | Bỏ qua các phép kiểm tra `binary_version` và `network`. |
+
+Các cờ dùng chung như `--json`, `--no-interactive`, `--quiet`, `--verbose` và
+`--yes` được mô tả trong [quy ước CLI](../cli-conventions).
+
+## Ví dụ thường dùng
+
+### Đọc báo cáo dành cho người dùng
+
+```bash
+ak doctor
+```
+
+Báo cáo nhóm các phép kiểm tra theo hệ thống con, tổng hợp kết quả `ok`, `warn`, `fail` và
+`skip`, đồng thời có thể đề xuất lệnh sửa chữa.
+
+### Kiểm soát tự động hoá bằng tình trạng sức khoẻ
+
+Bạn có thể đọc trường sức khoẻ có cấu trúc hoặc yêu cầu mã thoát phản ánh kết
+quả check:
+
+```bash
+ak doctor --json | jq '.data.healthy'
+ak doctor --exit-on-fail
+```
+
+Trường sức khoẻ trong JSON là `.data.healthy`, không phải `.healthy`.
+
+### Khám phá và chạy check có phạm vi hẹp
+
+```bash
+ak doctor --list
+ak doctor --check disk_space
+ak doctor --check binary_version,network
+ak doctor --adapter codex
+```
+
+Tên phép kiểm tra không tồn tại sẽ tạo lỗi lệnh, thay vì trả về một kết quả healthy
+rỗng.
+
+### Chạy mà không kiểm tra mạng
+
+```bash
+ak doctor --offline
+```
+
+Khi không có `--offline`, bộ kiểm tra đầy đủ bao gồm các phép kiểm tra phụ thuộc
+mạng. Chế độ offline bỏ qua chúng; kết quả bị bỏ qua không đồng nghĩa mạng đã
+được xác minh thành công.
+
+## Áp dụng bản sửa an toàn
+
+`ak doctor --fix` có thể chạy các lệnh sửa chữa được đề xuất và thay đổi tệp của
+AgentKit hoặc runtime. Trong terminal tương tác, lệnh hỏi xác nhận trước từng
+bản sửa có thể áp dụng.
+
+Nếu chủ động sửa chữa không cần người trực, hãy thêm `--yes` rõ ràng:
+
+```bash
+ak doctor --fix --yes --json
+```
+
+<Callout type="warning">
+  Không xem `--fix --json` hoặc `--fix --no-interactive` là không cần prompt nếu
+  chưa truyền thêm `--yes`. Khi thiếu `--yes`, đường sửa chữa hiện tại vẫn có
+  thể đọc stdin của process. End-of-file sẽ bỏ qua bản sửa, còn xác nhận được
+  pipe vào có thể áp dụng bản sửa đó.
+</Callout>
+
+Hãy xem lại các lệnh được đề xuất trước khi chấp thuận. Sau khi chạy, mỗi bản sửa
+được kiểm tra lại; bản sửa thất bại vẫn xuất hiện trong báo cáo cuối cùng.
+
+## Đầu ra cho tự động hoá
+
+Đầu ra JSON thành công dùng envelope có phiên bản trên stdout:
+
+```text
+schema_version: 1
+kind: doctor.report
+data.schema_version: 1
+data.checks: array of check results
+data.summary: total, ok, warn, fail, and skip counts
+data.healthy: boolean
+```
+
+Mỗi phép kiểm tra có thể báo tên, trạng thái, bằng chứng, lệnh sửa được đề xuất và thông
+tin bổ sung. Hãy kiểm tra `schema_version` và `kind` bên ngoài trước khi đọc
+`data`.
+
+Lỗi thực thi trong chế độ JSON ghi error envelope có cấu trúc vào stderr. Lỗi
+phân tích cờ xảy ra trước renderer và có thể vẫn là hướng dẫn dùng dạng plain
+text, vì vậy đừng giả định mọi lần gọi thất bại đều phát JSON.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bạn nên làm gì |
+| --- | --- | --- |
+| `0` | Các phép kiểm tra đã chọn đã chạy xong, dù healthy hay unhealthy. | Đọc `.data.healthy` trong JSON hoặc phần tổng hợp dành cho người dùng. |
+| `1` | Lệnh thất bại, tên phép kiểm tra không tồn tại hoặc `--exit-on-fail` gặp kết quả unhealthy. | Sửa tên phép kiểm tra, đọc lỗi hoặc xử lý các phép kiểm tra thất bại. |
+| `2` | Cờ hoặc argument không hợp lệ. | Sửa cách gọi trước khi thử lại. |
+
+Vì vậy, kết quả unhealthy mặc định không phải lỗi process. Chỉ dùng
+`--exit-on-fail` khi trạng thái process cần phản ánh tình trạng sức khoẻ.
+
+## Xác minh và khôi phục
+
+Sau khi sửa, hãy chạy lại phép kiểm tra liên quan mà không có `--fix`:
+
+```bash
+ak doctor --check <check-name>
+```
+
+Nếu bản sửa được đề xuất thay đổi tệp của Kit hoặc runtime, hãy giữ mọi recovery
+snapshot do lệnh bên dưới báo cáo và xác minh runtime đích trước khi xoá dữ liệu
+khôi phục. Đừng lặp lại thao tác với `--force` như bước xử lý đầu tiên.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của lệnh `ak doctor`](../cli/ak_doctor)
+- [Xuất diagnostics đã được loại bỏ dữ liệu nhạy cảm](../cli/ak_diagnostics_export)
+- [Xử lý sự cố cài đặt](../../troubleshooting/installation)
+- [Quy ước CLI](../cli-conventions)
