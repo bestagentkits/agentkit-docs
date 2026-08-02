@@ -57,7 +57,13 @@ export default async function Page(props: PageProps<'/[lang]/[...slug]'>) {
 
   return (
     <main className="contents">
-      <DocsPage toc={page.data.toc} full={page.data.full}>
+      <DocsPage
+        toc={page.data.toc}
+        full={page.data.full}
+        // Section label is the custom mono eyebrow below; Fumadocs breadcrumb
+        // would repeat the same parent folder name (e.g. "Bắt đầu" twice).
+        breadcrumb={{ enabled: false }}
+      >
         {channel === 'beta' && (
           <BetaBanner locale={params.lang} slug={params.slug ?? []} />
         )}
