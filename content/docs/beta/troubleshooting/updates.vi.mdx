@@ -9,35 +9,53 @@ hoặc cần rollback.
 ## Xác định thứ bạn muốn cập nhật
 
 `ak self-update` xử lý binary `ak`. `ak update` điều phối CLI, Kit global và Kit
-project, hoặc cập nhật một scope được chọn rõ ràng.
+project, hoặc cập nhật một scope được chọn rõ ràng. `ak kit refresh` làm mới
+độc lập một route Kit đã cài.
 
 Kiểm tra binary mà không thay đổi disk:
 
 ```bash
 ak --version
-ak self-update --check --json
+ak self-update --check --channel <channel> --json
 ```
 
 Check thành công thoát `0`; đọc các trường `available`, `status` và phiên bản để
 biết có bản cập nhật hay không. Lỗi mạng, xác minh, staging hoặc thay binary
 thoát `1`; flag không hợp lệ thoát `2`. Binary do package manager quản lý sẽ báo
 manager và lệnh upgrade gốc thay vì tự thay binary.
+Kênh cập nhật binary và kênh Kit package là hai thiết lập riêng. Kiểm tra đúng
+kênh binary dự kiến và chọn rõ cùng kênh Kit dự kiến khi compatibility yêu cầu
+chúng khớp nhau; không sửa cached manifest.
 
 ## Preview thay đổi Kit và project
 
 ```bash
-ak update --dry-run --show-diff
+ak update ./myproj --dry-run --show-diff
 ```
 
-`--dry-run` rõ ràng chỉ đọc và thoát `0` khi preview thành công. Trong script
-hoặc session non-interactive, `ak update` không có `--yes` cũng chỉ preview nhưng
-thoát `3` để automation phân biệt “chưa apply” với cập nhật đã apply. Trong
-interactive wizard, mỗi bước apply mặc định là **No**.
+Project `--dry-run` rõ ràng chỉ đọc và thoát `0` khi preview thành công. Trong
+script hoặc session non-interactive, `ak update ./myproj` không có `--yes` cũng
+chỉ preview nhưng thoát `3` để automation phân biệt “chưa apply” với cập nhật đã
+apply. Lệnh `ak update` trống trong terminal interactive mở wizard CLI → Kit
+global → Kit project; mỗi bước apply mặc định là **No**.
 
 Chỉ apply sau khi kiểm tra project, runtime, Kit và kênh đã chọn:
 
 ```bash
-ak update --yes
+ak update ./myproj --yes
+```
+
+Dùng `ak self-update --yes` để chỉ cập nhật binary, hoặc
+`ak update --global --yes` cho các user install do AgentKit sở hữu. Lệnh trống
+`ak update --yes` chấp nhận mọi bước của unified wizard, nên chỉ dùng khi chủ ý
+cả ba scope.
+
+Cập nhật Kit global là preserve-only: `--force` không cho phép ghi đè tệp global
+đã được người dùng sửa. Bản cài chỉ có Claude user plugin sẽ được báo thay vì
+refresh ngầm; refresh đúng route đó bằng:
+
+```bash
+ak kit refresh <kit> --global --switch-to-plugin --yes
 ```
 
 Lỗi runtime khi apply, CLI hard gate, Kit lỗi một phần hoặc ngắt sau khi đã
@@ -48,18 +66,21 @@ mutation thoát `1`. Kết hợp scope hoặc target không hợp lệ thoát `2
 ```bash
 ak --version
 ak doctor --json
-ak audit --json
+ak audit --project-dir . --json
 ```
 
-Phiên bản CLI và báo cáo doctor xác nhận state của binary và môi trường. Audit
-kiểm tra nội dung Kit Claude Code đã ghi nhận: thoát `0` là sạch và thoát `1`
-nghĩa là drift hoặc lỗi audit. Nhớ rằng doctor mặc định có thể báo không khỏe
-nhưng vẫn thoát `0`; hãy kiểm tra `healthy`.
+Phiên bản CLI và báo cáo doctor xác nhận state của binary và môi trường. Audit ở
+đây kiểm tra nội dung Kit Claude Code project-native; dùng `ak audit --json` cho
+user plugin hoặc `--plugin-mode --project-dir ./ak-engineer` cho project plugin
+root được nêu. Thoát `0` là sạch và thoát `1` nghĩa là drift hoặc lỗi audit. Nhớ
+rằng doctor mặc định có thể báo không khỏe nhưng vẫn thoát `0`; hãy kiểm tra
+`data.healthy`.
 
 ## Kiểm tra recovery snapshot
 
-Các đường cập nhật có mutation tạo recovery snapshot. Dùng snapshot ID mà thao
-tác lỗi đã in khi có:
+Các đường cập nhật Kit project và global có mutation tạo recovery snapshot.
+Binary self-update dùng verified replacement. Dùng snapshot ID mà thao tác Kit
+lỗi đã in khi có:
 
 ```bash
 ak backups list
@@ -87,8 +108,13 @@ ak backups restore <id>
 ```
 
 Nếu `ak backups show <id>` liệt kê project bundle root, chỉ authorize đúng các
-đường dẫn tuyệt đối đó bằng một `--allow-root` lặp lại cho mỗi root. Đường dẫn
-rộng hơn hoặc khác sẽ bị từ chối.
+đường dẫn tuyệt đối đó bằng một `--allow-root` lặp lại cho mỗi root:
+
+```bash
+ak backups restore <id> --allow-root /absolute/project
+```
+
+Đường dẫn rộng hơn hoặc khác sẽ bị từ chối.
 
 Chỉ dùng `--latest` sau khi `ak backups list` chứng minh snapshot mới nhất thuộc
 thao tác này. Mã thoát restore được phân loại:
@@ -96,10 +122,17 @@ thao tác này. Mã thoát restore được phân loại:
 | Mã thoát | Ý nghĩa |
 | --- | --- |
 | `0` | Preview hoặc restore hoàn tất. |
+| `1` | Lỗi xác minh, authority, I/O hoặc lỗi restore khác. |
 | `2` | Argument không hợp lệ, ví dụ kết hợp ID với `--latest`. |
 | `3` | Bạn từ chối xác nhận; không có gì được restore. |
 | `4` | Một thao tác backup khác đang giữ lock. |
-| `5` | Snapshot không tồn tại hoặc chưa có snapshot nào. |
+| `5` | Snapshot ID không hợp lệ hoặc không tồn tại, hoặc chưa có snapshot nào. |
+
+Restore theo kiểu replace-only: nó ghi đè tệp đã capture, xóa đúng path được ghi
+là không tồn tại cùng các cây AgentKit plugin được chấp thuận rõ ràng, và giữ
+các tệp không liên quan được tạo sau đó. Restore nhiều tệp không transactional,
+nên host failure có thể để lại state trung gian; tránh ngắt thao tác và tạo một
+backup phù hợp trước khi rollback khi có thể.
 
 Sau restore, chạy lại `ak --version`, `ak doctor --json` và audit áp dụng được.
 Không xóa backup storage, runtime home hoặc `~/.agentkit`; các hành động đó xóa

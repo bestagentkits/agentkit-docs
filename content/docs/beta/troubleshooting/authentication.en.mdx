@@ -13,13 +13,13 @@ ak whoami --json
 ak licenses --json
 ```
 
-These are separate checkpoints:
+Both commands perform the same live entitlement query. `ak whoami` foregrounds
+the active account; `ak licenses` presents the same per-Kit grants with
+Kit-focused wording. Account identity and a Kit grant are still distinct facts
+to verify.
 
-1. `ak whoami` confirms the active CLI account.
-2. `ak licenses` queries the registry for the Kits granted to that account.
-
-An unauthenticated `ak whoami` result is not a command failure: it reports
-`Authenticated: false` and exits `0`. Read the payload instead of relying only
+An unauthenticated `ak whoami --json` result is not a command failure: it reports
+`data.authenticated: false` and exits `0`. Read the payload instead of relying only
 on the exit code. If the account is correct but the Kit is absent from
 `ak licenses`, reinstalling cannot add the entitlement; use the account that
 received the Kit or contact support.
@@ -39,8 +39,8 @@ ak login --api-key ak_live_... --no-interactive
 ```
 
 Never put a real API key in shell history, source control, screenshots, or a
-support bundle. API-key login stores the private key in the local AgentKit
-session file; protect that file as a credential.
+support bundle. API-key login stores the private key locally for
+reauthentication; protect it as a credential.
 
 If the local CLI session is stale, clear only that session and sign in again:
 
@@ -52,11 +52,13 @@ ak licenses --json
 ```
 
 `ak logout` is idempotent and exits `0` when no CLI session exists. It removes
-the CLI registry credential but preserves a paid App device session.
+the local CLI credential first but preserves a paid App device session. For a
+renewable email session, remote revocation is best-effort; an unavailable
+registry does not leave the CLI locally signed in.
 
 ## App activation is a different check
 
-`ak login --license-key ak_license_...` activates an App device session. It
+`ak login --license-key ak_license_... --no-interactive` activates an App device session. It
 does not replace the live Kit entitlement query used by `ak licenses`. A valid
 App license, a successful CLI sign-in, and access to a paid Kit are related
 account states, but one does not prove the others.
@@ -72,7 +74,8 @@ ak doctor --offline --json
 
 If only the network-aware run fails, inspect proxy, DNS, TLS, and registry
 reachability. Do not switch channels or override the registry as a routine
-login fix.
+login fix. A stored-session or registry-query failure exits `1`; invalid flags
+exit `2`.
 
 ## If it still fails
 

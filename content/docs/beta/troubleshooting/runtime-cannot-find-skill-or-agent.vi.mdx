@@ -11,13 +11,33 @@ Skill hay Agent mong đợi.
 Xác nhận bốn thông tin từ output cài đặt ban đầu:
 
 1. Tên Kit.
-2. Runtime đích: `claude-code`, `codex` hoặc adapter được hỗ trợ khác.
+2. Runtime đích: `claude-code` hoặc `codex`.
 3. Scope: project hiện tại hoặc `--global`.
 4. Các Skill đã chọn, gồm mọi filter `--skills` hoặc `--exclude-skills`.
 
 Project install được discover từ project đó. Global install được discover từ
 user profile của runtime. Mở session runtime mới sau khi cài để nó tải inventory
-hiện tại, và dùng cú pháp gọi Skill hoặc Agent được runtime đó hỗ trợ.
+hiện tại, rồi dùng bề mặt discovery mà runtime đó hỗ trợ.
+
+Ví dụ, gọi Skill tên `ak:cook` bằng cú pháp riêng của từng runtime:
+
+```text
+/ak:cook Check this project   # Claude Code
+$ak:cook Check this project   # Codex
+```
+
+Agent dùng bề mặt khác. Claude Code dispatch subagent đã cài; Codex tải Agent
+được định nghĩa bằng TOML và cung cấp runtime tool `agent_<slug>` tương ứng.
+Không có cú pháp gọi `/` hoặc `$` không có nghĩa là Agent bị thiếu.
+
+Kiểm tra destination khớp delivery đã chọn:
+
+| Delivery | Project scope | Global/user scope |
+| --- | --- | --- |
+| Claude native | `<project>/.claude/` | `~/.claude/` |
+| Claude plugin | `<project>/ak-<kit>/` | `${AGENTKIT_PLUGIN_DIR:-~/.claude/plugins}/ak-<kit>/` |
+| Codex Skill | `<project>/.agents/skills/<name>/` | `~/.agents/skills/<name>/` |
+| Codex Agent, config và hook | Các surface `.codex/` của project | `~/.codex/` |
 
 ## Kiểm tra adapter, không chỉ sự tồn tại của tệp
 
@@ -27,8 +47,8 @@ ak doctor --adapter codex --json
 ```
 
 Chạy lệnh cho target đã cài. Tệp tồn tại không chứng minh registration hoặc cấu
-hình runtime hợp lệ. Kiểm tra các adapter check và trường `healthy` trong báo
-cáo; doctor mặc định vẫn thoát `0` khi báo cáo không khỏe. Trên Codex, dùng
+hình runtime hợp lệ. Kiểm tra các adapter check và `data.healthy`; doctor mặc
+định vẫn thoát `0` khi báo cáo không khỏe. Trên Codex, dùng
 doctor như tín hiệu về sức khỏe adapter, không phải bằng chứng duy nhất cho Skill
 inventory đã cài; hãy xác minh discovery ngay trong runtime.
 
@@ -50,13 +70,34 @@ tương đương trong namespace tool của Codex, nên group đó và các hand
 không được project. Các hook tương thích khác cùng Skill hoặc Agent đã cài là
 kết quả riêng; hãy kiểm tra các dòng tương ứng trong cùng install summary.
 
-Con số này đếm matcher group, không phải tệp hoặc script. Warning theo sau nêu
-event, matcher và handler bị ảnh hưởng.
+Con số này đếm matcher group, không phải tệp hoặc script. Output cài đặt JSON
+báo cùng giới hạn trong `hooksDropped` và `droppedHookSummaries`. Warning theo
+sau nêu event, matcher và handler bị ảnh hưởng.
 
-Đọc chi tiết group bị bỏ để biết event, matcher và tên handler. Automation chỉ
-do group bị bỏ cung cấp sẽ không khả dụng trên Codex. Không thử lại với
-`--force`, sao chép cấu hình hook Claude sang Codex hoặc xóa home của runtime để
-loại bỏ cảnh báo.
+Với Engineer, group `PostToolUse` có matcher
+`Agent|Task|TodoWrite|TodoRead` gọi `session-state.cjs` không được project, vì
+vậy group này không refresh task-state giữa session. Các group tương thích
+`Edit|Write` và `*` vẫn còn, và task-state vẫn refresh tại các ranh giới turn và
+subagent `Stop` cùng `SubagentStop` được hỗ trợ. Không thử lại với `--force`, sao
+chép cấu hình hook Claude sang Codex hoặc xóa home của runtime để loại bỏ cảnh
+báo.
+
+## Hook Codex lỗi trên Windows
+
+Hook `.cjs` đủ điều kiện bên trong Codex home đã resolve có thể chạy từ đường dẫn
+có khoảng trắng qua sibling shim `.cmd` do AgentKit quản lý. Đường dẫn có khoảng
+trắng bên ngoài Codex home, đường dẫn có metacharacter của `cmd.exe`, basename
+shim không phải ASCII hoặc argument được bake không an toàn hay không phải ASCII
+vẫn không được hỗ trợ và sẽ tạo warning. Đường dẫn không có khoảng trắng tiếp
+tục dùng lệnh trực tiếp.
+
+Không di chuyển hook bên ngoài vào Codex home hoặc sửa tay shim được generate như
+một workaround. Hãy giữ warning cùng diagnostics đã che dữ liệu nhạy cảm.
+
+Ở global scope, AgentKit chỉ merge registration do nó sở hữu vào
+`~/.codex/hooks.json` dùng chung, giữ cấu trúc của user hoặc nguồn khác, và xóa
+cấu trúc rỗng do AgentKit sở hữu khi owner cuối cùng rời đi. Không sửa tay
+ownership sidecar hoặc xóa rộng tệp hooks dùng chung.
 
 ## Kiểm tra scope cấu hình
 
@@ -75,7 +116,7 @@ hình](./configuration) trước khi sửa tệp.
 
 Sự cố được giải quyết khi báo cáo doctor cho adapter khỏe, audit áp dụng được
 không có drift và session runtime mới trong đúng scope liệt kê hoặc nhận diện
-item mong đợi. Nếu các checkpoint đều đạt nhưng discovery vẫn thất bại, export
+item mong đợi. Nếu các check đều đạt nhưng discovery vẫn thất bại, export
 gói đã che dữ liệu nhạy cảm:
 
 ```bash

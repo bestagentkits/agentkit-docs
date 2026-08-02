@@ -11,14 +11,34 @@ recognize an expected Skill or Agent.
 Confirm all four details from the original install output:
 
 1. Kit name.
-2. Target runtime: `claude-code`, `codex`, or another supported adapter.
+2. Target runtime: `claude-code` or `codex`.
 3. Scope: the current project or `--global`.
 4. Selected Skills, including any `--skills` or `--exclude-skills` filter.
 
 A project install is discovered from that project. A global install is
 discovered from the runtime's user profile. Start a new runtime session after
 installation so it loads the current inventory, and use that runtime's documented
-Skill or Agent invocation syntax.
+discovery surface.
+
+For example, invoke a Skill named `ak:cook` with the runtime-specific syntax:
+
+```text
+/ak:cook Check this project   # Claude Code
+$ak:cook Check this project   # Codex
+```
+
+Agents use a different surface. Claude Code dispatches installed subagents;
+Codex loads TOML-defined Agents and exposes their `agent_<slug>` runtime tools.
+The absence of `/` or `$` invocation syntax does not mean an Agent is missing.
+
+Check the destination that matches the selected delivery:
+
+| Delivery | Project scope | Global/user scope |
+| --- | --- | --- |
+| Claude native | `<project>/.claude/` | `~/.claude/` |
+| Claude plugin | `<project>/ak-<kit>/` | `${AGENTKIT_PLUGIN_DIR:-~/.claude/plugins}/ak-<kit>/` |
+| Codex Skills | `<project>/.agents/skills/<name>/` | `~/.agents/skills/<name>/` |
+| Codex Agents, config, and hooks | Project `.codex/` surfaces | `~/.codex/` |
 
 ## Check the adapter, not only file presence
 
@@ -29,7 +49,7 @@ ak doctor --adapter codex --json
 
 Run the command for the target you installed. File presence alone does not prove
 that runtime registration or configuration is valid. Inspect the report's
-adapter checks and `healthy` field; the default doctor command still exits `0`
+adapter checks and `data.healthy`; the default doctor command still exits `0`
 for an unhealthy report. On Codex, use doctor as an adapter-health signal, not
 as the only proof of the installed Skill inventory; verify discovery inside the
 runtime too.
@@ -52,13 +72,33 @@ no equivalent in the Codex tool namespace, so that group and its named handlers
 were not projected. Other compatible hooks and installed Skills or Agents remain
 separate results; check their lines in the same install summary.
 
-The number counts matcher groups, not files or scripts. The following warning
-names the affected event, matcher, and handlers.
+The number counts matcher groups, not files or scripts. JSON install output
+reports the same limitation in `hooksDropped` and `droppedHookSummaries`. The
+following warning names the affected event, matcher, and handlers.
 
-Read the dropped-group details to see the event, matcher, and handler names.
-Expect automation provided only by that dropped group to be unavailable on
-Codex. Do not retry with `--force`, copy Claude hook configuration into Codex,
-or delete either runtime home to remove the warning.
+For Engineer, the `PostToolUse` group with matcher
+`Agent|Task|TodoWrite|TodoRead` invoking `session-state.cjs` is not projected,
+so there is no mid-session task-state refresh from that group. Compatible
+`Edit|Write` and `*` groups remain, and task-state refresh still runs at the
+supported `Stop` and `SubagentStop` turn and subagent boundaries. Do not retry
+with `--force`, copy Claude hook configuration into Codex, or delete either
+runtime home to remove the warning.
+
+## A Codex hook fails on Windows
+
+An eligible `.cjs` hook inside the resolved Codex home can run from a path with
+spaces through an AgentKit-managed sibling `.cmd` shim. A spaced path outside
+the Codex home, a path with `cmd.exe` metacharacters, a non-ASCII shim basename,
+or unsafe or non-ASCII baked arguments remains unsupported and produces a
+warning. A path without spaces continues to use the direct command.
+
+Do not move an external hook into the Codex home or hand-edit the generated shim
+as a workaround. Keep the warning with your redacted diagnostics.
+
+At global scope, AgentKit merges only its owned registrations into the shared
+`~/.codex/hooks.json`, preserves foreign or user structures, and removes empty
+AgentKit-owned structures when the last owner leaves. Do not hand-edit ownership
+sidecars or broadly delete the shared hooks file.
 
 ## Check configuration scope
 
@@ -77,7 +117,7 @@ change hook behavior, but it does not install a missing Skill or Agent. See
 
 The issue is resolved when the adapter-specific doctor report is healthy, any
 applicable audit is clean, and a new runtime session in the intended scope lists
-or recognizes the expected item. If those checkpoints pass but discovery still
+or recognizes the expected item. If those checks pass but discovery still
 fails, export a redacted bundle:
 
 ```bash
