@@ -63,7 +63,7 @@ Locale root redirects live in `public/_redirects` (copied into `out/`; Workers s
 
 ## CI
 
-`.github/workflows/ci.yml` runs on every PR and push to `main` / `dev`: install (frozen lockfile) → typecheck → lint (MDX) → unit tests → reference hygiene → generated-dir guard → reference-regeneration check (regenerate from `reference-raw/` + `reference-prose/`, assert no drift) → build → internal link check → static-output assertion. Keep it green; all steps are deterministic and offline (the link check validates internal links only).
+`.github/workflows/ci.yml` runs on every PR and push to `main` / `dev`: install (frozen lockfile) → typecheck → lint (MDX) → unit tests → reference hygiene → generated-dir guard → reference-regeneration check (regenerate from `reference-raw/` + `reference-prose/`, assert no drift) → build → static-asset limits → internal link check → static-output assertion. The asset guard keeps every file within Cloudflare's 25 MiB limit, gives the search index a 22 MiB budget, and enforces the Paid Workers 100,000-file cap. Keep it green; all steps are deterministic and offline (the link check validates internal links only).
 
 Deploy workflows run their own typecheck + build, then `wrangler deploy` — they do not wait on the CI workflow.
 
