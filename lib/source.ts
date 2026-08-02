@@ -26,12 +26,23 @@ function canonicalCliReference(): LoaderPlugin {
   };
 }
 
+function hideUnapprovedChangelog(): LoaderPlugin {
+  return {
+    name: 'agentkit:hide-unapproved-changelog',
+    enforce: 'post',
+    transformStorage({ storage }) {
+      storage.delete('stable/changelog', true);
+      storage.delete('beta/changelog', true);
+    },
+  };
+}
+
 // See https://fumadocs.dev/docs/headless/source-api for more info
 export const source = loader({
   baseUrl: docsRoute,
   i18n,
   source: docs.toFumadocsSource(),
-  plugins: [canonicalCliReference()],
+  plugins: [canonicalCliReference(), hideUnapprovedChangelog()],
 });
 
 // The OG-image and raw-markdown route handlers live under the `[lang]` segment,
