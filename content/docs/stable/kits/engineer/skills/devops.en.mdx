@@ -1,0 +1,194 @@
+---
+title: Plan and operate infrastructure with ak:devops
+description: Prepare and verify Cloudflare, Docker, Google Cloud, Kubernetes, CI/CD, and GitOps work with explicit deployment and deletion gates.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:devops` to design, review, implement, or troubleshoot infrastructure and
+delivery work. The Skill can produce guidance, configuration, and commands, and
+it can use available tools to build or deploy when you explicitly authorize the
+target and effect.
+
+## Choose ak:devops for operational boundaries
+
+### Use ak:devops when
+
+- Cloudflare Workers, Pages, R2, D1, KV, Browser Rendering, Docker, Google
+  Cloud, Kubernetes, Helm, CI/CD, or GitOps is central to the task.
+- You need a deployment plan with environment, rollback, cost, secret, and
+  verification boundaries.
+- You need to inspect or improve a Dockerfile or deployment configuration.
+
+### Choose another workflow when
+
+- You only need application code. Use `ak:backend-development` or
+  `ak:frontend-development`, then hand the deployable artifact to this Skill.
+- A database migration is the main risk. Use `ak:databases` and preserve its
+  backup and recovery gates.
+- You need diagnosis without infrastructure mutation. Use `ak:fix` and grant
+  only read access.
+- You need an approved cross-stack plan executed. Use `ak:cook` and keep each
+  infrastructure mutation as a separately authorized step.
+
+## Prepare the target and authority
+
+Before you start:
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Engineer Kit is installed for the current runtime and scope.
+- Name the platform, account or organization, project, region, environment,
+  service, owner, and allowed maintenance window. Do not infer production.
+- Confirm the relevant CLI and authentication: Wrangler for Cloudflare, Docker
+  and Compose for containers, `gcloud` for Google Cloud, or the approved
+  Kubernetes and Helm clients for a cluster.
+- Inventory configuration, secrets, domains, data stores, IAM, quotas,
+  dependencies, current traffic, and billing ownership. Keep secret values out
+  of prompts, logs, generated files, and version control.
+- Define a local validation path, health checks, observability, rollback or
+  recovery steps, and the person authorized to approve provider changes.
+
+| Platform | Required evidence before mutation |
+| --- | --- |
+| Cloudflare | Correct account and environment, Wrangler configuration, bindings, secret names, compatibility date, routes, limits, rollback route, and billing impact |
+| Docker | Reviewed Dockerfile or Compose file, pinned inputs where required, build context, ports, volumes, secret handling, health check, image registry, and rollback image |
+| Google Cloud | Active account, project and region, enabled APIs, IAM role, quotas, network and data impact, estimated cost, and deletion or rollback plan |
+| Kubernetes or Helm | Current context and namespace, rendered manifests or diff, RBAC, secrets, storage and disruption impact, rollout checks, and rollback command |
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:devops ...` | Can use guidance and available local or provider tools; Engineer supports native and explicit plugin delivery. |
+| Cursor | `/ak:devops ...` | Uses the user-verified slash spelling; equivalent provider tooling and Hook parity are not established. |
+| Codex | `$ak:devops ...` | Uses native Skill discovery; provider tools and projected Hooks depend on the session. |
+
+## Run the Skill
+
+The declared argument shape is `[platform] [task]`. It defines no Skill flags,
+default platform, target environment, or deployment approval.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:devops cloudflare "Review this Worker's configuration for staging, produce a dry-run and rollback checklist, and stop before creating resources, uploading secrets, changing routes, or deploying."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:devops cloudflare "Review this Worker's configuration for staging, produce a dry-run and rollback checklist, and stop before creating resources, uploading secrets, changing routes, or deploying."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:devops cloudflare "Review this Worker's configuration for staging, produce a dry-run and rollback checklist, and stop before creating resources, uploading secrets, changing routes, or deploying."
+```
+
+  </Tab>
+</Tabs>
+
+### Understand the bundled utility modes
+
+These are separate local scripts, not `ak:devops` flags:
+
+| Utility | Inputs and modes | Effects |
+| --- | --- | --- |
+| Cloudflare deploy | `--project` defaults to `.`, `--env` accepts `production`, `staging`, or `dev`, plus `--dry-run` and `--verbose` | Requires a project directory, `wrangler.toml`, and an installed, authenticated Wrangler. Without `--dry-run`, it executes `wrangler deploy` against the selected environment. |
+| Dockerfile analyzer | Dockerfile path, with optional `--json` or `--verbose` | Reads one local file and reports heuristic errors, warnings, and suggestions. It does not build an image, start Docker, or edit the file. |
+
+The Cloudflare dry run still invokes Wrangler and the local project build path.
+It is a deployment preview, not a guarantee that arbitrary build hooks or local
+tooling are side-effect-free.
+
+## Observe a controlled workflow
+
+1. **The run resolves the target.** It records provider identity, project,
+   region, environment, resource names, current state, and requested outcome.
+2. **The run inspects before changing.** It reads local configuration and, when
+   authorized, provider or cluster state using the narrowest available access.
+3. **The run proposes an exact diff.** It names resources, commands, secret
+   references, lifecycle effects, expected cost, rollback, and evidence.
+4. **The run validates locally.** It renders or lints configuration, builds or
+   scans artifacts when tools are available, and distinguishes mocked checks
+   from live-provider evidence.
+5. **The run requests execution authority.** Login, resource creation, secret
+   upload, traffic changes, deployment, scaling, migration, and deletion remain
+   explicit decisions.
+6. **The run verifies the operation.** It checks deployment status, health,
+   logs, metrics, routes, versions, data accessibility, and rollback readiness.
+
+## Keep provider changes behind approval
+
+<Callout type="warn" title="Planning does not grant deployment authority">
+  A Skill invocation can prepare commands and configuration, but it does not
+  authorize a production login, deploy, secret write, IAM change, traffic cutover,
+  data deletion, or billable resource. Confirm the exact target and effect before
+  each operation that crosses that boundary.
+</Callout>
+
+Directly relevant effects include:
+
+- Wrangler commands can create or deploy Workers and Pages projects, write
+  secrets, create or mutate R2, D1, and KV resources, and change routes.
+- Docker commands can download images, execute build steps, start processes,
+  bind ports, write caches and volumes, publish images, or permanently prune
+  images, containers, networks, and volumes.
+- Google Cloud commands can enable services; create, update, scale, or delete
+  compute, clusters, Cloud Run services, databases, buckets, firewall rules,
+  registries, and IAM bindings; and send data over the network.
+- Kubernetes and Helm operations can change workloads, RBAC, ingress, secrets,
+  persistent storage, availability, and traffic in the active context.
+- Provider resources, builds, storage, egress, logging, Browser Rendering,
+  databases, clusters, and registries can incur continuing charges. The Skill
+  itself does not establish a price or spending limit.
+
+Treat `--quiet`, non-interactive flags, and automation credentials as removal
+of prompts, not as safety controls. Review destructive commands such as provider
+resource deletion, `docker system prune`, Compose volume removal, and namespace
+or release deletion independently.
+
+## Verify the result
+
+A complete result should provide:
+
+- The resolved account, project, region, environment, resource, version, and
+  identity, without exposing credentials.
+- The reviewed configuration or command diff and the validation performed.
+- Build, lint, image, manifest, deployment, health, log, metric, and route
+  evidence appropriate to the platform.
+- Rollback or recovery instructions, retained artifacts, and any irreversible
+  data or traffic effect.
+- Cost-sensitive resources, skipped checks, unresolved risks, and every action
+  still awaiting approval.
+
+## Troubleshoot or continue
+
+| Symptom | Safe next step |
+| --- | --- |
+| The target environment is ambiguous | Stop and resolve account, project, region, context, namespace, and environment before login or mutation. |
+| Wrangler reports missing configuration or authentication | Verify the local project and approved identity; do not create or deploy to a guessed account. |
+| A dry run succeeds | Review the produced bundle, configuration, build hooks, bindings, routes, and limits; it is not live health evidence. |
+| The Docker analyzer reports no errors | Build, test, scan, and run the image separately; the analyzer is text-based and heuristic. |
+| A provider command proposes deletion | Capture dependencies, backups, retention behavior, and recovery evidence, then request explicit approval for the exact resource. |
+| The runtime does not recognize the Skill | Confirm target and scope, restart the session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Review [Projects, artifacts, and checkpoints](../../../concepts/projects-artifacts-checkpoints)
+before rollback-sensitive work or continue with [Engineer Kit](../../engineer).
+
+## Know the current limits
+
+- Kubernetes and Helm are named capabilities, but this Skill release does not
+  bundle the detailed platform references supplied for Cloudflare, Docker, and
+  Google Cloud. Verify current upstream behavior before operating a cluster.
+- Bundled tests mock Wrangler and exercise the Docker analyzer with local
+  fixtures. They do not prove a live deployment, image security, cluster
+  safety, provider authorization, or rollback.
+- Runtime duration is not defined. A configuration review may take minutes;
+  builds, uploads, rollouts, image pulls, database operations, and recovery can
+  take much longer with artifact size, health gates, regions, and provider load.
+- Stable and beta contain identical Skill references, utilities, and tests for
+  this release pair.
