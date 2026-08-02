@@ -1,0 +1,148 @@
+---
+title: Marketing Kit lifecycle and recovery
+description: Refresh, remove, and recover a Marketing Kit installation without crossing its ownership, runtime, scope, or delivery boundaries.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Marketing Kit lifecycle operations act on one recorded installation at a time.
+The installation is identified by the Kit, target runtime, project or user
+scope, and, for Claude Code, native or plugin delivery. Keep those dimensions
+consistent when you refresh, uninstall, or recover it.
+
+## Match the installed route
+
+Project and user installations can coexist. Claude Code native and plugin
+delivery are also distinct. A project install is not a substitute for a user
+install, and changing the target or delivery flags does not make two
+installations interchangeable.
+
+| Installation dimension | What to match later |
+| --- | --- |
+| Kit | Keep `marketing` as the lifecycle subject. |
+| Runtime | Use the installed `claude-code`, `codex`, or `cursor` target. |
+| Scope | Run from the recorded project, or add `--global` for the user scope. |
+| Claude Code delivery | Keep native delivery native; use the explicit plugin flags for a plugin installation. |
+
+Review [Installing kits](../../../guides/installing-kits) before changing any
+of these dimensions. A deliberate Claude Code delivery transition uses
+ownership checks and recovery snapshots; it is not a rename or a file move.
+
+## Understand the ownership boundary
+
+AgentKit records the paths and content fingerprints it emits. Later operations
+classify each path before changing it:
+
+| Recorded state | Normal lifecycle behavior |
+| --- | --- |
+| AgentKit-owned and unchanged | Refresh may replace it, and uninstall may remove it. |
+| AgentKit-owned but modified | Preserve it by default and report the conflict. |
+| Unknown, user-created, or owned elsewhere | Preserve it; location inside a runtime directory does not grant ownership. |
+| Recorded but missing | Report or skip it as the selected operation requires. |
+
+Shared runtime settings follow the same rule. AgentKit updates or removes only
+registrations it can identify as its own and keeps user, foreign, and sibling
+Kit state. A preserved file is therefore not automatically a failed refresh or
+uninstall.
+
+Use `ak audit marketing` when installed state looks different from its recorded
+fingerprints. See [Projects, artifacts, and
+checkpoints](../../../concepts/projects-artifacts-checkpoints) for the full
+ownership model and [`ak audit`](../../../reference/cli/ak_audit) for exact
+options.
+
+## Refresh the Kit, update the CLI
+
+The Kit package and the `ak` binary have related but separate lifecycles:
+
+| Goal | Command surface |
+| --- | --- |
+| Refresh one Marketing Kit installation | `ak kit refresh marketing` re-emits the matching installed route and reconciles stale generated, owned paths. |
+| Check or replace only the CLI binary | `ak self-update --check` checks; `ak self-update --yes` applies a verified binary update. |
+| Review the combined convenience flow | Bare `ak update` can guide you through CLI, user-Kit, and project-Kit steps while preserving their separate identities. |
+
+For example, a project Codex refresh uses:
+
+```bash
+ak kit refresh marketing --target codex
+```
+
+Run it in an interactive terminal to review the confirmation screen. In a
+script or another non-interactive flow, add `--yes` only when you intend to
+apply the refresh. Keep `--global` or Claude Code's `--switch-to-plugin` when
+they are part of the recorded route.
+
+Refresh creates a recovery snapshot before mutation unless you explicitly
+disable that safeguard. It may replace clean owned output and remove stale
+generated owned paths, but it does not authorize deletion of modified or
+foreign files. Do not use `--force` or `--no-backup` as a routine repair.
+
+Use [Updating AgentKit and kits](../../../guides/updating) for the complete
+decision flow. Exact flags live under [`ak kit
+refresh`](../../../reference/cli/ak_kit_refresh), [`ak
+self-update`](../../../reference/cli/ak_self-update), and [`ak
+update`](../../../reference/cli/ak_update).
+
+## Preview and remove the installation
+
+Uninstall has an explicit dry run. For a project-native installation, preview
+and apply from the project with:
+
+```bash
+ak kit uninstall marketing --project-dir . --dry-run
+ak kit uninstall marketing --project-dir . --yes
+```
+
+Match a different recorded route deliberately:
+
+- Add `--global` for a user-scoped installation.
+- Add `--plugin-mode` for Claude Code plugin delivery.
+- Keep `--project-dir .` for a project installation, including a project plugin.
+
+The dry run changes nothing. Review which paths will be removed, preserved, or
+reported before applying. Uninstall snapshots first, removes matching clean
+AgentKit-owned output, and preserves modified or unknown content. It does not
+erase an entire runtime directory or guarantee that user-edited remnants are
+deleted.
+
+See [`ak kit uninstall`](../../../reference/cli/ak_kit_uninstall) for its exact
+scope and delivery flags.
+
+## Recover from a scoped snapshot
+
+Keep the operation report and snapshot ID until the runtime is verified. Inspect
+and preview the snapshot before applying it:
+
+```bash
+ak backups list
+ak backups show <id>
+ak backups verify <id>
+ak recover <id> --dry-run
+```
+
+`ak recover` is an alias for `ak backups restore`. A recovery snapshot contains
+the paths captured for a particular operation; it is not a full backup of the
+project, runtime home, or machine. Restore verifies the snapshot before its
+first write, replaces captured state, and normally preserves unrelated files
+created later. A multi-file restore can still be interrupted and leave an
+intermediate state, so review its plan and take an independent backup when the
+affected work requires one.
+
+If `ak backups show <id>` lists project-bundle roots, repeat the exact
+`--allow-root` value for every listed root. If the original operation reports a
+manual recovery path or instructions outside normal restore scope, follow that
+specific report instead of forcing a broad restore. After recovery, audit the
+matching installation and then refresh or reinstall only that same route if it
+is still needed.
+
+<Callout type="warn" title="Keep recovery narrow">
+  Do not delete `~/.agentkit`, a runtime home, or a project's runtime directory
+  to recover one Marketing Kit installation. Do not treat a snapshot as a
+  transactional whole-project or whole-machine rollback.
+</Callout>
+
+For restore flags and limits, use [`ak
+recover`](../../../reference/cli/ak_recover) and [`ak backups
+restore`](../../../reference/cli/ak_backups_restore). For diagnosis after an
+unexpected result, follow [Update and recovery
+problems](../../../troubleshooting/updates).

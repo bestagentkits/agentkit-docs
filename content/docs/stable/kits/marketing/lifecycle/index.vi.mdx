@@ -1,0 +1,148 @@
+---
+title: Vòng đời và khôi phục Marketing Kit
+description: Refresh, gỡ và khôi phục một bản cài Marketing Kit mà không vượt qua ranh giới ownership, runtime, scope hoặc delivery.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Thao tác vòng đời của Marketing Kit chỉ xử lý một bản cài đã được ghi nhận tại
+một thời điểm. Bản cài được xác định bằng Kit, runtime đích, scope project hoặc
+người dùng, và với Claude Code là delivery native hoặc plugin. Hãy giữ nhất
+quán các chiều này khi refresh, uninstall hoặc khôi phục.
+
+## Khớp đúng tuyến cài đặt
+
+Bản cài ở scope project và người dùng có thể cùng tồn tại. Delivery native và
+plugin của Claude Code cũng là hai dạng riêng biệt. Bản cài project không thay
+thế bản cài người dùng, và việc đổi target hoặc flag delivery không làm hai bản
+cài trở nên tương đương.
+
+| Chiều của bản cài | Điều cần khớp về sau |
+| --- | --- |
+| Kit | Giữ `marketing` làm đối tượng của thao tác vòng đời. |
+| Runtime | Dùng đúng target `claude-code`, `codex` hoặc `cursor` đã cài. |
+| Scope | Chạy từ project đã ghi nhận, hoặc thêm `--global` cho scope người dùng. |
+| Delivery Claude Code | Giữ delivery native là native; dùng flag plugin rõ ràng cho bản cài plugin. |
+
+Đọc [Cài đặt Kit](../../../guides/installing-kits) trước khi thay đổi bất kỳ
+chiều nào. Một lần chuyển delivery Claude Code có chủ đích sử dụng kiểm tra
+ownership và snapshot khôi phục; đó không phải thao tác đổi tên hay di chuyển
+tệp.
+
+## Hiểu ranh giới ownership
+
+AgentKit ghi lại path và fingerprint nội dung mà nó phát ra. Các thao tác sau
+đó phân loại từng path trước khi thay đổi:
+
+| Trạng thái đã ghi nhận | Hành vi vòng đời thông thường |
+| --- | --- |
+| Thuộc AgentKit và không thay đổi | Refresh có thể thay thế, còn uninstall có thể xóa. |
+| Thuộc AgentKit nhưng đã sửa | Mặc định giữ lại và báo conflict. |
+| Không rõ nguồn gốc, do người dùng tạo hoặc thuộc nơi khác | Giữ lại; nằm trong thư mục runtime không đồng nghĩa AgentKit sở hữu. |
+| Đã ghi nhận nhưng bị thiếu | Báo hoặc bỏ qua tùy thao tác được chọn. |
+
+Thiết lập runtime dùng chung cũng theo quy tắc này. AgentKit chỉ cập nhật hoặc
+gỡ registration mà nó xác định được là của mình, đồng thời giữ trạng thái của
+người dùng, bên ngoài và Kit khác. Vì vậy, một tệp được giữ lại không mặc nhiên
+đồng nghĩa refresh hoặc uninstall đã thất bại.
+
+Dùng `ak audit marketing` khi trạng thái đã cài khác fingerprint được ghi nhận.
+Xem [Projects, artifacts và
+checkpoints](../../../concepts/projects-artifacts-checkpoints) để hiểu đầy đủ mô
+hình ownership và [`ak audit`](../../../reference/cli/ak_audit) để biết tùy chọn
+chính xác.
+
+## Refresh Kit và cập nhật CLI
+
+Package Kit và binary `ak` có vòng đời liên quan nhưng tách biệt:
+
+| Mục tiêu | Bề mặt command |
+| --- | --- |
+| Refresh một bản cài Marketing Kit | `ak kit refresh marketing` phát lại đúng tuyến đã cài và đối soát path cũ được tạo ra, thuộc ownership. |
+| Chỉ kiểm tra hoặc thay binary CLI | `ak self-update --check` dùng để kiểm tra; `ak self-update --yes` áp dụng bản cập nhật binary đã xác minh. |
+| Review luồng tiện ích tổng hợp | `ak update` không đối số có thể hướng dẫn qua các bước CLI, Kit người dùng và Kit project trong khi vẫn giữ danh tính riêng của chúng. |
+
+Ví dụ, refresh Codex ở scope project dùng:
+
+```bash
+ak kit refresh marketing --target codex
+```
+
+Chạy trong terminal tương tác để review màn hình xác nhận. Trong script hoặc
+luồng không tương tác khác, chỉ thêm `--yes` khi bạn có chủ đích apply refresh.
+Giữ `--global` hoặc `--switch-to-plugin` của Claude Code khi chúng thuộc tuyến
+đã ghi nhận.
+
+Refresh tạo snapshot khôi phục trước khi thay đổi, trừ khi bạn chủ động tắt cơ
+chế bảo vệ đó. Nó có thể thay output sạch thuộc ownership và xóa path cũ được
+tạo ra, thuộc ownership, nhưng không cho phép xóa tệp đã sửa hoặc tệp bên ngoài.
+Không dùng `--force` hoặc `--no-backup` như cách sửa lỗi thường lệ.
+
+Dùng [Cập nhật AgentKit và Kit](../../../guides/updating) để xem toàn bộ luồng
+quyết định. Flag chính xác nằm trong [`ak kit
+refresh`](../../../reference/cli/ak_kit_refresh), [`ak
+self-update`](../../../reference/cli/ak_self-update) và [`ak
+update`](../../../reference/cli/ak_update).
+
+## Preview và gỡ bản cài
+
+Uninstall có dry run rõ ràng. Với bản cài native ở scope project, preview và
+apply từ project bằng:
+
+```bash
+ak kit uninstall marketing --project-dir . --dry-run
+ak kit uninstall marketing --project-dir . --yes
+```
+
+Khớp một tuyến đã ghi nhận khác một cách có chủ đích:
+
+- Thêm `--global` cho bản cài ở scope người dùng.
+- Thêm `--plugin-mode` cho delivery plugin của Claude Code.
+- Giữ `--project-dir .` cho bản cài project, kể cả plugin project.
+
+Dry run không thay đổi gì. Hãy review path nào sẽ bị xóa, được giữ hoặc được
+báo trước khi apply. Uninstall tạo snapshot trước, xóa output sạch khớp
+ownership của AgentKit, đồng thời giữ nội dung đã sửa hoặc không rõ nguồn gốc.
+Nó không xóa toàn bộ thư mục runtime và không đảm bảo phần còn lại do người
+dùng sửa sẽ bị xóa.
+
+Xem [`ak kit uninstall`](../../../reference/cli/ak_kit_uninstall) để biết flag
+scope và delivery chính xác.
+
+## Khôi phục từ snapshot có scope
+
+Giữ báo cáo thao tác và ID snapshot cho đến khi xác minh xong runtime. Kiểm tra
+và preview snapshot trước khi apply:
+
+```bash
+ak backups list
+ak backups show <id>
+ak backups verify <id>
+ak recover <id> --dry-run
+```
+
+`ak recover` là alias của `ak backups restore`. Snapshot khôi phục chứa các path
+được ghi lại cho một thao tác cụ thể; đó không phải bản sao lưu đầy đủ của
+project, runtime home hay toàn máy. Restore xác minh snapshot trước lần ghi đầu
+tiên, thay trạng thái đã ghi lại và thường giữ tệp không liên quan được tạo sau
+đó. Một restore nhiều tệp vẫn có thể bị gián đoạn và để lại trạng thái trung
+gian, vì vậy hãy review plan và tạo bản sao lưu độc lập khi phần việc bị ảnh
+hưởng cần điều đó.
+
+Nếu `ak backups show <id>` liệt kê root của project bundle, hãy lặp lại đúng giá
+trị `--allow-root` cho từng root được liệt kê. Nếu thao tác gốc báo path hoặc
+hướng dẫn khôi phục thủ công nằm ngoài scope restore thông thường, hãy làm theo
+báo cáo cụ thể đó thay vì ép một restore rộng. Sau khi khôi phục, audit đúng bản
+cài rồi chỉ refresh hoặc cài lại cùng tuyến đó nếu vẫn cần.
+
+<Callout type="warn" title="Giữ phạm vi khôi phục hẹp">
+  Không xóa `~/.agentkit`, runtime home hoặc thư mục runtime của project để khôi
+  phục một bản cài Marketing Kit. Không coi snapshot là rollback có tính giao
+  dịch cho toàn project hoặc toàn máy.
+</Callout>
+
+Để biết flag và giới hạn restore, dùng [`ak
+recover`](../../../reference/cli/ak_recover) và [`ak backups
+restore`](../../../reference/cli/ak_backups_restore). Để chẩn đoán sau kết quả
+ngoài dự kiến, làm theo [Lỗi cập nhật và khôi
+phục](../../../troubleshooting/updates).
