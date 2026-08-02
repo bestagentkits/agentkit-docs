@@ -1,0 +1,99 @@
+---
+title: ak codex-agent-runtime register
+description: Đăng ký AgentKit agent runtime vào Codex config theo cách idempotent với timeout và mutation boundary chính xác.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng lệnh này sau khi cài agent cho Codex. Nó thêm hoặc refresh stanza do
+AgentKit sở hữu `[mcp_servers.ak-agent-runtime]` trong Codex config.
+
+## Cách dùng
+
+```bash
+ak codex-agent-runtime register [flags]
+```
+
+Lệnh không nhận argument theo vị trí.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--codex-home <dir>` | `CODEX_HOME` hoặc `~/.codex` | Chọn thư mục chứa `config.toml`. |
+
+Cờ dùng chung nằm trong [quy ước CLI](../cli-conventions). Lệnh không prompt;
+`--yes` và `--no-interactive` không đổi mutation.
+
+## Config mutation chính xác
+
+Registration ghi định nghĩa server hiệu dụng sau:
+
+```toml
+[mcp_servers.ak-agent-runtime]
+command = "ak"
+args = ["codex-agent-runtime", "serve"]
+enabled = true
+startup_timeout_sec = 10
+tool_timeout_sec = 600
+```
+
+Lệnh cũng đặt `features.hooks = true`. AgentKit stanza bị drift sẽ được thay
+bằng các giá trị này. MCP server khác và Codex config value chưa model được giữ
+theo giá trị, nhưng tệp thay đổi được encode lại thành TOML deterministic nên
+thứ tự, whitespace và comment không phải hợp đồng preservation.
+
+Registration chờ tối đa năm giây với `config.toml.lock`. Nếu platform không hỗ
+trợ lock, lệnh tiếp tục kèm warning; lock failure khác làm write thất bại.
+
+## Áp dụng, ownership và khôi phục
+
+Không có preview, dry-run, confirmation hay force. Registration mới hoặc drifted
+ghi atomically qua tệp tạm mode `0600`. Chạy lại registration giống hệt trả
+`changed=false` và giữ mtime.
+
+<Callout type="warning">
+  Lệnh không tạo backup hoặc rollback record. Copy `config.toml` trước khi đăng
+  ký nếu comment hoặc format chính xác quan trọng. `unregister` sau đó chỉ xoá
+  MCP stanza; không restore tệp cũ hay reset `features.hooks`.
+</Callout>
+
+## Output và luồng
+
+Human success là một dòng trên stdout. Warning khi lock giảm bảo vệ đi stderr.
+
+`--json` success là raw object trên stdout, không phải envelope có
+`schema_version`/`kind`. Object có `config_path`, `changed`, `server_name`,
+`command`, `args`, `warnings` và `op=register`. Trong JSON mode, warning nằm
+trong object và stderr trống khi success. Flag-parse error có thể vẫn plain text.
+
+<Callout type="warning">
+  Dù tagged help khai báo mã `5` cho lỗi đọc/ghi config, implementation hiện trả
+  lỗi chưa classify và binary thoát `1`. Trong `--json`, failure không emit
+  structured error object; hãy dùng process status và stderr, có thể trống.
+</Callout>
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Stanza đã đăng ký, refresh hoặc đã đúng. |
+| `1` | Home resolution, lock, TOML read/parse/validation hoặc atomic write thất bại. |
+| `2` | Argument hoặc cờ không hợp lệ. |
+
+## Kiểm tra và gỡ
+
+Restart Codex sau changed registration, rồi kiểm tra discovery mà không mở
+transport:
+
+```bash
+ak codex-agent-runtime serve --list-only
+```
+
+Dùng `ak codex-agent-runtime unregister` để gỡ AgentKit stanza.
+
+## Lệnh liên quan
+
+- [Thông tin register](../cli/ak_codex-agent-runtime_register)
+- [Chạy runtime](../cli/ak_codex-agent-runtime_serve)
+- [Gỡ registration](../cli/ak_codex-agent-runtime_unregister)

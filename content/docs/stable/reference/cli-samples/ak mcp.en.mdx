@@ -1,0 +1,86 @@
+---
+title: ak mcp
+description: Discover local Claude and Codex MCP server configuration without exposing environment values.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak mcp` to inspect, edit, mirror, or verify local MCP server
+configuration. The group command itself does not change files or start a
+server; choose a subcommand for an operation.
+
+## Usage
+
+```bash
+ak mcp
+```
+
+The group accepts no positional arguments. Running it without a subcommand
+prints its help.
+
+## Discovery sources
+
+Discovery reads existing files in this order:
+
+| Source | Default path | Merge behavior |
+| --- | --- | --- |
+| Claude user settings | `~/.claude/settings.json` | Lowest Claude precedence. |
+| Claude user MCP config | `~/.claude/.mcp.json` | Replaces a same-named Claude entry from user settings. |
+| Project MCP config | `./.mcp.json` | Replaces a same-named Claude user entry. |
+| Codex config | `~/.codex/config.toml` | Kept as a separate Codex inventory rather than merged into Claude. |
+
+`AGENTKIT_CLAUDE_HOME` and `CODEX_HOME` change the two user roots. The MCP
+flags below override only the Claude home and project directory:
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--claude-home <dir>` | `AGENTKIT_CLAUDE_HOME` or `~/.claude` | Select the Claude configuration root. |
+| `--cwd <dir>` | Current working directory | Select the directory containing project `.mcp.json`. |
+
+Missing source files are ignored. An unreadable or malformed existing source
+fails the discovery operation instead of returning a partial inventory.
+
+<Callout type="warning">
+  Discovery removes environment values at parse time, but output still exposes
+  server names, commands, arguments, environment key names, source paths, and
+  enabled state. Redact those fields separately before sharing output when they
+  reveal private paths or infrastructure.
+</Callout>
+
+Claude and Codex may both contain the same server name. `show <name>` and
+`verify <name>` do not provide a harness selector and currently choose the
+first matching entry, which is the Claude entry. Use unique names when you
+need unambiguous single-server operations.
+
+## Choose a subcommand
+
+| Goal | Command | Effect |
+| --- | --- | --- |
+| List the redacted merged inventory | `ak mcp list` | Read-only. |
+| Inspect one discovered entry | `ak mcp show <name>` | Read-only. |
+| Add or replace one Claude-style entry | `ak mcp add <name>` | Writes a selected JSON config. |
+| Remove one Claude-style entry | `ak mcp remove <name>` | Writes a selected JSON config. |
+| Preview or apply a Codex mirror | `ak mcp link --to codex` | Dry-run unless `--apply` is present. |
+| Start servers and test initialization | `ak mcp verify [name]` | Executes configured subprocesses. |
+
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+## Output and exit behavior
+
+The group help is plain text on stdout. Subcommands document their own human
+and JSON output. Discovery-only operations do not prompt or contact a server.
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Help or the selected operation completed. |
+| `1` | An existing source could not be resolved, read, or parsed, or the selected operation failed. |
+| `2` | Arguments or flags were invalid. |
+
+Additional command-local exits include `3` for a declined catalog add and `5`
+for a missing server in `show` or `verify`.
+
+## Related commands
+
+- [Complete `ak mcp` command facts](../cli/ak_mcp)
+- [CLI conventions](../cli-conventions)
+- [Codex runtime registration facts](../cli/ak_codex-agent-runtime_register)

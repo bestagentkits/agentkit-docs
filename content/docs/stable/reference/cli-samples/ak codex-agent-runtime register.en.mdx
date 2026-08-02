@@ -1,0 +1,116 @@
+---
+title: ak codex-agent-runtime register
+description: Idempotently register the AgentKit agent runtime in Codex config with exact timeout and mutation boundaries.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use this command after installing Codex-targeted agents. It adds or refreshes
+the AgentKit-owned `[mcp_servers.ak-agent-runtime]` stanza in your Codex config.
+
+## Usage
+
+```bash
+ak codex-agent-runtime register [flags]
+```
+
+The command accepts no positional arguments.
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--codex-home <dir>` | `CODEX_HOME` or `~/.codex` | Select the directory containing `config.toml`. |
+
+Shared flags are described in [CLI conventions](../cli-conventions). The
+command never prompts; `--yes` and `--no-interactive` do not change mutation.
+
+## Exact config mutation
+
+Registration writes this effective server definition:
+
+```toml
+[mcp_servers.ak-agent-runtime]
+command = "ak"
+args = ["codex-agent-runtime", "serve"]
+enabled = true
+startup_timeout_sec = 10
+tool_timeout_sec = 600
+```
+
+It also sets `features.hooks = true`. A drifted AgentKit stanza is replaced
+with these values. Other MCP servers and unmodeled Codex config values are
+preserved by value, but a changed file is re-encoded into deterministic TOML,
+so ordering, whitespace, and comments are not a preservation contract.
+
+Registration waits up to five seconds for a sibling `config.toml.lock`. If
+locking is unavailable on the platform, it continues with a warning; other
+lock failures abort the write.
+
+## Apply, ownership, and recovery
+
+There is no preview, dry-run, confirmation, or force mode. A first or drifted
+registration writes atomically through a mode-`0600` temporary file. Re-running
+an identical registration returns `changed=false` and preserves the file mtime.
+
+<Callout type="warning">
+  The command does not create a backup or rollback record. Copy `config.toml`
+  before registration when comments or exact formatting matter. Running
+  `unregister` later removes only the MCP stanza; it does not restore the prior
+  file or reset `features.hooks`.
+</Callout>
+
+## Output and streams
+
+Human success is one line on stdout. Lock-degradation warnings are written to
+stderr.
+
+`--json` success is a raw object on stdout, not the shared
+`schema_version`/`kind` envelope:
+
+```json
+{
+  "config_path": "/home/user/.codex/config.toml",
+  "changed": true,
+  "server_name": "ak-agent-runtime",
+  "command": "ak",
+  "args": ["codex-agent-runtime", "serve"],
+  "warnings": [],
+  "op": "register"
+}
+```
+
+In JSON mode, warnings are inside the object and stderr stays empty on success.
+Flag-parse failures can remain plain text.
+
+<Callout type="warning">
+  Although tagged help declares exit `5` for config read/write failure, the
+  current implementation returns an unclassified error and the binary exits
+  `1`. In `--json` mode that failure does not emit a structured error object;
+  capture process status and stderr, which may be empty.
+</Callout>
+
+## Exit status
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The stanza was registered, refreshed, or already current. |
+| `1` | Home resolution, lock, TOML read/parse/validation, or atomic write failed. |
+| `2` | Arguments or flags were invalid. |
+
+## Verify and remove
+
+Restart Codex after a changed registration, then inspect discovery without
+opening the transport:
+
+```bash
+ak codex-agent-runtime serve --list-only
+```
+
+Use `ak codex-agent-runtime unregister` to remove the AgentKit stanza.
+
+## Related commands
+
+- [Complete register facts](../cli/ak_codex-agent-runtime_register)
+- [Serve the runtime](../cli/ak_codex-agent-runtime_serve)
+- [Remove the registration](../cli/ak_codex-agent-runtime_unregister)

@@ -1,0 +1,135 @@
+---
+title: ak run
+description: Resolve local Kit skill và stream qua Claude Code, Codex hoặc Cursor với hành vi stdin, timeout, output và dependency rõ ràng.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak run` để chạy một skill qua coding-agent adapter cục bộ. Lệnh resolve
+skill từ Kit source, activate managed runtime đã khai báo nếu có, dựng prompt từ
+skill instruction và argument của bạn, rồi start backend CLI đã chọn.
+
+## Cách dùng
+
+```bash
+ak run <kit>/<skill> [args...] [flags]
+```
+
+Reference phải có đúng một slash và dùng dạng lowercase canonical. Tên bundled
+skill không prefix có thể resolve export `ak-`, vì vậy `engineer/scout` có thể
+chọn skill export `ak-scout`.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--target <adapter>` | `claude-code` | Chọn `claude-code`, `codex` hoặc `cursor`. |
+| `--kits-dir <dir>` | `AGENTKIT_KITS_DIR` hoặc `./kits` | Chọn thư mục Kit source cục bộ. |
+| `--timeout <duration>` | `0s` | Đặt deadline cho invocation; zero tắt command timeout. |
+
+Cờ dùng chung nằm trong [quy ước CLI](../cli-conventions). Không có preview,
+apply, force hay confirmation chung.
+
+## Backend và credential
+
+| Target | Backend invocation | Gate trước dispatch |
+| --- | --- | --- |
+| `claude-code` | `AGENTKIT_CLAUDE_BIN` hoặc `claude` trên `PATH`; prompt qua stdin. | Cần Anthropic/OpenAI key trong environment hoặc AgentKit config, trừ khi `AK_DISABLE_FIRSTRUN_GATE=1`. |
+| `codex` | `AGENTKIT_CODEX_BIN` hoặc `codex` trên `PATH`; chạy `codex exec -`. | Bỏ provider gate; Codex quản lý auth. |
+| `cursor` | `AGENTKIT_CURSOR_BIN` hoặc `agent` trên `PATH`; dùng non-interactive `stream-json`. | Bỏ provider gate; Cursor quản lý auth. |
+
+Với Claude Code, thiếu provider key trong JSON, quiet, noninteractive hoặc
+`CI=1` sẽ ghi warning và thoát `4`. Ở mode mặc định, lệnh đọc stdin và hỏi
+`Run 'ak setup' now? [Y/n]:`. Trả lời yes không mở setup trong path này; lệnh
+vẫn thoát `4`. Trả lời no hoặc EOF thoát `3`. Gate không kiểm tra stdin có phải
+TTY hay không.
+
+<Callout type="warning">
+  Parent stdin không được forward đến backend sau launch. Prompt hoàn chỉnh
+  được ghi rồi child stdin đóng. Đừng dùng `ak run` cho backend workflow cần
+  input tương tác tiếp theo.
+</Callout>
+
+## Prompt và riêng tư
+
+AgentKit đọc `SKILL.md` đã resolve, normalize, bỏ một số invisible character,
+wrap thành Kit content không tin cậy kèm digest, rồi nối mọi CLI argument còn
+lại bằng khoảng trắng. Prompt đó được gửi đến backend và có thể truyền tới
+provider.
+
+Lệnh không redaction secret trong skill text, argument, backend output hay
+error. Tránh truyền credential làm argument. JSON mode escape child bytes thành
+event string; escaping không phải redaction.
+
+Khi skill khai báo Python hoặc Node runtime, AgentKit activate managed
+environment hiện có. Environment thiếu thoát `4` với gợi ý `ak skill install`;
+environment corrupt thoát `4` với gợi ý `ak skill repair`. Chỉ đặt
+`AGENTKIT_SKILL_RUNTIME=0` khi cố ý opt out managed runtime.
+
+Required adapter capability không có fallback cũng thoát `4`. Gap optional hoặc
+có fallback là warning trên stderr trừ khi dùng `--quiet`.
+
+## Luồng và JSON protocol
+
+Trong human mode, backend stdout đi stdout và backend stderr đi stderr. Status
+start/end của AgentKit cũng đi stderr trừ khi `--quiet`.
+
+`--json` ghi schema-v1 NDJSON event ra stdout, không phải một JSON envelope.
+Event type gồm `start`, `env_activate`, `chunk`, `error` và `end`. Activation
+event báo `ok` hoặc `skipped` trước backend chunk. `chunk.stream` là `stdout`
+hoặc `stderr`. Terminal event non-zero có
+`exit_code`; interrupt và timeout thêm boolean. Vì field zero bị omit, `end`
+success không có `exit_code`.
+
+Failure trước streaming dùng shared structured error trên stderr thay vì NDJSON
+sequence. Backend thiếu sau `start` tạo event NDJSON `error` và `end` trên
+stdout. Hãy consume stdout theo từng dòng và kiểm tra process status riêng.
+
+## Timeout, cancellation và process
+
+`--timeout` chỉ áp dụng cho backend invocation. Deadline dương cancel adapter
+process và thoát `1`; zero nghĩa là không giới hạn. SIGINT/SIGTERM cancel process
+group nơi được hỗ trợ và thoát `3`. Backend nhận graceful termination trước,
+sau đó forced termination sau một grace period ngắn.
+
+Adapter có thể truy cập network, provider credential, working directory và
+process environment kế thừa. Managed runtime variable được thêm vào child;
+adapter Codex và Cursor bỏ managed loader override `LD_*` và `DYLD_*` trước
+launch.
+
+## Hiệu ứng disk và activity record
+
+`ak run` đọc tệp Kit/skill. Backend có thể ghi working file, session data, cache
+hoặc thay project. Riêng AgentKit best-effort append event `run.started` và
+`run.completed` hoặc `run.failed` vào:
+
+```text
+~/.agentkit/activity/events.ndjson
+```
+
+`AGENTKIT_HOME` đổi path. Activity chứa skill reference, adapter, timestamp,
+duration và exit code, không chứa prompt hay backend output. Logging failure bị
+bỏ qua và không làm run fail. Event append-only không có backup/rollback.
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Backend hoàn tất thành công. |
+| `1` | Runtime, stream, timeout, prompt-build hoặc adapter thất bại. |
+| `2` | Reference, target, argument hoặc cờ không hợp lệ. |
+| `3` | Provider-key prompt bị từ chối/kết thúc hoặc invocation bị interrupt. |
+| `4` | Thiếu provider key, managed skill environment, required capability hoặc backend binary. |
+| `5` | Không tìm thấy Kit hoặc skill trong source đã chọn. |
+
+Backend process đã start và thoát bằng positive non-zero status khác sẽ được
+propagate thành process exit đó. Đừng giả định mọi backend failure trở thành
+`1`.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak run`](../cli/ak_run)
+- [Cài managed skill runtime](../cli/ak_skill_install)
+- [Verify managed skill runtime](../cli/ak_skill_verify)
+- [Xem local activity](../cli/ak_activity_list)
+- [Quy ước CLI](../cli-conventions)

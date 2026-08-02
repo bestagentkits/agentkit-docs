@@ -1,0 +1,95 @@
+---
+title: ak mcp verify
+description: Start discovered MCP commands, test their stdio initialize handshake, and interpret per-server timeout and failure results.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak mcp verify` when you intentionally want to execute configured MCP
+server commands and validate their stdio initialization handshake. This is not
+a passive config check.
+
+## Usage
+
+```bash
+ak mcp verify [name] [flags]
+```
+
+With no name, servers are verified sequentially. With one name, the first
+matching discovered entry is selected.
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--timeout <duration>` | `3s` | Limit each server's initialize handshake. Values at or below zero are normalized back to `3s`. |
+| `--claude-home <dir>` | Environment or `~/.claude` | Change Claude discovery. |
+| `--cwd <dir>` | Current directory | Change project discovery. |
+
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+## Execution boundary
+
+For each selected Claude-style entry, AgentKit:
+
+1. reloads the unredacted command, arguments, and environment from its source;
+2. starts that command with the current process environment plus configured
+   server environment values;
+3. sends an MCP `initialize` request using protocol version `2024-11-05`;
+4. accepts a framed response up to 1 MiB with result ID `1`;
+5. kills the server after success, failure, cancellation, or timeout.
+
+On Unix, termination targets the subprocess group; on Windows, it targets the
+server process. Server stderr is drained and discarded. Verification does not
+call an MCP tool.
+
+<Callout type="warning">
+  Starting a configured command can execute third-party code, access the
+  network, create caches, read credentials, or incur provider costs during
+  startup. `--json`, `--no-interactive`, and non-TTY input do not add a safety
+  gate, and the command never asks for confirmation.
+</Callout>
+
+Known catalog environment requirements are checked by key name. A configured
+empty value shadows the process environment. Missing required keys make the
+result fail even if the server completes the initialize handshake. Values are
+never returned in output.
+
+## Current Codex limitation
+
+Codex entries are discovered from `config.toml`, but the current verification
+launch loader expects Claude-style JSON. Selecting a Codex-only entry therefore
+fails while parsing its source and does not start that server. Use the server's
+Claude JSON source or its native client until this path supports TOML.
+
+If Claude and Codex contain the same name, single-name lookup chooses Claude
+first. Verifying without a name attempts both inventory entries.
+
+## Output and automation
+
+The command renders its full report to stdout before returning a failing
+status. Human output includes totals, duration, result message, and required
+environment presence by key.
+
+JSON output is one envelope with `kind=mcp.verify`. Under `data`, consume
+`results`, `total`, `passed`, `failed`, and `timeout`. Each result includes the
+redacted server, `status`, `ok`, `durationMs`, `message`, and optional
+`envPresence`/`envDocsUrl`.
+
+Capture stdout even when the process exits `1`; that is where the per-server
+failure details live. Flag-parse errors can remain plain text.
+
+## Exit status
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Every selected server completed initialization and required environment checks. An empty inventory also returns `0`. |
+| `1` | Discovery failed, at least one server failed, timed out, could not start, or returned an invalid/rejected response. |
+| `2` | Arguments or flags were invalid. |
+| `5` | A requested server name was not discovered. |
+
+## Related commands
+
+- [Inspect server config](../cli/ak_mcp_show)
+- [List discovered servers](../cli/ak_mcp_list)
+- [Complete `ak mcp verify` command facts](../cli/ak_mcp_verify)

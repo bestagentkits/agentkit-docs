@@ -1,0 +1,68 @@
+---
+title: ak mcp list
+description: List the redacted MCP inventory merged from Claude user, project, and Codex configuration.
+---
+
+Use `ak mcp list` before editing, linking, or verifying MCP configuration. It
+reads local config only and does not start any server.
+
+## Usage
+
+```bash
+ak mcp list
+```
+
+The command accepts no positional arguments and has no command-specific
+flags. MCP discovery flags are inherited:
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--claude-home <dir>` | `AGENTKIT_CLAUDE_HOME` or `~/.claude` | Select the Claude user root. |
+| `--cwd <dir>` | Current working directory | Select the project `.mcp.json` directory. |
+
+`CODEX_HOME` selects the Codex config root. Shared flags are described in
+[CLI conventions](../cli-conventions).
+
+## Merge and redaction behavior
+
+Within Claude sources, project `.mcp.json` wins over user `.mcp.json`, which
+wins over `settings.json` for a same-named server. Codex entries remain a
+separate harness inventory, so the result may contain a Claude and Codex entry
+with the same name.
+
+Environment values are discarded during parsing. Output includes environment
+key names, plus server names, commands, arguments, enabled state, harness,
+source description, and absolute source path. Missing files are ignored;
+malformed or unreadable existing files fail the entire list.
+
+## Output
+
+Human output on stdout lists the server name and source for each entry. An
+empty inventory prints `No MCP servers found.` and exits `0`.
+
+JSON output is one envelope on stdout:
+
+```json
+{"schema_version":1,"kind":"mcp.list","data":{"servers":[],"total":0}}
+```
+
+The `servers` array contains redacted server objects. Do not treat the output
+as safe to publish solely because environment values are absent: paths,
+commands, arguments, and key names can still be sensitive.
+
+## Effects and exits
+
+There is no prompt, stdin read, network request, subprocess, cache write, or
+config mutation.
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Discovery completed, including an empty inventory. |
+| `1` | A source root, existing file, or config body could not be resolved, read, or parsed. |
+| `2` | Arguments or flags were invalid. |
+
+## Related commands
+
+- [Inspect one server](../cli/ak_mcp_show)
+- [Verify server handshakes](../cli/ak_mcp_verify)
+- [Complete `ak mcp list` command facts](../cli/ak_mcp_list)

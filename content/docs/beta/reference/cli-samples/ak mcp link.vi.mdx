@@ -1,0 +1,88 @@
+---
+title: ak mcp link
+description: Preview hoặc áp dụng MCP mirror thận trọng vào Codex config với path check, redaction và backup riêng tư.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak mcp link` để copy định nghĩa MCP command và argument vào Codex config.
+Lệnh chỉ lập plan theo mặc định và chỉ ghi khi có `--apply`.
+
+## Cách dùng
+
+```bash
+ak mcp link --to <adapter> [flags]
+```
+
+Target adapter duy nhất được hỗ trợ là `codex`. Lệnh không nhận argument theo
+vị trí.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--to <adapter>` | Bắt buộc | Chọn `codex`. |
+| `--source <path>` | MCP discovery đã merge | Chỉ đọc một nguồn MCP JSON kiểu Claude cụ thể. |
+| `--target <path>` | Codex capability path | Chọn tệp Codex TOML để plan hoặc chỉnh. |
+| `--apply` | `false` | Áp dụng plan. |
+| `--dry-run` | `true` | Mô tả ý định preview; chỉ `--apply` quyết định có ghi hay không. |
+| `--claude-home <dir>` | Biến môi trường hoặc `~/.claude` | Thay discovery Claude. |
+| `--cwd <dir>` | Thư mục hiện tại | Thay discovery project. |
+
+Cờ dùng chung nằm trong [quy ước CLI](../cli-conventions).
+
+<Callout type="warning">
+  `--dry-run=false` không áp dụng plan. Implementation hiện bỏ qua giá trị cờ
+  này khi quyết định mutation; hãy truyền `--apply` rõ ràng để ghi.
+</Callout>
+
+## Preview trước khi áp dụng
+
+Ưu tiên nguồn Claude JSON rõ ràng để mirror không ingest luôn Codex inventory
+do discovery mặc định trả về:
+
+```bash
+ak mcp link --to codex --source .mcp.json --json
+ak mcp link --to codex --source .mcp.json --apply --json
+```
+
+Plan báo adds, updates và entry chỉ có ở target. Field JSON cho entry chỉ có ở
+target mang tên `removes`, nhưng apply vẫn giữ các section đó; linker không xoá
+Codex MCP server chỉ vì source thiếu nó.
+
+Giá trị môi trường không được copy. Plan cảnh báo khi source có environment key
+hoặc known server yêu cầu key. Hãy cấu hình môi trường Codex tương ứng riêng.
+
+## Ranh giới path, ownership và backup
+
+Target phải resolve bên trong user home, kể cả qua symlink. Target bên ngoài bị
+từ chối. Apply giữ TOML value không liên quan và MCP section chỉ có ở target,
+sau đó thêm hoặc refresh section cùng tên source.
+
+Trước changed apply, AgentKit ghi bản copy mode `0600` dưới
+`~/.agentkit/backups/mcp-link/` (`AGENTKIT_HOME` đổi backup root). Kết quả in
+backup path. Target mới nhận một backup rỗng. Ghi target không dùng atomic rename
+và không có concurrent fingerprint check, vì vậy tránh chạy writer Codex config
+khác cùng lúc.
+
+Không có prompt, stdin read, yêu cầu `--yes` hay `--force`.
+
+## Output
+
+Human và JSON success dùng stdout. JSON là một envelope `kind=mcp.link`; dưới
+`data` có `dryRun`, `changed`, `target`, `backupPath` và `plan`. Entry đã
+redaction giá trị môi trường, nhưng command, argument và path vẫn hiện.
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Plan đã render, apply hoàn tất hoặc target đã đúng. |
+| `1` | Discovery, adapter/target resolution, path safety, backup, parse hoặc ghi thất bại. |
+| `2` | Argument hoặc cờ không hợp lệ. |
+
+## Lệnh liên quan
+
+- [Liệt kê source inventory](../cli/ak_mcp_list)
+- [Verify server đã link](../cli/ak_mcp_verify)
+- [Thông tin đầy đủ của `ak mcp link`](../cli/ak_mcp_link)
