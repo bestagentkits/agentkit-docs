@@ -1,64 +1,165 @@
 ---
-title: Updating ak
-description: Check for releases, review changes, update on your channel, and roll back when needed.
+title: Updating AgentKit and kits
+description: Update the ak CLI and installed kits on a deliberate release channel, with previews and recoverable writes.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
-`ak` updates itself from the signed release channel. Every update verifies the
-release metadata and the target artifact before replacing the running binary.
+The `ak` CLI and installed kits have separate release lifecycles. Updating the
+CLI does not replace kit content, and refreshing a kit does not replace the CLI.
+Check and update each layer deliberately.
 
-## Check first
+## Choose a channel
 
-Stay on the beta channel with an explicit flag:
+AgentKit publishes `stable` and `beta` release channels:
 
-```bash
-ak self-update --check --channel beta           # is a newer release available?
-ak changelog --since-current --channel beta     # what changed since my version?
-ak self-update --changelog --channel beta       # print the verified changes directly
-```
+- Choose `stable` for the regular release line.
+- Choose `beta` when you intend to test prerelease behavior and can review
+  compatibility changes.
 
-## Apply
+Kit commands default to `stable`; `beta` requires an explicit opt-in. The CLI
+self-updater can inherit a saved channel, so pass `--channel stable` or
+`--channel beta` when the choice matters. Keep the CLI and kits on the same
+intended channel.
 
-Manual CLI apply requires `--yes`:
+The examples below use `stable`. Replace it with `beta` as a complete decision,
+not as a one-off troubleshooting step.
 
-```bash
-ak self-update --channel beta --yes
-```
+## Review the CLI release
 
-## Package-manager installs
-
-If `ak` proves the running binary belongs to a package manager (Homebrew,
-Scoop), both check and apply report a **managed install** and print the
-manager-native command instead of replacing files:
+Read the verified changelog, check availability, or fully verify an update
+without replacing the binary:
 
 ```bash
-brew upgrade ak      # Homebrew
-scoop update ak      # Scoop
+ak self-update --changelog --channel stable
+ak self-update --check --channel stable
+ak self-update --dry-run --channel stable
 ```
+
+`--changelog` is a read-only mode and cannot be combined with update flags.
+`--dry-run` downloads and verifies the required artifact in temporary staging,
+then leaves the installed binary unchanged.
+
+## Update the CLI
+
+Apply after the check succeeds:
+
+```bash
+ak self-update --channel stable --yes
+ak --version
+```
+
+The updater verifies release metadata and artifact bytes before replacement. If
+replacement fails, it restores the previous binary as part of the transaction.
+There is no user-facing `ak backups restore` step for a CLI binary update.
+
+### Package-manager installs
+
+If the running `ak` executable belongs to Homebrew or Scoop, `ak self-update`
+does not replace it. Run the manager-native command it reports:
+
+```bash
+brew upgrade ak
+scoop update ak
+```
+
+Detection is based on the resolved running executable and the package manager's
+receipt, not merely on whether the manager is installed somewhere on the
+machine.
+
+## Preview a project kit update
+
+`ak update` previews by default unless you confirm with `--yes`. Pin the project,
+kit, and channel so the plan is unambiguous:
+
+```bash
+ak update . --kits engineer --channel stable --show-diff
+```
+
+The preview does not write files or create a snapshot. It classifies incoming
+files and shows which user-modified files would be skipped. Apply the reviewed
+plan with:
+
+```bash
+ak update . --kits engineer --channel stable --yes
+```
+
+An applied project update creates a pre-update snapshot before mutation. By
+default, user-modified files are preserved. Use `--force` only after reviewing
+the exact diff and deciding that the snapshot is sufficient recovery; it is not
+a routine refresh flag.
+
+## Preview global kit updates
+
+Global update discovers AgentKit-owned user-scope installs. Preview all of them,
+or filter by kit and runtime:
+
+```bash
+ak update --global --channel stable
+ak update --global --kits engineer --target codex --channel stable
+```
+
+Apply only after the preview identifies the expected installs:
+
+```bash
+ak update --global --kits engineer --target codex --channel stable --yes
+```
+
+Global update is preserve-only for user-modified files. A runtime you selected
+but have not installed globally is reported as skipped rather than created.
 
 <Callout type="info">
-  A manager installed elsewhere on the machine is not enough — the resolved
-  running executable must live inside that manager's prefix for `ak` to treat it
-  as managed.
+  `ak update --global` reports Claude Code user-plugin-only installs instead of
+  silently refreshing them. Refresh that delivery mode explicitly with
+  `ak kit refresh engineer --global --switch-to-plugin`.
 </Callout>
 
-## Roll back
+## Refresh a specific install route
 
-To return to a previous **binary** release, reinstall that version. Binary
-self-update does not create an `ak backups` record:
+Use `ak kit refresh` when you need to preserve an existing target, scope, or
+Claude Code delivery route exactly:
 
 ```bash
-curl -fsSL https://agentkit.best/install.sh | AK_CHANNEL=beta AK_VERSION=<previous-tag> sh
+ak kit refresh engineer --target codex --channel stable
+ak kit refresh engineer --global --switch-to-plugin --channel stable
 ```
 
-`ak backups restore` rolls back **project/lifecycle state** snapshots (for
-example after `ak update` or kit uninstall), not the installed binary:
+Refresh creates a recovery snapshot, rewrites current AgentKit output, removes
+stale generated files, and preserves the previous selected-skill subset. Review
+the confirmation preview; avoid `--no-backup`.
+
+## Verify the update
+
+After updating:
+
+1. Run `ak --version` and confirm the channel/version you intended.
+2. Review the update summary for skipped or preserved files.
+3. Reopen each affected runtime.
+4. Invoke one important installed skill in each updated target.
+
+If the kit requires a newer CLI, update `ak` on the same channel first, then
+repeat the kit preview.
+
+## Recover a kit update
+
+Keep the snapshot ID and recovery path printed by the operation. Inspect a
+snapshot before restoring it:
 
 ```bash
 ak backups list
-ak backups restore --latest
+ak backups show <id>
+ak backups restore <id> --dry-run
 ```
 
-Record the resulting `ak --version` and `ak doctor --json` if you are reporting
-an update problem.
+If the operation says the project snapshot is outside `ak backups restore`, use
+the printed snapshot-files directory and copy back only the affected files.
+Otherwise, apply the reviewed restore plan with `ak backups restore <id>` and
+confirm the prompt.
+
+Preserve unrelated work created after the snapshot before restoring. Do not
+restore `--latest` blindly, delete an entire runtime directory, or rerun the
+failed update with `--force` before you understand the current state.
+
+## See also
+
+- [Installing kits](./installing-kits)

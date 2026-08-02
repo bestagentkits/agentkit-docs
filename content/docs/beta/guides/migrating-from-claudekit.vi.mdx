@@ -1,0 +1,144 @@
+---
+title: Chuyển từ ClaudeKit
+description: Xem trước, áp dụng, xác minh và rollback quá trình chuyển từ ClaudeKit trong khi giữ lại nội dung tùy chỉnh.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Migration tìm một bản cài ClaudeKit hiện có, phân loại nội dung thuộc quyền sở
+hữu ClaudeKit, giữ lại nội dung tùy chỉnh và đưa các Kit được hỗ trợ vào vòng đời
+do AgentKit quản lý. Đây là quá trình chuyển đổi có kế hoạch, không phải xóa diện
+rộng rồi cài lại.
+
+## Trước khi bắt đầu
+
+1. Chạy migration từ project có nội dung ClaudeKit mà bạn muốn AgentKit kiểm tra.
+2. Commit hoặc sao lưu instructions, Skill, hook tùy chỉnh và những nội dung khác
+   bạn cần giữ.
+3. Đóng các phiên Claude Code và Codex có thể đang dùng những file bị ảnh hưởng.
+4. Xác nhận `ak` đã đăng nhập và tài khoản có quyền dùng Kit cần thiết bằng
+   `ak whoami` và `ak licenses`.
+
+Migration quét project hiện tại và các vị trí người dùng chuẩn của ClaudeKit,
+bao gồm `~/.claude` và `~/.claudekit`. Lệnh có thể tìm cả nội dung project lẫn
+global, bao gồm các bề mặt Kit Claude Code và Codex được hỗ trợ.
+
+<Callout type="warn">
+  Không xóa `~/.claude`, `~/.codex`, `~/.agentkit` hoặc thư mục `.claude` của
+  project trước migration. Những vị trí này có thể chứa trạng thái runtime tùy
+  chỉnh hoặc không liên quan mà migration được thiết kế để giữ lại.
+</Callout>
+
+## Xem trước migration
+
+`ak migrate` mặc định là dry run. Hãy chỉ định rõ nguồn để ý định không mơ hồ:
+
+```bash
+ak migrate --from=ck
+```
+
+Để nhận báo cáo máy có thể đọc:
+
+```bash
+ak migrate --from=ck --json
+```
+
+Bản xem trước chạy discovery và in kế hoạch migration mà không ghi file. Hãy
+review:
+
+- runtime và phạm vi project/global đã phát hiện;
+- nội dung thuộc ClaudeKit có thể được archive, quarantine hoặc neutralize;
+- nội dung tùy chỉnh hoặc không rõ nguồn gốc sẽ được giữ lại;
+- AgentKit Kit sẽ được cài;
+- xung đột phải được xử lý trước khi áp dụng.
+
+Không thể áp dụng khi kế hoạch còn xung đột. Hãy xử lý chúng và chạy lại dry run;
+không bỏ qua bước review bằng một lần cài lại cưỡng chế.
+
+## Chọn cách phân phối cho Claude Code
+
+Migration dùng cách phân phối Claude Code native trừ khi bạn cho phép rõ ràng
+việc chuyển sang plugin trong project. Nếu bản xem trước và chế độ cài đặt bạn
+muốn yêu cầu plugin project, hãy dùng `--switch-to-plugin` ở cả bước xem trước
+và áp dụng:
+
+```bash
+ak migrate --from=ck --switch-to-plugin
+```
+
+Không thêm flag này chỉ vì ClaudeKit đã dùng các file có hình dạng plugin. Chỉ
+chọn khi bản cài AgentKit sau cùng phải là plugin Claude Code trong project.
+
+## Áp dụng kế hoạch đã review
+
+Để áp dụng, bắt buộc có cả `--dry-run=false` và `--yes`:
+
+```bash
+ak migrate --from=ck --dry-run=false --yes
+```
+
+Với tuyến plugin project đã được review rõ ràng:
+
+```bash
+ak migrate --from=ck --switch-to-plugin --dry-run=false --yes
+```
+
+Trước khi cài bản thay thế, AgentKit preflight mọi lượt cài Kit được yêu cầu.
+Thao tác chuyển các preference được hỗ trợ, archive hoặc quarantine các thư mục
+ClaudeKit được phép thay đổi, neutralize các bề mặt tích hợp có quyền sở hữu, giữ
+nội dung tùy chỉnh hoặc không rõ nguồn gốc và cài các AgentKit Kit tương ứng.
+AgentKit ghi trạng thái khôi phục trước khi thay đổi.
+
+Nếu apply thất bại, migration mặc định có thể tiếp tục lại. Hãy đọc trạng thái
+được báo trước khi chọn chạy lại apply hay rollback.
+
+## Xác minh kết quả
+
+Sau khi apply thành công:
+
+1. Đọc bản tóm tắt và xác nhận đúng runtime, phạm vi và các Kit đã cài.
+2. Mở lại runtime bị ảnh hưởng.
+3. Gọi một Skill quan trọng từ mỗi Kit đã chuyển.
+4. Review các instruction project và hook tùy chỉnh bạn muốn giữ.
+5. Giữ thông tin khôi phục của migration đến khi hoàn tất các bước kiểm tra.
+
+Chỉ thấy file tồn tại không chứng minh hook đã được đăng ký hoặc đang chạy. Hãy
+xác minh hành vi quan sát được trong runtime trước khi gỡ nội dung legacy đã
+được giữ lại.
+
+## Rollback
+
+Dùng rollback sau một lần apply thất bại hoặc khi kết quả migration không mong
+muốn:
+
+```bash
+ak migrate rollback
+```
+
+Rollback khôi phục transition legacy đang chờ gần nhất hoặc migration journal về
+trạng thái trước apply, sau đó xóa journal đã hoàn tất. Nếu không có journal,
+lệnh báo không có gì để rollback. Sau khi transition Kit legacy đã hoàn tất,
+trạng thái ClaudeKit được khôi phục có thể cùng tồn tại với bản thay thế
+AgentKit đã cài; hãy xem trước rồi gỡ riêng bản thay thế đó nếu bạn không còn
+muốn dùng.
+
+Trước rollback, hãy sao chép riêng công việc không liên quan được tạo sau
+migration. Rollback khôi phục trạng thái trước apply của thao tác; đây không phải
+undo có chọn lọc cho các chỉnh sửa về sau.
+
+## Nếu migration bị gián đoạn
+
+Trước tiên, chạy lại dry run mặc định. Nếu AgentKit báo có transition đang chờ,
+hãy chọn một đường khôi phục:
+
+- chạy lại apply đã review để thao tác có thể tiếp tục tự khôi phục và hoàn tất;
+- chạy `ak migrate rollback` để quay về trạng thái trước apply.
+
+Chỉ dùng `--force-unlock` khi CLI báo rõ có migration lock cũ do process bị crash
+để lại và không còn migration nào đang chạy. Flag này không xử lý xung đột file
+và không thay thế quy trình rollback.
+
+## Xem thêm
+
+- [Cài đặt Kit](./installing-kits)
+- [Cập nhật AgentKit và Kit](./updating)

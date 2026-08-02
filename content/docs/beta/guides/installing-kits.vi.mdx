@@ -1,66 +1,163 @@
 ---
-title: Cài kit
-description: Cài kit vào một hoặc nhiều runtime trợ lý, chọn hoặc loại trừ skill, và refresh an toàn.
+title: Cài đặt Kit
+description: Chọn runtime, phạm vi và cách phân phối cho Claude Code, sau đó cài đặt, làm mới hoặc gỡ Kit an toàn.
 ---
 
-Một **kit** là một bộ skill dành cho trợ lý lập trình. `ak` phân giải kit từ
-registry đã xác thực, xác minh nó, rồi ghi vào runtime mà bạn chọn.
+import { Callout } from 'fumadocs-ui/components/callout';
 
-## Target
+**Kit** đóng gói các Skill cùng những file hỗ trợ cho coding assistant. Hướng
+dẫn này giúp bạn cài Kit vào đúng runtime và phạm vi mà không ghi đè công việc
+không liên quan.
 
-Dùng `--target` để chọn runtime mà kit sẽ được cài vào. Bạn có thể cài cùng một
-kit vào nhiều runtime khác nhau:
+## Trước khi bắt đầu
 
-```bash
-ak kit init engineer --target claude-code --global
-ak kit init engineer --target codex --global
-```
-
-`--global` cài cho toàn bộ tài khoản người dùng thay vì chỉ một dự án đơn lẻ.
-
-## Chọn skill
-
-Chỉ cài những skill bạn muốn, hoặc cài tất cả trừ một vài skill:
+Đăng nhập và xác nhận tài khoản có quyền cài Kit:
 
 ```bash
-# chỉ các skill này
-ak kit install engineer --target codex --global --skills ak-cook,ak-plan
-
-# mọi thứ trừ các skill này
-ak kit install engineer --target claude-code --global --exclude-skills ak-video
+ak whoami
+ak licenses
 ```
 
-`--select-skills` sẽ mở một picker tương tác. Các tệp đi kèm mà mỗi skill cần
-(references, scripts, assets) sẽ được cài cùng.
+Theo mặc định, AgentKit lấy Kit đã phát hành từ registry có xác thực. Bạn không
+cần thêm `--remote`. Nguồn Kit cục bộ dành cho phát triển và CI, không phải luồng
+cài đặt thông thường.
 
-## Refresh
+## Chọn runtime và phạm vi
 
-Một lần refresh bằng `--force` sau này vẫn giữ nguyên tập skill bạn đã chọn, trừ
-khi bạn truyền vào lựa chọn mới. Nghĩa là bạn có thể chạy lại lệnh cài để nhận
-bản cập nhật kit mà không mất các skill đã chọn.
+`--target` nhận `claude-code`, `codex` hoặc `cursor`. Nếu bỏ qua flag này, mặc
+định là Claude Code. Package từ registry được resolve cho từng runtime, vì vậy
+hãy chạy một lệnh cài riêng cho mỗi runtime bạn sử dụng.
 
-## Gọi skill
+Phạm vi mặc định là project hiện tại. Thêm `--global` khi bạn muốn cài Kit vào
+thư mục người dùng của runtime để dùng ngoài một project.
 
-Sau khi cài xong, gọi skill bằng slash command ngay trong trợ lý:
+| Mục tiêu | Lệnh |
+| --- | --- |
+| Claude Code trong project này | `ak kit init engineer --target claude-code` |
+| Claude Code cho người dùng hiện tại | `ak kit init engineer --target claude-code --global` |
+| Codex trong project này | `ak kit init engineer --target codex` |
+| Codex cho người dùng hiện tại | `ak kit init engineer --target codex --global` |
+| Cursor trong project này | `ak kit init engineer --target cursor` |
+| Cursor cho người dùng hiện tại | `ak kit init engineer --target cursor --global` |
 
-```text
-/ak:cook      # skill core dùng chung (có trong mọi kit)
-/ak:agentize  # skill của engineer kit
-```
+Cài đặt theo project ghi nội dung runtime và metadata vòng đời của AgentKit vào
+project hiện tại. Cài đặt global ghi vào phạm vi người dùng của runtime đã chọn.
+Hãy kiểm tra đích đến trong bản xem trước trước khi xác nhận.
 
-Lời gọi skill luôn dùng chung tiền tố `ak:`, bất kể skill thuộc kit nào. Tên kit
-khi gõ trên dòng lệnh vẫn viết thường (`ak kit init engineer`,
-`ak kit uninstall engineer`).
+## Chọn cách phân phối cho Claude Code
 
-## Gỡ kit
+Claude Code hỗ trợ hai cách phân phối:
 
-Hãy gỡ kit thông qua `ak` để nó hủy đăng ký kit khỏi runtime và chỉ xóa những
-tệp do nó quản lý:
+- **Native** là mặc định. AgentKit hợp nhất các tài nguyên do nó quản lý vào cấu
+  trúc Claude Code của project hoặc người dùng.
+- **Plugin** cần được chọn rõ ràng. Thêm `--switch-to-plugin` ở một trong hai
+  phạm vi.
 
 ```bash
-ak kit uninstall engineer --dry-run   # xem trước
-ak kit uninstall engineer --yes
+# plugin trong project
+ak kit init engineer --target claude-code --switch-to-plugin
+
+# plugin cho người dùng
+ak kit init engineer --target claude-code --global --switch-to-plugin
 ```
 
-Quá trình gỡ sẽ tạo snapshot trước khi ghi và giữ nguyên những tệp lạ hoặc tệp
-do người dùng chỉnh sửa.
+Plugin người dùng được cài với tên `ak-<kit>` bên dưới thư mục plugin của Claude
+Code; ví dụ, đường dẫn mặc định của Engineer Kit là
+`~/.claude/plugins/ak-engineer`. Khi làm mới hoặc gỡ Kit, hãy giữ nguyên các flag
+về cách phân phối và phạm vi.
+
+<Callout type="info">
+  Native và plugin là hai chế độ cài đặt khác nhau, không phải hai tên gọi cho
+  cùng một tập tin. Khi chuyển chế độ, AgentKit hiển thị bản xem trước và tạo
+  snapshot khôi phục trước khi thay đổi các bề mặt do nó quản lý.
+</Callout>
+
+## Chọn Skill
+
+Nếu không có flag chọn lọc, AgentKit cài mọi Skill trong Kit. Dùng một trong các
+lựa chọn loại trừ lẫn nhau sau nếu bạn muốn phạm vi nhỏ hơn:
+
+```bash
+# chỉ cài các Skill này
+ak kit install engineer --target codex --skills ak-cook,ak-plan
+
+# cài mọi Skill trừ Skill này
+ak kit install engineer --target claude-code --exclude-skills ak-video
+
+# chọn tương tác
+ak kit install engineer --target claude-code --select-skills
+```
+
+`--select-skills` cần terminal tương tác. Trong script, dùng `--skills` hoặc
+`--exclude-skills`. AgentKit cài kèm các reference, script và asset mà những
+Skill đã chọn cần dùng.
+
+## Chọn kênh phát hành
+
+Cài đặt và làm mới Kit dùng kênh registry `stable` theo mặc định. Để thử Kit
+prerelease, hãy chủ động chọn `beta` và giữ CLI trên kênh tương thích:
+
+```bash
+ak kit init engineer --target claude-code --channel beta
+```
+
+Không trộn kênh như một cách xử lý sự cố. Nếu Kit báo cần phiên bản `ak` mới
+hơn, hãy cập nhật CLI trên cùng kênh rồi chạy lại thao tác với Kit.
+
+## Làm mới Kit đã cài
+
+Làm mới sẽ phát lại bản phát hành hiện tại và gỡ các file cũ do AgentKit tạo.
+Lệnh dùng remote registry theo mặc định và tạo snapshot trước các thay đổi phá
+hủy:
+
+```bash
+ak kit refresh engineer --target codex
+ak kit refresh engineer --global --switch-to-plugin
+```
+
+Bản xem trước của refresh là màn hình xác nhận, không phải dry run. Trong script,
+chế độ JSON hoặc phiên không tương tác khác, prompt sẽ được bỏ qua. Hãy dùng
+luồng chỉ xem trước `ak update` trong [hướng dẫn cập nhật](./updating) khi bạn cần
+một kế hoạch không thể áp dụng thay đổi.
+
+Nếu lần cài trước chỉ chọn một số Skill, thao tác làm mới dùng lại tập Skill đó.
+Skill đã bị gỡ khỏi bản phát hành mới không làm thao tác thất bại, còn Skill mới
+không tự động được thêm vào tập đã chọn.
+
+Hãy xem bản xem trước trước khi xác nhận. Không thêm `--no-backup`, và không dùng
+cài lại diện rộng với `--force` như cách khôi phục thông thường. Trước tiên hãy
+xử lý sai target, phạm vi, chế độ phân phối hoặc xung đột quyền sở hữu.
+
+## Xác minh kết quả
+
+Sau khi cài đặt hoặc làm mới:
+
+1. Xác nhận lệnh báo đúng target, phạm vi, chế độ phân phối và số Skill đã chọn.
+2. Mở lại runtime đích nếu runtime đang chạy.
+3. Gọi một Skill đã cài.
+
+Nếu runtime không tìm thấy Skill, hãy kiểm tra target, phạm vi và chế độ phân
+phối của Claude Code trước khi cài lại.
+
+## Gỡ Kit
+
+Xem trước thao tác gỡ bằng đúng phạm vi và chế độ phân phối đã dùng khi cài. Các
+ví dụ sau chọn plugin Claude Code cho người dùng:
+
+```bash
+ak kit uninstall engineer --global --plugin-mode --dry-run
+ak kit uninstall engineer --global --plugin-mode --yes
+```
+
+Với plugin trong project, thay `--global` bằng `--project-dir .`. Với cài đặt
+native trong project, dùng `--project-dir .` mà không có `--plugin-mode`; với cài
+đặt native global, dùng `--global` mà không có `--plugin-mode`.
+
+Uninstall chỉ gỡ các file khớp với quyền sở hữu của AgentKit, giữ lại file không
+rõ nguồn gốc hoặc đã được người dùng sửa, đồng thời tạo snapshot trước khi áp
+dụng. Tuyệt đối không xóa toàn bộ thư mục cấu hình runtime để gỡ một Kit. Nếu
+lệnh in ra snapshot khôi phục, hãy giữ ID đó đến khi bạn đã xác minh runtime.
+
+## Xem thêm
+
+- [Cập nhật AgentKit và Kit](./updating)
