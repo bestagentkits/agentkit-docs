@@ -1,114 +1,179 @@
 ---
 title: Onboarding
-description: First-run setup after install — authentication, kits, the desktop app, updates, backups, and feedback.
+description: Configure AgentKit, authenticate safely, install Engineer Kit, and verify your first runtime.
 ---
 
-import { Step, Steps } from 'fumadocs-ui/components/steps';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
-Once `ak` is installed, this checklist gets you to a working setup and shows
-where your data lives.
+Onboarding is complete when your chosen coding assistant recognizes an Engineer
+Kit skill in a project you control.
 
-<Steps>
-  <Step>
-    ### Confirm the install
+## Before you start
 
-    ```bash
-    ak --version
-    ak doctor --json
-    ```
+You need:
 
-    `ak doctor` reports environment and configuration health. Use `--json` when
-    you want machine-readable output to attach to a support request.
-  </Step>
-  <Step>
-    ### Authenticate
+- `ak` on your `PATH` — see [Installation](./installation).
+- Claude Code or Codex installed and signed in with that runtime's own account.
+- An AgentKit account with access to Engineer Kit.
+- A test project where you are comfortable adding runtime configuration.
 
-    ```bash
-    ak login
-    ak whoami --json
-    ak licenses --json
-    ```
+AgentKit authentication grants access to licensed kits. It does not sign Claude
+Code or Codex in to their providers, and runtime login does not grant AgentKit
+kit entitlement.
 
-    Two checks are separate: **sign-in** identifies you, while **kit
-    entitlement** controls which kits you can download and install. If a kit you
-    expect is missing from `ak licenses`, your account has not been granted it
-    yet — stop before trying to install it.
-  </Step>
-  <Step>
-    ### Install a kit
-
-    ```bash
-    ak kit init engineer --target claude-code --global
-    ```
-
-    You can install into more than one runtime (for example Claude Code and
-    Codex). See [Installing kits](../guides/installing-kits) for
-    targets and skill selection.
-  </Step>
-  <Step>
-    ### Desktop app (optional)
-
-    The desktop app opens behind a license gate: a fresh launch shows activation
-    and support until a valid app license unlocks the shell. The app license
-    (unlocking the desktop shell) and kit entitlement (controlling kit
-    downloads) are independent — signing in with an API key or email alone does
-    not unlock the desktop app.
-  </Step>
-</Steps>
-
-## Updating
-
-Check without applying, then apply on the beta channel. Manual apply requires
-`--yes`:
+## Configure AgentKit
 
 ```bash
-ak self-update --check --channel beta --json
-ak self-update --channel beta --yes
+ak setup
 ```
 
-To review what changed before updating:
+The wizard detects Claude Code and Codex login state, lets you choose enabled
+runtime adapters, and saves AgentKit preferences. Re-running it is idempotent.
+It does not copy runtime credentials and does not install a kit.
+
+Use these commands for different jobs:
+
+| Command | Use it for | Main result |
+| --- | --- | --- |
+| `ak setup` | Configure this user's AgentKit preferences | Updates AgentKit configuration; no kit content |
+| `ak init [dir]` | Adopt an existing directory | Creates or updates its AgentKit ownership manifest |
+| `ak new <project-name>` | Start a new project directory | Creates the directory and its ownership manifest |
+| `ak kit init <kit>` | Add a kit to a runtime | Writes runtime-ready kit content at project or user scope |
+
+You do not need `ak init` before installing a project-scoped kit; use it when you
+want AgentKit to adopt and track an existing project as a whole.
+
+## Sign in to AgentKit
+
+Use the same AgentKit account that owns the kit. A successful login with a
+different account can still return no Engineer Kit grant.
+
+### User API key (recommended)
+
+Create a user API key in the [Account Dashboard](https://agentkit.best/account/api-keys),
+then run this locally with your real key:
 
 ```bash
-ak changelog --since-current --channel beta
+ak login --api-key ak_live_... --no-interactive
 ```
 
-## Backups and rollback
+This method suits regular use and non-interactive environments. AgentKit stores
+the API key and CLI session in restricted files under `~/.agentkit/auth` (or
+`%USERPROFILE%\.agentkit\auth` on Windows) so the session can renew.
 
-AgentKit preserves unknown and user-modified files during ordinary operations.
-Tracked destructive writes require explicit confirmation and take a recovery
-snapshot first. `ak backups restore` rolls back **project/lifecycle state**,
-not the installed binary:
+### Email OTP
 
 ```bash
-ak backups list --json
-ak backups restore --latest     # restore the last pre-change state snapshot
+ak login --email you@example.com
 ```
 
-To roll back the **binary** itself, reinstall the previous release (for example
-with `AK_VERSION=<tag>` on the installer). See [Updating ak](../guides/updating).
+AgentKit sends a one-time code to that address and prompts for it. The OTP is not
+persisted; the resulting renewable session is stored locally. If the message
+does not arrive, check Spam, Junk, and Promotions, then confirm the address is
+the account that owns the kit.
 
-## Feedback
-
-File feedback directly from the CLI:
+### License key device activation
 
 ```bash
-ak feedback --type bug --title "Short title" --body "What happened" --yes
-ak feedback --type feature --title "Request" --motivation "Why it matters"
+ak login --license-key ak_license_... --no-interactive
 ```
 
-Include your OS and architecture, the command or screen involved, and the
-release tag. Attach a redacted `ak doctor` summary with `--attach-diagnostics`
-only when support asks — full diagnostics stay on your machine.
+This activates the current device. Add `--device-name <name>` only when you need
+an explicit device label. Kit grants are still checked separately.
 
 <Callout type="warn">
-  Never share raw environment files, provider configuration, private keys,
-  license keys, or session transcripts. Use `ak diagnostics export --json` to
-  produce a redacted bundle before sending evidence.
+  Never put a real API key, license key, OTP, session file, or provider
+  credential in source control, documentation, screenshots, diagnostics, or a
+  support message. Avoid leaving literal secrets in shared shell history; rotate
+  any credential that may have been exposed.
 </Callout>
 
-## Known limits
+## Verify identity and entitlement
 
-- Project creation, destructive lifecycle actions, and plan mutations are
-  CLI-only; the local dashboard (`ak gui` / `ak config`) is read-only for those.
-- Non-loopback dashboard binds require an auth token.
-- There is no telemetry — no analytics SDK and no usage beacon.
+```bash
+ak whoami
+ak licenses
+```
+
+`ak whoami` confirms the current account and live authentication state.
+`ak licenses` lists its per-kit grants. Continue only when Engineer Kit appears.
+Sign-in and entitlement are separate checks: logging in successfully does not
+create a missing grant.
+
+## Install Engineer Kit
+
+Change to your test project, choose the runtime, and review the installation
+preview before confirming.
+
+<Tabs items={['Claude Code', 'Codex']}>
+  <Tab value="Claude Code">
+
+```bash
+ak kit init engineer --target claude-code
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```bash
+ak kit init engineer --target codex
+```
+
+  </Tab>
+</Tabs>
+
+These commands install at project scope by default. Add `--global` only when you
+want the kit in the runtime's user scope across projects. A successful summary
+names `engineer`, the output location, install mode, scope, and number of files
+written. Review any hook or compatibility warnings instead of treating them as
+part of the success marker.
+
+## Run and verify the first skill
+
+Restart the assistant or open a new session so it reloads the installed content,
+then invoke:
+
+<Tabs items={['Claude Code', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:cook Add a health-check endpoint
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:cook Add a health-check endpoint
+```
+
+  </Tab>
+</Tabs>
+
+Onboarding is complete when the assistant recognizes `ak:cook`, reads the
+request, and begins the skill workflow in the current project. The `/ak:...`
+prefix is Claude Code syntax; `$ak:...` is Codex syntax.
+
+## Recovery and common failures
+
+- **`ak whoami` is unauthenticated:** run one explicit `ak login` method again.
+- **Engineer Kit is absent from `ak licenses`:** confirm you used the purchasing
+  account. Reinstalling cannot create entitlement.
+- **Runtime missing or logged out:** install it and use `claude auth login` or
+  `codex login`, then re-run `ak setup`.
+- **The skill is not recognized:** confirm the install summary named the intended
+  target, restart the assistant, and run `ak doctor` before reinstalling.
+- **The destination conflicts with existing content:** stop and review the
+  ownership warning. Do not add `--force` as a first response.
+
+AgentKit preserves unknown and user-modified files during normal kit operations.
+When a supported destructive change needs a recovery snapshot, the CLI prints a
+backup ID. Keep it until you have verified the result; restore that snapshot with:
+
+```bash
+ak backups restore <backup-id>
+```
+
+Continue with the focused [Quickstart](./quickstart), or read
+[Installing kits](../guides/installing-kits) before changing scope, selecting
+skills, or refreshing an installation.

@@ -1,114 +1,181 @@
 ---
 title: Làm quen
-description: Thiết lập lần đầu sau khi cài — xác thực, kit, app desktop, cập nhật, backup và phản hồi.
+description: Cấu hình AgentKit, xác thực an toàn, cài Engineer Kit và xác minh runtime đầu tiên.
 ---
 
-import { Step, Steps } from 'fumadocs-ui/components/steps';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
-Sau khi cài `ak`, checklist này giúp bạn dựng một setup chạy được và cho biết
-dữ liệu của bạn nằm ở đâu.
+Bạn hoàn tất onboarding khi trợ lý lập trình đã chọn nhận diện được một skill
+của Engineer Kit trong project do bạn kiểm soát.
 
-<Steps>
-  <Step>
-    ### Xác nhận bản cài
+## Trước khi bắt đầu
 
-    ```bash
-    ak --version
-    ak doctor --json
-    ```
+Bạn cần:
 
-    `ak doctor` báo cáo tình trạng môi trường và cấu hình. Dùng `--json` khi bạn
-    cần output ở định dạng máy đọc được để gửi kèm yêu cầu hỗ trợ.
-  </Step>
-  <Step>
-    ### Xác thực
+- `ak` có trong `PATH` — xem [Cài đặt](./installation).
+- Claude Code hoặc Codex đã được cài và đăng nhập bằng tài khoản riêng của
+  runtime đó.
+- Tài khoản AgentKit có quyền sử dụng Engineer Kit.
+- Một project thử nghiệm nơi bạn có thể thêm cấu hình runtime.
 
-    ```bash
-    ak login
-    ak whoami --json
-    ak licenses --json
-    ```
+Xác thực AgentKit cấp quyền truy cập các kit có license. Nó không đăng nhập
+Claude Code hay Codex vào provider, và đăng nhập runtime không cấp quyền sử dụng
+kit AgentKit.
 
-    Đây là hai bước kiểm tra riêng biệt: **đăng nhập** để xác định bạn là ai,
-    còn **quyền dùng kit** quyết định bạn được tải và cài kit nào. Nếu một kit
-    bạn mong đợi không xuất hiện trong `ak licenses`, nghĩa là tài khoản của bạn
-    chưa được cấp kit đó — hãy dừng lại trước khi thử cài.
-  </Step>
-  <Step>
-    ### Cài một kit
-
-    ```bash
-    ak kit init engineer --target claude-code --global
-    ```
-
-    Bạn có thể cài vào nhiều runtime cùng lúc (ví dụ Claude Code và Codex). Xem
-    [Cài kit](../guides/installing-kits) để biết về target và cách chọn skill.
-  </Step>
-  <Step>
-    ### App desktop (tùy chọn)
-
-    App desktop được kiểm soát bằng license: khi mới mở, app chỉ hiện màn hình
-    kích hoạt và hỗ trợ cho đến khi có license app hợp lệ mở khóa. License app
-    (mở khóa app desktop) và quyền dùng kit (kiểm soát việc tải kit) là hai thứ
-    độc lập — chỉ đăng nhập bằng API key hoặc email sẽ không mở khóa được app
-    desktop.
-  </Step>
-</Steps>
-
-## Cập nhật
-
-Kiểm tra trước, sau đó mới áp dụng trên kênh beta. Việc apply thủ công cần
-`--yes`:
+## Cấu hình AgentKit
 
 ```bash
-ak self-update --check --channel beta --json
-ak self-update --channel beta --yes
+ak setup
 ```
 
-Xem trước những thay đổi trước khi cập nhật:
+Wizard phát hiện trạng thái đăng nhập Claude Code và Codex, cho phép chọn runtime
+adapter đang bật và lưu tùy chọn AgentKit. Chạy lại lệnh là an toàn và cho cùng
+kết quả. Lệnh không sao chép credential của runtime và không cài kit.
+
+Dùng các lệnh sau cho những mục đích khác nhau:
+
+| Lệnh | Khi dùng | Kết quả chính |
+| --- | --- | --- |
+| `ak setup` | Cấu hình tùy chọn AgentKit của người dùng này | Cập nhật cấu hình AgentKit; không có nội dung kit |
+| `ak init [dir]` | Tiếp nhận một thư mục hiện có | Tạo hoặc cập nhật ownership manifest AgentKit |
+| `ak new <project-name>` | Bắt đầu một thư mục project mới | Tạo thư mục và ownership manifest |
+| `ak kit init <kit>` | Thêm kit vào runtime | Ghi nội dung kit phù hợp runtime ở scope project hoặc người dùng |
+
+Bạn không cần chạy `ak init` trước khi cài kit ở scope project; hãy dùng lệnh đó
+khi muốn AgentKit tiếp nhận và theo dõi toàn bộ project hiện có.
+
+## Đăng nhập AgentKit
+
+Hãy dùng đúng tài khoản AgentKit sở hữu kit. Đăng nhập thành công bằng tài khoản
+khác vẫn có thể không trả về quyền Engineer Kit.
+
+### User API key (khuyến nghị)
+
+Tạo user API key trong [Account Dashboard](https://agentkit.best/account/api-keys),
+sau đó chạy lệnh này cục bộ với key thật của bạn:
 
 ```bash
-ak changelog --since-current --channel beta
+ak login --api-key ak_live_... --no-interactive
 ```
 
-## Backup và rollback
+Phương thức này phù hợp cho việc dùng thường xuyên và môi trường không tương tác.
+AgentKit lưu API key và phiên CLI trong các tệp được giới hạn quyền truy cập dưới
+`~/.agentkit/auth` (hoặc `%USERPROFILE%\.agentkit\auth` trên Windows) để có thể
+làm mới phiên.
 
-Trong các thao tác thông thường, AgentKit giữ nguyên những tệp lạ và tệp do
-người dùng chỉnh sửa. Những thao tác ghi mang tính phá hủy được theo dõi sẽ cần
-bạn xác nhận tường minh và được tạo snapshot khôi phục trước. `ak backups restore`
-chỉ khôi phục **state dự án/vòng đời**, không phải binary đã cài:
+### Email OTP
 
 ```bash
-ak backups list --json
-ak backups restore --latest     # khôi phục snapshot state trước thay đổi gần nhất
+ak login --email you@example.com
 ```
 
-Để rollback **binary**, hãy cài lại bản phát hành trước đó (ví dụ dùng
-`AK_VERSION=<tag>` với trình cài đặt). Xem [Cập nhật ak](../guides/updating).
+AgentKit gửi mã dùng một lần tới địa chỉ đó và yêu cầu bạn nhập mã. OTP không
+được lưu; phiên có thể làm mới sau đó được lưu cục bộ. Nếu chưa nhận được thư,
+hãy kiểm tra Spam, Junk và Promotions, rồi xác nhận địa chỉ thuộc tài khoản sở
+hữu kit.
 
-## Phản hồi
-
-Gửi phản hồi trực tiếp từ CLI:
+### Kích hoạt thiết bị bằng license key
 
 ```bash
-ak feedback --type bug --title "Short title" --body "What happened" --yes
-ak feedback --type feature --title "Request" --motivation "Why it matters"
+ak login --license-key ak_license_... --no-interactive
 ```
 
-Hãy ghi rõ OS và kiến trúc, lệnh hoặc màn hình liên quan, cùng tag phát hành.
-Chỉ đính kèm bản tóm tắt `ak doctor` đã được redacted bằng `--attach-diagnostics`
-khi bộ phận hỗ trợ yêu cầu — toàn bộ diagnostics đầy đủ vẫn ở lại trên máy bạn.
+Lệnh này kích hoạt thiết bị hiện tại. Chỉ thêm `--device-name <name>` khi bạn cần
+nhãn thiết bị rõ ràng. Quyền sử dụng kit vẫn được kiểm tra riêng.
 
 <Callout type="warn">
-  Tuyệt đối không chia sẻ tệp môi trường thô, cấu hình provider, khóa riêng,
-  license key hay transcript phiên làm việc. Hãy dùng `ak diagnostics export --json`
-  để tạo một bundle đã được redacted trước khi gửi bằng chứng.
+  Không bao giờ đưa API key, license key, OTP, tệp phiên hoặc credential provider
+  thật vào source control, tài liệu, ảnh chụp, diagnostics hay tin nhắn hỗ trợ.
+  Tránh để secret dạng literal trong lịch sử shell dùng chung; hãy rotate mọi
+  credential có thể đã bị lộ.
 </Callout>
 
-## Giới hạn đã biết
+## Xác minh danh tính và quyền sử dụng
 
-- Việc tạo dự án, các thao tác vòng đời mang tính phá hủy và thay đổi plan chỉ
-  thực hiện được trên CLI; dashboard cục bộ (`ak gui` / `ak config`) chỉ đọc đối
-  với các thao tác đó.
-- Bind dashboard ra ngoài loopback cần auth token.
-- Không có telemetry — không có SDK analytics và không có usage beacon.
+```bash
+ak whoami
+ak licenses
+```
+
+`ak whoami` xác nhận tài khoản hiện tại và trạng thái xác thực trực tiếp.
+`ak licenses` liệt kê quyền theo từng kit. Chỉ tiếp tục khi Engineer Kit xuất
+hiện. Đăng nhập và quyền sử dụng là hai phép kiểm tra riêng: đăng nhập thành công
+không tạo ra quyền còn thiếu.
+
+## Cài Engineer Kit
+
+Chuyển tới project thử nghiệm, chọn runtime và xem trước kế hoạch cài đặt trước
+khi xác nhận.
+
+<Tabs items={['Claude Code', 'Codex']}>
+  <Tab value="Claude Code">
+
+```bash
+ak kit init engineer --target claude-code
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```bash
+ak kit init engineer --target codex
+```
+
+  </Tab>
+</Tabs>
+
+Mặc định, các lệnh này cài ở scope project. Chỉ thêm `--global` khi bạn muốn kit
+ở scope người dùng của runtime cho nhiều project. Phần tóm tắt thành công nêu
+`engineer`, vị trí đầu ra, install mode, scope và số tệp đã ghi. Hãy đọc mọi cảnh
+báo về hook hoặc khả năng tương thích thay vì xem chúng là một phần của dấu hiệu
+thành công.
+
+## Chạy và xác minh skill đầu tiên
+
+Khởi động lại trợ lý hoặc mở phiên mới để nạp lại nội dung đã cài, rồi gọi:
+
+<Tabs items={['Claude Code', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:cook Add a health-check endpoint
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:cook Add a health-check endpoint
+```
+
+  </Tab>
+</Tabs>
+
+Bạn hoàn tất onboarding khi trợ lý nhận diện `ak:cook`, đọc yêu cầu và bắt đầu
+workflow của skill trong project hiện tại. Prefix `/ak:...` là cú pháp Claude
+Code; `$ak:...` là cú pháp Codex.
+
+## Khôi phục và lỗi thường gặp
+
+- **`ak whoami` báo chưa xác thực:** chạy lại một phương thức `ak login` cụ thể.
+- **Engineer Kit không có trong `ak licenses`:** xác nhận bạn dùng tài khoản đã
+  mua kit. Cài lại không thể tạo quyền sử dụng.
+- **Runtime chưa có hoặc chưa đăng nhập:** cài runtime và dùng `claude auth login`
+  hoặc `codex login`, rồi chạy lại `ak setup`.
+- **Skill không được nhận diện:** xác nhận phần tóm tắt cài đặt ghi đúng target,
+  khởi động lại trợ lý và chạy `ak doctor` trước khi cài lại.
+- **Đích xung đột với nội dung hiện có:** dừng lại và xem cảnh báo quyền sở hữu.
+  Đừng dùng `--force` như phản ứng đầu tiên.
+
+AgentKit giữ các tệp không rõ nguồn gốc và tệp người dùng đã sửa trong thao tác
+kit thông thường. Khi một thay đổi phá hủy được hỗ trợ cần snapshot khôi phục,
+CLI sẽ in backup ID. Hãy giữ ID tới khi đã xác minh kết quả; khôi phục snapshot
+đó bằng:
+
+```bash
+ak backups restore <backup-id>
+```
+
+Tiếp tục với [Khởi động nhanh](./quickstart), hoặc đọc
+[Cài đặt kit](../guides/installing-kits) trước khi đổi scope, chọn skill hay
+refresh một bản cài.
