@@ -1,0 +1,210 @@
+---
+title: Thiết kế và chạy hệ thống web test với ak:web-testing
+description: Áp dụng pattern Playwright, Vitest, k6, accessibility, performance, visual, API, contract và test data với ranh giới runtime cùng environment rõ ràng.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:web-testing` để chọn và triển khai chiến lược web testing có thể lặp
+lại, từ unit cùng component test đến browser, visual, accessibility, contract,
+performance, load và security check. Skill cung cấp reference pattern chi tiết,
+script bootstrap Playwright và công cụ tóm tắt kết quả thay vì một test suite cố
+định cho mọi project.
+
+## Chọn ak:web-testing cho automation lặp lại được
+
+### Dùng ak:web-testing khi
+
+- Bạn cần test Playwright, Vitest hoặc k6 native của project có thể chạy lại ở
+  local development hay CI.
+- Feature cần coverage browser, mobile emulation, visual, accessibility, API
+  hoặc contract.
+- Bạn muốn thiết lập Playwright configuration, fixture, example test và report
+  format.
+- Bạn cần chẩn đoán flakiness hoặc chọn chiến lược testing pyramid, trophy hay
+  contract-centric.
+
+### Chọn workflow khác khi
+
+- Bạn chỉ cần kiểm tra browser live một lần. Dùng browser workflow của runtime
+  thay vì tạo test system.
+- Bạn cần cookie hoặc trạng thái đăng nhập trong Chrome profile thật của người
+  dùng. Dùng browser workflow nhận biết profile; Playwright context mặc định cô
+  lập.
+- Bạn cần threat modelling hoặc source security audit. Dùng `ak:security`.
+- Bạn cần chạy test repository nói chung mà không thiết kế web-test
+  infrastructure. Dùng `ak:test`.
+
+## Chuẩn bị test environment
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận Engineer
+  Kit đã được cài cho runtime cùng scope hiện tại.
+- Cung cấp test type, target URL hoặc module, hành vi dự kiến, browser hoặc
+  device, auth method, test data, environment và cleanup boundary.
+- Dùng Node.js 20 trở lên cho đường isolated runtime đã khai báo.
+- Đảm bảo runner đã chọn khả dụng. Playwright browser binary, Vitest, k6, axe,
+  Lighthouse, database container và cloud service tùy chọn là dependency riêng
+  trừ khi project đã cung cấp.
+- Khởi động hoặc cấp quyền rõ ràng cho application server và mọi database,
+  container, broker hay external test service mà suite cần.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:web-testing ...` | Thực thi native có thể dùng project file, Node script, shell command, browser, container và network service khả dụng cho session. |
+| Cursor | `/ak:web-testing ...` | Cách gọi bằng slash đã được người dùng xác minh; browser control, isolated dependency, container và approval prompt tương đương phụ thuộc Cursor. |
+| Codex | `$ak:web-testing ...` | Hỗ trợ discovery native; browser binary, live profile state, device cloud và process behavior không tự động tương đương. |
+
+## Nêu rõ test surface
+
+Skill khai báo `[test-type] [target]`, nhưng release này không định nghĩa parser
+cố định, tập giá trị liệt kê hay default dispatch cho các argument đó. Hãy nêu
+trực tiếp runner và bằng chứng mong muốn.
+
+| Test surface | Tool điển hình | Bằng chứng có thể quan sát |
+| --- | --- | --- |
+| Unit và integration | Vitest, Jest hoặc project runner | Assertion, coverage, kết quả service hoặc database cô lập |
+| Component | Testing Library, Vitest browser mode hoặc Playwright CT | Behavior, DOM, CSS, cross-browser và component screenshot |
+| End-to-end | Playwright | User-flow assertion, trace, screenshot, video và JSON hoặc HTML report |
+| API và contract | Supertest, MSW, Pact, Dredd hoặc project tool | Status, schema, auth, provider verification và deployment contract gate |
+| Accessibility và visual | axe, Lighthouse, Playwright screenshot | Violation, keyboard check, baseline và diff image |
+| Performance và load | Lighthouse CI, browser metric hoặc k6 | Core Web Vitals, latency, error rate, threshold và run duration |
+| Security check | SAST, DAST, SCA hoặc header tool đã duyệt | Finding có scope mà không exploit trái phép |
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:web-testing e2e "Test checkout on http://localhost:3000 with Chromium and mobile Safari emulation; use seeded test data and never contact payment production."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:web-testing e2e "Test checkout on http://localhost:3000 with Chromium and mobile Safari emulation; use seeded test data and never contact payment production."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:web-testing e2e "Test checkout on http://localhost:3000 with Chromium and mobile Safari emulation; use seeded test data and never contact payment production."
+```
+
+  </Tab>
+</Tabs>
+
+## Dùng helper script đóng package có chủ đích
+
+### Bootstrap tệp Playwright
+
+Initializer đóng package mặc định dùng thư mục hiện tại. `--dir <path>` chọn
+project khác và `--ct` thêm React component-testing configuration.
+
+Script tạo Playwright configuration, E2E fixture, example test, global setup và
+`.env.test.example` còn thiếu; tệp đã tồn tại được bỏ qua. Script không cài
+dependency hoặc browser được in ra. Config sinh ra mặc định dùng
+`http://localhost:3000`, chạy `npm run dev`, dùng Chromium, Firefox, WebKit cùng
+hai mobile emulation, rồi ghi failure artifact và JSON result. Hãy điều chỉnh
+sample route, auth cookie, credential, package manager và server command trước
+khi chạy.
+
+Khi bật `AGENTKIT_SKILL_RUNTIME=1`, runtime đã khai báo có thể cô lập
+`@playwright/test@1.48.0` trong cache của AgentKit thay vì thêm vào project.
+Browser download và các tool khác trên trang này vẫn là yêu cầu riêng.
+
+### Tóm tắt kết quả hiện có
+
+Analyzer nhận bất kỳ tổ hợp Playwright JSON, Vitest JSON và JUnit XML nào.
+Output mặc định là text; cũng hỗ trợ `--output json` và `--output markdown`.
+`--fail-threshold N` thoát khác 0 khi pass rate tính được thấp hơn `N`; mặc định
+của cờ này là `0`.
+
+Script báo total, passed, failed, skipped, flaky, duration, suite và danh sách
+failure có giới hạn. Không có result input đọc được sẽ thoát lỗi.
+
+## Theo workflow test dựa trên bằng chứng
+
+1. **Chọn confidence model.** Chọn unit, integration, contract, component, E2E
+   hoặc tổ hợp dựa trên architecture cùng failure risk.
+2. **Định nghĩa isolation.** Chọn fixture, factory có seed, record riêng theo
+   worker, transaction rollback, disposable container, external service mock và
+   cleanup.
+3. **Cấu hình thực thi deterministic.** Ưu tiên accessible selector, wait theo
+   điều kiện, viewport cố định, animation tắt, time được kiểm soát, network
+   response ổn định và data tái tạo được.
+4. **Chạy layer hữu ích nhỏ nhất trước.** Static và unit check fail nhanh;
+   integration, browser, visual, accessibility, performance và load check chỉ
+   mở rộng khi confidence được yêu cầu cần đến.
+5. **Thực thi environment đã chọn.** Browser project và mobile emulation bao phủ
+   automation; Safari thật, device thật và provider cloud vẫn là bằng chứng
+   riêng khi bắt buộc.
+6. **Giữ artifact.** Giữ trace, video, screenshot, visual diff, coverage, JSON,
+   JUnit, Lighthouse, k6 hoặc contract report cần để giải thích kết luận.
+7. **Báo giới hạn.** Check failed, skipped, flaky, unavailable, emulated và
+   externally hosted vẫn được phân biệt.
+
+## Kiểm soát tác động data, load và security
+
+<Callout type="warn" title="Test có thể thay đổi hệ thống được nhắm tới">
+  Browser, API, contract, database, load và security test có thể tạo user, submit
+  form, charge integration, xóa record, gửi email, dùng hết quota hoặc làm gián
+  đoạn service. Dùng environment cô lập và cleanup rõ ràng.
+</Callout>
+
+- Không chạy vulnerability payload, DAST scanner, brute-force check, SSRF probe
+  hoặc load test lên hệ thống khi chưa có quyền chính xác cùng target an toàn.
+  Không mặc định nhắm packaged example payload vào production.
+- Test credential phải nằm trong secret storage đã duyệt. Không commit giá trị
+  thật vào `.env.test.example`, fixture, snapshot, trace, screenshot hay report.
+- Cài Playwright có thể tải browser binary và system package. Testcontainers có
+  thể pull image và khởi động container local. Cả hai dùng disk, network, CPU,
+  memory và process capacity.
+- BrowserStack, Sauce Labs, AWS Device Farm, Pact Broker, Grafana Cloud k6,
+  Lighthouse temporary public storage, Snyk và service tương tự có thể upload
+  data hoặc artifact gần code và phát sinh provider usage hoặc cost.
+- Cập nhật visual snapshot thay đổi baseline được chấp nhận. Review mọi diff;
+  `--update-snapshots` không phải cách sửa regression chưa giải thích.
+- Workflow không commit, push, mở PR, merge, deploy hay publish test artifact trừ
+  khi workflow riêng được cấp quyền thực hiện.
+
+## Xác minh kết quả
+
+Kết quả hoàn chỉnh nên có:
+
+- Test strategy, scope chính xác, target environment, runner version, browser,
+  emulation hoặc device thật và command đã chạy.
+- Passed, failed, skipped, flaky, duration, coverage, threshold và build hoặc
+  server status khi phù hợp.
+- Tên failure, bằng chứng lỗi cần thiết, vị trí trace cùng artifact và bước tái
+  hiện.
+- Data đã tạo, cleanup đã làm, network service đã liên hệ và provider hoặc
+  container resource đã dùng.
+- Accessibility violation, visual diff, Core Web Vitals, load percentile,
+  contract result hoặc security finding chỉ cho surface được chọn.
+- Gap bằng chứng rõ ràng cho browser, real device, auth, tool, permission,
+  network hoặc environment parity còn thiếu.
+
+Test release xác minh runtime manifest parse được và khai báo Node runtime có
+package. Không tìm thấy test trực tiếp có scope cho initializer, result analyzer,
+Playwright project sinh ra hay browser cùng provider workflow live. Stable và
+beta đóng package cùng nội dung `ak:web-testing`.
+
+## Khắc phục và hiểu giới hạn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Playwright suite sinh ra thất bại ngay | Điều chỉnh `baseURL`, `webServer`, route, auth endpoint, cookie, test credential và package-manager command theo project trước khi đánh giá ứng dụng. |
+| Thiếu browser binary | Chỉ cài browser Playwright cần thiết trong environment đã duyệt và ghi nhận download. |
+| Test flaky | Tái hiện case nhỏ nhất, bỏ hard wait và shared state, kiểm soát network cùng animation và báo retry riêng với first-pass success. |
+| Mobile emulation pass nhưng device thật fail | Xem emulation là bằng chứng một phần và chạy check trên device iOS hoặc Android thật được yêu cầu. |
+| Visual snapshot khác | Kiểm tra diff cùng environment consistency trước khi cập nhật baseline. |
+| Analyzer không tìm thấy result | Xác nhận reporter format và path; không có input là lỗi, không phải lần chạy pass. |
+| Security hoặc load check có thể ảnh hưởng service dùng chung | Dừng và xin duyệt chính xác target, rate, duration, data cùng rollback. |
+| Runtime không nhận ra Skill | Xác nhận target và scope, khởi động lại runtime session, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Dùng [`ak:test`](./test) cho report validation project rộng hơn hoặc
+[`ak:security`](./security) để review source theo threat model.
