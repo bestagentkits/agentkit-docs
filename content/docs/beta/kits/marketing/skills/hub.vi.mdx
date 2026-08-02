@@ -1,0 +1,170 @@
+---
+title: Hiểu giới hạn launcher ak:hub hiện tại
+description: Review launcher Content Hub và Marketing Dashboard local dự kiến mà không dựa vào path cũ hay feature bị mô tả quá mức.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+`ak:hub` được thiết kế để khởi động Content Hub và Marketing Dashboard local,
+mở asset gallery, scan lại asset trong project hoặc dừng các dịch vụ local liên
+quan. Skill body hiện tại không đồng bộ với các Skill cùng package: nó vẫn dùng
+tên cũ `/write:hub`, tham chiếu sibling path không canonical và mô tả feature
+dashboard mà authority hiện tại của dashboard nói chưa được triển khai.
+
+<Callout type="warn" title="Không dựa vào ak:hub như launcher một bước">
+  Stable và beta ship cùng launcher chưa được giải quyết. Source không chứng
+  minh đường chạy end-to-end từ canonical discovery `ak:hub` tới cả hai dịch vụ
+  hiện tại. Hãy dùng trang này như bản ghi giới hạn, không phải approval để start
+  hay stop process local.
+</Callout>
+
+## Dùng trang này để hiểu scope dự kiến
+
+### Scope dự kiến
+
+- Khởi động asset gallery local và development stack dashboard local.
+- Mở Content Hub gần `http://localhost:3457/hub` và dashboard gần
+  `http://localhost:5173` khi các dịch vụ thực sự bind default port.
+- Scan lại cây `assets/` của project hiện tại.
+- Dừng process local liên quan tới hai default port.
+
+### Không dùng ak:hub khi
+
+- Bạn cần dashboard service được hỗ trợ cho unattended, production, remote hay
+  có authentication.
+- Bạn cần campaign management, content-generation API, automation recipe hoặc
+  API-key security boundary đang hoạt động. Marketing Dashboard hiện tại không
+  triển khai các claim đó.
+- Bạn không thể review trước việc cài dependency, tạo process, mở browser, index
+  tệp local, ghi SQLite hoặc terminate theo port.
+- Bạn cần cloud storage hay publishing. R2 field của Content Hub chỉ là metadata
+  manifest local; chúng không bật cloud sync.
+
+## Review prerequisite trước khi recovery thủ công
+
+Local stack dự kiến cần:
+
+- Marketing Kit đã cài trong project bạn kiểm soát.
+- Node.js và npm cho script dashboard cùng Content Hub.
+- Port local khả dụng, thường là `3457` cho API hoặc hub và `5173` cho dashboard
+  development UI.
+- Quyền scan `assets/`, ghi manifest hoặc database local, tạo PID file, start
+  child process và có thể mở browser.
+- Review mọi dependency install. Dashboard development starter có thể chạy
+  `npm install` khi thiếu thư mục `node_modules`.
+
+## Trạng thái invocation theo runtime
+
+| Runtime | Cú pháp canonical | Ranh giới hiện tại |
+| --- | --- | --- |
+| Claude Code | `/ak:hub [--stop\|--scan]` | Skill có thể discovery bằng tên canonical, nhưng body route qua tên cũ và sibling path chưa giải quyết. Không coi đây là workflow đã xác minh. |
+| Cursor | `/ak:hub [--stop\|--scan]` | Slash spelling nhất quán với Skill được project, nhưng chưa có bằng chứng end-to-end do người dùng xác minh để giải quyết path mismatch trong package. |
+| Codex | `$ak:hub [--stop\|--scan]` | Native discovery không sửa các giả định path và process cũ, thiên về Claude trong Skill body. |
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+Cú pháp dự kiến là `/ak:hub`, nhưng không start launcher hiện tại cho tới khi
+sibling path và service contract trong package được sửa và xác minh.
+
+  </Tab>
+  <Tab value="Cursor">
+
+Cú pháp dự kiến là `/ak:hub`, nhưng không start launcher hiện tại cho tới khi
+sibling path và service contract trong package được sửa và xác minh.
+
+  </Tab>
+  <Tab value="Codex">
+
+Cú pháp dự kiến là `$ak:hub`, nhưng không start launcher hiện tại cho tới khi
+sibling path và service contract trong package được sửa và xác minh.
+
+  </Tab>
+</Tabs>
+
+Xem [Runtime adapter](../../../concepts/runtime-adapters) để hiểu vì sao Skill
+discovery không thiết lập parity cho shell, process, browser hay Hook.
+
+## Hiểu các tác động dự kiến
+
+| Input dự kiến | Behavior dự kiến | Tác động quan trọng cần review |
+| --- | --- | --- |
+| Không có option | Start Content Hub, dashboard API và dashboard UI | Có thể cài dependency, start background process, ghi PID file cùng state local và mở browser |
+| `--scan` | Scan lại cây `assets/` của project hiện tại | Đọc tệp được hỗ trợ và cập nhật `.assets/manifest.json`; scanner hiện giả định parent directory đã tồn tại |
+| `--stop` | Dừng dịch vụ | Combined script cũ có thể force-kill mọi process dùng port `3457` hoặc `5173`, không chỉ process đã chứng minh thuộc AgentKit |
+
+Không chạy các option này qua `ak:hub` khi launcher contract chưa được giải
+quyết.
+
+## Tách riêng hai product surface hiện tại
+
+Các component liên quan có scope khác và hẹp hơn:
+
+1. **Content Hub** scan tệp được hỗ trợ dưới `assets/` của project, lưu gallery
+   metadata trong `.assets/manifest.json`, serve preview local, đọc brand
+   context và cung cấp route đọc hay lưu tệp local.
+2. **Marketing Dashboard** hiện cung cấp view Assets, Brand và Settings. API có
+   thể scan và cập nhật asset metadata, đọc brand context và upload logo đã
+   validate. State local được lưu trong `data/marketing.db` khi SQLite driver
+   khả dụng.
+3. **Settings không phải authentication.** UI còn field API key cũ, nhưng server
+   local hiện không enforce field đó như security boundary.
+
+Không được mô tả hai dịch vụ như một platform campaign hay automation có
+authentication.
+
+## Giữ approval cho process và dữ liệu local rõ ràng
+
+- Start development stack là mutation workspace và process. Duyệt riêng thay
+  đổi dependency, port, working directory, mở browser và tạo database.
+- Asset scan đọc filename, path, size, timestamp và các loại tệp được chọn từ
+  project hiện tại. Xác nhận project không có nội dung nhạy cảm không nên được
+  index hay serve.
+- Nhãn HTTP local không tự chứng minh access bị giới hạn ở máy local. Kiểm tra
+  bind address thực tế cùng CORS hay authentication trước khi dùng asset nhạy
+  cảm.
+- Lưu qua Content Hub có thể overwrite asset file được chọn. Yêu cầu path chính
+  xác, preview và boundary backup hoặc version control.
+- Không cấp quyền stop theo port cho tới khi xác định process owner. Không
+  terminate dịch vụ không liên quan chỉ vì nó dùng default port.
+- Không action launcher nào cấp quyền cloud upload, publication, provider spend
+  hay external sharing.
+
+## Bằng chứng dự kiến sau bản sửa tương lai
+
+Launcher được hỗ trợ nên báo:
+
+- Chính xác sibling Skill directory đã cài mà nó resolve.
+- Mọi dependency install được đề xuất trước khi chạy.
+- Process ID, bind address, port thực tế, health result và URL cho mỗi dịch vụ.
+- Tệp local được tạo hoặc đổi, gồm manifest, database và PID file.
+- Ownership check trước khi dừng process.
+- Product surface nào đang active, không kèm claim cũ về campaign, generation,
+  automation hay authentication.
+
+## Xử lý sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Launcher không tìm thấy Content Hub hoặc dashboard | Dừng. Không tạo alias hay di chuyển Skill directory đã cài như một cách sửa không tài liệu. |
+| Chỉ một dịch vụ start | Giữ URL và process ID, dừng an toàn theo ownership rồi coi combined launcher là thất bại. |
+| Port `3457` hoặc `5173` đã được dùng | Xác định process owner. Chọn port khác được component chuyên biệt hỗ trợ hoặc dừng; không force-kill mù. |
+| Asset scan không ghi được manifest | Kiểm tra project và parent `.assets/` rõ ràng; không mở rộng permission hay scan directory khác. |
+| SQLite không load được | Làm theo remediation dependency và yêu cầu Node mà dashboard hiện tại báo; không claim persistence đã thành công. |
+| Runtime không tìm thấy `ak:hub` | Làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent), nhưng lưu ý discovery không giải quyết defect launcher này. |
+
+Tiếp tục với [Tổng quan Marketing Kit](../../marketing),
+[Lỗi cài Kit](../../../troubleshooting/kit-installation) hoặc
+[Projects, artifacts và checkpoints](../../../concepts/projects-artifacts-checkpoints).
+
+## Biết các giới hạn hiện tại
+
+- Tên canonical rõ ràng, nhưng implementation launcher vẫn phụ thuộc tên cũ và
+  giả định directory không khớp export hiện tại.
+- Authority dashboard hiện tại loại trừ rõ campaign management, content
+  generation, automation recipe và API-key authentication được enforce.
+- Content Hub và dashboard có storage cùng route contract riêng; combined Skill
+  không hợp nhất chúng thành một hệ thống được hỗ trợ.
+- Stable và beta có nội dung `ak:hub` giống nhau, nên beta không giải quyết các
+  giới hạn này.

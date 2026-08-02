@@ -1,0 +1,201 @@
+---
+title: Điều phối marketing playbook với ak:play
+description: Tạo và tiến hành playbook marketing local, review dependency gate và giữ tác động provider hay publishing trong approval riêng.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:play` để tạo và vận hành marketing playbook local từ template đi kèm.
+Skill ghi dependency, trạng thái sẵn sàng, gate, goal, learning, output và
+timestamp của step vào manifest trong project để bạn thấy việc nào ready,
+blocked, stale hoặc đang chờ review.
+
+Skill điều phối Marketing Skill và Agent hiện có; nó không thay thế công việc
+chuyên biệt của các capability đó, cũng không biến template thành quyền publish,
+chi tiêu, liên hệ người dùng hay đổi tài khoản live.
+
+## Chọn ak:play cho workflow nhiều bước
+
+### Dùng ak:play khi
+
+- Một sáng kiến marketing có các bước research, planning, creation, review và
+  measurement phụ thuộc nhau.
+- Bạn muốn manifest local có thể dùng lại thay vì checklist không chính thức.
+- Template `product-hunt-launch`, `content-engine`, `campaign-sprint` hoặc
+  `saas-launch` đi kèm là cấu trúc khởi đầu phù hợp.
+- Bạn cần manual gate rõ ràng cùng góc nhìn về downstream work bị blocked hay
+  stale.
+
+### Chọn workflow khác khi
+
+- Bạn cần một deliverable có phạm vi hẹp. Hãy gọi trực tiếp Skill creation,
+  research hoặc review phù hợp.
+- Bạn chỉ cần planning và không muốn tạo tệp dưới `data/playbooks/`.
+- Bạn cần campaign scheduler, publisher, ad buyer, CRM operator hoặc analytics
+  platform live. `ak:play` là orchestrator local, không phải blanket authority
+  cho các hệ thống đó.
+- Bạn cần bảo đảm tác động kinh doanh. Gợi ý từ goal gap là heuristic local,
+  không phải forecast hay bảo đảm hiệu suất.
+
+## Chuẩn bị project và runtime
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và cài Marketing Kit
+  cho runtime cùng scope đang dùng.
+- Mở project có trạng thái `data/playbooks/` mà bạn muốn tạo hoặc thay đổi.
+- Giữ công việc không liên quan và đọc instruction của repository.
+- Chọn tên playbook rồi review template đi kèm trước khi chấp nhận step, default
+  hay goal target.
+- Quyết định data source bên ngoài nào, nếu có, được phép liên hệ. Giá trị goal
+  nhập thủ công là fallback an toàn.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:play ...` | Phân phối native là mặc định; plugin rõ ràng cũng được hỗ trợ. Capability được map vẫn phụ thuộc package Marketing đã cài và tool hiện có. |
+| Cursor | `/ak:play ...` | Slash invocation đã được người dùng xác minh. Điều này không thiết lập parity cho mọi Agent, Hook, prompt hay provider integration được map. |
+| Codex | `$ak:play ...` | Native Skill discovery được hỗ trợ. Hook projection chỉ một phần và capability được map vẫn phụ thuộc Codex adapter cùng session hiện tại. |
+
+Xem [Runtime adapter](../../../concepts/runtime-adapters) trước khi giả định cùng
+một playbook step được kích hoạt giống nhau trên mọi runtime.
+
+## Tạo playbook có phạm vi rõ ràng
+
+Bắt đầu bằng template local và giữ mọi hành động bên ngoài ngoài scope:
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:play create august-launch --template campaign-sprint
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:play create august-launch --template campaign-sprint
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:play create august-launch --template campaign-sprint
+```
+
+  </Tab>
+</Tabs>
+
+Review input bắt buộc, template step, goal default, file destination và manual
+gate trước khi chấp nhận tạo. Create flow ghi:
+
+```text
+data/playbooks/august-launch/manifest.json
+data/playbooks/august-launch/research/
+data/playbooks/august-launch/content/
+data/playbooks/august-launch/reports/
+```
+
+## Dùng subcommand có chủ đích
+
+| Input | Mục đích | Ranh giới mutation hoặc tác động bên ngoài |
+| --- | --- | --- |
+| `create <name> [--template <id>]` | Validate template local, thu thập input và tạo state playbook | Tạo thư mục playbook, manifest và ba workspace folder |
+| `next [name]` | Đánh giá dependency, hiển thị gợi ý và đề xuất một step ready | Có thể gọi Skill hoặc Agent khác và ghi output của step sau khi xác nhận |
+| `status [name]` | Hiển thị stage, step, gate, blocker, stale và goal state | Đọc state; goal pull đã cấu hình có thể liên hệ dịch vụ bên ngoài |
+| `list` | Tóm tắt playbook local | Đọc `data/playbooks/` |
+| `blocked [name]` | Giải thích step blocked và gate-pending | Đọc state và đề xuất đường gỡ blocker |
+| `learn [name]` | Ghi pattern tái sử dụng đã được người dùng review | Append vào `manifest.json` và ghi `learnings.md` |
+| `reset <name> [step]` | Reset một step hoặc toàn bộ playbook | Đổi state manifest; giữ output file và, với full reset, giữ input cùng learning |
+| `gate <name> <step> approve\|reject` | Ghi quyết định human gate | Đổi state step và gate; approval có thể mở khóa downstream work |
+| `templates [--browse]` | Liệt kê template đi kèm | Chỉ local; `--browse` hiện báo community marketplace chưa khả dụng |
+| `goals [set\|pull]` | Hiển thị, đặt hoặc refresh goal value | `set` đổi manifest; `pull` có thể gửi provider request khi integration hoạt động đã được cấu hình |
+
+Nếu không có subcommand, Skill hiển thị dashboard. Nếu token đầu không phải
+subcommand, token đó được coi là tên playbook để tra status.
+
+## Hiểu các giai đoạn
+
+1. **Parse và resolve.** Skill xác định subcommand cùng playbook, hoặc liệt kê
+   lựa chọn khi thiếu tên.
+2. **Tải state local.** Skill đọc template và
+   `data/playbooks/{slug}/manifest.json`, validate field template đã biết và ghi
+   step cùng dependency và expected output.
+3. **Đánh giá graph.** Skill đánh dấu step pending là ready hay blocked, nhận
+   diện expected output bị thiếu là stale và tìm nhóm có thể chạy song song.
+4. **Review goal và gợi ý.** Giá trị manual hoặc integration khả dụng cấp dữ
+   liệu cho heuristic gap-and-readiness đơn giản. Coi ranking là input cho phán
+   đoán, không phải bằng chứng về tác động kỳ vọng.
+5. **Xác nhận và chạy một step.** `next` trình bày strategy, AI execution và
+   human-decision layer, sau đó route step đã duyệt tới Skill hay Agent được map
+   và ghi output path.
+6. **Gate và tiếp tục.** Step gate-pending vẫn blocked cho tới khi bạn ghi
+   `approve` hoặc `reject`. Work bị reject quay lại revision; work được approve
+   có thể mở khóa dependency.
+7. **Ghi bằng chứng.** Manifest giữ status, timestamp, output, goal và learning
+   cho session tiếp theo.
+
+## Tách riêng approval và tác động provider
+
+<Callout type="warn" title="Step ready không phải hành động bên ngoài đã duyệt">
+  Approve playbook gate chỉ ghi workflow state. Nó không cấp quyền publish,
+  outreach, ad spend, mua hàng, đổi account, dùng credential hay gửi dữ liệu
+  nhạy cảm tới provider. Hãy duyệt riêng tại thời điểm phát sinh tác động.
+</Callout>
+
+- `create`, `learn`, `reset`, `gate` và step execution thành công thay đổi tệp
+  local trong project.
+- `reset` giữ output file, vì vậy artifact stale hoặc bị thay thế cần quyết định
+  cleanup riêng và rõ ràng.
+- Goal pull có thể liên hệ GA4, Google Search Console, Stripe hoặc SendGrid chỉ
+  khi script cùng credential liên quan khả dụng. Review date range, property hay
+  account và cách xử lý dữ liệu trước khi cho phép network access.
+- Social wrapper hiện tại cung cấp hướng dẫn setup hoặc nhập manual thay vì thu
+  thập metric live. Không coi việc phát hiện credential là đã lấy dữ liệu.
+- Step được map có thể có tác động rộng hơn chính `ak:play`. Hãy kiểm tra ranh
+  giới của Skill hoặc Agent đã chọn trước khi xác nhận thực thi.
+
+## Xác minh output và bằng chứng
+
+Một lần chạy hữu ích nên để lại:
+
+- `manifest.json` dễ đọc với template ID và version đã chọn, input, goal, step,
+  status, dependency, timestamp và output path.
+- Dashboard phân biệt ready, blocked, in-progress, gate-pending, stale và
+  completed.
+- Tệp chính xác được tạo bởi mỗi step đã thực thi, không chỉ completed status.
+- Quyết định gate được ghi cùng feedback khi work bị reject.
+- Kết quả provider pull nêu metric updated, skipped và failed mà không lộ
+  credential.
+- Ghi chú cuối về hành động bên ngoài vẫn chờ approval riêng.
+
+## Xử lý sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Chưa có playbook | Dùng `templates` trước, kiểm tra một template đi kèm rồi chạy `create`. |
+| Manifest không đọc được | Dừng ghi, giữ tệp và xem lỗi JSON. Không dùng reset như cách sửa mù. |
+| Không có step ready | Chạy `blocked [name]`, hoàn thành dependency hoặc review output gate-pending. |
+| Expected output biến mất | Coi step cùng dependency phía sau là stale; kiểm tra workspace trước khi chạy lại. |
+| Goal pull bị skip hoặc lỗi | Giữ lỗi provider hiển thị và nhập giá trị manual đã review nếu phù hợp. Không tạo metric hiện tại giả. |
+| Command hoặc Agent được map không khả dụng | Xác nhận tập Skill đã cài và runtime support; chọn workflow trực tiếp được hỗ trợ hoặc dừng. |
+| Runtime không tìm thấy `ak:play` | Làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Tiếp tục với [Tổng quan Marketing Kit](../../marketing) hoặc
+[Projects, artifacts và checkpoints](../../../concepts/projects-artifacts-checkpoints)
+trước khi khôi phục hay xóa playbook state.
+
+## Biết các giới hạn hiện tại
+
+- Template đi kèm là cấu trúc khởi đầu, không phải forecast đã xác minh,
+  platform commitment hay timeline được bảo đảm.
+- Graph evaluation phát hiện direct output overlap cho nhóm song song nhưng
+  không chứng minh hai routed workflow không đụng cùng tệp hay account.
+- Provider bridge chỉ hỗ trợ một phần và phụ thuộc credential, API, script local
+  cùng response format hiện tại. Một số trường hợp vẫn cần nhập manual.
+- Gợi ý dùng fixed keyword mapping cùng goal gap đơn giản; không ước lượng quan
+  hệ nhân quả, conversion lift, revenue hay return on spend.
+- Stable và beta hiện có `ak:play` Skill, script, reference và template giống
+  nhau.

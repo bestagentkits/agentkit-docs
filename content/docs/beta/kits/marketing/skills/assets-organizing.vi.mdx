@@ -1,0 +1,198 @@
+---
+title: Sắp xếp marketing asset trong project với ak:assets-organizing
+description: Lập plan và áp dụng tên cùng path có thể review dưới assets mà không vô tình move, overwrite, delete hay mở rộng scope.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:assets-organizing` để chọn path và filename nhất quán cho tệp marketing
+trong cây `assets/` thuộc project. Skill cung cấp convention về naming, date,
+directory và asset type cho output mới cùng việc tổ chức lại tệp hiện có đã
+được duyệt.
+
+Đây là workflow về convention và file organization. Nó không upload asset,
+publish, validate content, deduplicate theo nội dung tệp hay quản lý digital
+asset platform.
+
+## Chọn ak:assets-organizing cho cấu trúc tệp local
+
+### Dùng ak:assets-organizing khi
+
+- Output marketing mới cần destination local trong project dễ dự đoán.
+- Asset hiện có cần mapping đề xuất vào các category dưới `assets/`.
+- Campaign hoặc deliverable nhiều tệp cần giữ self-contained.
+- Bạn cần kebab-case slug, date prefix, variant, platform folder hoặc scene
+  numbering nhất quán.
+
+### Chọn workflow khác khi
+
+- Bạn cần tạo hoặc sửa chính asset. Dùng Skill writing, design, image, video,
+  audio hoặc analysis phù hợp.
+- Bạn cần cloud sync, CDN publication, provider metadata, rights management hay
+  remote asset catalog.
+- Bạn cần binary deduplication, checksum, media validation hoặc migration tool
+  có thể rollback. Skill này không ship organizing script riêng.
+- Bạn không thể review chính xác source và destination path trước khi tệp đổi.
+
+## Chuẩn bị project và ranh giới quyền hạn
+
+Trước khi chạy Skill:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và cài Marketing Kit
+  cho runtime cùng scope hiện tại.
+- Mở project có directory `assets/` mà bạn muốn kiểm tra.
+- Giữ công việc không liên quan và untracked work.
+- Nêu rõ lần chạy chỉ preview hay có thể tạo directory, move hoặc rename tệp sau
+  approval.
+- Xác định behavior khi collision. Default an toàn là không overwrite, delete
+  hay replace path hiện có.
+- Xác định tệp nhạy cảm, có license, thuộc client hoặc source-controlled không
+  được move hay làm lộ.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:assets-organizing ...` | Phân phối native là mặc định; plugin rõ ràng cũng được hỗ trợ. Mutation filesystem thực tế phụ thuộc tool và authority được cấp trong session. |
+| Cursor | `/ak:assets-organizing ...` | Slash invocation đã được người dùng xác minh. Điều này không chứng minh safeguard file operation giống nhau giữa các runtime setup. |
+| Codex | `$ak:assets-organizing ...` | Native Skill discovery được hỗ trợ. Hook projection chỉ một phần, vì vậy hãy kiểm tra trực tiếp filesystem diff đề xuất. |
+
+Xem [Runtime adapter](../../../concepts/runtime-adapters) để hiểu khác biệt theo
+từng component.
+
+## Bắt đầu bằng mapping chỉ preview
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:assets-organizing Audit ./incoming-assets and propose target paths under assets/. Return a source-to-destination table. Do not create, move, rename, delete, or overwrite any file until I approve the exact mapping
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:assets-organizing Audit ./incoming-assets and propose target paths under assets/. Return a source-to-destination table. Do not create, move, rename, delete, or overwrite any file until I approve the exact mapping
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:assets-organizing Audit ./incoming-assets and propose target paths under assets/. Return a source-to-destination table. Do not create, move, rename, delete, or overwrite any file until I approve the exact mapping
+```
+
+  </Tab>
+</Tabs>
+
+Public argument hint là `[directory or asset-type]`. Luôn thêm outcome và ranh
+giới mutation mong muốn; chỉ một directory không cho biết bạn cần audit, cấu
+trúc đề xuất hay file change đã duyệt.
+
+## Áp dụng naming rule canonical
+
+| Rule | Contract |
+| --- | --- |
+| Slug | Chuyển lowercase, thay space bằng hyphen, bỏ special character, giữ số, bỏ hyphen ở đầu/cuối và giới hạn `50` ký tự tại word boundary |
+| Default date | Dùng `CK_PLAN_DATE_FORMAT` khi có; nếu không dùng `YYMMDD-HHmm` |
+| Date-only form | `YYMMDD` cho asset nhạy với thời gian nhưng không cần giờ |
+| Variant | Dùng `{name}-{width}x{height}.{ext}`, `{name}-{size}.{ext}`, `{name}-{platform}.{ext}`, `{name}-v{N}.{ext}` hoặc `{name}-{variant}.{ext}` khi phù hợp |
+| Scene | Dùng `scene-{NN}-{position}.{ext}` với số hai chữ số cho storyboard frame |
+| Output nhiều tệp | Giữ các tệp liên quan trong một folder self-contained |
+| Output theo platform | Dùng platform subfolder khi content dành riêng cho platform |
+
+Các reference trong package xung đột về date cho article: quick path dùng
+`assets/articles/{date}-{slug}/`, còn hướng dẫn asset type coi article là
+evergreen và nói bỏ date prefix. Không tự chọn âm thầm. Hỏi owner article có
+time-bound không, rồi ghi lại convention đã chọn.
+
+## Dùng path pattern nhỏ nhất hữu ích
+
+| Asset class | Pattern canonical |
+| --- | --- |
+| Article bundle | `assets/articles/{date}-{slug}/` hoặc evergreen variant đã được duyệt rõ |
+| Storyboard | `assets/storyboards/{date}-{slug}/` |
+| Video bundle | `assets/videos/{date}-{slug}/` |
+| Transcript | `assets/transcripts/{slug}.md` |
+| Banner | `assets/banners/{campaign}/{variant}-{size}.{ext}` |
+| Design bundle | `assets/designs/{project}/` |
+| Social post | `assets/posts/{platform}/{date}-{slug}.{ext}` |
+| General report | `assets/reports/{category}/{date}-{descriptive-slug}.md` |
+| Copy | `assets/copy/{type}/` |
+| Campaign bundle | `assets/campaigns/{date}-{slug}/` với `briefs/`, `creatives/`, `reports/` và `assets/` khi cần |
+| Generated asset | `assets/generated/{type}/{date}-{slug}.{ext}` |
+
+Không tạo sẵn mọi directory được liệt kê. Chỉ tạo parent và child cần cho
+deliverable đã duyệt. Nếu directory rỗng cần được track trong Git, convention
+source dùng `.gitkeep`, cũng là một file creation cần review.
+
+## Hiểu các giai đoạn
+
+1. **Kiểm kê scope được yêu cầu.** Liệt kê source file, type, size, vị trí hiện
+   tại và quan hệ liên quan mà không đọc hay move nội dung ngoài scope.
+2. **Phân loại từng deliverable.** Chọn asset class hẹp nhất và xác định đó là
+   single file, multi-file bundle, campaign group hay platform-specific output.
+3. **Tạo tên.** Áp dụng slug, date, variant và scene rule đã duyệt.
+4. **Kiểm tra collision.** So sánh mọi destination với tệp hiện có và xác định
+   conflict về case-only, extension, version cùng folder.
+5. **Trình bày mapping.** Hiển thị source, destination đề xuất, rule đã dùng và
+   lựa chọn chưa giải quyết. Preview-only mode không mutation.
+6. **Chỉ áp dụng thay đổi đã duyệt.** Tạo directory tối thiểu, rồi chỉ write,
+   move hay rename path đã chấp nhận mà không overwrite.
+7. **Xác minh.** Xác nhận mọi tệp dự kiến tồn tại ở destination và báo source
+   không đổi, conflict bị skip cùng partial failure.
+
+## Giữ tác động tệp an toàn và có thể recovery
+
+<Callout type="warn" title="Organization làm thay đổi project state">
+  Một cây thư mục gọn vẫn có thể làm hỏng link, import, embed, script, Git
+  history hay publishing pipeline. Duyệt mapping đầy đủ cùng plan cập nhật
+  dependency trước khi move tệp hiện có.
+</Callout>
+
+- Preview là read-only. Tạo directory, tạo tệp, rename, move, copy, overwrite và
+  delete là các mutation riêng.
+- Mặc định copy-and-verify hoặc move có version-control backup khi recovery quan
+  trọng. Không delete source như một phần cleanup chưa review.
+- Tìm reference tới từng path được move và chỉ cập nhật trong scope đã duyệt.
+- Giữ file byte, metadata quan trọng với workflow và thay đổi người dùng không
+  liên quan. Naming convention không phải quyền rewrite content.
+- Organization chỉ local. Nó không cấp quyền upload, publication, provider
+  request, account change hay spend.
+
+## Xác minh output và bằng chứng
+
+Một lần chạy hoàn tất nên cung cấp:
+
+- Mapping source-to-destination với naming rule đã chọn cho từng tệp.
+- Danh sách directory đã tạo và path đã đổi.
+- Quyết định collision cùng tệp bị skip.
+- Bằng chứng destination file dự kiến tồn tại và reference bắt buộc vẫn resolve.
+- Danh sách source file được giữ hoặc remove có chủ đích, cùng approval cho mọi
+  removal.
+- Ambiguity còn lại, đặc biệt convention date cho article hoặc asset type chưa
+  biết.
+
+## Xử lý sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Destination đã tồn tại | Dừng item đó, giữ cả hai tệp và chọn variant hay version name mới. |
+| Cùng asset phù hợp nhiều category | Chọn category của deliverable chính và link hoặc reference ở nơi khác thay vì duplicate byte không có lý do. |
+| Tệp đã move làm hỏng link hay embed | Dừng move tiếp, restore hoặc chỉ cập nhật reference đã duyệt và xác minh workflow phụ thuộc. |
+| Hướng dẫn date xung đột | Hỏi asset là time-bound hay evergreen rồi ghi pattern đã chọn. |
+| Skill đề xuất cleanup rộng | Thu hẹp input directory và yêu cầu mapping rõ; không cấp quyền recursive deletion. |
+| Runtime không tìm thấy `ak:assets-organizing` | Làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Tiếp tục với [Projects, artifacts và checkpoints](../../../concepts/projects-artifacts-checkpoints)
+trước recovery hoặc quay lại [Tổng quan Marketing Kit](../../marketing).
+
+## Biết các giới hạn hiện tại
+
+- Skill cung cấp convention nhưng không có script riêng cho atomic move,
+  rollback, checksum, content deduplication hay rewrite reference.
+- Một số ví dụ source vẫn dùng command name cũ. Coi tên Skill runtime canonical
+  là `ak:assets-organizing` và chỉ dùng ví dụ làm hướng dẫn path.
+- Asset-type reference chứa template rộng với placeholder claim, metric, pricing
+  và ROI. Không điền bằng dữ liệu bịa đặt.
+- Stable và beta hiện có nội dung `ak:assets-organizing` giống nhau.

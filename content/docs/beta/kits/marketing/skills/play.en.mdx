@@ -1,0 +1,201 @@
+---
+title: Orchestrate a marketing playbook with ak:play
+description: Create and advance a local marketing playbook, review dependency gates, and keep provider and publishing effects separately approved.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:play` to create and operate a local marketing playbook from a bundled
+template. The Skill records step dependencies, readiness, gates, goals,
+learnings, outputs, and timestamps in a project-local manifest so you can see
+what is ready, blocked, stale, or waiting for review.
+
+It coordinates existing Marketing Skills and Agents; it does not replace their
+specialized work or turn a template into permission to publish, spend, contact
+people, or change a live account.
+
+## Choose ak:play for multi-step coordination
+
+### Use ak:play when
+
+- A marketing initiative has dependent research, planning, creation, review,
+  and measurement steps.
+- You want a reusable local manifest instead of an informal checklist.
+- A bundled `product-hunt-launch`, `content-engine`, `campaign-sprint`, or
+  `saas-launch` template is a useful starting structure.
+- You need explicit manual gates and a view of blocked or stale downstream work.
+
+### Choose another workflow when
+
+- You need one bounded deliverable. Invoke the relevant creation, research, or
+  review Skill directly.
+- You only need planning and do not want files created under `data/playbooks/`.
+- You need a campaign scheduler, publisher, ad buyer, CRM operator, or live
+  analytics platform. `ak:play` is a local orchestrator, not blanket authority
+  for those systems.
+- You need guaranteed business impact. Goal-gap suggestions are local
+  heuristics, not forecasts or performance guarantees.
+
+## Prepare the project and runtime
+
+Before starting:
+
+- Complete [Onboarding](../../../getting-started/onboarding) and install
+  Marketing Kit for the runtime and scope in use.
+- Open the project whose `data/playbooks/` state you intend to create or change.
+- Preserve unrelated work and review repository instructions.
+- Choose a playbook name and inspect the bundled template before accepting its
+  steps, defaults, or goal targets.
+- Decide which external data sources, if any, the run may contact. Manual goal
+  values are the safe fallback.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:play ...` | Native delivery is the default; explicit plugin delivery is also supported. Mapped step capabilities still depend on the installed Marketing package and current tools. |
+| Cursor | `/ak:play ...` | Slash invocation is user-verified. This does not establish parity for every mapped Agent, Hook, prompt, or provider integration. |
+| Codex | `$ak:play ...` | Native Skill discovery is supported. Hook projection is partial, and any mapped capability still depends on the Codex adapter and current session. |
+
+See [Runtime adapters](../../../concepts/runtime-adapters) before assuming that
+the same playbook step activates identically in every runtime.
+
+## Create a bounded playbook
+
+Start with a local template and keep all external actions out of scope:
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:play create august-launch --template campaign-sprint
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:play create august-launch --template campaign-sprint
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:play create august-launch --template campaign-sprint
+```
+
+  </Tab>
+</Tabs>
+
+Review the required inputs, template steps, goal defaults, file destinations,
+and manual gates before accepting creation. The create flow writes:
+
+```text
+data/playbooks/august-launch/manifest.json
+data/playbooks/august-launch/research/
+data/playbooks/august-launch/content/
+data/playbooks/august-launch/reports/
+```
+
+## Use subcommands deliberately
+
+| Input | Purpose | Mutation or external-effect boundary |
+| --- | --- | --- |
+| `create <name> [--template <id>]` | Validate a local template, collect inputs, and create playbook state | Creates the playbook directory, manifest, and three workspace folders |
+| `next [name]` | Evaluate dependencies, show suggestions, and offer a ready step | Can invoke another Skill or Agent and write step outputs after confirmation |
+| `status [name]` | Show stage, step, gate, blocker, stale, and goal state | Reads state; configured goal pulls may contact external services |
+| `list` | Summarize local playbooks | Reads `data/playbooks/` |
+| `blocked [name]` | Explain blocked and gate-pending steps | Reads state and recommends an unblock path |
+| `learn [name]` | Capture user-reviewed reusable patterns | Appends to `manifest.json` and writes `learnings.md` |
+| `reset <name> [step]` | Reset one step or the whole playbook | Changes manifest state; preserves output files and, for full reset, inputs and learnings |
+| `gate <name> <step> approve\|reject` | Record a human gate decision | Changes step and gate state; approval can unblock downstream work |
+| `templates [--browse]` | List bundled templates | Local only; `--browse` currently reports that a community marketplace is not available |
+| `goals [set\|pull]` | Display, set, or refresh goal values | `set` changes the manifest; `pull` can make provider requests when a working integration is configured |
+
+If no subcommand is supplied, the Skill shows a dashboard. If the first token is
+not a subcommand, it is treated as a playbook name for status lookup.
+
+## Understand the stages
+
+1. **Parse and resolve.** The Skill identifies the subcommand and playbook, or
+   lists candidates when the name is missing.
+2. **Load local state.** It reads the template and
+   `data/playbooks/{slug}/manifest.json`, validates known template fields, and
+   records steps with dependencies and expected outputs.
+3. **Evaluate the graph.** It marks pending steps ready or blocked, detects
+   missing expected outputs as stale, and identifies parallel-ready groups.
+4. **Review goals and suggestions.** Manual values or available integrations
+   feed a simple gap-and-readiness heuristic. Treat the ranking as a prompt for
+   judgment, not proof of expected impact.
+5. **Confirm and run one step.** `next` presents strategy, AI execution, and
+   human-decision layers, then routes the approved step to a mapped Skill or
+   Agent and records output paths.
+6. **Gate and continue.** A gate-pending step remains blocked until you record
+   `approve` or `reject`. Rejected work returns to revision; approved work can
+   unblock dependents.
+7. **Capture evidence.** The manifest retains statuses, timestamps, outputs,
+   goals, and learnings for the next session.
+
+## Keep approvals and provider effects separate
+
+<Callout type="warn" title="A ready step is not approved external action">
+  Approving a playbook gate records workflow state. It does not authorize
+  publishing, outreach, ad spend, purchases, account changes, credential use,
+  or sending sensitive data to a provider. Approve those actions separately at
+  the point of effect.
+</Callout>
+
+- `create`, `learn`, `reset`, `gate`, and successful step execution mutate
+  project-local files.
+- `reset` preserves output files, so stale or superseded artifacts require a
+  separate, explicit cleanup decision.
+- Goal pulls may contact GA4, Google Search Console, Stripe, or SendGrid only
+  when the relevant scripts and credentials are available. Review the date
+  range, property or account, and data handling before allowing network access.
+- Current social wrappers provide setup or manual-entry guidance rather than
+  live metric collection. Do not treat credential detection as data retrieval.
+- Mapped steps can have broader effects than `ak:play` itself. Inspect the
+  selected Skill or Agent boundary before confirming execution.
+
+## Verify outputs and evidence
+
+A useful run should leave:
+
+- A readable `manifest.json` with the selected template ID and version, inputs,
+  goals, steps, statuses, dependencies, timestamps, and output paths.
+- A dashboard that distinguishes ready, blocked, in-progress, gate-pending,
+  stale, and completed work.
+- The exact files created by each executed step, not only a completed status.
+- A recorded gate decision and feedback when work is rejected.
+- Provider pull results that name updated, skipped, and failed metrics without
+  exposing credentials.
+- A final note of any external action still awaiting separate approval.
+
+## Troubleshoot or continue
+
+| Symptom | Safe next step |
+| --- | --- |
+| No playbook exists | Use `templates` first, inspect a bundled template, then run `create`. |
+| A manifest is unreadable | Stop writes, preserve the file, and inspect the JSON error. Do not use reset as a blind repair. |
+| No step is ready | Run `blocked [name]`, complete dependencies, or review a gate-pending output. |
+| Expected output disappeared | Treat the step and dependents as stale; inspect the workspace before re-running anything. |
+| Goal pull is skipped or fails | Keep the provider error visible and enter a reviewed manual value if appropriate. Do not fabricate current metrics. |
+| A mapped command or Agent is unavailable | Confirm the installed Skill set and runtime support; choose a direct supported workflow or stop. |
+| Runtime cannot find `ak:play` | Follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+Continue with the [Marketing Kit overview](../../marketing) or
+[Projects, artifacts, and checkpoints](../../../concepts/projects-artifacts-checkpoints)
+before recovering or deleting playbook state.
+
+## Know the current limits
+
+- The bundled templates are starting structures, not validated forecasts,
+  platform commitments, or guaranteed timelines.
+- Graph evaluation detects direct output overlap for parallel groups but does
+  not prove that two routed workflows cannot touch the same files or accounts.
+- Provider bridges are partial and depend on current credentials, APIs, local
+  scripts, and response formats. Manual entry remains necessary in some cases.
+- Suggestions use fixed keyword mappings and simple goal gaps; they do not
+  estimate causality, conversion lift, revenue, or return on spend.
+- Stable and beta currently contain identical `ak:play` Skill, scripts,
+  references, and templates.
