@@ -2,15 +2,16 @@ import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseManifest } from './manifest.mjs';
 import { scrubPrivateLinks } from './hygiene.mjs';
-import { RAW_DIR, generateReference } from './generate.mjs';
+import { RAW_DIR, DERIVED_DIR, generateReference } from './generate.mjs';
 
 // Beta ingestion. A bundle directory laid out per the docs-bundle contract:
 //   manifest.json, reference/cli/**, release-notes.md
-// is applied to `content/docs/beta/` by WHOLESALE replacement (never merge), so
+// is applied by WHOLESALE replacement of reference-raw/ (never merge), so
 // files deleted upstream disappear here and re-runs of the same tag are no-ops.
 // The bundle's raw pages become the committed source in reference-raw/; the
-// published pages under content/docs/beta/reference/cli are DERIVED from that
-// source + prose overlays by generateReference (so CI can prove them correct).
+// derived help dump under reference-derived/ is produced from that source +
+// prose overlays by generateReference (so CI can prove it correct). Published
+// CLI docs under content/docs/<channel>/reference/cli/ are human-authored.
 
 async function readJson(path) {
   return JSON.parse(await readFile(path, 'utf8'));
@@ -38,15 +39,14 @@ export async function syncBetaRelease({ repoRoot, bundleDir }) {
   const { tag, sha, version, generatedAt } = manifest;
 
   const betaDir = join(repoRoot, 'content', 'docs', 'beta');
-  const cliDir = join(betaDir, 'reference', 'cli');
+  const derivedDir = join(repoRoot, DERIVED_DIR);
   const bundleCli = join(bundleDir, 'reference', 'cli');
 
-  // 1. Refresh the raw source from the bundle, then derive the published pages.
+  // 1. Refresh the raw source from the bundle, then derive the help dump.
   // reference-raw/ holds the hygiene-scrubbed `ak --help` projection (wholesale
   // replaced, so upstream deletions vanish); a bundle-provided meta is never
-  // stored there. generateReference then produces the derived pages under
-  // content/docs/beta/reference/cli from reference-raw + prose overlays,
-  // preserving the human-owned nav meta.
+  // stored there. generateReference then produces reference-derived/ from
+  // reference-raw + prose overlays.
   const rawDir = join(repoRoot, RAW_DIR);
   await mkdir(rawDir, { recursive: true });
   for (const e of await readdir(rawDir, { withFileTypes: true })) {
@@ -56,14 +56,11 @@ export async function syncBetaRelease({ repoRoot, bundleDir }) {
     if (!e.isFile() || isNavMeta(e.name) || !/\.mdx?$/.test(e.name)) continue;
     await writeFile(join(rawDir, e.name), scrubPrivateLinks(await readFile(join(bundleCli, e.name), 'utf8')));
   }
-  await mkdir(cliDir, { recursive: true });
-  const referenceFiles = await generateReference({ repoRoot, channel: 'beta' });
+  await mkdir(derivedDir, { recursive: true });
+  const referenceFiles = await generateReference({ repoRoot });
 
-  // 2. Rewrite the machine-owned marker with this tag's provenance. No channel
-  // field: the marker is copied verbatim during promotion, so it must carry
-  // nothing channel-specific (the beta tag it records stays correct as the
-  // promotedFrom provenance of the stable tree).
-  await writeJson(join(cliDir, '.generated'), {
+  // 2. Rewrite the machine-owned marker with this tag's provenance.
+  await writeJson(join(derivedDir, '.generated'), {
     generator: 'ak-cli-reference',
     source: 'ak-cli',
     tag,

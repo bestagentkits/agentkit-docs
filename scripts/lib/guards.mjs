@@ -21,7 +21,30 @@ const AGENT_ALLOW_PREFIXES = [
 // actor-based hand-edit check. So the hand-edit guard exempts it, letting a
 // generator-change PR update the derived pages without the sync-bot bypass.
 // (The agent-PR guard stays strict: agents may never touch the reference.)
-export const REPRODUCIBLE_DIRS = ['content/docs/beta/reference/cli'];
+export const REPRODUCIBLE_DIRS = ['reference-derived'];
+
+// One-time ownership transfer for the CLI migration: the Beta generated dump
+// moves to reference-derived/, while reviewed pages in both channels move from
+// the human-owned cli-samples/ tree into the published nested cli/ tree.
+const OWNERSHIP_TRANSFERS = [
+  {
+    from: 'content/docs/beta/reference/cli/',
+    to: 'reference-derived/',
+  },
+  {
+    from: 'content/docs/beta/reference/cli-samples/',
+    to: 'content/docs/beta/reference/cli/',
+  },
+  {
+    from: 'content/docs/stable/reference/cli-samples/',
+    to: 'content/docs/stable/reference/cli/',
+  },
+];
+
+// Stable's obsolete generated dump has no derived destination. Its exact base
+// subtree is retired in the same one-time route migration; additions and edits
+// there remain forbidden.
+const OWNERSHIP_RETIREMENTS = ['content/docs/stable/reference/cli/'];
 
 /** Generated dirs still covered by the hand-edit guard (reproducible ones removed). */
 export function guardedDirs(generatedDirs) {
@@ -36,6 +59,41 @@ export function guardedDirs(generatedDirs) {
  */
 export function generatedViolations(changedPaths, generatedDirs) {
   return changedPaths.filter((p) => isInGeneratedDir(p, generatedDirs) && !isNavMeta(p));
+}
+
+function isOwnershipTransfer(change) {
+  if (!/^R\d+$/.test(change.status) || !change.source) return false;
+  return OWNERSHIP_TRANSFERS.some(
+    ({ from, to }) => change.source.startsWith(from) && change.path.startsWith(to),
+  );
+}
+
+function isOwnershipRetirement(change) {
+  return (
+    change.status === 'D' &&
+    OWNERSHIP_RETIREMENTS.some((prefix) => change.path.startsWith(prefix))
+  );
+}
+
+/**
+ * Generated-dir guard with rename provenance. Exact ownership-transfer renames
+ * are allowed; edits, additions, and deletions in the machine-owned source are
+ * still rejected.
+ * @param {{status: string, source?: string, path: string}[]} changes
+ * @param {string[]} generatedDirs
+ */
+export function generatedChangeViolations(changes, generatedDirs) {
+  const violations = [];
+  for (const change of changes) {
+    const touchesGenerated = [change.source, change.path].some(
+      (path) => path && isInGeneratedDir(path, generatedDirs),
+    );
+    if (!touchesGenerated || isNavMeta(change.path)) continue;
+    if (isOwnershipTransfer(change)) continue;
+    if (isOwnershipRetirement(change)) continue;
+    violations.push(change.path);
+  }
+  return violations;
 }
 
 /**
