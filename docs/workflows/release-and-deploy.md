@@ -1,64 +1,45 @@
-# Release sync & deploy
+# Release maintenance & deploy
 
-How `ak-docs` stays aligned with `ak-cli` releases and reaches staging/production.
+How `ak-docs` stays aligned with `ak-cli` releases and reaches
+staging/production.
 
-## End-to-end overview
+## Post-launch operating direction
+
+Release maintenance is Skill-first, manually invoked, and human-reviewed. The
+repo-local release-update Skill is the intended entry point: it audits immutable
+release evidence, maps changed claims to affected pages, and stops before
+authoring. Until the Skill lands, maintainers follow the same gates manually.
+After a maintainer approves the impact map, changes are authored in the release
+channels currently in scope and opened as a normal PR. Stable promotion is not
+part of the current operating workflow; add that contract when the Stable
+workflow is implemented.
 
 ```mermaid
-flowchart TB
-  subgraph akcli["ak-cli"]
-    REL["Release job"]
-    BUNDLE["docs-bundle.tar.gz<br/>manifest + reference/cli + release-notes"]
-    DISP["repository_dispatch<br/>release-docs"]
-  end
+flowchart LR
+  EVIDENCE["Exact tags/SHAs<br/>implementation + tests<br/>release artifacts"]
+  AUDIT["Release-update Skill<br/>read-only audit"]
+  IMPACT["Human-approved<br/>impact map"]
+  CONTENT["Update reviewed<br/>channel content"]
+  PR["Reviewed PR → dev"]
+  DEV["dev branch"]
+  MAIN["main branch"]
+  STG["staging.docs.agentkit.best"]
+  PROD["docs.agentkit.best"]
 
-  subgraph akdocs["ak-docs"]
-    SYNC["docs-sync.yml"]
-    RAW["reference-raw/"]
-    PROSE["reference-prose/"]
-    BETA["content/docs/beta/"]
-    DEV["dev branch"]
-    MAIN["main branch"]
-  end
-
-  subgraph cf["Cloudflare"]
-    STG["staging.docs.agentkit.best"]
-    PROD["docs.agentkit.best"]
-  end
-
-  REL --> BUNDLE --> DISP --> SYNC
-  SYNC --> RAW
-  SYNC --> BETA
-  RAW --> PROSE
-  PROSE --> BETA
-  SYNC --> DEV
+  EVIDENCE --> AUDIT --> IMPACT --> CONTENT --> PR --> DEV
   DEV -->|deploy-staging.yml| STG
-  DEV -->|PR merge| MAIN
+  DEV -->|reviewed PR| MAIN
   MAIN -->|deploy-production.yml| PROD
 ```
 
-## Beta docs sync (per release)
+Automation is not the operating authority for this phase. Workflow integration
+starts only after the same manual release-update contract has succeeded more
+than once. It must still open a PR and must never merge automatically.
 
-```mermaid
-sequenceDiagram
-  participant CLI as ak-cli release
-  participant GH as GitHub
-  participant WF as docs-sync.yml
-  participant BOT as agentkit-docs-bot
-  participant REPO as ak-docs dev
+## Release evidence
 
-  CLI->>GH: Upload docs-bundle.tar.gz
-  CLI->>GH: repository_dispatch release-docs
-  GH->>WF: channel=beta, tag, sha
-  WF->>GH: Download bundle (manifest is source of truth)
-  WF->>REPO: sync-release.mjs
-  Note over REPO: reference-raw/ ← bundle reference/cli<br/>generate-reference ← raw + prose<br/>release-notes.mdx, channels.json
-  BOT->>REPO: Commit docs-sync: beta &lt;tag&gt;
-  BOT->>REPO: Tag docs/&lt;tag&gt;
-  Note over REPO: deploy-staging.yml → staging site
-```
-
-### docs-bundle contract (v1)
+When a docs bundle is available, treat its manifest as one evidence input and
+verify it against the exact release tag or SHA before using it:
 
 ```
 manifest.json      # schemaVersion, channel, tag, sha, version, generatedAt
@@ -66,28 +47,12 @@ reference/cli/     # raw ak --help MDX per command
 release-notes.md   # channel release notes (semi-trusted input)
 ```
 
-`sync-release.mjs` wholesale-replaces `reference-raw/`, regenerates derived
-`content/docs/beta/reference/cli/` from raw + prose overlays, preserves human-owned
-`meta.json` / `meta.vi.json` nav, updates `channels.json.beta`.
+`sync-release.mjs` can wholesale-replace `reference-raw/`, regenerate the
+non-published `reference-derived/` dump from raw facts + prose overlays, and
+update release notes and `channels.json.beta`. Published nested CLI pages under
+`content/docs/beta/reference/cli/` remain reviewed, human-owned content.
 
-Re-dispatching the same tag is **idempotent**.
-
-## Stable promotion
-
-```mermaid
-flowchart LR
-  BETA_TAG["docs/&lt;beta-tag&gt;<br/>on dev"]
-  PROMO["promote-docs.mjs<br/>stable bundle"]
-  PR["Promotion PR → dev<br/>label: docs-promotion"]
-  STABLE["content/docs/stable/<br/>whole copy from beta tag"]
-  REV["Human review"]
-
-  BETA_TAG --> PROMO --> PR --> REV --> STABLE
-```
-
-Stable is never direct-committed. Promotion asserts content is channel-neutral
-(no baked-in `beta`/`stable` wording). Prose overlays inherit for free because
-they live outside `content/docs/`.
+Running the sync against the same bundle and tag is **idempotent**.
 
 ## Branch → environment
 
@@ -106,25 +71,6 @@ flowchart LR
 
 Production changes only via reviewed `dev` → `main` merge.
 
-## Docs agent (optional prose patches)
-
-```mermaid
-flowchart TD
-  SYNC_OK["Green beta docs-sync on dev"]
-  AGENT["docs-agent.yml<br/>agentkit-docs-agent"]
-  DIFF["Compare release notes + reference diff vs guides"]
-  PR["Open PR only<br/>modify beta getting-started/guides"]
-  GUARD["agent-guard.yml<br/>check-agent-pr.mjs"]
-  HUMAN["CODEOWNERS review"]
-
-  SYNC_OK --> AGENT --> DIFF
-  DIFF -->|stale guide| PR --> GUARD --> HUMAN
-  DIFF -->|unsure / no drift| SKIP["Skip"]
-```
-
-The agent cannot touch `reference/`, `stable/`, workflows, or generated dirs.
-Disabling `docs-agent.yml` does not affect the sync pipeline.
-
 ## CI on every PR (reference-related excerpt)
 
 ```mermaid
@@ -138,13 +84,13 @@ flowchart TD
 
 See [CLI reference pipeline](./cli-reference-pipeline.md) for layer details.
 
-## Identities & guards (summary)
+## Ownership & guards (summary)
 
-| Actor | Role | Bypass on `dev`? |
-| --- | --- | --- |
-| `agentkit-docs-bot` | Beta sync commits + tags | Yes (ruleset bypass) |
-| `agentkit-docs-agent` | Guide patch PRs | No — must pass guards |
-| Humans | PRs via review | No |
+| Actor | Role |
+| --- | --- |
+| Planned release-update Skill | Read-only audit, impact mapping, approved authoring |
+| Humans | Approve impact and review PRs |
+| CI | Enforce generated ownership, reproducibility, routes, links, and static export |
 
 Generated reference dir: reproducibility check (`generate-reference` zero diff)
 is stronger than the hand-edit guard for that path.
@@ -153,7 +99,6 @@ is stronger than the hand-edit guard for that path.
 
 ```bash
 node scripts/sync-release.mjs --bundle fixtures/docs-bundle-beta
-node scripts/promote-docs.mjs --bundle fixtures/docs-bundle-stable --beta-source content/docs/beta
 node scripts/compile-prose.mjs --check
 node scripts/generate-reference.mjs
 pnpm test
