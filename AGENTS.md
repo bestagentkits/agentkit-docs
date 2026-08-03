@@ -75,8 +75,11 @@ continuous with the marketing site. Do **not** invent colours, fonts, or radii.
   body are **English-only** — do not translate command syntax; VI nav labels
   live in `meta.vi.json` (CLI `pages` must mirror EN: `index`, `ak`, `...`).
 - **Generated dirs are machine-owned:** any directory containing a `.generated`
-  marker (currently `…/reference/cli/`) is written by the release-sync pipeline;
-  do not hand-edit. Placeholder pages carry `generated: true` frontmatter.
+  marker (currently `reference-derived/` for the CLI help dump) is written by
+  the release-sync pipeline; do not hand-edit. Published CLI docs under
+  `content/docs/<channel>/reference/cli/` are human-authored and nested to match
+  site URLs. The co-located `meta.json` / `meta.vi.json` (localized nav labels)
+  are human-owned.
 - **`channels.json`** (repo root) holds the released version per channel
   (`null` until first sync). Read it null-safely; the beta banner and version
   display already do.

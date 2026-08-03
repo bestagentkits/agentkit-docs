@@ -21,7 +21,7 @@ const AGENT_ALLOW_PREFIXES = [
 // actor-based hand-edit check. So the hand-edit guard exempts it, letting a
 // generator-change PR update the derived pages without the sync-bot bypass.
 // (The agent-PR guard stays strict: agents may never touch the reference.)
-export const REPRODUCIBLE_DIRS = ['content/docs/beta/reference/cli'];
+export const REPRODUCIBLE_DIRS = ['reference-derived'];
 
 /** Generated dirs still covered by the hand-edit guard (reproducible ones removed). */
 export function guardedDirs(generatedDirs) {

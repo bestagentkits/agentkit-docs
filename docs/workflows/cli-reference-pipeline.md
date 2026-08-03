@@ -19,7 +19,7 @@ flowchart TB
   end
 
   subgraph published["Published (Fumadocs)"]
-    MDX["content/docs/beta/reference/cli/&lt;slug&gt;.mdx"]
+    MDX["reference-derived/&lt;slug&gt;.mdx"]
     SITE["docs.agentkit.best"]
   end
 
@@ -35,7 +35,8 @@ flowchart TB
 | `reference-raw/` | Machine (sync from `ak-cli` release) | Usage, flags, exit codes, examples — exact CLI help |
 | `reference-prose-json/` | LLM/agent (optional) | `{ overview, whenToUse, notes? }` |
 | `reference-prose/` | Human/LLM reviewed | Markdown lead only |
-| `content/docs/.../cli/` | **Derived** | Prose lead + generated fact sections |
+| `reference-derived/` | **Derived** | Prose lead + generated fact sections (not published) |
+| `content/docs/.../cli/` | **Authored** | Nested user-facing CLI reference |
 
 Slugs without a prose overlay fall back to a mechanical synopsis from raw.
 
@@ -104,7 +105,7 @@ node scripts/compile-prose.mjs              # → reference-prose/<slug>.md
 # Path B — edit reference-prose/<slug>.md directly
 
 # Both paths:
-node scripts/generate-reference.mjs           # → content/docs/beta/reference/cli/
+node scripts/generate-reference.mjs           # → reference-derived/
 pnpm lint && pnpm check:reference && pnpm build && pnpm check:links
 ```
 
@@ -132,7 +133,7 @@ flowchart TD
 
 Reproducibility rule: for unchanged `reference-raw/` + `reference-prose/`,
 re-running `generate-reference.mjs` must produce **zero diff** on
-`content/docs/beta/reference/cli/`.
+`reference-derived/`.
 
 ## When each layer changes
 

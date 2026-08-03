@@ -1,30 +1,9 @@
 import { docs } from 'collections/server';
 import { loader, type LoaderPlugin } from 'fumadocs-core/source';
 import { rewriteCliReferenceLinks } from './cli-reference-links';
-import {
-  nestCliReferencePageTree,
-  transformCliReferenceStorage,
-} from './cli-reference-routes.mjs';
 import { resolveDocsRelativeHref } from './relative-href';
 import { i18n } from './i18n';
 import { docsContentRoute, docsImageRoute, docsRoute } from './shared';
-
-function canonicalCliReference(): LoaderPlugin {
-  return {
-    name: 'agentkit:canonical-cli-reference',
-    enforce: 'post',
-    transformStorage({ storage }) {
-      transformCliReferenceStorage(storage);
-    },
-    transformPageTree: {
-      folder(node, folderPath) {
-        return /^(?:stable|beta)\/reference\/cli-samples$/.test(folderPath)
-          ? nestCliReferencePageTree(node)
-          : node;
-      },
-    },
-  };
-}
 
 function hideUnapprovedGeneratedContent(): LoaderPlugin {
   return {
@@ -46,7 +25,7 @@ export const source = loader({
   baseUrl: docsRoute,
   i18n,
   source: docs.toFumadocsSource(),
-  plugins: [canonicalCliReference(), hideUnapprovedGeneratedContent()],
+  plugins: [hideUnapprovedGeneratedContent()],
 });
 
 // The OG-image and raw-markdown route handlers live under the `[lang]` segment,
