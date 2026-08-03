@@ -5,6 +5,12 @@ import {
   validateLedger,
   validateProvenanceSummary,
 } from './docs-release-schema.mjs';
+import {
+  isCoverageApprovalRequest,
+  validateCoverageApprovalRequest,
+  validateCoverageImpactMap,
+  validateCoverageLedger,
+} from './docs-release-coverage-schema.mjs';
 import { digest, sortedUnique, stableJson, withoutKey } from './docs-release-normalize.mjs';
 import { isHumanOwnedBetaFile, normalizeRepoPath, validateTargetName } from './docs-release-paths.mjs';
 import { validateManifest } from './manifest.mjs';
@@ -120,7 +126,7 @@ export function createApprovalRequest({ ledger, impactMap, target }) {
   return { ...base, requestDigest: digest(base) };
 }
 
-export function validateApprovalRequest(request) {
+function validateReleaseApprovalRequest(request) {
   if (!request || request.schemaVersion !== APPROVAL_REQUEST_SCHEMA) fail('unsupported approval-request schema');
   const allowed = ['schemaVersion', 'requestId', 'status', 'channel', 'target', 'source', 'ledgerDigest', 'impactMapDigest', 'claimIds', 'blockedClaimIds', 'paths', 'requestDigest'];
   exactKeys(request, allowed, 'approval request');
@@ -143,6 +149,12 @@ export function validateApprovalRequest(request) {
   if (request.requestDigest !== digest(withoutKey(request, 'requestDigest'))) fail('approval request digest is forged or stale');
   for (const path of request.paths) normalizeRepoPath(path);
   return request;
+}
+
+export function validateApprovalRequest(request) {
+  return isCoverageApprovalRequest(request)
+    ? validateCoverageApprovalRequest(request)
+    : validateReleaseApprovalRequest(request);
 }
 
 export function validateDurableApprovalRecord(approval, options = {}) {
@@ -207,6 +219,7 @@ export function validateDurableApprovalRecord(approval, options = {}) {
 export function validateApprovalBinding(request, approval, options = {}) {
   validateApprovalRequest(request);
   validateDurableApprovalRecord(approval, options);
+  const coverageGap = isCoverageApprovalRequest(request);
   if (request.status !== 'approval-required') fail(`request status ${request.status} cannot authorize V1`);
   if (request.channel !== 'beta' || approval.subject.channel !== 'beta') fail('V1 authoring is Beta-only');
   if (approval.subject.targetBranch !== 'dev') fail('V1 authoring targets dev only');
@@ -223,7 +236,19 @@ export function validateApprovalBinding(request, approval, options = {}) {
   if (subject.docsBaseSha !== docsBaseSha) fail('approval docs base SHA does not match expected docs base SHA');
   if (subject.targetBranch !== targetBranch) fail('approval target branch does not match expected target branch');
   if (subject.channel !== request.channel) fail('approval channel does not match request');
-  if (subject.sourceTag !== request.source.to.ref || subject.sourceSha !== request.source.to.resolvedCommit) fail('approval source tag or SHA does not match request');
+  const requestSource = coverageGap
+    ? { repository: request.source.repository, tag: request.source.tag, sha: request.source.sha }
+    : { repository: sourceRepository, tag: request.source.to.ref, sha: request.source.to.resolvedCommit };
+  if (requestSource.repository !== sourceRepository) fail('request source repository does not match expected source repository');
+  if (subject.sourceTag !== requestSource.tag || subject.sourceSha !== requestSource.sha) fail('approval source tag or SHA does not match request');
+  if (coverageGap) {
+    if (request.docs.repository !== docsRepository || request.docs.baseSha !== docsBaseSha || request.docs.targetBranch !== targetBranch) fail('coverage request docs subject does not match expected docs context');
+    if (!equal(approval.tracking.issue, {
+      repository: request.issue.repository,
+      number: request.issue.number,
+      url: request.issue.url,
+    })) fail('approval tracking issue does not match coverage request issue snapshot');
+  }
 
   if (approval.evidence.request.requestId !== request.requestId) fail('approval request ID does not match request');
   if (!equal(approval.claimIds, request.claimIds)) fail('approval claim IDs do not match request');
@@ -231,7 +256,10 @@ export function validateApprovalBinding(request, approval, options = {}) {
   if (!request.paths.every(isHumanOwnedBetaFile)) fail('V1 request contains a non-prose Beta path');
 
   const expectedPrefix = `plans/releases/${request.target}/`;
-  for (const [kind, filename] of [['request', 'approval-request.json'], ['ledger', 'source-ledger.json'], ['impactMap', 'docs-impact-map.json']]) {
+  const filenames = coverageGap
+    ? [['request', 'coverage-approval-request.json'], ['ledger', 'coverage-source-ledger.json'], ['impactMap', 'coverage-impact-map.json']]
+    : [['request', 'approval-request.json'], ['ledger', 'source-ledger.json'], ['impactMap', 'docs-impact-map.json']];
+  for (const [kind, filename] of filenames) {
     if (approval.evidence[kind].path !== `${expectedPrefix}${filename}`) fail(`evidence.${kind}.path does not match the V0 artifact path`);
   }
 
@@ -241,13 +269,25 @@ export function validateApprovalBinding(request, approval, options = {}) {
   validateSuppliedArtifact(approval.evidence.ledger, artifacts.ledger, rawDigest(request.ledgerDigest, 'request.ledgerDigest'), 'ledger');
   validateSuppliedArtifact(approval.evidence.impactMap, artifacts.impactMap, rawDigest(request.impactMapDigest, 'request.impactMapDigest'), 'impact map');
   if (!equal(artifacts.request.value, request)) fail('supplied request artifact does not match the validated request');
-  validateLedger(artifacts.ledger.value);
-  validateImpactMap(artifacts.impactMap.value);
-  if (!equal({ from: artifacts.ledger.value.from, to: artifacts.ledger.value.to }, request.source)) fail('supplied ledger source does not match the request');
+  if (coverageGap) {
+    validateCoverageLedger(artifacts.ledger.value);
+    validateCoverageImpactMap(artifacts.impactMap.value);
+    const ledger = artifacts.ledger.value;
+    const impact = artifacts.impactMap.value;
+    for (const field of ['audit', 'source', 'docs', 'issue']) if (!equal(ledger[field], request[field])) fail(`coverage ledger ${field} does not match request`);
+    if (ledger.auditSourceDigest !== request.auditSourceDigest || ledger.sourceClaimsDigest !== request.sourceClaimsDigest) fail('coverage source or claim digest does not match request');
+    if (!equal(impact.audit, request.audit) || !equal(impact.docs, request.docs) || impact.issueBodyDigest !== request.issue.bodySnapshot.digest) fail('coverage impact context does not match request');
+    const routes = impact.pages.map((page) => ({ path: page.path, digest: page.routeDigest }));
+    if (!equal(routes, request.routeDigests)) fail('coverage route digests do not match request');
+  } else {
+    validateLedger(artifacts.ledger.value);
+    validateImpactMap(artifacts.impactMap.value);
+    if (!equal({ from: artifacts.ledger.value.from, to: artifacts.ledger.value.to }, request.source)) fail('supplied ledger source does not match the request');
+  }
   if (digest(artifacts.ledger.value) !== request.ledgerDigest) fail('supplied ledger is not bound to the request');
   if (digest(artifacts.impactMap.value) !== request.impactMapDigest || artifacts.impactMap.value.ledgerDigest !== request.ledgerDigest) fail('supplied impact map is not bound to the request and ledger');
 
-  const manifestDigest = request.source.to.manifestDigest;
+  const manifestDigest = coverageGap ? undefined : request.source.to.manifestDigest;
   if (manifestDigest) {
     if (!approval.evidence.manifest || !artifacts.manifest) fail('bundle approval requires manifest evidence and a supplied manifest');
     if (approval.evidence.manifest.path !== `${expectedPrefix}evidence/manifest.json`) fail('evidence.manifest.path does not match the V0 artifact path');

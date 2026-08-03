@@ -153,6 +153,28 @@ Add `--manifest <path>` when the request's target provenance is a bundle. The
 repository names and base SHA are explicit inputs because V0 release evidence
 does not contain those docs-control facts.
 
+Coverage-gap audits are a separate V0 mode; they never reinterpret an unchanged
+release claim as a release delta:
+
+```bash
+node scripts/check-docs-release-update.mjs \
+  --mode coverage-gap \
+  --audit-source plans/releases/<target>/audit-source.json \
+  --source-root /absolute/clean/source-or-descriptor-root \
+  --repo-root /absolute/clean/agentkit-docs \
+  --output-root /absolute/clean/agentkit-docs/plans/releases \
+  --target <target>
+```
+
+The versioned coverage request, ledger, and impact-map digests bind the audit
+kind/version, immutable source/test anchors, issue-body snapshot, docs base,
+and every existing-route digest. The same nested durable approval schema is
+used without another approval format: its request/ledger/impact artifacts bind
+those coverage fields transitively and the V1 validator revalidates them. A
+coverage V1 invocation also requires `--source-root` and `--issue-body`; it
+checks the source anchors again and reads route digests from the exact
+`docsBaseSha` before accepting the modify-only Beta prose batch.
+
 JSON Schema validates shape. A consumer must additionally fail closed unless all
 of these semantic checks pass:
 

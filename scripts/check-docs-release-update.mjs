@@ -3,6 +3,9 @@ import { readFile, realpath } from 'node:fs/promises';
 import { isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { validateApprovalBinding, validateApprovalRequest } from './lib/docs-release-approval.mjs';
+import { createCoverageGapAudit, verifyCoverageV1Physical } from './lib/docs-release-coverage.mjs';
+import { writeCoverageGapReports } from './lib/docs-release-coverage-reports.mjs';
+import { isCoverageApprovalRequest } from './lib/docs-release-coverage-schema.mjs';
 import { cliError, parseArgs, readJson, required } from './lib/docs-release-cli.mjs';
 import { createImpactMap } from './lib/docs-release-impact.mjs';
 import { createReleaseLedger } from './lib/docs-release-ledger.mjs';
@@ -16,6 +19,7 @@ const FLAGS = [
   '--repo-root', '--output-root', '--target', '--request', '--approval', '--changes',
   '--ledger', '--impact-map', '--manifest', '--source-repository', '--docs-repository',
   '--docs-base-sha', '--target-branch', '--now', '--used-nonces', '--output-prefix',
+  '--audit-source', '--source-root', '--issue-body',
 ];
 
 async function runV0(args) {
@@ -36,6 +40,24 @@ async function runV0(args) {
     outputDir: result.outputDir,
     files: result.files,
     requestDigest: result.request.requestDigest,
+  };
+}
+
+async function runCoverageGap(args) {
+  required(args, ['--audit-source', '--source-root', '--repo-root', '--output-root', '--target']);
+  const result = await createCoverageGapAudit({
+    auditSourcePath: args['--audit-source'],
+    sourceRoot: args['--source-root'],
+    docsRoot: args['--repo-root'],
+    target: args['--target'],
+  });
+  const written = await writeCoverageGapReports({ ...result, outputRoot: args['--output-root'], target: args['--target'] });
+  return {
+    mode: 'coverage-gap',
+    status: written.request.status,
+    outputDir: written.outputDir,
+    files: written.files,
+    requestDigest: written.request.requestDigest,
   };
 }
 
@@ -78,6 +100,7 @@ async function runV1(args) {
     : undefined;
   const approvalArtifact = await readRepoArtifact(args['--approval'], args['--repo-root'], 'durable approval');
   const request = validateApprovalRequest(requestArtifact.value);
+  if (isCoverageApprovalRequest(request)) required(args, ['--source-root', '--issue-body']);
   const approval = approvalArtifact.value;
   validateApprovalBinding(request, approval, {
     sourceRepository: args['--source-repository'],
@@ -93,6 +116,15 @@ async function runV1(args) {
       ...(manifestArtifact ? { manifest: manifestArtifact } : {}),
     },
   });
+  if (isCoverageApprovalRequest(request)) {
+    await verifyCoverageV1Physical({
+      request,
+      ledger: ledgerArtifact.value,
+      docsRoot: args['--repo-root'],
+      sourceRoot: args['--source-root'],
+      issueBodyPath: args['--issue-body'],
+    });
+  }
   const expectedApprovalPath = `docs-approvals/${approval.subject.sourceTag}-${approval.nonce}.json`;
   if (approvalArtifact.path !== expectedApprovalPath) throw new Error(`durable approval must be read from ${expectedApprovalPath}`);
   const changes = await readJson(args['--changes'], 'V1 changes');
@@ -120,9 +152,10 @@ async function runV0Scope(args) {
 
 export async function runCheck(args) {
   if (args['--mode'] === 'v0') return runV0(args);
+  if (args['--mode'] === 'coverage-gap') return runCoverageGap(args);
   if (args['--mode'] === 'v1') return runV1(args);
   if (args['--mode'] === 'v0-scope') return runV0Scope(args);
-  throw new Error('--mode must be v0, v0-scope, or v1');
+  throw new Error('--mode must be v0, coverage-gap, v0-scope, or v1');
 }
 
 export async function main(argv = process.argv.slice(2)) {

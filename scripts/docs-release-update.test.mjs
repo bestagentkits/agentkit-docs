@@ -2,7 +2,7 @@ import { afterEach, beforeEach, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -13,6 +13,7 @@ import {
   validateDurableApprovalRecord,
 } from './lib/docs-release-approval.mjs';
 import { runCheck } from './check-docs-release-update.mjs';
+import { isCoverageApprovalRequest } from './lib/docs-release-coverage-schema.mjs';
 import { createImpactMap } from './lib/docs-release-impact.mjs';
 import { createReleaseLedger } from './lib/docs-release-ledger.mjs';
 import { digest, stableJson } from './lib/docs-release-normalize.mjs';
@@ -37,6 +38,7 @@ const expectedApprovalContext = {
 const approvalNow = '2026-08-03T12:00:00.000Z';
 let temporary;
 let outputRoot;
+let coverageSequence = 0;
 
 async function json(path) {
   return JSON.parse(await readFile(path, 'utf8'));
@@ -90,23 +92,40 @@ function raw(prefixed) {
 function durableApproval(request, options = {}) {
   const nonce = options.nonce ?? '123e4567-e89b-42d3-a456-426614174000';
   const prefix = `plans/releases/${request.target}`;
+  const coverageGap = isCoverageApprovalRequest(request);
+  const source = coverageGap
+    ? { repository: request.source.repository, tag: request.source.tag, sha: request.source.sha }
+    : { repository: expectedApprovalContext.sourceRepository, tag: request.source.to.ref, sha: request.source.to.resolvedCommit };
+  const docs = coverageGap ? request.docs : {
+    repository: expectedApprovalContext.docsRepository,
+    baseSha: expectedApprovalContext.docsBaseSha,
+    targetBranch: expectedApprovalContext.targetBranch,
+  };
+  const filenames = coverageGap
+    ? { request: 'coverage-approval-request.json', ledger: 'coverage-source-ledger.json', impact: 'coverage-impact-map.json' }
+    : { request: 'approval-request.json', ledger: 'source-ledger.json', impact: 'docs-impact-map.json' };
+  const issue = coverageGap ? request.issue : {
+    repository: docs.repository,
+    number: 18,
+    url: `https://github.com/${docs.repository}/issues/18`,
+  };
   return {
     schemaVersion: 1,
-    approvalId: `docs-approval/v1/${request.source.to.ref}/${nonce}`,
+    approvalId: `docs-approval/v1/${source.tag}/${nonce}`,
     subject: {
       channel: request.channel,
-      sourceRepository: expectedApprovalContext.sourceRepository,
-      sourceTag: request.source.to.ref,
-      sourceSha: request.source.to.resolvedCommit,
-      docsRepository: expectedApprovalContext.docsRepository,
-      docsBaseSha: expectedApprovalContext.docsBaseSha,
-      targetBranch: expectedApprovalContext.targetBranch,
+      sourceRepository: source.repository,
+      sourceTag: source.tag,
+      sourceSha: source.sha,
+      docsRepository: docs.repository,
+      docsBaseSha: docs.baseSha,
+      targetBranch: docs.targetBranch,
     },
     evidence: {
-      request: { requestId: request.requestId, path: `${prefix}/approval-request.json`, sha256: raw(request.requestDigest) },
-      ledger: { path: `${prefix}/source-ledger.json`, sha256: raw(request.ledgerDigest) },
-      impactMap: { path: `${prefix}/docs-impact-map.json`, sha256: raw(request.impactMapDigest) },
-      ...(request.source.to.manifestDigest ? {
+      request: { requestId: request.requestId, path: `${prefix}/${filenames.request}`, sha256: raw(request.requestDigest) },
+      ledger: { path: `${prefix}/${filenames.ledger}`, sha256: raw(request.ledgerDigest) },
+      impactMap: { path: `${prefix}/${filenames.impact}`, sha256: raw(request.impactMapDigest) },
+      ...(!coverageGap && request.source.to.manifestDigest ? {
         manifest: { path: `${prefix}/evidence/manifest.json`, sha256: raw(request.source.to.manifestDigest) },
       } : {}),
     },
@@ -115,14 +134,14 @@ function durableApproval(request, options = {}) {
     approver: { login: 'example-docs-owner', kind: 'User' },
     tracking: {
       issue: {
-        repository: expectedApprovalContext.docsRepository,
-        number: 18,
-        url: `https://github.com/${expectedApprovalContext.docsRepository}/issues/18`,
+        repository: issue.repository,
+        number: issue.number,
+        url: issue.url,
       },
       approvalPullRequest: {
-        repository: expectedApprovalContext.docsRepository,
+        repository: docs.repository,
         number: 101,
-        url: `https://github.com/${expectedApprovalContext.docsRepository}/pull/101`,
+        url: `https://github.com/${docs.repository}/pull/101`,
       },
     },
     issuedAt: '2026-08-03T10:00:00.000Z',
@@ -142,11 +161,73 @@ function suppliedArtifacts(request, ledger, impactMap, manifest) {
 }
 
 function bindingOptions(request, ledger, impactMap, extras = {}) {
+  const context = isCoverageApprovalRequest(request) ? {
+    sourceRepository: request.source.repository,
+    docsRepository: request.docs.repository,
+    docsBaseSha: request.docs.baseSha,
+    targetBranch: request.docs.targetBranch,
+  } : expectedApprovalContext;
   return {
-    ...expectedApprovalContext,
+    ...context,
     now: approvalNow,
     artifacts: suppliedArtifacts(request, ledger, impactMap, extras.manifest),
     ...(extras.usedNonces ? { usedNonces: extras.usedNonces } : {}),
+  };
+}
+
+async function coverageWorkspace() {
+  const fixtureRoot = join(fixtures, 'coverage-gap');
+  coverageSequence += 1;
+  const docsRoot = join(temporary, `coverage-docs-${coverageSequence}`);
+  const sourceRoot = join(temporary, `coverage-source-${coverageSequence}`);
+  await cp(join(fixtureRoot, 'docs'), docsRoot, { recursive: true });
+  await cp(join(fixtureRoot, 'source'), sourceRoot, { recursive: true });
+  await writeFile(join(docsRoot, '.gitignore'), 'plans/\ndocs-approvals/\n');
+  await execFileAsync('git', ['init', '-b', 'dev'], { cwd: docsRoot });
+  await execFileAsync('git', ['config', 'user.name', 'Coverage Fixture'], { cwd: docsRoot });
+  await execFileAsync('git', ['config', 'user.email', 'coverage@example.test'], { cwd: docsRoot });
+  await execFileAsync('git', ['add', '.'], { cwd: docsRoot });
+  await execFileAsync('git', ['commit', '-m', 'fixture'], {
+    cwd: docsRoot,
+    env: {
+      ...process.env,
+      GIT_AUTHOR_DATE: '2026-08-04T00:00:00Z',
+      GIT_COMMITTER_DATE: '2026-08-04T00:00:00Z',
+    },
+  });
+  const { stdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: docsRoot });
+  const docsBaseSha = stdout.trim();
+  const evidenceDir = join(docsRoot, 'plans', 'releases', 'coverage-audit');
+  await mkdir(evidenceDir, { recursive: true });
+  const issueBodyPath = join(evidenceDir, 'issue-body.md');
+  await cp(join(fixtureRoot, 'issue-body.md'), issueBodyPath);
+  const template = await readFile(join(fixtureRoot, 'audit-source.template.json'), 'utf8');
+  const auditSourcePath = join(evidenceDir, 'audit-source.json');
+  await writeFile(auditSourcePath, template.replace('DOCS_BASE_SHA', docsBaseSha));
+  return {
+    docsRoot,
+    sourceRoot,
+    docsBaseSha,
+    issueBodyPath,
+    auditSourcePath,
+    outputRoot: join(docsRoot, 'plans', 'releases'),
+  };
+}
+
+async function runCoverageGap(workspace) {
+  const result = await runCheck({
+    '--mode': 'coverage-gap',
+    '--audit-source': workspace.auditSourcePath,
+    '--source-root': workspace.sourceRoot,
+    '--repo-root': workspace.docsRoot,
+    '--output-root': workspace.outputRoot,
+    '--target': 'coverage-audit',
+  });
+  return {
+    ...result,
+    request: await json(join(result.outputDir, 'coverage-approval-request.json')),
+    ledger: await json(join(result.outputDir, 'coverage-source-ledger.json')),
+    impactMap: await json(join(result.outputDir, 'coverage-impact-map.json')),
   };
 }
 
@@ -215,6 +296,123 @@ test('no-impact evidence produces an explicit no-op handoff', async () => {
   assert.equal(map.status, 'no-op');
   assert.equal(request.status, 'no-op');
   assert.deepEqual(request.paths, []);
+});
+
+test('ordinary V0 keeps the v2.7 to v2.8 issue-18 snapshot as a release no-op', async () => {
+  const from = await fixtureSource('issue18-snapshot', 'from');
+  const to = await fixtureSource('issue18-snapshot', 'to');
+  const ledger = createReleaseLedger(from, to, 'beta');
+  const impactMap = createImpactMap(ledger, { repoRoot });
+  const request = createApprovalRequest({ ledger, impactMap, target: 'issue-18' });
+  assert.equal(ledger.status, 'no-op');
+  assert.ok(ledger.claims.every((claim) => claim.classification === 'no-change'));
+  assert.equal(impactMap.status, 'no-op');
+  assert.equal(request.status, 'no-op');
+  assert.deepEqual(request.claimIds, []);
+  assert.deepEqual(request.paths, []);
+});
+
+test('coverage-gap V0 is deterministic and separates covered, partial, missing, and blocked claims', async () => {
+  const workspace = await coverageWorkspace();
+  const first = await runCoverageGap(workspace);
+  const before = await snapshot(first.outputDir);
+  const second = await runCoverageGap(workspace);
+  assert.deepEqual(await snapshot(second.outputDir), before);
+  assert.deepEqual(Object.keys(before).sort(), [
+    '/audit-source.json',
+    '/coverage-approval-request.json',
+    '/coverage-impact-map.json',
+    '/coverage-impact-map.md',
+    '/coverage-source-ledger.json',
+    '/coverage-source-ledger.md',
+    '/coverage-unresolved-evidence.md',
+    '/issue-body.md',
+  ]);
+  const bySource = Object.fromEntries(first.ledger.claims.map((claim) => [claim.sourceId, claim]));
+  assert.equal(bySource['issue18.covered-preservation'].classification, 'no-change');
+  assert.equal(bySource['issue18.partial-preservation'].classification, 'update');
+  assert.equal(bySource['issue18.missing-recovery'].classification, 'new');
+  assert.equal(bySource['issue18.blocked-without-test'].classification, 'blocked');
+  assert.match(bySource['issue18.blocked-without-test'].blockedReasons.join(' '), /test anchor missing/);
+  assert.equal(first.request.status, 'approval-required');
+  assert.equal(first.request.claimIds.length, 2);
+  assert.deepEqual(first.request.paths, [
+    'content/docs/beta/guides/coverage-missing.en.mdx',
+    'content/docs/beta/guides/coverage-partial.en.mdx',
+  ]);
+  assert.equal(first.impactMap.pages.find((page) => page.path.includes('covered')).classification, 'no-change');
+  assert.equal(first.impactMap.pages.find((page) => page.path.includes('blocked')).classification, 'blocked');
+  assert.ok(first.request.routeDigests.every((route) => route.digest.startsWith('sha256:')));
+});
+
+test('coverage-gap V0 rejects issue, source, route, dirty checkout, floating ref, and path escape mutations', async () => {
+  let workspace = await coverageWorkspace();
+  await writeFile(workspace.issueBodyPath, 'mutated issue\n');
+  await assert.rejects(() => runCoverageGap(workspace), /issue body snapshot digest mismatch/);
+
+  workspace = await coverageWorkspace();
+  await writeFile(join(workspace.sourceRoot, 'behavior.go'), 'mutated source\n');
+  await assert.rejects(() => runCoverageGap(workspace), /source\/test hash mismatch/);
+
+  workspace = await coverageWorkspace();
+  const descriptor = await json(workspace.auditSourcePath);
+  descriptor.claims[0].coverage[0].routeDigest = `sha256:${'f'.repeat(64)}`;
+  await writeFile(workspace.auditSourcePath, stableJson(descriptor));
+  await assert.rejects(() => runCoverageGap(workspace), /current-doc route digest mismatch/);
+
+  workspace = await coverageWorkspace();
+  await writeFile(join(workspace.docsRoot, 'content/docs/beta/guides/coverage-covered.en.mdx'), 'dirty\n');
+  await assert.rejects(() => runCoverageGap(workspace), /docs checkout is dirty/);
+
+  workspace = await coverageWorkspace();
+  const floating = await json(workspace.auditSourcePath);
+  floating.source.tag = 'dev';
+  await writeFile(workspace.auditSourcePath, stableJson(floating));
+  await assert.rejects(() => runCoverageGap(workspace), /full commit SHA or release tag/);
+
+  workspace = await coverageWorkspace();
+  await execFileAsync('git', ['init', '-b', 'dev'], { cwd: workspace.sourceRoot });
+  await execFileAsync('git', ['config', 'user.name', 'Coverage Source'], { cwd: workspace.sourceRoot });
+  await execFileAsync('git', ['config', 'user.email', 'source@example.test'], { cwd: workspace.sourceRoot });
+  await execFileAsync('git', ['add', '.'], { cwd: workspace.sourceRoot });
+  await execFileAsync('git', ['commit', '-m', 'source fixture'], {
+    cwd: workspace.sourceRoot,
+    env: { ...process.env, GIT_AUTHOR_DATE: '2026-08-04T00:00:00Z', GIT_COMMITTER_DATE: '2026-08-04T00:00:00Z' },
+  });
+  await execFileAsync('git', ['tag', 'v2.8.0-beta.2'], { cwd: workspace.sourceRoot });
+  const sourceHead = (await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: workspace.sourceRoot })).stdout.trim();
+  const checkout = await json(workspace.auditSourcePath);
+  checkout.source.sha = sourceHead;
+  checkout.source.provenance = 'checkout';
+  await writeFile(workspace.auditSourcePath, stableJson(checkout));
+  await runCoverageGap(workspace);
+  await writeFile(join(workspace.sourceRoot, 'dirty.txt'), 'dirty\n');
+  await assert.rejects(() => runCoverageGap(workspace), /source checkout is dirty/);
+
+  workspace = await coverageWorkspace();
+  const outside = join(temporary, 'outside-source.go');
+  await writeFile(outside, 'outside\n');
+  await symlink(outside, join(workspace.sourceRoot, 'escape.go'));
+  const escaped = await json(workspace.auditSourcePath);
+  escaped.claims[0].anchors[0].path = 'escape.go';
+  escaped.claims[0].anchors[0].digest = digest(await readFile(outside));
+  await writeFile(workspace.auditSourcePath, stableJson(escaped));
+  await assert.rejects(() => runCoverageGap(workspace), /unsafe path|outside/);
+});
+
+test('coverage descriptor statements remain inert data', async () => {
+  const workspace = await coverageWorkspace();
+  const marker = join(temporary, 'SHOULD_NOT_EXIST');
+  const descriptor = await json(workspace.auditSourcePath);
+  descriptor.claims[0].statement = `touch ${marker}`;
+  descriptor.claims[0].statementDigest = digest(descriptor.claims[0].statement);
+  await writeFile(workspace.auditSourcePath, stableJson(descriptor));
+  const result = await runCoverageGap(workspace);
+  await assert.rejects(() => readFile(marker), /ENOENT/);
+  for (const name of result.files) {
+    const contents = await readFile(join(result.outputDir, name), 'utf8');
+    assert.doesNotMatch(contents, /SHOULD_NOT_EXIST/);
+  }
 });
 
 test('partial evidence blocks only its claim and leaves unrelated pages actionable', async () => {
@@ -290,6 +488,105 @@ test('durable approval binds request, source, evidence, scope, reviewer, trackin
   assert.ok(request.source.to.provenanceDigest);
   assert.ok(request.claimIds.length > 0);
   assert.ok(request.paths.length > 0);
+});
+
+test('coverage durable approval binds audit, issue snapshot, source claims, route digests, claims, and paths', async () => {
+  const workspace = await coverageWorkspace();
+  const { request, ledger, impactMap } = await runCoverageGap(workspace);
+  const approval = durableApproval(request);
+  const options = bindingOptions(request, ledger, impactMap);
+  assert.equal(validateApprovalBinding(request, approval, options), approval);
+
+  const claimExpansion = structuredClone(approval);
+  claimExpansion.claimIds.push('CLM-FFFFFFFFFFFFFFFF');
+  claimExpansion.claimIds.sort();
+  assert.throws(() => validateApprovalBinding(request, claimExpansion, options), /claim IDs/);
+  const pathExpansion = structuredClone(approval);
+  pathExpansion.scope.paths.push('content/docs/beta/guides/coverage-covered.en.mdx');
+  pathExpansion.scope.paths.sort();
+  assert.throws(() => validateApprovalBinding(request, pathExpansion, options), /approval paths/);
+  const actionExpansion = structuredClone(approval);
+  actionExpansion.scope.actions = ['modify', 'create'];
+  assert.throws(() => validateApprovalBinding(request, actionExpansion, options), /scope\.actions/);
+  const issueMutation = structuredClone(request);
+  issueMutation.issue.bodySnapshot.digest = `sha256:${'f'.repeat(64)}`;
+  issueMutation.requestDigest = digest({ ...issueMutation, requestDigest: undefined });
+  assert.throws(() => validateApprovalBinding(issueMutation, approval, options), /forged or stale|artifact digest|request/);
+  const routeMutation = structuredClone(request);
+  routeMutation.routeDigests[0].digest = `sha256:${'e'.repeat(64)}`;
+  assert.throws(() => validateApprovalBinding(routeMutation, approval, options), /forged or stale/);
+  const ledgerMutation = structuredClone(options);
+  ledgerMutation.artifacts.ledger.value.claims[0].anchors[0].digest = `sha256:${'d'.repeat(64)}`;
+  assert.throws(() => validateApprovalBinding(request, approval, ledgerMutation), /sourceClaimsDigest|ledger|digest/);
+  assert.throws(
+    () => validateApprovalBinding(request, approval, { ...options, now: '2026-08-05T00:00:00.000Z' }),
+    /stale/,
+  );
+  assert.throws(
+    () => validateApprovalBinding(request, approval, { ...options, usedNonces: new Set([approval.nonce]) }),
+    /replay/,
+  );
+});
+
+test('coverage V1 verifies physical issue, source, and exact docs base without creating public content', async () => {
+  let workspace = await coverageWorkspace();
+  let evidence = await runCoverageGap(workspace);
+  let approval = durableApproval(evidence.request);
+  let approvalDir = join(workspace.docsRoot, 'docs-approvals');
+  await mkdir(approvalDir);
+  let approvalPath = join(approvalDir, `${evidence.request.source.tag}-${approval.nonce}.json`);
+  let changesPath = join(temporary, 'coverage-changes.json');
+  await writeFile(approvalPath, stableJson(approval));
+  await writeFile(changesPath, stableJson(evidence.request.paths.map((path) => ({ status: 'M', path }))));
+  const v1Args = {
+    '--mode': 'v1',
+    '--repo-root': workspace.docsRoot,
+    '--source-root': workspace.sourceRoot,
+    '--issue-body': workspace.issueBodyPath,
+    '--request': join(evidence.outputDir, 'coverage-approval-request.json'),
+    '--ledger': join(evidence.outputDir, 'coverage-source-ledger.json'),
+    '--impact-map': join(evidence.outputDir, 'coverage-impact-map.json'),
+    '--approval': approvalPath,
+    '--changes': changesPath,
+    '--source-repository': evidence.request.source.repository,
+    '--docs-repository': evidence.request.docs.repository,
+    '--docs-base-sha': evidence.request.docs.baseSha,
+    '--target-branch': 'dev',
+    '--now': approvalNow,
+  };
+  assert.equal((await runCheck(v1Args)).status, 'approved');
+  await writeFile(workspace.issueBodyPath, 'mutated after V0\n');
+  await assert.rejects(() => runCheck(v1Args), /issue body snapshot path or digest mismatch/);
+
+  workspace = await coverageWorkspace();
+  evidence = await runCoverageGap(workspace);
+  approval = durableApproval(evidence.request);
+  approvalDir = join(workspace.docsRoot, 'docs-approvals');
+  await mkdir(approvalDir);
+  approvalPath = join(approvalDir, `${evidence.request.source.tag}-${approval.nonce}.json`);
+  changesPath = join(temporary, 'coverage-changes-after-base.json');
+  await writeFile(approvalPath, stableJson(approval));
+  await writeFile(changesPath, stableJson(evidence.request.paths.map((path) => ({ status: 'M', path }))));
+  await writeFile(join(workspace.docsRoot, 'content/docs/beta/guides/coverage-covered.en.mdx'), 'changed base route\n');
+  const mutatedArgs = {
+    ...v1Args,
+    '--repo-root': workspace.docsRoot,
+    '--source-root': workspace.sourceRoot,
+    '--issue-body': workspace.issueBodyPath,
+    '--request': join(evidence.outputDir, 'coverage-approval-request.json'),
+    '--ledger': join(evidence.outputDir, 'coverage-source-ledger.json'),
+    '--impact-map': join(evidence.outputDir, 'coverage-impact-map.json'),
+    '--approval': approvalPath,
+    '--changes': changesPath,
+    '--docs-base-sha': evidence.request.docs.baseSha,
+  };
+  await assert.rejects(() => runCheck(mutatedArgs), /current-doc route mutation after V0/);
+  await execFileAsync('git', ['add', 'content/docs/beta/guides/coverage-covered.en.mdx'], { cwd: workspace.docsRoot });
+  await execFileAsync('git', ['commit', '-m', 'mutate route'], {
+    cwd: workspace.docsRoot,
+    env: { ...process.env, GIT_AUTHOR_DATE: '2026-08-04T01:00:00Z', GIT_COMMITTER_DATE: '2026-08-04T01:00:00Z' },
+  });
+  await assert.rejects(() => runCheck(mutatedArgs), /does not match docsBaseSha/);
 });
 
 test('old flat approval and prefixed durable digests are rejected', async () => {
@@ -475,4 +772,22 @@ test('public CLI works without importing project code through a build step', asy
   const result = JSON.parse(stdout);
   assert.equal(result.status, 'no-op');
   assert.ok(result.files.includes('source-ledger.json'));
+});
+
+test('public coverage-gap CLI emits only versioned temporary evidence', async () => {
+  const workspace = await coverageWorkspace();
+  const { stdout } = await execFileAsync(process.execPath, [
+    join(repoRoot, 'scripts', 'check-docs-release-update.mjs'),
+    '--mode', 'coverage-gap',
+    '--audit-source', workspace.auditSourcePath,
+    '--source-root', workspace.sourceRoot,
+    '--repo-root', workspace.docsRoot,
+    '--output-root', workspace.outputRoot,
+    '--target', 'coverage-audit',
+  ]);
+  const result = JSON.parse(stdout);
+  assert.equal(result.mode, 'coverage-gap');
+  assert.equal(result.status, 'approval-required');
+  assert.ok(result.files.includes('coverage-source-ledger.json'));
+  assert.ok(result.files.includes('coverage-approval-request.json'));
 });
