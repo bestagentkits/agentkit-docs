@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://docs.agentkit.best/schemas/docs-approval-v1.schema.json",
+  "title": "AgentKit docs approval v1",
+  "description": "A reviewable, expiring authorization bound to immutable release evidence and an exact docs change scope.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "approvalId",
+    "subject",
+    "evidence",
+    "claimIds",
+    "scope",
+    "approver",
+    "tracking",
+    "issuedAt",
+    "expiresAt",
+    "nonce"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "approvalId": {
+      "type": "string",
+      "pattern": "^docs-approval/v1/[A-Za-z0-9._-]+/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel", "sourceRepository", "sourceTag", "sourceSha", "docsRepository", "docsBaseSha", "targetBranch"],
+      "properties": {
+        "channel": { "enum": ["beta", "stable"] },
+        "sourceRepository": { "$ref": "#/$defs/repository" },
+        "sourceTag": { "type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+(?:-beta\\.[0-9]+)?$" },
+        "sourceSha": { "$ref": "#/$defs/gitSha" },
+        "docsRepository": { "$ref": "#/$defs/repository" },
+        "docsBaseSha": { "$ref": "#/$defs/gitSha" },
+        "targetBranch": { "enum": ["dev"] }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifest", "impactMap"],
+      "properties": {
+        "manifest": { "$ref": "#/$defs/digestedArtifact" },
+        "impactMap": { "$ref": "#/$defs/digestedArtifact" }
+      }
+    },
+    "claimIds": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$" }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["paths", "actions"],
+      "properties": {
+        "paths": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/allowedPath" }
+        },
+        "actions": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["create", "modify", "delete", "rename"] }
+        }
+      }
+    },
+    "approver": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["login", "kind"],
+      "properties": {
+        "login": { "type": "string", "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$" },
+        "kind": { "enum": ["User", "Team"] }
+      }
+    },
+    "tracking": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["issue", "approvalPullRequest"],
+      "properties": {
+        "issue": { "$ref": "#/$defs/githubRecord" },
+        "approvalPullRequest": { "$ref": "#/$defs/githubRecord" }
+      }
+    },
+    "issuedAt": { "type": "string", "format": "date-time" },
+    "expiresAt": { "type": "string", "format": "date-time" },
+    "nonce": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    }
+  },
+  "$defs": {
+    "repository": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$" },
+    "gitSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "allowedPath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!content/docs/stable/)(?!reference-derived/)(?!.*(?:^|/)\\.generated(?:/|$))(?!\\.github/)(?!docs-approvals/)[A-Za-z0-9._@{}-]+(?:/[A-Za-z0-9._@{}-]+)*$"
+    },
+    "digestedArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "$ref": "#/$defs/allowedPath" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "githubRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "number", "url"],
+      "properties": {
+        "repository": { "$ref": "#/$defs/repository" },
+        "number": { "type": "integer", "minimum": 1 },
+        "url": { "type": "string", "format": "uri", "pattern": "^https://github\\.com/" }
+      }
+    }
+  }
+}
