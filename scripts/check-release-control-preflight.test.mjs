@@ -1,11 +1,52 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   evaluatePreflight,
   formatReport,
   redactSensitive,
   REQUIRED,
 } from './check-release-control-preflight.mjs';
+import { validateDurableApprovalRecord } from './lib/docs-release-approval.mjs';
+
+const repoRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
+
+function schemaTarget(root, reference) {
+  return reference.slice(2).split('/').reduce((value, key) => value[key], root);
+}
+
+function validateSchemaValue(value, schema, root, label = '$') {
+  if (schema.$ref) return validateSchemaValue(value, schemaTarget(root, schema.$ref), root, label);
+  if (schema.const !== undefined) assert.deepEqual(value, schema.const, `${label} const`);
+  if (schema.enum) assert.ok(schema.enum.includes(value), `${label} enum`);
+  if (schema.type === 'object') {
+    assert.ok(value && typeof value === 'object' && !Array.isArray(value), `${label} object`);
+    for (const key of schema.required ?? []) assert.ok(Object.hasOwn(value, key), `${label}.${key} required`);
+    if (schema.additionalProperties === false) {
+      for (const key of Object.keys(value)) assert.ok(Object.hasOwn(schema.properties ?? {}, key), `${label}.${key} additional`);
+    }
+    for (const [key, child] of Object.entries(schema.properties ?? {})) {
+      if (Object.hasOwn(value, key)) validateSchemaValue(value[key], child, root, `${label}.${key}`);
+    }
+  } else if (schema.type === 'array') {
+    assert.ok(Array.isArray(value), `${label} array`);
+    if (schema.minItems !== undefined) assert.ok(value.length >= schema.minItems, `${label} minItems`);
+    if (schema.maxItems !== undefined) assert.ok(value.length <= schema.maxItems, `${label} maxItems`);
+    if (schema.uniqueItems) assert.equal(new Set(value.map((item) => JSON.stringify(item))).size, value.length, `${label} uniqueItems`);
+    value.forEach((item, index) => validateSchemaValue(item, schema.items, root, `${label}[${index}]`));
+  } else if (schema.type === 'string') {
+    assert.equal(typeof value, 'string', `${label} string`);
+    if (schema.minLength !== undefined) assert.ok(value.length >= schema.minLength, `${label} minLength`);
+    if (schema.pattern) assert.match(value, new RegExp(schema.pattern), `${label} pattern`);
+    if (schema.format === 'date-time') assert.ok(!Number.isNaN(Date.parse(value)), `${label} date-time`);
+    if (schema.format === 'uri') assert.doesNotThrow(() => new URL(value), `${label} uri`);
+  } else if (schema.type === 'integer') {
+    assert.ok(Number.isInteger(value), `${label} integer`);
+    if (schema.minimum !== undefined) assert.ok(value >= schema.minimum, `${label} minimum`);
+  }
+}
 
 function greenPolicy(branch) {
   return {
@@ -220,4 +261,14 @@ test('human report never serializes fixture credential values', () => {
   const report = formatReport(fixture, evaluatePreflight(fixture));
   assert.doesNotMatch(report, /github_pat_/);
   assert.match(report, /values were not requested or printed/);
+});
+
+test('durable approval example validates against the JSON schema and runtime contract', async () => {
+  const schema = JSON.parse(await readFile(resolve(repoRoot, 'docs-approvals/v1.schema.json'), 'utf8'));
+  const example = JSON.parse(await readFile(resolve(repoRoot, 'docs-approvals/v1.example.json'), 'utf8'));
+  validateSchemaValue(example, schema, schema);
+  assert.equal(
+    validateDurableApprovalRecord(example, { now: '2026-08-05T00:00:00Z' }),
+    example,
+  );
 });

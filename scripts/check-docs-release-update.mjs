@@ -1,18 +1,21 @@
 #!/usr/bin/env node
+import { readFile, realpath } from 'node:fs/promises';
+import { isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { validateApprovalBinding, validateApprovalRequest } from './lib/docs-release-approval.mjs';
 import { cliError, parseArgs, readJson, required } from './lib/docs-release-cli.mjs';
 import { createImpactMap } from './lib/docs-release-impact.mjs';
 import { createReleaseLedger } from './lib/docs-release-ledger.mjs';
-import { stableJson } from './lib/docs-release-normalize.mjs';
-import { assertV0WriteScope, v1WriteViolations } from './lib/docs-release-paths.mjs';
+import { digest, stableJson } from './lib/docs-release-normalize.mjs';
+import { assertV0WriteScope, normalizeRepoPath, v1WriteViolations } from './lib/docs-release-paths.mjs';
 import { writeV0Reports } from './lib/docs-release-reports.mjs';
 import { loadReleaseSource } from './lib/docs-release-source.mjs';
 
 const FLAGS = [
   '--mode', '--from-ref', '--to-ref', '--from-source', '--to-source', '--channel',
   '--repo-root', '--output-root', '--target', '--request', '--approval', '--changes',
-  '--now', '--used-nonces', '--output-prefix',
+  '--ledger', '--impact-map', '--manifest', '--source-repository', '--docs-repository',
+  '--docs-base-sha', '--target-branch', '--now', '--used-nonces', '--output-prefix',
 ];
 
 async function runV0(args) {
@@ -44,14 +47,54 @@ async function usedNonceSet(path) {
   return new Set(values);
 }
 
+async function readRepoArtifact(path, repoRoot, label, digestMode = 'bytes') {
+  const root = await realpath(resolve(repoRoot));
+  const candidate = isAbsolute(path) ? path : resolve(root, path);
+  const absolute = await realpath(candidate);
+  const repoPath = normalizeRepoPath(relative(root, absolute));
+  const bytes = await readFile(absolute);
+  let value;
+  try {
+    value = JSON.parse(bytes.toString('utf8'));
+  } catch (error) {
+    throw new Error(`cannot read ${label}: ${error.message}`);
+  }
+  const sha256 = digestMode === 'request'
+    ? String(value.requestDigest ?? '').replace(/^sha256:/, '')
+    : digest(bytes).slice('sha256:'.length);
+  return { path: repoPath, sha256, value };
+}
+
 async function runV1(args) {
-  required(args, ['--request', '--approval', '--changes', '--now']);
-  const request = validateApprovalRequest(await readJson(args['--request'], 'approval request'));
-  const approval = await readJson(args['--approval'], 'approval artifact');
+  required(args, [
+    '--request', '--ledger', '--impact-map', '--approval', '--changes', '--now', '--repo-root',
+    '--source-repository', '--docs-repository', '--docs-base-sha', '--target-branch',
+  ]);
+  const requestArtifact = await readRepoArtifact(args['--request'], args['--repo-root'], 'approval request', 'request');
+  const ledgerArtifact = await readRepoArtifact(args['--ledger'], args['--repo-root'], 'source ledger');
+  const impactMapArtifact = await readRepoArtifact(args['--impact-map'], args['--repo-root'], 'docs impact map');
+  const manifestArtifact = args['--manifest']
+    ? await readRepoArtifact(args['--manifest'], args['--repo-root'], 'release manifest')
+    : undefined;
+  const approvalArtifact = await readRepoArtifact(args['--approval'], args['--repo-root'], 'durable approval');
+  const request = validateApprovalRequest(requestArtifact.value);
+  const approval = approvalArtifact.value;
   validateApprovalBinding(request, approval, {
+    sourceRepository: args['--source-repository'],
+    docsRepository: args['--docs-repository'],
+    docsBaseSha: args['--docs-base-sha'],
+    targetBranch: args['--target-branch'],
     now: args['--now'],
     usedNonces: await usedNonceSet(args['--used-nonces']),
+    artifacts: {
+      request: requestArtifact,
+      ledger: ledgerArtifact,
+      impactMap: impactMapArtifact,
+      ...(manifestArtifact ? { manifest: manifestArtifact } : {}),
+    },
   });
+  const expectedApprovalPath = `docs-approvals/${approval.subject.sourceTag}-${approval.nonce}.json`;
+  if (approvalArtifact.path !== expectedApprovalPath) throw new Error(`durable approval must be read from ${expectedApprovalPath}`);
   const changes = await readJson(args['--changes'], 'V1 changes');
   if (!Array.isArray(changes)) throw new Error('V1 changes must be an array');
   const violations = v1WriteViolations(changes, request.paths);
@@ -62,7 +105,7 @@ async function runV1(args) {
     requestId: request.requestId,
     requestDigest: request.requestDigest,
     nonce: approval.nonce,
-    paths: request.paths,
+    paths: approval.scope.paths,
   };
 }
 

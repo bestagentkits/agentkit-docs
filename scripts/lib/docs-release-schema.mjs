@@ -6,7 +6,6 @@ export const SOURCE_SCHEMA = 'ak.docs.release-source/v1';
 export const LEDGER_SCHEMA = 'ak.docs.release-ledger/v1';
 export const IMPACT_SCHEMA = 'ak.docs.release-impact-map/v1';
 export const APPROVAL_REQUEST_SCHEMA = 'ak.docs.release-approval-request/v1';
-export const APPROVAL_SCHEMA = 'ak.docs.release-approval/v1';
 
 export const CHANNELS = ['beta', 'stable'];
 export const ITEM_KINDS = [

@@ -117,25 +117,61 @@ The record binds:
 
 - upstream repository, exact release tag, and 40-character source SHA;
 - docs repository, exact base SHA, and `dev` target;
-- SHA-256 digests of the release manifest and impact map;
+- the V0 request ID, request artifact, source ledger, and impact map;
+- the release manifest when the target evidence came from a docs bundle;
 - exact claim IDs;
-- exact repository-relative paths and permitted actions;
+- exact repository-relative Beta prose paths and `modify` as the only action;
 - resolved approver identity plus the issue and approval PR;
 - issue time, expiry time, and a unique UUIDv4 nonce.
+
+This nested record is the only durable approval format. The V0
+`approval-request.json` remains the machine-generated handoff; the former flat
+`ak.docs.release-approval/v1` artifact is not accepted. Durable records store
+SHA-256 values as lowercase raw 64-character hex. The V1 validator converts the
+V0 request's internal `sha256:<hex>` values explicitly before comparison; a
+prefixed digest in a durable record is invalid.
+
+V1 requires the exact V0 JSON artifacts and repository expectations:
+
+```bash
+node scripts/check-docs-release-update.mjs \
+  --mode v1 \
+  --repo-root /absolute/path/to/agentkit-docs \
+  --request plans/releases/<tag>/approval-request.json \
+  --ledger plans/releases/<tag>/source-ledger.json \
+  --impact-map plans/releases/<tag>/docs-impact-map.json \
+  --approval docs-approvals/<tag>-<nonce>.json \
+  --changes /absolute/path/to/changes.json \
+  --source-repository <owner/agentkit> \
+  --docs-repository <owner/agentkit-docs> \
+  --docs-base-sha <40-character-sha> \
+  --target-branch dev \
+  --now <utc-timestamp>
+```
+
+Add `--manifest <path>` when the request's target provenance is a bundle. The
+repository names and base SHA are explicit inputs because V0 release evidence
+does not contain those docs-control facts.
 
 JSON Schema validates shape. A consumer must additionally fail closed unless all
 of these semantic checks pass:
 
-1. The tag resolves to `subject.sourceSha`, and the docs branch still contains
-   `subject.docsBaseSha` as the reviewed base.
-2. Recomputed lowercase SHA-256 digests equal both evidence digests.
+1. The request is approval-required for Beta; its target tag/SHA equals the
+   approval subject, and the explicit source/docs repository, docs base SHA,
+   and `dev` expectations match exactly.
+2. The request ID and recomputed request digest match `evidence.request`; the
+   supplied ledger and impact map match their exact paths, raw digests, and
+   request bindings. Bundle provenance additionally requires the supplied
+   manifest path/digest/tag/SHA; non-bundle evidence must not add one.
 3. `issuedAt <= now < expiresAt`; timestamps are UTC and expiry is no more than
-   seven days after issue unless the approved policy explicitly changes.
+   seven days after issue.
 4. `nonce` is unique across all merged approval records, has never been
-   consumed, and equals the nonce suffix in `approvalId`.
+   consumed, and equals the nonce suffix in `approvalId`; the ID's tag also
+   equals `subject.sourceTag`.
 5. The issue and PR exist in the named repository; the PR is merged through the
    protected branch with the stated approver as an authorized CODEOWNER.
-6. Every proposed path and action is an exact subset of `scope`; no glob or
+6. Claim IDs and paths equal the V0 request exactly, every path is human-owned
+   Beta prose/metadata, and `scope.actions` is exactly `["modify"]`; no glob or
    path normalization may widen it.
 7. Stable, generated-marker directories, `reference-derived`, workflows,
    CODEOWNERS, and `docs-approvals` remain denied even if a malformed record
