@@ -26,6 +26,23 @@ Theo mặc định, AgentKit lấy Kit đã phát hành từ registry có xác t
 cần thêm `--remote`. Nguồn Kit cục bộ dành cho phát triển và CI, không phải luồng
 cài đặt thông thường.
 
+## Dự đoán thay đổi vòng đời
+
+Hãy xem mỗi lệnh như một phép chuyển trạng thái. Cập nhật một lớp không đồng
+nghĩa các lớp còn lại cũng thay đổi.
+
+| Lệnh | Trạng thái được đọc | Trạng thái có thể bị thay đổi | Ranh giới an toàn chính |
+| --- | --- | --- | --- |
+| [`ak self-update`](../reference/cli/self-update) | CLI đã cài và metadata bản phát hành đã ký | Chỉ binary `ak` | Xác minh bản thay thế và khôi phục binary trước đó nếu thay thế thất bại |
+| [`ak update`](../reference/cli/update) | Bản ghi cài đặt trong project hoặc phạm vi người dùng, nội dung Kit đã resolve và file hiện tại | Nội dung project hoặc người dùng thuộc quyền sở hữu AgentKit mà kế hoạch cập nhật chọn | Xem trước, tạo snapshot trước khi áp dụng và mặc định giữ file do người dùng sửa |
+| [`ak kit init`](../reference/cli/kit/init) | Package Kit đã resolve, target, scope, delivery mode và lựa chọn Skill | File native của target cùng sidecar vòng đời cho tuyến đã chọn | Xem trước đích và từ chối xung đột quyền sở hữu chưa được giải quyết |
+| [`ak kit refresh`](../reference/cli/kit/refresh) | Tuyến đã cài, các Skill đã chọn, package hiện tại và fingerprint quyền sở hữu | Output được quản lý hiện tại và output sạch đã nghỉ của cùng tuyến | Tạo snapshot trước thay đổi phá hủy và giữ đường dẫn đã sửa, không rõ nguồn gốc, không an toàn hoặc dùng chung |
+| [`ak kit uninstall`](../reference/cli/kit/uninstall) | Tuyến đã cài và bản ghi quyền sở hữu | Đường dẫn thuộc quyền sở hữu AgentKit còn nguyên vẹn và khớp với tuyến | Xem trước thao tác gỡ, tạo snapshot trước khi áp dụng và không bao giờ coi toàn bộ runtime home là thuộc sở hữu |
+| [`ak migrate`](../reference/cli/migrate) | Input migration, trạng thái đích hiện tại và tập thay đổi đã lập kế hoạch | Chỉ các đường dẫn trong kế hoạch migration đã review | Lập kế hoạch trước, tạo snapshot trước khi áp dụng và cung cấp đường rollback cho phần migration đã áp dụng |
+
+Bảng mô tả trạng thái và quyền sở hữu, không liệt kê mọi flag. Dùng các liên kết
+tham chiếu CLI để xem cú pháp chính xác của bản phát hành đang hoạt động.
+
 ## Chọn runtime và phạm vi
 
 Các bản cài runtime thông thường dùng `--target claude-code`, `--target codex`
@@ -34,18 +51,21 @@ registry được resolve cho từng runtime, vì vậy hãy chạy một lệnh
 mỗi runtime bạn sử dụng.
 
 Phạm vi mặc định là project hiện tại. Thêm `--global` khi bạn muốn cài Kit vào
-thư mục người dùng của runtime để dùng ngoài một project.
+thư mục người dùng của runtime để dùng ngoài một project. Target, scope và
+delivery mode kết hợp thành một tuyến cài đặt:
 
-| Mục tiêu | Lệnh |
-| --- | --- |
-| Claude Code trong project này | `ak kit install engineer --target claude-code` |
-| Claude Code cho người dùng hiện tại | `ak kit install engineer --target claude-code --global` |
-| Codex trong project này | `ak kit install engineer --target codex` |
-| Codex cho người dùng hiện tại | `ak kit install engineer --target codex --global` |
-| Cursor trong project này | `ak kit install engineer --target cursor` |
-| Cursor cho người dùng hiện tại | `ak kit install engineer --target cursor --global` |
-| AGY cho người dùng hiện tại | `ak kit init engineer --target agy --global` |
-| Export portable | `ak kit init engineer --target portable --out DIR` |
+| Tuyến target | Scope | Delivery | Đích chính |
+| --- | --- | --- | --- |
+| Claude Code native trong project | Project | Native | `<project>/.claude` cùng metadata vòng đời của project |
+| Claude Code native cho người dùng | Global | Native | `~/.claude` cùng metadata vòng đời ở phạm vi người dùng |
+| Plugin Claude Code trong project | Project | Plugin | Nguồn plugin Claude Code theo project và trạng thái enable của project |
+| Plugin Claude Code cho người dùng | Global | Plugin | `~/.claude/plugins/ak-<kit>` và trạng thái enable plugin của người dùng |
+| Codex trong project | Project | Native | `<project>/.agents/skills` và các bề mặt `<project>/.codex` tương ứng |
+| Codex cho người dùng | Global | Native | `~/.agents/skills` và các bề mặt `~/.codex` tương ứng |
+
+Cursor và AGY dùng bề mặt riêng của target, còn `portable` là export và không tạo
+trạng thái vòng đời đã cài. Đích hiển thị trong preview là nguồn chính xác khi
+môi trường ghi đè runtime root thông thường.
 
 Cài đặt theo project ghi nội dung runtime và metadata vòng đời của AgentKit vào
 project hiện tại. Cài đặt global ghi vào phạm vi người dùng của runtime đã chọn.
@@ -116,6 +136,33 @@ phân phối và phạm vi. Khi gỡ, hãy khớp đúng tuyến bằng `--plugi
   snapshot khôi phục trước khi thay đổi các bề mặt do nó quản lý.
 </Callout>
 
+## Theo dõi quá trình projection
+
+AgentKit resolve package Kit trước, sau đó projection nội dung đã chọn vào các
+bề mặt native mà tuyến cài hỗ trợ.
+
+```mermaid
+flowchart LR
+  package["Package Kit đã resolve"] --> selection["Các Skill đã chọn và nội dung hỗ trợ"]
+  selection --> route["Target + scope + delivery"]
+  route --> agents["Agent native của target"]
+  route --> skills["Skill native của target"]
+  route --> commands["Command"]
+  route --> hooks["Hook"]
+  route --> rules["Rule"]
+  route --> sidecars["Sidecar vòng đời và quyền sở hữu"]
+```
+
+Target có thể gỡ hoặc thu hẹp bề mặt không được hỗ trợ; báo cáo cài đặt sẽ công
+bố projection đó. Sidecar giữ identity của tuyến, các Skill đã chọn, owner và
+fingerprint để refresh, audit và uninstall sau này có thể suy luận về file đang
+tồn tại.
+
+“Workflow” là khái niệm sản phẩm, không phải thư mục `workflows/` được đồng bộ
+riêng trong package hiện tại. Hành vi workflow được kết hợp từ rule, Skill,
+agent, command và hook đã projection. Đừng coi việc không có thư mục
+`workflows/` là bằng chứng projection thất bại.
+
 ## Chọn Skill
 
 Nếu không có flag chọn lọc, AgentKit cài mọi Skill trong Kit. Dùng một trong các
@@ -148,6 +195,24 @@ ak kit install engineer --target claude-code --channel beta
 Không trộn kênh như một cách xử lý sự cố. Nếu Kit báo cần phiên bản `ak` mới
 hơn, hãy cập nhật CLI trên cùng kênh rồi chạy lại thao tác với Kit.
 
+## Hiểu quyền sở hữu và fingerprint
+
+AgentKit ghi cả đường dẫn được quản lý và fingerprint của bytes mà nó đã ghi.
+Thao tác sau đó so sánh đường dẫn cùng nội dung hiện tại với bằng chứng này thay
+vì nhận mọi thứ đang tồn tại ở đích làm nội dung được quản lý.
+
+| Lớp đường dẫn hiện tại | Ý nghĩa | Hành vi khi refresh hoặc uninstall |
+| --- | --- | --- |
+| Sạch và thuộc AgentKit | Owner cùng fingerprint nội dung đã ghi vẫn khớp | Có thể được ghi lại hoặc gỡ khi đường dẫn sinh tự động đã nghỉ |
+| Thuộc AgentKit nhưng đã sửa | Đường dẫn đã được ghi nhận nhưng bytes hiện tại không còn khớp | Được giữ lại và báo để review |
+| Không rõ nguồn gốc hoặc tùy chỉnh | Không có bản ghi quyền sở hữu AgentKit tương ứng | Được giữ lại; không bị âm thầm nhận làm nội dung được quản lý |
+| Dùng chung | Nhiều Kit đã cài cùng sở hữu một đường dẫn khớp | Được giữ đến khi mọi owner đều nhả đường dẫn |
+
+Symlink, chuyển tiếp đường dẫn không an toàn và trạng thái filesystem mơ hồ khác
+cũng fail closed hoặc được giữ lại. Bằng chứng quyền sở hữu giới hạn cleanup;
+nó không bao giờ có nghĩa xóa toàn bộ `.claude`, `.codex` hoặc thư mục runtime
+của người dùng.
+
 ## Làm mới Kit đã cài
 
 Làm mới sẽ phát lại bản phát hành hiện tại và chỉ gỡ đường dẫn sinh tự động hoặc
@@ -175,6 +240,64 @@ Hãy xem bản xem trước trước khi xác nhận. Không thêm `--no-backup`
 cài lại diện rộng với `--force` như cách khôi phục thông thường. Trước tiên hãy
 xử lý sai target, phạm vi, chế độ phân phối hoặc xung đột quyền sở hữu.
 
+### Reconcile output hiện tại và output đã nghỉ
+
+Refresh so sánh projection mới với projection đã ghi nhận cho cùng một tuyến:
+
+| Trước refresh | Projection mới | Kết quả |
+| --- | --- | --- |
+| Đường dẫn sạch thuộc sở hữu | Vẫn được sinh | Ghi lại bằng bytes hiện tại và fingerprint mới |
+| Đường dẫn sạch thuộc sở hữu | Đã nghỉ | Gỡ đường dẫn và nhả owner đó |
+| Đường dẫn thuộc sở hữu đã sửa | Hiện tại hoặc đã nghỉ | Giữ lại và báo fingerprint không khớp |
+| Đường dẫn không rõ nguồn gốc/tùy chỉnh | Trạng thái bất kỳ | Giữ lại vì AgentKit không có claim quyền sở hữu |
+| Đường dẫn dùng chung | Một Kit nhả | Giữ lại khi vẫn còn owner khác |
+
+Tập Skill đã chọn trước đó vẫn là lựa chọn của tuyến này trừ khi bạn chủ động
+thay đổi. Vì vậy, Skill mới thêm vào package không bị âm thầm thêm vào bản cài
+đã giới hạn từ trước.
+
+### Đọc ví dụ `.claude` trước và sau
+
+Các tên bên dưới chỉ để minh họa; chúng trình bày lớp vòng đời mà không sao chép
+inventory Kit có thể thay đổi.
+
+Trước refresh:
+
+```text
+.claude/
+├── rules/current-rule.md          sạch; fingerprint cũ
+├── rules/retired-rule.md          sạch; không còn được projection
+├── rules/shared-rule.md           sạch; Kit A và Kit B cùng sở hữu
+├── skills/edited-skill/SKILL.md   thuộc sở hữu; bytes do người dùng sửa
+└── custom-note.md                 file tùy chỉnh không rõ nguồn gốc
+```
+
+Sau khi refresh Kit A:
+
+```text
+.claude/
+├── rules/current-rule.md          được ghi lại; fingerprint mới
+├── rules/shared-rule.md           được giữ; Kit B vẫn sở hữu
+├── skills/edited-skill/SKILL.md   được giữ; thay đổi được báo
+└── custom-note.md                 được giữ; không bị nhận làm file quản lý
+```
+
+`retired-rule.md` chỉ bị gỡ vì file vẫn sạch. Rule dùng chung chỉ bị gỡ sau khi
+mọi owner đều nhả. Skill đã sửa và file tùy chỉnh không bị ghi đè chỉ vì vị trí
+của chúng nằm trong cây projection.
+
+## Audit và migrate an toàn
+
+[`ak audit`](../reference/cli/audit) là thao tác chỉ đọc. Lệnh so sánh nội dung
+hiện tại với fingerprint quyền sở hữu đã ghi nhận và báo drift mà không sửa,
+nhận quyền sở hữu hoặc xóa đường dẫn. Dùng bằng chứng đó để giải thích vì sao
+refresh giữ lại một file.
+
+[`ak migrate`](../reference/cli/migrate) là thao tác thay đổi có kế hoạch riêng.
+Hãy review kế hoạch, giữ snapshot trước khi áp dụng và dùng đường rollback của
+migration khi cần đảo ngược phần đã áp dụng. Migration không mở rộng quyền sở
+hữu Kit sang nội dung runtime không liên quan.
+
 ## Đọc thông báo về hook Codex
 
 Một lần cài Codex thành công có thể báo cả **Hooks dropped (unsupported on this
@@ -199,6 +322,28 @@ Sau khi cài đặt hoặc làm mới:
 
 Nếu runtime không tìm thấy Skill, hãy kiểm tra target, phạm vi và chế độ phân
 phối của Claude Code trước khi cài lại.
+
+### Nếu các file không thay đổi
+
+Dùng thứ tự quyết định sau thay vì xóa `.claude` hoặc thử lại với `--force`:
+
+1. **Lệnh:** bạn đã cập nhật binary, cập nhật nội dung project thuộc quyền sở hữu
+   hay refresh tuyến Kit đã cài?
+2. **Phiên bản và channel:** phiên bản CLI cùng Kit đã resolve có đúng như bạn
+   mong đợi không?
+3. **Tuyến:** target, scope project/global và delivery native/plugin có khớp lần
+   cài ban đầu không?
+4. **Lựa chọn:** file bị thiếu có thuộc tập Skill đã ghi nhận hay không?
+5. **Projection:** target có báo resource hoặc hook matcher bị gỡ hay thu hẹp
+   không?
+6. **Quyền sở hữu:** audit có báo đường dẫn đã sửa, không rõ nguồn gốc, không an
+   toàn, là liên kết hoặc dùng chung không?
+7. **Kết quả:** kiểm tra đường dẫn được giữ hoặc bỏ qua trong preview hay phần
+   tóm tắt, rồi chọn recovery hoặc thay đổi đúng tuyến một cách có chủ đích.
+
+Xem [Cập nhật AgentKit và Kit](./updating) để chọn đúng lớp cập nhật và luồng
+preview. Dùng tham chiếu được sinh ở trên cho flag hiện tại thay vì sao chép flag
+từ lệnh cũ.
 
 ## Gỡ Kit
 
