@@ -1,3 +1,5 @@
+import { legacyCliSamplesParentPath } from './cli-reference-routes.mjs';
+
 /**
  * Fumadocs `resolveHref` only matches relative links that point at a virtual
  * file path (e.g. `./installation.mdx`). Extensionless `./installation` is left
@@ -16,15 +18,20 @@ export function resolveDocsRelativeHref(
   if (!href) return href;
   if (!(href.startsWith('./') || href.startsWith('../'))) return href;
 
-  const resolved = (candidate: string) => {
-    const out = source.resolveHref(candidate, page);
+  const legacyParentPath = legacyCliSamplesParentPath(page.path);
+  const parents = legacyParentPath ? [page, { ...page, path: legacyParentPath }] : [page];
+
+  const resolved = (candidate: string, parent: { path: string; locale?: string }) => {
+    const out = source.resolveHref(candidate, parent);
     return out !== candidate && !out.startsWith('./') && !out.startsWith('../')
       ? out
       : null;
   };
 
-  const direct = resolved(href);
-  if (direct) return direct;
+  for (const parent of parents) {
+    const direct = resolved(href, parent);
+    if (direct) return direct;
+  }
 
   const hashIdx = href.indexOf('#');
   const path = hashIdx === -1 ? href : href.slice(0, hashIdx);
@@ -32,8 +39,10 @@ export function resolveDocsRelativeHref(
   if (/\.mdx?$/i.test(path)) return href;
 
   for (const suffix of ['.mdx', '/index.mdx'] as const) {
-    const hit = resolved(`${path}${suffix}${hash}`);
-    if (hit) return hit;
+    for (const parent of parents) {
+      const hit = resolved(`${path}${suffix}${hash}`, parent);
+      if (hit) return hit;
+    }
   }
   return href;
 }

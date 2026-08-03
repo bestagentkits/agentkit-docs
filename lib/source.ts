@@ -56,7 +56,10 @@ export async function getLLMText(page: (typeof source)['$inferPage']) {
     page.path,
     (href) =>
       resolveDocsRelativeHref(
-        { resolveHref: (candidate) => source.resolveHref(candidate, page) },
+        {
+          resolveHref: (candidate, parent) =>
+            source.resolveHref(candidate, parent as typeof page),
+        },
         page,
         href,
       ),

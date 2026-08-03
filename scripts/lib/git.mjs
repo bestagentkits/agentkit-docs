@@ -42,15 +42,19 @@ export function generatedDirsAt(ref, { cwd } = {}) {
   return dirs;
 }
 
-/** Changed entries with git status letter; rename/copy resolve to the dest path. */
+/** Changed entries with git status letter; renames/copies retain source and destination. */
 export function changedNameStatus(base, { head = 'HEAD', cwd } = {}) {
   const range = base ? [`${base}...${head}`] : [head];
-  return git(['diff', '--name-status', ...range], cwd)
+  return git(['diff', '--name-status', '--find-renames', ...range], cwd)
     .split('\n')
     .map((l) => l.trim())
     .filter(Boolean)
     .map((l) => {
       const parts = l.split('\t');
-      return { status: parts[0], path: parts[parts.length - 1] };
+      return {
+        status: parts[0],
+        source: parts.length === 3 ? parts[1] : undefined,
+        path: parts[parts.length - 1],
+      };
     });
 }

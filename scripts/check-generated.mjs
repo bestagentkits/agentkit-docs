@@ -5,9 +5,9 @@
 //   node scripts/check-generated.mjs --base origin/main
 //   GITHUB_ACTOR=agentkit-docs-bot node scripts/check-generated.mjs --base <sha>   # exempt
 import { parseArgs } from 'node:util';
-import { changedFiles, generatedDirsAt } from './lib/git.mjs';
+import { changedNameStatus, generatedDirsAt } from './lib/git.mjs';
 import { findGeneratedDirs } from './lib/generated-dirs.mjs';
-import { generatedViolations, guardedDirs } from './lib/guards.mjs';
+import { generatedChangeViolations, guardedDirs } from './lib/guards.mjs';
 import { repoRoot } from './lib/paths.mjs';
 
 async function main() {
@@ -26,7 +26,7 @@ async function main() {
     return;
   }
 
-  const changed = changedFiles(values.base, { cwd: values.repoRoot });
+  const changed = changedNameStatus(values.base, { cwd: values.repoRoot });
   // Ownership is decided by the base ref: a dir only counts as machine-owned if
   // it already carried a marker there (so bootstrapping a new generated dir in
   // this same change is allowed). Falls back to the working tree if no base.
@@ -34,7 +34,7 @@ async function main() {
     ? generatedDirsAt(values.base, { cwd: values.repoRoot })
     : await findGeneratedDirs(values.repoRoot);
   // Reproducible dirs are covered by the regenerate-and-diff CI step instead.
-  const violations = generatedViolations(changed, guardedDirs(generatedDirs));
+  const violations = generatedChangeViolations(changed, guardedDirs(generatedDirs));
 
   if (violations.length) {
     console.error('check-generated: hand edits to machine-owned (.generated) dirs are not allowed:');

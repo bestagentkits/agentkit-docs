@@ -1,6 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { agentPrViolations, generatedViolations, guardedDirs } from './lib/guards.mjs';
+import {
+  agentPrViolations,
+  generatedChangeViolations,
+  generatedViolations,
+  guardedDirs,
+} from './lib/guards.mjs';
 import { isInGeneratedDir } from './lib/generated-dirs.mjs';
 
 const GENERATED = ['reference-derived'];
@@ -33,6 +38,53 @@ test('guardedDirs exempts the reproducible derived dir', () => {
     generatedViolations(['reference-derived/ak.mdx'], guardedDirs(GENERATED)),
     [],
   );
+});
+
+test('generated guard allows only the explicit CLI ownership migration', () => {
+  const generated = [
+    'content/docs/beta/reference/cli',
+    'content/docs/stable/reference/cli',
+  ];
+  const transfers = [
+    {
+      status: 'R100',
+      source: 'content/docs/beta/reference/cli/ak.mdx',
+      path: 'reference-derived/ak.mdx',
+    },
+    {
+      status: 'R081',
+      source: 'content/docs/beta/reference/cli-samples/index.en.mdx',
+      path: 'content/docs/beta/reference/cli/index.en.mdx',
+    },
+    {
+      status: 'R100',
+      source: 'content/docs/stable/reference/cli-samples/index.en.mdx',
+      path: 'content/docs/stable/reference/cli/index.en.mdx',
+    },
+    { status: 'D', path: 'content/docs/stable/reference/cli/ak.mdx' },
+  ];
+  assert.deepEqual(generatedChangeViolations(transfers, generated), []);
+});
+
+test('generated guard still rejects edits, additions, and unrelated deletions', () => {
+  const generated = [
+    'content/docs/beta/reference/cli',
+    'content/docs/stable/reference/cli',
+  ];
+  const changes = [
+    { status: 'M', path: 'content/docs/beta/reference/cli/ak.mdx' },
+    { status: 'A', path: 'content/docs/beta/reference/cli/new.en.mdx' },
+    { status: 'D', path: 'content/docs/beta/reference/cli/old.mdx' },
+    { status: 'M', path: 'content/docs/stable/reference/cli/ak.mdx' },
+    { status: 'A', path: 'content/docs/stable/reference/cli/new.en.mdx' },
+  ];
+  assert.deepEqual(generatedChangeViolations(changes, generated), [
+    'content/docs/beta/reference/cli/ak.mdx',
+    'content/docs/beta/reference/cli/new.en.mdx',
+    'content/docs/beta/reference/cli/old.mdx',
+    'content/docs/stable/reference/cli/ak.mdx',
+    'content/docs/stable/reference/cli/new.en.mdx',
+  ]);
 });
 
 test('agent PR: a modify-only beta prose patch is allowed', () => {

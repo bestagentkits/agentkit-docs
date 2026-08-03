@@ -8,10 +8,12 @@
 import { parseArgs } from 'node:util';
 import { readFile, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join, posix, relative, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { repoRoot } from './lib/paths.mjs';
 
 const SKIP = /^(https?:|mailto:|tel:|data:|#|\/\/)/;
+const MAX_REPORTED_BROKEN_LINKS = 100;
 
 async function htmlFiles(outDir) {
   const entries = await readdir(outDir, { withFileTypes: true, recursive: true });
@@ -31,6 +33,15 @@ function extractHrefs(html) {
 function internalCandidates(sitePath) {
   const clean = sitePath.split('#')[0].split('?')[0];
   return [clean];
+}
+
+export function sitePathForHref(outDir, file, href) {
+  if (href.startsWith('/')) return href;
+  if (!(href.startsWith('./') || href.startsWith('../'))) return undefined;
+
+  const outputPath = relative(outDir, file).split(sep).join('/');
+  const pagePath = `/${outputPath.replace(/\.html$/, '')}`;
+  return posix.resolve(posix.dirname(pagePath), href);
 }
 
 // A site path resolves if any of these exist: the literal file (assets), or
@@ -68,9 +79,11 @@ async function main() {
   for (const file of files) {
     const html = await readFile(file, 'utf8');
     for (const href of extractHrefs(html)) {
-      if (SKIP.test(href) || !href.startsWith('/')) continue;
+      if (SKIP.test(href)) continue;
+      const sitePath = sitePathForHref(outDir, file, href);
+      if (!sitePath) continue;
       checked++;
-      if (!resolves(outDir, href)) {
+      if (!resolves(outDir, sitePath)) {
         broken.push({ file: file.slice(outDir.length + 1), href });
       }
     }
@@ -78,13 +91,22 @@ async function main() {
 
   if (broken.length) {
     console.error(`check-links: ${broken.length} broken internal link(s):`);
-    for (const b of broken) console.error(`  ✗ ${b.href}  (in ${b.file})`);
+    for (const b of broken.slice(0, MAX_REPORTED_BROKEN_LINKS)) {
+      console.error(`  ✗ ${b.href}  (in ${b.file})`);
+    }
+    if (broken.length > MAX_REPORTED_BROKEN_LINKS) {
+      console.error(
+        `  … ${broken.length - MAX_REPORTED_BROKEN_LINKS} more (showing first ${MAX_REPORTED_BROKEN_LINKS})`,
+      );
+    }
     process.exit(1);
   }
   console.error(`check-links: ${checked} internal links across ${files.length} pages OK.`);
 }
 
-main().catch((err) => {
-  console.error(`check-links failed: ${err.message}`);
-  process.exit(1);
-});
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().catch((err) => {
+    console.error(`check-links failed: ${err.message}`);
+    process.exit(1);
+  });
+}

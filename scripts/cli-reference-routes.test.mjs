@@ -4,6 +4,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import {
   cliCommandSegmentsFromTitle,
+  legacyCliSamplesParentPath,
   resolveCliReferenceHref,
 } from '../lib/cli-reference-routes.mjs';
 
@@ -78,6 +79,30 @@ test('rewrites nested, legacy flat, and generated hrefs within the current chann
   const pages = channels.flatMap((channel) => inventory(channel, 'en'));
   assert.equal(
     resolveCliReferenceHref(
+      './projects-list',
+      pages,
+      'beta/reference/cli/projects/add.en.mdx',
+    ),
+    '/en/beta/reference/cli/projects/list',
+  );
+  assert.equal(
+    resolveCliReferenceHref(
+      './ak%20content%20queue%20list',
+      pages,
+      'beta/reference/cli/content/queue/cancel.en.mdx',
+    ),
+    '/en/beta/reference/cli/content/queue/list',
+  );
+  assert.equal(
+    resolveCliReferenceHref(
+      './watch-dry-run',
+      pages,
+      'beta/reference/cli/watch/start.en.mdx',
+    ),
+    '/en/beta/reference/cli/watch/dry-run',
+  );
+  assert.equal(
+    resolveCliReferenceHref(
       '../reference/cli',
       pages,
       'beta/getting-started/quickstart.en.mdx',
@@ -96,9 +121,9 @@ test('rewrites nested, legacy flat, and generated hrefs within the current chann
     resolveCliReferenceHref(
       '../reference/cli-samples/ak%20gui',
       pages,
-      'stable/desktop-app/index.en.mdx',
+      'beta/desktop-app/index.en.mdx',
     ),
-    '/en/stable/reference/cli/gui',
+    '/en/beta/reference/cli/gui',
   );
   assert.equal(
     resolveCliReferenceHref(
@@ -114,6 +139,17 @@ test('rewrites nested, legacy flat, and generated hrefs within the current chann
       pages,
       'beta/reference/cli/index.en.mdx',
     ),
-    undefined,
+    '/en/beta/reference/cli/doctor',
+  );
+});
+
+test('rebases non-CLI relatives from the legacy flat authored directory', () => {
+  assert.equal(
+    legacyCliSamplesParentPath('beta/reference/cli/kit/install.en.mdx'),
+    'beta/reference/cli-samples/__legacy__.en.mdx',
+  );
+  assert.equal(
+    legacyCliSamplesParentPath('stable/reference/cli/kit/install.vi.mdx'),
+    'stable/reference/cli-samples/__legacy__.vi.mdx',
   );
 });
