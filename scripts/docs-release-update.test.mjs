@@ -13,9 +13,17 @@ import {
   validateDurableApprovalRecord,
 } from './lib/docs-release-approval.mjs';
 import { runCheck } from './check-docs-release-update.mjs';
+import { runManualApproval } from './docs-release-manual-approval.mjs';
 import { isCoverageApprovalRequest } from './lib/docs-release-coverage-schema.mjs';
 import { createImpactMap } from './lib/docs-release-impact.mjs';
 import { createReleaseLedger } from './lib/docs-release-ledger.mjs';
+import {
+  MANUAL_OWNER_APPROVAL_SCHEMA,
+  createManualOwnerApprovalRecord,
+  manualOwnerApprovalStatement,
+  validateManualOwnerApprovalBinding,
+  validateManualOwnerApprovalRecord,
+} from './lib/docs-release-manual-approval.mjs';
 import { digest, stableJson } from './lib/docs-release-normalize.mjs';
 import {
   assertV0WriteScope,
@@ -36,6 +44,9 @@ const expectedApprovalContext = {
   targetBranch: 'dev',
 };
 const approvalNow = '2026-08-03T12:00:00.000Z';
+const manualIssuedAt = '2026-08-03T10:00:00.000Z';
+const manualExpiresAt = '2026-08-04T10:00:00.000Z';
+const manualNonce = '987e4567-e89b-42d3-a456-426614174000';
 let temporary;
 let outputRoot;
 let coverageSequence = 0;
@@ -173,6 +184,25 @@ function bindingOptions(request, ledger, impactMap, extras = {}) {
     artifacts: suppliedArtifacts(request, ledger, impactMap, extras.manifest),
     ...(extras.usedNonces ? { usedNonces: extras.usedNonces } : {}),
   };
+}
+
+function manualApproval(request, ledger, impactMap, options = {}) {
+  const statement = manualOwnerApprovalStatement(request.requestId);
+  const docsBaseSha = isCoverageApprovalRequest(request)
+    ? request.docs.baseSha
+    : expectedApprovalContext.docsBaseSha;
+  return createManualOwnerApprovalRecord({
+    request,
+    requestId: request.requestId,
+    ownerLabel: options.ownerLabel ?? 'Release owner: Thieu Nguyen',
+    approvalStatement: options.approvalStatement ?? statement,
+    docsBaseSha: options.docsBaseSha ?? docsBaseSha,
+    issuedAt: options.issuedAt ?? manualIssuedAt,
+    expiresAt: options.expiresAt ?? manualExpiresAt,
+    nonce: options.nonce ?? manualNonce,
+    artifacts: suppliedArtifacts(request, ledger, impactMap, options.manifest),
+    now: options.now ?? approvalNow,
+  });
 }
 
 async function coverageWorkspace() {
@@ -536,6 +566,116 @@ test('durable approval binds request, source, evidence, scope, reviewer, trackin
   assert.ok(request.paths.length > 0);
 });
 
+test('manual-owner approval is versioned, exact, and cannot satisfy the organization adapter', async () => {
+  const { request, ledger, impactMap } = await changedEvidence();
+  const approval = manualApproval(request, ledger, impactMap);
+  assert.equal(approval.schemaVersion, MANUAL_OWNER_APPROVAL_SCHEMA);
+  assert.equal(approval.approvalMode, 'manual-owner');
+  assert.equal(approval.request.id, request.requestId);
+  assert.equal(approval.request.digest, request.requestDigest);
+  assert.equal(approval.request.ledgerDigest, request.ledgerDigest);
+  assert.equal(approval.request.impactMapDigest, request.impactMapDigest);
+  assert.deepEqual(approval.claimIds, request.claimIds);
+  assert.deepEqual(approval.scope, { actions: ['modify'], paths: request.paths });
+  assert.deepEqual(approval.owner, { label: 'Release owner: Thieu Nguyen' });
+  assert.equal(validateManualOwnerApprovalRecord(approval, { now: approvalNow }), approval);
+  assert.equal(validateManualOwnerApprovalBinding(
+    request,
+    approval,
+    bindingOptions(request, ledger, impactMap),
+  ), approval);
+  assert.throws(
+    () => validateDurableApprovalRecord(approval, { now: approvalNow }),
+    /durable approval schema/,
+  );
+});
+
+test('manual-owner approval rejects loose assent, forgery, stale refs, expansion, and replay', async () => {
+  const { request, ledger, impactMap } = await changedEvidence();
+  const options = bindingOptions(request, ledger, impactMap);
+  const approval = manualApproval(request, ledger, impactMap);
+
+  for (const looseStatement of [
+    'looks good',
+    `Approve ${request.requestId}`,
+    `approve  ${request.requestId}`,
+    `approve ${request.requestId}.`,
+  ]) {
+    assert.throws(
+      () => manualApproval(request, ledger, impactMap, { approvalStatement: looseStatement }),
+      /exact approval statement/,
+    );
+  }
+  assert.throws(
+    () => manualApproval(request, ledger, impactMap, { ownerLabel: '   ' }),
+    /owner label/,
+  );
+
+  const mutations = [
+    ['request ID|exact approval statement', (value) => { value.request.id = 'REQ-FFFFFFFFFFFFFFFF'; }],
+    ['request digest', (value) => { value.request.digest = `sha256:${'f'.repeat(64)}`; }],
+    ['ledger digest', (value) => { value.request.ledgerDigest = `sha256:${'e'.repeat(64)}`; }],
+    ['impact map digest', (value) => { value.request.impactMapDigest = `sha256:${'d'.repeat(64)}`; }],
+    ['docs base SHA', (value) => { value.docsBaseSha = '3'.repeat(40); }],
+    ['claim IDs', (value) => { value.claimIds.push('CLM-FFFFFFFFFFFFFFFF'); value.claimIds.sort(); }],
+    ['approval paths', (value) => { value.scope.paths.push('content/docs/beta/getting-started/quickstart.en.mdx'); value.scope.paths.sort(); }],
+    ['scope actions', (value) => { value.scope.actions = ['modify', 'create']; }],
+    ['exact approval statement', (value) => { value.approvalStatement = 'approved'; }],
+  ];
+  for (const [expected, mutate] of mutations) {
+    const forged = structuredClone(approval);
+    mutate(forged);
+    assert.throws(
+      () => validateManualOwnerApprovalBinding(request, forged, options),
+      new RegExp(expected),
+    );
+  }
+
+  assert.throws(
+    () => validateManualOwnerApprovalBinding(request, approval, { ...options, now: '2026-08-05T00:00:00.000Z' }),
+    /stale/,
+  );
+  assert.throws(
+    () => validateManualOwnerApprovalBinding(request, approval, { ...options, usedNonces: new Set([approval.nonce]) }),
+    /replay/,
+  );
+  assert.throws(
+    () => manualApproval(request, ledger, impactMap, { nonce: '987e4567-e89b-12d3-a456-426614174000' }),
+    /nonce/,
+  );
+  assert.throws(
+    () => manualApproval(request, ledger, impactMap, { expiresAt: '2026-08-11T10:00:00.000Z' }),
+    /seven days/,
+  );
+  const artifactForgery = structuredClone(options);
+  artifactForgery.artifacts.ledger.sha256 = 'c'.repeat(64);
+  assert.throws(
+    () => validateManualOwnerApprovalBinding(request, approval, artifactForgery),
+    /ledger artifact digest/,
+  );
+  const staleRefRequest = structuredClone(request);
+  staleRefRequest.source.to.resolvedCommit = '9'.repeat(40);
+  delete staleRefRequest.requestDigest;
+  staleRefRequest.requestDigest = digest(staleRefRequest);
+  assert.throws(
+    () => validateManualOwnerApprovalBinding(staleRefRequest, approval, options),
+    /request digest/,
+  );
+});
+
+test('manual-owner approval supports coverage requests without GitHub approver or approval-PR identity', async () => {
+  const workspace = await coverageWorkspace();
+  const { request, ledger, impactMap } = await runCoverageGap(workspace);
+  const approval = manualApproval(request, ledger, impactMap);
+  assert.equal(validateManualOwnerApprovalBinding(
+    request,
+    approval,
+    bindingOptions(request, ledger, impactMap),
+  ), approval);
+  assert.equal('approver' in approval, false);
+  assert.equal('tracking' in approval, false);
+});
+
 test('coverage durable approval binds audit, issue snapshot, source claims, route digests, claims, and paths', async () => {
   const workspace = await coverageWorkspace();
   const { request, ledger, impactMap } = await runCoverageGap(workspace);
@@ -800,6 +940,119 @@ test('orchestrator CLI emits deterministic V0 and validates an approved V1 batch
       '--now': approvalNow,
     }),
     /missing required argument --repo-root/,
+  );
+});
+
+test('manual-owner CLI creates only the exact local record and V1 requires explicit manual mode', async () => {
+  await writeFile(join(temporary, '.gitignore'), 'plans/\n');
+  await execFileAsync('git', ['init', '-b', 'dev'], { cwd: temporary });
+  await execFileAsync('git', ['config', 'user.name', 'Manual Approval Fixture'], { cwd: temporary });
+  await execFileAsync('git', ['config', 'user.email', 'manual-approval@example.test'], { cwd: temporary });
+  await execFileAsync('git', ['add', '.gitignore'], { cwd: temporary });
+  await execFileAsync('git', ['commit', '-m', 'fixture'], {
+    cwd: temporary,
+    env: {
+      ...process.env,
+      GIT_AUTHOR_DATE: '2026-08-04T00:00:00Z',
+      GIT_COMMITTER_DATE: '2026-08-04T00:00:00Z',
+    },
+  });
+  const { stdout: baseStdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: temporary });
+  const docsBaseSha = baseStdout.trim();
+  const { ledger, impactMap, request } = await changedEvidence();
+  const written = await writeV0Reports({ ledger, impactMap, outputRoot, target: request.target });
+  const requestPath = join(written.outputDir, 'approval-request.json');
+  const ledgerPath = join(written.outputDir, 'source-ledger.json');
+  const impactMapPath = join(written.outputDir, 'docs-impact-map.json');
+  const statement = manualOwnerApprovalStatement(request.requestId);
+  const createArgs = [
+    join(repoRoot, 'scripts', 'docs-release-manual-approval.mjs'),
+    '--mode', 'create',
+    '--repo-root', temporary,
+    '--request', requestPath,
+    '--ledger', ledgerPath,
+    '--impact-map', impactMapPath,
+    '--request-id', request.requestId,
+    '--owner-label', 'Release owner: Thieu Nguyen',
+    '--approval-statement', statement,
+    '--issued-at', manualIssuedAt,
+    '--expires-at', manualExpiresAt,
+    '--nonce', manualNonce,
+    '--now', approvalNow,
+  ];
+  const first = JSON.parse((await execFileAsync(process.execPath, createArgs)).stdout);
+  const approvalPath = join(written.outputDir, 'manual-owner-approval.json');
+  assert.equal(first.mode, 'create');
+  assert.equal(first.approvalMode, 'manual-owner');
+  assert.equal(first.path, `plans/releases/${request.target}/manual-owner-approval.json`);
+  assert.equal(first.requestId, request.requestId);
+  const createdApproval = await json(approvalPath);
+  assert.equal(createdApproval.docsBaseSha, docsBaseSha);
+  assert.equal(await readFile(approvalPath, 'utf8'), stableJson(createdApproval));
+  const before = await readFile(approvalPath);
+  await execFileAsync(process.execPath, createArgs);
+  assert.deepEqual(await readFile(approvalPath), before);
+  await assert.rejects(
+    () => execFileAsync(process.execPath, createArgs.map((value) => (
+      value === request.requestId ? 'REQ-FFFFFFFFFFFFFFFF' : value
+    ))),
+    /request ID does not match/,
+  );
+
+  const changesPath = join(temporary, 'manual-owner-changes.json');
+  await writeFile(changesPath, stableJson(request.paths.map((path) => ({ status: 'M', path }))));
+  const usedNoncesPath = join(temporary, 'used-nonces.json');
+  await writeFile(usedNoncesPath, stableJson({ nonces: [] }));
+  const v1Args = {
+    '--mode': 'v1',
+    '--repo-root': temporary,
+    '--request': requestPath,
+    '--ledger': ledgerPath,
+    '--impact-map': impactMapPath,
+    '--approval': approvalPath,
+    '--changes': changesPath,
+    '--source-repository': expectedApprovalContext.sourceRepository,
+    '--docs-repository': expectedApprovalContext.docsRepository,
+    '--docs-base-sha': docsBaseSha,
+    '--target-branch': expectedApprovalContext.targetBranch,
+    '--now': approvalNow,
+    '--used-nonces': usedNoncesPath,
+  };
+  await assert.rejects(
+    () => runManualApproval({ ...v1Args, '--used-nonces': undefined }),
+    /missing required argument --used-nonces/,
+  );
+  const approved = await runManualApproval(v1Args);
+  assert.equal(approved.status, 'approved');
+  assert.equal(approved.approvalMode, 'manual-owner');
+  await assert.rejects(
+    () => runCheck(v1Args),
+    /durable approval schema/,
+  );
+
+  await writeFile(usedNoncesPath, stableJson({ nonces: [manualNonce] }));
+  await assert.rejects(
+    () => runManualApproval({ ...v1Args, '--used-nonces': usedNoncesPath }),
+    /replay/,
+  );
+
+  const wrongDir = join(temporary, 'docs-approvals');
+  await mkdir(wrongDir);
+  const wrongPath = join(wrongDir, 'manual-owner-approval.json');
+  await writeFile(wrongPath, before);
+  await writeFile(usedNoncesPath, stableJson({ nonces: [] }));
+  await assert.rejects(
+    () => runManualApproval({ ...v1Args, '--approval': wrongPath }),
+    /manual-owner approval must be read from plans\/releases/,
+  );
+
+  await rm(approvalPath);
+  const outsideApproval = join(temporary, 'outside-manual-owner-approval.json');
+  await writeFile(outsideApproval, before);
+  await symlink(outsideApproval, approvalPath);
+  await assert.rejects(
+    () => execFileAsync(process.execPath, createArgs),
+    /symlink output path rejected/,
   );
 });
 
