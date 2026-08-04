@@ -214,6 +214,25 @@ async function coverageWorkspace() {
   };
 }
 
+async function checkoutFixture(name, tag) {
+  const root = join(temporary, `checkout-${name}`);
+  await cp(join(fixtures, name), root, { recursive: true });
+  await execFileAsync('git', ['init', '-b', 'fixture'], { cwd: root });
+  await execFileAsync('git', ['config', 'user.name', 'Checkout Fixture'], { cwd: root });
+  await execFileAsync('git', ['config', 'user.email', 'checkout@example.test'], { cwd: root });
+  await execFileAsync('git', ['add', '--all', '--force'], { cwd: root });
+  await execFileAsync('git', ['commit', '-m', 'fixture'], {
+    cwd: root,
+    env: {
+      ...process.env,
+      GIT_AUTHOR_DATE: '2026-08-04T00:00:00Z',
+      GIT_COMMITTER_DATE: '2026-08-04T00:00:00Z',
+    },
+  });
+  await execFileAsync('git', ['tag', tag], { cwd: root });
+  return root;
+}
+
 async function runCoverageGap(workspace) {
   const result = await runCheck({
     '--mode': 'coverage-gap',
@@ -437,6 +456,33 @@ test('alias collisions block both identities instead of guessing', async () => {
   assert.equal(ledger.claims.length, 2);
   assert.ok(ledger.claims.every((claim) => claim.classification === 'blocked'));
   assert.ok(ledger.claims.every((claim) => claim.blockedReasons.includes('alias resolves to multiple entities')));
+});
+
+test('checkout IDs normalize source-safe paths and preserve already-valid identities', async () => {
+  const tag = 'v2.8.0-beta.4';
+  const root = await checkoutFixture('checkout-id-paths', tag);
+  const first = await loadReleaseSource(root, { channel: 'beta', ref: tag });
+  const second = await loadReleaseSource(root, { channel: 'beta', ref: tag });
+  assert.deepEqual(second, first);
+  assert.deepEqual(first.items.map(({ kind, id }) => `${kind}:${id}`), [
+    'hook:claude/hooks/__tests__/block-unsafe-git-and-lifecycle-commands.test',
+    'hook:hooks/__tests__/safe_name.test',
+    'hook:hooks/already-valid',
+    'hook:hooks/release-guard-safe.test',
+    'hook:hooks/scope+name@v1.test',
+    'kit:kits/core/skills/name_with_underscores/SKILL',
+  ]);
+  assert.equal(first.items.find((item) => item.id === 'hooks/already-valid').anchors[0].path, 'hooks/already-valid.cjs');
+  assert.equal(first.items.find((item) => item.id === 'hooks/__tests__/safe_name.test').anchors[0].path, 'hooks/__tests__/safe_name.test.cjs');
+});
+
+test('checkout ID normalization collisions fail closed', async () => {
+  const tag = 'v2.8.0-beta.4';
+  const root = await checkoutFixture('checkout-id-collision', tag);
+  await assert.rejects(
+    () => loadReleaseSource(root, { channel: 'beta', ref: tag }),
+    /source\.items contains duplicate kind\/id pairs/,
+  );
 });
 
 test('immutable refs and bundle provenance mismatches fail closed', async () => {

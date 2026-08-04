@@ -10,6 +10,7 @@ import { readTarGzipEntries } from './docs-release-tar.mjs';
 
 const execFileAsync = promisify(execFile);
 const IGNORED_DIRS = new Set(['.git', 'node_modules', '.next', 'out', 'dist', 'coverage']);
+const VALID_ITEM_ID = /^[A-Za-z0-9][A-Za-z0-9._:@/+\-]{0,199}$/;
 
 async function filesUnder(root, current = root) {
   const entries = await readdir(current, { withFileTypes: true });
@@ -110,15 +111,25 @@ async function tarBundleSource(path, expected) {
 function classifyCheckoutPath(path) {
   const lower = path.toLowerCase();
   const stem = path.replace(/\.[^/.]+$/, '');
-  if (/(^|\/)install(?:er|ers|ation)?(\/|[-_.])/.test(lower)) return ['installer', stem];
-  if (/(^|\/)runtime[-_]?adapters?(\/|[-_.])/.test(lower)) return ['runtime-adapter', stem];
+  if (/(^|\/)install(?:er|ers|ation)?(\/|[-_.])/.test(lower)) return ['installer', normalizeCheckoutItemId(stem)];
+  if (/(^|\/)runtime[-_]?adapters?(\/|[-_.])/.test(lower)) return ['runtime-adapter', normalizeCheckoutItemId(stem)];
   for (const kind of ['kits', 'skills', 'agents', 'hooks']) {
     const marker = `/${kind}/`;
     const wrapped = `/${lower}`;
-    if (wrapped.includes(marker)) return [kind.slice(0, -1), stem];
+    if (wrapped.includes(marker)) return [kind.slice(0, -1), normalizeCheckoutItemId(stem)];
   }
-  if (/(^|\/)manifest\.json$/.test(lower)) return ['release-manifest', stem];
+  if (/(^|\/)manifest\.json$/.test(lower)) return ['release-manifest', normalizeCheckoutItemId(stem)];
   return null;
+}
+
+function normalizeCheckoutItemId(value) {
+  if (VALID_ITEM_ID.test(value)) return value;
+  const normalized = value
+    .replace(/[^A-Za-z0-9._:@/+\-]+/g, '-')
+    .replace(/^[^A-Za-z0-9]+/, '')
+    .slice(0, 200);
+  if (!VALID_ITEM_ID.test(normalized)) throw new Error(`checkout path cannot produce a valid source item ID: ${JSON.stringify(value)}`);
+  return normalized;
 }
 
 async function git(root, args) {
