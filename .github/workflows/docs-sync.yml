@@ -1,15 +1,15 @@
 name: docs-sync
 
 # Fired by ak-cli's release job via repository_dispatch. The payload is only a
-# trigger; the workflow re-downloads the docs-bundle asset and trusts its
-# manifest, not the payload.
+# trigger; the workflow binds immutable release assets, provenance, checksum,
+# and the bundle manifest before applying any documentation change.
 on:
   repository_dispatch:
     types: [release-docs]
 
-# Serialize per channel — every tag must land, so queue rather than cancel.
+# One global writer owns dev, docs tags, receipts, and promotion branches.
 concurrency:
-  group: docs-sync-${{ github.event.client_payload.channel }}
+  group: docs-sync
   cancel-in-progress: false
 
 jobs:
@@ -20,7 +20,7 @@ jobs:
       pull-requests: write
     steps:
       # Short-lived token for the agentkit-docs-bot GitHub App (the sole
-      # ruleset-bypass identity on main). App-token pushes re-trigger downstream
+      # ruleset-bypass identity on dev). App-token pushes re-trigger downstream
       # workflows (unlike GITHUB_TOKEN), keeping the deploy + docs-agent chain live.
       - name: Mint bot token
         id: bot
@@ -44,18 +44,61 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
-      - name: Download docs-bundle
+      - name: Validate dispatch and release asset identities
+        id: evidence
         env:
           # Fine-grained PAT: contents:read on the private ak-cli repo only.
           GH_TOKEN: ${{ secrets.AK_CLI_READ_TOKEN }}
-          TAG: ${{ github.event.client_payload.tag }}
           AK_CLI_REPO: ${{ vars.AK_CLI_REPO || 'bestagentkits/agentkit' }}
         run: |
-          mkdir -p _bundle
-          gh release download "$TAG" --repo "$AK_CLI_REPO" \
-            --pattern docs-bundle.tar.gz --dir _bundle
-          tar -xzf _bundle/docs-bundle.tar.gz -C _bundle
-          rm _bundle/docs-bundle.tar.gz
+          set -euo pipefail
+          payload_file="${RUNNER_TEMP}/release-docs-payload.json"
+          release_file="${RUNNER_TEMP}/release.json"
+          selection_file="${RUNNER_TEMP}/release-evidence-selection.json"
+          asset_dir="${RUNNER_TEMP}/release-evidence-assets"
+          bundle_dir="${RUNNER_TEMP}/validated-docs-bundle"
+          receipt_file="${RUNNER_TEMP}/release-receipt.json"
+          jq -c '.client_payload' "${GITHUB_EVENT_PATH}" > "${payload_file}"
+
+          payload="$(node scripts/release-evidence.mjs payload --payload "${payload_file}")"
+          tag="$(jq -r '.tag' <<< "${payload}")"
+          channel="$(jq -r '.channel' <<< "${payload}")"
+          gh api "repos/${AK_CLI_REPO}/releases/tags/${tag}" > "${release_file}"
+          node scripts/release-evidence.mjs select \
+            --payload "${payload_file}" \
+            --release "${release_file}" \
+            --output "${selection_file}"
+
+          mkdir -p "${asset_dir}"
+          while IFS=$'\t' read -r asset_id asset_name; do
+            gh api \
+              -H 'Accept: application/octet-stream' \
+              "repos/${AK_CLI_REPO}/releases/assets/${asset_id}" \
+              > "${asset_dir}/${asset_name}"
+          done < <(jq -r '.assets[] | [.id, .name] | @tsv' "${selection_file}")
+
+          node scripts/release-evidence.mjs verify \
+            --payload "${payload_file}" \
+            --release "${release_file}" \
+            --assets "${asset_dir}" \
+            --bundle "${bundle_dir}" \
+            --output "${receipt_file}"
+
+          receipt_path="release-sync-receipts/${channel}/${tag}.json"
+          replay="$(node scripts/release-evidence.mjs receipt \
+            --candidate "${receipt_file}" --existing "${receipt_path}")"
+          if [[ "${replay}" == "new" ]]; then
+            node scripts/release-evidence.mjs advance \
+              --payload "${payload_file}" --channels channels.json
+          fi
+          {
+            echo "channel=${channel}"
+            echo "tag=${tag}"
+            echo "bundle_dir=${bundle_dir}"
+            echo "receipt_file=${receipt_file}"
+            echo "receipt_path=${receipt_path}"
+            echo "replay=${replay}"
+          } >> "${GITHUB_OUTPUT}"
 
       - name: Configure bot identity
         run: |
@@ -64,32 +107,108 @@ jobs:
 
       # ---- Beta: direct commit + docs tag + push to dev (staging Worker deploys) ----
       - name: Sync beta
-        if: github.event.client_payload.channel == 'beta'
+        if: steps.evidence.outputs.channel == 'beta' && steps.evidence.outputs.replay == 'new'
         id: beta
+        env:
+          BUNDLE_DIR: ${{ steps.evidence.outputs.bundle_dir }}
+          RECEIPT_FILE: ${{ steps.evidence.outputs.receipt_file }}
+          RECEIPT_PATH: ${{ steps.evidence.outputs.receipt_path }}
+          TAG: ${{ steps.evidence.outputs.tag }}
         run: |
-          SUMMARY=$(node scripts/sync-release.mjs --bundle _bundle)
-          TAG=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).tag)" "$SUMMARY")
-          rm -rf _bundle
-          git add -A content/docs channels.json
+          set -euo pipefail
+          if git show-ref --verify --quiet "refs/tags/docs/${TAG}"; then
+            echo "[X] docs tag exists without a matching receipt: docs/${TAG}" >&2
+            exit 1
+          fi
+          summary="$(node scripts/sync-release.mjs --bundle "${BUNDLE_DIR}")"
+          synced_tag="$(node -e "process.stdout.write(JSON.parse(process.argv[1]).tag)" "${summary}")"
+          test "${synced_tag}" = "${TAG}" || { echo "[X] validated tag changed during beta sync" >&2; exit 1; }
+          mkdir -p "$(dirname "${RECEIPT_PATH}")"
+          cp "${RECEIPT_FILE}" "${RECEIPT_PATH}"
+          git add -A content/docs reference-raw reference-derived channels.json "${RECEIPT_PATH}"
           git commit -m "docs-sync: beta ${TAG}"
           git tag "docs/${TAG}"
-          git push origin HEAD:dev "refs/tags/docs/${TAG}"
+          git push --atomic origin HEAD:dev "refs/tags/docs/${TAG}"
+
+      - name: Record exact beta replay
+        if: steps.evidence.outputs.channel == 'beta' && steps.evidence.outputs.replay == 'replay'
+        env:
+          RECEIPT_FILE: ${{ steps.evidence.outputs.receipt_file }}
+          RECEIPT_PATH: ${{ steps.evidence.outputs.receipt_path }}
+          TAG: ${{ steps.evidence.outputs.tag }}
+        run: |
+          set -euo pipefail
+          node scripts/release-evidence.mjs beta-replay \
+            --repo . \
+            --tag "${TAG}" \
+            --receiptPath "${RECEIPT_PATH}" \
+            --candidate "${RECEIPT_FILE}" \
+            --currentRef HEAD >/dev/null
+          echo "[OK] exact beta release receipt and docs tag already applied; no-op"
 
       # ---- Stable: open a promotion PR (never direct-commit to stable) ----
       - name: Promote stable
-        if: github.event.client_payload.channel == 'stable'
+        if: steps.evidence.outputs.channel == 'stable' && steps.evidence.outputs.replay == 'new'
         env:
           GH_TOKEN: ${{ steps.bot.outputs.token }}
+          BUNDLE_DIR: ${{ steps.evidence.outputs.bundle_dir }}
+          RECEIPT_FILE: ${{ steps.evidence.outputs.receipt_file }}
+          RECEIPT_PATH: ${{ steps.evidence.outputs.receipt_path }}
+          TAG: ${{ steps.evidence.outputs.tag }}
         run: |
-          OUT=$(node scripts/promote-docs.mjs --bundle _bundle)
-          BRANCH=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).branch)" "$OUT")
-          TAG=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).tag)" "$OUT")
-          FROM=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).promotedFrom)" "$OUT")
-          rm -rf _bundle
-          git switch -c "$BRANCH"
-          git add -A content/docs channels.json
-          git commit -m "docs-promotion: ${TAG}"
-          git push origin "$BRANCH"
-          gh pr create --base dev --head "$BRANCH" --label docs-promotion \
-            --title "docs-promotion: ${TAG}" \
-            --body "Promotes \`${FROM}\` → stable \`${TAG}\`. Stable is now a whole-copy of that beta docs tag. Review the diff and merge into dev (then dev → main ships it to prod)."
+          set -euo pipefail
+          branch="docs-promotion/${TAG}"
+          if git ls-remote --exit-code --heads origin "${branch}" >/dev/null 2>&1; then
+            git fetch origin "+refs/heads/${branch}:refs/remotes/origin/${branch}"
+            branch_ref="refs/remotes/origin/${branch}"
+            replay="$(node scripts/release-evidence.mjs stable-replay \
+              --repo . \
+              --branchRef "${branch_ref}" \
+              --receiptPath "${RECEIPT_PATH}" \
+              --candidate "${RECEIPT_FILE}" \
+              --currentRef HEAD)"
+            original_base="$(jq -r '.parent' <<< "${replay}")"
+            replay_parent="$(mktemp -d "${RUNNER_TEMP}/stable-replay.XXXXXX")"
+            replay_root="${replay_parent}/worktree"
+            git worktree add --detach "${replay_root}" "${original_base}"
+            out="$(node "${GITHUB_WORKSPACE}/scripts/promote-docs.mjs" \
+              --bundle "${BUNDLE_DIR}" --repoRoot "${replay_root}")"
+            test "$(jq -r '.branch' <<< "${out}")" = "${branch}" || {
+              echo "[X] stable replay produced a different branch identity" >&2
+              exit 1
+            }
+            mkdir -p "${replay_root}/$(dirname "${RECEIPT_PATH}")"
+            cp "${RECEIPT_FILE}" "${replay_root}/${RECEIPT_PATH}"
+            git -C "${replay_root}" add -A content/docs channels.json "${RECEIPT_PATH}"
+            expected_tree="$(git -C "${replay_root}" write-tree)"
+            node scripts/release-evidence.mjs stable-replay-tree \
+              --repo . --branchRef "${branch_ref}" --expectedTree "${expected_tree}" >/dev/null
+            git worktree remove --force "${replay_root}"
+            from="$(jq -r '.promotedFrom' <<< "${out}")"
+            if ! gh pr list --state open --base dev --head "${branch}" --json number --jq 'length' | grep -qx 1; then
+              gh pr create --base dev --head "${branch}" --label docs-promotion \
+                --title "docs-promotion: ${TAG}" \
+                --body "Promotes \`${from}\` → stable \`${TAG}\`. Stable is now a whole-copy of that beta docs tag. Review the diff and merge into dev (then dev → main ships it to prod)."
+            fi
+            echo "[OK] exact stable promotion branch already published"
+          else
+            out="$(node scripts/promote-docs.mjs --bundle "${BUNDLE_DIR}")"
+            test "$(jq -r '.branch' <<< "${out}")" = "${branch}" || {
+              echo "[X] stable promotion produced a different branch identity" >&2
+              exit 1
+            }
+            from="$(jq -r '.promotedFrom' <<< "${out}")"
+            git switch -c "${branch}"
+            mkdir -p "$(dirname "${RECEIPT_PATH}")"
+            cp "${RECEIPT_FILE}" "${RECEIPT_PATH}"
+            git add -A content/docs channels.json "${RECEIPT_PATH}"
+            git commit -m "docs-promotion: ${TAG}"
+            git push origin "${branch}"
+            gh pr create --base dev --head "${branch}" --label docs-promotion \
+              --title "docs-promotion: ${TAG}" \
+              --body "Promotes \`${from}\` → stable \`${TAG}\`. Stable is now a whole-copy of that beta docs tag. Review the diff and merge into dev (then dev → main ships it to prod)."
+          fi
+
+      - name: Record exact stable replay
+        if: steps.evidence.outputs.channel == 'stable' && steps.evidence.outputs.replay == 'replay'
+        run: echo "[OK] exact stable release receipt already applied; no-op"
