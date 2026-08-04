@@ -45,6 +45,8 @@ async function makeFixture({
   stableViRoutes,
   nav,
   stableNav,
+  betaIndexRoutes,
+  betaViIndexRoutes,
   count = identities.length,
 } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'ak-kit-catalog-'));
@@ -57,11 +59,19 @@ async function makeFixture({
     .filter((entry) => entry.classification === 'public')
     .map((entry) => entry.canonicalRoute.split('/').at(-1));
   const routesByChannel = {
-    beta: { en: betaRoutes ?? routed, vi: betaViRoutes ?? betaRoutes ?? routed, nav: nav ?? publicRoutes },
+    beta: {
+      en: betaRoutes ?? routed,
+      vi: betaViRoutes ?? betaRoutes ?? routed,
+      nav: nav ?? publicRoutes,
+      indexEn: betaIndexRoutes ?? publicRoutes,
+      indexVi: betaViIndexRoutes ?? betaIndexRoutes ?? publicRoutes,
+    },
     stable: {
       en: stableRoutes ?? betaRoutes ?? routed,
       vi: stableViRoutes ?? stableRoutes ?? betaViRoutes ?? betaRoutes ?? routed,
       nav: stableNav ?? nav ?? publicRoutes,
+      indexEn: publicRoutes,
+      indexVi: publicRoutes,
     },
   };
   for (const [channel, observed] of Object.entries(routesByChannel)) {
@@ -71,6 +81,10 @@ async function makeFixture({
     for (const slug of observed.vi) await writeFile(join(skillsDir, `${slug}.vi.mdx`), '---\ntitle: Test\n---\n');
     await writeJson(join(skillsDir, 'meta.json'), { pages: observed.nav });
     await writeJson(join(skillsDir, 'meta.vi.json'), { pages: observed.nav });
+    const indexBody = (routes) =>
+      `---\ntitle: Test\n---\n\n${routes.map((slug) => `[ak:${slug}](./${slug})`).join('\n')}\n`;
+    await writeFile(join(skillsDir, 'index.en.mdx'), indexBody(observed.indexEn));
+    await writeFile(join(skillsDir, 'index.vi.mdx'), indexBody(observed.indexVi));
     const overview = `---\ntitle: Test\n---\n\n| Component | Resolved count | Note |\n| --- | ---: | --- |\n| Skills | ${count} | Fixture |\n`;
     await writeFile(join(docsRoot, channel, 'kits', 'test.en.mdx'), overview);
     await writeFile(join(docsRoot, channel, 'kits', 'test.vi.mdx'), overview);
@@ -142,6 +156,11 @@ test('rejects Stable and Beta route divergence', async () => {
 test('rejects a stale overview count', async () => {
   const fixture = await makeFixture({ count: 2 });
   await expectFailure(fixture, /Skills count 2 does not match source-identities 1/);
+});
+
+test('rejects an incomplete public Skill index in either locale', async () => {
+  const fixture = await makeFixture({ betaViIndexRoutes: [] });
+  await expectFailure(fixture, /Beta VI public Skill index.*missing \[alpha\]/);
 });
 
 test('accepts a reviewed intentionally-unlisted route', async () => {

@@ -56,6 +56,15 @@ async function detailSlugs(skillsDir, locale) {
   );
 }
 
+async function indexSkillSlugs(skillsDir, locale) {
+  const path = join(skillsDir, `index.${locale}.mdx`);
+  if (!existsSync(path)) return new Set();
+  const body = await readFile(path, 'utf8');
+  return new Set(
+    [...body.matchAll(/\]\(\.\/([a-z0-9][a-z0-9-]*)\)/g)].map((match) => match[1]),
+  );
+}
+
 async function observeChannel(docsRoot, channel, kitId) {
   const skillsDir = join(docsRoot, channel, 'kits', kitId, 'skills');
   const metaPath = join(skillsDir, 'meta.json');
@@ -65,6 +74,8 @@ async function observeChannel(docsRoot, channel, kitId) {
     vi: await detailSlugs(skillsDir, 'vi'),
     nav: new Set(existsSync(metaPath) ? (await readJson(metaPath)).pages ?? [] : []),
     navVi: new Set(existsSync(metaViPath) ? (await readJson(metaViPath)).pages ?? [] : []),
+    indexEn: await indexSkillSlugs(skillsDir, 'en'),
+    indexVi: await indexSkillSlugs(skillsDir, 'vi'),
   };
 }
 
@@ -235,6 +246,8 @@ export async function checkKitCatalog({
     }
     addDifference(errors, `${kit.kitId} registered detail routes`, routed, beta.en);
     addDifference(errors, `${kit.kitId} public navigation`, publicRoutes, beta.nav);
+    addDifference(errors, `${kit.kitId} Beta EN public Skill index`, publicRoutes, beta.indexEn);
+    addDifference(errors, `${kit.kitId} Beta VI public Skill index`, publicRoutes, beta.indexVi);
     const metrics = {
       'source-identities': kit.identities.length,
       'public-identities': publicRoutes.size,
