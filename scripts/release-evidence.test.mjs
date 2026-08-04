@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -8,10 +8,13 @@ import test from 'node:test';
 import { gunzipSync, gzipSync } from 'node:zlib';
 import {
   classifyReceipt,
+  inspectStableReplay,
   inspectTarGz,
   ReleaseEvidenceError,
   selectReleaseAssets,
   validateChannelAdvance,
+  validateBetaReplay,
+  validateStableReplayTree,
   validateDispatchPayload,
   verifyReleaseEvidence,
 } from './lib/release-evidence.mjs';
@@ -24,6 +27,19 @@ const payload = {
 
 function digest(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
+}
+
+function git(cwd, ...args) {
+  return execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
+}
+
+async function initGitRepo(root) {
+  git(root, 'init', '--quiet');
+  git(root, 'config', 'user.name', 'Test');
+  git(root, 'config', 'user.email', 'test@example.com');
+  await writeFile(join(root, 'base.txt'), 'base\n');
+  git(root, 'add', 'base.txt');
+  git(root, 'commit', '--quiet', '-m', 'base');
 }
 
 function octal(value, width) {
@@ -331,12 +347,85 @@ test('canonical receipts make exact replay a no-op and reject conflicts', async 
   }
 });
 
+test('beta replay requires the docs tag to remain on the receipt-introducing commit', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'beta-replay-'));
+  const receiptPath = `release-sync-receipts/beta/${payload.tag}.json`;
+  const candidate = `${JSON.stringify({ schemaVersion: 'receipt.v1', tag: payload.tag }, null, 2)}\n`;
+  try {
+    await initGitRepo(root);
+    await mkdir(join(root, 'release-sync-receipts', 'beta'), { recursive: true });
+    await writeFile(join(root, receiptPath), candidate);
+    git(root, 'add', receiptPath);
+    git(root, 'commit', '--quiet', '-m', `docs-sync: beta ${payload.tag}`);
+    const syncCommit = git(root, 'rev-parse', 'HEAD');
+    git(root, 'tag', `docs/${payload.tag}`);
+    await writeFile(join(root, 'later.txt'), 'later\n');
+    git(root, 'add', 'later.txt');
+    git(root, 'commit', '--quiet', '-m', 'later dev change');
+
+    assert.equal(validateBetaReplay({ repoRoot: root, tag: payload.tag, receiptPath, candidateText: candidate }), syncCommit);
+    git(root, 'tag', '--force', `docs/${payload.tag}`, 'HEAD');
+    assert.throws(
+      () => validateBetaReplay({ repoRoot: root, tag: payload.tag, receiptPath, candidateText: candidate }),
+      /receipt-introducing commit/,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('stable replay validates the original promotion tree after dev advances', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'stable-replay-'));
+  const stableTag = 'v2.8.0';
+  const receiptPath = `release-sync-receipts/stable/${stableTag}.json`;
+  const candidate = `${JSON.stringify({ schemaVersion: 'receipt.v1', tag: stableTag }, null, 2)}\n`;
+  try {
+    await initGitRepo(root);
+    const base = git(root, 'rev-parse', 'HEAD');
+    git(root, 'switch', '--quiet', '-c', 'docs-promotion');
+    await mkdir(join(root, 'release-sync-receipts', 'stable'), { recursive: true });
+    await writeFile(join(root, receiptPath), candidate);
+    await writeFile(join(root, 'stable.txt'), 'promoted\n');
+    git(root, 'add', receiptPath, 'stable.txt');
+    git(root, 'commit', '--quiet', '-m', `docs-promotion: ${stableTag}`);
+    const promotionTree = git(root, 'rev-parse', 'HEAD^{tree}');
+    git(root, 'switch', '--quiet', '-c', 'dev', base);
+    await writeFile(join(root, 'unrelated.txt'), 'new dev work\n');
+    git(root, 'add', 'unrelated.txt');
+    git(root, 'commit', '--quiet', '-m', 'unrelated dev change');
+    assert.notEqual(git(root, 'rev-parse', 'HEAD^{tree}'), promotionTree);
+
+    const replay = inspectStableReplay({
+      repoRoot: root,
+      branchRef: 'docs-promotion',
+      receiptPath,
+      candidateText: candidate,
+    });
+    assert.equal(replay.parent, base);
+    assert.equal(validateStableReplayTree({ repoRoot: root, branchRef: 'docs-promotion', expectedTree: promotionTree }), promotionTree);
+    assert.throws(
+      () => validateStableReplayTree({
+        repoRoot: root,
+        branchRef: 'docs-promotion',
+        expectedTree: git(root, 'rev-parse', 'HEAD^{tree}'),
+      }),
+      /conflicts with deterministic original-base tree/,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('workflow validates immutable evidence before writes and publishes beta atomically', async () => {
   const workflow = await readFile(new URL('../.github/workflows/docs-sync.yml', import.meta.url), 'utf8');
   assert.match(workflow, /group: docs-sync\n/);
   assert.match(workflow, /releases\/assets\/\$\{asset_id\}/);
   assert.match(workflow, /node scripts\/release-evidence\.mjs verify/);
   assert.match(workflow, /git push --atomic origin HEAD:dev/);
+  assert.match(workflow, /release-evidence\.mjs beta-replay/);
+  assert.match(workflow, /git worktree add --detach "\$\{replay_root\}" "\$\{original_base\}"/);
+  assert.match(workflow, /release-evidence\.mjs stable-replay-tree/);
+  assert.doesNotMatch(workflow, /git diff --quiet HEAD "refs\/remotes\/origin\/\$\{branch\}"/);
   assert.ok(workflow.indexOf('release-evidence.mjs verify') < workflow.indexOf('sync-release.mjs'));
   assert.doesNotMatch(workflow, /tar -x/);
   assert.doesNotMatch(workflow, /gh release download/);

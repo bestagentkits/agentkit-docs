@@ -138,19 +138,12 @@ jobs:
           TAG: ${{ steps.evidence.outputs.tag }}
         run: |
           set -euo pipefail
-          git show-ref --verify --quiet "refs/tags/docs/${TAG}" || {
-            echo "[X] matching beta receipt exists but docs tag is missing: docs/${TAG}" >&2
-            exit 1
-          }
-          git merge-base --is-ancestor "refs/tags/docs/${TAG}" HEAD || {
-            echo "[X] matching beta docs tag is not in current dev history" >&2
-            exit 1
-          }
-          tagged_receipt="${RUNNER_TEMP}/tagged-release-receipt.json"
-          git show "refs/tags/docs/${TAG}:${RECEIPT_PATH}" > "${tagged_receipt}"
-          node scripts/release-evidence.mjs receipt \
-            --candidate "${RECEIPT_FILE}" --existing "${tagged_receipt}" \
-            | grep -qx replay
+          node scripts/release-evidence.mjs beta-replay \
+            --repo . \
+            --tag "${TAG}" \
+            --receiptPath "${RECEIPT_PATH}" \
+            --candidate "${RECEIPT_FILE}" \
+            --currentRef HEAD >/dev/null
           echo "[OK] exact beta release receipt and docs tag already applied; no-op"
 
       # ---- Stable: open a promotion PR (never direct-commit to stable) ----
@@ -161,40 +154,59 @@ jobs:
           BUNDLE_DIR: ${{ steps.evidence.outputs.bundle_dir }}
           RECEIPT_FILE: ${{ steps.evidence.outputs.receipt_file }}
           RECEIPT_PATH: ${{ steps.evidence.outputs.receipt_path }}
+          TAG: ${{ steps.evidence.outputs.tag }}
         run: |
           set -euo pipefail
-          out="$(node scripts/promote-docs.mjs --bundle "${BUNDLE_DIR}")"
-          branch="$(node -e "process.stdout.write(JSON.parse(process.argv[1]).branch)" "${out}")"
-          tag="$(node -e "process.stdout.write(JSON.parse(process.argv[1]).tag)" "${out}")"
-          from="$(node -e "process.stdout.write(JSON.parse(process.argv[1]).promotedFrom)" "${out}")"
-          git switch -c "${branch}"
-          mkdir -p "$(dirname "${RECEIPT_PATH}")"
-          cp "${RECEIPT_FILE}" "${RECEIPT_PATH}"
-          git add -A content/docs channels.json "${RECEIPT_PATH}"
-          git commit -m "docs-promotion: ${tag}"
-
+          branch="docs-promotion/${TAG}"
           if git ls-remote --exit-code --heads origin "${branch}" >/dev/null 2>&1; then
             git fetch origin "+refs/heads/${branch}:refs/remotes/origin/${branch}"
-            remote_receipt="${RUNNER_TEMP}/remote-release-receipt.json"
-            git show "refs/remotes/origin/${branch}:${RECEIPT_PATH}" > "${remote_receipt}"
-            node scripts/release-evidence.mjs receipt \
-              --candidate "${RECEIPT_FILE}" --existing "${remote_receipt}" \
-              | grep -qx replay
-            git diff --quiet HEAD "refs/remotes/origin/${branch}" || {
-              echo "[X] stable replay branch conflicts with the deterministic promotion tree" >&2
+            branch_ref="refs/remotes/origin/${branch}"
+            replay="$(node scripts/release-evidence.mjs stable-replay \
+              --repo . \
+              --branchRef "${branch_ref}" \
+              --receiptPath "${RECEIPT_PATH}" \
+              --candidate "${RECEIPT_FILE}" \
+              --currentRef HEAD)"
+            original_base="$(jq -r '.parent' <<< "${replay}")"
+            replay_parent="$(mktemp -d "${RUNNER_TEMP}/stable-replay.XXXXXX")"
+            replay_root="${replay_parent}/worktree"
+            git worktree add --detach "${replay_root}" "${original_base}"
+            out="$(node "${GITHUB_WORKSPACE}/scripts/promote-docs.mjs" \
+              --bundle "${BUNDLE_DIR}" --repoRoot "${replay_root}")"
+            test "$(jq -r '.branch' <<< "${out}")" = "${branch}" || {
+              echo "[X] stable replay produced a different branch identity" >&2
               exit 1
             }
+            mkdir -p "${replay_root}/$(dirname "${RECEIPT_PATH}")"
+            cp "${RECEIPT_FILE}" "${replay_root}/${RECEIPT_PATH}"
+            git -C "${replay_root}" add -A content/docs channels.json "${RECEIPT_PATH}"
+            expected_tree="$(git -C "${replay_root}" write-tree)"
+            node scripts/release-evidence.mjs stable-replay-tree \
+              --repo . --branchRef "${branch_ref}" --expectedTree "${expected_tree}" >/dev/null
+            git worktree remove --force "${replay_root}"
+            from="$(jq -r '.promotedFrom' <<< "${out}")"
             if ! gh pr list --state open --base dev --head "${branch}" --json number --jq 'length' | grep -qx 1; then
               gh pr create --base dev --head "${branch}" --label docs-promotion \
-                --title "docs-promotion: ${tag}" \
-                --body "Promotes \`${from}\` → stable \`${tag}\`. Stable is now a whole-copy of that beta docs tag. Review the diff and merge into dev (then dev → main ships it to prod)."
+                --title "docs-promotion: ${TAG}" \
+                --body "Promotes \`${from}\` → stable \`${TAG}\`. Stable is now a whole-copy of that beta docs tag. Review the diff and merge into dev (then dev → main ships it to prod)."
             fi
             echo "[OK] exact stable promotion branch already published"
           else
+            out="$(node scripts/promote-docs.mjs --bundle "${BUNDLE_DIR}")"
+            test "$(jq -r '.branch' <<< "${out}")" = "${branch}" || {
+              echo "[X] stable promotion produced a different branch identity" >&2
+              exit 1
+            }
+            from="$(jq -r '.promotedFrom' <<< "${out}")"
+            git switch -c "${branch}"
+            mkdir -p "$(dirname "${RECEIPT_PATH}")"
+            cp "${RECEIPT_FILE}" "${RECEIPT_PATH}"
+            git add -A content/docs channels.json "${RECEIPT_PATH}"
+            git commit -m "docs-promotion: ${TAG}"
             git push origin "${branch}"
             gh pr create --base dev --head "${branch}" --label docs-promotion \
-              --title "docs-promotion: ${tag}" \
-              --body "Promotes \`${from}\` → stable \`${tag}\`. Stable is now a whole-copy of that beta docs tag. Review the diff and merge into dev (then dev → main ships it to prod)."
+              --title "docs-promotion: ${TAG}" \
+              --body "Promotes \`${from}\` → stable \`${TAG}\`. Stable is now a whole-copy of that beta docs tag. Review the diff and merge into dev (then dev → main ships it to prod)."
           fi
 
       - name: Record exact stable replay

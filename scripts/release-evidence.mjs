@@ -4,9 +4,12 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import {
   classifyReceipt,
+  inspectStableReplay,
   selectReleaseAssets,
   validateChannelAdvance,
+  validateBetaReplay,
   validateDispatchPayload,
+  validateStableReplayTree,
   verifyReleaseEvidence,
 } from './lib/release-evidence.mjs';
 
@@ -27,6 +30,12 @@ async function main() {
       existing: { type: 'string' },
       candidate: { type: 'string' },
       channels: { type: 'string' },
+      repo: { type: 'string', default: '.' },
+      tag: { type: 'string' },
+      receiptPath: { type: 'string' },
+      branchRef: { type: 'string' },
+      currentRef: { type: 'string', default: 'HEAD' },
+      expectedTree: { type: 'string' },
     },
   });
   if (command === 'payload') {
@@ -61,7 +70,37 @@ async function main() {
     validateChannelAdvance(await readJson(values.payload), await readJson(values.channels));
     return;
   }
-  throw new Error('command must be payload, select, verify, receipt, or advance');
+  if (command === 'beta-replay') {
+    const candidateText = await readFile(values.candidate, 'utf8');
+    process.stdout.write(`${validateBetaReplay({
+      repoRoot: values.repo,
+      tag: values.tag,
+      receiptPath: values.receiptPath,
+      candidateText,
+      currentRef: values.currentRef,
+    })}\n`);
+    return;
+  }
+  if (command === 'stable-replay') {
+    const candidateText = await readFile(values.candidate, 'utf8');
+    process.stdout.write(`${JSON.stringify(inspectStableReplay({
+      repoRoot: values.repo,
+      branchRef: values.branchRef,
+      receiptPath: values.receiptPath,
+      candidateText,
+      currentRef: values.currentRef,
+    }))}\n`);
+    return;
+  }
+  if (command === 'stable-replay-tree') {
+    process.stdout.write(`${validateStableReplayTree({
+      repoRoot: values.repo,
+      branchRef: values.branchRef,
+      expectedTree: values.expectedTree,
+    })}\n`);
+    return;
+  }
+  throw new Error('unsupported release-evidence command');
 }
 
 main().catch((error) => {

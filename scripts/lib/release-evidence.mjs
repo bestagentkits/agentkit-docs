@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { lstat, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, posix } from 'node:path';
 import { gunzipSync } from 'node:zlib';
@@ -25,6 +26,18 @@ function fail(message) {
 
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
+}
+
+function git(repoRoot, args) {
+  try {
+    return execFileSync('git', ['-C', repoRoot, ...args], { encoding: 'utf8' }).trim();
+  } catch (error) {
+    fail(error.stderr?.trim() || `git ${args.join(' ')} failed`);
+  }
+}
+
+function gitSucceeds(repoRoot, args) {
+  return spawnSync('git', ['-C', repoRoot, ...args], { stdio: 'ignore' }).status === 0;
 }
 
 function parseJson(raw, label) {
@@ -301,6 +314,58 @@ function canonicalJson(value) {
   return `${JSON.stringify(value, null, 2)}\n`;
 }
 
+function validateCanonicalReceiptText(text, label) {
+  const value = parseJson(text, label);
+  if (canonicalJson(value) !== text) fail(`${label} is not canonical`);
+  return text;
+}
+
+export function validateBetaReplay({ repoRoot, tag, receiptPath, candidateText, currentRef = 'HEAD' }) {
+  const dispatch = validateDispatchPayload({ channel: 'beta', tag, sha: '0'.repeat(40) });
+  const ref = `refs/tags/docs/${dispatch.tag}`;
+  const commit = git(repoRoot, ['rev-parse', `${ref}^{commit}`]);
+  const parents = git(repoRoot, ['show', '-s', '--format=%P', commit]).split(/\s+/).filter(Boolean);
+  if (parents.length !== 1) fail(`beta docs tag must point to a single-parent sync commit: ${ref}`);
+  if (!gitSucceeds(repoRoot, ['merge-base', '--is-ancestor', commit, currentRef])) {
+    fail(`beta docs tag is not in current dev history: ${ref}`);
+  }
+  if (gitSucceeds(repoRoot, ['cat-file', '-e', `${parents[0]}:${receiptPath}`])) {
+    fail(`beta docs tag does not point to the receipt-introducing commit: ${ref}`);
+  }
+  const receiptChange = git(repoRoot, [
+    'diff-tree', '--no-commit-id', '--name-status', '-r', parents[0], commit, '--', receiptPath,
+  ]);
+  if (receiptChange !== `A\t${receiptPath}`) {
+    fail(`beta docs tag does not add the expected release receipt: ${ref}`);
+  }
+  const taggedReceipt = `${git(repoRoot, ['show', `${commit}:${receiptPath}`])}\n`;
+  validateCanonicalReceiptText(candidateText, 'candidate release receipt');
+  validateCanonicalReceiptText(taggedReceipt, 'tagged release receipt');
+  if (taggedReceipt !== candidateText) fail(`beta docs tag receipt conflicts with the release evidence: ${ref}`);
+  return commit;
+}
+
+export function inspectStableReplay({ repoRoot, branchRef, receiptPath, candidateText, currentRef = 'HEAD' }) {
+  const commit = git(repoRoot, ['rev-parse', `${branchRef}^{commit}`]);
+  const parents = git(repoRoot, ['show', '-s', '--format=%P', commit]).split(/\s+/).filter(Boolean);
+  if (parents.length !== 1) fail(`stable promotion branch must have exactly one parent: ${branchRef}`);
+  if (!gitSucceeds(repoRoot, ['merge-base', '--is-ancestor', parents[0], currentRef])) {
+    fail(`stable promotion base is not in current dev history: ${parents[0]}`);
+  }
+  const branchReceipt = `${git(repoRoot, ['show', `${commit}:${receiptPath}`])}\n`;
+  validateCanonicalReceiptText(candidateText, 'candidate release receipt');
+  validateCanonicalReceiptText(branchReceipt, 'stable branch release receipt');
+  if (branchReceipt !== candidateText) fail(`stable promotion branch receipt conflicts: ${branchRef}`);
+  return { commit, parent: parents[0], tree: git(repoRoot, ['rev-parse', `${commit}^{tree}`]) };
+}
+
+export function validateStableReplayTree({ repoRoot, branchRef, expectedTree }) {
+  if (!SHA40.test(expectedTree)) fail('expected stable promotion tree must be a 40-character lowercase SHA');
+  const actualTree = git(repoRoot, ['rev-parse', `${branchRef}^{tree}`]);
+  if (actualTree !== expectedTree) fail(`stable promotion branch conflicts with deterministic original-base tree: ${branchRef}`);
+  return actualTree;
+}
+
 export async function verifyReleaseEvidence({ payload, release, assetsDir, bundleDir }) {
   const selection = selectReleaseAssets(release, payload);
   const downloaded = await verifyDownloadedAssets(selection, assetsDir);
@@ -340,8 +405,7 @@ export async function verifyReleaseEvidence({ payload, release, assetsDir, bundl
 }
 
 export async function classifyReceipt(existingPath, candidateText) {
-  const candidate = parseJson(candidateText, 'candidate release receipt');
-  if (canonicalJson(candidate) !== candidateText) fail('candidate release receipt is not canonical');
+  validateCanonicalReceiptText(candidateText, 'candidate release receipt');
   let existing;
   try {
     existing = await readFile(existingPath, 'utf8');
@@ -349,8 +413,14 @@ export async function classifyReceipt(existingPath, candidateText) {
     if (error.code === 'ENOENT') return 'new';
     throw error;
   }
-  const parsed = parseJson(existing, 'existing release receipt');
-  if (canonicalJson(parsed) !== existing) fail(`existing release receipt is not canonical: ${existingPath}`);
+  try {
+    validateCanonicalReceiptText(existing, 'existing release receipt');
+  } catch (error) {
+    if (error instanceof ReleaseEvidenceError && /not canonical/.test(error.message)) {
+      fail(`existing release receipt is not canonical: ${existingPath}`);
+    }
+    throw error;
+  }
   if (existing !== candidateText) fail(`conflicting release receipt already exists: ${existingPath}`);
   return 'replay';
 }
