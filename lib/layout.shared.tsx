@@ -35,6 +35,13 @@ export function baseOptions(locale: string): BaseLayoutProps {
       },
       themeSwitch: AccessibleThemeSwitch,
     },
+    links: [
+      {
+        text: locale === 'vi' ? 'Cộng đồng Discord' : 'Discord community',
+        url: 'https://discord.com/invite/x7SwTSf3wc',
+        external: true,
+      },
+    ],
     githubUrl: `https://github.com/${gitConfig.user}/${gitConfig.repo}`,
   };
 }
