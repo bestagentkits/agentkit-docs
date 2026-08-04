@@ -10,6 +10,7 @@ export const CHANNELS = ['beta', 'stable'];
 // Tag shapes: beta releases are `vX.Y.Z-beta.N`, stable are `vX.Y.Z`.
 const BETA_TAG = /^v\d+\.\d+\.\d+-beta\.\d+$/;
 const STABLE_TAG = /^v\d+\.\d+\.\d+$/;
+const COMMIT_SHA = /^[0-9a-f]{40}$/;
 
 export function isValidTag(tag, channel) {
   if (typeof tag !== 'string') return false;
@@ -61,23 +62,31 @@ export function validateManifest(m, opts = {}) {
       `tag ${JSON.stringify(m.tag)} is not a valid ${m.channel} tag`,
     );
   }
-  if (typeof m.sha !== 'string' || m.sha.length < 7) {
-    throw new ManifestError(`sha must be a commit SHA string, got ${JSON.stringify(m.sha)}`);
+  if (typeof m.sha !== 'string' || !COMMIT_SHA.test(m.sha)) {
+    throw new ManifestError(
+      `sha must be exactly 40 lowercase hexadecimal characters, got ${JSON.stringify(m.sha)}`,
+    );
   }
   if (typeof m.version !== 'string' || m.version.length === 0) {
     throw new ManifestError(`version must be a non-empty string, got ${JSON.stringify(m.version)}`);
   }
+  if (m.version !== m.tag.slice(1)) {
+    throw new ManifestError(`version ${JSON.stringify(m.version)} does not match tag ${m.tag}`);
+  }
   // generatedAt is stamped by ak-cli at build time. Sync reuses it verbatim (never
   // a fresh clock read) so re-dispatching the same tag reproduces byte-identical
   // output — the idempotence guarantee.
-  if (typeof m.generatedAt !== 'string' || m.generatedAt.length === 0) {
-    throw new ManifestError(`generatedAt must be a non-empty ISO timestamp string, got ${JSON.stringify(m.generatedAt)}`);
+  if (typeof m.generatedAt !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(m.generatedAt)) {
+    throw new ManifestError(`generatedAt must be an ISO timestamp string, got ${JSON.stringify(m.generatedAt)}`);
   }
   if (m.channel === 'stable') {
     if (!isValidTag(m.promotedFrom, 'beta')) {
       throw new ManifestError(
         `stable manifest must carry promotedFrom as a valid beta tag, got ${JSON.stringify(m.promotedFrom)}`,
       );
+    }
+    if (m.promotedFrom.split('-beta.', 1)[0] !== m.tag) {
+      throw new ManifestError('stable promotedFrom must have the same base version as the stable tag');
     }
   }
   return m;
