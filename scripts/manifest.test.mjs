@@ -6,7 +6,7 @@ const betaManifest = {
   schemaVersion: 1,
   channel: 'beta',
   tag: 'v0.42.0-beta.7',
-  sha: '1a2b3c4d5e6f7890',
+  sha: '1a2b3c4d5e6f7890abcdef1234567890abcdef12',
   version: '0.42.0-beta.7',
   generatedAt: '2026-07-20T00:00:00Z',
 };
@@ -54,8 +54,25 @@ test('bad tag shape is rejected', () => {
 
 test('missing sha / version / generatedAt is rejected', () => {
   assert.throws(() => validateManifest({ ...betaManifest, sha: 'x' }), /sha/);
+  assert.throws(
+    () => validateManifest({ ...betaManifest, sha: betaManifest.sha.toUpperCase() }),
+    /lowercase hexadecimal/,
+  );
+  assert.throws(
+    () => validateManifest({ ...betaManifest, sha: `${betaManifest.sha}0` }),
+    /40 lowercase hexadecimal/,
+  );
   assert.throws(() => validateManifest({ ...betaManifest, version: '' }), /version/);
+  assert.throws(() => validateManifest({ ...betaManifest, version: '0.42.1-beta.7' }), /does not match tag/);
   assert.throws(() => validateManifest({ ...betaManifest, generatedAt: undefined }), /generatedAt/);
+  assert.throws(() => validateManifest({ ...betaManifest, generatedAt: 'today' }), /ISO timestamp/);
+});
+
+test('stable promotedFrom must match the stable base version', () => {
+  assert.throws(
+    () => validateManifest({ ...stableManifest, promotedFrom: 'v0.43.0-beta.1' }),
+    /same base version/,
+  );
 });
 
 test('malformed JSON is a ManifestError, not a raw SyntaxError', () => {
