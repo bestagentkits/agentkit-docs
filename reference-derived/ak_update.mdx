@@ -19,15 +19,21 @@ ak update [project-dir] [flags]
 ### Examples
 
 ```bash
-ak update                                                   # preview inferred project refreshes
-ak update --yes                                             # apply inferred project refreshes
-ak update ./myproj                                          # preview a specific project
+ak update                                                   # TTY wizard (CLI → global → project)
+ak update --yes                                             # TTY: accept every wizard step
+ak update ./myproj                                          # project-only preview
 ak update --show-diff                                       # preview unified diff for each change
 ak update --kits engineer                                   # expert: preview one project kit
 ak update --kits engineer --force --yes                     # expert: overwrite user-modified files too
 ak update --kits engineer --yes --json --no-interactive     # scripted project refresh envelope
-ak update --kits core --yes                                 # --kits defaults to the remote registry; offline reuses the verified local cache only, no embedded fallback
+ak update --kits engineer --yes                             # authenticated remote registry; offline reuses verified cache only
 ak update --kits engineer --local --kits-dir kits/ --yes    # dev/CI: force the local kit source for --kits
+ak update --beta --yes                                      # shorthand for --channel beta
+ak update --global                                          # preview AgentKit-owned user/global kit refreshes
+ak update --global --yes                                    # apply user/global kit refreshes (CLI hard-gate first)
+ak update -g --kits engineer --yes --json --no-interactive  # scripted global refresh of one kit
+ak update --global --target codex --yes                     # refresh only the codex global install
+ak update --global --target claude-code,codex --yes         # refresh several runtimes; uninstalled ones are skipped
 ak kit refresh engineer --remote --yes                      # separate paid plugin refresh
 ```
 
@@ -37,23 +43,27 @@ Global flags, output modes, and the standard exit codes (`0`–`3`) are shared b
 
 | Flag | Description |
 | --- | --- |
+| `--beta` | Shorthand for --channel beta |
 | `--channel string` | Remote registry channel for --remote (beta requires explicit opt-in) (default "stable") |
 | `--dry-run` | Force preview (exit 0); update already previews by default unless --yes is given |
 | `--force` | Overwrite user-modified files (snapshot is always taken first) |
+| `-g, --global` | Refresh AgentKit-owned kits at user/global scope instead of the current project |
 | `--kits string` | Comma-separated list of kits to update |
-| `--kits-dir string` | Kits source directory (default: embedded kits, $AGENTKIT_KITS_DIR, or ./kits) |
-| `--local` | Read --kits from the embedded/local kit source instead of the remote registry (dev/CI) |
+| `--kits-dir string` | Explicit local kits source directory for development and CI |
+| `--local` | Read kits from an explicit --kits-dir or AGENTKIT_KITS_DIR source (dev/CI) |
 | `--registry-url string` | AgentKit registry base URL (default: $AGENTKIT_REGISTRY_URL, then dev/staging https://staging.agentkit.best or release https://agentkit.best) |
-| `--remote ak update` | Download --kits from the authenticated AgentKit registry (default; use --local for the embedded/dev source). Bare ak update with no --kits stays local regardless. (default true) |
-| `--runtime string` | Remote kit runtime for --remote (claude-code or codex) (default "claude-code") |
+| `--remote` | Download kits from the authenticated AgentKit registry (default) (default true) |
+| `--runtime string` | Alias of --target: which agent runtime(s) to update (claude-code, codex, cursor) (default "claude-code") |
 | `--show-diff` | Show unified diff for each file that will be overwritten |
+| `--target string` | Agent runtime(s) to update, comma-separated (e.g. claude-code,codex). With --global, filters which installed runtimes refresh (unset = all). Alias of --runtime; pass only one. |
 | `--version string` | Remote kit version for --remote (default: channel latest) |
 
 ### Exit codes
 
 | Code | Meaning |
 | --- | --- |
-| `1` | runtime error (missing manifest, snapshot failure, etc.) |
+| `1` | runtime error, CLI hard-gate, partial kit failure, or interrupt after mutation |
+| `2` | invalid flags (including --target with --runtime set differently, an unknown runtime, or a multi-value --target at project scope); with --global: a project directory argument, an empty refreshable set, or a plugin-only result |
 | `3` | preview only — neither --yes nor an interactive confirmation was given |
 
 ### Related commands
