@@ -4,6 +4,7 @@ import {
   AccessibleSearchTrigger,
 } from '@/components/accessible-search-trigger';
 import { AccessibleThemeSwitch } from '@/components/accessible-theme-switch';
+import { CommunityLinksMenu } from '@/components/community-links-menu';
 import { localePath } from './locale-path';
 import { appName, gitConfig } from './shared';
 
@@ -13,6 +14,7 @@ export function baseOptions(locale: string): BaseLayoutProps {
   return {
     nav: {
       url: localePath(locale),
+      children: <CommunityLinksMenu locale={locale} />,
       title: (
         <>
           {/* Real AgentKit logo mark (public/logo-icon.svg). Plain <img> so it
@@ -35,13 +37,6 @@ export function baseOptions(locale: string): BaseLayoutProps {
       },
       themeSwitch: AccessibleThemeSwitch,
     },
-    links: [
-      {
-        text: locale === 'vi' ? 'Cộng đồng Discord' : 'Discord community',
-        url: 'https://discord.com/invite/x7SwTSf3wc',
-        external: true,
-      },
-    ],
     githubUrl: `https://github.com/${gitConfig.user}/${gitConfig.repo}`,
   };
 }
