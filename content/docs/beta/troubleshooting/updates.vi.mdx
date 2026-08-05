@@ -58,8 +58,88 @@ refresh ngầm; refresh đúng route đó bằng:
 ak kit refresh <kit> --global --switch-to-plugin --yes
 ```
 
+Nếu refresh Claude global báo `refusing foreign-home takeover`, lệnh đã dừng
+trước khi thay đổi Claude home được discover. Snapshot ID vẫn có thể xuất hiện
+vì snapshot được tạo trước bước từ chối ownership; ID đó chứng minh recovery
+material tồn tại, không chứng minh đã có partial write. Hãy xác nhận đây là bản
+cài global mong muốn, rồi chạy đúng lệnh `ak kit init <kit> --global` trong lỗi
+để thiết lập lại ownership. Đừng restore chỉ vì lỗi trước mutation này có
+snapshot.
+
 Lỗi runtime khi apply, CLI hard gate, Kit lỗi một phần hoặc ngắt sau khi đã
 mutation thoát `1`. Kết hợp scope hoặc target không hợp lệ thoát `2`.
+
+## Workaround khi một runtime global lỗi trên Windows
+
+Cập nhật global báo kết quả riêng cho từng runtime. Nếu row Claude Code lỗi
+trước mutation còn row Codex báo `updated`, Codex đã được cập nhật; đừng mô tả
+toàn bộ lần cập nhật là thất bại.
+
+Đừng coi hướng dẫn terminal chung về dung lượng disk hoặc quyền backup là root
+cause. Guidance hiện tại dùng classification đó cho mọi raw error chứa
+`snapshot`. Snapshot ID được in chứng minh ít nhất một capture trước đó đã thành
+công. Nó không chứng minh có partial write, và một capture sau vẫn có thể lỗi vì
+dung lượng, ACL hoặc security software, Claude path bị lock hoặc không đọc được,
+foreign-home refusal, hay lỗi snapshot-path khác.
+
+### Đọc local detail trước
+
+Trong PowerShell, tìm row Claude Code lỗi và các marker liên quan trong local
+report mới nhất:
+
+```powershell
+$report = Get-ChildItem "$env:USERPROFILE\.agentkit\support\update-report-*.md" |
+  Sort-Object LastWriteTime -Descending |
+  Select-Object -First 1
+
+$report.FullName
+Select-String -Path $report.FullName `
+  -Pattern '^### engineer \[claude-code\]$','^- Detail:','^- Snapshot:'
+```
+
+Chỉ chia sẻ các dòng `- Detail:` và `- Snapshot:` liên quan. Hãy redact username,
+địa chỉ email, project path, token và diagnostics không liên quan. Khi chưa có
+raw `- Detail:`, hãy giữ nguyên trạng thái chưa xác định nguyên nhân.
+
+Nếu cần thêm bằng chứng, các check sau chỉ đọc:
+
+```powershell
+ak backups show <snapshot-id> --json
+ak backups verify <snapshot-id>
+ak doctor --json --offline
+Get-PSDrive -Name C
+```
+
+### Sửa đúng nguyên nhân rồi chỉ retry Claude Code
+
+Giữ nguyên `.agentkit`, `.claude` và snapshot. Không bypass safety boundary bằng
+`--no-backup`.
+
+- Nếu path bị lock hoặc không đọc được, đóng Claude Code và process đang giữ
+  path đó, sửa đúng readability hoặc quyền của chính path đó rồi retry.
+- Nếu detail báo hết dung lượng, giải phóng dung lượng trên volume chứa source và
+  AgentKit backups.
+- Nếu detail là `refusing foreign-home takeover`, trước tiên xác nhận AgentKit
+  thực sự nên sở hữu global Claude Code surface. Sau đó dùng đúng recovery command
+  `ak kit init engineer --global`. Đây là quyết định ownership, không phải lỗi
+  permissions.
+
+Sau khi sửa nguyên nhân, chỉ retry runtime đã lỗi:
+
+```powershell
+ak update --global --target claude-code --yes
+```
+
+Tại thời điểm behavior này được xác minh, `2.8.0-beta.8` là bản beta mới nhất.
+Trong phiên bản đó, detail `refusing foreign-home takeover` phải nhận guidance
+ownership trước mutation chuyên biệt ở trên. Nếu đúng detail đó lại nhận generic
+snapshot guidance, hãy giữ các dòng report đã redact và liên hệ support; coi đây
+là guidance regression, không phải bằng chứng lỗi snapshot hoặc permissions.
+
+Cảnh báo Codex như
+`preserving hook script ...cook-after-plan-reminder.cjs` là một kết quả
+ownership-preservation riêng. Không dùng nó để chẩn đoán lỗi snapshot Claude
+Code.
 
 ## Kiểm tra kết quả
 

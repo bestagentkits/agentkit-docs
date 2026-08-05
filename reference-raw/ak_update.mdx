@@ -11,30 +11,40 @@ Preview or apply AgentKit-owned project refreshes
 ### Synopsis
 
 What it does:
-  Update the AK-owned files in a project. For each tracked file, `ak update` checks whether the user has modified it since install. Clean files are overwritten with the latest content; user-modified files are skipped (unless --force). A pre-update project snapshot is always taken before any disk mutation and points to manual recovery files when the project is outside `ak backups restore` scope.
-  
-  Default behaviour is preview (dry-run). `ak update` infers project kits from tracked kits/&lt;kit>/... files when it can; pass --kits for the explicit expert path. Pass --yes or confirm the interactive prompt to apply.
+  Update AgentKit: on an interactive TTY, bare `ak update` runs a step-by-step wizard (CLI signed self-update → global/user kits → project kits). Each step defaults to N; pass --yes to accept every step, or pin scope with --global / [project-dir].
+
+  Project scope: for each tracked file, `ak update` checks whether the user has modified it since install. Clean files are overwritten; user-modified files are skipped (unless --force). A pre-update project snapshot is always taken before mutation.
+
+  Scripted / non-TTY callers without --yes stay preview-only (exit 3, offline-safe). Pass --global (-g) to refresh only AgentKit-owned user/global kit installs (preserve-only; no --force). Claude Code user-plugin-only installs are reported, not silently refreshed — use `ak kit refresh <kit> --global --switch-to-plugin`.
+
+  Runtime selection: --target (alias --runtime) picks which agent runtime(s) to update (claude-code, codex, cursor), comma-separated for several at once. At --global it filters which installed runtimes refresh — unset means all discovered runtimes; a runtime you ask for but have not installed globally is reported as skipped, not an error. At project scope exactly one runtime is materialized, so a multi-value spec there is rejected. --target and --runtime are the same flag; set only one.
 
 Who it's for:
-  Both: power devs (--yes --json --no-interactive) and non-tech users (interactive prompt).
+  Both: power devs (--yes --json --no-interactive) and non-tech users (interactive wizard).
 
 When to use it:
-  After an AgentKit release to refresh AK-owned project files. Bare `ak update` refreshes inferred project-owned kits/&lt;kit>/... content; refresh installed plugins with `ak kit refresh engineer --remote --yes` for paid kits or `ak kit refresh core --yes` for public kits.
+  After an AgentKit release. Bare TTY `ak update` walks CLI → global → project; `ak update --global` refreshes user-scope installs; `ak update ./myproj` pins a project. Refresh a shipped child plugin with `ak kit refresh engineer --remote --yes`.
 
 Examples:
-  ak update                                                   # preview inferred project refreshes
-  ak update --yes                                             # apply inferred project refreshes
-  ak update ./myproj                                          # preview a specific project
+  ak update                                                   # TTY wizard (CLI → global → project)
+  ak update --yes                                             # TTY: accept every wizard step
+  ak update ./myproj                                          # project-only preview
   ak update --show-diff                                       # preview unified diff for each change
   ak update --kits engineer                                   # expert: preview one project kit
   ak update --kits engineer --force --yes                     # expert: overwrite user-modified files too
   ak update --kits engineer --yes --json --no-interactive     # scripted project refresh envelope
-  ak update --kits core --yes                                 # --kits defaults to the remote registry; offline reuses the verified local cache only, no embedded fallback
+  ak update --kits engineer --yes                             # authenticated remote registry; offline reuses verified cache only
   ak update --kits engineer --local --kits-dir kits/ --yes    # dev/CI: force the local kit source for --kits
+  ak update --beta --yes                                      # shorthand for --channel beta
+  ak update --global                                          # preview AgentKit-owned user/global kit refreshes
+  ak update --global --yes                                    # apply user/global kit refreshes (CLI hard-gate first)
+  ak update -g --kits engineer --yes --json --no-interactive  # scripted global refresh of one kit
+  ak update --global --target codex --yes                     # refresh only the codex global install
+  ak update --global --target claude-code,codex --yes         # refresh several runtimes; uninstalled ones are skipped
   ak kit refresh engineer --remote --yes                      # separate paid plugin refresh
 
 What changes on disk:
-  Previews by default; applies only with --yes or an interactive accept. When applied, overwrites AK-owned files with the latest content and re-tracks them in the ownership manifest, taking a pre-update project snapshot before any mutation. User-modified files are skipped without --force. Bare `ak update` infers project kits from the manifest; `--kits` is the explicit override. The command writes project-owned kits/&lt;kit>/... content. With --yes it checks and updates or re-executes the ak binary first when needed, then refreshes project kit content. Use `ak self-update --yes` for a binary-only operation. It does not refresh installed ~/.claude/plugins/&lt;kit>/ plugin output; use `ak kit refresh engineer --remote --yes` for a paid install.
+  TTY wizard applies only the steps you accept (or all steps with --yes). Scripted project updates preview by default; apply with --yes. With --yes (and after an interactive accept), the command updates or re-executes the ak binary first when needed, then refreshes kit content. CLI hard-gate runs before kit mutation (manager-owned / Windows-pending / restart-required abort). Kit failures continue with an honest summary and a support bundle under ~/.agentkit/support/. Global refresh is preserve-only: --force never overwrites user-modified files; it only authorizes archiving legacy ClaudeKit Codex skills so the refresh can proceed. Use `ak self-update --yes` for a binary-only operation.
 
 Output modes:
   pretty   default on TTY (colors, ASCII markers)
@@ -46,8 +56,8 @@ Exit codes:
   1  runtime error
   2  invalid flags
   3  user-cancel (SIGINT, prompt-cancel)
-  1  runtime error (missing manifest, snapshot failure, etc.)
-  2  invalid flags
+  1  runtime error, CLI hard-gate, partial kit failure, or interrupt after mutation
+  2  invalid flags (including --target with --runtime set differently, an unknown runtime, or a multi-value --target at project scope); with --global: a project directory argument, an empty refreshable set, or a plugin-only result
   3  preview only — neither --yes nor an interactive confirmation was given
 
 ```
@@ -57,20 +67,23 @@ ak update [project-dir] [flags]
 ### Options
 
 ```
+      --beta                  Shorthand for --channel beta
       --channel string        Remote registry channel for --remote (beta requires explicit opt-in) (default "stable")
       --dry-run               Force preview (exit 0); update already previews by default unless --yes is given
       --force                 Overwrite user-modified files (snapshot is always taken first)
+  -g, --global                Refresh AgentKit-owned kits at user/global scope instead of the current project
   -h, --help                  help for update
       --json                  Emit machine-readable JSON (implies --no-interactive)
       --kits string           Comma-separated list of kits to update
-      --kits-dir string       Kits source directory (default: embedded kits, $AGENTKIT_KITS_DIR, or ./kits)
-      --local                 Read --kits from the embedded/local kit source instead of the remote registry (dev/CI)
+      --kits-dir string       Explicit local kits source directory for development and CI
+      --local                 Read kits from an explicit --kits-dir or AGENTKIT_KITS_DIR source (dev/CI)
       --no-interactive        Disable interactive prompts (CI-safe)
   -q, --quiet                 Suppress non-error output on stderr
       --registry-url string   AgentKit registry base URL (default: $AGENTKIT_REGISTRY_URL, then dev/staging https://staging.agentkit.best or release https://agentkit.best)
-      --remote ak update      Download --kits from the authenticated AgentKit registry (default; use --local for the embedded/dev source). Bare ak update with no --kits stays local regardless. (default true)
-      --runtime string        Remote kit runtime for --remote (claude-code or codex) (default "claude-code")
+      --remote                Download kits from the authenticated AgentKit registry (default) (default true)
+      --runtime string        Alias of --target: which agent runtime(s) to update (claude-code, codex, cursor) (default "claude-code")
       --show-diff             Show unified diff for each file that will be overwritten
+      --target string         Agent runtime(s) to update, comma-separated (e.g. claude-code,codex). With --global, filters which installed runtimes refresh (unset = all). Alias of --runtime; pass only one.
   -V, --verbose               Extra diagnostic output on stderr (loses to --quiet)
       --version string        Remote kit version for --remote (default: channel latest)
   -y, --yes                   Assume yes for all prompts
@@ -79,4 +92,3 @@ ak update [project-dir] [flags]
 ### SEE ALSO
 
 * [ak](./ak)	 - AgentKit CLI
-

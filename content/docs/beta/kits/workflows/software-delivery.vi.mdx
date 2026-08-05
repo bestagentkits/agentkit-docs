@@ -1,0 +1,443 @@
+---
+title: Deliver software bằng Workflow nhỏ nhất hữu ích
+description: Chọn quick, classic, greenfield hoặc autonomous delivery và chuyển contract đã duyệt qua implementation, test, review và handoff.
+---
+
+Dùng guide này khi outcome là software change đã test. Chọn path nhỏ nhất khớp
+uncertainty và risk; đừng chạy chuỗi hình thức khi một bounded Skill có thể hoàn
+tất task an toàn.
+
+## Chọn delivery mode
+
+| Tình huống | Path | Dùng khi |
+| --- | --- | --- |
+| Quick implement | `ak:cook --fast` | Scope và acceptance criteria rõ; change nhỏ, risk thấp. |
+| Classic feature | brainstorm khi cần → plan → cook → test → review | Nhiều file, decision hoặc risk cần gate nhìn thấy được. |
+| Greenfield project | `ak:bootstrap` hoặc research theo stage → plan → cook → docs | Bắt đầu app/system mới từ zero. |
+| Issue chỉ tới plan | `ak:issue-to-plan` | Muốn roadmap đã audit trước mọi code. |
+| Full issue-to-PR pipeline | `ak:vibe` | Scope trusted và GitHub/branch authority rõ. |
+
+Dùng [Planning và research](#planning-and-research) khi approach còn chưa rõ,
+[Debug và fix](#debug-and-fix) cho failure cụ thể, và
+[Review và ship](#review-and-ship) khi implementation đã sẵn sàng.
+
+## Chuẩn bị delivery contract
+
+```text
+User-visible outcome:
+Scope và non-goal đã duyệt:
+Repository/module boundary:
+Acceptance criteria:
+Required test và browser evidence:
+Compatibility, migration và rollback constraint:
+Authority cho dependency, Git, external system và deploy:
+```
+
+Đọc repository instruction và giữ unrelated work. Nêu action không được xảy ra,
+như install package, commit, push, tạo PR, provider mutation hoặc deployment.
+
+## Recipe 1: quick implement cho known scope
+
+Dùng [ak:cook](../engineer/skills/cook) trực tiếp khi research và plan phase riêng
+không mang thêm giá trị.
+
+```text
+/ak:cook --fast "Thêm disabled state vào submit button hiện có khi mutation đang pending. Reuse component và token, thêm focused test, không install package, commit hoặc deploy."
+```
+
+`--fast` giảm research overhead; nó không bỏ concise plan, test, review hoặc
+completion check bên trong Skill. Chỉ thêm `--advice` khi task nhỏ vẫn có
+decision quan trọng.
+
+Trước khi chấp nhận result, verify changed behavior, focused test, affected
+neighboring check, final diff và action chủ ý chưa làm.
+
+## Recipe 2: classic feature delivery
+
+Dùng path này cho shape chưa rõ, multi-file impact hoặc elevated risk.
+
+### 1. Understand và decide
+
+Dùng [ak:brainstorm](../engineer/skills/brainstorm) khi có nhiều hướng khả thi.
+Chỉ dùng [ak:scout](../engineer/skills/scout) hoặc
+[ak:research](../engineer/skills/research) cho question có thể thay đổi decision.
+
+```text
+/ak:brainstorm "So sánh recovery approach cho offline draft; giữ document format và tránh service mới; dừng sau khi recommend một hướng"
+```
+
+Ghi hướng đã chọn, evidence, lựa chọn đã loại và open question.
+
+### 2. Tạo và approve plan
+
+```text
+/ak:plan --hard --tdd "Implement hướng offline-draft recovery đã chấp nhận; gồm crash/reload behavior, compatibility, test, rollback và dừng trước coding"
+```
+
+Review plan path. Với work ảnh hưởng cao, chạy `ak:plan red-team <plan-path>` và
+`ak:plan validate <plan-path>` trước approval.
+
+### 3. Implement plan đã duyệt
+
+```text
+/ak:cook @<approved-plan-path> --tdd
+```
+
+Chuyển current repository state, phase được duyệt cho run, authority boundary và
+acceptance criteria. Dừng nếu implementation cần unplanned scope hoặc làm
+decision không còn đúng.
+
+### 4. Verify độc lập
+
+```text
+/ak:test
+/ak:code-review --pending
+```
+
+Trả failure test/review về implementation. Đừng làm yếu acceptance criteria để
+workflow xanh.
+
+### 5. Chỉ deliver khi có authority
+
+Theo [Review và ship](#review-and-ship). Commit, push, PR, merge và deploy vẫn
+là approval boundary riêng.
+
+## Recipe 3: bắt đầu greenfield project
+
+Dùng [ak:bootstrap](../engineer/skills/bootstrap) khi một command cần điều phối
+research, stack decision, design, planning, implementation và documentation.
+
+```text
+/ak:bootstrap "Tạo local-first issue tracker cho team năm người; chỉ web app; offline read/write; không billing hoặc production deploy; document stack đã chọn và dừng tại local build có thể review"
+```
+
+Đây là workflow rộng. Review stack, dependency, data, security và deployment
+decision trước khi cho phép irreversible work.
+
+Để kiểm soát nhiều hơn, chạy theo stage:
+
+```text
+/ak:research "Chỉ so sánh stack decision ảnh hưởng local-first sync và deployment"
+/ak:brainstorm "Chọn một architecture từ evidence"
+/ak:plan --deep --tdd "Plan greenfield architecture đã chấp nhận"
+/ak:cook @<approved-plan-path> --tdd
+/ak:docs update
+```
+
+## Recipe 4: issue tới plan rồi pause
+
+```text
+/ak:issue-to-plan <issue-number-or-url>
+```
+
+Review evidence, plan, validation finding và issue handoff. Chỉ start `ak:cook`
+sau khi human approve plan. Path này phù hợp hơn autopilot khi issue chưa đủ hoặc
+repository chưa quen.
+
+## Recipe 5: full autopilot tới PR readiness
+
+[ak:vibe](../engineer/skills/vibe) có thể điều phối isolated planning,
+implementation hoặc repair, test, review và PR delivery.
+
+```text
+/ak:vibe <issue-number-or-url>
+```
+
+Chỉ dùng cho request trusted, bounded với repository đúng và GitHub authority
+rõ. `--advice` thêm advisory checkpoint; không bỏ review hoặc ship gate. Chỉ
+thêm ship/merge mode khi các action đó được chủ ý rõ.
+
+## Practical handoff sau mỗi stage
+
+```text
+Artifact đã tạo và location:
+Decision hoặc change đã làm:
+Check pass/fail:
+Scope đã dùng và còn lại:
+Evidence mới hoặc assumption đã đổi:
+Skill tiếp theo và exact input:
+Authority còn thiếu:
+```
+
+Dùng [ak:handoff](../engineer/skills/handoff) trước khi đổi session, owner hoặc
+runtime.
+
+## Checklist hoàn tất
+
+- Path khớp uncertainty và risk thực tế.
+- Implementation giữ approved contract.
+- Required behavior, test và review pass trên final diff.
+- Compatibility, migration, rollout và rollback được xử lý khi liên quan.
+- GitHub và external action chỉ hoàn tất khi được cấp quyền; nếu chưa, handoff
+  liệt kê chính xác.
+
+## Planning and research
+
+Dùng chapter này khi chưa thể trả lời “cần đổi code nào?”. Chỉ research unknown
+có thể thay đổi decision, rồi chuyển evidence thành một implementation contract
+được approve.
+
+| Starting point | Practical chain |
+| --- | --- |
+| Repository chưa quen | `ak:scout` → `ak:plan` |
+| Có nhiều hướng khả thi | `ak:research` → `ak:brainstorm` → `ak:plan` |
+| Cần specialist opinion | `ak:advise` → `ak:plan` |
+| Architecture ảnh hưởng lớn | `ak:plan --hard` → `ak:plan red-team` → `ak:plan validate` |
+| Behavior cần dẫn thiết kế | `ak:scenario` → `ak:plan --tdd` |
+| Đã có GitHub issue | `ak:issue-to-plan` → human approval |
+
+Bắt đầu bằng decision brief có boundary:
+
+```text
+Decision cần đưa ra:
+Evidence và constraint hiện có:
+Question có thể thay đổi decision:
+Option đã cân nhắc:
+Required output và stop point:
+```
+
+Với change trong repository chưa quen, chạy:
+
+```text
+/ak:scout "Xác định ownership, data flow, test và repository instruction cho offline draft recovery. Chỉ trả evidence; không edit file."
+/ak:research "So sánh các recovery approach khả thi theo repository constraint đã quan sát. Cite primary source cho external claim."
+/ak:brainstorm "Recommend một approach, liệt kê alternative đã loại và trade-off, rồi dừng trước planning."
+/ak:plan --hard --tdd "Chuyển approach đã chấp nhận thành phase, acceptance criteria, test, compatibility check, rollback và approval gate rõ ràng."
+```
+
+Với work ảnh hưởng lớn, review saved plan rồi chạy:
+
+```text
+/ak:plan red-team <plan-path>
+/ak:plan validate <plan-path>
+```
+
+`ak:advise` là consultation riêng khi cần opinion trước khi chọn Skill tiếp theo.
+`--advice` thêm advisory checkpoint bên trong workflow hỗ trợ như `brainstorm`,
+`plan`, `cook`, `fix` và `vibe`; nó không thay plan approval hoặc review.
+
+Dừng trước implementation khi evidence mâu thuẫn, ownership chưa rõ, plan đổi
+public behavior mà thiếu compatibility treatment, hoặc thiếu Git/external
+authority. Handoff sang implementation phải có approved plan path, accepted
+decision, non-goal, repository state hiện tại và check bắt buộc trên final diff.
+
+## Debug and fix
+
+Dùng chapter này cho failure reproduce được. Tách diagnosis khỏi patch hợp lý
+đầu tiên và chứng minh final change xử lý đúng observed cause.
+
+| Evidence hiện có | Practical chain |
+| --- | --- |
+| Error rõ và cause có boundary | `ak:fix` → focused test → `ak:code-review --pending` |
+| Chưa biết cause | `ak:debug` → `ak:fix` → regression test → review |
+| UI flaky hoặc chỉ lỗi trong browser | `ak:debug` + `ak:agent-browser`/`ak:web-testing` → fix → browser evidence |
+| Review đã tìm ra defect | `ak:fix --review` → test → pending review |
+
+Chuẩn bị failure contract trước khi đổi code:
+
+```text
+Expected behavior:
+Observed behavior và exact error:
+Smallest reproduction:
+Environment và version:
+Last known good state:
+Evidence đã có; hypothesis chưa chứng minh:
+Allowed scope và action:
+```
+
+Khi cause đã có boundary:
+
+```text
+/ak:fix "Reproduce timeout từ <test-or-command>. Xác định cause, tạo compatible fix nhỏ nhất, thêm regression test, chạy affected check và không commit hoặc deploy."
+```
+
+Khi chưa biết cause:
+
+```text
+/ak:debug "Reproduce <failure>; trace failing path; phân biệt evidence với hypothesis; dừng sau khi xác định cause có khả năng nhất và falsifying check tiếp theo."
+/ak:fix --advice "Áp dụng cause-aligned fix từ debug handoff, giữ unrelated behavior, thêm regression test và report assumption đã đổi."
+/ak:test
+/ak:code-review --pending
+```
+
+Với browser-only failure, ghi viewport, route, interaction, console/network
+error và screenshot trước/sau. Không gọi failure đã fix chỉ vì reload làm nó
+biến mất.
+
+Sau hai attempt gặp cùng failure, dừng patch loop. Re-check reproduction và
+environment, liệt kê hypothesis đã bác bỏ và escalate bằng evidence bundle nhỏ
+nhất hữu ích. Không xóa user data, làm yếu test, bypass safety mechanism hoặc mở
+rộng permission chỉ để symptom biến mất.
+
+## Review and ship
+
+Dùng chapter này khi đã có implementation. Review final diff thực tế, đóng
+finding bằng evidence, và xem commit, push, PR, merge, deploy là action riêng.
+
+| State | Entry point |
+| --- | --- |
+| Local change chưa commit hoặc push | `ak:code-review --pending` |
+| Pull request đang mở | `ak:review-pr <number>` |
+| Fix và reply review finding | `ak:review-pr <number> --fix --reply` |
+| Approved local change cần commit | `ak:git cm` |
+| Release đã được cấp quyền rõ | `ak:ship official` |
+
+Đưa reviewer packet ngắn gọn:
+
+```text
+Outcome và acceptance criteria:
+Approved plan hoặc issue:
+Changed file và intentional non-change:
+Test và browser evidence:
+Compatibility, migration, security và rollback note:
+Known limit và action chưa được cấp quyền:
+```
+
+Với local work:
+
+```text
+/ak:test
+/ak:code-review --pending
+```
+
+Fix material finding, chạy lại affected check rồi review updated diff—không phải
+version cũ. Với PR hiện có:
+
+```text
+/ak:review-pr 482
+/ak:review-pr 482 --fix --reply
+```
+
+Chỉ dùng `--fix --reply` khi đã hiểu finding và task cho phép code change cùng
+GitHub reply. Finding severity cao chưa resolve, required check fail, drift khỏi
+approved scope hoặc thiếu rollout/rollback evidence là stop condition.
+
+Chỉ sau approval và explicit authority mới dùng delivery action hẹp:
+
+```text
+/ak:git cm
+/ak:ship official
+```
+
+Final handoff phải nêu commit/PR, check chạy trên final revision, unresolved
+finding, merge/deploy state và rollback owner. “Ready to merge” không đồng nghĩa
+“merged”, và “merged” không đồng nghĩa “deployed”.
+
+## High-risk delivery
+
+Dùng chapter này cho authentication, authorization, payment, public API, secret,
+migration hoặc infrastructure. Thêm domain Skill và independent security/review
+gate; không chỉ dựa vào generic implementation chain.
+
+```text
+Protected asset và trust boundary:
+Threat và abuse case:
+Data classification và retention:
+Compatibility và migration contract:
+Rollback và incident path:
+Required approver và prohibited action:
+```
+
+Chọn domain entry point hẹp rồi plan:
+
+```text
+/ak:better-auth "Thiết kế authentication change cần có; giữ current session, định nghĩa migration và rollback constraint. Dừng trước implementation."
+/ak:plan --hard --tdd "Plan auth change đã chấp nhận với negative authorization test, compatibility, rollout, rollback và approval gate."
+/ak:cook @<approved-plan-path> --tdd
+/ak:security --red-team --iterations 12
+/ak:code-review --pending
+```
+
+Với payment, bắt đầu bằng `ak:payment-integration`; với bounded repository scan,
+dùng `ak:security-scan <path>`. Security scan bổ sung domain test và review—nó
+không chứng minh authorization logic, payment idempotency, safe secret handling
+hoặc migration reversibility.
+
+Yêu cầu evidence cho denial path, replay/idempotency khi liên quan, secret
+exposure check, migration rehearsal, rollback và final independent review. Dừng
+khi breaking change chưa classify, critical/high finding chưa resolve, migration
+không có owner, thiếu rollback hoặc production authority chưa rõ.
+
+## Frontend delivery
+
+Dùng chapter này khi outcome phải khớp design và chạy đúng trong browser thật.
+Định nghĩa UI contract trước implementation để visual polish không che behavior
+hoặc accessibility bị hỏng.
+
+```text
+Route và user task:
+Reference screenshot/design system:
+Required state: loading, empty, error, success, disabled:
+Viewport và browser:
+Keyboard, focus và screen-reader expectation:
+Performance budget và existing component cần reuse:
+```
+
+Chọn entry point khớp evidence:
+
+- `ak:ui-ux-pro-max` cho UX direction mới hoặc system-level design decision.
+- `ak:frontend-design` cho visual surface và interaction state đã định nghĩa.
+- `ak:frontend-development` cho implementation theo accepted contract.
+- `ak:react-best-practices` cho React performance hoặc architecture pass.
+- `ak:agent-browser` hoặc `ak:web-testing` cho real-browser verification.
+
+Một design-to-browser chain thực tế:
+
+```text
+/ak:frontend-design "Định nghĩa responsive state cho <route> bằng token và component hiện có. Gồm loading, error, empty, focus và narrow desktop behavior."
+/ak:frontend-development "Implement accepted UI contract; giữ unrelated layout; thêm focused component test; không install package hoặc deploy."
+/ak:web-testing "Verify <route> tại <viewports>; exercise keyboard và primary interaction; capture console/network error và before/after evidence."
+/ak:code-review --pending
+```
+
+Với pixel-faithful work, đưa reference viewport và compare cùng content/state ở
+cùng dimension. Với performance work, ghi baseline, đổi một bounded cause và
+compare cùng scenario sau đó. Chỉ complete khi required state, keyboard/focus,
+responsive layout, console/network check, focused test và final diff review pass.
+
+## Parallel delivery
+
+Chỉ dùng parallel work khi có ít nhất ba workstream thật sự độc lập, ownership
+có thể exclusive và một integrator chịu trách nhiệm final system result.
+Parallelism không thay decomposition.
+
+| Need | Tooling choice |
+| --- | --- |
+| Một plan có phase độc lập | `ak:plan --parallel` rồi `ak:cook --parallel` |
+| Multi-agent dependency graph rõ | `ak:orchestrate` |
+| Filesystem isolation giữa branch | `ak:worktree` |
+| Claude Code team execution | `ak:team` (không có trên Codex) |
+
+Định nghĩa work graph trước dispatch:
+
+```text
+Shared outcome và acceptance criteria:
+Workstream A — owner, file, input, output:
+Workstream B — owner, file, input, output:
+Workstream C — owner, file, input, output:
+Dependency và shared contract:
+Integrator và merge order:
+Final test, review và rollback owner:
+```
+
+Với plan đã có phase boundary an toàn:
+
+```text
+/ak:plan --parallel "Tách <outcome> thành independent file ownership, shared contract, integration order và một final verification phase."
+/ak:cook @<approved-plan-path> --parallel
+/ak:test
+/ak:code-review --pending
+```
+
+Với explicit agent coordination:
+
+```text
+/ak:orchestrate "Execute approved work graph; enforce exclusive file ownership; require artifact handoff; giữ integration và final verification cho một owner."
+```
+
+Dùng `ak:worktree` khi branch cần isolation, nhưng inspect current worktree và
+giữ user change trước khi tạo hoặc xóa. Integrator phải validate shared contract,
+resolve semantic conflict—not chỉ textual conflict—chạy combined test, review
+combined diff và report merge/PR state thực tế. Dừng parallel execution khi hai
+worker cần cùng file, shared contract đổi, hoặc không có owner verify integrated
+result.

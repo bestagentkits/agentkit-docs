@@ -10,6 +10,7 @@ user-facing content see `content/docs/`.
 | [CLI reference pipeline](./workflows/cli-reference-pipeline.md) | Three-layer reference model, JSON → prose → derived MDX, CI checks |
 | [CLI reference i18n (Vietnamese)](./workflows/cli-reference-i18n.md) | **Proposal:** full VI translation of the derived reference with source-fingerprinted anti-drift guards |
 | [Release maintenance & deploy](./workflows/release-and-deploy.md) | Skill-first release audit, reviewed channel updates, deploy, CI |
+| [Post-launch quality & operations](./workflows/post-launch-operations.md) | Route/search/output baselines, browser matrix, promotion evidence, exact rollback and cleanup |
 
 ## Related
 

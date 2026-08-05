@@ -1,0 +1,74 @@
+---
+name: ak-docs-release-update
+description: Audit an AgentKit release delta, map evidence-backed claims to affected documentation, and author only explicitly approved Beta prose. Use for release docs syncs, exact tag or SHA comparisons, stale-guide audits, release coverage gaps, or preparing an owner-reviewed Beta documentation update; do not use for Stable hand edits or generated CLI reference edits.
+---
+
+# AgentKit Docs Release Update
+
+Maintain release-sensitive documentation through a read-only evidence phase and
+an owner-approved authoring phase. Keep release workflow automation deferred;
+this Skill is manually invoked.
+
+## Select the mode
+
+- Use **V0 release delta** when comparing two immutable AgentKit releases.
+- Use **coverage-gap** when a current product behavior or issue is missing from
+  docs without representing a release delta.
+- Use **V1 authoring** only after the owner supplies the exact statement
+  `approve <request-id>` for the generated request.
+
+Read [evidence-contract.md](references/evidence-contract.md) before V0 or
+coverage-gap work. Read
+[release-diff-routing.md](references/release-diff-routing.md) and
+[impact-map-contract.md](references/impact-map-contract.md) when classifying
+impact. Before V1, read
+[authoring-guardrails.md](references/authoring-guardrails.md) and
+[validation-and-handoff.md](references/validation-and-handoff.md).
+
+## Run V0
+
+1. Read the repository `README.md`, `AGENTS.md`, and `CLAUDE.md`.
+2. Resolve `from` and `to` to immutable tags and commits. Prefer an exact docs
+   bundle; label a reproducible source checkout clearly when no bundle exists.
+3. Ensure `plans/releases/` exists and is working-only.
+4. Run `scripts/check-docs-release-update.mjs --mode v0` with explicit
+   `--from-ref`, `--to-ref`, `--from-source`, `--to-source`, `--channel`,
+   `--repo-root`, `--output-root`, and `--target`.
+5. Review `source-ledger`, `docs-impact-map`, `unresolved-evidence`, and
+   `approval-request` together. Re-run on identical inputs and require an
+   equivalent result.
+6. Stop without editing public docs. Present the request ID, exact claims,
+   paths, unresolved evidence, and recommended decision to the owner.
+
+For an existing-behavior gap, run the same checker with `--mode coverage-gap`
+and explicit `--audit-source`, `--source-root`, `--repo-root`, `--output-root`,
+and `--target`. Never disguise a coverage gap as a changed release claim.
+
+## Record manual owner approval
+
+Accept only the exact user statement `approve REQ-…` matching the generated
+request. Create the local approval with
+`scripts/docs-release-manual-approval.mjs --mode create`, binding the request,
+ledger, impact map, current docs HEAD, validity window, and a new UUIDv4 nonce.
+Use the user's own label; no separate CODEOWNER or approval PR is required for
+this manual workflow. Do not widen claims or paths after approval.
+
+## Run V1
+
+1. Generate a change manifest from the proposed diff.
+2. Validate it with `scripts/docs-release-manual-approval.mjs --mode v1`, the
+   exact V0 artifacts, local manual approval, docs base SHA, `dev` target,
+   current time, and used-nonce ledger.
+3. Modify only the existing, approved Beta prose or human-owned metadata paths.
+4. Author EN and VI with equivalent meaning and unchanged technical tokens.
+5. Re-run V1 validation after the final diff. Stop on stale approval, replay,
+   path expansion, missing evidence, or any generated/Stable change.
+
+## Finish
+
+Run the focused checks required by the changed page family, then the repository
+catalog, reference, shape, link, and static-export checks as risk warrants.
+Return a handoff listing immutable refs, request and approval IDs, claims
+covered, paths changed, validation results, remaining blockers, and local
+preview routes. Stable promotion stays a separate reviewed whole-copy action.
+

@@ -71,18 +71,23 @@ flowchart LR
 
 Production changes only via reviewed `dev` → `main` merge.
 
-## CI on every PR (reference-related excerpt)
+## CI on every PR
 
 ```mermaid
 flowchart TD
-  A["PR to dev or main"] --> B["Unit tests"]
-  B --> C["Reference hygiene"]
-  C --> D["compile-prose --check"]
-  D --> E["generate-reference + zero diff"]
-  E --> F["Build + link check"]
+  A["PR to dev or main"] --> B["Typecheck + MDX lint"]
+  B --> C["Unit tests + Kit catalog guard"]
+  C --> D["Reference hygiene + generated ownership"]
+  D --> E["compile-prose --check"]
+  E --> F["generate-reference + zero diff"]
+  F --> G["Static build"]
+  G --> H["Route shape + output/search quality"]
+  H --> I["Asset + internal link + static-output checks"]
 ```
 
-See [CLI reference pipeline](./cli-reference-pipeline.md) for layer details.
+See [CLI reference pipeline](./cli-reference-pipeline.md) for layer details and
+[post-launch quality & operations](./post-launch-operations.md) for baselines,
+browser evidence, promotion, and rollback.
 
 ## Ownership & guards (summary)
 
