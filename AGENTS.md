@@ -74,6 +74,10 @@ continuous with the marketing site. Do **not** invent colours, fonts, or radii.
   other locale on a fallback page. The generated CLI reference and release-notes
   body are **English-only** — do not translate command syntax; VI nav labels
   live in `meta.vi.json` (CLI `pages` must mirror EN: `index`, `ak`, `...`).
+  In Vietnamese product documentation, keep `Skill` in English for an AgentKit
+  artifact or workflow (`các Skill`, never `Skills`); use `kỹ năng` only for a
+  generic human or agent capability. Apply the same product-taxonomy treatment
+  to `Kit`, `Agent`, and `Hook`.
 - **Generated dirs are machine-owned:** any directory containing a `.generated`
   marker (currently `reference-derived/` for the CLI help dump) is written by
   the release-sync pipeline; do not hand-edit. Published CLI docs under

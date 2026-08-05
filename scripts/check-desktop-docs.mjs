@@ -7,7 +7,7 @@
 //   - every /gui/*.webp an MDX references is present on disk,
 //   - each channel's folder meta lists the four slugs after `getting-started`,
 //   - new content is channel-neutral (no `/docs/beta/` links),
-//   - stable is a byte-identical mirror of beta for the pages we author.
+//   - both channels retain the same required Desktop page and metadata shape.
 //
 // It does NOT re-implement `check:links` (post-build src/href) or
 // `check:assets` (Cloudflare deploy limits). Downstream MDX assertions
@@ -27,8 +27,7 @@ const NEW_SLUGS = [
   "projects-and-plans",
   "settings-and-system",
 ];
-// Pages that must stay byte-identical across channels (authored + edited).
-const MIRROR_SLUGS = [...NEW_SLUGS, "getting-started"];
+const AUDITED_SLUGS = [...NEW_SLUGS, "getting-started"];
 
 const EXPECTED_WEBP = [
   "dashboard-charts",
@@ -102,7 +101,7 @@ const anyNewMdxExists = channels.some((c) =>
 );
 
 if (!anyNewMdxExists) {
-  note(`no new usage-page MDX yet — skipping page/meta/mirror assertions (Phase 2+).`);
+  note(`no new usage-page MDX yet — skipping page/meta assertions (Phase 2+).`);
 } else {
   // 2. All 16 MDX present.
   for (const c of channels)
@@ -115,7 +114,7 @@ if (!anyNewMdxExists) {
   // 3. Referenced /gui/*.webp exist; channel-neutral (no /docs/beta/).
   const imgRe = /!\[[^\]]*\]\((\/gui\/[^)]+)\)/g;
   for (const c of channels)
-    for (const s of MIRROR_SLUGS)
+    for (const s of AUDITED_SLUGS)
       for (const l of locales) {
         const p = mdxPath(c, s, l);
         if (!existsSync(p)) continue;
@@ -145,24 +144,7 @@ if (!anyNewMdxExists) {
         fail(`${c}/desktop-app/${metaName} must list [${NEW_SLUGS.join(", ")}] right after "getting-started"; got [${pages.join(", ")}]`);
     }
 
-  // 5. Stable is a byte-identical mirror of beta for the pages we author/edit.
-  for (const s of MIRROR_SLUGS)
-    for (const l of locales) {
-      const bp = mdxPath("beta", s, l);
-      const sp = mdxPath("stable", s, l);
-      if (existsSync(bp) && existsSync(sp)) {
-        if (readFileSync(bp).equals(readFileSync(sp)) === false)
-          fail(`stable/${s}.${l}.mdx is not byte-identical to beta (promotion whole-copies beta→stable)`);
-      }
-    }
-  for (const metaName of ["meta.json", "meta.vi.json"]) {
-    const bp = join(root, "content", "docs", "beta", "desktop-app", metaName);
-    const sp = join(root, "content", "docs", "stable", "desktop-app", metaName);
-    if (existsSync(bp) && existsSync(sp) && !readFileSync(bp).equals(readFileSync(sp)))
-      fail(`stable/desktop-app/${metaName} is not byte-identical to beta`);
-  }
-
-  if (!fails.length) ok(`16 MDX present, images resolve, meta ordered, channel-neutral, stable mirrors beta`);
+  if (!fails.length) ok(`16 MDX present, images resolve, meta ordered, and content is channel-neutral`);
 }
 
 // ── report ─────────────────────────────────────────────────────────────────

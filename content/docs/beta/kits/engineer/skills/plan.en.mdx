@@ -30,6 +30,40 @@ plan before offering implementation.
 - You want implementation rather than planning. `ak:plan` does not change
   product code.
 
+<a id="run-a-feature-delivery-workflow" />
+
+## Run a feature-delivery workflow
+
+Use `ak:plan` as the decision boundary in a longer chain, not as a command that
+automatically starts implementation. A reliable feature workflow has seven
+separate, reviewable stages:
+
+| Stage | Skill | Required input | Output and gate |
+| --- | --- | --- | --- |
+| 1. Frame | [`ak:brainstorm`](./brainstorm) | User problem, constraints, non-goals | Chosen direction; stop if the outcome is still ambiguous. |
+| 2. Establish evidence | [`ak:scout`](./scout) or [`ak:research`](./research) | Approved direction and bounded questions | Repository map or sourced evidence; stop on missing authority or conflicting facts. |
+| 3. Plan | `ak:plan` | Direction, evidence, constraints, acceptance criteria | Phased roadmap with dependencies, owners, tests, risks, and approval points. Review this artifact before implementation. |
+| 4. Implement | [`ak:cook`](./cook) | Approved plan or one approved phase | Bounded code and focused checks; do not silently absorb unplanned scope. |
+| 5. Verify | [`ak:test`](./test) | Changed behavior and acceptance criteria | Independent test evidence; return failures to implementation instead of weakening the criteria. |
+| 6. Review | [`ak:code-review`](./code-review) | Final diff, tests, and known risks | Risk-ranked findings and an explicit readiness decision. |
+| 7. Deliver | [`ak:ship`](./ship) | Review-approved branch | Delivery preparation behind its own commit, push, PR, and merge gates. |
+
+Pass a compact contract to every next stage:
+
+```text
+Goal:
+Approved scope and non-goals:
+Evidence and decisions:
+Artifacts produced:
+Acceptance criteria:
+Open risks or blockers:
+Authority granted for this stage:
+```
+
+If a stage fails, resume from that stage with the new evidence. Do not restart
+the whole chain unless the chosen direction or acceptance criteria changed.
+Use [`ak:handoff`](./handoff) before switching session, runtime, or Kit.
+
 ## Prepare the project and runtime
 
 Before you start:
@@ -38,7 +72,9 @@ Before you start:
   Kit is installed, and make the `ak` CLI available for plan scaffolding and
   phase-state operations.
 - Open the project to plan. Project scope writes under
-  `plans/<timestamp>-<slug>/` by default.
+  `<project>/<plans-dir>/<timestamp>-<slug>/`. A project-relative `paths.plans`
+  value in `.agentkit/config.yaml` selects `<plans-dir>`; otherwise it defaults
+  to `plans/`.
 - Provide an accepted outcome, constraints, non-goals, and acceptance criteria.
 - Preserve unfinished plan files and identify any known overlapping work.
 - Ensure any optional GitHub or AgentWiki projection has the required client,
@@ -113,6 +149,13 @@ Use `--global` only when you explicitly want the configured global plans root
 or no project context exists. Confirm exact plan CLI syntax from live
 `ak plan --help`; the Skill does not treat remembered subcommands as authority.
 
+The V1 CLI boundary accepts only a safe project-relative `paths.plans` value.
+If the value is missing, malformed, absolute, points outside the project or
+inside `.agentkit`, or cannot be followed safely, `ak plan`, journals, and the
+dashboard fall back to `<project>/plans/`. An absolute path may still be visible
+to the Skill, so confirm the CLI-resolved location before scaffolding instead of
+assuming every plan surface uses that external directory.
+
 ## Describe the plan clearly
 
 A strong request names:
@@ -123,6 +166,8 @@ A strong request names:
   deployment boundaries.
 - **Known risks:** compatibility, security, performance, migration, or rollback
   concerns.
+- **Load-bearing assumptions:** premises the design fails without, which ones
+  current evidence can resolve, and which may break during delivery.
 - **Evidence:** prior research, scout reports, incidents, or existing plans.
 - **Authority:** whether external research, GitHub issue creation, private
   sharing, or public publication is allowed.
@@ -144,12 +189,16 @@ that no new service or deployment belongs in scope.
 4. **The Skill gathers evidence.** It reads repository instructions and current
    code, tests, contracts, and documentation. Research or scouting is added only
    when the mode or missing evidence requires it.
-5. **The Skill designs and scaffolds the plan.** It uses live `ak plan` help
-   and CLI-managed scaffolding, reads every generated stub before filling it,
-   then writes `plan.md` and detailed `phase-*.md` files.
+5. **The Skill designs and scaffolds the plan.** It compares worst plausible
+   cases and, when a load-bearing assumption remains unresolved, favors the
+   design that is cheapest to leave. It records the condition under which the
+   design stops meeting its success criteria, switching cost, and lock-in. It
+   then uses live `ak plan` help and CLI-managed scaffolding, reads every
+   generated stub, and writes `plan.md` and detailed `phase-*.md` files.
 6. **The Skill reviews the plan.** Relevant modes perform evidence-backed red
-   team and validation passes. Any accepted change triggers a whole-plan
-   consistency sweep.
+   team and validation passes. Red-team review targets assumptions that are
+   both essential and breakable during the plan's life. Any accepted change
+   triggers a whole-plan consistency sweep.
 7. **The Skill projects optional views.** It may hydrate a live task view,
    generate `plan.html`, create a GitHub issue, or share through AgentWiki
    according to the requested options and available authentication.
@@ -161,9 +210,14 @@ that no new service or deployment belongs in scope.
 
 The durable source is file-first:
 
+- In project scope, the canonical plan folder is
+  `<project>/<plans-dir>/<timestamp>-<slug>/`, using the resolved directory
+  boundary above.
 - `plan.md` summarizes the contract, status, dependencies, and phase links.
 - `phase-NN-*.md` records architecture, affected files, steps, success
-  criteria, tests, risks, and dependencies for each phase.
+  criteria, tests, risks, and dependencies for each phase. For an unresolved
+  breakable assumption, its risk entry includes an observable failure signal
+  and a pre-decided response: adjust within the plan or stop and replan.
 - The local plan index is rebuildable from those files. If index and files
   drift, use the reindex operation shown by live `ak plan --help`.
 - A live task view is a convenience projection. Plan files win when states
@@ -211,6 +265,8 @@ A complete plan should provide:
 - Architecture and implementation steps grounded in current project evidence.
 - Test, security, performance, migration, and rollback considerations where
   relevant.
+- Load-bearing assumptions, the design's stop condition, switching cost, and
+  observable signals with adjust-or-replan responses.
 - Verification results with failures or unverified claims kept visible.
 - A consistency sweep showing no unresolved contradictions before execution.
 - The authoritative artifact path and the status of optional GitHub, AgentWiki,
@@ -246,5 +302,3 @@ ownership context.
   guaranteed in every client.
 - Cursor slash invocation is user-verified evidence, not proof of full runtime
   parity.
-- Stable and beta package the same `ak:plan` content, modes, and subcommands.
-  Beta runtime changes do not alter this planning workflow.
