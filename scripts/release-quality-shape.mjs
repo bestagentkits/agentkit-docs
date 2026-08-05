@@ -9,11 +9,11 @@ import { repoRoot } from './lib/paths.mjs';
 export const RELEASE_SHAPE_BASELINE = Object.freeze({
   schemaVersion: 1,
   reviewedAt: '2026-08-04',
-  sourceCommit: '70eba3f2cb37e920e4799ae85dd076dd8d013983',
+  sourceCommit: '1f49a15ae192724b4a848bf198ada0dffc72206d',
   channels: ['beta', 'stable'],
   locales: ['en', 'vi'],
-  sourceRoutesPerLocaleChannel: 382,
-  routesPerLocaleChannel: 381,
+  sourceRoutesPerLocaleChannel: 386,
+  routesPerLocaleChannel: 385,
   reviewedSourceOnlyRoutes: [
     {
       route: 'changelog',
