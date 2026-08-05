@@ -29,18 +29,17 @@ export function createImpactMap(ledgerInput, options) {
   const ledger = validateLedger(ledgerInput);
   const repoRoot = resolve(options.repoRoot);
   const grouped = new Map();
-  const unrouted = [];
+  const unrouted = new Map();
   for (const claim of ledger.claims) {
     if (claim.docs.length === 0) {
       if (claim.classification !== 'no-change') {
-        unrouted.push({
-          path: null,
-          family: claim.kind,
-          classification: 'blocked',
-          proposedClassification: claim.classification,
-          claimIds: [claim.id],
-          reasons: ['no exact docs path supplied by source evidence'],
+        const entries = unrouted.get(claim.kind) ?? [];
+        entries.push({
+          claimId: claim.id,
+          classification: claim.classification,
+          blockedReasons: claim.blockedReasons,
         });
+        unrouted.set(claim.kind, entries);
       }
       continue;
     }
@@ -70,7 +69,19 @@ export function createImpactMap(ledgerInput, options) {
       reasons: sortedUnique([...(reason ? [reason] : []), ...claimReasons]),
     });
   }
-  pages.push(...unrouted);
+  for (const [family, entries] of unrouted) {
+    pages.push({
+      path: null,
+      family,
+      classification: 'blocked',
+      proposedClassification: pageClassification(entries),
+      claimIds: sortedUnique(entries.map((entry) => entry.claimId)),
+      reasons: sortedUnique([
+        'no exact docs path supplied by source evidence',
+        ...entries.flatMap((entry) => entry.blockedReasons),
+      ]),
+    });
+  }
   pages.sort((a, b) => compareText(a.path ?? `~${a.family}`, b.path ?? `~${b.family}`));
   const actionable = pages.some((page) => !['no-change', 'blocked'].includes(page.classification));
   const blocked = pages.some((page) => page.classification === 'blocked');

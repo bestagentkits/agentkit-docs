@@ -488,6 +488,40 @@ test('alias collisions block both identities instead of guessing', async () => {
   assert.ok(ledger.claims.every((claim) => claim.blockedReasons.includes('alias resolves to multiple entities')));
 });
 
+test('unrouted claims of one family collapse into one blocked impact identity', async () => {
+  const before = `sha256:${'a'.repeat(64)}`;
+  const after = `sha256:${'b'.repeat(64)}`;
+  const from = await fixtureSource('no-impact', 'from');
+  const to = await fixtureSource('no-impact', 'to');
+  from.items = ['shell', 'powershell'].map((id) => ({
+    id,
+    kind: 'installer',
+    claimType: 'fact',
+    digest: before,
+    anchors: [{ path: `${id}.sh`, digest: before, type: 'source' }],
+    docs: [],
+    aliases: [],
+  }));
+  to.items = ['shell', 'powershell'].map((id) => ({
+    id,
+    kind: 'installer',
+    claimType: 'fact',
+    digest: after,
+    anchors: [{ path: `${id}.sh`, digest: after, type: 'source' }],
+    docs: [],
+    aliases: [],
+  }));
+  const ledger = createReleaseLedger(from, to, 'beta');
+  const map = createImpactMap(ledger, { repoRoot });
+  assert.equal(map.pages.length, 1);
+  assert.equal(map.pages[0].path, null);
+  assert.equal(map.pages[0].family, 'installer');
+  assert.equal(map.pages[0].classification, 'blocked');
+  assert.equal(map.pages[0].proposedClassification, 'update');
+  assert.equal(map.pages[0].claimIds.length, 2);
+  assert.deepEqual(map.pages[0].reasons, ['no exact docs path supplied by source evidence']);
+});
+
 test('checkout IDs normalize source-safe paths and preserve already-valid identities', async () => {
   const tag = 'v2.8.0-beta.4';
   const root = await checkoutFixture('checkout-id-paths', tag);
@@ -498,6 +532,8 @@ test('checkout IDs normalize source-safe paths and preserve already-valid identi
     'hook:claude/hooks/__tests__/block-unsafe-git-and-lifecycle-commands.test',
     'hook:hooks/__tests__/safe_name.test',
     'hook:hooks/already-valid',
+    'hook:hooks/platform-pair.cmd',
+    'hook:hooks/platform-pair.sh',
     'hook:hooks/release-guard-safe.test',
     'hook:hooks/scope+name@v1.test',
     'kit:kits/core/skills/name_with_underscores/SKILL',

@@ -111,14 +111,14 @@ async function tarBundleSource(path, expected) {
 function classifyCheckoutPath(path) {
   const lower = path.toLowerCase();
   const stem = path.replace(/\.[^/.]+$/, '');
-  if (/(^|\/)install(?:er|ers|ation)?(\/|[-_.])/.test(lower)) return ['installer', normalizeCheckoutItemId(stem)];
-  if (/(^|\/)runtime[-_]?adapters?(\/|[-_.])/.test(lower)) return ['runtime-adapter', normalizeCheckoutItemId(stem)];
+  if (/(^|\/)install(?:er|ers|ation)?(\/|[-_.])/.test(lower)) return ['installer', normalizeCheckoutItemId(stem), stem];
+  if (/(^|\/)runtime[-_]?adapters?(\/|[-_.])/.test(lower)) return ['runtime-adapter', normalizeCheckoutItemId(stem), stem];
   for (const kind of ['kits', 'skills', 'agents', 'hooks']) {
     const marker = `/${kind}/`;
     const wrapped = `/${lower}`;
-    if (wrapped.includes(marker)) return [kind.slice(0, -1), normalizeCheckoutItemId(stem)];
+    if (wrapped.includes(marker)) return [kind.slice(0, -1), normalizeCheckoutItemId(stem), stem];
   }
-  if (/(^|\/)manifest\.json$/.test(lower)) return ['release-manifest', normalizeCheckoutItemId(stem)];
+  if (/(^|\/)manifest\.json$/.test(lower)) return ['release-manifest', normalizeCheckoutItemId(stem), stem];
   return null;
 }
 
@@ -146,10 +146,27 @@ async function checkoutSource(root, expected) {
   if (await git(root, ['status', '--porcelain'])) throw new Error('local checkout is dirty; refusing mixed evidence');
   const generatedAt = await git(root, ['show', '-s', '--format=%cI', commit]);
   const paths = await filesUnder(root);
-  const items = [];
-  for (const path of paths) {
+  const candidates = paths.flatMap((path) => {
     const classification = classifyCheckoutPath(path);
-    if (classification) items.push(await fileItem(root, path, classification[0], classification[1]));
+    return classification ? [{ path, kind: classification[0], id: classification[1], stem: classification[2] }] : [];
+  });
+  const groups = new Map();
+  for (const candidate of candidates) {
+    const key = `${candidate.kind}:${candidate.id}`;
+    groups.set(key, [...(groups.get(key) ?? []), candidate]);
+  }
+  const items = [];
+  for (const candidate of candidates) {
+    const group = groups.get(`${candidate.kind}:${candidate.id}`);
+    // Several release assets intentionally share a stem across platforms or
+    // formats (for example install.sh/install.ps1 and hub.css/hub.js). Preserve
+    // extensionless identities for the common case, but qualify true same-stem
+    // siblings by their full path so a real checkout remains auditable. Distinct
+    // paths that merely normalize to the same ID still fail closed in schema
+    // validation instead of being guessed apart.
+    const sameStemSiblings = group.length > 1 && group.every((item) => item.stem === candidate.stem);
+    const id = sameStemSiblings ? normalizeCheckoutItemId(candidate.path) : candidate.id;
+    items.push(await fileItem(root, candidate.path, candidate.kind, id));
   }
   let version = expected.ref;
   try {
