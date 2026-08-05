@@ -70,8 +70,10 @@ Trước khi bắt đầu:
 - Hoàn thành [Làm quen](../../../getting-started/onboarding), xác nhận Engineer
   Kit đã được cài và `ak` CLI khả dụng cho plan scaffolding cùng phase-state
   operation.
-- Mở project cần lập plan. Project scope mặc định ghi dưới
-  `plans/<timestamp>-<slug>/`.
+- Mở project cần lập plan. Project scope ghi dưới
+  `<project>/<plans-dir>/<timestamp>-<slug>/`. Giá trị `paths.plans` tương đối
+  theo project trong `.agentkit/config.yaml` chọn `<plans-dir>`; nếu không có,
+  mặc định là `plans/`.
 - Cung cấp outcome, constraint, non-goal và acceptance criteria đã được chấp
   nhận.
 - Giữ nguyên plan chưa hoàn tất và nêu công việc chồng lấn đã biết.
@@ -147,6 +149,13 @@ Chỉ dùng `--global` khi bạn chủ động muốn global plans root đã c�
 không có project context. Xác nhận cú pháp plan CLI chính xác từ
 `ak plan --help`; Skill không dùng subcommand ghi nhớ làm authority.
 
+Ranh giới CLI V1 chỉ chấp nhận giá trị `paths.plans` tương đối theo project và
+an toàn. Nếu giá trị bị thiếu, malformed, là absolute path, trỏ ra ngoài project
+hay vào `.agentkit`, hoặc không thể follow an toàn, `ak plan`, journal và
+dashboard fallback về `<project>/plans/`. Absolute path vẫn có thể hiển thị cho
+Skill, vì vậy hãy xác nhận location do CLI resolve trước scaffolding thay vì giả
+định mọi plan surface đều dùng external directory đó.
+
 ## Mô tả plan rõ ràng
 
 Yêu cầu tốt nêu:
@@ -155,6 +164,8 @@ Yêu cầu tốt nêu:
 - **Affected surface:** module, public contract, data, runtime và deployment
   boundary có thể bị ảnh hưởng.
 - **Known risks:** compatibility, security, performance, migration hoặc rollback.
+- **Load-bearing assumptions:** premise mà nếu thiếu thì design thất bại, phần
+  nào evidence hiện tại giải quyết được và phần nào có thể hỏng trong delivery.
 - **Evidence:** research, scout report, incident hoặc plan hiện có.
 - **Authority:** có cho phép external research, tạo GitHub issue, private share
   hoặc public publication không.
@@ -175,11 +186,16 @@ deployment mới trong scope.
 4. **Skill thu thập bằng chứng.** Skill đọc repository instruction, code, test,
    contract và documentation hiện tại. Chỉ thêm research hoặc scouting khi mode
    hay bằng chứng còn thiếu yêu cầu.
-5. **Skill design và scaffold plan.** Skill dùng help trực tiếp của `ak plan`
-   cùng CLI-managed scaffolding, đọc mọi generated stub trước khi điền, rồi ghi
-   `plan.md` cùng các tệp `phase-*.md` chi tiết.
+5. **Skill design và scaffold plan.** Skill so sánh worst plausible case và khi
+   load-bearing assumption chưa xử lý, ưu tiên design có chi phí rời bỏ thấp
+   nhất. Skill ghi điều kiện khiến design không còn đạt success criteria,
+   switching cost cùng lock-in. Sau đó Skill dùng help trực tiếp của `ak plan`
+   và CLI-managed scaffolding, đọc mọi generated stub rồi ghi `plan.md` cùng
+   các tệp `phase-*.md` chi tiết.
 6. **Skill review plan.** Mode phù hợp chạy red team và validation dựa trên bằng
-   chứng. Mỗi thay đổi được chấp nhận kích hoạt consistency sweep toàn plan.
+   chứng. Red-team review nhắm vào assumption vừa thiết yếu vừa có thể hỏng
+   trong vòng đời plan. Mỗi thay đổi được chấp nhận kích hoạt consistency sweep
+   toàn plan.
 7. **Skill tạo projection tùy chọn.** Skill có thể hydrate live task view, tạo
    `plan.html`, GitHub issue hoặc chia sẻ qua AgentWiki theo tùy chọn đã yêu
    cầu cùng authentication khả dụng.
@@ -191,9 +207,14 @@ deployment mới trong scope.
 
 Nguồn bền vững là file-first:
 
+- Trong project scope, plan folder canonical là
+  `<project>/<plans-dir>/<timestamp>-<slug>/`, dùng resolved directory boundary
+  ở trên.
 - `plan.md` tóm tắt contract, status, dependency và link phase.
 - `phase-NN-*.md` ghi architecture, tệp bị ảnh hưởng, bước thực hiện, success
-  criteria, test, risk và dependency cho từng phase.
+  criteria, test, risk và dependency cho từng phase. Với breakable assumption
+  chưa xử lý, risk entry gồm observable failure signal cùng response đã chốt:
+  điều chỉnh trong plan hoặc dừng và lập lại plan.
 - Local plan index có thể rebuild từ các tệp đó. Nếu index và file lệch nhau,
   dùng reindex operation hiển thị bởi `ak plan --help`.
 - Live task view là projection tiện ích. Plan file thắng khi state không khớp.
@@ -238,6 +259,8 @@ Plan hoàn tất nên cung cấp:
 - Phase, dependency, priority và tệp bị ảnh hưởng rõ ràng.
 - Architecture cùng implementation step bám bằng chứng project hiện tại.
 - Cân nhắc test, security, performance, migration và rollback khi liên quan.
+- Load-bearing assumption, stop condition của design, switching cost và
+  observable signal cùng response điều chỉnh-hoặc-lập-lại-plan.
 - Verification result với failure hoặc claim chưa xác minh vẫn hiển thị.
 - Consistency sweep không còn contradiction chưa xử lý trước execution.
 - Đường dẫn artifact có authority cùng trạng thái projection GitHub, AgentWiki,
@@ -273,5 +296,3 @@ cùng ownership.
   bảo đảm trong mọi client.
 - Cách gọi Cursor bằng slash là bằng chứng do người dùng xác minh, không chứng
   minh runtime parity đầy đủ.
-- Package stable và beta chứa cùng nội dung, mode và subcommand `ak:plan`.
-  Thay đổi runtime ở beta không làm đổi planning workflow này.
