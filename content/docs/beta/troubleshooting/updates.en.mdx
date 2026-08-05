@@ -70,6 +70,79 @@ Do not restore solely because this pre-mutation failure includes a snapshot.
 An applied runtime error, CLI hard gate, partial Kit failure, or interruption
 after mutation exits `1`. Invalid scope or target combinations exit `2`.
 
+## Work around one failed global runtime on Windows
+
+A global update reports each runtime separately. If the Claude Code row failed
+before mutation while the Codex row says `updated`, Codex was updated; do not
+describe the whole update as failed.
+
+Do not treat generic terminal guidance about disk space or backup permissions as
+the root cause. Current guidance uses that classification for any raw error that
+contains `snapshot`. A printed snapshot ID proves that at least one earlier
+capture succeeded. It does not prove a partial write, and a later capture can
+still fail because of disk space, ACL or security software, a locked or
+unreadable Claude path, a foreign-home refusal, or another snapshot-path error.
+
+### Read the local detail first
+
+In PowerShell, locate the failed Claude Code row and its relevant markers in the
+newest local report:
+
+```powershell
+$report = Get-ChildItem "$env:USERPROFILE\.agentkit\support\update-report-*.md" |
+  Sort-Object LastWriteTime -Descending |
+  Select-Object -First 1
+
+$report.FullName
+Select-String -Path $report.FullName `
+  -Pattern '^### engineer \[claude-code\]$','^- Detail:','^- Snapshot:'
+```
+
+Share only the relevant `- Detail:` and `- Snapshot:` lines. Redact usernames,
+email addresses, project paths, tokens, and unrelated diagnostics. Without the
+raw `- Detail:`, keep the cause unresolved.
+
+If more evidence is needed, these checks are read-only:
+
+```powershell
+ak backups show <snapshot-id> --json
+ak backups verify <snapshot-id>
+ak doctor --json --offline
+Get-PSDrive -Name C
+```
+
+### Fix the exact cause, then retry only Claude Code
+
+Keep `.agentkit`, `.claude`, and the snapshot. Do not bypass the safety boundary
+with `--no-backup`.
+
+- For a locked or unreadable path, close Claude Code and the process holding that
+  path, correct readability or permissions for that exact path, then retry.
+- For a no-space detail, free space on the volume that contains the source and
+  AgentKit backups.
+- For `refusing foreign-home takeover`, first confirm that AgentKit should own
+  the global Claude Code surface. Then use the exact recovery command
+  `ak kit init engineer --global`. This is an ownership decision, not a
+  permissions error.
+
+After correcting the cause, retry only the failed runtime:
+
+```powershell
+ak update --global --target claude-code --yes
+```
+
+At the time this behavior was verified, `2.8.0-beta.8` was the latest beta. In
+that version, a `refusing foreign-home takeover` detail should receive the
+dedicated pre-mutation ownership guidance above. If that exact detail instead
+receives generic snapshot guidance, preserve the redacted report lines and
+contact support; treat it as a guidance regression, not proof of a snapshot or
+permissions failure.
+
+A Codex warning such as
+`preserving hook script ...cook-after-plan-reminder.cjs` is a separate
+ownership-preservation result. Do not use it to diagnose the Claude Code
+snapshot failure.
+
 ## Check the result
 
 ```bash
