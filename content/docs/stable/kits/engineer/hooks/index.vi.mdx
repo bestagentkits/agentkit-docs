@@ -42,6 +42,16 @@ package:
 Những kết quả này hỗ trợ workflow Engineer; chúng không tự phê duyệt plan,
 commit, merge, deploy hay phát hành công việc thay bạn.
 
+## Path đã cấu hình khi bắt đầu session
+
+Handler `SessionStart` resolve tùy chọn path của project trước khi export môi
+trường mà workflow Engineer sử dụng. Giá trị tương đối của `paths.docs` hoặc
+`paths.plans` được resolve dưới project base của session. Giá trị tuyệt đối được
+export nguyên vẹn dưới dạng `CK_DOCS_PATH` hoặc `CK_PLANS_PATH`, thay vì được
+join vào path của project. Export này cung cấp các vị trí đã cấu hình cho Skill;
+các bề mặt plan, journal và dashboard Go native yêu cầu riêng `paths.plans`
+tương đối theo project và fallback về `plans/` khi giá trị là path tuyệt đối.
+
 ## Projection theo runtime
 
 Các nhãn dưới đây mô tả nội dung trở thành active:
@@ -106,6 +116,21 @@ deduplicate, còn nội dung xung đột giữ shim đầu tiên rồi cảnh b�
 shim tiếp tục dùng command trực tiếp. Không sửa thủ công shim hoặc cấu hình Hook
 đã được tạo.
 
+## Chẩn đoán bề mặt Claude Code đang hoạt động
+
+`ak doctor --adapter claude-code --json` discover các bề mặt Hook Claude Code đã
+bật theo scope và delivery mode, thay vì xem tệp package là bằng chứng một Hook
+đang hoạt động. Với bản cài native ở scope project và người dùng, check
+`hook_registration` so sánh expectation đã cài với đăng ký đang hoạt động trong
+`settings.json` và xác minh các entrypoint được tham chiếu. Với bản cài plugin,
+check này kiểm tra manifest Hook đang hoạt động và các entrypoint của manifest.
+Hook bị tắt qua AgentKit được loại khỏi expectation native.
+
+Check `hook_log` đọc log gắn với từng bề mặt native hoặc plugin đã discover. Một
+bề mặt active mới chưa có log vẫn được xem là healthy; đăng ký, manifest hoặc
+entrypoint bị thiếu được báo kèm scope và delivery mode. Hãy dùng kết quả này để
+xác định bề mặt bị ảnh hưởng trước khi refresh hoặc cài lại Kit.
+
 ## Ownership và lifecycle
 
 Đăng ký Hook ở scope project và người dùng có thể cùng tồn tại. Với cấu hình
@@ -130,9 +155,10 @@ hoặc toàn bộ tệp cấu hình Hook dùng chung để sửa lỗi.
    field JSON tương ứng trước khi kết luận toàn bộ Hook graph thất bại.
 2. **Xác nhận target và scope.** Bản cài ở project và người dùng là riêng biệt,
    và runtime có thể nạp một bản khác với bản bạn dự kiến.
-3. **Chạy health check cho Codex.** Dùng `ak doctor --adapter codex --json` và
-   kiểm tra các check được báo cáo thay vì giả định có tệp đồng nghĩa Hook đã
-   được đăng ký.
+3. **Chạy health check cho target.** Dùng
+   `ak doctor --adapter claude-code --json` cho Claude Code hoặc
+   `ak doctor --adapter codex --json` cho Codex, rồi kiểm tra các check được báo
+   cáo thay vì giả định có tệp đồng nghĩa Hook đang hoạt động.
 4. **Kiểm tra phân loại path trên Windows.** Path `.cjs` hợp lệ trong Codex home
    có thể dùng shim được quản lý; dạng path bên ngoài hoặc không an toàn sẽ cảnh
    báo.

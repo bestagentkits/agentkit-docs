@@ -67,69 +67,99 @@ Locale root redirects live in `public/_redirects` (copied into `out/`; Workers s
 
 Deploy workflows run their own typecheck + build, then `wrangler deploy` — they do not wait on the CI workflow.
 
-## Release sync pipeline
+## Release maintenance (authoritative: manual local)
 
-Docs stay in sync with `ak` releases via a deterministic pipeline (scripts + workflows) and a guardrailed LLM agent. Everything is validated against hand-built fixtures in `fixtures/`, so no `ak-cli` change is required to run it.
+The authoritative operating model is **manual local evidence → local script → reviewed PR → staging → reviewed `dev` → `main` → production**. Do not treat GitHub `repository_dispatch` automation as the source of truth for this phase.
+
+```
+exact release evidence
+  → local beta sync and/or stable promote (scripts below)
+  → normal PR into dev
+  → staging.docs.agentkit.best verification
+  → reviewed dev → main PR
+  → docs.agentkit.best (deploy-production.yml)
+```
+
+Diagrams and the full runbook: [`docs/workflows/release-and-deploy.md`](docs/workflows/release-and-deploy.md).
 
 The CLI reference is **two layers**: the _facts_ (usage, examples, flags, exit codes, related commands) are projected mechanically from `ak --help` — always exact, never drifting — while the _narrative_ (overview + when-to-use + notes) is reviewed prose in `reference-prose/<slug>.md`. The help dump under `reference-derived/` is **derived**; published CLI docs under `content/docs/<channel>/reference/cli/` are human-authored: `generateReference` = normalize(`reference-raw/<slug>.mdx` source + prose overlay). Because they are a pure function of committed sources, CI regenerates them and asserts a zero diff — so the reference can't silently drift or be hand-edited. See [`reference-prose/README.md`](reference-prose/README.md) for the authoring contract and [`docs/workflows/cli-reference-pipeline.md`](docs/workflows/cli-reference-pipeline.md) for diagrams.
 
 ### docs-bundle contract (v1)
 
-`ak-cli`'s release job publishes `docs-bundle.tar.gz` as a release asset and fires a `repository_dispatch` (`event_type: release-docs`, `client_payload: { channel, tag, sha }`) at this repo. The payload is only a trigger — the workflow re-downloads the asset and trusts its **manifest**, not the payload.
+A channel docs-bundle is a directory (or `docs-bundle.tar.gz`) with:
 
 ```
 manifest.json      # { schemaVersion: 1, channel: "beta"|"stable", tag, sha,
                    #   version, generatedAt, promotedFrom? }  ← promotedFrom on stable only
 reference/cli/     # generated MDX (frontmatter: title, description, generated: true)
-release-notes.md   # channel-appropriate notes
+release-notes.md   # channel-appropriate notes (required for both channels)
 ```
 
-All contract parsing/validation lives in `scripts/lib/manifest.mjs` (`schemaVersion` gates future changes to one module + the fixtures).
+When upstream publishes the asset, treat its **manifest** as evidence and verify it against the exact release tag/SHA before applying. Fixtures under `fixtures/docs-bundle-{beta,stable}/` are enough to exercise the scripts without a live `ak-cli` checkout. All contract parsing/validation lives in `scripts/lib/manifest.mjs`.
 
 ### Scripts (plain Node, no build step; `pnpm test` covers them)
 
-- `scripts/sync-release.mjs --bundle <dir|tar.gz> | --tag <vX.Y.Z-beta.N>` — beta ingestion: refresh the raw source in `reference-raw/` from the bundle (hygiene-scrubbed: private-repo links → public support repo), then derive `reference-derived/` from it + prose overlays, rewrite the `.generated` marker, write `release-notes.mdx`, update `channels.json.beta`. Idempotent (re-running a tag reproduces byte-identical output — `generatedAt` comes from the manifest, never the clock).
+- `scripts/sync-release.mjs --bundle <dir|tar.gz> | --tag <vX.Y.Z-beta.N>` — **beta** ingestion: refresh `reference-raw/` from the bundle (hygiene-scrubbed: private-repo links → public support repo), derive `reference-derived/`, rewrite the `.generated` marker, write beta `release-notes.mdx` via the shared release-note renderer, update `channels.json.beta`. Idempotent (`generatedAt` comes from the manifest, never the clock).
 - `scripts/compile-prose.mjs [--check] [--slug <name>] [--export-missing]` — render `reference-prose-json/<slug>.json` (LLM/agent wire format) → `reference-prose/<slug>.md`. `--check` fails when markdown drift from JSON; `--export-missing` bootstraps JSON from existing markdown.
 - `scripts/generate-reference.mjs [--channel beta]` — regenerate the derived pages from `reference-raw/` + `reference-prose/` via `scripts/lib/normalize-reference.mjs` (raw `cobra/doc` → web-native MDX, prose overlay merged, shared boilerplate deduped to the `cli-conventions` page, `cli/index` compiled into a grouped TOC via `scripts/lib/reference-index.mjs`). Idempotent. CI runs it and asserts a zero diff to prove the reference is exactly `generator(source + overlays)`.
-- `scripts/promote-docs.mjs --bundle <stable-bundle-dir>` — stable promotion: whole-copy the beta tree at tag `docs/{promotedFrom}` into `content/docs/stable/`, assert it is channel-neutral, update `channels.json.stable`. Emits a branch name; the workflow opens the PR (stable is never direct-committed).
+- `scripts/promote-docs.mjs --bundle <stable-bundle-dir> [--beta-ref <git-ref>]` — **stable** promotion: whole-copy the **exact** beta docs snapshot for `manifest.promotedFrom` (default git tag `docs/{promotedFrom}`; override only with `--beta-ref` pointing at that same snapshot), **rewrite** `content/docs/stable/reference/release-notes.mdx` from the stable bundle's `release-notes.md` (shared renderer: stable channel + stable tag frontmatter + hygiene), assert channel-neutral prose, update `channels.json.stable` only. Beta is never mutated. Repeat runs are byte-identical. Open a normal PR; do not hand-edit `stable/`. An arbitrary `content/docs/beta` working tree is **not** sufficient evidence. `--beta-source` exists only for fixtures/tests and requires `--allow-unverified-beta-source`.
 - `scripts/check-generated.mjs --base <ref>` — CI guard: fails any hand edit to a `.generated`-marked dir's generated pages (ownership judged at the base ref, so bootstrapping a new generated dir is allowed; `meta*.json` nav is exempt); the sync bot (`GITHUB_ACTOR`) is exempt. Dirs covered by the regenerate-and-diff reproducibility step (`REPRODUCIBLE_DIRS`, e.g. beta's reference) are exempt here — that check is stronger, so generator-change PRs need no bot bypass.
 - `scripts/check-agent-pr.mjs --base <ref>` — agent-PR scope guard (modify-only, `content/docs/beta/{getting-started,guides}` prose).
 - `scripts/check-links.mjs` — internal link checker over `out/`.
 
-### Workflows
+### Deploy workflows (still active)
 
-- `docs-sync.yml` (`repository_dispatch: release-docs`): beta → sync + commit `docs-sync: beta <tag>` + tag `docs/<tag>` + push to **`dev`** (deploys to staging); stable → promotion PR **into `dev`** labeled `docs-promotion`. Concurrency is queued per channel. Everything lands on `dev` (staging) first; a `dev` → `main` merge promotes it to production. Diagrams: [`docs/workflows/release-and-deploy.md`](docs/workflows/release-and-deploy.md).
 - `deploy-staging.yml` / `deploy-production.yml`: push to `dev` / `main` → build static export → `wrangler deploy --env staging|production`.
-- `docs-agent.yml` (`workflow_run` after a green beta sync): the docs agent patches drifted beta prose via a PR only; beta-only + ≥1h rate limit. Runs under its own non-bypass identity so guards always apply. Disable it by deleting/disabling this one file — the sync pipeline is unaffected.
-- `agent-guard.yml`: enforces agent-PR scope on the diff.
+- Production changes **only** via a reviewed `dev` → `main` PR.
+
+### Legacy automation (non-authoritative)
+
+These workflows exist in the repo but are **not** the operating authority for release maintenance:
+
+- `docs-sync.yml` (`repository_dispatch: release-docs`) — historical automatic beta commit + stable promotion PR path. Prefer local `sync-release.mjs` / `promote-docs.mjs` + normal PRs. Do not rely on it for releases that lack a published `docs-bundle.tar.gz` asset. Whether to disable or remove it is a separate ops decision (not done by content/tooling PRs by default).
+- `docs-agent.yml` / `agent-guard.yml` — optional post-sync prose agent; scope-guarded if used.
 
 ### Secrets, variables, and identities (set in the GitHub org/repo console)
 
 | Name | Kind | Purpose |
 | --- | --- | --- |
-| `DOCS_BOT_APP_ID` / `DOCS_BOT_PRIVATE_KEY` | secret | **agentkit-docs-bot** GitHub App (contents:write + pull-requests:write on ak-docs only). Ruleset-bypass identity on **`dev`** (where the sync bot pushes commits + tags); promotion PRs use its short-lived token too. |
+| `DOCS_BOT_APP_ID` / `DOCS_BOT_PRIVATE_KEY` | secret | **agentkit-docs-bot** GitHub App (contents:write + pull-requests:write on ak-docs only). Legacy ruleset-bypass identity on **`dev`** if automation is re-enabled. |
 | `DOCS_AGENT_APP_ID` / `DOCS_AGENT_PRIVATE_KEY` | secret | **agentkit-docs-agent** GitHub App for the docs agent. Same write scopes but **NOT** on the ruleset bypass list — so agent changes must always pass the PR guards + CODEOWNERS. Keep it off the bypass list. |
-| `AK_CLI_READ_TOKEN` | secret | Fine-grained PAT, contents:read on the private `ak-cli` repo only, to download the release asset. Document a rotation owner. |
-| `ANTHROPIC_API_KEY` | secret | Docs agent (Claude Code Action). |
+| `AK_CLI_READ_TOKEN` | secret | Fine-grained PAT, contents:read on the private `ak-cli` repo only, to download release assets when validating evidence. Document a rotation owner. |
+| `ANTHROPIC_API_KEY` | secret | Docs agent (Claude Code Action), if that workflow is used. |
 | `AK_CLI_REPO` | variable | Source repo slug (default `bestagentkits/agentkit`). |
 | `CLOUDFLARE_API_TOKEN` | secret | Wrangler deploy (Workers + custom domains on `agentkit.best`). |
 | `CLOUDFLARE_ACCOUNT_ID` | secret | Cloudflare account ID (`digitop.vn@gmail.com`). |
 
 Branch protection / rulesets:
 
-- **`dev`** (integration → staging): required checks (CI build + guards); direct push allowed only for the `agentkit-docs-bot` app (bypass list = that app only — **not** the agent app), so the beta sync can commit while agent/human PRs still pass the guards.
-- **`main`** (production): required checks + review via `.github/CODEOWNERS`; **no** direct push, no bot bypass — production is updated only by a reviewed `dev` → `main` promotion.
+- **`dev`** (integration → staging): required checks (CI build + guards); human PRs always pass the guards. Bot bypass (if any) is only for legacy automation identities.
+- **`main`** (production): required checks + review via `.github/CODEOWNERS`; **no** direct push — production is updated only by a reviewed `dev` → `main` promotion.
 
 **Caveat:** enforced rulesets/CODEOWNERS on a **private** repo require a paid GitHub plan — verify the org tier; if unavailable, fall back to required status checks + review discipline and record the gap in `AGENTS.md`/`CODEOWNERS`.
 
-### Runbook
+### Runbook (manual)
 
-- **Re-fire a sync manually:** re-send the dispatch (the same tag is idempotent):
-  ```bash
-  gh api repos/bestagentkits/agentkit-docs/dispatches -f event_type=release-docs \
-    -F 'client_payload[channel]=beta' -F 'client_payload[tag]=v0.42.0-beta.7' -F 'client_payload[sha]=<sha>'
-  ```
-- **Promote staging → production:** open a `dev` → `main` PR (or fast-forward merge) once staging looks right; merging it triggers `deploy-production.yml`. This is the only way prod changes.
-- **Recover a failed/half-applied sync:** the workflow stages everything and commits once, so a partial state is unusual; if it happens, revert the bad commit on `dev` and re-dispatch the tag (idempotent).
-- **Reviewing agent PRs:** confirm the diff is minimal and factual; the guard already proves it is modify-only beta prose. Release notes are semi-trusted (built from PR titles) — read on merits.
-- **Local validation without ak-cli:** `node scripts/sync-release.mjs --bundle fixtures/docs-bundle-beta` and `node scripts/promote-docs.mjs --bundle fixtures/docs-bundle-stable --beta-source content/docs/beta` (the `--beta-source` flag skips the git checkout).
+1. **Collect exact evidence** for the release: channel, tag, product SHA, `promotedFrom` (stable only), and a docs-bundle directory (or construct one from the contract when upstream did not attach `docs-bundle.tar.gz`).
+2. **Beta sync (when needed):** on a working branch from `dev`:
+   ```bash
+   node scripts/sync-release.mjs --bundle path/to/docs-bundle-beta
+   pnpm test
+   ```
+   Open a normal PR into `dev`. After merge, confirm staging.
+3. **Stable promote:** ensure the exact docs snapshot for `manifest.promotedFrom` exists as a git ref (normally tag `docs/{promotedFrom}`). Then:
+   ```bash
+   # Binds docs/{promotedFrom} automatically — fails closed if the ref is missing.
+   node scripts/promote-docs.mjs --bundle path/to/docs-bundle-stable
+   # Optional: name the exact snapshot ref explicitly (must still be that promotedFrom tree):
+   node scripts/promote-docs.mjs --bundle path/to/docs-bundle-stable --beta-ref docs/v2.8.0-beta.14
+   pnpm test
+   ```
+   Do **not** promote from the current `content/docs/beta` working tree as evidence. Review that `content/docs/stable/reference/release-notes.mdx` says the **stable** channel and stable tag (never leftover beta metadata), that Beta is unchanged, and that `channels.json.stable` matches the manifest. Open a normal PR into `dev`.
+4. **Staging → production:** once staging looks right, open a reviewed `dev` → `main` PR; merging triggers `deploy-production.yml`. This is the only way prod changes.
+5. **Local validation without a live product checkout** (fixture shape only; not a real promote):
+   ```bash
+   node scripts/sync-release.mjs --bundle fixtures/docs-bundle-beta
+   node scripts/promote-docs.mjs --bundle fixtures/docs-bundle-stable \
+     --beta-source content/docs/beta --allow-unverified-beta-source
+   ```
