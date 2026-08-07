@@ -10,6 +10,17 @@ export const RELEASE_ASSET_NAMES = Object.freeze([
   'docs-bundle.tar.gz.sha256',
   'release-provenance.json',
 ]);
+export const DOCS_BACKFILL_PROVENANCE_NAME = 'docs-backfill-provenance.json';
+
+const LEGACY_DOCS_BACKFILLS = new Map([
+  [
+    'beta:v2.8.0-beta.14:fb99155ba6dd173e137a69ffee6122b80441fe56',
+    {
+      repository: 'bestagentkits/agentkit',
+      commit: '69fccfd32bf48acb4fd30c38556819bae82cef38',
+    },
+  ],
+]);
 
 const SHA40 = /^[0-9a-f]{40}$/;
 const SHA256 = /^[0-9a-f]{64}$/;
@@ -53,6 +64,26 @@ function requireObject(value, label) {
     fail(`${label} must be a JSON object`);
   }
   return value;
+}
+
+function exactKeys(value, expected, label) {
+  const actual = Object.keys(value).sort();
+  const wanted = [...expected].sort();
+  if (actual.length !== wanted.length || actual.some((key, index) => key !== wanted[index])) {
+    fail(`${label} must contain exactly ${wanted.join(', ')}`);
+  }
+}
+
+function legacyBackfillKey(payload) {
+  return `${payload.channel}:${payload.tag}:${payload.sha}`;
+}
+
+function isLegacyDocsBackfill(payload) {
+  return LEGACY_DOCS_BACKFILLS.has(legacyBackfillKey(payload));
+}
+
+function legacyDocsBackfillTooling(payload) {
+  return LEGACY_DOCS_BACKFILLS.get(legacyBackfillKey(payload));
 }
 
 export function validateDispatchPayload(payload) {
@@ -124,6 +155,15 @@ export function selectReleaseAssets(release, payload) {
     }
     return validateAsset(matches[0], name);
   });
+  const backfillMatches = value.assets.filter((asset) => asset?.name === DOCS_BACKFILL_PROVENANCE_NAME);
+  if (isLegacyDocsBackfill(dispatch)) {
+    if (backfillMatches.length !== 1) {
+      fail(`GitHub release must contain exactly one ${DOCS_BACKFILL_PROVENANCE_NAME}; found ${backfillMatches.length}`);
+    }
+    selected.push(validateAsset(backfillMatches[0], DOCS_BACKFILL_PROVENANCE_NAME));
+  } else if (backfillMatches.length !== 0) {
+    fail(`${DOCS_BACKFILL_PROVENANCE_NAME} is allowed only for an explicit legacy release tuple`);
+  }
   const ids = new Set(selected.map((asset) => asset.id));
   if (ids.size !== selected.length) fail('release evidence assets do not have unique asset ids');
   return { releaseId: value.id, payload: dispatch, assets: selected };
@@ -156,7 +196,29 @@ async function verifyDownloadedAssets(selection, assetsDir) {
   return verified;
 }
 
-function validateProvenance(raw, selection) {
+function validateArtifactRecord(record, asset, name, label) {
+  requireObject(record, `${label} ${name}`);
+  if (!SHA256.test(record.sha256 ?? '') || record.sha256 !== asset.sha256) {
+    fail(`${label} sha256 mismatch for ${name}`);
+  }
+  if (record.size !== asset.size || record.githubAssetId !== asset.id) {
+    fail(`${label} identity mismatch for ${name}`);
+  }
+  if (record.githubDigest !== `sha256:${asset.sha256}`) {
+    fail(`${label} GitHub digest mismatch for ${name}`);
+  }
+}
+
+function validateArtifactRecords(records, selection, label) {
+  for (const name of RELEASE_ASSET_NAMES.slice(0, 2)) {
+    const matches = records.filter((artifact) => artifact?.name === name);
+    if (matches.length !== 1) fail(`${label} must contain exactly one ${name} record`);
+    const asset = selection.assets.find((candidate) => candidate.name === name);
+    validateArtifactRecord(matches[0], asset, name, label);
+  }
+}
+
+function validateProvenance(raw, selection, downloaded) {
   const provenance = requireObject(parseJson(raw, 'release-provenance.json'), 'release provenance');
   const { payload } = selection;
   if (provenance.schemaVersion !== 'agentkit-release-provenance.v1') {
@@ -174,22 +236,91 @@ function validateProvenance(raw, selection) {
   }
   if (!Array.isArray(provenance.artifacts)) fail('release provenance artifacts must be an array');
 
+  if (!isLegacyDocsBackfill(payload)) {
+    validateArtifactRecords(provenance.artifacts, selection, 'release provenance');
+    return provenance;
+  }
+
   for (const name of RELEASE_ASSET_NAMES.slice(0, 2)) {
-    const matches = provenance.artifacts.filter((artifact) => artifact?.name === name);
-    if (matches.length !== 1) fail(`release provenance must contain exactly one ${name} record`);
-    const record = matches[0];
-    const asset = selection.assets.find((candidate) => candidate.name === name);
-    if (!SHA256.test(record.sha256 ?? '') || record.sha256 !== asset.sha256) {
-      fail(`release provenance sha256 mismatch for ${name}`);
-    }
-    if (record.size !== asset.size || record.githubAssetId !== asset.id) {
-      fail(`release provenance identity mismatch for ${name}`);
-    }
-    if (record.githubDigest !== `sha256:${asset.sha256}`) {
-      fail(`release provenance GitHub digest mismatch for ${name}`);
+    if (provenance.artifacts.some((artifact) => artifact?.name === name)) {
+      fail(`legacy release provenance must not already contain ${name}`);
     }
   }
+  const rawBackfill = downloaded.get(DOCS_BACKFILL_PROVENANCE_NAME)?.bytes;
+  if (!rawBackfill) fail(`downloaded ${DOCS_BACKFILL_PROVENANCE_NAME} is missing`);
+  const backfill = requireObject(
+    parseJson(rawBackfill.toString('utf8'), DOCS_BACKFILL_PROVENANCE_NAME),
+    'docs backfill provenance',
+  );
+  exactKeys(backfill, [
+    'schemaVersion', 'releaseTag', 'channel', 'snapshotSha', 'promotedSourceSha',
+    'tooling', 'baseProvenance', 'artifacts',
+  ], 'docs backfill provenance');
+  if (backfill.schemaVersion !== 'agentkit-docs-backfill-provenance.v1') {
+    fail(`unsupported docs backfill provenance schema ${JSON.stringify(backfill.schemaVersion)}`);
+  }
+  if (backfill.releaseTag !== payload.tag || backfill.channel !== payload.channel ||
+      backfill.snapshotSha !== provenance.snapshotSha ||
+      backfill.promotedSourceSha !== payload.sha) {
+    fail('docs backfill provenance identity does not match the immutable release provenance');
+  }
+  if (!Array.isArray(backfill.artifacts)) fail('docs backfill provenance artifacts must be an array');
+  const tooling = requireObject(backfill.tooling, 'docs backfill tooling');
+  exactKeys(tooling, ['repository', 'commit'], 'docs backfill tooling');
+  const expectedTooling = legacyDocsBackfillTooling(payload);
+  if (tooling.repository !== expectedTooling.repository || tooling.commit !== expectedTooling.commit) {
+    fail('docs backfill tooling does not match the reviewed builder commit');
+  }
+  const baseRecord = requireObject(backfill.baseProvenance, 'docs backfill base provenance');
+  exactKeys(baseRecord, ['githubAssetId', 'githubDigest', 'name', 'sha256', 'size'], 'docs backfill base provenance');
+  if (baseRecord.name !== 'release-provenance.json') {
+    fail('docs backfill base provenance must name release-provenance.json');
+  }
+  validateArtifactRecord(
+    baseRecord,
+    selection.assets.find((candidate) => candidate.name === 'release-provenance.json'),
+    'release-provenance.json',
+    'docs backfill base provenance',
+  );
+  validateArtifactRecords(backfill.artifacts, selection, 'docs backfill provenance');
   return provenance;
+}
+
+function artifactRecord(asset) {
+  return {
+    githubAssetId: asset.id,
+    githubDigest: `sha256:${asset.sha256}`,
+    name: asset.name,
+    sha256: asset.sha256,
+    size: asset.size,
+  };
+}
+
+export function createLegacyDocsBackfillProvenance(release, payload) {
+  const dispatch = validateDispatchPayload(payload);
+  if (!isLegacyDocsBackfill(dispatch)) {
+    fail('docs backfill provenance generation is allowed only for an explicit legacy release tuple');
+  }
+  const value = requireObject(release, 'GitHub release');
+  if (value.tag_name !== dispatch.tag || !Array.isArray(value.assets)) {
+    fail('GitHub release does not match the docs backfill payload');
+  }
+  const selected = RELEASE_ASSET_NAMES.map((name) => {
+    const matches = value.assets.filter((asset) => asset?.name === name);
+    if (matches.length !== 1) fail(`GitHub release must contain exactly one ${name}; found ${matches.length}`);
+    return validateAsset(matches[0], name);
+  });
+  const byName = new Map(selected.map((asset) => [asset.name, asset]));
+  return `${JSON.stringify({
+    schemaVersion: 'agentkit-docs-backfill-provenance.v1',
+    releaseTag: dispatch.tag,
+    channel: dispatch.channel,
+    snapshotSha: dispatch.sha,
+    promotedSourceSha: dispatch.sha,
+    tooling: legacyDocsBackfillTooling(dispatch),
+    baseProvenance: artifactRecord(byName.get('release-provenance.json')),
+    artifacts: RELEASE_ASSET_NAMES.slice(0, 2).map((name) => artifactRecord(byName.get(name))),
+  }, null, 2)}\n`;
 }
 
 function parseOctal(header, offset, length, label) {
@@ -372,6 +503,7 @@ export async function verifyReleaseEvidence({ payload, release, assetsDir, bundl
   const provenance = validateProvenance(
     downloaded.get('release-provenance.json').bytes.toString('utf8'),
     selection,
+    downloaded,
   );
   const archive = downloaded.get('docs-bundle.tar.gz');
   const sidecar = downloaded.get('docs-bundle.tar.gz.sha256').bytes.toString('utf8');
