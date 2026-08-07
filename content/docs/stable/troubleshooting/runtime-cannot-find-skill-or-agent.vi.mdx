@@ -52,9 +52,31 @@ hình runtime hợp lệ. Kiểm tra các adapter check và `data.healthy`; doct
 doctor như tín hiệu về sức khỏe adapter, không phải bằng chứng duy nhất cho Skill
 inventory đã cài; hãy xác minh discovery ngay trong runtime.
 
+Hãy đọc `codex_install_provenance` như phân loại toàn bộ home, không phải check
+inventory Kit. `${CODEX_HOME:-~/.codex}` là root dùng chung do người dùng sở
+hữu, vì vậy dòng này khỏe khi root chứa nội dung người dùng và không yêu cầu
+marker AgentKit cho toàn bộ home. Marker cũ không phải bằng chứng ownership hiện
+tại, còn thiếu marker không phải lý do để init, thay thế hoặc xóa Codex home.
+Manifest cùng ownership record theo Kit mới quản lý nội dung AgentKit.
+
 Với bản cài Claude Code, dùng audit chỉ đọc đúng mode như mô tả trong [Lỗi cài
 Kit](./kit-installation). Nếu audit thoát `1`, hãy xử lý drift được báo trước khi
 debug runtime discovery.
+
+### Đọc các bề mặt hook Claude đang active
+
+Các check Claude Code `hook_registration` và `hook_log` kiểm tra mọi install
+surface đang active mà chúng quy được trong context hiện tại: scope user hoặc
+project, cùng delivery native hoặc plugin. Trong JSON, chi tiết registration
+liệt kê `kit`, `scope`, `mode`, đường dẫn manifest hoặc settings và registration
+bị thiếu dưới `details.surfaces`; chi tiết hook log liệt kê từng log active dưới
+`details.logs`.
+
+Hook log chưa tồn tại vẫn là trạng thái khỏe trên surface mới và không chứng
+minh Skill hoặc Agent bị thiếu. Warning registration nêu surface bị ảnh hưởng.
+Khi Doctor in một lệnh sửa duy nhất không mơ hồ, hãy dùng đúng target, scope và
+delivery mode đó; nếu không, sửa rõ từng surface được nêu thay vì refresh route
+khác.
 
 ## Khôi phục activation plugin Claude
 
@@ -101,6 +123,21 @@ Override này xác minh `<project>/<kit>/.codex/agents/`; nó không chuyển Ag
 sang user scope hoặc viết lại server đã đăng ký. Nếu chỉ check có override tìm
 thấy Agent, hãy xử lý scope mismatch thay vì sao chép file TOML. Sau khi đăng ký
 hoặc sửa scope, đóng và mở session Codex mới để tải lại cấu hình MCP.
+
+## Nếu Codex không tìm thấy ak:team
+
+Sự vắng mặt này là có chủ ý. Adapter Codex loại Skill Engineer `ak:team` vì
+Codex không cung cấp đầy đủ lifecycle Agent Teams mà workflow yêu cầu. Adapter
+không cài cách gọi `$ak:team` và không âm thầm thay bằng ordinary Codex
+subagent.
+
+Install summary báo `Capabilities excluded (unsupported on this target)` và nêu
+`ak-team`; JSON dùng `capabilityExclusions` cùng
+`capabilityExclusionSummaries`. Refresh chỉ xóa bản `ak-team` cũ do AgentKit sở
+hữu khi ownership hash đã ghi vẫn khớp. Bản đã sửa, không có ownership hoặc là
+link được giữ lại, nhưng việc còn trên disk không làm chúng được hỗ trợ. Hãy chọn
+workflow Codex khác hoặc dùng `ak:team` trong runtime có chiếu Skill này và có
+live team lifecycle.
 
 ## Nếu bản cài báo Hooks bị bỏ
 

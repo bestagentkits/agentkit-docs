@@ -10,6 +10,12 @@ Dùng `ak:team` khi các teammate session độc lập cần phối hợp qua le
 work state và direct message. Skill giữ decomposition, ownership, integration,
 verification, shutdown cùng cleanup thuộc trách nhiệm lead.
 
+<Callout type="warn" title="ak:team không khả dụng trên Codex">
+  Adapter Codex chủ động loại Skill này vì Codex không cung cấp đầy đủ lifecycle
+  Agent Teams mà Skill yêu cầu. Bản cài Codex báo rõ exclusion; nó không tạo cách
+  gọi `$ak:team` hoặc dùng ordinary subagent làm fallback.
+</Callout>
+
 ## Chọn ak:team cho live collaboration
 
 ### Dùng ak:team khi
@@ -47,14 +53,14 @@ Trước khi bắt đầu:
 | --- | --- | --- |
 | Claude Code | `/ak:team ...` | Skill chỉ dùng live Agent Teams surface khi session hiện tại cung cấp lifecycle cùng control capability cần thiết. |
 | Cursor | `/ak:team ...` | Slash invocation theo cách gọi Engineer Skill do người dùng xác minh. Skill discovery không chứng minh live team surface; workflow abort nếu thiếu capability bắt buộc. |
-| Codex | `$ak:team ...` | Native Skill discovery được hỗ trợ. Workflow cần live team surface; ordinary Codex subagent không được âm thầm thay thế. |
+| Codex | Không khả dụng | Adapter bỏ `ak-team` và báo `Capabilities excluded (unsupported on this target)`. |
 
 Capability name, parameter, model routing, limit, permission, isolation và
 cleanup behavior hiện tại phải được khám phá trong lần chạy.
 
 ## Chạy Skill
 
-<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+<Tabs items={['Claude Code', 'Cursor']}>
   <Tab value="Claude Code">
 
 ```text
@@ -66,13 +72,6 @@ cleanup behavior hiện tại phải được khám phá trong lần chạy.
 
 ```text
 /ak:team review "Review the checkout change for security, accessibility, and failure-path coverage; return evidence only" --reviewers 3 --delegate
-```
-
-  </Tab>
-  <Tab value="Codex">
-
-```text
-$ak:team review "Review the checkout change for security, accessibility, and failure-path coverage; return evidence only" --reviewers 3 --delegate
 ```
 
   </Tab>
@@ -176,7 +175,8 @@ tra và integrated verification mới thiết lập completion.
 | Teammate fail | Giữ bounded handoff, shutdown rồi giao cùng scope cho replacement mà không mở rộng ownership. |
 | Integrated test fail | Giữ team result chưa hoàn tất và giao diagnosis hoặc correction trước shutdown. |
 | Cleanup fail | Báo observed error và dùng runtime recovery guidance hiện tại; không xóa state directory phỏng đoán. |
-| Runtime không nhận diện Skill | Xác nhận target cùng scope, mở lại session, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+| Codex không nhận diện Skill | Đây là adapter exclusion dự kiến. Chọn workflow Codex khác hoặc chạy `ak:team` trong runtime được hỗ trợ; không thử cài lại. |
+| Runtime khác không nhận diện Skill | Xác nhận target cùng scope, mở lại session, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
 
 So sánh `ak:orchestrate` cho captured headless job, hoặc tiếp tục với
 [Engineer Kit](../../engineer) và
@@ -184,11 +184,12 @@ So sánh `ak:orchestrate` cho captured headless job, hoặc tiếp tục với
 
 ## Biết các giới hạn hiện tại
 
-- Skill cần live team surface và abort khi thiếu required capability.
+- Chỉ các adapter được hỗ trợ mới chiếu Skill này, và Skill cần live team
+  surface. Codex không chiếu Skill; runtime khác abort khi thiếu live capability
+  bắt buộc.
 - Model list, limit, permission, isolation, display mode, memory, resume và
   cleanup behavior do runtime sở hữu và phải được kiểm tra trực tiếp.
 - Persistent teammate memory chỉ dùng khi runtime cung cấp và project policy
   cho phép.
 - Parallelism chỉ giúp khi scope độc lập; coordination có thể tốn hơn short
   sequential work.
-- Stable và beta chứa template cùng lifecycle rule `ak:team` giống nhau.
