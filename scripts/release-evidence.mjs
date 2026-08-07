@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import {
   classifyReceipt,
+  createLegacyDocsBackfillProvenance,
   inspectStableReplay,
   selectReleaseAssets,
   validateChannelAdvance,
@@ -59,6 +60,15 @@ async function main() {
     await mkdir(dirname(values.output), { recursive: true });
     await writeFile(values.output, result.receiptText);
     process.stdout.write(`${JSON.stringify({ channel: result.manifest.channel, tag: result.manifest.tag, sha: result.manifest.sha })}\n`);
+    return;
+  }
+  if (command === 'legacy-backfill-provenance') {
+    const result = createLegacyDocsBackfillProvenance(
+      await readJson(values.release),
+      await readJson(values.payload),
+    );
+    await mkdir(dirname(values.output), { recursive: true });
+    await writeFile(values.output, result);
     return;
   }
   if (command === 'receipt') {
