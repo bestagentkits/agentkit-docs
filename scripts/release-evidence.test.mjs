@@ -8,8 +8,6 @@ import test from 'node:test';
 import { gunzipSync, gzipSync } from 'node:zlib';
 import {
   classifyReceipt,
-  createLegacyDocsBackfillProvenance,
-  DOCS_BACKFILL_PROVENANCE_NAME,
   inspectStableReplay,
   inspectTarGz,
   ReleaseEvidenceError,
@@ -25,12 +23,6 @@ const payload = {
   channel: 'beta',
   tag: 'v2.8.0-beta.7',
   sha: '1234567890abcdef1234567890abcdef12345678',
-};
-
-const legacyPayload = {
-  channel: 'beta',
-  tag: 'v2.8.0-beta.14',
-  sha: 'fb99155ba6dd173e137a69ffee6122b80441fe56',
 };
 
 function digest(bytes) {
@@ -109,62 +101,34 @@ async function fixture(root, overrides = {}) {
   const archiveDigest = digest(archive);
   const sidecar = Buffer.from(overrides.sidecar ?? `${archiveDigest}  docs-bundle.tar.gz\n`);
   const sidecarDigest = digest(sidecar);
-  const provenanceArtifacts = overrides.legacyBackfill ? [] : [
-    {
-      githubAssetId: 11,
-      githubDigest: `sha256:${archiveDigest}`,
-      name: 'docs-bundle.tar.gz',
-      sha256: archiveDigest,
-      size: archive.length,
-    },
-    {
-      githubAssetId: 12,
-      githubDigest: `sha256:${sidecarDigest}`,
-      name: 'docs-bundle.tar.gz.sha256',
-      sha256: sidecarDigest,
-      size: sidecar.length,
-    },
-  ];
   const provenance = Buffer.from(JSON.stringify({
     schemaVersion: 'agentkit-release-provenance.v1',
     releaseTag: identity.tag,
     channel: identity.channel,
     snapshotSha: overrides.snapshotSha ?? identity.sha,
     promotedSourceSha: identity.sha,
-    artifacts: provenanceArtifacts,
+    artifacts: [
+      {
+        githubAssetId: 11,
+        githubDigest: `sha256:${archiveDigest}`,
+        name: 'docs-bundle.tar.gz',
+        sha256: archiveDigest,
+        size: archive.length,
+      },
+      {
+        githubAssetId: 12,
+        githubDigest: `sha256:${sidecarDigest}`,
+        name: 'docs-bundle.tar.gz.sha256',
+        sha256: sidecarDigest,
+        size: sidecar.length,
+      },
+    ],
   }, null, 2) + '\n');
   const files = new Map([
     ['docs-bundle.tar.gz', { id: 11, bytes: archive }],
     ['docs-bundle.tar.gz.sha256', { id: 12, bytes: sidecar }],
     ['release-provenance.json', { id: 13, bytes: provenance }],
   ]);
-  const assetRecord = (name) => {
-    const item = files.get(name);
-    const sha256 = digest(item.bytes);
-    return {
-      githubAssetId: item.id,
-      githubDigest: `sha256:${sha256}`,
-      name,
-      sha256,
-      size: item.bytes.length,
-    };
-  };
-  if (overrides.legacyBackfill) {
-    const backfill = Buffer.from(`${JSON.stringify({
-      schemaVersion: 'agentkit-docs-backfill-provenance.v1',
-      releaseTag: identity.tag,
-      channel: identity.channel,
-      snapshotSha: overrides.snapshotSha ?? identity.sha,
-      promotedSourceSha: identity.sha,
-      tooling: {
-        repository: 'bestagentkits/agentkit',
-        commit: '69fccfd32bf48acb4fd30c38556819bae82cef38',
-      },
-      baseProvenance: assetRecord('release-provenance.json'),
-      artifacts: [assetRecord('docs-bundle.tar.gz'), assetRecord('docs-bundle.tar.gz.sha256')],
-    }, null, 2)}\n`);
-    files.set(DOCS_BACKFILL_PROVENANCE_NAME, { id: 14, bytes: backfill });
-  }
   for (const [name, item] of files) await writeFile(join(assetsDir, name), item.bytes);
   const release = {
     id: 99,
@@ -249,90 +213,6 @@ test('verified release evidence binds GitHub bytes, provenance, sidecar, manifes
     assert.match(await readFile(join(bundleDir, 'reference/cli/ak.mdx'), 'utf8'), /generated: true/);
   } finally {
     await rm(root, { recursive: true, force: true });
-  }
-});
-
-test('the exact beta.14 legacy tuple uses supplemental provenance without replacing release provenance', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'release-evidence-backfill-'));
-  try {
-    const { assetsDir, release } = await fixture(root, {
-      payload: legacyPayload,
-      legacyBackfill: true,
-    });
-    const selection = selectReleaseAssets(release, legacyPayload);
-    assert.equal(selection.assets.length, 4);
-    const generated = createLegacyDocsBackfillProvenance(release, legacyPayload);
-    assert.equal(generated, await readFile(join(assetsDir, DOCS_BACKFILL_PROVENANCE_NAME), 'utf8'));
-    const releasePath = join(root, 'release.json');
-    const payloadPath = join(root, 'payload.json');
-    const outputPath = join(root, 'generated-backfill.json');
-    await writeFile(releasePath, JSON.stringify(release));
-    await writeFile(payloadPath, JSON.stringify(legacyPayload));
-    const command = spawnSync(process.execPath, [
-      'scripts/release-evidence.mjs', 'legacy-backfill-provenance',
-      '--release', releasePath,
-      '--payload', payloadPath,
-      '--output', outputPath,
-    ], {
-      cwd: new URL('..', import.meta.url),
-      encoding: 'utf8',
-    });
-    assert.equal(command.status, 0, command.stderr);
-    assert.equal(await readFile(outputPath, 'utf8'), generated);
-    const result = await verifyReleaseEvidence({
-      payload: legacyPayload,
-      release,
-      assetsDir,
-      bundleDir: join(root, 'bundle'),
-    });
-    assert.equal(result.receipt.assets.length, 4);
-    assert.equal(result.receipt.snapshotSha, legacyPayload.sha);
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
-});
-
-test('legacy supplemental provenance is tuple-scoped and binds the immutable base provenance identity', async () => {
-  const missingRoot = await mkdtemp(join(tmpdir(), 'release-evidence-backfill-missing-'));
-  const tamperedRoot = await mkdtemp(join(tmpdir(), 'release-evidence-backfill-tampered-'));
-  try {
-    const missing = await fixture(missingRoot, { payload: legacyPayload });
-    await assert.rejects(
-      async () => selectReleaseAssets(missing.release, legacyPayload),
-      /exactly one docs-backfill-provenance.json/,
-    );
-
-    const tampered = await fixture(tamperedRoot, {
-      payload: legacyPayload,
-      legacyBackfill: true,
-    });
-    const backfillPath = join(tampered.assetsDir, DOCS_BACKFILL_PROVENANCE_NAME);
-    const value = JSON.parse(await readFile(backfillPath, 'utf8'));
-    value.baseProvenance.githubAssetId = 999;
-    const bytes = Buffer.from(`${JSON.stringify(value, null, 2)}\n`);
-    await writeFile(backfillPath, bytes);
-    const asset = tampered.release.assets.find((candidate) => candidate.name === DOCS_BACKFILL_PROVENANCE_NAME);
-    asset.size = bytes.length;
-    asset.digest = `sha256:${digest(bytes)}`;
-    await assert.rejects(
-      () => verifyReleaseEvidence({
-        payload: legacyPayload,
-        release: tampered.release,
-        assetsDir: tampered.assetsDir,
-        bundleDir: join(tamperedRoot, 'bundle'),
-      }),
-      /base provenance identity mismatch/,
-    );
-
-    const unrelatedRelease = structuredClone(tampered.release);
-    unrelatedRelease.tag_name = payload.tag;
-    assert.throws(
-      () => selectReleaseAssets(unrelatedRelease, payload),
-      /allowed only for an explicit legacy release tuple/,
-    );
-  } finally {
-    await rm(missingRoot, { recursive: true, force: true });
-    await rm(tamperedRoot, { recursive: true, force: true });
   }
 });
 
