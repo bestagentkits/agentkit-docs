@@ -26,6 +26,23 @@ Released kits come from the authenticated AgentKit registry by default. You do
 not need `--remote`. Local kit sources are for development and CI, not the
 normal installation flow.
 
+## Predict lifecycle changes
+
+Think of each command as a state transition. Updating one layer does not imply
+that the other layers changed.
+
+| Command | State it reads | State it may mutate | Main safety boundary |
+| --- | --- | --- | --- |
+| [`ak self-update`](../reference/cli/self-update) | Installed CLI and signed release metadata | The `ak` binary only | Verifies the replacement and restores the previous binary if replacement fails |
+| [`ak update`](../reference/cli/update) | Project or user install records, resolved Kit content, and current files | AgentKit-owned project or user content selected by the update plan | Previews first, snapshots before apply, and preserves user-modified files by default |
+| [`ak kit init`](../reference/cli/kit/init) | Resolved Kit package, target, scope, delivery mode, and Skill selection | Target-native files plus lifecycle sidecars for the selected route | Previews the destination and refuses unresolved ownership conflicts |
+| [`ak kit refresh`](../reference/cli/kit/refresh) | The installed route, its selected Skills, current package, and ownership fingerprints | Current managed output and retired clean output for that same route | Snapshots before destructive writes and preserves modified, unknown, unsafe, or shared paths |
+| [`ak kit uninstall`](../reference/cli/kit/uninstall) | The installed route and ownership records | Matching unchanged AgentKit-owned paths for that route | Previews removal, snapshots before apply, and never treats the whole runtime home as owned |
+| [`ak migrate`](../reference/cli/migrate) | Migration inputs, current destination state, and a planned change set | Only paths in the reviewed migration plan | Plans first, snapshots before apply, and provides a rollback path for applied migration work |
+
+The table describes ownership and state, not every flag. Use the linked CLI
+reference for the exact syntax supported by the active release.
+
 ## Choose a runtime and scope
 
 Normal runtime installs use `--target claude-code`, `--target codex`, or
@@ -34,18 +51,21 @@ registry packages are resolved for one runtime at a time, so run a separate
 install for each runtime you use.
 
 The default scope is the current project. Add `--global` when you want the kit
-in the runtime's user directory and available beyond one project.
+in the runtime's user directory and available beyond one project. Together,
+target, scope, and delivery mode identify one install route:
 
-| Goal | Command |
-| --- | --- |
-| Claude Code in this project | `ak kit install engineer --target claude-code` |
-| Claude Code for your user | `ak kit install engineer --target claude-code --global` |
-| Codex in this project | `ak kit install engineer --target codex` |
-| Codex for your user | `ak kit install engineer --target codex --global` |
-| Cursor in this project | `ak kit install engineer --target cursor` |
-| Cursor for your user | `ak kit install engineer --target cursor --global` |
-| AGY for your user | `ak kit init engineer --target agy --global` |
-| Portable export | `ak kit init engineer --target portable --out DIR` |
+| Target route | Scope | Delivery | Primary destination |
+| --- | --- | --- | --- |
+| Claude Code native project | Project | Native | `<project>/.claude` plus project lifecycle metadata |
+| Claude Code native user | Global | Native | `~/.claude` plus user-scope lifecycle metadata |
+| Claude Code project plugin | Project | Plugin | Project-scoped Claude Code plugin source and enablement state |
+| Claude Code user plugin | Global | Plugin | `~/.claude/plugins/ak-<kit>` and user plugin enablement state |
+| Codex project | Project | Native | `<project>/.agents/skills` and corresponding `<project>/.codex` surfaces |
+| Codex user | Global | Native | `~/.agents/skills` and corresponding `~/.codex` surfaces |
+
+Cursor and AGY use their own target surfaces, while `portable` is an export and
+does not create installed lifecycle state. The previewed destination is the
+authority when an environment overrides a normal runtime root.
 
 Project-scoped installs write runtime content in the current project and keep
 AgentKit lifecycle metadata there. Global installs write into the selected
@@ -115,6 +135,33 @@ instead of `--switch-to-plugin`.
   creates recovery snapshots before it changes managed surfaces.
 </Callout>
 
+## Follow the projection
+
+AgentKit resolves the Kit package first, then projects the selected content into
+the native surfaces supported by the install route.
+
+```mermaid
+flowchart LR
+  package["Resolved Kit package"] --> selection["Selected Skills and supporting content"]
+  selection --> route["Target + scope + delivery"]
+  route --> agents["Target-native agents"]
+  route --> skills["Target-native skills"]
+  route --> commands["Commands"]
+  route --> hooks["Hooks"]
+  route --> rules["Rules"]
+  route --> sidecars["Lifecycle and ownership sidecars"]
+```
+
+A target may drop or narrow a surface it cannot support; the install report
+discloses that projection. The sidecars preserve route identity, selected
+Skills, owners, and fingerprints so later refresh, audit, and uninstall can
+reason about the files already present.
+
+“Workflow” is a product concept, not a separately synchronized `workflows/`
+directory in the current package. Workflow behavior is composed through the
+projected rules, Skills, agents, commands, and hooks. Do not use the absence of a
+`workflows/` directory as evidence that projection failed.
+
 ## Select skills
 
 Without a selection flag, AgentKit installs every skill in the kit. Use one of
@@ -149,6 +196,23 @@ Do not mix channels as a troubleshooting shortcut. If a kit reports that it
 requires a newer `ak`, update the CLI on the same channel, then retry the kit
 operation.
 
+## Understand ownership and fingerprints
+
+AgentKit records both the managed path and a fingerprint of the bytes it wrote.
+Later operations compare the current path and content with that evidence rather
+than adopting whatever happens to exist at the destination.
+
+| Current path class | Meaning | Refresh or uninstall behavior |
+| --- | --- | --- |
+| Clean AgentKit-owned | The recorded owner and content fingerprint still match | May be rewritten, or removed when the generated path is retired |
+| Modified AgentKit-owned | The path is recorded, but its current bytes no longer match | Preserved and reported for review |
+| Unknown or custom | No matching AgentKit ownership record exists | Preserved; it is not silently adopted as managed content |
+| Shared | More than one installed Kit owns the same matching path | Preserved until every owner releases it |
+
+Symlinks, unsafe path transitions, and other ambiguous filesystem state also
+fail closed or remain preserved. Ownership evidence qualifies cleanup; it never
+means deleting an entire `.claude`, `.codex`, or user runtime directory.
+
 ## Refresh an installed kit
 
 Refresh re-emits the current release and removes stale generated or owned paths
@@ -174,6 +238,65 @@ skills are not added to that subset automatically.
 Review the preview before confirming. Do not add `--no-backup`, and do not use a
 broad `--force` reinstall as routine recovery. First resolve an incorrect
 target, scope, delivery mode, or ownership conflict.
+
+### Reconcile current and stale output
+
+Refresh compares the new projection with the recorded projection for the same
+route:
+
+| Before refresh | New projection | Result |
+| --- | --- | --- |
+| Clean owned path | Still generated | Rewrite it with the current generated bytes and fingerprint |
+| Clean owned path | Retired | Remove it and release that owner |
+| Modified owned path | Current or retired | Preserve it and report the mismatch |
+| Unknown/custom path | Any state | Preserve it because AgentKit has no ownership claim |
+| Shared path | One Kit releases it | Preserve it while another owner remains |
+
+The previous selected-Skill subset remains the selection for this route unless
+you explicitly change it. A Skill newly added to the package is therefore not
+silently added to a previously restricted install.
+
+### Read a `.claude` before/after example
+
+The names below are illustrative; they show lifecycle classes without copying a
+mutable Kit inventory.
+
+Before refresh:
+
+```text
+.claude/
+├── rules/current-rule.md          clean owned; old fingerprint
+├── rules/retired-rule.md          clean owned; no longer projected
+├── rules/shared-rule.md           clean; owned by Kit A and Kit B
+├── skills/edited-skill/SKILL.md   owned; user-edited bytes
+└── custom-note.md                 unknown custom file
+```
+
+After refreshing Kit A:
+
+```text
+.claude/
+├── rules/current-rule.md          rewritten; new fingerprint
+├── rules/shared-rule.md           preserved; Kit B still owns it
+├── skills/edited-skill/SKILL.md   preserved; modification reported
+└── custom-note.md                 preserved; never adopted
+```
+
+`retired-rule.md` is removed only because it was still clean. The shared rule is
+removed only after every owner releases it. The edited Skill and custom file are
+not overwritten merely because their locations overlap the projected tree.
+
+## Audit and migrate safely
+
+[`ak audit`](../reference/cli/audit) is read-only. It compares current content
+with recorded ownership fingerprints and reports drift without repairing,
+adopting, or deleting paths. Use that evidence to explain why a refresh
+preserved a file.
+
+[`ak migrate`](../reference/cli/migrate) is a separate planned mutation. Review
+the plan, keep the pre-apply snapshot, and use its migration rollback path when
+you need to reverse applied migration work. Migration does not broaden Kit
+ownership to unrelated runtime content.
 
 ## Read Codex hook disclosures
 
@@ -201,6 +324,30 @@ After installation or refresh:
 If the runtime cannot find the skill, check the target, scope, and Claude Code
 delivery mode before reinstalling.
 
+### If files did not change
+
+Use this decision order instead of deleting `.claude` or retrying with
+`--force`:
+
+1. **Command:** did you update the binary, update project-owned content, or
+   refresh the installed Kit route?
+2. **Versions and channel:** do the CLI and resolved Kit versions match what you
+   expected?
+3. **Route:** does target, project/global scope, and native/plugin delivery match
+   the original install?
+4. **Selection:** was the missing file part of the recorded selected-Skill
+   subset?
+5. **Projection:** did the target report that a resource or hook matcher was
+   dropped or narrowed?
+6. **Ownership:** does audit show the path as modified, unknown, unsafe, linked,
+   or shared?
+7. **Result:** inspect preserved and skipped paths in the preview or summary,
+   then choose recovery or a deliberate route-specific change.
+
+See [Updating AgentKit and Kits](./updating) for choosing the correct update
+layer and preview flow. Use the generated references linked above for current
+flags rather than copying flags from an older command.
+
 ## Remove a kit
 
 Preview uninstall with the same scope and delivery mode as the install. The
@@ -222,6 +369,11 @@ Uninstall removes matching AgentKit-owned files, preserves unknown or
 user-modified files, and snapshots before applying changes. Never remove an
 entire runtime configuration directory to uninstall one kit. If the operation
 prints a recovery snapshot, keep that ID until you have verified the runtime.
+
+For native installs, cleanup then removes only empty ancestor directories owned
+by that installation. It stops at a shared-owner boundary or shared runtime
+root, and keeps directories containing user content or links. Unsafe traversal
+or a path replaced during cleanup is rejected rather than followed or removed.
 
 ## See also
 

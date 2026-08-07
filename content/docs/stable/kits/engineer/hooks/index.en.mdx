@@ -41,6 +41,17 @@ The active graph is organized around outcomes rather than package file count:
 These outcomes support the Engineer workflow; they do not approve a plan,
 commit, merge, deploy, or release work for you.
 
+## Configured paths at session start
+
+The `SessionStart` handler resolves project path preferences before exporting
+the environment used by Engineer workflows. A relative `paths.docs` or
+`paths.plans` value resolves under the session's project base. An absolute value
+is exported verbatim as `CK_DOCS_PATH` or `CK_PLANS_PATH`, rather than being
+joined to the project path. This export makes the configured locations
+available to Skills; Go-native plan, journal, and dashboard surfaces separately
+require a project-relative `paths.plans` and fall back to `plans/` for an
+absolute value.
+
 ## Runtime projection
 
 The labels below describe what becomes active:
@@ -104,6 +115,22 @@ a distinct warning; identical same-path shims deduplicate, while conflicting
 content keeps the first shim and warns. Paths that do not need a shim continue
 to use the direct command. Do not hand-edit generated shims or Hook configuration.
 
+## Diagnose the active Claude Code surfaces
+
+`ak doctor --adapter claude-code --json` discovers enabled Claude Code Hook
+surfaces by scope and delivery mode instead of treating package files as proof
+that a Hook is active. For native project and user installs, the
+`hook_registration` check compares the installed expectations with the active
+`settings.json` registrations and verifies referenced entrypoints. For plugin
+installs, it checks the active Hook manifest and its entrypoints. Hooks disabled
+through AgentKit are excluded from the native expectations.
+
+The `hook_log` check reads the log associated with each discovered native or
+plugin surface. A new active surface with no log yet remains healthy; missing
+registrations, manifests, or entrypoints are reported with their scope and
+delivery mode. Use these results to identify the affected surface before
+refreshing or reinstalling a Kit.
+
 ## Ownership and lifecycle
 
 Project and user-scope Hook registrations can coexist. For shared global Codex
@@ -127,9 +154,9 @@ Hooks configuration as a repair step.
    headings or their JSON fields before assuming the whole Hook graph failed.
 2. **Confirm the target and scope.** Project and user installs are separate, and
    the runtime can load a different copy than the one you expected.
-3. **Run the Codex health check.** Use `ak doctor --adapter codex --json` and
-   inspect the reported checks instead of assuming that file presence means a
-   Hook is registered.
+3. **Run the target health check.** Use `ak doctor --adapter claude-code --json`
+   for Claude Code or `ak doctor --adapter codex --json` for Codex, and inspect
+   the reported checks instead of assuming file presence means a Hook is active.
 4. **Check the Windows path classification.** An eligible in-home `.cjs` path
    can use a managed shim; unsupported external or unsafe path forms warn.
 5. **Use the matching lifecycle route.** Preview refresh or uninstall, preserve
