@@ -1,6 +1,14 @@
 ---
-name: ak-release-update
-description: Orchestrate an AgentKit docs release update end-to-end — resolve evidence, detect audit gaps, delegate audit and V1 authoring to ak-docs-release-update, run deterministic sync and promote scripts, validate, and open the PR. Use for beta sync PRs, stable promotion PRs, and multi-hop catch-up runs against an audit trail.
+name: ak:release-update
+description: "Orchestrate an AgentKit docs release update end-to-end — resolve evidence, detect audit gaps, delegate audit + V1 authoring to ak-docs-release-update, run deterministic sync and promote scripts, validate, and open the PR. Use for beta sync PRs, stable promotion PRs, and multi-hop catch-up runs against an audit trail."
+user-invocable: true
+when_to_use: "Invoke when publishing a docs update for a new upstream beta or stable release, catching up prose that drifted across a stretch of releases without audit passes, or preparing a stable promote after a beta sync PR lands."
+category: utilities
+keywords: [release, sync, promote, audit, evidence, orchestrator, beta, stable, catchup]
+argument-hint: "--tag <tag> | --beta <tag> --stable <tag> [--from <ref>] [--catchup] [--no-audit-check]"
+metadata:
+  author: agentkit
+  version: "1.0.0"
 ---
 
 # AgentKit Docs Release Update Orchestrator
