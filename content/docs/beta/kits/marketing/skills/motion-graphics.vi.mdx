@@ -1,0 +1,132 @@
+---
+title: Định tuyến và xác minh motion với ak:motion-graphics
+description: Ưu tiên Skill motion in-repo trước, đề xuất pack external iart-ai phù hợp khi template ngoài phạm vi, và đóng mỗi lần render bằng cùng một verify loop freeze-frame hoặc probe-MP4.
+---
+
+Dùng `ak:motion-graphics` khi task motion/animation/video cần một router
+chọn Skill in-repo phù hợp trước, đề xuất template pack external khi yêu
+cầu ngoài phạm vi, và đóng bằng verify loop nhất quán trên artifact đã
+render. Skill không tái triển khai Skill motion nào; nó composition.
+
+## Chọn ak:motion-graphics để routing và xác minh
+
+### Dùng ak:motion-graphics khi
+
+- Bạn có yêu cầu motion/animation/video và chưa chắc Skill nào phù hợp.
+- Bạn muốn router ưu tiên Skill in-repo đã cài trước.
+- Bạn muốn router đề xuất pack template external cụ thể khi yêu cầu ngoài
+  phạm vi — nhưng không bao giờ tự cài.
+- Bạn muốn verify loop nhất quán (seek shot, contact sheet, probe MP4)
+  trên mọi output render.
+
+### Chọn Skill khác khi
+
+- Bạn muốn nguyên tắc motion đúng brand, không phải routing — dùng
+  [`ak:motion-design`](./motion-design).
+- Bạn muốn diagram Mermaid tĩnh, không phải motion — dùng
+  [`ak:mermaidjs-v11`](./mermaidjs-v11).
+- Bạn đã biết muốn video React lập trình hoặc HTML render sang MP4 —
+  cài Engineer Kit và dùng `ak:remotion` hoặc `ak:html-video` ở đó.
+
+## Dạng argument
+
+```text
+ak:motion-graphics [intent-or-pack] [--list | --propose <pack> | --verify <file>]
+```
+
+| Subcommand | Hành vi |
+| --- | --- |
+| _(mặc định)_ | Route `$ARGUMENTS` theo flow "in-repo trước, propose sau, verify cuối". |
+| `--list` | In mọi pack có sẵn kèm đối tượng, cụm kích hoạt và lệnh install. |
+| `--propose <pack>` | In lệnh `npx skills add iart-ai/<pack>` kèm lý do một dòng. Không thực thi. |
+| `--verify <file>` | Route file sang helper verify phù hợp (`.mp4` → probe-MP4, `.html` → seek + contact sheet). |
+
+## Route theo thứ tự
+
+### 1. Skill in-repo trước
+
+Ưu tiên Skill in-repo đã cài khi cover được yêu cầu. Xác nhận Skill đích
+có trong installation hiện tại (`ak skills list` hoặc catalog runtime)
+trước khi route — dòng có target chưa cài sẽ nhảy sang dòng khớp tiếp
+theo.
+
+| Hình dáng yêu cầu | Skill |
+| --- | --- |
+| Video lập trình, Remotion (React), video data-driven | `ak:remotion` (Engineer Kit) |
+| Template HTML/CSS/JS → MP4 cục bộ (Chromium + ffmpeg) | `ak:html-video` (Engineer Kit) |
+| Sinh Veo, script, storyboard, thumbnail | [`ak:video`](./video) |
+| Shader GLSL, đồ hoạ procedural | `ak:shader` (Engineer Kit) |
+| Three.js / WebGL / WebGPU / GLTF | `ak:threejs` (Engineer Kit) |
+| FFmpeg / ImageMagick encode, filter, batch | `ak:media-processing` (Engineer Kit) |
+| Diagram Mermaid (tĩnh, không phải motion) | [`ak:mermaidjs-v11`](./mermaidjs-v11) |
+
+Chỉ fall through bước 2 khi yêu cầu cần template mà các Skill in-repo có
+sẵn không mang theo.
+
+### 2. Pack external — propose, không tự cài
+
+Khi yêu cầu cần một trong các template chuyên biệt của pack (nhịp hook
+dọc, biến thể ad hook/body/CTA, animation chart, kinetic type, map biên
+tập, cảnh Manim, illustration procedural…), Skill:
+
+1. Tra pack theo cụm kích hoạt.
+2. In lệnh install để bạn chạy:
+
+   ```bash
+   npx skills add iart-ai/<pack>
+   # hoặc, phân phối plugin cho Claude Code:
+   /plugin marketplace add iart-ai/<pack>
+   ```
+
+3. Giải thích một câu pack ship gì và tại sao phù hợp.
+4. Chờ bạn go-ahead rõ ràng trước khi thực thi bất cứ điều gì.
+
+Routing trigger-to-pack cover 15 pack từ họ
+[iart-ai/motion-skills](https://github.com/iart-ai/motion-skills) MIT:
+TikTok video, text-message video, YouTube video, ecommerce video, ad
+video, data animation, explainer video, map animation, web animation,
+motion design, kinetic typography, freelance motion, WebGL animation,
+Manim và generative illustration.
+
+Một số intent trùng nhau. Nguyên tắc:
+
+- "tiktok ad" — bắt đầu với pack TikTok (format thắng), chỉ chuyển sang
+  pack ad khi variant harness là cái bạn cần.
+- "chart in an explainer" — bắt đầu với pack data-animation (số liệu
+  trước), rồi dùng pack explainer để khung.
+- "logo animation on the web" — pack motion-design cho motion của logo,
+  rồi pack web-animation (hoặc `ak:frontend-development` từ Engineer Kit)
+  cho embed phía trang.
+
+### 3. Xác minh render thật
+
+Mỗi pack — và mọi Skill video in-repo — đóng bằng cùng inspection loop.
+Hai tier:
+
+**Tier nhẹ** — HTML độc lập có seek harness `?t=N`:
+
+```bash
+scripts/seek-shot.sh anim.html 0 1.5 3
+scripts/contact-sheet.sh sheet.png frame-*.png
+```
+
+**Tier nặng** — Remotion, Manim, html-video, hoặc bất kỳ MP4 đã encode:
+
+```bash
+scripts/probe-mp4.sh out/short.mp4 1080x1920 30
+```
+
+Probe MP4 đọc width × height thực, codec, fps và duration trực tiếp từ
+file bằng `ffprobe`. Nó fail lộ liễu khi render nói dối.
+
+## Attribution
+
+Logic router phản chiếu
+[iart-ai/motion-skills](https://github.com/iart-ai/motion-skills) (MIT).
+Skill ship các shell helper upstream deliver-and-verify dưới `scripts/`.
+
+## Skill liên quan
+
+- [`ak:motion-design`](./motion-design) — nguyên tắc motion đúng brand.
+- [`ak:video`](./video) — script, storyboard, thumbnail.
+- [`ak:mermaidjs-v11`](./mermaidjs-v11) — đối trọng diagram tĩnh.

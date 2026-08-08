@@ -1,0 +1,143 @@
+---
+title: Vận hành ak CLI an toàn với ak:ak
+description: Chạy các subcommand ak, xác định rõ scope, ưu tiên đọc trước khi mutation, và diễn giải envelope --json mà không phá state của người dùng.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak:ak` khi hành động tiếp theo là chạy một subcommand `ak` hoặc diễn
+giải output của nó. Skill này sở hữu mô hình vận hành an toàn cho chính
+control-plane CLI — không phải flag reference, phần đó do `ak <cmd> --help`
+và envelope `--json` là chuẩn.
+
+## Chọn ak:ak cho vận hành CLI
+
+### Dùng ak:ak khi
+
+- Hành động tiếp theo là gọi một subcommand `ak` (`init`, `kit`, `skills`,
+  `plan`, `journal`, `doctor`, `recover`, `self-update`, `login`, …).
+- Bạn cần phân biệt lệnh chỉ đọc và lệnh mutation vòng đời trước khi lệnh
+  chạy.
+- Bạn cần xác định rõ scope project vs user/global, adapter, hoặc chế độ
+  delivery trước khi thay đổi rơi vào chỗ không mong muốn.
+- Bạn cần diễn giải envelope `ak <cmd> --json`.
+
+### Chọn Skill khác khi
+
+- Viết hoặc tinh chỉnh Claude Skill — dùng
+  [`ak:skill-creator`](./skill-creator).
+- Viết hoặc thực thi implementation plan — dùng [`ak:plan`](./plan) hoặc
+  [`ak:cook`](./cook).
+- Viết technical journal entry — dùng [`ak:journal`](./journal).
+- Chọn Skill nào chạy cho một task — dùng [`ak:agentkit`](./agentkit) (task
+  router).
+- Workflow đặc thù của kit đã có Skill riêng — dùng Skill đó.
+
+`ak:agentkit` quyết định *Skill nào chạy*. `ak:ak` chạy *chính binary ak*.
+
+## Giao thức vận hành an toàn
+
+Làm đủ mọi bước theo thứ tự. Đừng bỏ bước inspect kể cả khi tên lệnh quen
+thuộc — binary đã cài có thể cũ hơn hoặc mới hơn appendix.
+
+1. **Triage mục tiêu.** Phân loại ý định là `read-only`, `mutating`, hoặc
+   `diagnostic` (chạy lâu hoặc tương tác; phán quyết của người dùng là hiệu
+   ứng phụ chính).
+2. **Inspect trước khi hành động.** Chạy `ak <cmd> --help` cho subcommand
+   dự kiến. Với công việc script chỉ đọc, thêm `--json --no-interactive`
+   để response là envelope có version (`schema_version`, `kind`, `data`).
+3. **Xác nhận scope.** Lệnh này tác động ở đâu? Project scope (working
+   tree hiện tại), user hoặc global scope (`~/.claude`, `~/.agents`,
+   `~/.codex`, hoặc home tương đương của adapter), nguồn cài kit, hoặc
+   chế độ adapter/delivery.
+4. **Ưu tiên status/inspect trước khi mutation vòng đời.** Trước
+   `ak update`, `ak kit refresh`, `ak self-update`, `ak uninstall` hoặc
+   `ak recover`, hãy chạy đường chỉ đọc tương ứng — `ak doctor`,
+   `ak kit list-kits`, `ak kit validate`, `ak skill verify`, `ak plan
+   status`, `ak sessions list`, `ak backups list`, `ak diagnostics
+   export`.
+5. **Snapshot trước khi mutation.** Trước `ak recover`, `ak backups
+   restore`, `ak uninstall`, hoặc bất kỳ lệnh nào kết hợp `--fresh`, hãy
+   chạy `ak backups create` — hoặc xác nhận có backup hiện thời với
+   `ak backups list`.
+6. **Giữ nguyên tệp lạ.** AgentKit chỉ mutate path nó sở hữu. Đừng gợi
+   ý `--force` kết hợp `--fresh`; đừng đề xuất destructive reset trừ khi
+   người dùng đã yêu cầu rõ. Hãy nêu conflict.
+7. **Báo cáo chính xác lệnh, scope và kết quả.** Kèm envelope `--json`
+   đã resolve khi phù hợp. Nêu rõ cái gì đã đổi trên đĩa và mọi constraint
+   chưa giải quyết.
+
+<Callout type="warning">
+  Đừng bao giờ truyền `--no-interactive` hoặc `--yes` cho một lệnh mutating
+  nếu không có sự chấp thuận rõ ràng của người dùng. Các cờ đó chặn xác
+  nhận — cửa duy nhất trước khi mutation ổ đĩa.
+</Callout>
+
+## Họ lệnh theo task
+
+- **Bootstrap và setup** — `ak init`, `ak new`, `ak setup`. Toàn bộ
+  mutating; xác nhận kit và scope trước.
+- **Kits** — `ak kit init|install|refresh|validate|uninstall|list-kits|repair-install-mode`.
+  `list-kits` và `validate` chỉ đọc; còn lại mutate.
+- **Skills** — inventory (`ak skills list|show|search|install|remove|graph`)
+  và môi trường từng Skill (`ak skill
+  install|remove|repair|upgrade|verify`).
+- **Agents, content, commands** — cùng hình dáng như skills: đọc
+  (`list`, `show`, `search`), ghi (`install`, `remove`), và một mutation
+  chuyên biệt cho mỗi nhóm.
+- **Plans và journals** — quản lý plan/journal file-first. `ak plan
+  list|show|status|search|validate|resolve|parse` chỉ đọc. `ak plan
+  create|check|uncheck|add-phase|update|use|archive|close|reindex|migrate`
+  mutate. `ak plan kanban` là TUI chẩn đoán. `ak journal
+  list|show|validate` đọc; `ak journal create` ghi.
+- **Chẩn đoán** — `ak doctor`, `ak activity`, `ak audit`, `ak sessions`,
+  `ak analytics`, `ak backups`, `ak versions`, `ak changelog`,
+  `ak diagnostics export`. Phần lớn chỉ đọc; `enable`/`disable`/`delete`
+  của `analytics` và `content-search` mutate.
+- **Khôi phục** — `ak recover`, `ak backups restore`. Mutating và không
+  thể đảo ngược nếu trước đó chưa có `ak backups create`.
+- **Watch và daemons** — `ak watch start|stop|status|dry-run`,
+  `ak content schedule daemon`, `ak codex-agent-runtime serve`,
+  `ak api start|stop|status`, `ak config start|stop|status`.
+- **Config, auth, và MCP** — `ak config prefs
+  resolve|set|unset|validate`, auth cấp cao nhất (`ak login`,
+  `ak logout`, `ak whoami`, `ak licenses`), và `ak mcp
+  add|link|list|remove|show|verify`. Lệnh auth ở cấp cao nhất, không
+  dưới cha `ak auth`.
+- **Self-update và migrations** — `ak self-update`, `ak migrate
+  prefs|rollback`. Chạy `ak versions` và kiểm tra `ak changelog` trước
+  khi gọi.
+
+## Nguồn chuẩn
+
+Command appendix sinh ra có mốc version. Nếu tụt sau `ak --version`, coi
+appendix là gợi ý ban đầu và kiểm tra lại cờ với `ak <cmd> --help` trước
+mọi lệnh mutating. `ak self-update` tiến version binary độc lập với nội
+dung skill đã cài, nên version lệch là bình thường sau self-update và
+trước khi `ak update` refresh lần tiếp theo.
+
+Bề mặt chuẩn, theo thứ tự:
+
+1. `ak <cmd> --help` — luôn cập nhật cho binary đang chạy.
+2. Output `ak <cmd> --json` — envelope có version, parse được.
+3. `references/command-reference.md` của Skill — chỉ số khởi đầu, có thể
+   tụt.
+
+## Anti-pattern
+
+- Không kết hợp `--force` với `--fresh` cho bất kỳ lệnh vòng đời nào.
+- Không chạy installer, refresh, migration, uninstall, hoặc destructive
+  smoke test lên state thật của maintainer. Đặt AgentKit home tạm trước.
+- Không bịa cờ không có trong `ak <cmd> --help`. Metadata Cobra là chuẩn.
+- Không coi capability chỉ có trong source là đang hoạt động trong binary
+  đã cài. Xác nhận qua `ak versions` hoặc `ak doctor`.
+- Không suy khả năng adapter từ adapter khác.
+- Không báo cáo kết quả lệnh mutating mà không nêu scope đã resolve —
+  hãy nêu project vs global, adapter, và conflict đã bỏ qua.
+
+## Skill liên quan
+
+- [`ak:agentkit`](./agentkit) — task router (Skill nào chạy).
+- [`ak:skill-creator`](./skill-creator) — tác giả Claude Skill.
+- [`ak:plan`](./plan) — vòng đời implementation plan.
+- [`ak:journal`](./journal) — technical journal entry.
