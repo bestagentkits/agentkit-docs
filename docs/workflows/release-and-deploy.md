@@ -124,11 +124,33 @@ Beta PR (or an immediate follow-up):
    drift on its own — refresh the catalog against the new bundle first, then
    let the guard verify the docs match.
 
-Do these two passes in the **same PR** as the sync when the drift lands on the
-same release; batching them keeps the catch-up honest and prevents multi-hop
-stale prose (as happened between `v2.8.0-beta.14` and `v2.11.0-beta.1`, where
-three sync PRs shipped without either pass and the fourth release had to
-absorb the whole delta).
+3. **Desktop App section.** `content/docs/beta/desktop-app/**` describes
+   product-state for a specific Desktop release: artifact filenames, sizes,
+   SHA-256 hashes, download URLs, and behavior notes. Docs-bundle contract
+   v1 does not carry Desktop provenance, so V0 never flags this section.
+   Refresh has three layers:
+
+   - **A. Version and artifact bump.** Update package tables (filenames,
+     bytes, SHA-256) from the target release's `ak-gui_*` assets, and bump
+     `releases/tag/vX.Y.Z` links. Verify hashes against the release page.
+   - **B. Feature and behavior authoring.** New sections (in-app updater,
+     native Wails MCP bridge, trust center, in-app announcements, `ak
+     config` native window, Windows startup diagnostics, etc.) require
+     human/LLM authoring against release-note evidence, subject to owner
+     approval.
+   - **C. Screenshots.** Capture per `public/gui/README.md` from the
+     target Desktop build (viewport, theme, state, redaction rules). Not
+     possible without a running Desktop binary.
+
+   Until a full refresh lands, leave a callout at the top of
+   `content/docs/beta/desktop-app/index.{en,vi}.mdx` stating which release
+   the page was verified against and where the refresh plan lives.
+
+Do these three passes in the **same PR** as the sync when the drift lands on
+the same release; batching them keeps the catch-up honest and prevents
+multi-hop stale prose (as happened between `v2.8.0-beta.14` and
+`v2.11.0-beta.1`, where three sync PRs shipped without any of the passes and
+the fourth release had to absorb the whole delta).
 
 ### Stable promotion (`scripts/promote-docs.mjs`)
 
