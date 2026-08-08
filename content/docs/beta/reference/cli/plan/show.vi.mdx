@@ -1,12 +1,12 @@
 ---
 title: ak plan show
-description: Hiển thị plan được theo dõi, body plan/phase nguyên bản, cách resolve context và hành vi fallback khi index stale.
+description: Hiển thị plan theo hướng files-first, best-effort-overlay các field do index sở hữu, hiểu các dạng id, cách resolve current-plan pointer và hành vi an toàn.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
-Dùng `ak plan show` để render một plan được theo dõi cùng các phase và toàn bộ
-body Markdown.
+Dùng `ak plan show` để render một plan cùng các phase và toàn bộ body Markdown
+từ tệp, best-effort-overlay các field do index sở hữu từ plan store cục bộ.
 
 ## Cách dùng
 
@@ -14,30 +14,38 @@ body Markdown.
 ak plan show [id]
 ```
 
-Lệnh nhận tối đa một plan-store ID và không có cờ riêng.
+Lệnh nhận tối đa một tên thư mục plan (ví dụ `260722-1200-my-plan`) hoặc dạng
+đã lập chỉ mục `<slug>/<timestamp>`, và không có cờ riêng.
 
 ## Chọn plan
 
-Khi có ID, lệnh tải row đó kể cả khi thuộc worktree khác. Khi không có ID, thứ
-tự là:
+Khi có ID, lệnh đọc thư mục plan đó trực tiếp rồi best-effort-overlay các
+field index. ID có thể là tên thư mục plan (`260722-1200-my-plan`) hoặc dạng
+đã lập chỉ mục `<slug>/<timestamp>`.
 
-1. pointer riêng của worktree do `ak plan use` ghi;
-2. active plan khớp issue/branch/worktree/project tốt nhất như `ak plan resolve`.
-
-Nếu pointer thiếu, không hợp lệ hoặc không map tới row đã sync, lệnh dùng context
-resolution. Plan closed/archived vẫn có thể được show bằng ID hoặc pointer hợp
-lệ; context fallback chỉ xét active plan.
+Khi không có ID, lệnh resolve current-plan pointer do `ak plan create` hoặc
+`ak plan use` đặt. Pointer nằm dưới `.git` và đọc được ngay cả khi `$HOME` bị
+sandbox. Nếu pointer thiếu, không hợp lệ hoặc không map tới plan tồn tại, lệnh
+dùng context resolution — cùng cách khớp issue/branch/worktree/project mà
+`ak plan resolve` tính. Plan closed/archived vẫn có thể được show bằng ID hoặc
+pointer hợp lệ; context fallback chỉ xét active plan.
 
 ## Freshness, fallback và quyền riêng tư
 
-Với plan có liên kết, show so sánh mtime và parse lại tệp đã đổi vào index trước
-khi render. Refresh lỗi tạo warning trên stderr và row cũ vẫn được hiển thị. Body
-`plan.md` được đọc qua path-containment guard; body không đọc được sẽ bị lược bỏ.
+Lệnh đọc `plan.md` và từng tệp phase trực tiếp từ thư mục plan. Sau đó lệnh
+best-effort-overlay các field do index sở hữu — `state`, `issue_number`,
+`linked_pr`, `current_phase`, và các field cấp phase `rev`, `notes`,
+`evidence`, `acceptance`, `comment_id` — từ plan store cục bộ khi mở được. Nếu
+không mở được store (không ghi được, hỏng, hoặc schema mới hơn CLI), overlay
+bị bỏ qua và stderr ghi warning; body plan và phase nguyên bản vẫn được
+render.
 
-Nếu index unusable do không ghi được hoặc có schema mới hơn CLI, show fallback
-sang tệp repository. Trong mode này, argument là tên thư mục dưới `./plans/`,
-không phải store ID; khi không có argument, chỉ current-plan pointer được dùng.
-Trường index-only bị lược bỏ và stderr có warning.
+Với plan có liên kết, show so sánh mtime và refresh index từ tệp đã đổi trước
+khi overlay. Refresh lỗi tạo warning trên stderr và tiếp tục render bằng
+snapshot index chưa đổi.
+
+Body nguyên bản được đọc qua path-containment guard; body không đọc được sẽ
+bị lược bỏ.
 
 <Callout type="warning">
   Human và JSON output chứa body plan/phase nguyên bản, không redaction. Nội
@@ -56,11 +64,14 @@ JSON thành công dùng `kind=plan.show`:
 ```text
 data.plan: plan summary
 data.plan_body: raw plan.md text or an empty string
-data.phases[]: plan_id, n, title, status, rev, body
+data.phases[]: plan_id, n, title, status, rev, body,
+  notes, evidence, acceptance, comment_id
 ```
 
-Phase notes, evidence, acceptance và comment ID không có trong output.
-Human/plain in plan header, body và từng phase body ra stdout.
+`notes`, `evidence`, `acceptance` và `comment_id` đến từ store overlay. Khi
+overlay bị bỏ qua (store thiếu, hỏng, hoặc schema mới hơn CLI), các field cấp
+phase này vắng mặt. Human/plain in plan header, body và từng phase body ra
+stdout.
 
 ## Kết quả và mã thoát
 

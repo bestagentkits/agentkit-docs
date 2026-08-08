@@ -1,0 +1,110 @@
+---
+title: Hand work to a selected coding agent with ak:handover
+description: Capture a portable handoff, then dispatch one single-job orchestration spec at a specific coding runtime with preflight, safety gates, and arbiter review.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak:handover` to continue in-progress work in a different coding runtime
+with a controlled, captured, safety-gated job. The Skill is a thin
+composition — it does not duplicate capture, model routing, dispatch, or
+arbiter logic. It runs three steps in order: capture via `ak:handoff`, build
+one deterministic single-job orchestration spec, dispatch via
+`ak:orchestrate`, then report.
+
+## Choose ak:handover for one-shot continuation
+
+### Use ak:handover when
+
+- You want to continue current work in a specifically selected coding
+  runtime.
+- You want the successor to read a portable, redacted handoff before it
+  acts.
+- You want the dispatch to run under `ak:orchestrate` safety gates, capture,
+  resumability, and arbiter review.
+
+### Choose another Skill when
+
+- You only want to save context and hand off later. Use
+  [`ak:handoff`](./handoff) alone.
+- You want to orchestrate multiple jobs in parallel or in sequence. Use
+  [`ak:orchestrate`](./orchestrate) directly with your YAML spec.
+- You want to route generic work to the right skill. Use
+  [`ak:agentkit`](./agentkit).
+
+## Argument shape
+
+```text
+ak:handover [task] --agent <id> [--cwd PATH] [--task TEXT] [--handoff PATH] [--model NAME] [--yes]
+```
+
+Examples:
+
+```bash
+/ak:handover --agent claude-code "continue the OAuth callback fix"
+/ak:handover --agent codex --cwd . --task "implement the next action in the handoff"
+/ak:handover --agent cursor --handoff plans/handoffs/oauth-callback.md
+/ak:handover --agent opencode --model anthropic/claude-sonnet-5 --yes
+```
+
+| Flag | Effect |
+| --- | --- |
+| `--agent <id>` | **Required.** Selected coding runtime. Must resolve in the runtime catalog. No default, no silent substitution. |
+| `[task]` positional | Focus for the successor agent. Included in the handoff Mission section and in the orchestrate job's `prompt`. |
+| `--task TEXT` | Alternative to the positional task string. If both are given, the positional value wins with a warning. |
+| `--cwd PATH` | Workspace root for the dispatched job. Defaults to the current workspace root. |
+| `--handoff PATH` | Use an existing handoff artifact instead of generating a new one. Must exist and pass schema validation. |
+| `--model NAME` | Override the model for CLI-runtime jobs. Rejected when `--agent internal`. |
+| `--yes` | Approve write or destructive continuation. Flips the job's `approval:` from `require` to `inherit`. |
+
+## Runtime selection
+
+`--agent` must resolve to an ID in the Skill's runtime catalog:
+
+- **First-class:** `claude-code`, `codex`, `ak-run`, `internal`.
+- **External, preflight-gated:** `opencode`, `copilot`, `cursor`, `cline`,
+  `qwen-code`, `grok`, `kimi`, `agy`.
+- **Not dispatchable:** `gemini-cli` — the retired Gemini CLI path is not
+  supported.
+
+Availability, authentication, flags, models, and capability tiers come from
+`ak:orchestrate`'s live runtime matrix at run time. A missing binary,
+missing authentication, unavailable internal agent, or failed preflight
+returns a clear blocker in the final report — never a silent substitution.
+
+## Handoff validation
+
+<Callout type="warning">
+  The handoff artifact — freshly captured or supplied via `--handoff` —
+  must pass strict schema validation before dispatch. Failure is a hard
+  blocker; the Skill refuses to dispatch and prints the failing checks.
+</Callout>
+
+- Every required H2 section from the handoff artifact schema is present and
+  spelled exactly.
+- `Exact next actions` contains at least one item, with the first item
+  bold-prefixed `**First safe step**`.
+- No raw-secret pattern matches any line.
+- Frontmatter `handoff-version`, when present, is `1`.
+
+## Safety gates and refusals
+
+- Runtime-specific bypass flags — `--dangerously-skip-permissions`,
+  `--allow-all-tools`, `--yolo` — are never emitted. Jobs that would embed
+  them in the prompt are refused.
+- `--model` is rejected when `--agent internal`. Internal jobs do not set
+  `model` in the spec.
+- `--fallback-agent` is not accepted in v1. On preflight failure, the Skill
+  reports the blocker and suggests rerunning with a different `--agent`.
+
+## Final report
+
+Every run prints the handoff artifact path, the orchestrate run directory,
+the selected runtime, the job result, verification status, produced
+artifacts, and the next action — in that order.
+
+## Related Skills
+
+- [`ak:handoff`](./handoff) — capture the portable handoff artifact.
+- [`ak:orchestrate`](./orchestrate) — dispatch, safety, and arbiter review.
+- [`ak:agentkit`](./agentkit) — route generic work to the right Skill.

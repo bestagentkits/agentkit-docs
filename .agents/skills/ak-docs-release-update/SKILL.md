@@ -25,6 +25,43 @@ impact. Before V1, read
 [authoring-guardrails.md](references/authoring-guardrails.md) and
 [validation-and-handoff.md](references/validation-and-handoff.md).
 
+## Docs-bundle contract v1 blind spots
+
+The bundle carries only `manifest.json`, `reference/cli/**`, and
+`release-notes.md`. V0 audits what the bundle carries; three surfaces drift
+outside its evidence and need matched manual passes on the same Beta PR:
+
+- **Human-owned CLI prose** under `content/docs/beta/reference/cli/**/*.mdx`.
+  Bundle-derived source items have empty `docs` mappings, so V0's
+  impact-map returns `paths: []` under `blocked` classification even when
+  `cli:*` `update` claims are surfaced. Route under owner-directed scope:
+  present the surfaced claims with proposed nested prose paths, wait for
+  `approve REQ-…`, then V1 authoring refreshes those paths (EN + VI
+  parity, technical tokens unchanged).
+- **Kit catalog and public skill pages.** Bundle does not carry kit
+  inventory. Detect by downloading
+  `agentkit-kit-<kit>-<runtime>-<tag>.tar.gz` and comparing per-skill
+  `SKILL.md` frontmatter (`user-invocable`, `disable-model-invocation`).
+  Refresh `kit-catalog-identities.json`, add public skill pages EN+VI,
+  update `skills/meta.{json,vi.json}` and skill index tables, bump the
+  Kit overview `| Skills | N |` count. Mirror into
+  `content/docs/stable/**` so the tree stays whole-copy-ready for the
+  next promotion. `disable-model-invocation: true` without
+  `user-invocable: true` stays `internal` (no public page).
+- **Desktop App section** under `content/docs/beta/desktop-app/**`.
+  Bundle does not carry Desktop provenance. Detect by inspecting the
+  release page's `ak-gui_*` assets and Desktop-tagged release-note
+  lines. Refresh has three layers: **A.** artifact bump (filenames,
+  bytes, SHA-256, download URLs); **B.** feature and behavior authoring
+  from release-note evidence under owner approval; **C.** screenshots
+  captured per `public/gui/README.md` from a running Desktop build.
+  Layer C requires the binary and often defers.
+
+Batch the manual passes into the same PR as the sync when the drift lands
+on the same release. Full runbook and command examples:
+[`docs/workflows/release-and-deploy.md`](../../../docs/workflows/release-and-deploy.md)
+under "What Beta sync does *not* refresh".
+
 ## Run V0
 
 1. Read the repository `README.md`, `AGENTS.md`, and `CLAUDE.md`.

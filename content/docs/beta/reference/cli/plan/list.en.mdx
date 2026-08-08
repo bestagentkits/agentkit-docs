@@ -1,11 +1,13 @@
 ---
 title: ak plan list
-description: List the current project's indexed plans or all projects, with explicit lifecycle filters and files fallback limits.
+description: List the current project's plans from files first, best-effort-overlay index-owned fields, and understand cross-project scope limits.
 ---
 
-Use `ak plan list` to inspect plans tracked in the private local plan store.
-By default it scopes results to the current project and excludes closed and
-archived rows.
+Use `ak plan list` to inspect the current project's plans. The command reads
+canonical files under the project's `plans/` directory first, then
+best-effort-overlays index-owned fields (`state`, `issue_number`, `linked_pr`,
+`current_phase`) from the local plan store when it opens. By default it scopes
+results to the current project and excludes closed and archived plans.
 
 ## Usage
 
@@ -17,7 +19,7 @@ ak plan list
 
 | Flag | Default | Description |
 | --- | --- | --- |
-| `--all` | `false` | List rows across every project in the local store. |
+| `--all` | `false` | List plans across every tracked project. Requires the local plan store, since files are single-project by design. |
 | `--include-closed` | `false` | Include lifecycle state `closed`. |
 | `--include-archived` | `false` | Include lifecycle state `archived`. |
 
@@ -33,22 +35,23 @@ Current-project matching uses Git/repository context, including the normalized
 remote URL or project path. An empty result is successful and is represented by
 an empty JSON array.
 
-## Understand the files fallback
+## Understand the files-first model
 
-Opening the store can create the private directory/database and apply
-forward-only schema migrations. If the index is unwritable or its schema is
-newer than the running CLI, `list` degrades to canonical plan files under the
-current repository's `./plans/` and writes a warning to stderr.
+The rows come from canonical plan files under the current repository's
+`./plans/`. Opening the store best-effort attaches index-owned fields to each
+row and can create the private directory/database or apply forward-only schema
+migrations. When the store is unwritable, corrupt, or its schema is newer than
+the running CLI, the overlay is skipped, index-only fields are absent, and
+stderr carries a warning; the file-derived rows still render.
 
-The fallback cannot list other projects. Even with `--all`, it returns only the
-current project's files and warns that cross-project scope needs the index.
-Index-only fields can be absent. A corrupt or foreign database is not treated
-as a safe fallback and can fail the command.
+Cross-project scope needs the store because files are single-project by
+design. Without the store, `--all` returns only the current project's files
+and warns that cross-project scope requires the index.
 
-The command does not change plan lifecycle state or repository files, but store
-initialization and schema migration are possible local disk effects. Current-project
-resolution can run local `git` commands. No network, authentication, provider,
-or remote cache is involved.
+The command does not change plan lifecycle state or repository files, but
+store initialization and schema migration are possible local disk effects.
+Current-project resolution can run local `git` commands. No network,
+authentication, provider, or remote cache is involved.
 
 ## Output and privacy
 
@@ -68,8 +71,8 @@ errors use stderr. There is no NDJSON mode.
 
 | Exit | Meaning | Safe next step |
 | --- | --- | --- |
-| `0` | The store or files fallback was listed, including an empty result. | Check stderr for a degraded-scope warning. |
-| `1` | Store access, project-context resolution, or fallback scanning failed. | Follow the index permission/upgrade hint; do not delete canonical plan files. |
+| `0` | The current project's plan files were listed, with or without the index overlay, including an empty result. | Check stderr for a degraded-scope warning. |
+| `1` | Plan file scanning, project-context resolution, or an unrecoverable store error failed the command. | Follow the index permission/upgrade hint; do not delete canonical plan files. |
 | `2` | Arguments or flags were invalid. | Remove positional arguments and correct flags. |
 
 ## Related commands

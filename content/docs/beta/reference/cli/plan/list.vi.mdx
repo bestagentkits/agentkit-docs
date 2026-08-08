@@ -1,11 +1,13 @@
 ---
 title: ak plan list
-description: Liệt kê plan đã lập chỉ mục của project hiện tại hoặc mọi project, với bộ lọc vòng đời và giới hạn fallback rõ ràng.
+description: Liệt kê plan của project hiện tại theo hướng files-first, best-effort-overlay các field do index sở hữu, và hiểu giới hạn phạm vi xuyên project.
 ---
 
-Dùng `ak plan list` để xem các plan được theo dõi trong plan store cục bộ riêng
-tư. Theo mặc định, lệnh giới hạn kết quả ở project hiện tại và loại row closed,
-archived.
+Dùng `ak plan list` để xem các plan của project hiện tại. Lệnh đọc tệp plan
+chuẩn dưới thư mục `plans/` của project trước, sau đó best-effort-overlay các
+field do index sở hữu (`state`, `issue_number`, `linked_pr`, `current_phase`)
+từ plan store cục bộ khi mở được. Theo mặc định, lệnh giới hạn kết quả ở
+project hiện tại và loại plan closed, archived.
 
 ## Cách dùng
 
@@ -17,7 +19,7 @@ ak plan list
 
 | Cờ | Mặc định | Mô tả |
 | --- | --- | --- |
-| `--all` | `false` | Liệt kê row của mọi project trong store cục bộ. |
+| `--all` | `false` | Liệt kê plan của mọi project được theo dõi. Yêu cầu plan store cục bộ vì tệp là single-project theo thiết kế. |
 | `--include-closed` | `false` | Bao gồm trạng thái vòng đời `closed`. |
 | `--include-archived` | `false` | Bao gồm trạng thái vòng đời `archived`. |
 
@@ -33,22 +35,23 @@ Việc khớp project hiện tại dùng ngữ cảnh Git/repository, gồm remo
 chuẩn hoá hoặc đường dẫn project. Kết quả rỗng vẫn thành công và được biểu diễn
 bằng mảng JSON rỗng.
 
-## Hiểu files fallback
+## Hiểu mô hình files-first
 
-Mở store có thể tạo thư mục/cơ sở dữ liệu riêng tư và áp dụng migration schema
-chỉ tiến về phía trước. Nếu index không ghi được hoặc schema mới hơn CLI đang
-chạy, `list` fallback sang tệp plan chuẩn trong `./plans/` của repository hiện
-tại và ghi warning vào stderr.
+Row đến từ các tệp plan chuẩn dưới `./plans/` của repository hiện tại. Việc mở
+store best-effort đính kèm các field do index sở hữu vào từng row, đồng thời có
+thể tạo thư mục/cơ sở dữ liệu riêng tư hoặc áp dụng migration schema chỉ tiến.
+Khi store không ghi được, hỏng hoặc schema mới hơn CLI đang chạy, overlay bị
+bỏ qua, trường chỉ có trong index vắng mặt và stderr ghi warning; row từ tệp
+vẫn được hiển thị.
 
-Fallback không thể liệt kê project khác. Kể cả có `--all`, lệnh chỉ trả về tệp
-của project hiện tại và cảnh báo rằng phạm vi xuyên project cần index. Trường
-chỉ có trong index có thể vắng mặt. Cơ sở dữ liệu hỏng hoặc thuộc ứng dụng khác
-không được xem là fallback an toàn và có thể làm lệnh thất bại.
+Phạm vi xuyên project cần store vì tệp là single-project theo thiết kế. Không
+có store, `--all` chỉ trả về tệp của project hiện tại và cảnh báo rằng phạm vi
+xuyên project cần index.
 
 Lệnh không đổi trạng thái vòng đời hoặc tệp trong repository, nhưng việc khởi
 tạo store và migration schema là hiệu ứng đĩa cục bộ có thể xảy ra. Việc
-resolve project hiện tại có thể chạy lệnh `git` cục bộ. Không có mạng, xác thực,
-provider hay cache từ xa.
+resolve project hiện tại có thể chạy lệnh `git` cục bộ. Không có mạng, xác
+thực, provider hay cache từ xa.
 
 ## Đầu ra và quyền riêng tư
 
@@ -68,8 +71,8 @@ fallback và lỗi dùng stderr. Không có chế độ NDJSON.
 
 | Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
 | --- | --- | --- |
-| `0` | Store hoặc files fallback đã được liệt kê, kể cả kết quả rỗng. | Kiểm tra stderr để tìm warning về phạm vi suy giảm. |
-| `1` | Truy cập store, resolve ngữ cảnh project hoặc quét fallback thất bại. | Làm theo hint về quyền/upgrade index; đừng xoá tệp plan chuẩn. |
+| `0` | Tệp plan của project hiện tại đã được liệt kê, có hay không index overlay, kể cả kết quả rỗng. | Kiểm tra stderr để tìm warning về phạm vi suy giảm. |
+| `1` | Quét tệp plan, resolve ngữ cảnh project hoặc lỗi store không cứu được làm lệnh thất bại. | Làm theo hint về quyền/upgrade index; đừng xoá tệp plan chuẩn. |
 | `2` | Argument hoặc cờ không hợp lệ. | Bỏ argument theo vị trí và sửa cờ. |
 
 ## Lệnh liên quan
