@@ -144,7 +144,8 @@ Beta PR (or an immediate follow-up):
 
    Until a full refresh lands, leave a callout at the top of
    `content/docs/beta/desktop-app/index.{en,vi}.mdx` stating which release
-   the page was verified against and where the refresh plan lives.
+   the page was verified against, and open a follow-up PR when Desktop
+   binaries are available for verification.
 
 Do these three passes in the **same PR** as the sync when the drift lands on
 the same release; batching them keeps the catch-up honest and prevents
