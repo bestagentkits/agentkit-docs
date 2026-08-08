@@ -1,13 +1,14 @@
 ---
 title: ak config prefs set
-description: Đặt một boolean Hook có giới hạn với hành vi chính xác về scope, schema, backup, atomic write, đầu ra và khôi phục thủ công.
+description: Đặt một boolean Hook có giới hạn hoặc preference journal.auto với hành vi chính xác về scope, schema, backup, atomic write, đầu ra và khôi phục thủ công.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
-Dùng `ak config prefs set` để ghim một soft-preference của Hook thành `true`
-hoặc `false` trong config user hay config của project hiện tại. Lệnh thay đổi
-tệp đã chọn ngay; lệnh không unregister hay cài Hook.
+Dùng `ak config prefs set` để ghim một soft-preference của Hook hoặc
+preference `journal.auto` thành `true` hoặc `false` trong config user hay
+config của project hiện tại. Lệnh thay đổi tệp đã chọn ngay; lệnh không
+unregister hay cài Hook và không chặn `/ak:journal` gọi tường minh.
 
 ## Cách dùng
 
@@ -29,28 +30,32 @@ không có `--dry-run`, `--force` hay preview mode.
 
 ## Validate key và value
 
-Cách viết key duy nhất được chấp nhận là:
+Hai dạng key được chấp nhận:
 
-```text
-hooks.<name>
-```
+- `hooks.<name>` — `<name>` phải là basename Hook script dạng kebab-case chữ
+  thường, khớp `^[a-z0-9]+(?:-[a-z0-9]+)*$` và không được chứa thêm dấu chấm.
+- `journal.auto` — literal chính xác, không có key con nào dưới `journal`.
 
-`<name>` phải là basename Hook script dạng kebab-case chữ thường, khớp
-`^[a-z0-9]+(?:-[a-z0-9]+)*$`. Tên không được chứa thêm dấu chấm. Value phải là
-literal chữ thường chính xác `true` hoặc `false`.
+Value phải là literal chữ thường chính xác `true` hoặc `false`.
 
 ```bash
 ak config prefs set hooks.simplify-gate false
 ak config prefs set hooks.simplify-gate true --scope project
+ak config prefs set journal.auto false
 ```
 
-Key như `keys.anthropic`, `api.token`, `telemetry.enabled`, `hooks.Bad-Name` và
-`hooks.a.b` bị từ chối trước khi ghi preference. Allowlist này ngăn lệnh trở
-thành editor config hoặc secret tổng quát.
+Key như `keys.anthropic`, `api.token`, `telemetry.enabled`, `hooks.Bad-Name`,
+`hooks.a.b`, và mọi `journal.<other>` bị từ chối trước khi ghi preference.
+Allowlist này ngăn lệnh trở thành editor config hoặc secret tổng quát.
 
-`false` cho phép Hook có đọc preference này exit sớm ở lần chạy tiếp theo;
-`true` ghi preference ngược lại. Harness registration không đổi, và việc đặt
-tên không chứng minh Hook đó đã được cài.
+Với Hook toggle, `false` cho phép Hook có đọc preference này exit sớm ở lần
+chạy tiếp theo; `true` ghi preference ngược lại. Harness registration không
+đổi, và việc đặt tên không chứng minh Hook đó đã được cài.
+
+Với `journal.auto`, `false` chặn bước `/ak:journal` tự động ở cuối các workflow
+`plan`, `cook`, `fix`, `ship`, `bootstrap` mà không unregister hooks và không
+chặn `/ak:journal` gọi tường minh. `true` ghi preference ngược lại. Default
+tích hợp là `true`.
 
 ## Scope và tác động filesystem
 
@@ -59,9 +64,10 @@ tên không chứng minh Hook đó đã được cài.
 | `user` | `$AGENTKIT_HOME/config.yaml`, thường là `~/.agentkit/config.yaml` | Tệp thiếu sẽ được tạo. |
 | `project` | `<cwd>/.agentkit/config.yaml` | Nếu thiếu, AgentKit scaffold project template và `.agentkit/.gitignore` trước. Project config được thiết kế để commit, vì vậy không đặt credential vào đó. |
 
-Writer chỉ thay leaf `hooks.<name>` đã chọn. Các section khác, YAML chưa được
-model, comment, thứ tự key và schema editor directive được giữ lại. Nếu `hooks`
-đã tồn tại nhưng không phải mapping, lệnh từ chối ghi.
+Writer chỉ thay leaf `hooks.<name>` hoặc `journal.auto` đã chọn. Các section
+khác, YAML chưa được model, comment, thứ tự key và schema editor directive
+được giữ lại. Nếu `hooks` hoặc `journal` đã tồn tại nhưng không phải mapping,
+lệnh từ chối ghi.
 
 Trước khi ghi, AgentKit validate toàn bộ candidate bằng schema nhúng trong
 binary. Cách viết cũ có thể tạo warning nhưng không tự làm validation thất bại;
