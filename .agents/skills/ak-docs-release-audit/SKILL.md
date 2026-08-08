@@ -1,9 +1,9 @@
 ---
-name: ak-docs-release-update
-description: Audit an AgentKit release delta, map evidence-backed claims to affected documentation, and author only explicitly approved Beta prose. Use for release docs syncs, exact tag or SHA comparisons, stale-guide audits, release coverage gaps, or preparing an owner-reviewed Beta documentation update; do not use for Stable hand edits or generated CLI reference edits.
+name: ak-docs-release-audit
+description: Audit an AgentKit release delta, map evidence-backed claims to affected documentation, and author only explicitly approved Beta prose. Read-only V0 evidence phase plus owner-approved V1 authoring phase; the deterministic sync/promote scripts and the docs release orchestrator run outside this skill. Use for release docs syncs, exact tag or SHA comparisons, stale-guide audits, release coverage gaps, or preparing an owner-reviewed Beta documentation update; do not use for Stable hand edits or generated CLI reference edits.
 ---
 
-# AgentKit Docs Release Update
+# AgentKit Docs Release Audit
 
 Maintain release-sensitive documentation through a read-only evidence phase and
 an owner-approved authoring phase. Keep release workflow automation deferred;

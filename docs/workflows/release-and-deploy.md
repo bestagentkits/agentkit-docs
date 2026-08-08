@@ -94,7 +94,7 @@ Beta PR (or an immediate follow-up):
 
    Review the impact-map for `cli:*` `update` claims, get owner approval, then
    refresh the exact nested prose pages by hand (EN + VI parity, technical
-   tokens unchanged). See `.agents/skills/ak-docs-release-update/SKILL.md` for
+   tokens unchanged). See `.agents/skills/ak-docs-release-audit/SKILL.md` for
    the full V0 → approval → V1 authoring flow.
 
 2. **Kit catalog + new skill pages.** The docs-bundle contract v1 does **not**

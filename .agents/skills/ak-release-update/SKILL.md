@@ -1,6 +1,6 @@
 ---
 name: ak:release-update
-description: "Orchestrate an AgentKit docs release update end-to-end — resolve evidence, detect audit gaps, delegate audit + V1 authoring to ak-docs-release-update, run deterministic sync and promote scripts, validate, and open the PR. Use for beta sync PRs, stable promotion PRs, and multi-hop catch-up runs against an audit trail."
+description: "Orchestrate an AgentKit docs release update end-to-end — resolve evidence, detect audit gaps, delegate audit + V1 authoring to ak-docs-release-audit, run deterministic sync and promote scripts, validate, and open the PR. Use for beta sync PRs, stable promotion PRs, and multi-hop catch-up runs against an audit trail."
 user-invocable: true
 when_to_use: "Invoke when publishing a docs update for a new upstream beta or stable release, catching up prose that drifted across a stretch of releases without audit passes, or preparing a stable promote after a beta sync PR lands."
 category: utilities
@@ -15,7 +15,7 @@ metadata:
 
 Composition skill for the end-to-end release update pipeline. Delegates
 authoritative audit and authoring to
-[`ak-docs-release-update`](../ak-docs-release-update/SKILL.md); orchestrates the
+[`ak-docs-release-audit`](../ak-docs-release-audit/SKILL.md); orchestrates the
 deterministic steps around it (bundle download, drift detection, script
 invocation, validation, PR opening).
 
@@ -59,7 +59,7 @@ examples, and error paths.
    `from-ref`. See
    [`references/detection.md`](references/detection.md) and
    [`references/audit-tag-convention.md`](references/audit-tag-convention.md).
-3. **Invoke `ak-docs-release-update` V0.** Present the choice and, on owner
+3. **Invoke `ak-docs-release-audit` V0.** Present the choice and, on owner
    confirmation, run `scripts/check-docs-release-update.mjs --mode v0` with
    the chosen refs and channel. The audit skill emits the ledger, impact
    map, unresolved evidence, and the approval request under

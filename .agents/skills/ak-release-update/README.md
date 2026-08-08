@@ -1,12 +1,12 @@
 # ak:release-update
 
 Orchestrator for the end-to-end AgentKit docs release-update pipeline.
-Composes the audit skill (`ak-docs-release-update`), the deterministic
+Composes the audit skill (`ak-docs-release-audit`), the deterministic
 scripts under `scripts/` in the repo root, and the manual passes for
 Contract v1 blind spots (CLI prose, Kits, Desktop) into a single owner-
 gated flow.
 
-`ak:release-update` does not replace `ak-docs-release-update`. The audit
+`ak:release-update` does not replace `ak-docs-release-audit`. The audit
 skill remains the source of truth for evidence, approval, and V1 authoring
 guardrails. This orchestrator invokes it at the right steps and never
 bypasses its approval gate.
@@ -54,7 +54,7 @@ Dry-run to preview the pipeline plan without invoking scripts:
 The orchestrator (1) fetches the target upstream tag, downloads and
 digest-verifies the docs and kit bundles; (2) reads `channels.json` and
 `git tag audit/*` to recommend `from-ref` (single-hop vs catchup); (3)
-delegates V0 evidence to `ak-docs-release-update`; (4) stops for the
+delegates V0 evidence to `ak-docs-release-audit`; (4) stops for the
 owner statement `approve REQ-…`; (5) runs the manual passes for CLI
 prose (V1 authoring), Kits (skill page authoring + catalog refresh),
 and Desktop (Layer A auto, Layer B owner-gate, Layer C skip); (6) runs
@@ -87,7 +87,7 @@ Two prompts require an explicit reply. No silent default advances.
 2. **After V0 completes** — reply with the exact statement
    `approve REQ-…` (matching the generated request ID), optionally
    followed by the approved nested prose paths. See
-   [`../ak-docs-release-update/SKILL.md`](../ak-docs-release-update/SKILL.md).
+   [`../ak-docs-release-audit/SKILL.md`](../ak-docs-release-audit/SKILL.md).
 
 Everything else in the pipeline is deterministic.
 
@@ -142,7 +142,7 @@ negatives are easier to recover from than false positives.
 
 ## Related
 
-- [`../ak-docs-release-update/SKILL.md`](../ak-docs-release-update/SKILL.md)
+- [`../ak-docs-release-audit/SKILL.md`](../ak-docs-release-audit/SKILL.md)
   — audit + authoring skill this orchestrator delegates to.
 - [`docs/workflows/release-and-deploy.md`](../../../docs/workflows/release-and-deploy.md)
   under "What Beta sync does *not* refresh" — the manual-pass runbook
