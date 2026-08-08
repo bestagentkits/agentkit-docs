@@ -1,12 +1,13 @@
 ---
 title: ak plan show
-description: Show a tracked plan, raw plan and phase bodies, context resolution, and stale-index fallback behavior.
+description: Show a plan from files first, best-effort-overlay index-owned fields, understand id forms and pointer resolution, and safely handle the current-plan pointer.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
-Use `ak plan show` to render one tracked plan with its phases and full Markdown
-bodies.
+Use `ak plan show` to render one plan with its phases and full Markdown bodies
+from files, best-effort-overlaying index-owned fields from the local plan
+store.
 
 ## Usage
 
@@ -14,34 +15,40 @@ bodies.
 ak plan show [id]
 ```
 
-The command accepts at most one plan-store ID and has no command-specific
-flags.
+The command accepts at most one plan folder basename (for example,
+`260722-1200-my-plan`) or the indexed `<slug>/<timestamp>` form, and has no
+command-specific flags.
 
 ## Choose the plan
 
-With an explicit ID, the command loads that store row even when it belongs to
-another worktree. With no ID, it uses this order:
+With an explicit ID, the command reads that plan's folder directly, then
+best-effort-overlays index fields. The ID may be either the plan folder
+basename (`260722-1200-my-plan`) or the indexed `<slug>/<timestamp>` form.
 
-1. the valid worktree-private pointer written by `ak plan use`;
-2. the best active issue/branch/worktree/project match used by
-   `ak plan resolve`.
-
-If the pointer is absent, invalid, or does not map to a synced row, context
-resolution is used. Closed or archived plans can still be shown by explicit
-ID or a valid pointer; the context fallback considers active plans only.
+With no ID, the command resolves the current-plan pointer set by
+`ak plan create` or `ak plan use`. The pointer lives under `.git` and is
+readable even under a sandboxed `$HOME`. If the pointer is absent, invalid, or
+does not map to an existing plan, context resolution is used — the same
+issue/branch/worktree/project match `ak plan resolve` computes. Closed or
+archived plans can still be shown by explicit ID or a valid pointer; the
+context fallback considers active plans only.
 
 ## Freshness, fallback, and privacy
 
-For a linked plan, show compares file modification times and reparses changed
-files into the index before rendering. A failed refresh becomes a stderr
-warning and the older indexed row is still shown. The raw `plan.md` body is
-read through a path-containment guard; unreadable body content is omitted.
+The command reads `plan.md` and every phase file directly from the plan
+folder. It then best-effort-overlays index-owned fields — `state`,
+`issue_number`, `linked_pr`, `current_phase`, and per-phase `rev`, `notes`,
+`evidence`, `acceptance`, `comment_id` — from the local plan store when it
+opens. If the store cannot be opened (unwritable, corrupt, or schema newer
+than this CLI), the overlay is skipped and stderr carries a warning; the raw
+plan and phase bodies still render.
 
-If the index cannot be used because it is unwritable or newer than this CLI,
-show degrades to repository files. In that mode an explicit argument is a
-folder name under `./plans/`, not a store ID; without an argument, only the
-current-plan pointer is used. Index-only fields are omitted and stderr carries
-a warning.
+For a linked plan, show compares file modification times and refreshes the
+index from changed files before overlay. A failed refresh becomes a stderr
+warning and rendering proceeds with the unchanged index snapshot.
+
+The raw bodies are read through a path-containment guard; unreadable body
+content is omitted.
 
 <Callout type="warning">
   Human and JSON output include raw plan and phase bodies without redaction.
@@ -61,11 +68,14 @@ JSON success uses `kind=plan.show`:
 ```text
 data.plan: plan summary
 data.plan_body: raw plan.md text or an empty string
-data.phases[]: plan_id, n, title, status, rev, body
+data.phases[]: plan_id, n, title, status, rev, body,
+  notes, evidence, acceptance, comment_id
 ```
 
-Phase notes, evidence, acceptance, and comment IDs are not included. Human and
-plain modes print the plan header, body, and each phase body to stdout.
+`notes`, `evidence`, `acceptance`, and `comment_id` come from the store
+overlay. When the overlay is skipped (store missing, corrupt, or schema newer
+than this CLI), those per-phase fields are absent. Human and plain modes print
+the plan header, body, and each phase body to stdout.
 
 ## Exit behavior
 
