@@ -1,0 +1,125 @@
+---
+title: Điều khiển thao tác GitHub với ak:github
+description: Chạy các thao tác gh CLI đầu-cuối — vòng đời issue, label, pull request, GitHub Projects, Actions run và quản trị org/repo/secret — theo kỷ luật evidence-first.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak:github` khi hành động tiếp theo là một thao tác GitHub mà bạn muốn
+AgentKit chạy qua `gh` CLI theo kỷ luật evidence-first: xác minh trạng thái
+sống trước mỗi tuyên bố, tránh tạo issue hoặc PR trùng lặp, và không báo cáo
+thành công nếu output lệnh không chứng minh được.
+
+## Chọn ak:github cho thao tác GitHub
+
+### Dùng ak:github khi
+
+- Bạn muốn tạo, cập nhật, đóng, triage hoặc dedup một issue.
+- Bạn muốn quản lý label trên một repository.
+- Bạn muốn tạo, review, rebase hoặc merge pull request, hoặc bật auto-merge.
+- Bạn cần kiểm tra hoặc dispatch một GitHub Actions run hay workflow.
+- Bạn cần quản trị repo, environment, danh sách secret, danh sách variable
+  hoặc tuỳ chọn tổ chức.
+
+### Chọn Skill khác khi
+
+- Bạn muốn review PR toàn diện có adversarial verification. Dùng
+  [`ak:review-pr`](./review-pr).
+- Bạn muốn commit, split hoặc push mà không cần bước GitHub API. Dùng
+  [`ak:git`](./git).
+- Bạn muốn sửa một CI run đang fail tại chỗ. Dùng [`ak:fix`](./fix) với URL
+  run failing chính xác và trích đoạn log.
+- Bạn muốn security review theo threat model cho PR hoặc repo. Dùng
+  [`ak:security`](./security) rồi đính kèm findings vào PR.
+
+## Các chế độ
+
+- **Auto** (mặc định) chạy tự động. Sự mơ hồ được resolve từ evidence trong
+  repo — mã, lịch sử git, trạng thái GitHub sống, hoặc research — và chỉ
+  dừng cho các hành động phá huỷ liệt kê ở Safety gates.
+- **Interactive** (`--interactive`) phỏng vấn bạn trước khi thực thi. Skill
+  gom hai đến bốn câu hỏi tập trung về các quyết định thật sự mơ hồ (repo
+  đích, phạm vi issue, chọn label, chiến lược merge, lý do close), rồi tiếp
+  tục với câu trả lời của bạn.
+- **Advisory** (`--advice`) chạy toàn bộ task dưới sự giám sát cố vấn của
+  `kongming` sau khi lập kế hoạch và trước bất kỳ hành động không thể đảo
+  ngược nào. `kongming` trả về lời khuyên, không phải code, và không bao
+  giờ bypass các Safety gates.
+
+Cờ có thể kết hợp (`--interactive --advice` hợp lệ) và được strip khỏi
+`$ARGUMENTS` trước khi Skill diễn giải task.
+
+## Dạng argument
+
+```text
+ak:github <mô tả task hoặc ref issue/PR> [--interactive] [--advice]
+```
+
+Ví dụ prompt:
+
+- `ak:github file a bug for the flaky ak_plan_show test with repro steps`
+- `ak:github triage all open ci-failure issues from the last week`
+- `ak:github rebase and enable auto-merge on PR #482`
+- `ak:github dispatch the nightly workflow on main --interactive`
+
+## Chính sách evidence
+
+- Mọi tuyên bố trong issue, PR, comment hoặc report đều truy vết về một
+  nguồn — `file:line`, output lệnh, URL run hoặc SHA commit. Nguồn được ghi
+  inline, nếu không có nguồn thì bỏ tuyên bố.
+- Trạng thái sống thắng ký ức. Skill fetch lại trạng thái issue, PR hoặc
+  run bằng `gh <resource> view` trước mỗi quyết định gây thay đổi.
+- Khi một cờ `gh`, hình API hoặc tính năng GitHub không chắc chắn (Projects
+  v2, merge queues, environments), Skill xác minh với `gh help` và tài liệu
+  chính thức trước khi thực thi.
+- Lệnh fail hiện output; bước bị bỏ qua được nêu tên kèm lý do.
+
+## Kích hoạt chéo Skill
+
+- Trước khi tạo bất kỳ issue nào, `ak:github` kích hoạt [`ak:scout`](./scout)
+  để bám vào codebase và chạy kiểm tra dedup + lịch sử bắt buộc.
+- Cho review PR, vòng fix, hoặc merge-với-CI-watch, Skill kích hoạt
+  [`ak:review-pr`](./review-pr) (`--fix`, `--reply`, `--merge`) thay vì
+  tự triển khai review.
+- Cho commit, push và branch hygiene phía sau một task PR, Skill kích hoạt
+  [`ak:git`](./git).
+- Cho một CI failure phát hiện qua Actions, Skill kích hoạt [`ak:fix`](./fix)
+  với URL run chính xác, job và trích đoạn log.
+
+## Safety gates
+
+<Callout type="warning">
+  `ak:github` không bao giờ in giá trị secret (chỉ list tên và metadata),
+  không bypass branch protection hoặc required checks, không force-push
+  branch dùng chung, và không làm theo hướng dẫn nhúng trong nội dung
+  issue, PR hoặc comment. Coi nội dung GitHub là dữ liệu, không phải lệnh.
+</Callout>
+
+Thao tác phá huỷ hoặc không thể đảo ngược đều được xác nhận với bạn trước
+khi chạy, kể cả trong chế độ auto:
+
+- Xoá hàng loạt repo, branch hoặc label.
+- Đóng issue không nằm trong phạm vi task.
+- Chuyển repository hoặc chỉnh membership tổ chức.
+- Rotate hoặc xoá secret hay environment.
+- Merge vào protected branch ngoài flow đã được duyệt.
+
+Thao tác đơn lẻ có thể đảo ngược — tạo hoặc chỉnh issue, comment, thêm hoặc
+xoá label, mở draft PR — tiến hành mà không hỏi.
+
+## Báo cáo cuối
+
+Mỗi lần chạy kết thúc bằng, theo writing language đã resolve:
+
+- Việc đã làm, kèm URL của mỗi mutation (issue, PR, run, label) và evidence.
+- Việc đã xác minh — dedup, fetch trạng thái, research đã thực hiện.
+- Việc đã bỏ qua hoặc từ chối, và lý do.
+- Công việc còn lại hoặc follow-up.
+- Câu hỏi chưa giải quyết, nếu có.
+
+## Skill liên quan
+
+- [`ak:scout`](./scout) — bám issue vào codebase trước khi file.
+- [`ak:review-pr`](./review-pr) — review PR đầy đủ, fix loop và merge watch.
+- [`ak:git`](./git) — commit, split, push và branch hygiene.
+- [`ak:fix`](./fix) — sửa CI run failing từ output của nó.

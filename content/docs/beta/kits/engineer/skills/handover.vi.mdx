@@ -1,0 +1,110 @@
+---
+title: Bàn giao công việc cho một coding agent cụ thể với ak:handover
+description: Capture một handoff di động, rồi dispatch một orchestration spec đơn-job vào runtime code cụ thể có preflight, safety gate và arbiter review.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak:handover` để tiếp tục công việc đang dở trong runtime code khác với
+một job có kiểm soát, được capture và có safety gate. Skill là một hợp thành
+mỏng — không lặp lại capture, model routing, dispatch hay arbiter logic.
+Skill chạy ba bước theo thứ tự: capture qua `ak:handoff`, dựng một
+orchestration spec đơn-job xác định, dispatch qua `ak:orchestrate`, rồi
+report.
+
+## Chọn ak:handover cho continuation một-lần
+
+### Dùng ak:handover khi
+
+- Bạn muốn tiếp tục công việc hiện tại trong runtime code cụ thể được chỉ
+  định.
+- Bạn muốn agent kế nhiệm đọc handoff di động, đã redact trước khi hành
+  động.
+- Bạn muốn dispatch chạy dưới safety gate, capture, resumability và
+  arbiter review của `ak:orchestrate`.
+
+### Chọn Skill khác khi
+
+- Bạn chỉ muốn lưu ngữ cảnh và bàn giao sau. Dùng riêng
+  [`ak:handoff`](./handoff).
+- Bạn muốn orchestrate nhiều job song song hoặc tuần tự. Dùng
+  [`ak:orchestrate`](./orchestrate) trực tiếp với YAML spec của bạn.
+- Bạn muốn định tuyến task chung sang Skill phù hợp. Dùng
+  [`ak:agentkit`](./agentkit).
+
+## Dạng argument
+
+```text
+ak:handover [task] --agent <id> [--cwd PATH] [--task TEXT] [--handoff PATH] [--model NAME] [--yes]
+```
+
+Ví dụ:
+
+```bash
+/ak:handover --agent claude-code "continue the OAuth callback fix"
+/ak:handover --agent codex --cwd . --task "implement the next action in the handoff"
+/ak:handover --agent cursor --handoff plans/handoffs/oauth-callback.md
+/ak:handover --agent opencode --model anthropic/claude-sonnet-5 --yes
+```
+
+| Cờ | Hiệu ứng |
+| --- | --- |
+| `--agent <id>` | **Bắt buộc.** Runtime code được chọn. Phải resolve trong runtime catalog. Không có mặc định, không thay thế im lặng. |
+| `[task]` positional | Trọng tâm cho agent kế nhiệm. Nhập vào section Mission của handoff và trường `prompt` của orchestrate job. |
+| `--task TEXT` | Dạng thay thế cho task positional. Nếu cả hai được cung cấp, positional thắng kèm warning. |
+| `--cwd PATH` | Workspace root cho job dispatched. Mặc định workspace root hiện tại. |
+| `--handoff PATH` | Dùng handoff artifact có sẵn thay vì tạo mới. Phải tồn tại và pass schema validation. |
+| `--model NAME` | Override model cho job runtime CLI. Bị từ chối khi `--agent internal`. |
+| `--yes` | Duyệt continuation ghi hoặc phá huỷ. Chuyển `approval:` của job từ `require` sang `inherit`. |
+
+## Chọn runtime
+
+`--agent` phải resolve thành ID trong runtime catalog của Skill:
+
+- **First-class:** `claude-code`, `codex`, `ak-run`, `internal`.
+- **External, có preflight-gate:** `opencode`, `copilot`, `cursor`, `cline`,
+  `qwen-code`, `grok`, `kimi`, `agy`.
+- **Không dispatch được:** `gemini-cli` — đường Gemini CLI đã ngưng, không
+  hỗ trợ.
+
+Availability, authentication, flags, models và capability tier đến từ live
+runtime matrix của `ak:orchestrate` tại thời điểm chạy. Thiếu binary,
+thiếu authentication, internal agent không có, hoặc preflight fail trả về
+blocker rõ trong báo cáo cuối — không bao giờ thay thế im lặng.
+
+## Xác thực handoff
+
+<Callout type="warning">
+  Handoff artifact — mới capture hoặc cung cấp qua `--handoff` — phải pass
+  schema validation nghiêm trước khi dispatch. Fail là blocker cứng; Skill
+  từ chối dispatch và in các kiểm tra fail.
+</Callout>
+
+- Mọi section H2 bắt buộc trong schema handoff artifact hiện diện và được
+  đánh vần chính xác.
+- `Exact next actions` chứa ít nhất một item, và item đầu tiên bold-prefix
+  `**First safe step**`.
+- Không mẫu raw-secret nào khớp dòng nào.
+- Frontmatter `handoff-version`, nếu có, là `1`.
+
+## Safety gate và từ chối
+
+- Các cờ bypass runtime-specific — `--dangerously-skip-permissions`,
+  `--allow-all-tools`, `--yolo` — không bao giờ được phát ra. Job nhúng
+  chúng trong prompt bị từ chối.
+- `--model` bị từ chối khi `--agent internal`. Job internal không set
+  `model` trong spec.
+- `--fallback-agent` không chấp nhận trong v1. Khi preflight fail, Skill
+  báo blocker và gợi ý chạy lại với `--agent` khác.
+
+## Báo cáo cuối
+
+Mỗi lần chạy in đường dẫn handoff artifact, thư mục run của orchestrate,
+runtime đã chọn, kết quả job, trạng thái xác minh, artifact tạo ra và
+hành động tiếp theo — theo thứ tự đó.
+
+## Skill liên quan
+
+- [`ak:handoff`](./handoff) — capture handoff artifact di động.
+- [`ak:orchestrate`](./orchestrate) — dispatch, safety và arbiter review.
+- [`ak:agentkit`](./agentkit) — định tuyến task chung sang Skill phù hợp.

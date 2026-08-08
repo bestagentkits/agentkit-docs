@@ -20,8 +20,8 @@ import { collectPublishedChannelRoutes, inspectReleaseShape } from './release-qu
 
 export const RELEASE_QUALITY_BASELINE = Object.freeze({
   schemaVersion: 1,
-  reviewedAt: '2026-08-04',
-  sourceCommit: '1f49a15ae192724b4a848bf198ada0dffc72206d',
+  reviewedAt: '2026-08-08',
+  sourceCommit: 'd77ca2667090b311b3ac2650852ede002b6bc338',
   channels: ['beta', 'stable'],
   locales: ['en', 'vi'],
   deterministic: {
@@ -31,7 +31,7 @@ export const RELEASE_QUALITY_BASELINE = Object.freeze({
     fileCountBudget: 23_154,
     searchBytes: 20_067_964,
     searchBudgetBytes: SEARCH_ASSET_BUDGET_BYTES,
-    searchPagesPerLocaleChannel: 384,
+    searchPagesPerLocaleChannel: 390,
     reviewedSearchOutsideChannelRoutes: ['_showcase'],
     reviewedSearchExcludedPublishedRoutes: ['reference/cli/ak'],
     maxAssetBytesExclusive: MAX_ASSET_BYTES,

@@ -1,0 +1,144 @@
+---
+title: Operate the ak CLI safely with ak:ak
+description: Run ak subcommands, disambiguate scope, prefer read-only inspection before mutation, and interpret --json envelopes without breaking user-owned state.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak:ak` when the next concrete action is running an `ak` subcommand or
+interpreting its output. This Skill owns the safe operating model for the
+control-plane CLI itself — not the flag reference, which stays authoritative
+in `ak <cmd> --help` and the `--json` envelope.
+
+## Choose ak:ak for CLI operation
+
+### Use ak:ak when
+
+- The next action is invoking an `ak` subcommand (`init`, `kit`, `skills`,
+  `plan`, `journal`, `doctor`, `recover`, `self-update`, `login`, …).
+- You need to disambiguate a read-only inspection from a mutating lifecycle
+  command before it lands.
+- You need to disambiguate project vs user/global scope, adapter, or
+  delivery mode before a change hits somewhere unexpected.
+- You need to interpret an `ak <cmd> --json` envelope.
+
+### Choose another Skill when
+
+- Authoring or refining a Claude Skill — use [`ak:skill-creator`](./skill-creator).
+- Writing or executing an implementation plan — use [`ak:plan`](./plan) or
+  [`ak:cook`](./cook).
+- Writing a technical journal entry — use [`ak:journal`](./journal).
+- Choosing which installed Skill fits a task — use
+  [`ak:agentkit`](./agentkit) (task router).
+- Any kit-specific workflow already covered by its own Skill — use that
+  Skill.
+
+`ak:agentkit` decides *which Skill runs*. `ak:ak` runs *the ak binary
+itself*.
+
+## Safe operating protocol
+
+Follow every step in order. Do not skip the inspect step even when the
+command name is familiar — the installed binary may be older or newer than
+the appendix.
+
+1. **Triage the goal.** Classify the intent as `read-only`, `mutating`, or
+   `diagnostic` (long-running or interactive; user judgement is the main
+   side effect).
+2. **Inspect before acting.** Run `ak <cmd> --help` for the intended
+   subcommand. For read-only scripted work, also pass `--json
+   --no-interactive` so the response is a versioned envelope
+   (`schema_version`, `kind`, `data`).
+3. **Confirm scope.** Where does this command act? Project scope (current
+   working tree), user or global scope (`~/.claude`, `~/.agents`, `~/.codex`,
+   or the equivalent adapter home), kit installation source, or adapter or
+   delivery mode.
+4. **Prefer status or inspect before lifecycle mutation.** Before
+   `ak update`, `ak kit refresh`, `ak self-update`, `ak uninstall`, or
+   `ak recover`, run the corresponding read-only path — `ak doctor`,
+   `ak kit list-kits`, `ak kit validate`, `ak skill verify`, `ak plan
+   status`, `ak sessions list`, `ak backups list`, `ak diagnostics
+   export`.
+5. **Snapshot before mutate.** Before `ak recover`, `ak backups restore`,
+   `ak uninstall`, or any command combined with `--fresh`, first run
+   `ak backups create` — or confirm a current backup with `ak backups list`.
+6. **Preserve unknown files.** AgentKit mutates only paths it owns. Never
+   suggest `--force` combined with `--fresh`; never propose a destructive
+   reset unless the user has explicitly asked. Surface a conflict.
+7. **Report the exact command, scope, and result.** Include the resolved
+   `--json` envelope where relevant. Name what changed on disk and any
+   unresolved constraint.
+
+<Callout type="warning">
+  Never pass `--no-interactive` or `--yes` to a mutating command without
+  explicit user approval. Those flags suppress the confirmation prompt that
+  is the only human gate before disk mutation.
+</Callout>
+
+## Command families by task
+
+- **Bootstrap and setup** — `ak init`, `ak new`, `ak setup`. All mutating;
+  confirm intended kit and scope first.
+- **Kits** — `ak kit init|install|refresh|validate|uninstall|list-kits|repair-install-mode`.
+  `list-kits` and `validate` are read-only; the rest mutate.
+- **Skills** — inventory (`ak skills list|show|search|install|remove|graph`)
+  and per-skill environment (`ak skill install|remove|repair|upgrade|verify`).
+- **Agents, content, commands** — mirror the skills shape: reads (`list`,
+  `show`, `search`), writes (`install`, `remove`), and one domain-specific
+  mutating action per group.
+- **Plans and journals** — file-first plan and journal management. `ak plan
+  list|show|status|search|validate|resolve|parse` are read-only. `ak plan
+  create|check|uncheck|add-phase|update|use|archive|close|reindex|migrate`
+  mutate. `ak plan kanban` is a diagnostic TUI. `ak journal
+  list|show|validate` read; `ak journal create` writes.
+- **Diagnostics** — `ak doctor`, `ak activity`, `ak audit`, `ak sessions`,
+  `ak analytics`, `ak backups`, `ak versions`, `ak changelog`,
+  `ak diagnostics export`. Mostly read-only; `enable`/`disable`/`delete`
+  under `analytics` and `content-search` mutate.
+- **Recovery** — `ak recover`, `ak backups restore`. Mutating and
+  irreversible without a prior `ak backups create`.
+- **Watch and daemons** — `ak watch start|stop|status|dry-run`,
+  `ak content schedule daemon`, `ak codex-agent-runtime serve`,
+  `ak api start|stop|status`, `ak config start|stop|status`.
+- **Config, auth, and MCP** — `ak config prefs
+  resolve|set|unset|validate`, top-level auth (`ak login`, `ak logout`,
+  `ak whoami`, `ak licenses`), and `ak mcp
+  add|link|list|remove|show|verify`. Auth commands are top-level, not
+  under an `ak auth` parent.
+- **Self-update and migrations** — `ak self-update`, `ak migrate
+  prefs|rollback`. Run `ak versions` and check `ak changelog` before
+  invoking.
+
+## Source of truth
+
+The generated command appendix carries a version stamp. If it lags behind
+`ak --version`, treat it as a starting hint and re-check flags with
+`ak <cmd> --help` before any mutating call. `ak self-update` advances the
+binary independently of installed skill content, so version skew is normal
+after self-update and before the next `ak update` refresh.
+
+Authoritative surfaces, in order:
+
+1. `ak <cmd> --help` — always current for the running binary.
+2. `ak <cmd> --json` output — versioned envelope, parseable.
+3. The Skill's `references/command-reference.md` — starting index, may lag.
+
+## Anti-patterns
+
+- Do not combine `--force` with `--fresh` on any lifecycle command.
+- Do not run installer, refresh, migration, uninstall, or destructive smoke
+  tests against real maintainer state. Set a temporary AgentKit home first.
+- Do not invent flags not present in `ak <cmd> --help`. The Cobra metadata
+  is authoritative.
+- Do not treat a source-only capability as active in the installed binary.
+  Confirm via `ak versions` or `ak doctor`.
+- Do not infer adapter capability from another adapter.
+- Do not report a mutating command's outcome without the resolved scope —
+  say project vs global, adapter, and any conflict skipped.
+
+## Related Skills
+
+- [`ak:agentkit`](./agentkit) — task router (which Skill runs).
+- [`ak:skill-creator`](./skill-creator) — author Claude Skills.
+- [`ak:plan`](./plan) — implementation plan lifecycle.
+- [`ak:journal`](./journal) — technical journal entries.

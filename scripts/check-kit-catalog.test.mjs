@@ -203,8 +203,8 @@ test('reproduces the reviewed Engineer and Marketing catalog counts', async () =
       navEntries,
     })),
     [
-      { kitId: 'engineer', sourceIdentities: 98, publicIdentities: 97, detailRoutes: 97, navEntries: 97 },
-      { kitId: 'marketing', sourceIdentities: 78, publicIdentities: 76, detailRoutes: 78, navEntries: 76 },
+      { kitId: 'engineer', sourceIdentities: 101, publicIdentities: 100, detailRoutes: 100, navEntries: 100 },
+      { kitId: 'marketing', sourceIdentities: 81, publicIdentities: 79, detailRoutes: 81, navEntries: 79 },
     ],
   );
 });
