@@ -82,6 +82,12 @@ examples, and error paths.
    - Stable: verify `git tag docs/<promotedFrom>` matches
      `channels.beta.tag`, then
      `node scripts/promote-docs.mjs --bundle <stable-bundle-dir>`.
+     `promote-docs.mjs` whole-copies the bound beta snapshot into
+     `content/docs/stable/**`, which pulls the source beta's
+     `ak-gui_<beta-tag>_*` references into stable/desktop-app. Right
+     after the whole-copy, re-run Layer A against the final stable
+     tag's ak-gui evidence (release-page `.sha256` sidecars) so
+     stable/desktop-app reflects the stable build, not the beta build.
    Skip if the run does not target that channel.
 7. **Validate, commit, and open PR.**
    Run `pnpm install --frozen-lockfile`, `test`, `typecheck`, `lint`,
