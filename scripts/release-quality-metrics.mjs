@@ -31,7 +31,7 @@ export const RELEASE_QUALITY_BASELINE = Object.freeze({
     fileCountBudget: 23_154,
     searchBytes: 20_067_964,
     searchBudgetBytes: SEARCH_ASSET_BUDGET_BYTES,
-    searchPagesPerLocaleChannel: 390,
+    searchPagesPerLocaleChannel: 391,
     reviewedSearchOutsideChannelRoutes: ['_showcase'],
     reviewedSearchExcludedPublishedRoutes: ['reference/cli/ak'],
     maxAssetBytesExclusive: MAX_ASSET_BYTES,
