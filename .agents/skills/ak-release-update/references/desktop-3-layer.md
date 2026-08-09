@@ -14,7 +14,23 @@ Runs automatically on every release. Deterministic edits from
 release-page evidence.
 
 **Detection**: any run whose target `channels.<channel>.tag` differs
-from the current stored value triggers Layer A.
+from the current stored value triggers Layer A **for that channel only**.
+Never touch the other channel's Desktop mdx.
+
+- Beta sync run (updates `channels.beta.tag`) → touch
+  `content/docs/beta/desktop-app/**` only.
+- Stable promote run (updates `channels.stable.tag`) → touch
+  `content/docs/stable/desktop-app/**` only, using the **stable** tag's
+  ak-gui assets. `promote-docs.mjs` whole-copies the beta snapshot into
+  stable/, which pulls the source beta's `ak-gui_<beta-tag>_*` references
+  into stable/desktop-app; re-run Layer A against the final stable tag
+  after promote so stable/desktop-app reflects the stable ak-gui build,
+  not the beta build.
+
+Do **not** mirror `content/docs/beta/desktop-app/**` into
+`content/docs/stable/desktop-app/**` (or vice versa) as a shortcut.
+Each channel's Desktop pages track that channel's release, not the
+other channel's.
 
 **Evidence source**:
 
@@ -27,21 +43,21 @@ gh api "repos/bestagentkits/agentkit/releases/tags/<to-tag>" \
 Verify each digest against the release-page value and the
 `.sha256` sidecar downloaded via `gh release download`.
 
-**Files touched** (Beta + Stable, EN + VI):
+**Files touched** (target channel only, EN + VI):
 
-- `content/docs/{beta,stable}/desktop-app/installation.{en,vi}.mdx`
+- `content/docs/<channel>/desktop-app/installation.{en,vi}.mdx`
   — artifact table (filename, bytes, SHA-256), download-URL,
   description frontmatter, opening sentence.
-- `content/docs/{beta,stable}/desktop-app/index.{en,vi}.mdx`
+- `content/docs/<channel>/desktop-app/index.{en,vi}.mdx`
   — "Supported v<X> packages" heading, ARM64 limitation paragraph
   (verify current release still lacks Linux/Windows ARM64 packages).
-- `content/docs/{beta,stable}/desktop-app/updating.{en,vi}.mdx`
+- `content/docs/<channel>/desktop-app/updating.{en,vi}.mdx`
   — paired-update version column labels.
-- `content/docs/{beta,stable}/desktop-app/troubleshooting.{en,vi}.mdx`
+- `content/docs/<channel>/desktop-app/troubleshooting.{en,vi}.mdx`
   — artifact filename in shell examples.
-- `content/docs/{beta,stable}/desktop-app/getting-started.{en,vi}.mdx`
+- `content/docs/<channel>/desktop-app/getting-started.{en,vi}.mdx`
   — version reference next to Kit-catalog mention.
-- `content/docs/{beta,stable}/troubleshooting/kit-installation.{en,vi}.mdx`
+- `content/docs/<channel>/troubleshooting/kit-installation.{en,vi}.mdx`
   — CLI version reference (companion to Desktop pages).
 
 **Callout hygiene**: if the Desktop `index.mdx` carries a "verified
@@ -133,9 +149,12 @@ screenshots at least keep the pages navigable.
 
 After Layer A completes:
 
-- Every `ak-gui_*` reference in tables matches the release page.
-- No `v<older>` reference remains in packaging text.
-- Callout on `desktop-app/index.mdx` reflects the new verified version.
+- Every `ak-gui_*` reference in tables matches the release page for
+  the run's target channel.
+- No `v<older>` reference remains in that channel's packaging text.
+- Callout on `<channel>/desktop-app/index.mdx` reflects the new
+  verified version.
+- The other channel's `desktop-app/` tree is unchanged.
 
 After Layer B completes (when triggered):
 
