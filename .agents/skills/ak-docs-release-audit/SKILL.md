@@ -47,7 +47,13 @@ outside its evidence and need matched manual passes on the same Beta PR:
   Kit overview `| Skills | N |` count. Mirror into
   `content/docs/stable/**` so the tree stays whole-copy-ready for the
   next promotion. `disable-model-invocation: true` without
-  `user-invocable: true` stays `internal` (no public page).
+  `user-invocable: true` stays `internal` (no public page). Identity
+  checks alone miss body drift (existing pages that advertise a retired
+  form when SKILL.md prose, `.env.example`, or `skill.yaml` change with
+  identity stable). Run the body-diff pass in
+  [`references/kit-prose-drift.md`](references/kit-prose-drift.md) in
+  addition to the identity comparison; route stale-page candidates
+  through the same owner-directed scope as CLI prose.
 - **Desktop App section** under `content/docs/beta/desktop-app/**`.
   Bundle does not carry Desktop provenance. Detect by inspecting the
   release page's `ak-gui_*` assets and Desktop-tagged release-note
