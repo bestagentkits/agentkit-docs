@@ -73,7 +73,12 @@ examples, and error paths.
    - **Kits** — diff kit tar bundles, author public skill pages EN+VI,
      refresh `kit-catalog-identities.json`, update meta and skill index.
      See [`references/default-tab-detection.md`](references/default-tab-detection.md)
-     for the diff-first classification.
+     for the diff-first classification. Also run the body-diff pass in
+     the audit skill's
+     [`references/kit-prose-drift.md`](../ak-docs-release-audit/references/kit-prose-drift.md)
+     against existing kit skill pages — identity checks miss prose drift
+     when a skill's SKILL.md body, `.env.example`, or `skill.yaml`
+     changes while frontmatter stays stable.
    - **Desktop** — Layer A bump automatically; Layer B semi-auto with
      owner gate; Layer C deferred. See
      [`references/desktop-3-layer.md`](references/desktop-3-layer.md).
