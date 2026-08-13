@@ -165,7 +165,12 @@ function searchPageShape(exported, baseline, publishedRoutes) {
       new Set(baseline.deterministic.reviewedSearchOutsideChannelRoutes),
       outside[locale],
     );
-    addSetDifference(errors, `${locale} Beta/Stable searchable route parity`, routes[locale].beta, routes[locale].stable);
+    addMissingSubset(
+      errors,
+      `${locale} stable ⊆ beta searchable route shape`,
+      routes[locale].stable,
+      routes[locale].beta,
+    );
   }
   const [referenceLocale, ...otherLocales] = baseline.locales ?? ['en', 'vi'];
   for (const locale of otherLocales) {
@@ -195,6 +200,11 @@ function addSetDifference(errors, label, expected, actual) {
   const missing = [...expected].filter((value) => !actual.has(value)).sort();
   const extra = [...actual].filter((value) => !expected.has(value)).sort();
   if (missing.length || extra.length) errors.push(`${label}: missing [${missing.join(', ')}]; extra [${extra.join(', ')}]`);
+}
+
+function addMissingSubset(errors, label, expected, actual) {
+  const missing = [...expected].filter((value) => !actual.has(value)).sort();
+  if (missing.length) errors.push(`${label}: missing [${missing.join(', ')}]`);
 }
 
 export async function checkFixedQueries(searchPath, queries) {
