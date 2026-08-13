@@ -1,0 +1,114 @@
+---
+title: Grok CLI Hook errors
+description: Stop Grok from failing Claude-compat Hooks without editing AgentKit-managed settings.json, then re-enable Claude scan after an AgentKit update that folds global Hook commands.
+---
+
+Use this page when Grok CLI reports Hook errors on every prompt or tool call,
+especially a missing `~/.claude/node`, after a global AgentKit Kit install for
+Claude Code.
+
+## Confirm the symptom
+
+Typical signs:
+
+- Grok shows Hook errors on `SessionStart`, `UserPromptSubmit`, `PreToolUse`,
+  `PostToolUse`, or `Stop`.
+- The failing path is `~/.claude/node`, or Node starts without the Hook script.
+- One-liner Hooks already stored as a single `command` string still run. Entries
+  with `"command": "node"` plus an `args` array fail.
+
+Grok reads `~/.claude/settings.json` by default. It treats `command` as a path
+relative to that JSON file, or as an inline shell command when the string
+contains whitespace. It does not use Claude's `args` array.
+
+## Do not edit AgentKit-managed settings
+
+Do not rewrite `command` / `args` inside `~/.claude/settings.json` or
+`<project>/.claude/settings.json`. `ak kit update` matches managed Hooks by
+the `.cjs` script path and writes the exec-form back.
+
+Do not create `~/.claude/node` as a symlink to your real Node binary. Grok still
+drops `args`, so that shim would start Node with no script.
+
+Do not add a second copy of the same Hooks under `~/.grok/hooks/` while Claude
+compat scanning stays on. Grok merges sources and the Hooks would run twice.
+
+## Workaround until AgentKit folds global Hooks
+
+Keep Claude Code on the AgentKit-managed settings file. Point Grok at its own
+Hook files and turn off Claude Hook scanning.
+
+1. In `~/.grok/config.toml`:
+
+```toml
+[compat.claude]
+hooks = false
+```
+
+The same switch is `GROK_CLAUDE_HOOKS_ENABLED=0` for one process.
+
+2. Add Grok-native Hook files under `~/.grok/hooks/`. Use a one-liner `command`
+   that includes the script path, matching the form Grok already accepts:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node '/Users/you/.claude/hooks/session-init.cjs'"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Copy only the AgentKit Hooks you need from `~/.claude/settings.json`. Keep
+timeouts and matchers. Quote paths that contain spaces.
+
+3. Restart Grok and inspect `/hooks`. Project Hooks also need `/hooks-trust` or
+   `--trust` before they run.
+
+This overlay lives outside AgentKit ownership. Kit update and uninstall will
+not create, refresh, or delete `~/.grok/hooks/`. Re-check the overlay when a
+Kit adds or removes a Hook.
+
+Project-native Claude settings already emit portable `node "<script>"`
+shell-form. The failure is the **global** `~/.claude/settings.json` exec-form.
+
+## After the AgentKit fix ships
+
+The durable fix is AgentKit folding global Node Hooks into one quoted
+shell-form command with an absolute Node runner, then deleting `args`. Track
+[agentkit#1607](https://github.com/bestagentkits/agentkit/issues/1607).
+
+When that CLI is installed:
+
+```bash
+ak kit update engineer --target claude-code --global
+```
+
+Use the Kit name you actually installed. Then remove the Grok overlay if you
+no longer need it, set `[compat.claude] hooks = true` (or delete that key; the
+default is on), and start a new Grok session.
+
+`ak doctor` can confirm a Node runner is still resolvable. Do not treat doctor
+output as proof of Grok's stdin schema.
+
+## Residual behavior on Grok
+
+Even with a runnable `command`, some AgentKit Hooks were written for Claude
+Code's snake_case stdin JSON. Grok sends camelCase fields such as
+`hookEventName` and `toolName`. Those Hooks may no-op or fail-open on Grok.
+That is a separate schema mismatch, not the missing `~/.claude/node` path.
+
+## Related pages
+
+- [Configuration problems](./configuration)
+- [Kit installation problems](./kit-installation)
+- [Updates and recovery](./updates)
