@@ -1,0 +1,40 @@
+---
+title: "ak orchestrate"
+description: "Run and supervise external CLI job graphs (Darwin only)"
+generated: true
+---
+
+Start, resume, check, and stop a graph of external CLI jobs under a dedicated local worker supervisor. The worker owns each job's process group, persists durable run state under AGENTKIT_HOME, and survives the launching client or coordinator exiting. `start` always creates a new run; only `resume <run-id>` continues an existing one. v1 supports darwin only — every other GOOS returns an explicit unsupported error.
+
+**Who it's for:** The /ak:orchestrate skill's job-execution layer, and power devs scripting multi-job CLI runs directly.
+
+**When to use it:** Use `ak orchestrate start` to launch a validated job graph. If a client or coordinator is interrupted, use `ak orchestrate status`/`stop` with the same run ID to reconnect to the still-running worker instead of guessing at orphaned processes.
+
+**What changes on disk:** Writes run state, per-job output logs, and a control socket under AGENTKIT_HOME/orchestrate/runs/&lt;run-id&gt;/. Never persists prompts, raw command arguments, environment values, or secrets.
+
+### Examples
+
+```bash
+ak orchestrate start jobs.json           # launch a new run, prints its run ID
+ak orchestrate status <run-id>            # PID/PGID, heartbeat, last output, per-job state
+ak orchestrate resume <run-id> jobs.json  # reconnect after a client/coordinator crash
+ak orchestrate stop <run-id>               # TERM the group, grace period, then KILL
+ak orchestrate start jobs.json --json      # scripted run-id + status envelope
+```
+
+Global flags, output modes, and the standard exit codes (`0`–`3`) are shared by every command — see [CLI conventions](../cli-conventions). The sections below list only what is specific to this command.
+
+### Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| `1` | runtime error (state I/O, launch/signal failure) |
+| `6` | unsupported platform (v1 requires darwin) |
+
+### Related commands
+
+- [`ak`](./ak) — AgentKit CLI
+- [`ak orchestrate resume`](./ak_orchestrate_resume) — Reconnect to an existing run after a client or coordinator crash
+- [`ak orchestrate start`](./ak_orchestrate_start) — Launch a new orchestrated run from a job graph file
+- [`ak orchestrate status`](./ak_orchestrate_status) — Report a run's current lifecycle state
+- [`ak orchestrate stop`](./ak_orchestrate_stop) — Terminate a run's live jobs (TERM, grace period, then KILL)

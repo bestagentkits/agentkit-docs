@@ -46,14 +46,14 @@ function inventory(channel, locale) {
   });
 }
 
-test('publishes 165 unique nested authored routes with full channel/locale parity', () => {
+test('publishes 170 unique nested authored routes with full channel/locale parity', () => {
   const shapes = new Map();
   for (const channel of channels) {
     for (const locale of locales) {
       const pages = inventory(channel, locale);
       const routes = pages.map((page) => page.slugs.slice(1).join('/'));
-      assert.equal(pages.length, 165, `${channel}/${locale} authored page count`);
-      assert.equal(new Set(routes).size, 165, `${channel}/${locale} route collisions`);
+      assert.equal(pages.length, 170, `${channel}/${locale} authored page count`);
+      assert.equal(new Set(routes).size, 170, `${channel}/${locale} route collisions`);
       assert.ok(routes.every((route) => !/[\s]|%20/i.test(route)));
       shapes.set(`${channel}/${locale}`, routes.sort());
     }
