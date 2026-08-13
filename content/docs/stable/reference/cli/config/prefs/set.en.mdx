@@ -1,15 +1,14 @@
 ---
 title: ak config prefs set
-description: Set one bounded Hook boolean, the journal.auto preference, or the worktree.root default with exact scope, schema, backup, atomic-write, output, and manual-recovery behavior.
+description: Set one bounded Hook boolean or the journal.auto preference with exact scope, schema, backup, atomic-write, output, and manual-recovery behavior.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
-Use `ak config prefs set` to pin one Hook soft-preference, the `journal.auto`
-preference, or the `worktree.root` default location in the user config or the
-current project's config. The command changes the selected file immediately;
-it does not unregister or install a Hook and does not stop explicit
-`/ak:journal`.
+Use `ak config prefs set` to pin one Hook soft-preference or the `journal.auto`
+preference to `true` or `false` in the user config or the current project's
+config. The command changes the selected file immediately; it does not
+unregister or install a Hook and does not stop explicit `/ak:journal`.
 
 ## Usage
 
@@ -31,31 +30,24 @@ does not prompt, so `--yes` and `--no-interactive` do not change it. There is no
 
 ## Key and value validation
 
-Three key shapes are accepted:
+Two key shapes are accepted:
 
 - `hooks.<name>` — `<name>` must be a lowercase kebab-case Hook script basename
   matching `^[a-z0-9]+(?:-[a-z0-9]+)*$` and cannot contain another dot.
 - `journal.auto` — the exact literal, no nested keys under `journal`.
-- `worktree.root` — the exact literal, no nested keys under `worktree`.
 
-For `hooks.<name>` and `journal.auto` the value must be the exact lowercase
-literal `true` or `false`. For `worktree.root` the value is a filesystem path;
-project scope only accepts a relative path (resolved against the project root),
-while user scope accepts either a relative path (also resolved against the
-project root) or an absolute path.
+The value must be the exact lowercase literal `true` or `false`.
 
 ```bash
 ak config prefs set hooks.simplify-gate false
 ak config prefs set hooks.simplify-gate true --scope project
 ak config prefs set journal.auto false
-ak config prefs set worktree.root /Volumes/Portable/agentkit-worktrees
-ak config prefs set worktree.root ../my-app-worktrees --scope project
 ```
 
 Keys such as `keys.anthropic`, `api.token`, `telemetry.enabled`,
-`hooks.Bad-Name`, `hooks.a.b`, any `journal.<other>`, and any
-`worktree.<other>` are rejected before a preference write. This allowlist
-prevents the command from being used as a general secret or config editor.
+`hooks.Bad-Name`, `hooks.a.b`, and any `journal.<other>` are rejected before a
+preference write. This allowlist prevents the command from being used as a
+general secret or config editor.
 
 For a Hook toggle, `false` lets a Hook that honors this preference exit early
 on its next run; `true` records the opposite preference. Harness registration
@@ -66,15 +58,6 @@ end of `plan`, `cook`, `fix`, `ship`, and `bootstrap` workflows without
 unregistering hooks or blocking an explicit `/ak:journal`. `true` records the
 opposite preference. The built-in default is `true`.
 
-For `worktree.root`, the value picks the default location that `ak:worktree`
-uses when `--worktree-root` is not passed. Project scope refuses an absolute
-value with a warning and falls through to the next scope, because a committed
-project config can arrive from an untrusted clone. User scope accepts an
-absolute path, which is the right choice for a portable-drive or
-external-volume worktree layout. The built-in default is unset, so
-`ak:worktree` continues to fall back to the `WORKTREE_ROOT` environment
-variable and its built-in location chain.
-
 ## Scope and filesystem effects
 
 | Scope | Target | Additional effect |
@@ -82,10 +65,10 @@ variable and its built-in location chain.
 | `user` | `$AGENTKIT_HOME/config.yaml`, normally `~/.agentkit/config.yaml` | A missing file is created. |
 | `project` | `<cwd>/.agentkit/config.yaml` | If absent, AgentKit scaffolds the project template and `.agentkit/.gitignore` first. The project config is intended to be committed, so do not place credentials in it. |
 
-The writer changes only the selected `hooks.<name>`, `journal.auto`, or
-`worktree.root` leaf. It preserves other sections, unmodelled YAML, comments,
-key order, and the schema editor directive. If `hooks`, `journal`, or
-`worktree` already exists but is not a mapping, the write is refused.
+The writer changes only the selected `hooks.<name>` or `journal.auto` leaf. It
+preserves other sections, unmodelled YAML, comments, key order, and the schema
+editor directive. If `hooks` or `journal` already exists but is not a mapping,
+the write is refused.
 
 Before writing, AgentKit validates the whole candidate against the schema
 embedded in this binary. Existing legacy spellings can produce warnings but do

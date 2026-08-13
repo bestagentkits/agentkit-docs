@@ -1,14 +1,14 @@
 ---
 title: ak config prefs set
-description: Đặt một boolean Hook có giới hạn, preference journal.auto, hoặc mặc định worktree.root với hành vi chính xác về scope, schema, backup, atomic write, đầu ra và khôi phục thủ công.
+description: Đặt một boolean Hook có giới hạn hoặc preference journal.auto với hành vi chính xác về scope, schema, backup, atomic write, đầu ra và khôi phục thủ công.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
-Dùng `ak config prefs set` để ghim một soft-preference của Hook, preference
-`journal.auto`, hoặc mặc định `worktree.root` trong config user hay config
-của project hiện tại. Lệnh thay đổi tệp đã chọn ngay; lệnh không unregister
-hay cài Hook và không chặn `/ak:journal` gọi tường minh.
+Dùng `ak config prefs set` để ghim một soft-preference của Hook hoặc
+preference `journal.auto` thành `true` hoặc `false` trong config user hay
+config của project hiện tại. Lệnh thay đổi tệp đã chọn ngay; lệnh không
+unregister hay cài Hook và không chặn `/ak:journal` gọi tường minh.
 
 ## Cách dùng
 
@@ -30,31 +30,23 @@ không có `--dry-run`, `--force` hay preview mode.
 
 ## Validate key và value
 
-Ba dạng key được chấp nhận:
+Hai dạng key được chấp nhận:
 
 - `hooks.<name>` — `<name>` phải là basename Hook script dạng kebab-case chữ
   thường, khớp `^[a-z0-9]+(?:-[a-z0-9]+)*$` và không được chứa thêm dấu chấm.
 - `journal.auto` — literal chính xác, không có key con nào dưới `journal`.
-- `worktree.root` — literal chính xác, không có key con nào dưới `worktree`.
 
-Với `hooks.<name>` và `journal.auto`, value phải là literal chữ thường chính
-xác `true` hoặc `false`. Với `worktree.root`, value là một filesystem path;
-project scope chỉ chấp nhận relative path (resolve theo project root), còn
-user scope chấp nhận cả relative path (cũng resolve theo project root) lẫn
-absolute path.
+Value phải là literal chữ thường chính xác `true` hoặc `false`.
 
 ```bash
 ak config prefs set hooks.simplify-gate false
 ak config prefs set hooks.simplify-gate true --scope project
 ak config prefs set journal.auto false
-ak config prefs set worktree.root /Volumes/Portable/agentkit-worktrees
-ak config prefs set worktree.root ../my-app-worktrees --scope project
 ```
 
 Key như `keys.anthropic`, `api.token`, `telemetry.enabled`, `hooks.Bad-Name`,
-`hooks.a.b`, mọi `journal.<other>`, và mọi `worktree.<other>` bị từ chối
-trước khi ghi preference. Allowlist này ngăn lệnh trở thành editor config
-hoặc secret tổng quát.
+`hooks.a.b`, và mọi `journal.<other>` bị từ chối trước khi ghi preference.
+Allowlist này ngăn lệnh trở thành editor config hoặc secret tổng quát.
 
 Với Hook toggle, `false` cho phép Hook có đọc preference này exit sớm ở lần
 chạy tiếp theo; `true` ghi preference ngược lại. Harness registration không
@@ -65,14 +57,6 @@ Với `journal.auto`, `false` chặn bước `/ak:journal` tự động ở cu�
 chặn `/ak:journal` gọi tường minh. `true` ghi preference ngược lại. Default
 tích hợp là `true`.
 
-Với `worktree.root`, value chọn vị trí mặc định mà `ak:worktree` dùng khi
-không truyền `--worktree-root`. Project scope từ chối value là absolute path
-với warning và fall through xuống scope kế tiếp, vì project config được
-commit có thể đến từ clone không đáng tin. User scope chấp nhận absolute
-path, phù hợp cho layout worktree trên ổ portable hoặc volume ngoài. Default
-tích hợp là unset, nên `ak:worktree` tiếp tục fallback về biến môi trường
-`WORKTREE_ROOT` và chuỗi vị trí tích hợp sẵn.
-
 ## Scope và tác động filesystem
 
 | Scope | Target | Tác động thêm |
@@ -80,10 +64,10 @@ tích hợp là unset, nên `ak:worktree` tiếp tục fallback về biến môi
 | `user` | `$AGENTKIT_HOME/config.yaml`, thường là `~/.agentkit/config.yaml` | Tệp thiếu sẽ được tạo. |
 | `project` | `<cwd>/.agentkit/config.yaml` | Nếu thiếu, AgentKit scaffold project template và `.agentkit/.gitignore` trước. Project config được thiết kế để commit, vì vậy không đặt credential vào đó. |
 
-Writer chỉ thay leaf `hooks.<name>`, `journal.auto`, hoặc `worktree.root` đã
-chọn. Các section khác, YAML chưa được model, comment, thứ tự key và schema
-editor directive được giữ lại. Nếu `hooks`, `journal`, hoặc `worktree` đã
-tồn tại nhưng không phải mapping, lệnh từ chối ghi.
+Writer chỉ thay leaf `hooks.<name>` hoặc `journal.auto` đã chọn. Các section
+khác, YAML chưa được model, comment, thứ tự key và schema editor directive
+được giữ lại. Nếu `hooks` hoặc `journal` đã tồn tại nhưng không phải mapping,
+lệnh từ chối ghi.
 
 Trước khi ghi, AgentKit validate toàn bộ candidate bằng schema nhúng trong
 binary. Cách viết cũ có thể tạo warning nhưng không tự làm validation thất bại;

@@ -46,25 +46,43 @@ function inventory(channel, locale) {
   });
 }
 
-test('publishes 170 unique nested authored routes with full channel/locale parity', () => {
+test('publishes unique nested authored routes with EN+VI parity per channel and beta ⊇ stable', () => {
+  // Expected counts: stable = channels.stable.tag surface; beta = stable + any
+  // new command groups authored ahead of the next stable promote. Beta must
+  // strictly contain every stable route so promotion is a safe whole-copy;
+  // beta-only routes are the delta the next promote will publish.
+  const expected = {
+    stable: 165,
+    beta: 170,
+  };
   const shapes = new Map();
   for (const channel of channels) {
+    const channelExpected = expected[channel];
     for (const locale of locales) {
       const pages = inventory(channel, locale);
       const routes = pages.map((page) => page.slugs.slice(1).join('/'));
-      assert.equal(pages.length, 170, `${channel}/${locale} authored page count`);
-      assert.equal(new Set(routes).size, 170, `${channel}/${locale} route collisions`);
+      assert.equal(pages.length, channelExpected, `${channel}/${locale} authored page count`);
+      assert.equal(new Set(routes).size, channelExpected, `${channel}/${locale} route collisions`);
       assert.ok(routes.every((route) => !/[\s]|%20/i.test(route)));
       shapes.set(`${channel}/${locale}`, routes.sort());
     }
   }
 
-  const expected = shapes.get('stable/en');
-  for (const shape of shapes.values()) assert.deepEqual(shape, expected);
-  assert.ok(expected.includes('reference/cli'));
-  assert.ok(expected.includes('reference/cli/agents'));
-  assert.ok(expected.includes('reference/cli/agents/install'));
-  assert.ok(expected.includes('reference/cli/config/prefs/set'));
+  // EN and VI must match within each channel (locale parity).
+  assert.deepEqual(shapes.get('stable/vi'), shapes.get('stable/en'), 'stable EN/VI parity');
+  assert.deepEqual(shapes.get('beta/vi'), shapes.get('beta/en'), 'beta EN/VI parity');
+
+  // Beta must be a strict superset of stable (contains every stable route).
+  const stableRoutes = new Set(shapes.get('stable/en'));
+  const betaRoutes = new Set(shapes.get('beta/en'));
+  const missing = [...stableRoutes].filter((route) => !betaRoutes.has(route));
+  assert.deepEqual(missing, [], 'stable routes missing from beta');
+
+  const stable = shapes.get('stable/en');
+  assert.ok(stable.includes('reference/cli'));
+  assert.ok(stable.includes('reference/cli/agents'));
+  assert.ok(stable.includes('reference/cli/agents/install'));
+  assert.ok(stable.includes('reference/cli/config/prefs/set'));
 });
 
 test('title segments match nested filesystem paths', () => {

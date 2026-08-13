@@ -31,7 +31,9 @@ export const RELEASE_QUALITY_BASELINE = Object.freeze({
     fileCountBudget: 23_154,
     searchBytes: 20_067_964,
     searchBudgetBytes: SEARCH_ASSET_BUDGET_BYTES,
-    searchPagesPerLocaleChannel: 396,
+    // Per-channel: stable stays bound to channels.stable.tag; beta may include
+    // pages authored ahead of the next stable promote.
+    searchPagesPerLocaleChannel: { stable: 391, beta: 396 },
     reviewedSearchOutsideChannelRoutes: ['_showcase'],
     reviewedSearchExcludedPublishedRoutes: ['reference/cli/ak'],
     maxAssetBytesExclusive: MAX_ASSET_BYTES,
@@ -140,8 +142,9 @@ function searchPageShape(exported, baseline, publishedRoutes) {
     }
     for (const channel of ['beta', 'stable']) {
       const count = routes[locale][channel].size;
-      if (count !== baseline.deterministic.searchPagesPerLocaleChannel) {
-        errors.push(`${locale}/${channel}: searchable page count ${count} does not match reviewed baseline ${baseline.deterministic.searchPagesPerLocaleChannel}`);
+      const expectedCount = baseline.deterministic.searchPagesPerLocaleChannel[channel];
+      if (count !== expectedCount) {
+        errors.push(`${locale}/${channel}: searchable page count ${count} does not match reviewed baseline ${expectedCount}`);
       }
       const expectedSearchRoutes = new Set(publishedRoutes[locale][channel]);
       for (const route of baseline.deterministic.reviewedSearchExcludedPublishedRoutes) {

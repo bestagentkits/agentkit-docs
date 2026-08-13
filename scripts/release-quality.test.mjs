@@ -32,8 +32,8 @@ function shapeBaseline(overrides = {}) {
     sourceCommit: 'fixture',
     channels: ['beta', 'stable'],
     locales: ['en', 'vi'],
-    sourceRoutesPerLocaleChannel: 2,
-    routesPerLocaleChannel: 2,
+    sourceRoutesPerLocaleChannel: { stable: 2, beta: 2 },
+    routesPerLocaleChannel: { stable: 2, beta: 2 },
     reviewedSourceOnlyRoutes: [],
     reviewedGeneratedRoutes: [],
     reviewedVariants: [
@@ -129,7 +129,7 @@ async function makeMetricFixture() {
       fileCountBudget: 6,
       searchBytes,
       searchBudgetBytes: searchBytes + 10,
-      searchPagesPerLocaleChannel: 1,
+      searchPagesPerLocaleChannel: { stable: 1, beta: 1 },
       reviewedSearchOutsideChannelRoutes: [],
       reviewedSearchExcludedPublishedRoutes: [],
       maxAssetBytesExclusive: searchBytes + 10,
@@ -177,7 +177,7 @@ test('rejects Stable and Beta route divergence', async () => {
 
 test('rejects authored routes that silently disappear from every built locale and channel', async () => {
   const fixture = await makeShapeFixture();
-  fixture.baseline.sourceRoutesPerLocaleChannel = 3;
+  fixture.baseline.sourceRoutesPerLocaleChannel = { stable: 3, beta: 3 };
   for (const channel of ['beta', 'stable']) {
     await write(join(fixture.docsRoot, channel, 'orphan.en.mdx'));
     await write(join(fixture.docsRoot, channel, 'orphan.vi.mdx'));
