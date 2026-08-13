@@ -43,11 +43,15 @@ outside its evidence and need matched manual passes on the same Beta PR:
   `agentkit-kit-<kit>-<runtime>-<tag>.tar.gz` and comparing per-skill
   `SKILL.md` frontmatter (`user-invocable`, `disable-model-invocation`).
   Refresh `kit-catalog-identities.json`, add public skill pages EN+VI,
-  update `skills/meta.{json,vi.json}` and skill index tables, bump the
-  Kit overview `| Skills | N |` count. Mirror into
-  `content/docs/stable/**` so the tree stays whole-copy-ready for the
-  next promotion. `disable-model-invocation: true` without
-  `user-invocable: true` stays `internal` (no public page). Identity
+  update `skills/meta.{json,vi.json}` and skill index tables, and bump the
+  Kit overview `| Skills | N |` count in Beta only. Keep EN/VI route parity
+  inside Beta, but do not mirror Beta-only pages or prose into
+  `content/docs/stable/**`; Stable remains bound to `channels.stable.tag`
+  until a reviewed whole-copy promotion. The current `check:catalog` guard
+  still assumes identical Kit routes and counts across channels; if a
+  legitimate Beta-only Kit addition trips it, stop and fix the guard contract
+  rather than copying the addition into Stable. `disable-model-invocation:
+  true` without `user-invocable: true` stays `internal` (no public page). Identity
   checks alone miss body drift (existing pages that advertise a retired
   form when SKILL.md prose, `.env.example`, or `skill.yaml` change with
   identity stable). Run the body-diff pass in

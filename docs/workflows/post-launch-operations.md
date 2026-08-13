@@ -40,37 +40,23 @@ as a deterministic gate.
 
 ## Committed baseline and budgets
 
-The baseline is committed in `scripts/release-quality-metrics.mjs` and
-`scripts/release-quality-shape.mjs`. Changing a baseline is a reviewed decision,
-not an automatic response to a red check.
+The executable baselines live in `scripts/release-quality-shape.mjs` and
+`scripts/release-quality-metrics.mjs`; use `quality:receipt` to record their
+current values. Changing a count, budget, exclusion, or reviewed variant is a
+reviewed decision, not an automatic response to a red check.
 
-| Signal | Reviewed baseline | Gate |
-| --- | ---: | ---: |
-| Published routes per locale/channel | 377 | Exact |
-| Output files | 18,290 | 22,863 reviewed budget; Cloudflare hard limit remains below 100,000 |
-| Total `out/` bytes | 2,251,685,582 | 2,814,606,978 (+25%) |
-| Search bytes | 19,911,284 | 23,068,672 (22 MiB) |
-| Largest individual asset | Search, 19,911,284 bytes | Strictly below 26,214,400 (25 MiB) |
+The shape gate requires exact EN/VI source and published-route parity within
+each channel. Across channels, every Stable route must exist in Beta, while Beta
+may contain additional routes awaiting promotion. The same `stable ⊆ beta`
+invariant applies to searchable routes. Search still requires exact EN/VI
+parity within each channel and an exact match between published and searchable
+routes after the reviewed exclusions.
 
-The route guard compares exact EN/VI and Stable/Beta published route sets. Its
-source-to-output contract also requires exactly 378 authored routes and reviews
-the only two source-only routes: `changelog` (navigation data) and
-`reference/release-notes` (composed release data). Its reviewed non-native and
-generated classifications are:
-
-- `reference/cli-conventions`: channel-neutral English source with an explicit
-  Vietnamese body;
-- `reference/cli/ak`: generated legacy redirect in both locales.
-
-There are no live English-body fallbacks in the published matrix. A future
-missing Vietnamese body becomes an unclassified `english-fallback` and fails
-CI until a reviewer approves the exception and verifies that the page discloses
-the fallback. This prevents silent language fallback.
-
-The search index must contain exactly 376 page routes in each EN/VI and
-Beta/Stable partition, with exact route parity and an exact match to published
-routes after removing the reviewed generated redirect. The only reviewed
-searchable page outside a channel is `/_showcase`.
+Reviewed source-only routes, generated routes, locale variants, out-of-channel
+search pages, output budgets, and Cloudflare limits are declared beside their
+checks in those scripts. Do not copy Beta-only content into Stable to make a
+count or parity check pass; fix the contract defect or update the reviewed
+per-channel baseline from a fresh build.
 
 ### Fixed search relevance
 

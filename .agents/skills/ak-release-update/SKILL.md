@@ -69,8 +69,8 @@ examples, and error paths.
    impact-map returns `paths: []`). Await the exact statement
    `approve REQ-…`.
 5. **Handle contract v1 blind spots.** Run the manual passes in one PR:
-   - **CLI prose** — V1 authoring inside the approved paths only.
-   - **Kits** — diff kit tar bundles, author public skill pages EN+VI,
+   - **CLI prose** — V1 authoring inside the approved Beta paths only.
+   - **Kits** — diff kit tar bundles, author public Beta skill pages EN+VI,
      refresh `kit-catalog-identities.json`, update meta and skill index.
      See [`references/default-tab-detection.md`](references/default-tab-detection.md)
      for the diff-first classification. Also run the body-diff pass in
@@ -78,7 +78,12 @@ examples, and error paths.
      [`references/kit-prose-drift.md`](../ak-docs-release-audit/references/kit-prose-drift.md)
      against existing kit skill pages — identity checks miss prose drift
      when a skill's SKILL.md body, `.env.example`, or `skill.yaml`
-     changes while frontmatter stays stable.
+     changes while frontmatter stays stable. Do not copy Beta-only Kit or
+     CLI changes into Stable; `stable ⊆ beta` is the cross-channel contract,
+     and Stable changes only through promotion. The current `check:catalog`
+     guard still assumes identical Kit routes and counts across channels; if a
+     Beta-only Kit addition trips it, fix that guard contract instead of
+     mirroring the addition into Stable.
    - **Desktop** — Layer A bump automatically; Layer B semi-auto with
      owner gate; Layer C deferred. See
      [`references/desktop-3-layer.md`](references/desktop-3-layer.md).
@@ -95,6 +100,10 @@ examples, and error paths.
      stable/desktop-app reflects the stable build, not the beta build.
    Skip if the run does not target that channel.
 7. **Validate, commit, and open PR.**
+   Preserve exact EN/VI source, published, and searchable route parity within
+   each channel and `stable ⊆ beta` across channels. Per-channel route and search counts may differ when Beta contains
+   features awaiting promotion; update reviewed baselines only from a fresh
+   build, never by copying those features into Stable.
    Run `pnpm install --frozen-lockfile`, `test`, `typecheck`, `lint`,
    `check:catalog`, `check:reference`, `build`, `check:quality`,
    `check:assets`, `check:links`. Commit per pass with descriptive
