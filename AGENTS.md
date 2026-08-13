@@ -59,10 +59,13 @@ continuous with the marketing site. Do **not** invent colours, fonts, or radii.
 ## Content structure
 
 - **Two channels:** `content/docs/stable/` and `content/docs/beta/` are Fumadocs
-  root folders (`meta.json` `"root": true`) rendered as Sidebar Tabs. Their page
-  trees must stay **identical in shape** — promotion is a whole-copy, so any
-  asymmetry breaks it. Content is equal at launch and diverges only when the
-  release-sync pipeline writes into a channel.
+  root folders (`meta.json` `"root": true`) rendered as Sidebar Tabs. Within
+  each channel, EN and VI must publish the same route shape. Across channels,
+  Stable must remain a subset of Beta; Beta may add routes and prose ahead of
+  the next promotion. Never mirror Beta-only content into `stable/` to satisfy
+  parity checks — Stable changes only through the whole-copy promotion pipeline.
+  The executable contract lives in `scripts/release-quality-shape.mjs`,
+  `scripts/release-quality-metrics.mjs`, and the route tests.
 - **Bilingual:** Fumadocs i18n (`lib/i18n.ts`), locales `en` (default) + `vi`,
   URL-prefixed (`/en`, `/vi`). Files use `.en.mdx` / `.vi.mdx`; nav labels use
   `meta.json` + `meta.vi.json`. A missing `.vi.mdx` falls back to English

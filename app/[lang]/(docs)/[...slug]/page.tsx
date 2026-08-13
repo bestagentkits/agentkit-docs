@@ -54,6 +54,9 @@ export default async function Page(props: PageProps<'/[lang]/[...slug]'>) {
   const eyebrow = breadcrumb.at(-1)?.name;
 
   const channel = channelFromSlug(params.slug);
+  const stableRouteExists = channel === 'beta' && params.slug
+    ? source.getPage(['stable', ...params.slug.slice(1)], params.lang) !== undefined
+    : false;
 
   return (
     <main className="contents">
@@ -65,7 +68,11 @@ export default async function Page(props: PageProps<'/[lang]/[...slug]'>) {
         breadcrumb={{ enabled: false }}
       >
         {channel === 'beta' && (
-          <BetaBanner locale={params.lang} slug={params.slug ?? []} />
+          <BetaBanner
+            locale={params.lang}
+            slug={params.slug ?? []}
+            stableRouteExists={stableRouteExists}
+          />
         )}
         {eyebrow && (
           <p className="mb-3 font-mono text-xs font-medium uppercase tracking-[0.09em] text-fd-primary">

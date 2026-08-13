@@ -1,0 +1,90 @@
+---
+title: ak orchestrate
+description: Chạy và giám sát một graph các job CLI bên ngoài dưới worker cục bộ bền bỉ với process-group ownership, run state bền vững, reconnect an toàn khi crash và phạm vi v1 chỉ hỗ trợ Darwin.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak orchestrate` để start, resume, check và stop một graph các job CLI
+bên ngoài dưới một worker supervisor cục bộ chuyên biệt. Worker sở hữu
+process group của mỗi job, ghi run state bền vững dưới `AGENTKIT_HOME`, và
+tồn tại qua sự kiện client hay coordinator đã launch thoát. Đây là lớp
+process-lifecycle mà skill `/ak:orchestrate` uỷ quyền tới khi giám sát job
+graph CLI.
+
+<Callout type="warning">
+  `ak orchestrate` v1 chỉ hỗ trợ **Darwin** (macOS). Mọi GOOS khác trả về lỗi
+  unsupported rõ ràng với mã thoát `6`. Caller chạy trên Linux hay Windows
+  nên fallback về subprocess do coordinator sở hữu và chấp nhận khoảng
+  trống khi bị interrupt được ghi chú công khai.
+</Callout>
+
+## Cách dùng
+
+```bash
+ak orchestrate
+```
+
+Lệnh nhóm trần chỉ in help. Dùng một trong các subcommand để thao tác trên
+một run.
+
+## Chọn subcommand orchestrate
+
+| Mục tiêu | Lệnh | Tác động |
+| --- | --- | --- |
+| Launch run mới từ job graph đã validate | `ak orchestrate start <job-graph.json>` | Validate graph, sinh run ID opaque mới, spawn worker detached sở hữu process group của mọi job, block đến khi worker durably persist run state và chứng minh readiness, rồi in run ID và status ban đầu. |
+| Reconnect sau khi client hoặc coordinator crash | `ak orchestrate resume <run-id> <job-graph.json>` | Xác nhận digest của graph còn khớp với record đang chạy và báo state hiện tại — không bao giờ relaunch job hay tạo process tree thứ hai. Fallback về reclassification read-only khi chính worker đã crash. |
+| Báo state lifecycle hiện tại của run | `ak orchestrate status <run-id>` | Với qua control socket đã verify của worker live khi tới được, ngược lại reconcile persisted state so với identity probe mới. Báo PID/PGID, heartbeat, thời gian output cuối và nhãn current-command cho từng job. |
+| Cancel các job live của run | `ak orchestrate stop <run-id>` | Gửi SIGTERM tới mọi job được cấp signal trong process group đã verify, chờ khoảng grace bounded, rồi SIGKILL chỉ job có group vẫn còn sống dưới cùng identity đã verify. Không bao giờ đoán target kill từ persisted state. |
+
+`start` luôn tạo run mới; retry cùng graph không tái dùng run ID cũ. Chỉ
+`resume <run-id>` mới tiếp tục một run có sẵn.
+
+## Ranh giới filesystem và quyền riêng tư
+
+Mỗi run ghi state, log output từng job và một control socket dưới
+`AGENTKIT_HOME/orchestrate/runs/<run-id>/`. Worker không persist prompt,
+argument command thô, giá trị environment hay secret — chỉ launch graph,
+status từng job, identity PID/PGID và stdout/stderr bounded mà graph chỉ
+định capture.
+
+Digest launch graph gắn với run ID ở `start`. `resume` verify digest này so
+với file graph được cấp cho nó; mismatch bị từ chối với mã thoát `1` thay
+vì âm thầm chạy tiếp dưới graph khác.
+
+## Cấu trúc job graph
+
+File graph là JSON liệt kê các job qua `id`, `command`, `args`, `work_dir`,
+`env`, `depends_on`. Schema và luật validate đầy đủ nằm trong job
+specification của skill `/ak:orchestrate`; trang tham chiếu này chỉ bao phủ
+ngữ nghĩa process-lifecycle của binary `ak orchestrate`.
+
+## Chế độ đầu ra
+
+| Chế độ | Kích hoạt |
+| --- | --- |
+| `pretty` | Mặc định trên TTY (màu, marker ASCII). |
+| `plain` | Tự động khi stdout piped hoặc đặt `--no-interactive`. |
+| `json` | `--json` (envelope một object, an toàn NDJSON). |
+
+Các cờ dùng chung (`--json`, `--no-interactive`, `--quiet`, `--verbose`,
+`--yes`) được mô tả trong [quy ước CLI](../cli-conventions). `--json` ngầm
+định `--no-interactive`.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Subcommand được yêu cầu thành công. |
+| `1` | Lỗi runtime (I/O state, launch thất bại, signal thất bại, digest graph không khớp, run không tìm thấy, state hỏng). |
+| `2` | Parse cờ thất bại. |
+| `3` | Người dùng huỷ (SIGINT, prompt-cancel). |
+| `6` | Nền tảng không hỗ trợ (v1 yêu cầu Darwin). |
+
+## Lệnh liên quan
+
+- [`ak orchestrate start`](./start)
+- [`ak orchestrate resume`](./resume)
+- [`ak orchestrate status`](./status)
+- [`ak orchestrate stop`](./stop)
+- [Quy ước CLI](../cli-conventions)

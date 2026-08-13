@@ -19,16 +19,22 @@ export function ProductDocsLayout({
   children,
   locale,
   tree,
+  unavailableUrls,
 }: {
   children: ReactNode;
   locale: string;
   tree: SerializedPageTree;
+  unavailableUrls: string[];
 }) {
   const pathname = usePathname();
   const product = activeProduct(pathname);
   const channelSegment = pathname.split('/').filter(Boolean)[1];
   const channel = channelSegment === 'beta' ? 'beta' : 'stable';
   const pageTree = useMemo(() => deserializePageTree(tree), [tree]);
+  const unavailableUrlSet = useMemo(
+    () => new Set(unavailableUrls),
+    [unavailableUrls],
+  );
   const filteredTree = useMemo(
     () => filterTreeByProduct(pageTree, product),
     [pageTree, product],
@@ -44,7 +50,14 @@ export function ProductDocsLayout({
       tabs={tabs}
       tabMode="top"
       containerProps={{ className: 'ak-product-docs-layout' }}
-      sidebar={{ banner: <ChannelSelector locale={locale} /> }}
+      sidebar={{
+        banner: (
+          <ChannelSelector
+            locale={locale}
+            unavailableUrls={unavailableUrlSet}
+          />
+        ),
+      }}
       {...baseOptions(locale)}
     >
       {children}

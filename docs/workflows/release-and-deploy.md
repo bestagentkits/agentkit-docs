@@ -67,9 +67,15 @@ content.
 
 Re-running the same bundle/tag is **idempotent**.
 
+A Beta sync may publish routes that do not yet exist in Stable. EN and VI must
+keep identical source, published, and searchable route sets within each
+channel, while every Stable route in those sets must still exist in Beta. The quality gates in
+`scripts/release-quality-shape.mjs`, `scripts/release-quality-metrics.mjs`, and
+the route tests enforce this `stable ⊆ beta` contract.
+
 ### What Beta sync does *not* refresh
 
-`sync-release.mjs` is scoped to what the docs-bundle carries. Two surfaces
+`sync-release.mjs` is scoped to what the docs-bundle carries. Three surfaces
 drift silently across releases and need their own manual passes on the same
 Beta PR (or an immediate follow-up):
 
@@ -113,16 +119,20 @@ Beta PR (or an immediate follow-up):
    `skills/meta.{json,vi.json}` and `skills/index.{en,vi}.mdx`, refresh
    `kit-catalog-identities.json` (evidence anchor + bundle SHA256 + new
    identity entries), and bump the Kit overview `| Skills | N |` count in
-   `content/docs/beta/kits/{engineer,marketing}.{en,vi}.mdx`. Mirror the same
-   additions into `content/docs/stable/**` so the tree stays whole-copy-ready
-   for the next promotion. Skills marked `disable-model-invocation: true`
-   without `user-invocable: true` (for example `ak-common`) stay classified
-   `internal` in the catalog and get no public page.
+   `content/docs/beta/kits/{engineer,marketing}.{en,vi}.mdx`. Keep EN/VI route
+   parity inside Beta, but do not copy new pages or prose into
+   `content/docs/stable/**`. Stable remains bound to its recorded tag until the
+   reviewed whole-copy promotion consumes the exact Beta snapshot. Skills marked
+   `disable-model-invocation: true` without `user-invocable: true` (for example
+   `ak-common`) stay classified `internal` in the catalog and get no public page.
 
-   The `check:catalog` guard reads the frozen catalog as ground truth, so it
-   only fails when docs and catalog disagree. It does not detect upstream
-   drift on its own — refresh the catalog against the new bundle first, then
-   let the guard verify the docs match.
+   The current `check:catalog` guard reads one frozen catalog for both channels
+   and still requires identical Beta/Stable Kit routes, navigation, and overview
+   counts. Until that guard gains per-channel catalog state and `stable ⊆ beta`
+   checks, a legitimate Beta-only Kit addition will fail it. Stop and fix that
+   guard contract; never copy the new Kit page or count into Stable to obtain a
+   green check. The guard also does not detect upstream drift on its own — its
+   catalog evidence must first be refreshed against the new bundle.
 
 3. **Desktop App section.** `content/docs/beta/desktop-app/**` describes
    product-state for a specific Desktop release: artifact filenames, sizes,

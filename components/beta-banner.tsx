@@ -1,6 +1,6 @@
 import Link from 'next/link';
+import { channelRouteHref } from '@/lib/channel-route-href.mjs';
 import { getChannelVersion } from '@/lib/channels';
-import { localePath } from '@/lib/locale-path';
 
 // Persistent beta-channel notice. Rendered on every `beta/` docs page (keyed on
 // the slug's channel prefix by the caller). The version is read from
@@ -56,21 +56,21 @@ const copy = {
 export function BetaBanner({
   locale,
   slug,
+  stableRouteExists,
 }: {
   locale: string;
   slug: string[];
+  stableRouteExists: boolean;
 }) {
   const t = copy[locale as keyof typeof copy] ?? copy.en;
   const version = getChannelVersion('beta');
   const stableVersion = getChannelVersion('stable');
   const mirrorsStable = version !== null && version === stableVersion;
-  // Same page on the stable channel = swap the leading `beta` segment.
-  // Static params retain percent-encoded spaces; pass decoded segments to
-  // Next's Link so it applies URL encoding exactly once.
-  const stableHref = localePath(
+  const stableHref = channelRouteHref(
     locale,
     'stable',
-    ...slug.slice(1).map((segment) => decodeURI(segment)),
+    slug.slice(1),
+    stableRouteExists,
   );
 
   return (

@@ -24,6 +24,8 @@ Checked out as siblings of this repo (paths relative to the repo root):
 - Screenshots for those pages live in `public/gui/`; see
   [`public/gui/README.md`](./public/gui/README.md) for the capture and
   optimization manifest.
-- `stable` is machine-generated from `beta` by the promotion pipeline, so keep
-  new docs channel-neutral (relative links only) and keep the two channels
-  byte-identical for any page authored in both.
+- `stable` is machine-generated from an exact `beta` snapshot by the promotion
+  pipeline. Keep new docs channel-neutral (relative links only), author release
+  updates in Beta, and let Stable change only through reviewed whole-copy
+  promotion. EN and VI keep the same route shape within each channel; Beta may
+  contain routes and prose that Stable has not promoted yet.
