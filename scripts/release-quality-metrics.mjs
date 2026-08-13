@@ -21,7 +21,7 @@ import { collectPublishedChannelRoutes, inspectReleaseShape } from './release-qu
 export const RELEASE_QUALITY_BASELINE = Object.freeze({
   schemaVersion: 1,
   reviewedAt: '2026-08-13',
-  sourceCommit: 'e1f84b0b0203cb2578aad2e0c9b9b708233ec2c2',
+  sourceCommit: 'dca7e4d895f45ba8b786f949ae94072855d3a5a4',
   channels: ['beta', 'stable'],
   locales: ['en', 'vi'],
   deterministic: {
@@ -33,7 +33,7 @@ export const RELEASE_QUALITY_BASELINE = Object.freeze({
     searchBudgetBytes: SEARCH_ASSET_BUDGET_BYTES,
     // Per-channel: stable stays bound to channels.stable.tag; beta may include
     // pages authored ahead of the next stable promote.
-    searchPagesPerLocaleChannel: { stable: 391, beta: 396 },
+    searchPagesPerLocaleChannel: { stable: 392, beta: 397 },
     reviewedSearchOutsideChannelRoutes: ['_showcase'],
     reviewedSearchExcludedPublishedRoutes: ['reference/cli/ak'],
     maxAssetBytesExclusive: MAX_ASSET_BYTES,
