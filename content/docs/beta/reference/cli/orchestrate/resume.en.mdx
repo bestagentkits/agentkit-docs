@@ -1,0 +1,93 @@
+---
+title: ak orchestrate resume
+description: Reconnect to an existing orchestrated run after a client or coordinator crash, verifying the graph digest and reclassifying orphaned jobs without ever relaunching a second process tree.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak orchestrate resume` to reconnect to an existing run after this
+terminal, its shell, or its coordinating process was interrupted while the
+run was in flight. Resume never relaunches jobs or creates a second process
+tree; a live worker either confirms it is still supervising the recorded
+run, or the command falls back to a read-only reclassification of persisted
+state.
+
+<Callout type="info">
+  Resume is the safe reconnect after a client or coordinator crash. When the
+  worker itself crashed mid-run, an adopted job is left as `orphaned` for a
+  human (or a fresh `start`) to act on — resume never silently continues an
+  unsupervised process tree.
+</Callout>
+
+## Usage
+
+```bash
+ak orchestrate resume <run-id> <job-graph.json>
+```
+
+Supply exactly two positional arguments — the run ID printed by
+[`ak orchestrate start`](./start), and the same job graph file used at
+dispatch. The graph's digest is compared against the digest bound to the
+persisted run; a mismatch is refused with exit code `1`.
+
+## Command flags
+
+Shared flags (`--json`, `--no-interactive`, `--quiet`, `--verbose`, `--yes`)
+are described in [CLI conventions](../cli-conventions). `--json` returns a
+single-object result envelope.
+
+## Reconnect semantics
+
+| Case | Result |
+| --- | --- |
+| Live, verified worker is reachable | Resume confirms the graph digest still matches and reports current state. No processes are touched. |
+| Worker itself crashed | Read-only reclassification of the persisted record against a fresh identity probe. Jobs whose original worker died mid-run stay marked `orphaned`. |
+| Graph digest does not match the persisted record | Refused with exit code `1`. Correct the graph file or `start` a fresh run. |
+| Run ID not found | Refused with exit code `1`. |
+
+Resume never re-executes work, never redispatches a second process tree,
+and never adopts an orphan into a new supervisor without an explicit human
+step.
+
+## Filesystem effects
+
+- Read-only against a live worker.
+- Persists a reclassification of orphaned or unknown jobs when the worker
+  itself crashed.
+
+The launch graph file must be exactly the one used at `start`. The digest
+comparison is byte-stable against the persisted `launch-graph.json`, not a
+loose semantic diff.
+
+## Human and JSON output
+
+`--json` returns:
+
+```json
+{
+  "action": "resume",
+  "run_id": "<opaque>",
+  "worker_state": "live | crashed | unreachable",
+  "graph_digest_matches": true,
+  "jobs": [
+    { "id": "<job-id>", "state": "running | completed | orphaned | ..." }
+  ]
+}
+```
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | Reconnected, or reclassification recorded. | Inspect per-job state; act on any `orphaned` job explicitly. |
+| `1` | Digest mismatch, run not found, or state corrupt/unsupported. | Do not force resume; investigate the persisted record or `start` a fresh run. |
+| `2` | Flag parsing failed. | Correct the flags. |
+| `3` | Interrupted. | Re-run resume with the same arguments. |
+| `6` | Platform unsupported. | Non-Darwin has no persisted worker to reconnect to. |
+
+## Related commands
+
+- [`ak orchestrate`](./)
+- [`ak orchestrate start`](./start)
+- [`ak orchestrate status`](./status)
+- [`ak orchestrate stop`](./stop)

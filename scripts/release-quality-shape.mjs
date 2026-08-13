@@ -8,12 +8,15 @@ import { repoRoot } from './lib/paths.mjs';
 
 export const RELEASE_SHAPE_BASELINE = Object.freeze({
   schemaVersion: 1,
-  reviewedAt: '2026-08-09',
-  sourceCommit: '85d343811d16d653bafd060a03ac755e09a51fc0',
+  reviewedAt: '2026-08-13',
+  sourceCommit: 'e1f84b0b0203cb2578aad2e0c9b9b708233ec2c2',
   channels: ['beta', 'stable'],
   locales: ['en', 'vi'],
-  sourceRoutesPerLocaleChannel: 393,
-  routesPerLocaleChannel: 392,
+  // Per-channel: stable stays bound to channels.stable.tag; beta may include
+  // routes authored ahead of the next stable promote. Beta must remain a
+  // superset of stable so a whole-copy promote is safe.
+  sourceRoutesPerLocaleChannel: { stable: 393, beta: 398 },
+  routesPerLocaleChannel: { stable: 392, beta: 397 },
   reviewedSourceOnlyRoutes: [
     {
       route: 'changelog',
@@ -60,6 +63,17 @@ function addSetDifference(errors, label, expected, actual) {
   const extra = sorted([...actual].filter((value) => !expected.has(value)));
   if (missing.length || extra.length) {
     errors.push(`${label}: missing [${missing.join(', ')}]; extra [${extra.join(', ')}]`);
+  }
+}
+
+// Assert `actual` contains every value in `expected` (i.e., actual ⊇ expected).
+// Extra values in `actual` are allowed. Used for cross-channel comparison where
+// beta may include routes authored ahead of the next stable promote but must
+// still contain every stable route so a whole-copy promote is safe.
+function addMissingSubset(errors, label, expected, actual) {
+  const missing = sorted([...expected].filter((value) => !actual.has(value)));
+  if (missing.length) {
+    errors.push(`${label}: missing [${missing.join(', ')}]`);
   }
 }
 
@@ -204,12 +218,14 @@ export async function inspectReleaseShape({
     }
     for (const locale of baseline.locales) {
       const sourceCount = observations[channel].sourceRoutes[locale].size;
-      if (sourceCount !== baseline.sourceRoutesPerLocaleChannel) {
-        errors.push(`${channel}/${locale}: source route count ${sourceCount} does not match reviewed baseline ${baseline.sourceRoutesPerLocaleChannel}`);
+      const expectedSourceCount = baseline.sourceRoutesPerLocaleChannel[channel];
+      if (sourceCount !== expectedSourceCount) {
+        errors.push(`${channel}/${locale}: source route count ${sourceCount} does not match reviewed baseline ${expectedSourceCount}`);
       }
       const count = observations[channel].routes[locale].size;
-      if (count !== baseline.routesPerLocaleChannel) {
-        errors.push(`${channel}/${locale}: route count ${count} does not match reviewed baseline ${baseline.routesPerLocaleChannel}`);
+      const expectedCount = baseline.routesPerLocaleChannel[channel];
+      if (count !== expectedCount) {
+        errors.push(`${channel}/${locale}: route count ${count} does not match reviewed baseline ${expectedCount}`);
       }
 
       const sourceOnly = new Set(
@@ -235,24 +251,25 @@ export async function inspectReleaseShape({
     }
   }
 
-  const referenceChannel = observations[baseline.channels[0]];
-  if (referenceChannel) {
-    for (const channel of baseline.channels.slice(1)) {
-      if (!observations[channel]) continue;
-      for (const locale of baseline.locales) {
-        addSetDifference(
-          errors,
-          `${baseline.channels[0]}/${channel} ${locale} source route shape`,
-          referenceChannel.sourceRoutes[locale],
-          observations[channel].sourceRoutes[locale],
-        );
-        addSetDifference(
-          errors,
-          `${baseline.channels[0]}/${channel} ${locale} route shape`,
-          referenceChannel.routes[locale],
-          observations[channel].routes[locale],
-        );
-      }
+  // Cross-channel guarantee: every stable route must exist in beta so a
+  // whole-copy promote stays safe. Extra beta-only routes (features authored
+  // ahead of the next promote) are allowed.
+  const stableChannel = observations.stable;
+  const betaChannel = observations.beta;
+  if (stableChannel && betaChannel) {
+    for (const locale of baseline.locales) {
+      addMissingSubset(
+        errors,
+        `stable ⊆ beta ${locale} source route shape`,
+        stableChannel.sourceRoutes[locale],
+        betaChannel.sourceRoutes[locale],
+      );
+      addMissingSubset(
+        errors,
+        `stable ⊆ beta ${locale} route shape`,
+        stableChannel.routes[locale],
+        betaChannel.routes[locale],
+      );
     }
   }
 
@@ -309,7 +326,7 @@ async function main() {
     for (const [channel, locales] of Object.entries(report.channels)) {
       console.log(`${channel}: ${Object.entries(locales).map(([locale, count]) => `${locale}=${count}`).join(', ')}`);
     }
-    console.log(`source routes per locale/channel: ${report.baseline.sourceRoutesPerLocaleChannel}`);
+    console.log(`source routes per locale/channel: ${JSON.stringify(report.baseline.sourceRoutesPerLocaleChannel)}`);
     console.log(`reviewed locale variants: ${report.reviewedVariants.length}`);
     console.log('release-quality-shape: route parity OK.');
   }

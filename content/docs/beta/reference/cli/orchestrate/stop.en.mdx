@@ -1,0 +1,89 @@
+---
+title: ak orchestrate stop
+description: Terminate an orchestrated run's live jobs with SIGTERM, a bounded grace period, then SIGKILL — always against a verified worker identity, never guessed from a stale persisted PID.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak orchestrate stop` to send SIGTERM to every signal-authorized job in
+the run's verified process group through the worker's control socket, wait
+a bounded grace period, then SIGKILL only a job whose group is still alive
+under the same verified identity. If no live, verified worker is reachable,
+the command reports that instead of guessing a kill target.
+
+<Callout type="warning">
+  Stop never falls back to signalling from a persisted PID alone. A reused
+  OS PID from a different process is not a valid kill target; the command
+  refuses to signal one and asks the operator to investigate instead.
+</Callout>
+
+## Usage
+
+```bash
+ak orchestrate stop <run-id>
+```
+
+Supply exactly one positional argument — the run ID printed by
+[`ak orchestrate start`](./start).
+
+## Command flags
+
+Shared flags (`--json`, `--no-interactive`, `--quiet`, `--verbose`, `--yes`)
+are described in [CLI conventions](../cli-conventions). Stop honors
+`--yes` and `--no-interactive` for scripted cancellation; the shutdown
+sequence itself does not prompt.
+
+## Shutdown sequence
+
+1. **Verify the worker.** Contact the run's control socket and confirm the
+   worker's identity matches the one recorded at `start`.
+2. **SIGTERM the process group.** Every signal-authorized job in the
+   verified group receives SIGTERM.
+3. **Wait the grace period.** The worker gives each job a bounded time to
+   exit cleanly.
+4. **SIGKILL survivors.** Only a job whose group is still alive under the
+   same verified identity receives SIGKILL.
+5. **Persist the outcome.** The stop request and its per-job result are
+   written to the run's state file.
+
+If step 1 fails — for example, the worker itself crashed — no signals are
+sent. Stop reports the unreachable worker and exits `1` rather than
+signalling a persisted PID that may now belong to a different process.
+
+## Filesystem effects
+
+Persists the stop request and its outcome to the run's state file. Does
+not delete run state, output logs, or the launch graph; those remain for
+inspection.
+
+## Human and JSON output
+
+`--json` returns:
+
+```json
+{
+  "action": "stop",
+  "run_id": "<opaque>",
+  "worker_state": "live | crashed | unreachable",
+  "signalled": ["<job-id>", "..."],
+  "killed": ["<job-id>", "..."],
+  "survived": []
+}
+```
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | Every reachable, signal-authorized job was terminated. | Run `ak orchestrate status <run-id>` to verify. |
+| `1` | No live, verified worker was reachable, or a stop step failed. | Investigate; do not force-signal a persisted PID by hand. |
+| `2` | Flag parsing failed. | Correct the flags. |
+| `3` | User cancelled during the shutdown request. | Re-run stop when ready. |
+| `6` | Platform unsupported. | Non-Darwin has no persisted worker to stop. |
+
+## Related commands
+
+- [`ak orchestrate`](./)
+- [`ak orchestrate start`](./start)
+- [`ak orchestrate resume`](./resume)
+- [`ak orchestrate status`](./status)

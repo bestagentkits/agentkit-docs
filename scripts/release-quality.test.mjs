@@ -32,8 +32,8 @@ function shapeBaseline(overrides = {}) {
     sourceCommit: 'fixture',
     channels: ['beta', 'stable'],
     locales: ['en', 'vi'],
-    sourceRoutesPerLocaleChannel: 2,
-    routesPerLocaleChannel: 2,
+    sourceRoutesPerLocaleChannel: { stable: 2, beta: 2 },
+    routesPerLocaleChannel: { stable: 2, beta: 2 },
     reviewedSourceOnlyRoutes: [],
     reviewedGeneratedRoutes: [],
     reviewedVariants: [
@@ -78,7 +78,7 @@ function searchDocument(locale, route, title) {
   };
 }
 
-async function serializedSearchData() {
+async function serializedSearchData(routesByChannel) {
   const data = {};
   for (const [locale, title] of [['en', 'Installation'], ['vi', 'Cài đặt']]) {
     const database = create({
@@ -93,27 +93,39 @@ async function serializedSearchData() {
       },
       language: 'english',
     });
-    await insertMultiple(database, ['beta', 'stable'].map((channel) => {
-      const route = `/${locale}/${channel}/installation`;
-      return searchDocument(locale, route, title);
+    const routes = [
+      ['beta', 'installation'],
+      ['stable', 'installation'],
+      ...routesByChannel.beta.filter((route) => route !== 'installation').map((route) => ['beta', route]),
+      ...routesByChannel.stable.filter((route) => route !== 'installation').map((route) => ['stable', route]),
+    ];
+    await insertMultiple(database, routes.map(([channel, route]) => {
+      const url = `/${locale}/${channel}/${route}`;
+      return searchDocument(locale, url, route === 'installation' ? title : route);
     }));
     data[locale] = { type: 'advanced', ...save(database) };
   }
   return JSON.stringify({ type: 'i18n', data });
 }
 
-async function makeMetricFixture() {
+async function makeMetricFixture({ betaOnlyRoutes = [], stableOnlyRoutes = [] } = {}) {
   const root = await temporaryRoot('ak-release-metrics-');
   const outDir = join(root, 'out');
+  const routesByChannel = {
+    beta: ['installation', ...betaOnlyRoutes],
+    stable: ['installation', ...stableOnlyRoutes],
+  };
   const htmlPaths = [];
   for (const locale of ['en', 'vi']) {
     for (const channel of ['beta', 'stable']) {
-      const htmlPath = join(outDir, locale, channel, 'installation.html');
-      await write(htmlPath, '<h1>Installation</h1>');
-      htmlPaths.push(htmlPath);
+      for (const route of routesByChannel[channel]) {
+        const htmlPath = join(outDir, locale, channel, `${route}.html`);
+        await write(htmlPath, `<h1>${route}</h1>`);
+        htmlPaths.push(htmlPath);
+      }
     }
   }
-  const searchBody = await serializedSearchData();
+  const searchBody = await serializedSearchData(routesByChannel);
   await write(join(outDir, 'api', 'search'), searchBody);
   const searchBytes = (await stat(join(outDir, 'api', 'search'))).size;
   const htmlBytes = (await Promise.all(htmlPaths.map((htmlPath) => stat(htmlPath))))
@@ -125,11 +137,14 @@ async function makeMetricFixture() {
     deterministic: {
       outputBytes: searchBytes + htmlBytes,
       outputBudgetBytes: searchBytes + htmlBytes + 100,
-      fileCount: 5,
-      fileCountBudget: 6,
+      fileCount: htmlPaths.length + 1,
+      fileCountBudget: htmlPaths.length + 2,
       searchBytes,
       searchBudgetBytes: searchBytes + 10,
-      searchPagesPerLocaleChannel: 1,
+      searchPagesPerLocaleChannel: {
+        stable: routesByChannel.stable.length,
+        beta: routesByChannel.beta.length,
+      },
       reviewedSearchOutsideChannelRoutes: [],
       reviewedSearchExcludedPublishedRoutes: [],
       maxAssetBytesExclusive: searchBytes + 10,
@@ -177,7 +192,7 @@ test('rejects Stable and Beta route divergence', async () => {
 
 test('rejects authored routes that silently disappear from every built locale and channel', async () => {
   const fixture = await makeShapeFixture();
-  fixture.baseline.sourceRoutesPerLocaleChannel = 3;
+  fixture.baseline.sourceRoutesPerLocaleChannel = { stable: 3, beta: 3 };
   for (const channel of ['beta', 'stable']) {
     await write(join(fixture.docsRoot, channel, 'orphan.en.mdx'));
     await write(join(fixture.docsRoot, channel, 'orphan.vi.mdx'));
@@ -190,6 +205,23 @@ test('checks deterministic output budgets and fixed top-five relevance', async (
   const report = await inspectReleaseMetrics(fixture);
   assert.equal(report.observed.fileCount, 5);
   assert.deepEqual(report.relevance.map((entry) => entry.rank), [2, 2]);
+});
+
+test('allows searchable routes authored only in beta', async () => {
+  const fixture = await makeMetricFixture({ betaOnlyRoutes: ['reference/beta-only'] });
+  const report = await inspectReleaseMetrics(fixture);
+  assert.deepEqual(report.searchShape.pages, {
+    en: { beta: 2, stable: 1 },
+    vi: { beta: 2, stable: 1 },
+  });
+});
+
+test('rejects searchable stable routes that are missing from beta', async () => {
+  const fixture = await makeMetricFixture({ stableOnlyRoutes: ['reference/stable-only'] });
+  await assert.rejects(
+    () => inspectReleaseMetrics(fixture),
+    /stable ⊆ beta searchable route shape: missing \[reference\/stable-only\]/,
+  );
 });
 
 test('rejects output growth beyond the reviewed deterministic budget', async () => {

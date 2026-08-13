@@ -1,4 +1,5 @@
 import { ProductDocsLayout } from '@/components/product-docs-layout';
+import { unavailableChannelUrls } from '@/lib/channel-route-href.mjs';
 import { source } from '@/lib/source';
 import type { SerializedPageTree } from 'fumadocs-core/source/client';
 
@@ -14,9 +15,16 @@ export default async function Layout({
   const tree = JSON.parse(
     JSON.stringify(await source.serializePageTree(source.getPageTree(lang))),
   ) as SerializedPageTree;
+  const unavailableUrls = unavailableChannelUrls(
+    source.getPages(lang).map((page) => page.url),
+  );
 
   return (
-    <ProductDocsLayout locale={lang} tree={tree}>
+    <ProductDocsLayout
+      locale={lang}
+      tree={tree}
+      unavailableUrls={unavailableUrls}
+    >
       {children}
     </ProductDocsLayout>
   );
