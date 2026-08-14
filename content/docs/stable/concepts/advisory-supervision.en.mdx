@@ -1,0 +1,340 @@
+---
+title: Advisory supervision
+description: Understand how AgentKit uses advisory-only Agents for checkpoints, hard decisions, and interview-driven second opinions.
+---
+
+Advisory supervision is the AgentKit pattern for asking a stronger or more
+specialized adviser to examine a decision without handing it authority to
+implement. The adviser gives counsel; the main workflow still owns the plan,
+edits, tests, approvals, and final decision.
+
+This matters because several tools sound similar:
+
+- Claude Code's built-in advisor is a runtime-native advisor tool.
+- An ordinary subagent is an isolated worker that can run its own task loop.
+- AgentKit `kongming` is a one-shot advisory Agent used at workflow checkpoints.
+- AgentKit `advisor` is the interview-driven Agent behind
+  `/ak:advise --agent`.
+
+They are all useful, but they have different context, lifecycle, and authority
+boundaries.
+
+## The short version
+
+Use the built-in Claude Code advisor when you want the current Claude Code
+session to consult a native adviser during its own generation. Use `kongming`
+when an AgentKit workflow reaches a hard checkpoint and needs explicit,
+evidence-packed counsel from a fresh advisory Agent. Use `/ak:advise` when the
+problem itself needs to be reframed through a user interview. Use an ordinary
+subagent when you want delegated work, not just counsel.
+
+`kongming` and `advisor` are AgentKit Agents. They are advisory-only by
+contract. They may inspect evidence that the runtime allows them to inspect, but
+they do not become the owner of implementation or approval.
+
+## Built-in advisor in Claude Code
+
+Claude Code exposes its own advisor feature through `/advisor`, the
+`advisorModel` setting, and the `--advisor <model>` CLI flag. Anthropic describes
+the underlying advisor tool as a way for an executor model to consult an adviser
+model mid-generation; the adviser reads the conversation and returns strategic
+guidance to the executor.
+
+That makes it a runtime-native consultation. You do not package a task for an
+AgentKit Agent, choose AgentKit checkpoints, or create an isolated AgentKit
+state file. The main Claude Code session continues after receiving the advice.
+
+```mermaid
+flowchart LR
+  accTitle: Claude Code built-in advisor flow
+  accDescr: The main Claude Code session calls the native advisor tool. The runtime forwards conversation context to an adviser model, then returns advice to the main session.
+  user["User"] --> main["Claude Code main session"]
+  main --> tool["advisor() runtime tool"]
+  tool --> model["Advisor model"]
+  model --> tool
+  tool --> main
+  main --> work["Main session continues"]
+```
+
+See the public Claude documentation for the
+[advisor tool](https://docs.anthropic.com/en/agents-and-tools/tool-use/advisor-tool),
+the [Claude Code CLI flag](https://docs.anthropic.com/en/docs/claude-code/cli-reference),
+and [Claude Code settings](https://docs.anthropic.com/en/docs/claude-code/settings).
+
+## Ordinary subagents
+
+Ordinary subagents are a delegation mechanism. Claude Code documents subagents
+as specialized assistants that run in their own context window with their own
+prompt, tool access, and permissions. They are useful when a side task would
+flood the main session with logs, file reads, search results, or implementation
+details.
+
+A normal subagent can be asked to scout, test, review, write a report, or
+sometimes edit files, depending on the task and runtime permissions. It is not
+inherently advisory-only. Its authority comes from its prompt, tools, and the
+user's or caller's instructions.
+
+```mermaid
+flowchart LR
+  accTitle: Ordinary subagent flow
+  accDescr: The main session delegates a bounded task to an isolated subagent. The subagent works in its own context and returns a result.
+  main["Main session"] --> package["Task package"]
+  package --> subagent["Subagent context"]
+  subagent --> tools["Allowed tools"]
+  tools --> subagent
+  subagent --> result["Summary, report, test result, or edits"]
+  result --> main
+```
+
+See Anthropic's [Claude Code subagents](https://docs.anthropic.com/en/docs/claude-code/sub-agents)
+documentation for the runtime model.
+
+## AgentKit kongming
+
+`kongming` is implemented as an AgentKit Agent, but its contract is narrower
+than a normal worker subagent:
+
+| Property | `kongming` behavior |
+| --- | --- |
+| Purpose | Strategic counsel for hard design, debugging, trade-off, or go/no-go calls |
+| Lifecycle | One-shot: one prompt in, one final answer out |
+| User interview | None |
+| Implementation authority | None |
+| Expected input | Task, evidence, approaches tried, and the exact question |
+| Expected output | Structured advice, assumptions, risks, checklist, and success metrics |
+
+AgentKit Skills such as `ak:plan`, `ak:cook`, `ak:fix`, and `ak:vibe` use
+`--advice` to add `kongming` supervision at checkpoints. Typical checkpoints
+include:
+
+- after a phase, gate, or major analysis completes;
+- when repeated attempts fail or evidence conflicts;
+- before a high-stakes architecture, public-contract, security-sensitive, or
+  irreversible decision;
+- after a pull request is open and required checks are green, when the workflow
+  requires a final advisory review.
+
+The calling workflow gives `kongming` enough context to answer in one reply.
+`kongming` may scout with allowed read, search, or exploration tools, but it
+does not interview the user and does not apply code changes.
+
+```mermaid
+flowchart TB
+  accTitle: AgentKit kongming checkpoint flow
+  accDescr: An AgentKit workflow spawns kongming at explicit checkpoints with evidence and a question. Kongming returns counsel; the main workflow remains responsible for action.
+  user["User"] --> workflow["AgentKit workflow"]
+  workflow --> checkpoint["Checkpoint or hard decision"]
+  checkpoint --> prompt["Task, evidence, attempts, exact question"]
+  prompt --> kongming["kongming Agent"]
+  kongming --> scout["Optional scouting"]
+  scout --> kongming
+  kongming --> counsel["Structured counsel"]
+  counsel --> workflow
+  workflow --> owner["Main workflow decides, edits, tests, and gates"]
+```
+
+## One-shot lifecycle
+
+Each `kongming` consultation is fresh. If the workflow reaches checkpoint A, it
+spawns `kongming #1`, receives advice, and continues. If new evidence appears
+later at checkpoint B, the workflow spawns `kongming #2`.
+
+The second consultation does not automatically inherit the first one's hidden
+state. Forward the relevant prior counsel, evidence, and decision history
+explicitly in the new prompt.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant Main as Main workflow
+  participant K1 as kongming #1
+  participant K2 as kongming #2
+
+  Main->>K1: Checkpoint A: task, evidence, question
+  K1-->>Main: Counsel, assumptions, risks
+  Main->>Main: Decide and continue work
+  Main->>Main: Gather new evidence
+  Main->>K2: Checkpoint B: new evidence plus relevant prior counsel
+  K2-->>Main: Updated counsel
+  Main->>Main: Decide, edit, test, and gate
+```
+
+Treat `kongming` advice as a high-quality input, not as a verdict that executes
+itself. The main workflow must still resolve conflicts, choose the path, make
+the edits, run validation, satisfy approval gates, and record what happened.
+
+## ak:advise inline and ak:advise --agent
+
+AgentKit `advisor` is different from `kongming`.
+
+`/ak:advise` is an interview-driven Skill. It analyzes a prompt or URL, scouts
+when project evidence matters, asks one question at a time, confirms the
+reframed problem, then delivers candid advice.
+
+Without `--agent`, Claude Code runs `/ak:advise` inline in the main session. The
+same Skill workflow still applies: the main session analyzes the input, scouts
+when useful, asks the interview questions directly, confirms the reframing, and
+returns the advice or requested report artifacts. No separate AgentKit
+`advisor` Agent is spawned.
+
+With `--agent` on Claude Code, the Skill delegates that whole interview to the
+`advisor` Agent.
+
+Because the interview needs user participation, `advisor` uses a relay pattern:
+it asks exactly one question, persists its state, returns a structured
+`NEEDS_USER_INPUT` request to the orchestrating session, then is re-spawned with
+the user's answer. When the interview converges, it writes the advice report and
+returns `ADVICE_READY`.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant User as User
+  participant Main as Main session
+  participant Advisor as advisor Agent
+
+  User->>Main: /ak:advise ... --agent
+  Main->>Advisor: Input, flags, state path, report path
+  Advisor-->>Main: NEEDS_USER_INPUT with one question
+  Main-->>User: Ask the question
+  User->>Main: Answer
+  Main->>Advisor: Re-spawn with answer and state path
+  Advisor-->>Main: More questions or ADVICE_READY
+  Main-->>User: Final advice and requested outputs
+```
+
+Use `advisor` when the advice depends on discovering the real requirements with
+the user. Use `kongming` when the workflow already knows the checkpoint question
+and needs a one-shot strategic review.
+
+## Runtime notes
+
+Runtime support is not identical.
+
+| Runtime | Advisory behavior to know |
+| --- | --- |
+| Claude Code | `/ak:advise` without `--agent` runs inline in the main session. `/ak:advise --agent` delegates the interview to the AgentKit `advisor` Agent. AgentKit marks `kongming` and `advisor` with the `fable` model tier. Claude Code also has its own built-in advisor, which is separate from AgentKit Agents. |
+| Codex | AgentKit maps `kongming` to a Codex frontier model override with high reasoning effort. The shared `fable` frontmatter remains portable, but Codex-specific model IDs are emitted only by the Codex adapter. `/ak:advise --agent` does not imply the Claude Code relay path; use inline `ak:advise` unless your installed runtime reports support. |
+| Cursor | AgentKit can project Agents and Skills, but do not assume Claude Code advisor behavior or AgentKit `advisor` relay parity from file presence alone. Check the runtime adapter output and the Skill page for the active surface. |
+
+### Claude Code
+
+Claude Code has two AgentKit `ak:advise` shapes:
+
+- **Inline `/ak:advise`** keeps the interview in the current main session. Use
+  this when you want the ordinary Skill flow, visible conversation state, and no
+  separate AgentKit adviser context.
+- **`/ak:advise --agent`** makes the main session an orchestrator for the
+  AgentKit `advisor` Agent. Use this when you want the long interview and advice
+  generation isolated in an adviser context on the strongest configured tier.
+
+Both modes are different from Claude Code's built-in `/advisor`. The built-in
+advisor is a runtime-native consultation tool; AgentKit `ak:advise` is a Skill
+workflow, with optional delegation to the AgentKit `advisor` Agent.
+
+### Codex
+
+Codex uses native Skill discovery for AgentKit Skills, so `ak:advise` runs as a
+Skill in the current Codex session. The Claude Code-only `advisor` relay behind
+`/ak:advise --agent` is not the Codex contract; outside Claude Code, use the
+inline interview unless the installed runtime explicitly reports an adviser
+relay surface.
+
+For workflow supervision, Codex does support Agent delegation. When a Skill such
+as `ak:plan`, `ak:cook`, `ak:fix`, or `ak:vibe` runs with `--advice`, the
+workflow can consult `kongming` through Codex's delegation capability when
+delegation is available in the session. AgentKit emits `kongming` with a
+Codex-specific frontier model override and high reasoning effort, while keeping
+the shared `model: fable` source portable.
+
+The same ownership rule applies: `kongming` returns advice only. The Codex main
+session still applies patches, runs commands, updates plans, and decides whether
+to continue.
+
+### Cursor
+
+Cursor has a native AgentKit projection for Skills and Agents:
+
+- Skills are emitted under Cursor's `.cursor/skills/` discovery tree.
+- Agents are emitted under `.cursor/agents/`.
+- AgentKit command files are preserved as sidecar content because Cursor does
+  not have the same command-file surface.
+
+In practice, `ak:advise` is the safe Cursor path: run the Skill inline and let
+it ask the interview questions in the current session. `--agent` should not be
+treated as equivalent to Claude Code's adviser relay. The AgentKit `advisor`
+Agent may be projected, but the documented relay protocol for
+`/ak:advise --agent` is Claude Code-only.
+
+For `--advice`, Cursor exposes a native subagent capability and can project
+`kongming` as an Agent. That means an AgentKit workflow can ask for `kongming`
+counsel at checkpoints when the live Cursor setup supports Agent invocation.
+Cursor remaps the shared `fable` tier to a Cursor model ID at emit time. Current
+AgentKit conformance still records live Cursor Agent install, update, and
+invocation canary coverage as deferred, and model availability can vary by
+Cursor plan. Treat adapter output and the active Cursor session as the source of
+truth.
+
+### Model availability and fallback
+
+AgentKit does not silently downgrade advisory Agents when a subscription,
+provider, or runtime plan cannot use the configured frontier model. A model tier
+or emitted model ID is a request to the runtime, not proof that the user's
+account can run it.
+
+If the runtime rejects the model, treat the advisory step as not completed. The
+safe fallback is explicit:
+
+- Run the advice inline in the main session when the task is `/ak:advise` and
+  isolation is not required.
+- Reconfigure the installed Agent or runtime model to one the account can use,
+  then rerun the advisory step.
+- Continue without `--advice` only when the workflow owner accepts losing the
+  `kongming` checkpoint.
+- Report the model or entitlement failure instead of claiming frontier counsel
+  happened.
+
+In Codex, an Agent can either request a specific model or inherit the current
+session default. If an Agent is marked `inherit`, or AgentKit does not recognize
+its model tier, AgentKit writes no Codex model override for that Agent. Codex
+then runs it with the session's default model.
+
+`kongming` is different: AgentKit writes an explicit Codex frontier-model
+override for it. If that model is not available to the account, do not assume
+Codex will fall back to the session default. Treat the advisory checkpoint as
+blocked until the model is changed or the workflow continues without that
+checkpoint.
+
+For broader installation differences, see [Runtime adapters](./runtime-adapters).
+
+## Choosing the right tool
+
+| Need | Use |
+| --- | --- |
+| Native mid-generation second opinion inside Claude Code | Claude Code built-in advisor |
+| One-shot strategic checkpoint inside an AgentKit workflow | `kongming`, usually through `--advice` |
+| Interview-driven reframing before deciding what to do | `/ak:advise`, or `/ak:advise --agent` on Claude Code |
+| Isolated research, testing, review, or implementation work | An ordinary subagent with a bounded task |
+| Parallel or multi-session coordination | Agent team or workflow support, not advisory supervision alone |
+
+Good `kongming` prompts include the current task, the phase or gate, concrete
+evidence, file or command findings when available, approaches already tried,
+constraints, the specific decision, and what kind of answer would help the main
+workflow continue.
+
+Weak prompts ask for general wisdom without evidence. Advisory supervision works
+best when the adviser can inspect the same facts the main workflow is using and
+answer a precise question.
+
+## Keep ownership in the main workflow
+
+Advisory supervision is deliberately asymmetric:
+
+- The adviser can challenge, reframe, and recommend.
+- The main workflow chooses, implements, tests, and records.
+- Approval gates, branch protections, review blockers, security policy, and
+  runtime permissions still apply.
+- A later checkpoint should pass forward the relevant prior advice explicitly.
+
+That separation is the point. AgentKit uses advisory supervision to improve
+judgment without confusing advice with execution authority.
