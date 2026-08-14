@@ -247,7 +247,7 @@ export async function createCoverageGapAudit({ auditSourcePath, sourceRoot, docs
   return { ledger, impactMap, request };
 }
 
-export async function verifyCoverageV1Physical({ request, ledger, docsRoot, sourceRoot, issueBodyPath }) {
+export async function verifyCoverageV1Physical({ request, ledger, docsRoot, sourceRoot, issueBodyPath, changedPaths = new Set() }) {
   validateCoverageApprovalRequest(request);
   validateCoverageLedger(ledger);
   await verifySourceIdentity(request.source, sourceRoot, true);
@@ -258,9 +258,11 @@ export async function verifyCoverageV1Physical({ request, ledger, docsRoot, sour
     throw new Error('issue body snapshot path or digest mismatch');
   }
   for (const route of request.routeDigests) {
-    const working = await repoFile(docsRoot, route.path, `current coverage route ${route.path}`);
-    if (digest(working.bytes) !== route.digest) throw new Error(`current-doc route mutation after V0 for ${route.path}`);
     const bytes = await git(docsRoot, ['show', `${request.docs.baseSha}:${route.path}`]);
     if (digest(bytes) !== route.digest) throw new Error(`base route digest mismatch for ${route.path}`);
+    if (!changedPaths.has(route.path)) {
+      const working = await repoFile(docsRoot, route.path, `current coverage route ${route.path}`);
+      if (digest(working.bytes) !== route.digest) throw new Error(`current-doc route mutation after V0 for ${route.path}`);
+    }
   }
 }

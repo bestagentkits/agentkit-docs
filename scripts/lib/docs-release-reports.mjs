@@ -63,10 +63,10 @@ function safeVersion(version) {
   return version;
 }
 
-export async function writeV0Reports({ ledger, impactMap, outputRoot, target }) {
+export async function writeV0Reports({ ledger, impactMap, outputRoot, target, ownerPaths = [] }) {
   const outputDir = releaseOutputDir(outputRoot, target);
   await assertNoSymlinkPath(outputRoot, outputDir);
-  const request = createApprovalRequest({ ledger, impactMap, target });
+  const request = createApprovalRequest({ ledger, impactMap, target, ownerPaths });
   const files = new Map([
     ['source-ledger.json', stableJson(ledger)],
     ['source-ledger.md', renderSourceLedger(ledger)],

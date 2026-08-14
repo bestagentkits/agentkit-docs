@@ -5,7 +5,7 @@ user-invocable: true
 when_to_use: "Invoke when publishing a docs update for a new upstream beta or stable release, catching up prose that drifted across a stretch of releases without audit passes, or preparing a stable promote after a beta sync PR lands."
 category: utilities
 keywords: [release, sync, promote, audit, evidence, orchestrator, beta, stable, catchup]
-argument-hint: "--tag <tag> | --beta <tag> --stable <tag> [--from <ref>] [--catchup] [--no-audit-check]"
+argument-hint: "--tag <tag> | --beta <tag> --stable <tag> [--from <ref>] [--catchup] [--no-audit-check] | --stable-docs-exception <paths...>"
 metadata:
   author: agentkit
   version: "1.0.0"
@@ -34,6 +34,7 @@ orchestrator provides a consistent pipeline shell around it.
 ```text
 /ak:release-update --tag <exact-tag> [--from <ref>] [--catchup] [--no-audit-check]
 /ak:release-update --beta <beta-tag> --stable <stable-tag>
+/ak:release-update --stable-docs-exception <beta-route-or-path>...
 ```
 
 | Flag | Meaning |
@@ -44,9 +45,51 @@ orchestrator provides a consistent pipeline shell around it.
 | `--from <ref>` | Override the audit `from-ref`. Skips auto-detection. |
 | `--catchup` | Force multi-hop audit with `from` = source of current `channels.stable.tag` (i.e., its `promotedFrom`). |
 | `--no-audit-check` | Skip audit-gap detection and default single-hop. Logs a warning in the PR body. |
+| `--stable-docs-exception <paths...>` | Owner-approved docs-only copy from Beta to Stable when no new stable `ak` version exists. See Stable docs exception. |
 
 See [`references/syntax.md`](references/syntax.md) for the full flag surface,
 examples, and error paths.
+
+## Stable docs exception
+
+Use this only when the owner explicitly asks to publish a small set of
+channel-neutral authored Beta docs to Stable before the next stable `ak`
+release exists. This is not a release promote and must not change
+`channels.json.stable`.
+
+Allowed scope:
+
+- Existing or new route families under
+  `content/docs/{beta,stable}/{concepts,guides,getting-started,troubleshooting}/`.
+- Matching EN and VI pages for each route.
+- The minimal `meta.json` and `meta.vi.json` entries needed to make those
+  copied Stable routes navigable.
+- Reviewed quality baselines only after a fresh build proves the new Stable
+  route/search counts.
+
+Forbidden scope:
+
+- `content/docs/*/reference/**`, `reference-derived/**`, `changelog/**`,
+  `release-notes.*`, generated directories, generated CLI reference, Kit
+  catalog pages, Desktop release artifacts, screenshots, and `channels.json`.
+- Any prose that claims a Beta-only product behavior is available in Stable.
+- Any partial locale copy. EN and VI route shape must stay aligned.
+- Any broad directory copy that would amount to a Stable promotion.
+
+Procedure:
+
+1. Confirm there is no new stable `ak` release or stable docs bundle to promote.
+2. Require explicit owner approval naming each route or repo path.
+3. For each approved route, copy the Beta EN/VI source files to the same Stable
+   route. Keep content channel-neutral; remove or reject Beta-only claims.
+4. Update only the matching Stable nav metadata required for the approved
+   routes.
+5. Run `pnpm typecheck`, `pnpm lint`, `pnpm build`, and `pnpm check:quality`.
+   If Stable route or search counts change, update reviewed baselines only from
+   that fresh build.
+6. In the handoff, label the change as a stable docs exception, list every
+   copied route, state that `channels.json.stable` was unchanged, and say which
+   stable release gap made promotion unavailable.
 
 ## Pipeline (seven steps)
 
@@ -61,13 +104,17 @@ examples, and error paths.
    [`references/audit-tag-convention.md`](references/audit-tag-convention.md).
 3. **Invoke `ak-docs-release-audit` V0.** Present the choice and, on owner
    confirmation, run `scripts/check-docs-release-update.mjs --mode v0` with
-   the chosen refs and channel. The audit skill emits the ledger, impact
-   map, unresolved evidence, and the approval request under
+   the chosen refs and channel. When a manual blind-spot pass finds exact
+   existing Beta prose for an actionable pathless claim, write EN/VI-paired
+   paths as a JSON array and pass `--owner-paths <file>`; nested human-owned
+   `content/docs/beta/reference/cli/**` paths are allowed. The request records
+   them in `ownerDirectedPaths` and binds the complete final `paths` set without
+   rewriting the source-derived impact map. The audit skill emits the ledger,
+   impact map, unresolved evidence, and approval request under
    `plans/releases/<target>/`.
 4. **Stop for owner approval.** Present the request ID, digests, and the
-   proposed nested prose paths (owner-directed scope for CLI prose whose
-   impact-map returns `paths: []`). Await the exact statement
-   `approve REQ-…`.
+   proposed nested prose paths, including any `ownerDirectedPaths`. Await the
+   exact statement `approve REQ-…`.
 5. **Handle contract v1 blind spots.** Run the manual passes in one PR:
    - **CLI prose** — V1 authoring inside the approved Beta paths only.
    - **Kits** — diff kit tar bundles, author public Beta skill pages EN+VI,
@@ -99,6 +146,8 @@ examples, and error paths.
      tag's ak-gui evidence (release-page `.sha256` sidecars) so
      stable/desktop-app reflects the stable build, not the beta build.
    Skip if the run does not target that channel.
+   For a `--stable-docs-exception` run, skip both release scripts and follow
+   the Stable docs exception procedure instead.
 7. **Validate, commit, and open PR.**
    Preserve exact EN/VI source, published, and searchable route parity within
    each channel and `stable ⊆ beta` across channels. Per-channel route and search counts may differ when Beta contains
@@ -120,6 +169,8 @@ for the next run.
 - Never invoke `promote-docs.mjs` without a verified `docs/<promotedFrom>`
   tag whose beta snapshot's `channels.json.beta.tag` matches the manifest
   `promotedFrom`.
+- Never use Stable docs exception for release notes, generated reference,
+  Kit/CLI release drift, Desktop artifact bumps, or Beta-only product behavior.
 - Never merge, deploy, force-push, or modify unrelated PRs.
 - Never write files outside the current repository.
 - Never touch the user's local `../agentkit` checkout. Use temporary clones

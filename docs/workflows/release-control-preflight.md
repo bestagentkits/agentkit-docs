@@ -151,7 +151,11 @@ node scripts/check-docs-release-update.mjs \
 
 Add `--manifest <path>` when the request's target provenance is a bundle. The
 repository names and base SHA are explicit inputs because V0 release evidence
-does not contain those docs-control facts.
+does not contain those docs-control facts. V1 resolves the repository's current
+`HEAD`, requires it to equal `--docs-base-sha`, derives the tracked Git diff from
+that base, and rejects `--changes` unless it is an exact normalized match. Use
+an empty manifest for the clean pre-authoring validation, then regenerate it
+from the final diff.
 
 Coverage-gap audits are a separate V0 mode; they never reinterpret an unchanged
 release claim as a release delta:

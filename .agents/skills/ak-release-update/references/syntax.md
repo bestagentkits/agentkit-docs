@@ -1,6 +1,6 @@
 # Invocation syntax
 
-`ak:release-update` accepts one of three invocation shapes plus a common
+`ak:release-update` accepts release invocation shapes plus a common
 option set.
 
 ## Shapes
@@ -35,6 +35,22 @@ between them so the audit trail seals correctly.
 Force a channel when tag suffix inference is wrong (rare — e.g., a
 maintainer-cut tag that violates the naming convention).
 
+### Stable docs exception
+
+```text
+/ak:release-update --stable-docs-exception <beta-route-or-path>...
+```
+
+Copy a small, owner-approved set of channel-neutral authored Beta docs to
+Stable when no new stable `ak` version or stable docs bundle exists to promote.
+This is not a release promote and must leave `channels.json.stable` unchanged.
+
+Accepted arguments may be route slugs such as
+`concepts/advisory-supervision` or repo paths such as
+`content/docs/beta/concepts/advisory-supervision.en.mdx`. Each approved route
+must include matching EN and VI files and the minimal Stable `meta.json` /
+`meta.vi.json` nav updates needed to publish it.
+
 ## Options
 
 | Flag | Semantics | Default |
@@ -46,6 +62,7 @@ maintainer-cut tag that violates the naming convention).
 | `--yes` | Skip owner confirmation prompts inside the orchestrator (does not skip V0 approval — that remains explicit). | Off |
 | `--no-desktop` | Skip Desktop app processing entirely, even Layer A. Use only when the release explicitly does not affect Desktop. | Off |
 | `--no-default-tab` | Skip Default-tab phrase-based drift scan. Use when release notes are noisy. | Off |
+| `--stable-docs-exception <paths...>` | Publish approved channel-neutral authored docs from Beta to Stable without a stable release promote. Mutually exclusive with release shapes. | Off |
 
 ## Examples
 
@@ -67,6 +84,9 @@ maintainer-cut tag that violates the naming convention).
 
 # See the plan without doing anything
 /ak:release-update --tag v2.12.0-beta.1 --dry-run
+
+# Publish one channel-neutral concept page to Stable before the next stable release
+/ak:release-update --stable-docs-exception concepts/advisory-supervision
 ```
 
 ## Error paths
@@ -74,11 +94,15 @@ maintainer-cut tag that violates the naming convention).
 | Condition | Behavior |
 | --- | --- |
 | `--tag` and `--beta` both supplied | Reject; ask for a single invocation shape. |
+| `--stable-docs-exception` combined with `--tag`, `--beta`, or `--stable` | Reject; docs exception is not a release sync or promote. |
 | `--from` and `--catchup` both supplied | Reject; ambiguous intent. |
 | `--tag <tag>` matches `channels.<channel>.tag` already synced | Abort with `already-synced`; suggest `--force` (not defined by default; owner must edit config to allow re-run). |
 | Upstream tag not found via `gh api` | Abort with clear error including the API response. |
 | Bundle SHA-256 mismatch versus release-page asset digest | Abort with the two hashes; refuse to proceed. |
 | `docs/<promotedFrom>` tag missing for stable promote | Abort; instruct owner to run the beta pass first. |
+| Stable docs exception path is outside `concepts`, `guides`, `getting-started`, or `troubleshooting` | Reject; wait for a real Stable promote or get the Skill updated with an explicit reviewed scope expansion. |
+| Stable docs exception would copy only one locale | Reject; EN and VI route shape must stay aligned. |
+| Stable docs exception includes generated/reference/release-note/Kit/Desktop release content | Reject; those surfaces require release evidence or a real promotion. |
 | Owner never replies `approve REQ-…` within pipeline | Session ends cleanly; no writes happen. |
 
 ## Owner interactions
@@ -93,3 +117,8 @@ defaults advance the pipeline.
    request ID, optionally followed by the approved nested prose paths.
 
 Every other decision inside the pipeline is deterministic.
+
+For `--stable-docs-exception`, require a separate explicit owner statement
+naming every route or path. The normal V0 release approval is not required
+because no release delta is being claimed, but the final handoff must list the
+approved routes and confirm that `channels.json.stable` did not change.

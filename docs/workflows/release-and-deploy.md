@@ -103,6 +103,19 @@ Beta PR (or an immediate follow-up):
    tokens unchanged). See `.agents/skills/ak-docs-release-audit/SKILL.md` for
    the full V0 → approval → V1 authoring flow.
 
+   If an actionable release-note claim has no source-supplied route but manual
+   review identifies exact existing Beta prose, put those repository-relative
+   paths in a JSON array and rerun V0 with `--owner-paths <file>`. The approval
+   request records them as `ownerDirectedPaths` and binds the complete final
+   path set into its ID and digest; the impact map remains blocked to preserve
+   the distinction between source evidence and owner-directed scope. The file
+   may name only existing, modify-only, EN/VI-paired human-owned Beta prose or
+   metadata paths, including nested `content/docs/beta/reference/cli/**` pages
+   but excluding other `reference/`, generated, and Stable content. V1 requires
+   `HEAD` to match the approved docs base and checks that `--changes` exactly
+   matches the tracked Git diff; use an empty manifest before authoring and
+   regenerate it from the final diff afterward.
+
 2. **Kit catalog + new skill pages.** The docs-bundle contract v1 does **not**
    carry a kit inventory. New skills added upstream (per-kit `SKILL.md`
    packages) do not surface in V0. Detect drift by comparing kit tar bundles
