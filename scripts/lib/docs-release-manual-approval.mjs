@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import {
+  createApprovalRequest,
   validateApprovalRequest,
 } from './docs-release-approval.mjs';
 import {
@@ -188,6 +189,15 @@ function validateBoundArtifacts(request, options) {
     validateImpactMap(artifacts.impactMap.value);
     if (!equal({ from: artifacts.ledger.value.from, to: artifacts.ledger.value.to }, request.source)) {
       fail('supplied ledger source does not match the request');
+    }
+    const expectedRequest = createApprovalRequest({
+      ledger: artifacts.ledger.value,
+      impactMap: artifacts.impactMap.value,
+      target: request.target,
+      ownerPaths: request.ownerDirectedPaths ?? [],
+    });
+    if (!equal(expectedRequest, request)) {
+      fail('approval request scope is not derived from the bound impact map and owner-directed paths');
     }
   }
   if (digest(artifacts.ledger.value) !== request.ledgerDigest) fail('supplied ledger is not bound to the request');

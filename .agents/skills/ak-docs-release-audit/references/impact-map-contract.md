@@ -21,11 +21,15 @@ claim blocks only the paths that depend on it.
 When source evidence has an actionable claim but no exact docs route, manual
 review may supply a JSON array of existing Beta prose or human-owned metadata
 through `--owner-paths`. V0 records the normalized entries in both `paths` and
-`ownerDirectedPaths`, and binds them into the request ID and digest. It does not
-rewrite the impact map: the pathless entry stays `blocked` with its original
-reason so owner direction cannot be mistaken for source-derived routing.
+`ownerDirectedPaths`, and binds the complete final `paths` set into the request
+ID and digest. Validation re-derives that set as source-derived impact paths
+union owner-directed paths. It does not rewrite the impact map: the pathless
+entry stays `blocked` with its original reason so owner direction cannot be
+mistaken for source-derived routing.
 
-Owner-directed paths are Beta-only and modify-only. Reject an empty/non-array
-input, Stable/generated/reference paths, missing files, symlinks, and any scope
-when the ledger has no actionable release claim.
+Owner-directed paths are Beta-only, modify-only, and locale-paired. Allow exact
+existing nested CLI prose/metadata under `content/docs/beta/reference/cli/`, but
+reject other `reference/` content, Stable/generated paths, missing files,
+symlinks, empty/non-array input, single-locale scope, and any scope when the
+ledger has no actionable release claim.
 

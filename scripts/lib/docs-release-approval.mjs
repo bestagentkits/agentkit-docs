@@ -12,7 +12,12 @@ import {
   validateCoverageLedger,
 } from './docs-release-coverage-schema.mjs';
 import { digest, sortedUnique, stableJson, withoutKey } from './docs-release-normalize.mjs';
-import { isHumanOwnedBetaFile, normalizeRepoPath, validateTargetName } from './docs-release-paths.mjs';
+import {
+  isHumanOwnedBetaFile,
+  localizedBetaPairViolations,
+  normalizeRepoPath,
+  validateTargetName,
+} from './docs-release-paths.mjs';
 import { validateManifest } from './manifest.mjs';
 
 const PREFIXED_SHA256 = /^sha256:[0-9a-f]{64}$/;
@@ -96,12 +101,12 @@ function validateSuppliedArtifact(expected, supplied, expectedDigest, label) {
   if (expected.sha256 !== expectedDigest) fail(`${label} digest does not match the V0 request`);
 }
 
-function releaseRequestId({ target, ledgerDigest, impactMapDigest, ownerDirectedPaths = [] }) {
+function releaseRequestId({ target, ledgerDigest, impactMapDigest, paths = [], ownerDirectedPaths = [] }) {
   const identity = {
     target,
     ledger: ledgerDigest,
     impactMap: impactMapDigest,
-    ...(ownerDirectedPaths.length ? { ownerDirectedPaths } : {}),
+    ...(ownerDirectedPaths.length ? { paths, ownerDirectedPaths } : {}),
   };
   return `REQ-${digest(identity).slice(7, 23).toUpperCase()}`;
 }
@@ -119,6 +124,8 @@ export function createApprovalRequest({ ledger, impactMap, target, ownerPaths = 
     if (!isHumanOwnedBetaFile(normalized)) fail('owner-directed request paths must be human-owned Beta prose/metadata');
     return normalized;
   }));
+  const ownerPairViolations = localizedBetaPairViolations(ownerDirectedPaths, 'owner-directed request path');
+  if (ownerPairViolations.length) fail(ownerPairViolations[0]);
   const actionableClaims = ledger.claims.filter((claim) => !['no-change', 'blocked'].includes(claim.classification));
   if (ownerDirectedPaths.length && ledger.channel !== 'beta') {
     fail('owner-directed request paths are Beta-only');
@@ -133,9 +140,10 @@ export function createApprovalRequest({ ledger, impactMap, target, ownerPaths = 
   const status = actionableClaims.length === 0
     ? (blockedClaimIds.length ? 'blocked' : 'no-op')
     : 'approval-required';
+  const paths = sortedUnique([...impactPaths, ...ownerDirectedPaths]);
   const base = {
     schemaVersion: APPROVAL_REQUEST_SCHEMA,
-    requestId: releaseRequestId({ target, ledgerDigest, impactMapDigest, ownerDirectedPaths }),
+    requestId: releaseRequestId({ target, ledgerDigest, impactMapDigest, paths, ownerDirectedPaths }),
     status,
     channel: ledger.channel,
     target,
@@ -144,7 +152,7 @@ export function createApprovalRequest({ ledger, impactMap, target, ownerPaths = 
     impactMapDigest,
     claimIds: actionableClaims.map((claim) => claim.id).sort(),
     blockedClaimIds: blockedClaimIds.sort(),
-    paths: sortedUnique([...impactPaths, ...ownerDirectedPaths]),
+    paths,
     ...(ownerDirectedPaths.length ? { ownerDirectedPaths } : {}),
   };
   return { ...base, requestDigest: digest(base) };
@@ -187,11 +195,14 @@ function validateReleaseApprovalRequest(request) {
       if (!isHumanOwnedBetaFile(normalized)) fail('approval request ownerDirectedPaths contain a non-prose Beta path');
       if (!request.paths.includes(normalized)) fail('approval request ownerDirectedPaths must be included in paths');
     }
+    const ownerPairViolations = localizedBetaPairViolations(ownerDirectedPaths, 'approval request ownerDirectedPath');
+    if (ownerPairViolations.length) fail(ownerPairViolations[0]);
   }
   const expectedRequestId = releaseRequestId({
     target: request.target,
     ledgerDigest: request.ledgerDigest,
     impactMapDigest: request.impactMapDigest,
+    paths: request.paths,
     ownerDirectedPaths,
   });
   if (request.requestId !== expectedRequestId) fail('approval request ID is forged or stale');
@@ -331,6 +342,13 @@ export function validateApprovalBinding(request, approval, options = {}) {
     validateLedger(artifacts.ledger.value);
     validateImpactMap(artifacts.impactMap.value);
     if (!equal({ from: artifacts.ledger.value.from, to: artifacts.ledger.value.to }, request.source)) fail('supplied ledger source does not match the request');
+    const expectedRequest = createApprovalRequest({
+      ledger: artifacts.ledger.value,
+      impactMap: artifacts.impactMap.value,
+      target: request.target,
+      ownerPaths: request.ownerDirectedPaths ?? [],
+    });
+    if (!equal(expectedRequest, request)) fail('approval request scope is not derived from the bound impact map and owner-directed paths');
   }
   if (digest(artifacts.ledger.value) !== request.ledgerDigest) fail('supplied ledger is not bound to the request');
   if (digest(artifacts.impactMap.value) !== request.impactMapDigest || artifacts.impactMap.value.ledgerDigest !== request.ledgerDigest) fail('supplied impact map is not bound to the request and ledger');

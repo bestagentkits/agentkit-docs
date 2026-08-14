@@ -106,14 +106,17 @@ this manual workflow. Do not widen claims or paths after approval.
 
 ## Run V1
 
-1. Generate a change manifest from the proposed diff.
-2. Validate it with `scripts/docs-release-manual-approval.mjs --mode v1`, the
-   exact V0 artifacts, local manual approval, docs base SHA, `dev` target,
-   current time, and used-nonce ledger.
+1. Before authoring, validate a clean worktree with an empty change manifest.
+2. Run `scripts/docs-release-manual-approval.mjs --mode v1` with the exact V0
+   artifacts, local manual approval, docs base SHA, `dev` target, current time,
+   and used-nonce ledger. The validator requires repository `HEAD` to equal the
+   approved base and requires `--changes` to exactly match the tracked Git diff.
 3. Modify only the existing, approved Beta prose or human-owned metadata paths.
-4. Author EN and VI with equivalent meaning and unchanged technical tokens.
-5. Re-run V1 validation after the final diff. Stop on stale approval, replay,
-   path expansion, missing evidence, or any generated/Stable change.
+4. Author EN and VI as a pair with equivalent meaning and unchanged technical
+   tokens.
+5. Regenerate the change manifest from the final Git diff and re-run V1. Stop on
+   stale approval, replay, manifest mismatch, path expansion, missing evidence,
+   or any generated/Stable change.
 
 ## Finish
 

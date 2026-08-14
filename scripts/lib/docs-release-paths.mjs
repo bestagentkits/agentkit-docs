@@ -65,16 +65,31 @@ export function assertV0WriteScope(changes, outputPrefix) {
 }
 
 const BETA_PREFIX = 'content/docs/beta/';
-const FORBIDDEN_BETA_PREFIXES = [
-  'content/docs/beta/reference/',
-  'content/docs/beta/reference-derived/',
-];
+const BETA_REFERENCE_PREFIX = `${BETA_PREFIX}reference/`;
+const HUMAN_OWNED_CLI_PREFIX = `${BETA_REFERENCE_PREFIX}cli/`;
 
 export function isHumanOwnedBetaFile(path) {
   if (!path.startsWith(BETA_PREFIX)) return false;
-  if (FORBIDDEN_BETA_PREFIXES.some((prefix) => path.startsWith(prefix))) return false;
+  if (path.startsWith(BETA_REFERENCE_PREFIX) && !path.startsWith(HUMAN_OWNED_CLI_PREFIX)) return false;
   if (path.split('/').includes('reference-derived')) return false;
   return /\.(?:en|vi)\.mdx$/.test(path) || /(^|\/)meta(?:\.[\w-]+)?\.json$/.test(path);
+}
+
+export function localizedBetaPair(path) {
+  if (path.endsWith('.en.mdx')) return `${path.slice(0, -'.en.mdx'.length)}.vi.mdx`;
+  if (path.endsWith('.vi.mdx')) return `${path.slice(0, -'.vi.mdx'.length)}.en.mdx`;
+  if (path.endsWith('/meta.json')) return `${path.slice(0, -'/meta.json'.length)}/meta.vi.json`;
+  if (path.endsWith('/meta.vi.json')) return `${path.slice(0, -'/meta.vi.json'.length)}/meta.json`;
+  return null;
+}
+
+export function localizedBetaPairViolations(paths, label = 'localized path') {
+  const normalized = [...new Set(paths.map(normalizeRepoPath))].sort();
+  const included = new Set(normalized);
+  return normalized.flatMap((path) => {
+    const pair = localizedBetaPair(path);
+    return pair && !included.has(pair) ? [`${label} ${path} requires paired path ${pair}`] : [];
+  });
 }
 
 export function validateOwnerDirectedPaths(paths, repoRoot) {
@@ -107,11 +122,14 @@ export function validateOwnerDirectedPaths(paths, repoRoot) {
       throw new ReleasePathError(`${path}: owner-directed path must be an existing regular file`);
     }
   }
+  const pairViolations = localizedBetaPairViolations(normalized, 'owner-directed path');
+  if (pairViolations.length) throw new ReleasePathError(pairViolations[0]);
   return normalized;
 }
 
 export function v1WriteViolations(changes, approvedPaths) {
   const approved = new Set(approvedPaths.map(normalizeRepoPath));
+  const modified = new Set();
   const violations = [];
   for (const change of changes) {
     let path;
@@ -127,6 +145,14 @@ export function v1WriteViolations(changes, approvedPaths) {
       violations.push(`${path}: outside human-owned Beta prose/metadata scope`);
     } else if (!approved.has(path)) {
       violations.push(`${path}: not bound by approval`);
+    } else {
+      modified.add(path);
+    }
+  }
+  for (const path of modified) {
+    const pair = localizedBetaPair(path);
+    if (pair && approved.has(pair) && !modified.has(pair)) {
+      violations.push(`V1 change ${path} requires paired path ${pair}`);
     }
   }
   return violations;
