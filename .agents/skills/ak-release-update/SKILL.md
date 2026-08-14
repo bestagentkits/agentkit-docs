@@ -61,13 +61,15 @@ examples, and error paths.
    [`references/audit-tag-convention.md`](references/audit-tag-convention.md).
 3. **Invoke `ak-docs-release-audit` V0.** Present the choice and, on owner
    confirmation, run `scripts/check-docs-release-update.mjs --mode v0` with
-   the chosen refs and channel. The audit skill emits the ledger, impact
-   map, unresolved evidence, and the approval request under
-   `plans/releases/<target>/`.
+   the chosen refs and channel. When a manual blind-spot pass finds exact
+   existing Beta prose for an actionable pathless claim, write those paths as
+   a JSON array and pass `--owner-paths <file>`; the request binds them as
+   `ownerDirectedPaths` without rewriting the source-derived impact map. The
+   audit skill emits the ledger, impact map, unresolved evidence, and approval
+   request under `plans/releases/<target>/`.
 4. **Stop for owner approval.** Present the request ID, digests, and the
-   proposed nested prose paths (owner-directed scope for CLI prose whose
-   impact-map returns `paths: []`). Await the exact statement
-   `approve REQ-…`.
+   proposed nested prose paths, including any `ownerDirectedPaths`. Await the
+   exact statement `approve REQ-…`.
 5. **Handle contract v1 blind spots.** Run the manual passes in one PR:
    - **CLI prose** — V1 authoring inside the approved Beta paths only.
    - **Kits** — diff kit tar bundles, author public Beta skill pages EN+VI,

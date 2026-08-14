@@ -96,15 +96,38 @@ function validateSuppliedArtifact(expected, supplied, expectedDigest, label) {
   if (expected.sha256 !== expectedDigest) fail(`${label} digest does not match the V0 request`);
 }
 
-export function createApprovalRequest({ ledger, impactMap, target }) {
+function releaseRequestId({ target, ledgerDigest, impactMapDigest, ownerDirectedPaths = [] }) {
+  const identity = {
+    target,
+    ledger: ledgerDigest,
+    impactMap: impactMapDigest,
+    ...(ownerDirectedPaths.length ? { ownerDirectedPaths } : {}),
+  };
+  return `REQ-${digest(identity).slice(7, 23).toUpperCase()}`;
+}
+
+export function createApprovalRequest({ ledger, impactMap, target, ownerPaths = [] }) {
   validateLedger(ledger);
   validateImpactMap(impactMap);
-  if (impactMap.ledgerDigest !== digest(ledger) || impactMap.channel !== ledger.channel) {
+  const ledgerDigest = digest(ledger);
+  const impactMapDigest = digest(impactMap);
+  if (impactMap.ledgerDigest !== ledgerDigest || impactMap.channel !== ledger.channel) {
     fail('impact map is not bound to this ledger');
   }
+  const ownerDirectedPaths = sortedUnique(ownerPaths.map((path) => {
+    const normalized = normalizeRepoPath(path);
+    if (!isHumanOwnedBetaFile(normalized)) fail('owner-directed request paths must be human-owned Beta prose/metadata');
+    return normalized;
+  }));
   const actionableClaims = ledger.claims.filter((claim) => !['no-change', 'blocked'].includes(claim.classification));
+  if (ownerDirectedPaths.length && ledger.channel !== 'beta') {
+    fail('owner-directed request paths are Beta-only');
+  }
+  if (ownerDirectedPaths.length && actionableClaims.length === 0) {
+    fail('owner-directed request paths require an actionable release claim');
+  }
   const blockedClaimIds = ledger.claims.filter((claim) => claim.classification === 'blocked').map((claim) => claim.id);
-  const paths = impactMap.pages
+  const impactPaths = impactMap.pages
     .filter((page) => !['no-change', 'blocked'].includes(page.classification) && page.path)
     .map((page) => page.path);
   const status = actionableClaims.length === 0
@@ -112,23 +135,24 @@ export function createApprovalRequest({ ledger, impactMap, target }) {
     : 'approval-required';
   const base = {
     schemaVersion: APPROVAL_REQUEST_SCHEMA,
-    requestId: `REQ-${digest({ target, ledger: digest(ledger), impactMap: digest(impactMap) }).slice(7, 23).toUpperCase()}`,
+    requestId: releaseRequestId({ target, ledgerDigest, impactMapDigest, ownerDirectedPaths }),
     status,
     channel: ledger.channel,
     target,
     source: { from: ledger.from, to: ledger.to },
-    ledgerDigest: digest(ledger),
-    impactMapDigest: digest(impactMap),
+    ledgerDigest,
+    impactMapDigest,
     claimIds: actionableClaims.map((claim) => claim.id).sort(),
     blockedClaimIds: blockedClaimIds.sort(),
-    paths: sortedUnique(paths),
+    paths: sortedUnique([...impactPaths, ...ownerDirectedPaths]),
+    ...(ownerDirectedPaths.length ? { ownerDirectedPaths } : {}),
   };
   return { ...base, requestDigest: digest(base) };
 }
 
 function validateReleaseApprovalRequest(request) {
   if (!request || request.schemaVersion !== APPROVAL_REQUEST_SCHEMA) fail('unsupported approval-request schema');
-  const allowed = ['schemaVersion', 'requestId', 'status', 'channel', 'target', 'source', 'ledgerDigest', 'impactMapDigest', 'claimIds', 'blockedClaimIds', 'paths', 'requestDigest'];
+  const allowed = ['schemaVersion', 'requestId', 'status', 'channel', 'target', 'source', 'ledgerDigest', 'impactMapDigest', 'claimIds', 'blockedClaimIds', 'paths', 'ownerDirectedPaths', 'requestDigest'];
   exactKeys(request, allowed, 'approval request');
   if (!['approval-required', 'no-op', 'blocked'].includes(request.status)) fail('approval request status is invalid');
   if (!['beta', 'stable'].includes(request.channel)) fail('approval request channel is invalid');
@@ -141,13 +165,37 @@ function validateReleaseApprovalRequest(request) {
     if (!Array.isArray(request[field])) fail(`approval request ${field} must be an array`);
     if (!equal(request[field], sortedUnique(request[field]))) fail(`approval request ${field} must be sorted and unique`);
   }
+  const ownerDirectedPaths = request.ownerDirectedPaths ?? [];
+  if (!Array.isArray(ownerDirectedPaths) || !equal(ownerDirectedPaths, sortedUnique(ownerDirectedPaths))) {
+    fail('approval request ownerDirectedPaths must be sorted and unique');
+  }
+  if (request.ownerDirectedPaths !== undefined && ownerDirectedPaths.length === 0) {
+    fail('approval request ownerDirectedPaths must be omitted when empty');
+  }
   if (![...request.claimIds, ...request.blockedClaimIds].every((id) => CLAIM_ID.test(id))) fail('approval request claim ID is invalid');
   if (request.claimIds.some((id) => request.blockedClaimIds.includes(id))) fail('approval request claim sets overlap');
   if (request.status === 'approval-required' && request.claimIds.length === 0) fail('approval-required request has no actionable claims');
   if (request.status !== 'approval-required' && request.claimIds.length !== 0) fail('non-actionable request contains actionable claims');
   if (request.status === 'no-op' && request.blockedClaimIds.length !== 0) fail('no-op request contains blocked claims');
-  if (request.requestDigest !== digest(withoutKey(request, 'requestDigest'))) fail('approval request digest is forged or stale');
   for (const path of request.paths) normalizeRepoPath(path);
+  if (ownerDirectedPaths.length) {
+    if (request.channel !== 'beta' || request.status !== 'approval-required') {
+      fail('owner-directed request paths require an actionable Beta request');
+    }
+    for (const path of ownerDirectedPaths) {
+      const normalized = normalizeRepoPath(path);
+      if (!isHumanOwnedBetaFile(normalized)) fail('approval request ownerDirectedPaths contain a non-prose Beta path');
+      if (!request.paths.includes(normalized)) fail('approval request ownerDirectedPaths must be included in paths');
+    }
+  }
+  const expectedRequestId = releaseRequestId({
+    target: request.target,
+    ledgerDigest: request.ledgerDigest,
+    impactMapDigest: request.impactMapDigest,
+    ownerDirectedPaths,
+  });
+  if (request.requestId !== expectedRequestId) fail('approval request ID is forged or stale');
+  if (request.requestDigest !== digest(withoutKey(request, 'requestDigest'))) fail('approval request digest is forged or stale');
   return request;
 }
 

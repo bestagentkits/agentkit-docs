@@ -80,7 +80,11 @@ under "What Beta sync does *not* refresh".
 3. Ensure `plans/releases/` exists and is working-only.
 4. Run `scripts/check-docs-release-update.mjs --mode v0` with explicit
    `--from-ref`, `--to-ref`, `--from-source`, `--to-source`, `--channel`,
-   `--repo-root`, `--output-root`, and `--target`.
+   `--repo-root`, `--output-root`, and `--target`. When an actionable release
+   claim has no source-supplied docs route but manual review identifies exact
+   existing Beta prose, pass a JSON array through `--owner-paths`. The resulting
+   request records those entries as `ownerDirectedPaths`; the impact map remains
+   blocked so it never misrepresents owner routing as source evidence.
 5. Review `source-ledger`, `docs-impact-map`, `unresolved-evidence`, and
    `approval-request` together. Re-run on identical inputs and require an
    equivalent result.

@@ -1,3 +1,4 @@
+import { lstatSync } from 'node:fs';
 import { lstat, mkdir, rename, writeFile } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 
@@ -74,6 +75,39 @@ export function isHumanOwnedBetaFile(path) {
   if (FORBIDDEN_BETA_PREFIXES.some((prefix) => path.startsWith(prefix))) return false;
   if (path.split('/').includes('reference-derived')) return false;
   return /\.(?:en|vi)\.mdx$/.test(path) || /(^|\/)meta(?:\.[\w-]+)?\.json$/.test(path);
+}
+
+export function validateOwnerDirectedPaths(paths, repoRoot) {
+  if (!Array.isArray(paths) || paths.length === 0) {
+    throw new ReleasePathError('owner paths must be a non-empty JSON array');
+  }
+  const normalized = [...new Set(paths.map(normalizeRepoPath))].sort();
+  for (const path of normalized) {
+    if (!isHumanOwnedBetaFile(path)) {
+      throw new ReleasePathError(`${path}: owner-directed path is outside human-owned Beta prose/metadata scope`);
+    }
+    resolveWithin(repoRoot, path);
+    let cursor = resolve(repoRoot);
+    let stat;
+    for (const part of path.split('/')) {
+      cursor = resolve(cursor, part);
+      try {
+        stat = lstatSync(cursor);
+      } catch (error) {
+        if (error.code === 'ENOENT') {
+          throw new ReleasePathError(`${path}: owner-directed path does not exist; V1 is modify-only`);
+        }
+        throw error;
+      }
+      if (stat.isSymbolicLink()) {
+        throw new ReleasePathError(`${path}: owner-directed path must not traverse a symlink`);
+      }
+    }
+    if (!stat.isFile()) {
+      throw new ReleasePathError(`${path}: owner-directed path must be an existing regular file`);
+    }
+  }
+  return normalized;
 }
 
 export function v1WriteViolations(changes, approvedPaths) {

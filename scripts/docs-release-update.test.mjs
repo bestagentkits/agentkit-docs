@@ -13,6 +13,7 @@ import {
   validateDurableApprovalRecord,
 } from './lib/docs-release-approval.mjs';
 import { runCheck } from './check-docs-release-update.mjs';
+import { runImpactMap } from './docs-impact-map.mjs';
 import { runManualApproval } from './docs-release-manual-approval.mjs';
 import { isCoverageApprovalRequest } from './lib/docs-release-coverage-schema.mjs';
 import { createImpactMap } from './lib/docs-release-impact.mjs';
@@ -29,6 +30,7 @@ import {
   assertV0WriteScope,
   releaseOutputDir,
   v1WriteViolations,
+  validateOwnerDirectedPaths,
 } from './lib/docs-release-paths.mjs';
 import { writeV0Reports } from './lib/docs-release-reports.mjs';
 import { validateLedger, validateReleaseSource } from './lib/docs-release-schema.mjs';
@@ -47,6 +49,10 @@ const approvalNow = '2026-08-03T12:00:00.000Z';
 const manualIssuedAt = '2026-08-03T10:00:00.000Z';
 const manualExpiresAt = '2026-08-04T10:00:00.000Z';
 const manualNonce = '987e4567-e89b-42d3-a456-426614174000';
+const grokOwnerPaths = [
+  'content/docs/beta/troubleshooting/grok-hooks.en.mdx',
+  'content/docs/beta/troubleshooting/grok-hooks.vi.mdx',
+];
 let temporary;
 let outputRoot;
 let coverageSequence = 0;
@@ -69,6 +75,35 @@ async function changedEvidence() {
   const ledger = createReleaseLedger(from, to, 'beta');
   const impactMap = createImpactMap(ledger, { repoRoot });
   return { from, to, ledger, impactMap, request: createApprovalRequest({ ledger, impactMap, target: to.version }) };
+}
+
+async function ownerDirectedEvidence(ownerPaths = grokOwnerPaths) {
+  const from = await fixtureSource('no-impact', 'from');
+  const to = await fixtureSource('no-impact', 'to');
+  const beforeDigest = `sha256:${'a'.repeat(64)}`;
+  const afterDigest = `sha256:${'b'.repeat(64)}`;
+  from.items = [{
+    id: 'release-notes',
+    kind: 'docs-bundle',
+    claimType: 'fact',
+    digest: beforeDigest,
+    anchors: [{ path: 'release-notes.md', digest: beforeDigest, type: 'source' }],
+    docs: [],
+    aliases: [],
+  }];
+  to.items = [{
+    id: 'release-notes',
+    kind: 'docs-bundle',
+    claimType: 'fact',
+    digest: afterDigest,
+    anchors: [{ path: 'release-notes.md', digest: afterDigest, type: 'source' }],
+    docs: [],
+    aliases: [],
+  }];
+  const ledger = createReleaseLedger(from, to, 'beta');
+  const impactMap = createImpactMap(ledger, { repoRoot });
+  const request = createApprovalRequest({ ledger, impactMap, target: to.version, ownerPaths });
+  return { from, to, ledger, impactMap, request };
 }
 
 async function bundleChangedEvidence() {
@@ -333,6 +368,138 @@ test('V0 writes only normalized temporary evidence and is byte-equivalent on rer
     '/unresolved-evidence.md',
   ]);
   assert.equal((await json(join(first.outputDir, 'approval-request.json'))).status, 'approval-required');
+});
+
+test('owner-directed paths bind an unrouted release claim to an exact approval scope', async () => {
+  const { ledger, impactMap, request } = await ownerDirectedEvidence();
+  const withoutOwnerScope = createApprovalRequest({
+    ledger,
+    impactMap,
+    target: request.target,
+  });
+  assert.equal(impactMap.status, 'blocked');
+  assert.deepEqual(impactMap.pages.map((page) => page.path), [null]);
+  assert.deepEqual(withoutOwnerScope.paths, []);
+  assert.deepEqual(request.ownerDirectedPaths, grokOwnerPaths);
+  assert.deepEqual(request.paths, grokOwnerPaths);
+  assert.notEqual(request.requestId, withoutOwnerScope.requestId);
+  assert.notEqual(request.requestDigest, withoutOwnerScope.requestDigest);
+  assert.equal(validateApprovalRequest(request), request);
+
+  const approval = manualApproval(request, ledger, impactMap);
+  assert.equal(validateManualOwnerApprovalBinding(
+    request,
+    approval,
+    bindingOptions(request, ledger, impactMap),
+  ), approval);
+  assert.deepEqual(v1WriteViolations(
+    request.paths.map((path) => ({ status: 'M', path })),
+    request.paths,
+  ), []);
+  assert.equal(v1WriteViolations([
+    { status: 'M', path: 'content/docs/beta/troubleshooting/configuration.en.mdx' },
+  ], request.paths).length, 1);
+
+  const forged = structuredClone(request);
+  forged.ownerDirectedPaths.push('content/docs/beta/troubleshooting/configuration.en.mdx');
+  forged.ownerDirectedPaths.sort();
+  delete forged.requestDigest;
+  forged.requestDigest = digest(forged);
+  assert.throws(() => validateApprovalRequest(forged), /included in paths/);
+
+  const staleIdentity = structuredClone(request);
+  const expandedPath = 'content/docs/beta/troubleshooting/configuration.en.mdx';
+  staleIdentity.ownerDirectedPaths.push(expandedPath);
+  staleIdentity.ownerDirectedPaths.sort();
+  staleIdentity.paths.push(expandedPath);
+  staleIdentity.paths.sort();
+  delete staleIdentity.requestDigest;
+  staleIdentity.requestDigest = digest(staleIdentity);
+  assert.throws(() => validateApprovalRequest(staleIdentity), /request ID is forged or stale/);
+});
+
+test('owner-directed path input is normalized and fails closed outside modify-only Beta scope', async () => {
+  assert.deepEqual(validateOwnerDirectedPaths([
+    grokOwnerPaths[1],
+    grokOwnerPaths[0],
+    grokOwnerPaths[1],
+  ], repoRoot), grokOwnerPaths);
+  for (const [value, expected] of [
+    [{ paths: grokOwnerPaths }, /non-empty JSON array/],
+    [[], /non-empty JSON array/],
+    [['content/docs/stable/troubleshooting/grok-hooks.en.mdx'], /human-owned Beta/],
+    [['content/docs/beta/reference/release-notes.mdx'], /human-owned Beta/],
+    [['content/docs/beta/troubleshooting/missing.en.mdx'], /does not exist/],
+  ]) {
+    assert.throws(() => validateOwnerDirectedPaths(value, repoRoot), expected);
+  }
+
+  const symlinkRoot = join(temporary, 'owner-symlink-root');
+  const symlinkDir = join(symlinkRoot, 'content', 'docs', 'beta', 'troubleshooting');
+  await mkdir(symlinkDir, { recursive: true });
+  await symlink(
+    join(repoRoot, grokOwnerPaths[0]),
+    join(symlinkDir, 'grok-hooks.en.mdx'),
+  );
+  assert.throws(
+    () => validateOwnerDirectedPaths([grokOwnerPaths[0]], symlinkRoot),
+    /must not traverse a symlink/,
+  );
+
+  const from = await fixtureSource('no-impact', 'from');
+  const to = await fixtureSource('no-impact', 'to');
+  const ledger = createReleaseLedger(from, to, 'beta');
+  const impactMap = createImpactMap(ledger, { repoRoot });
+  assert.throws(
+    () => createApprovalRequest({ ledger, impactMap, target: to.version, ownerPaths: grokOwnerPaths }),
+    /actionable release claim/,
+  );
+});
+
+test('V0 CLI binds owner-directed paths and remains byte-equivalent on rerun', async () => {
+  const ownerPathsPath = join(temporary, 'owner-paths.json');
+  await writeFile(ownerPathsPath, stableJson([
+    grokOwnerPaths[1],
+    grokOwnerPaths[0],
+    grokOwnerPaths[1],
+  ]));
+  const args = {
+    '--mode': 'v0',
+    '--from-ref': 'v0.41.0-beta.1',
+    '--to-ref': 'v0.42.0-beta.2',
+    '--from-source': join(fixtures, 'changed', 'from.json'),
+    '--to-source': join(fixtures, 'changed', 'to.json'),
+    '--channel': 'beta',
+    '--repo-root': repoRoot,
+    '--output-root': outputRoot,
+    '--target': 'owner-directed-v0',
+    '--owner-paths': ownerPathsPath,
+  };
+  const first = await runCheck(args);
+  const before = await snapshot(first.outputDir);
+  const second = await runCheck(args);
+  assert.deepEqual(await snapshot(second.outputDir), before);
+  const request = await json(join(first.outputDir, 'approval-request.json'));
+  assert.deepEqual(request.ownerDirectedPaths, grokOwnerPaths);
+  assert.ok(grokOwnerPaths.every((path) => request.paths.includes(path)));
+
+  await writeFile(ownerPathsPath, stableJson({ paths: grokOwnerPaths }));
+  await assert.rejects(() => runCheck(args), /non-empty JSON array/);
+});
+
+test('impact-map CLI accepts the same owner-directed path contract', async () => {
+  const { ledger } = await ownerDirectedEvidence();
+  const ledgerPath = join(temporary, 'owner-impact-ledger.json');
+  await writeFile(ledgerPath, stableJson(ledger));
+  const result = await runImpactMap({
+    ledger: ledgerPath,
+    repoRoot,
+    outputRoot,
+    target: 'owner-impact-map',
+    ownerPaths: grokOwnerPaths,
+  });
+  assert.deepEqual(result.request.ownerDirectedPaths, grokOwnerPaths);
+  assert.deepEqual(result.request.paths, grokOwnerPaths);
 });
 
 test('no-impact evidence produces an explicit no-op handoff', async () => {

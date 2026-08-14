@@ -10,7 +10,12 @@ import { cliError, parseArgs, readJson, required } from './lib/docs-release-cli.
 import { createImpactMap } from './lib/docs-release-impact.mjs';
 import { createReleaseLedger } from './lib/docs-release-ledger.mjs';
 import { digest, stableJson } from './lib/docs-release-normalize.mjs';
-import { assertV0WriteScope, normalizeRepoPath, v1WriteViolations } from './lib/docs-release-paths.mjs';
+import {
+  assertV0WriteScope,
+  normalizeRepoPath,
+  v1WriteViolations,
+  validateOwnerDirectedPaths,
+} from './lib/docs-release-paths.mjs';
 import { writeV0Reports } from './lib/docs-release-reports.mjs';
 import { loadReleaseSource } from './lib/docs-release-source.mjs';
 
@@ -19,7 +24,7 @@ const FLAGS = [
   '--repo-root', '--output-root', '--target', '--request', '--approval', '--changes',
   '--ledger', '--impact-map', '--manifest', '--source-repository', '--docs-repository',
   '--docs-base-sha', '--target-branch', '--now', '--used-nonces', '--output-prefix',
-  '--audit-source', '--source-root', '--issue-body',
+  '--audit-source', '--source-root', '--issue-body', '--owner-paths',
 ];
 
 async function runV0(args) {
@@ -28,11 +33,18 @@ async function runV0(args) {
   const to = await loadReleaseSource(args['--to-source'], { ref: args['--to-ref'], channel: args['--channel'] });
   const ledger = createReleaseLedger(from, to, args['--channel']);
   const impactMap = createImpactMap(ledger, { repoRoot: args['--repo-root'] });
+  const ownerPaths = args['--owner-paths']
+    ? validateOwnerDirectedPaths(
+      await readJson(args['--owner-paths'], 'owner-directed paths'),
+      args['--repo-root'],
+    )
+    : [];
   const result = await writeV0Reports({
     ledger,
     impactMap,
     outputRoot: args['--output-root'],
     target: args['--target'],
+    ownerPaths,
   });
   return {
     mode: 'v0',
