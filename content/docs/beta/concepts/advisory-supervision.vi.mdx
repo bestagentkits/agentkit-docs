@@ -1,0 +1,328 @@
+---
+title: Giám sát tư vấn
+description: Hiểu cách AgentKit dùng các Agent chỉ tư vấn cho checkpoint, quyết định khó và second opinion có phỏng vấn.
+---
+
+Giám sát tư vấn là pattern của AgentKit để nhờ một adviser mạnh hơn hoặc chuyên
+biệt hơn xem xét một quyết định mà không giao quyền implementation cho adviser
+đó. Adviser đưa counsel; workflow chính vẫn sở hữu plan, edit, test, approval
+và quyết định cuối cùng.
+
+Điều này quan trọng vì vài công cụ nghe khá giống nhau:
+
+- Built-in advisor của Claude Code là advisor tool native của runtime.
+- Subagent thông thường là worker cô lập có thể chạy task loop riêng.
+- AgentKit `kongming` là Agent tư vấn one-shot dùng tại checkpoint của workflow.
+- AgentKit `advisor` là Agent phỏng vấn phía sau `/ak:advise --agent`.
+
+Chúng đều hữu ích, nhưng khác nhau về context, lifecycle và ranh giới authority.
+
+## Tóm tắt nhanh
+
+Dùng built-in advisor của Claude Code khi bạn muốn session Claude Code hiện tại
+consult một adviser native trong lúc tự sinh phản hồi. Dùng `kongming` khi một
+workflow AgentKit tới checkpoint khó và cần counsel được đóng gói rõ bằng chứng
+từ một Agent tư vấn mới. Dùng `/ak:advise` khi chính problem cần được reframe
+qua interview với người dùng. Dùng subagent thông thường khi bạn muốn giao việc,
+không chỉ xin counsel.
+
+`kongming` và `advisor` là Agent của AgentKit. Theo contract, chúng chỉ tư vấn.
+Chúng có thể kiểm tra evidence mà runtime cho phép, nhưng không trở thành chủ sở
+hữu implementation hay approval.
+
+## Built-in advisor trong Claude Code
+
+Claude Code cung cấp advisor riêng qua `/advisor`, setting `advisorModel` và
+CLI flag `--advisor <model>`. Tài liệu Anthropic mô tả advisor tool bên dưới như
+cách để executor model consult một adviser model trong lúc sinh phản hồi; adviser
+đọc conversation và trả strategic guidance về executor.
+
+Vì vậy đây là consultation native của runtime. Bạn không đóng gói task cho một
+Agent của AgentKit, không chọn checkpoint của AgentKit và không tạo state file cô
+lập của AgentKit. Main session Claude Code tiếp tục sau khi nhận advice.
+
+```mermaid
+flowchart LR
+  accTitle: Luồng built-in advisor của Claude Code
+  accDescr: Main session Claude Code gọi advisor tool native. Runtime chuyển conversation context tới adviser model, rồi trả advice về main session.
+  user["User"] --> main["Claude Code main session"]
+  main --> tool["advisor() runtime tool"]
+  tool --> model["Advisor model"]
+  model --> tool
+  tool --> main
+  main --> work["Main session tiếp tục"]
+```
+
+Xem tài liệu công khai của Claude về
+[advisor tool](https://docs.anthropic.com/en/agents-and-tools/tool-use/advisor-tool),
+[CLI flag của Claude Code](https://docs.anthropic.com/en/docs/claude-code/cli-reference)
+và [Claude Code settings](https://docs.anthropic.com/en/docs/claude-code/settings).
+
+## Subagent thông thường
+
+Subagent thông thường là cơ chế delegation. Tài liệu Claude Code mô tả subagent
+như assistant chuyên biệt chạy trong context window riêng, với prompt, tool
+access và permission riêng. Chúng hữu ích khi một side task sẽ làm main session
+đầy log, file read, search result hoặc implementation detail.
+
+Một subagent thông thường có thể scout, test, review, viết report hoặc đôi khi
+edit file, tùy task và permission của runtime. Nó không mặc định là
+advisory-only. Authority của nó đến từ prompt, tools và instruction của người
+dùng hoặc caller.
+
+```mermaid
+flowchart LR
+  accTitle: Luồng subagent thông thường
+  accDescr: Main session giao một task có ranh giới cho subagent cô lập. Subagent làm việc trong context riêng và trả kết quả.
+  main["Main session"] --> package["Task package"]
+  package --> subagent["Subagent context"]
+  subagent --> tools["Allowed tools"]
+  tools --> subagent
+  subagent --> result["Summary, report, test result hoặc edits"]
+  result --> main
+```
+
+Xem tài liệu
+[Claude Code subagents](https://docs.anthropic.com/en/docs/claude-code/sub-agents)
+của Anthropic để biết runtime model.
+
+## AgentKit kongming
+
+`kongming` được triển khai như một Agent của AgentKit, nhưng contract hẹp hơn
+một worker subagent thông thường:
+
+| Thuộc tính | Hành vi của `kongming` |
+| --- | --- |
+| Mục đích | Counsel chiến lược cho design, debugging, trade-off hoặc go/no-go khó |
+| Lifecycle | One-shot: một prompt vào, một final answer ra |
+| User interview | Không |
+| Implementation authority | Không |
+| Input kỳ vọng | Task, evidence, approach đã thử và câu hỏi chính xác |
+| Output kỳ vọng | Advice có cấu trúc, assumption, risk, checklist và success metric |
+
+Các Skill của AgentKit như `ak:plan`, `ak:cook`, `ak:fix` và `ak:vibe` dùng
+`--advice` để thêm giám sát bằng `kongming` tại checkpoint. Checkpoint thường
+gồm:
+
+- Sau khi một phase, gate hoặc phân tích lớn hoàn tất;
+- Khi nhiều lần thử thất bại hoặc evidence mâu thuẫn;
+- Trước quyết định architecture, public contract, security-sensitive hoặc không
+  dễ đảo ngược;
+- Sau khi pull request đã mở và required checks xanh, khi workflow yêu cầu
+  advisory review cuối.
+
+Workflow gọi cung cấp đủ context để `kongming` trả lời trong một lần.
+`kongming` có thể scout bằng các tool đọc, search hoặc explore được phép, nhưng
+không phỏng vấn người dùng và không áp dụng code change.
+
+```mermaid
+flowchart TB
+  accTitle: Luồng checkpoint AgentKit kongming
+  accDescr: Một workflow AgentKit spawn kongming tại checkpoint rõ ràng với evidence và câu hỏi. Kongming trả counsel; workflow chính vẫn chịu trách nhiệm hành động.
+  user["User"] --> workflow["AgentKit workflow"]
+  workflow --> checkpoint["Checkpoint hoặc quyết định khó"]
+  checkpoint --> prompt["Task, evidence, attempts, exact question"]
+  prompt --> kongming["kongming Agent"]
+  kongming --> scout["Optional scouting"]
+  scout --> kongming
+  kongming --> counsel["Structured counsel"]
+  counsel --> workflow
+  workflow --> owner["Workflow chính quyết định, edit, test và gate"]
+```
+
+## Lifecycle one-shot
+
+Mỗi lần consult `kongming` là mới. Nếu workflow tới checkpoint A, nó spawn
+`kongming #1`, nhận advice và tiếp tục. Nếu sau đó có evidence mới tại
+checkpoint B, workflow spawn `kongming #2`.
+
+Lần consult thứ hai không tự kế thừa hidden state của lần thứ nhất. Hãy chuyển
+rõ prior counsel, evidence và decision history liên quan trong prompt mới.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant Main as Main workflow
+  participant K1 as kongming #1
+  participant K2 as kongming #2
+
+  Main->>K1: Checkpoint A: task, evidence, question
+  K1-->>Main: Counsel, assumptions, risks
+  Main->>Main: Decide và tiếp tục work
+  Main->>Main: Gather evidence mới
+  Main->>K2: Checkpoint B: evidence mới cộng prior counsel liên quan
+  K2-->>Main: Updated counsel
+  Main->>Main: Decide, edit, test và gate
+```
+
+Hãy coi advice của `kongming` là input chất lượng cao, không phải verdict tự
+thực thi. Workflow chính vẫn phải giải quyết conflict, chọn hướng đi, sửa code,
+chạy validation, đáp ứng approval gate và ghi lại điều đã xảy ra.
+
+## ak:advise inline và ak:advise --agent
+
+AgentKit `advisor` khác với `kongming`.
+
+`/ak:advise` là Skill có interview. Skill phân tích prompt hoặc URL, scout khi
+project evidence quan trọng, hỏi từng câu, xác nhận problem đã reframe, rồi đưa
+advice thẳng thắn.
+
+Khi không có `--agent`, Claude Code chạy `/ak:advise` inline trong main session.
+Cùng workflow Skill vẫn áp dụng: main session phân tích input, scout khi hữu
+ích, hỏi các interview question trực tiếp, xác nhận reframing và trả advice hoặc
+report artifact đã yêu cầu. Không có AgentKit `advisor` Agent riêng được spawn.
+
+Với `--agent` trên Claude Code, Skill giao toàn bộ interview đó cho Agent
+`advisor`.
+
+Vì interview cần người dùng tham gia, `advisor` dùng relay pattern: nó hỏi đúng
+một câu, lưu state, trả một request `NEEDS_USER_INPUT` có cấu trúc cho session
+orchestrating, rồi được re-spawn với answer của người dùng. Khi interview hội
+tụ, nó viết advice report và trả `ADVICE_READY`.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant User as User
+  participant Main as Main session
+  participant Advisor as advisor Agent
+
+  User->>Main: /ak:advise ... --agent
+  Main->>Advisor: Input, flags, state path, report path
+  Advisor-->>Main: NEEDS_USER_INPUT với một câu hỏi
+  Main-->>User: Hỏi câu đó
+  User->>Main: Answer
+  Main->>Advisor: Re-spawn với answer và state path
+  Advisor-->>Main: Thêm câu hỏi hoặc ADVICE_READY
+  Main-->>User: Final advice và output đã yêu cầu
+```
+
+Dùng `advisor` khi advice phụ thuộc việc khám phá requirement thật với người
+dùng. Dùng `kongming` khi workflow đã biết câu hỏi checkpoint và cần strategic
+review one-shot.
+
+## Ghi chú runtime
+
+Runtime không hỗ trợ giống hệt nhau.
+
+| Runtime | Điều cần biết về advisory |
+| --- | --- |
+| Claude Code | `/ak:advise` không có `--agent` chạy inline trong main session. `/ak:advise --agent` giao interview cho AgentKit `advisor` Agent. AgentKit đánh dấu `kongming` và `advisor` bằng model tier `fable`. Claude Code cũng có built-in advisor riêng, tách biệt với các Agent của AgentKit. |
+| Codex | AgentKit map `kongming` sang frontier model override của Codex với high reasoning effort. Frontmatter `fable` dùng chung vẫn portable, nhưng model ID riêng của Codex chỉ do adapter Codex emit. `/ak:advise --agent` không đồng nghĩa có relay path của Claude Code; dùng inline `ak:advise` trừ khi runtime đã cài báo hỗ trợ. |
+| Cursor | AgentKit có thể project Agents và Skills, nhưng đừng suy ra behavior của Claude Code advisor hoặc parity của relay `advisor` trong AgentKit chỉ từ việc file tồn tại. Kiểm tra output của runtime adapter và trang Skill để biết surface đang active. |
+
+### Claude Code
+
+Claude Code có hai shape cho AgentKit `ak:advise`:
+
+- **Inline `/ak:advise`** giữ interview trong main session hiện tại. Dùng khi
+  bạn muốn flow Skill thông thường, conversation state hiển thị rõ và không cần
+  adviser context riêng của AgentKit.
+- **`/ak:advise --agent`** biến main session thành orchestrator cho AgentKit
+  `advisor` Agent. Dùng khi bạn muốn interview dài và advice generation được cô
+  lập trong adviser context trên tier mạnh nhất đã cấu hình.
+
+Cả hai mode đều khác built-in `/advisor` của Claude Code. Built-in advisor là
+consultation tool native của runtime; AgentKit `ak:advise` là Skill workflow,
+có thể tùy chọn delegate sang AgentKit `advisor` Agent.
+
+### Codex
+
+Codex dùng native Skill discovery cho các Skill của AgentKit, nên `ak:advise`
+chạy như một Skill trong session Codex hiện tại. Relay `advisor` chỉ dành cho
+Claude Code phía sau `/ak:advise --agent` không phải contract của Codex; ngoài
+Claude Code, hãy dùng inline interview trừ khi runtime đã cài báo rõ có adviser
+relay surface.
+
+Với workflow supervision, Codex có hỗ trợ Agent delegation. Khi một Skill như
+`ak:plan`, `ak:cook`, `ak:fix` hoặc `ak:vibe` chạy với `--advice`, workflow có
+thể consult `kongming` qua capability delegation của Codex khi session cho phép
+delegation. AgentKit emit `kongming` với frontier model override riêng của Codex
+và high reasoning effort, trong khi vẫn giữ source chung `model: fable` portable.
+
+Quy tắc ownership vẫn giống nhau: `kongming` chỉ trả advice. Main session Codex
+vẫn apply patch, chạy command, update plan và quyết định có tiếp tục hay không.
+
+### Cursor
+
+Cursor có projection native của AgentKit cho Skills và Agents:
+
+- Skills được emit vào discovery tree `.cursor/skills/` của Cursor.
+- Agents được emit vào `.cursor/agents/`.
+- Command file của AgentKit được giữ như sidecar content vì Cursor không có cùng
+  command-file surface.
+
+Trong thực tế, `ak:advise` là đường an toàn trên Cursor: chạy Skill inline và để
+Skill hỏi các interview question trong session hiện tại. Không nên coi `--agent`
+tương đương adviser relay của Claude Code. Agent `advisor` của AgentKit có thể
+được project, nhưng relay protocol được document cho `/ak:advise --agent` chỉ
+dành cho Claude Code.
+
+Với `--advice`, Cursor có native subagent capability và có thể project
+`kongming` như một Agent. Nghĩa là workflow AgentKit có thể xin counsel từ
+`kongming` tại checkpoint khi setup Cursor live hỗ trợ Agent invocation. Cursor
+remap tier chung `fable` sang model ID của Cursor tại thời điểm emit. Conformance
+hiện tại của AgentKit vẫn ghi live canary cho Cursor Agent install, update và
+invocation là deferred, và model availability có thể khác nhau theo Cursor plan.
+Hãy coi adapter output và session Cursor đang active là nguồn sự thật.
+
+### Model availability và fallback
+
+AgentKit không tự động downgrade các Agent tư vấn khi subscription, provider
+hoặc runtime plan không dùng được frontier model đã cấu hình. Model tier hoặc
+model ID được emit là request gửi tới runtime, không phải bằng chứng account của
+người dùng chạy được model đó.
+
+Nếu runtime từ chối model, hãy coi advisory step là chưa hoàn tất. Fallback an
+toàn phải rõ ràng:
+
+- Chạy advice inline trong main session khi task là `/ak:advise` và không cần
+  isolation.
+- Cấu hình lại Agent đã cài hoặc runtime model sang model account dùng được, rồi
+  chạy lại advisory step.
+- Chỉ tiếp tục không có `--advice` khi workflow owner chấp nhận mất checkpoint
+  `kongming`.
+- Báo lỗi model hoặc entitlement thay vì claim rằng frontier counsel đã xảy ra.
+
+Trong Codex, một Agent có thể yêu cầu model riêng hoặc dùng default của session
+hiện tại. Nếu Agent được đánh dấu `inherit`, hoặc AgentKit không nhận diện được
+model tier của Agent đó, AgentKit không ghi model override cho Codex. Khi đó
+Codex chạy Agent bằng model mặc định của session.
+
+`kongming` thì khác: AgentKit ghi frontier-model override rõ cho Codex. Nếu
+account không dùng được model đó, đừng giả định Codex sẽ tự rơi về default của
+session. Hãy coi checkpoint tư vấn đang bị chặn cho đến khi đổi model hoặc
+workflow tiếp tục mà không có checkpoint đó.
+
+Để xem khác biệt cài đặt rộng hơn, đọc [Runtime adapters](./runtime-adapters).
+
+## Chọn đúng công cụ
+
+| Nhu cầu | Dùng |
+| --- | --- |
+| Second opinion native giữa lúc sinh phản hồi trong Claude Code | Built-in advisor của Claude Code |
+| Strategic checkpoint one-shot trong workflow AgentKit | `kongming`, thường qua `--advice` |
+| Reframing có interview trước khi quyết định làm gì | `/ak:advise`, hoặc `/ak:advise --agent` trên Claude Code |
+| Research, testing, review hoặc implementation cô lập | Subagent thông thường với task có ranh giới |
+| Điều phối parallel hoặc nhiều session | Agent team hoặc workflow support, không chỉ advisory supervision |
+
+Prompt tốt cho `kongming` gồm task hiện tại, phase hoặc gate, evidence cụ thể,
+finding từ file hoặc command khi có, approach đã thử, constraint, quyết định
+đang cần chọn và kiểu answer giúp workflow chính tiếp tục.
+
+Prompt yếu xin lời khuyên chung chung mà không có evidence. Giám sát tư vấn hoạt
+động tốt nhất khi adviser có thể xem cùng facts mà workflow chính đang dùng và
+trả lời một câu hỏi chính xác.
+
+## Giữ ownership ở workflow chính
+
+Giám sát tư vấn cố ý bất đối xứng:
+
+- Adviser có thể challenge, reframe và recommend.
+- Workflow chính chọn, implement, test và record.
+- Approval gate, branch protection, review blocker, security policy và runtime
+  permission vẫn áp dụng.
+- Checkpoint sau nên chuyển rõ prior advice liên quan.
+
+Sự tách biệt đó là mục đích của pattern này. AgentKit dùng giám sát tư vấn để
+cải thiện judgment mà không nhầm advice với execution authority.
