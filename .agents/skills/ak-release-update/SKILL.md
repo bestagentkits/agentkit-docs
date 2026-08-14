@@ -64,11 +64,11 @@ examples, and error paths.
    the chosen refs and channel. When a manual blind-spot pass finds exact
    existing Beta prose for an actionable pathless claim, write EN/VI-paired
    paths as a JSON array and pass `--owner-paths <file>`; nested human-owned
-   `content/docs/beta/reference/cli/**` paths are allowed. The request binds the
-   complete final path set as `ownerDirectedPaths` scope without rewriting the
-   source-derived impact map. The audit skill emits the ledger, impact map,
-   unresolved evidence, and approval
-   request under `plans/releases/<target>/`.
+   `content/docs/beta/reference/cli/**` paths are allowed. The request records
+   them in `ownerDirectedPaths` and binds the complete final `paths` set without
+   rewriting the source-derived impact map. The audit skill emits the ledger,
+   impact map, unresolved evidence, and approval request under
+   `plans/releases/<target>/`.
 4. **Stop for owner approval.** Present the request ID, digests, and the
    proposed nested prose paths, including any `ownerDirectedPaths`. Await the
    exact statement `approve REQ-…`.
