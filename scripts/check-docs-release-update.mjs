@@ -7,10 +7,16 @@ import { createCoverageGapAudit, verifyCoverageV1Physical } from './lib/docs-rel
 import { writeCoverageGapReports } from './lib/docs-release-coverage-reports.mjs';
 import { isCoverageApprovalRequest } from './lib/docs-release-coverage-schema.mjs';
 import { cliError, parseArgs, readJson, required } from './lib/docs-release-cli.mjs';
+import { assertV1ChangeManifest, resolveV1GitChanges } from './lib/docs-release-git.mjs';
 import { createImpactMap } from './lib/docs-release-impact.mjs';
 import { createReleaseLedger } from './lib/docs-release-ledger.mjs';
 import { digest, stableJson } from './lib/docs-release-normalize.mjs';
-import { assertV0WriteScope, normalizeRepoPath, v1WriteViolations } from './lib/docs-release-paths.mjs';
+import {
+  assertV0WriteScope,
+  normalizeRepoPath,
+  v1WriteViolations,
+  validateOwnerDirectedPaths,
+} from './lib/docs-release-paths.mjs';
 import { writeV0Reports } from './lib/docs-release-reports.mjs';
 import { loadReleaseSource } from './lib/docs-release-source.mjs';
 
@@ -19,7 +25,7 @@ const FLAGS = [
   '--repo-root', '--output-root', '--target', '--request', '--approval', '--changes',
   '--ledger', '--impact-map', '--manifest', '--source-repository', '--docs-repository',
   '--docs-base-sha', '--target-branch', '--now', '--used-nonces', '--output-prefix',
-  '--audit-source', '--source-root', '--issue-body',
+  '--audit-source', '--source-root', '--issue-body', '--owner-paths',
 ];
 
 async function runV0(args) {
@@ -28,11 +34,18 @@ async function runV0(args) {
   const to = await loadReleaseSource(args['--to-source'], { ref: args['--to-ref'], channel: args['--channel'] });
   const ledger = createReleaseLedger(from, to, args['--channel']);
   const impactMap = createImpactMap(ledger, { repoRoot: args['--repo-root'] });
+  const ownerPaths = args['--owner-paths']
+    ? validateOwnerDirectedPaths(
+      await readJson(args['--owner-paths'], 'owner-directed paths'),
+      args['--repo-root'],
+    )
+    : [];
   const result = await writeV0Reports({
     ledger,
     impactMap,
     outputRoot: args['--output-root'],
     target: args['--target'],
+    ownerPaths,
   });
   return {
     mode: 'v0',
@@ -116,6 +129,15 @@ async function runV1(args) {
       ...(manifestArtifact ? { manifest: manifestArtifact } : {}),
     },
   });
+  const expectedApprovalPath = `docs-approvals/${approval.subject.sourceTag}-${approval.nonce}.json`;
+  if (approvalArtifact.path !== expectedApprovalPath) throw new Error(`durable approval must be read from ${expectedApprovalPath}`);
+  const suppliedChanges = await readJson(args['--changes'], 'V1 changes');
+  const changes = assertV1ChangeManifest(
+    suppliedChanges,
+    await resolveV1GitChanges(args['--repo-root'], args['--docs-base-sha']),
+  );
+  const violations = v1WriteViolations(changes, request.paths);
+  if (violations.length) throw new Error(`V1 write scope rejected:\n${violations.map((item) => `- ${item}`).join('\n')}`);
   if (isCoverageApprovalRequest(request)) {
     await verifyCoverageV1Physical({
       request,
@@ -123,14 +145,9 @@ async function runV1(args) {
       docsRoot: args['--repo-root'],
       sourceRoot: args['--source-root'],
       issueBodyPath: args['--issue-body'],
+      changedPaths: new Set(changes.map((change) => change.path)),
     });
   }
-  const expectedApprovalPath = `docs-approvals/${approval.subject.sourceTag}-${approval.nonce}.json`;
-  if (approvalArtifact.path !== expectedApprovalPath) throw new Error(`durable approval must be read from ${expectedApprovalPath}`);
-  const changes = await readJson(args['--changes'], 'V1 changes');
-  if (!Array.isArray(changes)) throw new Error('V1 changes must be an array');
-  const violations = v1WriteViolations(changes, request.paths);
-  if (violations.length) throw new Error(`V1 write scope rejected:\n${violations.map((item) => `- ${item}`).join('\n')}`);
   return {
     mode: 'v1',
     status: 'approved',

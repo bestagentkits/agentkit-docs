@@ -4,6 +4,7 @@ import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { validateApprovalRequest } from './lib/docs-release-approval.mjs';
 import { verifyCoverageV1Physical } from './lib/docs-release-coverage.mjs';
+import { assertV1ChangeManifest, resolveV1GitChanges } from './lib/docs-release-git.mjs';
 import { isCoverageApprovalRequest } from './lib/docs-release-coverage-schema.mjs';
 import { cliError, parseArgs, readJson, required } from './lib/docs-release-cli.mjs';
 import {
@@ -124,6 +125,19 @@ async function validateManualV1(args) {
     artifacts,
   });
   await resolveManualOwnerDocsBase(repoRoot, approval.docsBaseSha);
+  const expectedApprovalPath = `plans/releases/${request.target}/manual-owner-approval.json`;
+  if (approvalArtifact.path !== expectedApprovalPath) {
+    throw new Error(`manual-owner approval must be read from ${expectedApprovalPath}`);
+  }
+  const suppliedChanges = await readJson(args['--changes'], 'V1 changes');
+  const changes = assertV1ChangeManifest(
+    suppliedChanges,
+    await resolveV1GitChanges(repoRoot, args['--docs-base-sha']),
+  );
+  const violations = v1WriteViolations(changes, request.paths);
+  if (violations.length) {
+    throw new Error(`V1 write scope rejected:\n${violations.map((item) => `- ${item}`).join('\n')}`);
+  }
   if (isCoverageApprovalRequest(request)) {
     await verifyCoverageV1Physical({
       request,
@@ -131,17 +145,8 @@ async function validateManualV1(args) {
       docsRoot: repoRoot,
       sourceRoot: args['--source-root'],
       issueBodyPath: args['--issue-body'],
+      changedPaths: new Set(changes.map((change) => change.path)),
     });
-  }
-  const expectedApprovalPath = `plans/releases/${request.target}/manual-owner-approval.json`;
-  if (approvalArtifact.path !== expectedApprovalPath) {
-    throw new Error(`manual-owner approval must be read from ${expectedApprovalPath}`);
-  }
-  const changes = await readJson(args['--changes'], 'V1 changes');
-  if (!Array.isArray(changes)) throw new Error('V1 changes must be an array');
-  const violations = v1WriteViolations(changes, request.paths);
-  if (violations.length) {
-    throw new Error(`V1 write scope rejected:\n${violations.map((item) => `- ${item}`).join('\n')}`);
   }
   return {
     mode: 'v1',

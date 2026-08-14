@@ -6,15 +6,24 @@ import { cliError, parseArgs, readJson, required } from './lib/docs-release-cli.
 import { createImpactMap } from './lib/docs-release-impact.mjs';
 import { renderImpactMap, renderUnresolved } from './lib/docs-release-reports.mjs';
 import { stableJson } from './lib/docs-release-normalize.mjs';
-import { assertNoSymlinkPath, atomicWrite, releaseOutputDir } from './lib/docs-release-paths.mjs';
+import {
+  assertNoSymlinkPath,
+  atomicWrite,
+  releaseOutputDir,
+  validateOwnerDirectedPaths,
+} from './lib/docs-release-paths.mjs';
 import { validateLedger } from './lib/docs-release-schema.mjs';
 
-const FLAGS = ['--ledger', '--repo-root', '--output-root', '--target'];
+const REQUIRED_FLAGS = ['--ledger', '--repo-root', '--output-root', '--target'];
+const FLAGS = [...REQUIRED_FLAGS, '--owner-paths'];
 
 export async function runImpactMap(options) {
   const ledger = validateLedger(await readJson(options.ledger, 'source ledger'));
   const impactMap = createImpactMap(ledger, { repoRoot: options.repoRoot });
-  const request = createApprovalRequest({ ledger, impactMap, target: options.target });
+  const ownerPaths = options.ownerPaths === undefined
+    ? []
+    : validateOwnerDirectedPaths(options.ownerPaths, options.repoRoot);
+  const request = createApprovalRequest({ ledger, impactMap, target: options.target, ownerPaths });
   const outputDir = releaseOutputDir(options.outputRoot, options.target);
   await assertNoSymlinkPath(options.outputRoot, outputDir);
   const files = new Map([
@@ -28,12 +37,15 @@ export async function runImpactMap(options) {
 }
 
 export async function main(argv = process.argv.slice(2)) {
-  const args = required(parseArgs(argv, FLAGS), FLAGS);
+  const args = required(parseArgs(argv, FLAGS), REQUIRED_FLAGS);
   const result = await runImpactMap({
     ledger: args['--ledger'],
     repoRoot: args['--repo-root'],
     outputRoot: args['--output-root'],
     target: args['--target'],
+    ...(args['--owner-paths'] ? {
+      ownerPaths: await readJson(args['--owner-paths'], 'owner-directed paths'),
+    } : {}),
   });
   process.stdout.write(stableJson({ status: result.request.status, outputDir: result.outputDir, files: result.files }));
 }
