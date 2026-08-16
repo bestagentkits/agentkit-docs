@@ -1,6 +1,6 @@
 ---
 title: Runtime adapter
-description: So sánh cách AgentKit cung cấp capability được hỗ trợ cho Claude Code, Codex và Cursor.
+description: So sánh cách phân phối tới runtime production với Grok Build spike chỉ dùng nguồn cục bộ.
 ---
 
 Các coding assistant không dùng chung cấu trúc tệp, bộ công cụ hay mô hình
@@ -42,8 +42,10 @@ Cách phân phối trả lời câu hỏi **runtime tải bản cài như thế 
 
 Scope và cách phân phối độc lập với nhau. Vì vậy, Claude Code có thể dùng native
 theo project, native theo người dùng, plugin theo project hoặc plugin theo người
-dùng. Bản cài Codex và Cursor dùng cấu trúc native theo project hoặc người dùng;
-`--switch-to-plugin` không chọn cách phân phối plugin cho hai runtime này.
+dùng. Bản cài Codex và Cursor dùng cấu trúc native theo project hoặc người dùng.
+Grok Build `spike` cũng dùng cấu trúc native theo project hoặc người dùng, nhưng
+chỉ từ nguồn Kit cục bộ rõ ràng. `--switch-to-plugin` không chọn cách phân phối
+plugin cho các target này.
 
 Trong cùng một scope, phân phối native và plugin cho cùng một Claude Code Kit
 loại trừ lẫn nhau. Chọn mode còn lại sẽ bắt đầu một lần chuyển đổi rõ ràng; thao
@@ -63,6 +65,22 @@ các bề mặt hoạt động khác nhau:
 | Claude Code | Phân phối native hoặc plugin được chọn rõ ràng. Skills, agents, slash commands, rules, hooks và status line của AgentKit có thể hoạt động ở scope project hoặc người dùng. |
 | Codex | Khám phá Skill theo cơ chế native, rules và giao việc cho Agent qua AgentKit runtime cục bộ. Hook chỉ được hỗ trợ một phần; group không được hỗ trợ sẽ không được chuyển sang runtime, còn trạng thái task được làm mới tại ranh giới lượt làm việc và subagent được hỗ trợ thay vì sau mọi lần gọi công cụ task. Tệp command của Kit chỉ được giữ làm nội dung hỗ trợ không hoạt động và Codex không có bề mặt status line của AgentKit. |
 | Cursor | Adapter chuyển Skills, agents, rules và hooks sang scope project hoặc người dùng. Tệp command của Kit chỉ được giữ làm nội dung hỗ trợ không hoạt động, không có bề mặt status line của AgentKit và adapter không cung cấp công cụ quản lý plan chuyên biệt. Phạm vi xác minh cài đặt, cập nhật và invocation trực tiếp chưa đầy đủ trên mọi thiết lập provider, vì vậy không suy ra parity hoàn toàn chỉ từ việc source có hỗ trợ. |
+| Grok Build (`spike`) | Chỉ projection native từ nguồn cục bộ. Rule, Skill, Agent và Hook được hỗ trợ nằm dưới `<project>/.grok` hoặc `${GROK_HOME:-~/.grok}`; metadata lifecycle nằm riêng dưới `<project>/.agentkit/adapters/grok/<kit>` hoặc `${AGENTKIT_HOME:-~/.agentkit}/adapters/grok/<kit>`. Command và export không được hỗ trợ vẫn là sidecar không hoạt động. Chưa có package runtime Grok đã ký hoặc authenticated dispatch canary được phát hành. |
+
+Hook command exec-form native trên Grok dùng launcher
+`agentkit-grok-envelope-shim.cjs` thuộc quyền sở hữu để bổ sung field và tên tool
+theo dạng Claude mà script trong Kit cần. HTTP handler và command handler không
+có argument exec-form nhận raw envelope camelCase của Grok. Hook trong project
+không hoạt động đến khi bạn chủ động trust project. Timeout, crash, output sai
+định dạng và lỗi shim đều fail open; chỉ một denial `PreToolUse` áp dụng được mới
+chặn action, vì vậy hãy kết hợp Hook nhạy cảm về an toàn với quyền của Grok.
+
+`ak run <kit>/<skill> --target grok` là dispatch native của AgentKit. Lệnh phân
+giải `AGENTKIT_GROK_BIN` hoặc `grok`; AgentKit sở hữu việc đóng khung process,
+còn Grok và người dùng sở hữu model, xác thực, trust, quyền, sandbox và
+`.grok/config.toml`. Đường này tách biệt với Claude-compat scanner của Grok đọc
+settings `.claude`. Init và refresh Grok từ remote fail closed vì registry không
+có package runtime Grok đã ký.
 
 Với Hook native của Claude Code, AgentKit kiểm tra toàn bộ runtime closure trước
 khi thay đổi tệp. Preflight dừng mà không sửa gì nếu nội dung chưa được theo dõi
@@ -105,9 +123,11 @@ quả capability, không nhất thiết là cài đặt thất bại.
 2. Chọn scope project hoặc người dùng theo nơi workflow cần khả dụng.
 3. Với Claude Code, giữ cách phân phối native trừ khi bạn chủ động muốn cơ chế
    kích hoạt và lifecycle của plugin.
-4. Review cảnh báo của adapter sau khi cài, đặc biệt với Hooks và các bề mặt UI
+4. Chỉ chọn Grok Build khi bạn chủ động chấp nhận một `spike` dùng nguồn cục bộ;
+   không coi đây là target cài đặt production hoặc remote.
+5. Review cảnh báo của adapter sau khi cài, đặc biệt với Hook và các bề mặt UI
    chỉ có ở một số runtime.
-5. Bắt đầu một phiên runtime mới nếu assistant chưa tải lại nội dung vừa cài.
+6. Bắt đầu một phiên runtime mới nếu assistant chưa tải lại nội dung vừa cài.
 
 Xem [Cài đặt Kit](../guides/installing-kits) để biết lệnh cài đặt. Xem
 [Kits, Skills, Agents và Hooks](./building-blocks) để hiểu mô hình thành phần.

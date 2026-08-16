@@ -27,11 +27,14 @@ Chạy lệnh cài từ project sẽ sở hữu nội dung project-scoped. Ghi r
 ```bash
 ak kit init engineer --target claude-code
 ak kit init engineer --target codex
+ak kit init engineer --local --kits-dir ./kits --target grok
 ```
 
-Scope mặc định là project hiện tại. `--global` chọn user scope của runtime. Cài
-thành công trong một scope không làm Kit xuất hiện trong project hoặc user
-profile khác.
+Hai lệnh đầu chọn target registry đã phát hành. Lệnh Grok chọn một `spike` dùng
+nguồn cục bộ; đây không phải bản cài production hoặc có thể lấy từ remote. Scope
+mặc định là project hiện tại. `--global` chọn user scope của runtime. Cài thành
+công trong một scope không làm Kit xuất hiện trong project hoặc user profile
+khác.
 
 Với Claude Code, project-native delivery là mặc định. Plugin delivery là lựa
 chọn riêng:
@@ -44,9 +47,19 @@ ak kit init engineer --target claude-code --global --switch-to-plugin
 Lệnh đầu chọn project plugin; lệnh thứ hai chọn user plugin. Không thêm
 `--switch-to-plugin` vào bản cài Codex.
 
-Với bản phát hành, authenticated remote registry là nguồn mặc định. `--local`
-dành cho nguồn development hoặc CI rõ ràng và yêu cầu `--kits-dir` hoặc
-`AGENTKIT_KITS_DIR`; đây không phải fallback cho lỗi registry.
+Với target đã phát hành, authenticated remote registry là nguồn mặc định.
+`--local` dành cho nguồn development hoặc CI rõ ràng và yêu cầu `--kits-dir`
+hoặc `AGENTKIT_KITS_DIR`; đây không phải fallback cho lỗi registry.
+`--target grok` native là ngoại lệ: init và refresh yêu cầu nguồn cục bộ rõ ràng
+đó. Thao tác Grok từ remote fail closed vì chưa có package runtime Grok đã ký;
+không thay bằng package của runtime khác.
+
+Bản cài Grok native trong project ghi dưới `<project>/.grok` và lưu quyền sở hữu
+lifecycle dưới `<project>/.agentkit/adapters/grok/<kit>`. Bản cài global dùng
+`${GROK_HOME:-~/.grok}` và
+`${AGENTKIT_HOME:-~/.agentkit}/adapters/grok/<kit>`. Đường này tách biệt với
+việc Grok scan `.claude/settings.json` trong Claude-compat mode. Hook native
+trong project không chạy đến khi bạn chủ động trust project trong Grok.
 
 ## Đọc nhóm lỗi
 
@@ -93,9 +106,11 @@ ak doctor --adapter codex --json
 ```
 
 Chỉ chạy adapter bạn đã chọn. Chọn một adapter được document: `claude-code`,
-`codex` hoặc `cursor`. Tên
-`--check` không tồn tại là lỗi lệnh; dùng `ak doctor --list` để xem các tên mà
-CLI đang cài hỗ trợ. Filter `claude-code` cũng giữ lại các shared check.
+`codex` hoặc `cursor`. Grok Build `spike` không có filter Doctor riêng theo
+adapter trong bản phát hành này; thay vào đó hãy kiểm tra install summary, native
+root và khả năng discovery của Grok. Tên `--check` không tồn tại là lỗi lệnh;
+dùng `ak doctor --list` để xem các tên mà CLI đang cài hỗ trợ. Filter
+`claude-code` cũng giữ lại các shared check.
 
 Các check integrity và removability của Kit chỉ kiểm tra thư mục có bằng chứng
 ownership AgentKit rõ ràng: lifecycle install manifest khớp hoặc metadata plugin
@@ -144,10 +159,11 @@ phục](./updates) trước khi áp dụng snapshot.
 
 ## Xác minh kết quả
 
-Chạy lại doctor cho adapter. Sau đó mở session runtime mới trong cùng project và
-xác minh Skill hoặc Agent mong đợi đã có. Nếu cài đặt khỏe nhưng runtime vẫn
-không discover được, tiếp tục với [Runtime không tìm thấy Skill hoặc
-Agent](./runtime-cannot-find-skill-or-agent).
+Chạy lại doctor theo adapter ở nơi có check đó. Với Grok native, hãy mở session
+mới trong cùng project, trust Hook trong project nếu áp dụng và xác minh discovery
+dưới `.grok`. Sau đó xác nhận Skill hoặc Agent mong đợi đã có. Nếu cài đặt khỏe
+nhưng runtime vẫn không discover được, tiếp tục với [Runtime không tìm thấy Skill
+hoặc Agent](./runtime-cannot-find-skill-or-agent).
 
 ## Trang liên quan
 

@@ -1,34 +1,38 @@
 ---
 title: Kiến trúc AgentKit
-description: Tìm hiểu cách CLI, Kit được phát hành, runtime adapter và project của bạn phối hợp với nhau.
+description: Tìm hiểu cách CLI, Kit đã phát hành hoặc từ nguồn cục bộ, runtime adapter và project của bạn phối hợp với nhau.
 ---
 
-AgentKit nằm giữa các gói workflow đã phát hành và coding assistant được hỗ trợ.
-CLI xử lý việc cài đặt và các thao tác lifecycle; assistant vẫn chạy phiên AI và
-các công cụ của nó.
+AgentKit nằm giữa các nguồn Kit và coding assistant. CLI xử lý việc cài đặt,
+các thao tác lifecycle và có thể bắt đầu dispatch qua adapter; assistant vẫn
+chạy phiên AI và các công cụ của nó.
 
 ```mermaid
 flowchart TB
-  accTitle: Từ Kit đã xác minh đến các bề mặt runtime
-  accDescr: Registry yêu cầu xác thực cung cấp bản phát hành Kit đã xác minh cho AgentKit CLI. CLI chuyển Kit qua adapter thành các bề mặt của Claude Code, Codex hoặc Cursor.
+  accTitle: Từ nguồn Kit đến các bề mặt runtime
+  accDescr: Registry yêu cầu xác thực cung cấp các bản phát hành Kit đã xác minh cho target đã phát hành, còn nguồn cục bộ rõ ràng cung cấp Kit cho target development-only. AgentKit CLI chuyển từng Kit qua runtime adapter.
   registry["Registry yêu cầu xác thực"] --> release["Bản phát hành Kit đã xác minh"]
   release --> cli["AgentKit CLI"]
+  local["Nguồn Kit cục bộ rõ ràng<br/>(Grok Build spike)"] --> cli
   cli --> adapter["Chuyển đổi qua adapter"]
   adapter --> claude["Bề mặt Claude Code"]
   adapter --> codex["Bề mặt Codex"]
   adapter --> cursor["Bề mặt Cursor"]
+  adapter --> grok["Bề mặt native của Grok Build<br/>(spike)"]
 ```
 
 ## Các phần của hệ thống
 
 - **AgentKit CLI (`ak`)** xác thực quyền truy cập, phân giải gói Kit đã phát
   hành, xác minh nội dung phát hành, cài đặt qua adapter được chọn và quản lý cập
-  nhật, chẩn đoán, gỡ cài đặt cùng snapshot khôi phục.
-- **Kit đã phát hành** đóng gói workflow và các thành phần hỗ trợ thành một đơn
-  vị có phiên bản. Bạn có thể cài toàn bộ Kit hoặc chọn Skills khi lệnh hỗ trợ.
+  nhật, chẩn đoán, gỡ cài đặt cùng snapshot khôi phục. Target chỉ có trong source
+  có thể dùng nguồn Kit cục bộ rõ ràng cho development hoặc CI.
+- **Gói Kit** đóng gói workflow và các thành phần hỗ trợ thành một đơn vị. Gói đã
+  phát hành có phiên bản và được xác minh; nguồn cục bộ là input development,
+  không phải bằng chứng rằng package cho runtime đã được phát hành.
 - **Runtime adapter** chuyển các bề mặt được hỗ trợ của Kit thành tệp và đăng ký
-  mà Claude Code, Codex hoặc Cursor hiểu được. Adapter cũng báo nội dung mà
-  runtime đích không thể kích hoạt.
+  mà Claude Code, Codex, Cursor hoặc Grok Build spike hiểu được. Adapter cũng báo
+  nội dung mà runtime đích không thể kích hoạt.
 - **Scope project hoặc người dùng** quyết định nội dung đã chuyển đổi có hiệu lực
   ở đâu. Scope project là mặc định cho workspace hiện tại. Scope người dùng làm
   cho bản cài khả dụng qua các thư mục người dùng của runtime đó.
@@ -41,7 +45,7 @@ flowchart TB
    việc cho Agent.
 2. Runtime tải hướng dẫn đã được chuyển đổi cùng các tệp hỗ trợ mà nó biết cách
    sử dụng.
-3. Skills, Agents và các Hooks được hỗ trợ phối hợp thực hiện công việc. Hành vi
+3. Các Skill, Agent và Hook được hỗ trợ phối hợp thực hiện công việc. Hành vi
    chính xác phụ thuộc vào capability của runtime.
 4. Workflow có thể tạo hoặc thay đổi artifact trong project như code, plan hay
    report.
@@ -58,6 +62,13 @@ runtime và workflow đó.
 AgentKit sở hữu lifecycle cài đặt đối với các tệp mà nó xác định được là do mình
 quản lý. Coding assistant sở hữu việc thực thi. Repository và artifact do bạn
 tạo vẫn thuộc về bạn.
+
+Với Grok Build native, `--target grok` chọn ranh giới projection và dispatch của
+AgentKit. AgentKit sở hữu các đường dẫn đã cài cùng thao tác khởi chạy process;
+Grok và người dùng sở hữu model thực tế, xác thực, trust của project, quyền,
+sandbox và `.grok/config.toml`. Target này vẫn là `spike`: việc đăng ký trong
+source và đường khám phá native dùng một lần không biến nó thành package runtime
+production hoặc có thể lấy từ remote.
 
 Sự tách biệt này quan trọng khi cập nhật và gỡ cài đặt: AgentKit có thể thay thế
 hoặc xóa tệp chưa đổi mà nó đã cài trước đó, nhưng sẽ giữ tệp không rõ nguồn gốc

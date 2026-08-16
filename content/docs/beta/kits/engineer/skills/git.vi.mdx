@@ -85,7 +85,7 @@ Khi không có đối số, Skill hiển thị chooser thao tác. Các thao tác
 | `cp` | Thực hiện workflow commit | Push branch hiện tại sau khi commit |
 | `pr [to-branch] [from-branch]` | Phân tích so sánh remote branch | Push source branch khi cần và tạo GitHub pull request; target mặc định là `main`, source là branch hiện tại |
 | `merge [to-branch] [from-branch]` | Checkout và cập nhật target, rồi merge `origin/<from-branch>` bằng merge commit | Push target branch; target mặc định là `main`, source là branch hiện tại |
-| `merge-pr <pr-ref>` | Kiểm tra trạng thái PR và quy ước repo | Merge GitHub PR, có thể bật auto-merge cho check đang chờ và theo dõi CI sau merge |
+| `merge-pr <pr-ref>` | Kiểm tra trạng thái PR và quy ước repo | Merge GitHub PR; đường native có thể bật auto-merge cho check đang chờ, còn REST fallback đợi check terminal-green trước khi merge; sau đó theo dõi CI sau merge |
 
 `merge-pr` yêu cầu số hoặc URL của PR. Các đối số branch khác dùng mặc định đã
 được ghi rõ khi bỏ qua.
@@ -127,16 +127,23 @@ thị để xử lý thủ công.
 
 ### Merge GitHub PR
 
+Workflow trước tiên probe tính khả dụng của GraphQL. Các lượt đọc readiness dùng
+lệnh `gh pr` native khi khả dụng và REST fallback khi GraphQL bị chặn. Đường đi
+thích ứng này không biến mọi thao tác GitHub thành GraphQL-free: `gh pr merge`
+native và việc bật auto-merge vẫn phụ thuộc GraphQL.
+
 Workflow `merge-pr`:
 
 1. **Kiểm tra sẵn sàng.** PR phải đang mở, merge được, không có yêu cầu thay đổi,
    được branch policy cho phép và không có CI đỏ.
 2. **Chọn phương thức merge.** Skill làm theo chỉ dẫn project, PR đã merge gần
    đây, cấu hình repo, rồi mặc định dùng merge commit.
-3. **Merge hoặc bật auto-merge.** Check đang chờ có thể dùng `--auto`; check đỏ
-   và conflict dừng workflow.
-4. **Chờ merge thực tế.** Auto-merge được poll trước khi bắt đầu công việc sau
-   merge; chờ quá 30 phút được báo là blocker.
+3. **Dùng đường merge khả dụng.** Khi GraphQL khả dụng, check đang chờ có thể dùng
+   `--auto`. REST fallback không thể bật auto-merge; nó poll đến khi check
+   terminal-green, từ chối kết quả không green rồi mới merge qua REST. Check đỏ
+   và conflict dừng cả hai đường.
+4. **Chờ merge thực tế.** Auto-merge native được poll trước khi bắt đầu công việc
+   sau merge; chờ quá 30 phút được báo là blocker.
 5. **Theo dõi CI của target branch.** Các run cho merge commit được theo dõi tới
    kết luận.
 6. **Xử lý lỗi xác định được.** Lỗi sau merge có thể sửa trong repo có thể bắt
@@ -205,4 +212,5 @@ Bằng chứng mong đợi gồm:
   bên ngoài, thiếu quyền, review bắt buộc hay branch protection.
 - Cách gọi slash trên Cursor là bằng chứng do người dùng xác minh, không chứng
   minh agent hay GitHub tool tương đương.
-- Stable và beta đóng gói cùng thao tác và gate của `ak:git`.
+- Bằng chứng release xác lập các thao tác và gate của `ak:git` được mô tả tại đây;
+  đừng suy ra tính tương đương với phiên bản Skill hay runtime projection khác.
