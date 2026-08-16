@@ -27,11 +27,14 @@ the runtime explicitly so the destination is unambiguous:
 ```bash
 ak kit init engineer --target claude-code
 ak kit init engineer --target codex
+ak kit init engineer --local --kits-dir ./kits --target grok
 ```
 
-The default scope is the current project. `--global` selects the runtime's user
-scope. Installing successfully in one scope does not make the Kit visible in a
-different project or user profile.
+The first two commands select released registry targets. The Grok command
+selects a local-source `spike`; it is not a production or remotely obtainable
+install. The default scope is the current project. `--global` selects the
+runtime's user scope. Installing successfully in one scope does not make the Kit
+visible in a different project or user profile.
 
 For Claude Code, project-native delivery is the default. Plugin delivery is a
 separate choice:
@@ -44,9 +47,19 @@ ak kit init engineer --target claude-code --global --switch-to-plugin
 The first command selects a project plugin; the second selects a user plugin.
 Do not add `--switch-to-plugin` to a Codex install.
 
-For release installs, the authenticated remote registry is the default source.
+For released targets, the authenticated remote registry is the default source.
 `--local` is for an explicit development or CI source and requires `--kits-dir`
-or `AGENTKIT_KITS_DIR`; it is not a fallback for a registry failure.
+or `AGENTKIT_KITS_DIR`; it is not a fallback for a registry failure. Native
+`--target grok` is the exception: init and refresh require that explicit local
+source. Remote Grok operations fail closed because no signed Grok runtime
+package exists; do not substitute another runtime's package.
+
+A native Grok project install writes below `<project>/.grok` and records
+lifecycle ownership below `<project>/.agentkit/adapters/grok/<kit>`. A global
+install uses `${GROK_HOME:-~/.grok}` and
+`${AGENTKIT_HOME:-~/.agentkit}/adapters/grok/<kit>`. This is separate from Grok
+scanning `.claude/settings.json` in Claude-compat mode. Native project Hooks do
+not run until you explicitly trust the project in Grok.
 
 ## Read the failure class
 
@@ -94,10 +107,11 @@ ak doctor --adapter codex --json
 ```
 
 Run only the adapter you targeted. Pass one of the documented adapter values:
-`claude-code`, `codex`, or `cursor`.
-An unknown `--check` name is a command error; use `ak doctor --list` for the
-names supported by the installed CLI. The `claude-code` filter also retains
-shared checks.
+`claude-code`, `codex`, or `cursor`. The Grok Build `spike` has no
+adapter-specific Doctor filter in this release; inspect the install summary,
+native roots, and Grok discovery instead. An unknown `--check` name is a command
+error; use `ak doctor --list` for the names supported by the installed CLI. The
+`claude-code` filter also retains shared checks.
 
 Kit integrity and removability checks inspect only directories with positive
 AgentKit ownership evidence: a matching lifecycle install manifest or
@@ -147,10 +161,11 @@ applying a snapshot.
 
 ## Verify the result
 
-Run the adapter-specific doctor check again. Then start a new runtime session
-in the same project and verify that the expected Skill or Agent is available.
-If the install is healthy but runtime discovery still fails, continue with
-[Runtime cannot find a Skill or Agent](./runtime-cannot-find-skill-or-agent).
+Run the adapter-specific doctor check again where one exists. For native Grok,
+start a new session in the same project, trust project Hooks if applicable, and
+verify discovery below `.grok`. Then confirm that the expected Skill or Agent is
+available. If the install is healthy but runtime discovery still fails, continue
+with [Runtime cannot find a Skill or Agent](./runtime-cannot-find-skill-or-agent).
 
 ## Related pages
 

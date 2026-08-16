@@ -1,18 +1,18 @@
 ---
-title: Review, repair, or merge a pull request with ak:review-pr
-description: Inspect a GitHub pull request, optionally fix findings, publish the review, and merge only after explicit readiness gates pass.
+title: Review, repair, or merge pull requests with ak:review-pr
+description: Inspect one or more GitHub pull requests, optionally fix findings, publish reviews, and merge only after explicit readiness gates pass.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
-Use `ak:review-pr` to evaluate a GitHub pull request against its stated scope,
-the surrounding code, repository rules, tests, security boundaries, and merge
-readiness. The default mode is read-only. Optional flags deliberately expand
-the workflow to repair the branch, post a formal review, or merge and watch
-post-merge CI.
+Use `ak:review-pr` to evaluate one or more GitHub pull requests against their
+stated scope, the surrounding code, repository rules, tests, security
+boundaries, and merge readiness. The default mode is read-only. Optional flags
+deliberately expand each pull request's workflow to repair its branch, post a
+formal review, or merge and watch post-merge CI.
 
-## Choose ak:review-pr for an existing GitHub pull request
+## Choose ak:review-pr for existing GitHub pull requests
 
 ### Use ak:review-pr when
 
@@ -36,9 +36,11 @@ Before you start:
 
 - Complete [Onboarding](../../../getting-started/onboarding), and confirm the
   installed Kit is available in the current runtime.
-- Run from the pull request's repository and provide its number or URL.
-- Install and authenticate `gh` with permission to read the repository and
-  pull request.
+- Run from the pull request's repository. Provide one or more refs as a bare
+  number (`123`), hash-prefixed number (`#123`), or full PR URL; separate refs
+  with whitespace or commas.
+- Install and authenticate `gh` with permission to read the repository and its
+  pull requests.
 - For `--fix`, start with a clean, correct pull request head branch and preserve
   unrelated user changes.
 - Grant write, review, merge, and Actions permissions only for the modes you
@@ -52,18 +54,26 @@ Before you start:
 
 ## Select the authority deliberately
 
-Flags can appear in any order and compose. With no flag, the Skill only prints
-the review locally.
+Flags can appear in any order and compose. With no flag, the Skill prints each
+review locally.
 
 | Input | Behavior | External or local effects |
 | --- | --- | --- |
-| `<PR number or URL>` | Reviews and returns a local verdict | Reads GitHub metadata, diff, checks, linked context, and relevant repository files |
-| `--fix` | Fixes actionable findings, verifies, commits, pushes, and re-reviews | Mutates the worktree and pull request branch; may repeat until converged or blocked |
-| `--reply` | Posts the final result as a formal GitHub review | Creates a review event using approve, request-changes, or comment semantics |
-| `--merge` | Merges only after readiness gates pass, then watches target-branch CI | Can merge, enable auto-merge for pending required checks, and ship follow-up CI fixes |
+| `<PR ref> [<PR ref> ...]` | Reviews one or more PRs and returns a verdict for each | Reads GitHub metadata, diff, checks, linked context, and relevant repository files |
+| `--fix` | Fixes actionable findings, verifies, commits, pushes, and re-reviews each PR | Mutates the worktree and pull request branch; may repeat per PR until converged or blocked |
+| `--reply` | Posts each final result as a formal GitHub review | Creates a review event using approve, request-changes, or comment semantics |
+| `--merge` | Merges each ready PR after its gates pass, then watches target-branch CI | Can merge; the native path may enable auto-merge for pending checks, while the REST fallback waits for terminal-green checks; may ship follow-up CI fixes |
 
-`--fix --reply` posts only the final re-review. Adding `--merge` runs the merge
-stage last, after repair and reply behavior completes.
+`--fix --reply` posts only the final re-review for each PR. Adding `--merge` runs
+the merge stage last for that PR, after repair and reply behavior completes.
+
+Refs may be separated by whitespace or commas: `482 517 --reply` and
+`482,517 --reply` select the same two PRs. The Skill processes refs in input
+order and completes the full review, fix, reply, merge, and advice flow selected
+for one PR before starting the next. A fatal PR-specific failure is recorded and
+the run continues with remaining refs; only an unrecoverable environment-wide
+failure stops the whole run. Passing one ref keeps the same modes, gates, and
+effects as the single-PR workflow.
 
 <Tabs items={['Claude Code', 'Cursor', 'Codex']}>
   <Tab value="Claude Code">
@@ -95,6 +105,8 @@ stages but do not waive readiness, verification, or repository protection.
 
 ## Understand the review workflow
 
+For each PR in input order:
+
 1. **The Skill resolves context.** It reads pull request metadata, description,
    changed-file counts, the full diff, and current checks.
 2. **It validates the stated work.** The title, body, linked issues, claimed
@@ -111,9 +123,24 @@ stages but do not waive readiness, verification, or repository protection.
    posts the final review, and merge runs only after every readiness condition
    passes.
 
-Human-facing review prose follows the configured writing language when it can
-be resolved. Commands, paths, identifiers, GitHub keywords, and quoted evidence
-stay unchanged.
+That selected sequence completes end-to-end for the current PR before the next
+ref starts. Human-facing review prose follows the configured writing language
+when it can be resolved. Commands, paths, identifiers, GitHub keywords, and
+quoted evidence stay unchanged.
+
+## Understand the adaptive GitHub API path
+
+The installed compatibility helper probes GraphQL availability with
+`gh api graphql`. When GraphQL is blocked, supported reads for PR metadata,
+diffs, changed files, checks, and body content use REST instead. Formal reviews
+and PR comments also have REST fallbacks: REST-only sessions skip the native
+attempt, while GraphQL-capable sessions prefer the native `gh pr` operation and
+retry through REST if it fails.
+
+This is an adaptive fallback, not a claim that every GitHub operation is
+GraphQL-free. Native `gh pr` commands may still use GraphQL, and GitHub exposes
+auto-merge enablement only through GraphQL. The merge stage therefore uses the
+qualified native or REST behavior described below.
 
 ## Keep write and merge authority explicit
 
@@ -132,7 +159,10 @@ Important boundaries:
   downgrade.
 - The merge gate requires an Approve verdict, no fix-loop blocker, an open and
   mergeable pull request, no outstanding changes request, and passing or only
-  pending checks. It does not force conflicts or branch protection.
+  pending checks. With pending checks, the native path may enable `--auto`; the
+  REST fallback cannot enable auto-merge and instead waits for terminal-green
+  checks before its REST merge. Neither path forces red checks, conflicts, or
+  branch protection.
 - `--fix` must not commit or push when verification fails, secrets are found,
   or unrelated user changes would be included.
 - Re-running `--reply` posts another review; the current workflow does not
@@ -143,7 +173,7 @@ Important boundaries:
 
 ## Verify the evidence
 
-A complete result should include:
+A complete result should include, for each PR:
 
 - Summary, risk level, findings by severity, and final verdict.
 - File and line or function evidence for every actionable finding.
@@ -155,9 +185,13 @@ A complete result should include:
   any follow-up fixes.
 - Explicit unresolved questions instead of unsupported completion claims.
 
-Release evidence covers portable Skill projection and the stable and beta
-packages contain the same `ak:review-pr` workflow. It does not guarantee live
-GitHub permissions, repository-specific merge rules, CI duration, or identical
+After all refs finish, the result also aggregates the number processed, verdict
+totals, `AK_GH_REST=<0|1>` environment mode and actual REST-path use, plus
+remaining blockers by PR. A one-ref invocation retains its full per-PR result.
+
+Release evidence covers portable Skill projection together with the multi-PR
+and adaptive API contracts described here. It does not guarantee live GitHub
+permissions, repository-specific merge rules, CI duration, or identical
 approval prompts across runtimes.
 
 ## Troubleshoot safely

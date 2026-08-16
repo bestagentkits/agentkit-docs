@@ -23,8 +23,14 @@ rather than treating a successful exit as proof of authentication or
 entitlement.
 
 Released kits come from the authenticated AgentKit registry by default. You do
-not need `--remote`. Local kit sources are for development and CI, not the
+not need `--remote`. Local Kit sources are for development and CI, not the
 normal installation flow.
+
+<Callout type="warning">
+  Grok Build is the exception: native `--target grok` remains a local-source
+  `spike`, not a production or remotely obtainable target. Use an explicit
+  `--local --kits-dir` source; the registry has no signed Grok runtime package.
+</Callout>
 
 ## Predict lifecycle changes
 
@@ -45,10 +51,11 @@ reference for the exact syntax supported by the active release.
 
 ## Choose a runtime and scope
 
-Normal runtime installs use `--target claude-code`, `--target codex`, or
+Released runtime installs use `--target claude-code`, `--target codex`, or
 `--target cursor`. Claude Code is the default when you omit the flag. Released
 registry packages are resolved for one runtime at a time, so run a separate
-install for each runtime you use.
+install for each runtime you use. Native `--target grok` is a separate
+local-source `spike`, described below.
 
 The default scope is the current project. Add `--global` when you want the kit
 in the runtime's user directory and available beyond one project. Together,
@@ -62,10 +69,13 @@ target, scope, and delivery mode identify one install route:
 | Claude Code user plugin | Global | Plugin | `~/.claude/plugins/ak-<kit>` and user plugin enablement state |
 | Codex project | Project | Native | `<project>/.agents/skills` and corresponding `<project>/.codex` surfaces |
 | Codex user | Global | Native | `~/.agents/skills` and corresponding `~/.codex` surfaces |
+| Grok Build project (`spike`) | Project | Native | `<project>/.grok` plus `<project>/.agentkit/adapters/grok/<kit>` |
+| Grok Build user (`spike`) | Global | Native | `${GROK_HOME:-~/.grok}` plus `${AGENTKIT_HOME:-~/.agentkit}/adapters/grok/<kit>` |
 
 Cursor and AGY use their own target surfaces, while `portable` is an export and
-does not create installed lifecycle state. The previewed destination is the
-authority when an environment overrides a normal runtime root.
+does not create installed lifecycle state. The Grok rows apply only to its
+explicit local-source path. The previewed destination is the authority when an
+environment overrides a normal runtime root.
 
 Project-scoped installs write runtime content in the current project and keep
 AgentKit lifecycle metadata there. Global installs write into the selected
@@ -105,6 +115,32 @@ scopes may run. Remove an unwanted copy through the matching uninstall route.
   and Codex. Verify skill discovery in Cursor after installation before relying
   on it.
 </Callout>
+
+### Use the native Grok Build spike
+
+Use an explicit local Kit source for development or CI:
+
+```bash
+ak kit init engineer --local --kits-dir ./kits --target grok
+ak kit init engineer --local --kits-dir ./kits --target grok --global
+ak kit refresh engineer --local --kits-dir ./kits --target grok
+```
+
+Remote Grok init and refresh fail closed because no signed Grok runtime package
+exists. Do not substitute a Claude Code, Codex, or Cursor package. Project
+installs use `<project>/.grok`; global installs use `${GROK_HOME:-~/.grok}`.
+Lifecycle ownership stays in the separate `.agentkit/adapters/grok/<kit>` route
+shown above.
+
+This native route is distinct from Grok's Claude-compat scanner reading
+`.claude/settings.json`. Native project Hooks remain inactive until you
+explicitly trust the project in Grok. Hook timeout, crash, and malformed
+output fail open; only an applicable `PreToolUse` denial blocks an action. For
+AgentKit dispatch, `ak run <kit>/<skill> --target grok` resolves
+`AGENTKIT_GROK_BIN` or `grok`, while Grok and the user retain ownership of model,
+authentication, trust, permissions, sandbox, and `.grok/config.toml`. See
+[Grok CLI Hook errors](../troubleshooting/grok-hooks) only when you deliberately
+use Claude-compat scanning.
 
 ## Choose Claude Code delivery
 
@@ -211,14 +247,17 @@ than adopting whatever happens to exist at the destination.
 
 Symlinks, unsafe path transitions, and other ambiguous filesystem state also
 fail closed or remain preserved. Ownership evidence qualifies cleanup; it never
-means deleting an entire `.claude`, `.codex`, or user runtime directory.
+means deleting an entire `.claude`, `.codex`, `.grok`, or user runtime
+directory.
 
 ## Refresh an installed kit
 
-Refresh re-emits the current release and removes stale generated or owned paths
-only when they still match AgentKit's ownership evidence. Modified, unsafe,
-linked, or other-kit-shared paths are preserved. Refresh uses the remote
-registry by default and creates a snapshot before destructive writes:
+Refresh re-emits the current Kit and removes stale generated or owned paths only
+when they still match AgentKit's ownership evidence. Modified, unsafe, linked,
+or other-kit-shared paths are preserved. Released targets use the remote
+registry by default and create a snapshot before destructive writes. The Grok
+Build `spike` instead requires the explicit `--local --kits-dir` source shown
+above:
 
 ```bash
 ak kit refresh engineer --target codex
