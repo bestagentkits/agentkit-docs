@@ -1,6 +1,6 @@
 ---
 title: Runtime adapters
-description: Compare how AgentKit delivers supported capabilities to Claude Code, Codex, and Cursor.
+description: Compare production runtime delivery with the local-source Grok Build spike.
 ---
 
 Coding assistants do not share one file layout, tool set, or lifecycle event
@@ -41,8 +41,9 @@ Delivery answers **how the runtime loads the installation**:
 
 Scope and delivery are independent. Claude Code can therefore use project-native,
 user-native, project-plugin, or user-plugin delivery. Codex and Cursor installs
-use their native project or user layouts; `--switch-to-plugin` does not select
-plugin delivery for them.
+use their native project or user layouts. The Grok Build `spike` also uses native
+project or user layouts, but only from an explicit local Kit source.
+`--switch-to-plugin` does not select plugin delivery for these targets.
 
 Within one scope, native and plugin delivery for the same Claude Code Kit are
 mutually exclusive. Selecting the other mode starts an explicit transition; it
@@ -62,6 +63,22 @@ surfaces differ:
 | Claude Code | Native or explicit plugin delivery. Skills, agents, slash commands, rules, hooks, and the AgentKit status line can be active at project or user scope. |
 | Codex | Native Skill discovery, rules, and Agent dispatch through the local AgentKit runtime. Hook support is partial; unsupported groups are not projected, and task-state refresh occurs at supported turn and subagent boundaries rather than after every task tool call. Kit command files remain inactive supporting content, and Codex has no AgentKit status-line surface. |
 | Cursor | The adapter projects Skills, agents, rules, and hooks at project or user scope. Kit command files remain inactive supporting content, there is no AgentKit status-line surface, and the adapter does not expose a dedicated plan-management tool. Live install, update, and invocation coverage is not complete across provider setups, so do not infer full parity from source support alone. |
+| Grok Build (`spike`) | Local-source native projection only. Rules, Skills, agents, and supported Hooks go below `<project>/.grok` or `${GROK_HOME:-~/.grok}`; lifecycle metadata stays separately below `<project>/.agentkit/adapters/grok/<kit>` or `${AGENTKIT_HOME:-~/.agentkit}/adapters/grok/<kit>`. Commands and unsupported exports remain inactive sidecars. No signed Grok runtime package or authenticated dispatch canary has shipped. |
+
+Native Grok exec-form command Hooks use the owned
+`agentkit-grok-envelope-shim.cjs` launcher to add the Claude-shaped fields and
+tool names that Kit scripts expect. HTTP handlers and command handlers without
+exec-form arguments receive Grok's raw camelCase envelope. Project Hooks remain
+inactive until you explicitly trust the project. Hook timeout, crash, malformed
+output, and shim errors fail open; only an applicable `PreToolUse` denial blocks
+the action, so pair safety-sensitive Hooks with Grok permissions.
+
+`ak run <kit>/<skill> --target grok` is native AgentKit dispatch. It resolves
+`AGENTKIT_GROK_BIN` or `grok`; AgentKit owns process framing, while Grok and the
+user own the model, authentication, trust, permissions, sandbox, and
+`.grok/config.toml`. This is separate from Grok's Claude-compat scanner reading
+`.claude` settings. Remote Grok init and refresh fail closed because the registry
+has no signed Grok runtime package.
 
 For native Claude Code Hooks, AgentKit checks the complete runtime closure before
 changing files. Preflight stops without mutation when untracked or modified
@@ -103,9 +120,11 @@ capability result, not necessarily a failed installation.
 2. Choose project or user scope based on where it should be available.
 3. For Claude Code, keep native delivery unless you deliberately want plugin
    activation and lifecycle.
-4. Review adapter warnings after installation, especially for Hooks and
+4. Choose Grok Build only when you intentionally accept a local-source `spike`;
+   do not treat it as a production or remote install target.
+5. Review adapter warnings after installation, especially for Hooks and
    runtime-only UI surfaces.
-5. Start a fresh runtime session if the assistant has not reloaded newly
+6. Start a fresh runtime session if the assistant has not reloaded newly
    installed content.
 
 For installation commands, see [Installing kits](../guides/installing-kits).

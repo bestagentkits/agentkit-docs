@@ -1,15 +1,23 @@
 ---
-title: Grok CLI Hook errors
-description: Repair Grok Claude-compat Hook errors by updating AgentKit-managed global commands, removing any temporary overlay, and re-enabling Claude Hook scanning.
+title: Grok Claude-compat Hook errors
+description: Repair Grok Claude-compat Hook errors without confusing that scanner with AgentKit's native Grok Build spike.
 ---
 
-Use this page when Grok CLI reports Hook errors on every prompt or tool call,
-especially a missing `~/.claude/node`, after a global AgentKit Kit install for
-Claude Code.
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use this page when Grok reports Hook errors after a Kit was installed for Claude
+Code and Grok is scanning Claude settings. It does not describe a native
+`--target grok` install.
+
+<Callout type="warning">
+  Native `--target grok` is a separate local-source `spike`. It writes below
+  `.grok`, not `.claude`, and requires `--local --kits-dir` because no signed
+  Grok runtime package exists. See [Installing kits](../guides/installing-kits).
+</Callout>
 
 ## Confirm the symptom
 
-Typical signs:
+Typical signs on the Claude-compat path:
 
 - Grok shows Hook errors on `SessionStart`, `UserPromptSubmit`, `PreToolUse`,
   `PostToolUse`, or `Stop`.
@@ -17,9 +25,20 @@ Typical signs:
 - One-liner Hooks already stored as a single `command` string still run. Entries
   with `"command": "node"` plus an `args` array fail.
 
-Grok reads `~/.claude/settings.json` by default. It treats `command` as a path
-relative to that JSON file, or as an inline shell command when the string
-contains whitespace. It does not use Claude's `args` array.
+Grok reads `~/.claude/settings.json` by default in this compatibility mode. It
+treats `command` as a path relative to that JSON file, or as an inline shell
+command when the string contains whitespace. It does not use Claude's `args`
+array.
+
+## Choose one Hook source
+
+- **Claude-compat scanning:** the Kit was installed with
+  `--target claude-code`, and Grok reads `~/.claude/settings.json` or
+  `<project>/.claude/settings.json`. Continue with this workaround.
+- **Native Grok projection:** the Kit was installed with `--target grok` from an
+  explicit `--local --kits-dir` source. Grok reads AgentKit-managed native files
+  below `.grok`; do not apply this Claude-settings workaround or add a duplicate
+  overlay.
 
 ## Do not edit AgentKit-managed settings
 
@@ -33,7 +52,7 @@ drops `args`, so that shim would start Node with no script.
 Do not add a second copy of the same Hooks under `~/.grok/hooks/` while Claude
 compat scanning stays on. Grok merges sources and the Hooks would run twice.
 
-## Fix on AgentKit v2.13.0-beta.7 or later
+## Fix the Claude-compat path
 
 Starting with `v2.13.0-beta.7`, AgentKit folds each managed global Node Hook
 into one quoted shell-form `command` containing the absolute Node runner and
@@ -70,15 +89,27 @@ This fix shipped in
 `ak doctor` can confirm a Node runner is still resolvable. Do not treat doctor
 output as proof of Grok's stdin schema.
 
-## Residual behavior on Grok
+## Understand the schema boundary
 
-Even with a runnable `command`, some AgentKit Hooks were written for Claude
-Code's snake_case stdin JSON. Grok sends camelCase fields such as
-`hookEventName` and `toolName`. Those Hooks may no-op or fail-open on Grok.
-That is a separate schema mismatch, not the missing `~/.claude/node` path.
+The Claude-compat fix above repairs command loading only. Grok still sends its
+raw camelCase stdin envelope to Hooks discovered through `.claude`, so a Hook
+that expects Claude's snake_case fields can no-op or fail open.
+
+Native `--target grok` handles exec-form command Hooks differently: AgentKit
+emits the owned `agentkit-grok-envelope-shim.cjs` launcher to add the
+Claude-shaped fields, event values, and tool names those Kit scripts expect. It
+also restates an applicable `PreToolUse` exit-2 block as a Grok deny decision.
+HTTP handlers and command handlers without exec-form arguments are not wrapped
+and still receive Grok's raw envelope.
+
+Native project Hooks remain inactive until you explicitly trust the project.
+Timeouts, crashes, malformed output, and shim errors fail open; only an
+applicable `PreToolUse` denial blocks an action. Treat Grok permissions as the
+enforcement boundary rather than relying on a Hook alone.
 
 ## Related pages
 
+- [Installing kits](../guides/installing-kits)
 - [Configuration problems](./configuration)
 - [Kit installation problems](./kit-installation)
 - [Updates and recovery](./updates)
