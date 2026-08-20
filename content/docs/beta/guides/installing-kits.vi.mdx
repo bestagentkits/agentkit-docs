@@ -26,12 +26,6 @@ Theo mặc định, AgentKit lấy Kit đã phát hành từ registry có xác t
 cần thêm `--remote`. Nguồn Kit cục bộ dành cho development và CI, không phải
 luồng cài đặt thông thường.
 
-<Callout type="warning">
-  Grok Build là ngoại lệ: `--target grok` native vẫn là `spike` dùng nguồn cục
-  bộ, không phải target production hoặc có thể lấy từ remote. Hãy dùng nguồn
-  `--local --kits-dir` rõ ràng; registry không có package runtime Grok đã ký.
-</Callout>
-
 ## Dự đoán thay đổi vòng đời
 
 Hãy xem mỗi lệnh như một phép chuyển trạng thái. Cập nhật một lớp không đồng
@@ -51,11 +45,11 @@ tham chiếu CLI để xem cú pháp chính xác của bản phát hành đang h
 
 ## Chọn runtime và phạm vi
 
-Các bản cài runtime đã phát hành dùng `--target claude-code`, `--target codex`
-hoặc `--target cursor`. Nếu bỏ qua flag này, mặc định là Claude Code. Package từ
-registry được resolve cho từng runtime, vì vậy hãy chạy một lệnh cài riêng cho
-mỗi runtime bạn sử dụng. `--target grok` native là một `spike` dùng nguồn cục bộ
-riêng, được mô tả bên dưới.
+Các bản cài runtime đã phát hành dùng `--target claude-code`, `--target codex`,
+`--target cursor` hoặc `--target grok`. Nếu bỏ qua flag này, mặc định là Claude
+Code. Package từ registry được resolve cho từng runtime, vì vậy hãy chạy một
+lệnh cài riêng cho mỗi runtime bạn sử dụng. Oh My Pi là harness dispatch target
+cho `ak run --target omp`; đây không phải target cài của `ak kit init`.
 
 Phạm vi mặc định là project hiện tại. Thêm `--global` khi bạn muốn cài Kit vào
 thư mục người dùng của runtime để dùng ngoài một project. Target, scope và
@@ -69,13 +63,12 @@ delivery mode kết hợp thành một tuyến cài đặt:
 | Plugin Claude Code cho người dùng | Global | Plugin | `~/.claude/plugins/ak-<kit>` và trạng thái enable plugin của người dùng |
 | Codex trong project | Project | Native | `<project>/.agents/skills` và các bề mặt `<project>/.codex` tương ứng |
 | Codex cho người dùng | Global | Native | `~/.agents/skills` và các bề mặt `~/.codex` tương ứng |
-| Grok Build trong project (`spike`) | Project | Native | `<project>/.grok` cùng `<project>/.agentkit/adapters/grok/<kit>` |
-| Grok Build cho người dùng (`spike`) | Global | Native | `${GROK_HOME:-~/.grok}` cùng `${AGENTKIT_HOME:-~/.agentkit}/adapters/grok/<kit>` |
+| Grok Build trong project | Project | Native | `<project>/.grok` cùng `<project>/.agentkit/adapters/grok/<kit>` |
+| Grok Build cho người dùng | Global | Native | `${GROK_HOME:-~/.grok}` cùng `${AGENTKIT_HOME:-~/.agentkit}/adapters/grok/<kit>` |
 
-Cursor và AGY dùng bề mặt riêng của target, còn `portable` là export và không tạo
-trạng thái vòng đời đã cài. Các dòng Grok chỉ áp dụng cho đường dùng nguồn cục bộ
-rõ ràng. Đích hiển thị trong preview là nguồn chính xác khi môi trường ghi đè
-runtime root thông thường.
+Cursor, Grok và AGY dùng bề mặt riêng của target, còn `portable` là export và
+không tạo trạng thái vòng đời đã cài. Đích hiển thị trong preview là nguồn chính
+xác khi môi trường ghi đè runtime root thông thường.
 
 Cài đặt theo project ghi nội dung runtime và metadata vòng đời của AgentKit vào
 project hiện tại. Cài đặt global ghi vào phạm vi người dùng của runtime đã chọn.
@@ -116,20 +109,21 @@ hai phạm vi có thể cùng chạy. Hãy gỡ bản không cần thiết bằn
   phụ thuộc vào target này.
 </Callout>
 
-### Dùng Grok Build spike native
+### Dùng Grok Build native
 
-Dùng nguồn Kit cục bộ rõ ràng cho development hoặc CI:
+Dùng package registry đã ký cho cài đặt thông thường:
 
 ```bash
-ak kit init engineer --local --kits-dir ./kits --target grok
-ak kit init engineer --local --kits-dir ./kits --target grok --global
-ak kit refresh engineer --local --kits-dir ./kits --target grok
+ak kit init engineer --target grok
+ak kit init engineer --target grok --global
+ak kit refresh engineer --target grok
 ```
 
-Init và refresh Grok từ remote fail closed vì chưa có package runtime Grok đã
-ký. Không thay bằng package Claude Code, Codex hoặc Cursor. Bản cài project dùng
-`<project>/.grok`; bản cài global dùng `${GROK_HOME:-~/.grok}`. Quyền sở hữu
-lifecycle nằm trong tuyến `.agentkit/adapters/grok/<kit>` riêng được nêu ở trên.
+Bản cài project dùng `<project>/.grok`; bản cài global dùng
+`${GROK_HOME:-~/.grok}`. Quyền sở hữu lifecycle nằm trong tuyến
+`.agentkit/adapters/grok/<kit>` riêng được nêu ở trên. Chỉ dùng nguồn cục bộ cho
+development hoặc CI, ví dụ `ak kit init engineer --local --kits-dir ./kits
+--target grok`.
 
 Tuyến native này tách biệt với Claude-compat scanner của Grok đọc
 `.claude/settings.json`. Hook native trong project không hoạt động đến khi bạn
@@ -254,7 +248,7 @@ Làm mới sẽ phát lại Kit hiện tại và chỉ gỡ đường dẫn sinh
 quyền sở hữu đã cũ khi đường dẫn vẫn khớp bằng chứng quyền sở hữu của AgentKit.
 Đường dẫn đã sửa, không an toàn, là liên kết hoặc được Kit khác dùng chung sẽ
 được giữ lại. Target đã phát hành dùng remote registry theo mặc định và tạo
-snapshot trước các thay đổi phá hủy. Grok Build `spike` thay vào đó yêu cầu nguồn
+snapshot trước các thay đổi phá hủy. Grok Build từ nguồn development cục bộ thay vào đó yêu cầu nguồn
 `--local --kits-dir` rõ ràng như ở trên:
 
 ```bash

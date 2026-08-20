@@ -13,12 +13,13 @@ flowchart TB
   accDescr: An authenticated registry supplies verified Kit releases for released targets, while an explicit local source supplies Kits for development-only targets. The AgentKit CLI projects each Kit through a runtime adapter.
   registry["Authenticated registry"] --> release["Verified Kit release"]
   release --> cli["AgentKit CLI"]
-  local["Explicit local Kit source<br/>(Grok Build spike)"] --> cli
+  local["Explicit local Kit source<br/>(development or CI)"] --> cli
   cli --> adapter["Adapter projection"]
   adapter --> claude["Claude Code surfaces"]
   adapter --> codex["Codex surfaces"]
   adapter --> cursor["Cursor surfaces"]
-  adapter --> grok["Grok Build native surfaces<br/>(spike)"]
+  adapter --> grok["Grok Build native surfaces"]
+  cli --> omp["Oh My Pi harness dispatch<br/>(ak run --target omp)"]
 ```
 
 ## The parts of the system
@@ -31,8 +32,9 @@ flowchart TB
   Released packages are versioned and verified; a local source is development
   input, not evidence that a runtime package was released.
 - **A runtime adapter** translates supported Kit surfaces into the files and
-  registrations understood by Claude Code, Codex, Cursor, or the Grok Build
-  spike. It also reports content that the target cannot activate.
+  registrations understood by Claude Code, Codex, Cursor, or Grok Build. It also
+  reports content that the target cannot activate. `ak run` can also dispatch
+  local Skill execution through Oh My Pi with `--target omp`.
 - **A project or user scope** determines where the adapted content is available.
   Project scope is the default for the current workspace. User scope makes the
   installation available through that runtime's user directories.
@@ -62,12 +64,12 @@ AgentKit owns the installation lifecycle for files it can identify as its own.
 The coding assistant owns execution. Your repository and user-created artifacts
 remain yours.
 
-For native Grok Build, `--target grok` selects AgentKit's projection and dispatch
-boundary. AgentKit owns its installed paths and process launch; Grok and the user
-own the effective model, authentication, project trust, permissions, sandbox,
-and `.grok/config.toml`. This target remains a `spike`: source registration and
-a disposable native discovery path do not make it a production or remotely
-obtainable runtime package.
+For native Grok Build, `--target grok` selects AgentKit's signed registry
+package, projection, and dispatch boundary. AgentKit owns its installed paths
+and process launch; Grok and the user own the effective model, authentication,
+project trust, permissions, sandbox, and `.grok/config.toml`. Local-source Grok
+installs remain available for development or CI with an explicit `--local
+--kits-dir` source.
 
 This separation matters during updates and removal: AgentKit can replace or
 remove an unchanged file it previously installed, but it preserves unknown or
