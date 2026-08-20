@@ -131,8 +131,8 @@ export function validateManualOwnerApprovalRecord(approval, options = {}) {
 
   const scope = object(approval.scope, 'manual-owner scope');
   exactKeys(scope, ['paths', 'actions'], 'manual-owner scope');
-  if (!Array.isArray(scope.paths) || !scope.paths.length || !equal(scope.paths, sortedUnique(scope.paths))) {
-    fail('manual-owner approval paths must be non-empty, sorted, and unique');
+  if (!Array.isArray(scope.paths) || !equal(scope.paths, sortedUnique(scope.paths))) {
+    fail('manual-owner approval paths must be sorted and unique');
   }
   for (const path of scope.paths) {
     normalizeRepoPath(path);

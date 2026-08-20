@@ -1325,6 +1325,16 @@ test('manual-owner CLI creates only the exact local record and V1 requires expli
   );
 });
 
+test('public CLI prints help', async () => {
+  const { stdout } = await execFileAsync(process.execPath, [
+    join(repoRoot, 'scripts', 'check-docs-release-update.mjs'),
+    '--help',
+  ]);
+  assert.match(stdout, /Usage:/);
+  assert.match(stdout, /--mode v0/);
+  assert.match(stdout, /coverage-gap/);
+});
+
 test('public CLI works without importing project code through a build step', async () => {
   const target = 'v0.42.0-beta.3';
   const { stdout } = await execFileAsync(process.execPath, [
