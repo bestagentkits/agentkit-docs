@@ -28,6 +28,33 @@ const FLAGS = [
   '--audit-source', '--source-root', '--issue-body', '--owner-paths',
 ];
 
+const HELP = `Usage:
+  node scripts/check-docs-release-update.mjs --mode v0 \\
+    --from-ref <ref> --to-ref <ref> \\
+    --from-source <path> --to-source <path> --channel <beta|stable> \\
+    --repo-root <path> --output-root <path> --target <name> [--owner-paths <json>]
+
+  node scripts/check-docs-release-update.mjs --mode coverage-gap \\
+    --audit-source <path> --source-root <path> \\
+    --repo-root <path> --output-root <path> --target <name>
+
+  node scripts/check-docs-release-update.mjs --mode v1 \\
+    --request <json> --ledger <json> --impact-map <json> --approval <json> \\
+    --changes <json> --now <iso> --repo-root <path> \\
+    --source-repository <owner/repo> --docs-repository <owner/repo> \\
+    --docs-base-sha <sha> --target-branch <branch> [--manifest <json>] \\
+    [--used-nonces <json>] [--source-root <path> --issue-body <path>]
+
+  node scripts/check-docs-release-update.mjs --mode v0-scope \\
+    --changes <json> --output-prefix <path>
+
+Modes:
+  v0            Create a release ledger, impact map, unresolved evidence, and approval request.
+  coverage-gap  Create a coverage-gap audit request from an explicit audit source.
+  v1            Validate approved authoring against the bound request and Git changes.
+  v0-scope      Validate that V0 output writes stay under the expected output prefix.
+`;
+
 async function runV0(args) {
   required(args, ['--from-ref', '--to-ref', '--from-source', '--to-source', '--channel', '--repo-root', '--output-root', '--target']);
   const from = await loadReleaseSource(args['--from-source'], { ref: args['--from-ref'], channel: args['--channel'] });
@@ -176,6 +203,10 @@ export async function runCheck(args) {
 }
 
 export async function main(argv = process.argv.slice(2)) {
+  if (argv.includes('--help') || argv.includes('-h')) {
+    process.stdout.write(HELP);
+    return;
+  }
   const args = required(parseArgs(argv, FLAGS), ['--mode']);
   process.stdout.write(stableJson(await runCheck(args)));
 }

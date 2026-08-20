@@ -131,6 +131,17 @@ Procedure:
      guard still assumes identical Kit routes and counts across channels; if a
      Beta-only Kit addition trips it, fix that guard contract instead of
      mirroring the addition into Stable.
+   - **Runtime targets** — diff release notes, docs-bundle reference text, and
+     kit registry manifests for runtime lifecycle changes (`claude-code`,
+     `codex`, `cursor`, `grok`, `omp`, and future targets). When a runtime moves
+     between local-source spike, signed registry target, native harness target,
+     or unsupported status, route all existing Beta prose that names the old
+     status through owner-directed scope (EN + VI): getting-started install,
+     quickstart, onboarding, runtime-adapters, architecture, installing-kits,
+     runtime discovery troubleshooting, kit-installation troubleshooting,
+     runtime-specific troubleshooting, and human-owned CLI reference prose. Do
+     not assume Kit identity diffs or V0 docs mappings catch runtime status
+     drift; manifests may change while public routes stay unchanged.
    - **Desktop** — Layer A bump automatically; Layer B semi-auto with
      owner gate; Layer C deferred. See
      [`references/desktop-3-layer.md`](references/desktop-3-layer.md).
