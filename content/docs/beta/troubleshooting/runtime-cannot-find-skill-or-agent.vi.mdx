@@ -30,6 +30,12 @@ Agent dùng bề mặt khác. Claude Code dispatch subagent đã cài; Codex t�
 được định nghĩa bằng TOML và cung cấp runtime tool `agent_<slug>` tương ứng.
 Không có cú pháp gọi `/` hoặc `$` không có nghĩa là Agent bị thiếu.
 
+Với Oh My Pi, hãy phân biệt discovery của bản cài với dispatch trực tiếp. Bản
+cài project cho runtime discover Skill, Agent và rule bên dưới `.omp/`; `ak run
+<kit>/<skill> --target omp` resolve rồi dispatch riêng một Skill. Oh My Pi sở
+hữu backend và credential đã cấu hình, vì vậy chỉ có file chưa chứng minh runtime
+đã tải nội dung.
+
 Kiểm tra destination khớp delivery đã chọn:
 
 | Delivery | Project scope | Global/user scope |
@@ -40,11 +46,19 @@ Kiểm tra destination khớp delivery đã chọn:
 | Codex Agent, config và hook | `<project>/<kit>/.codex/` | `${CODEX_HOME:-~/.codex}/` |
 | Cursor | `<project>/.cursor/` | `~/.cursor/` |
 | Grok Build | `<project>/.grok/` cùng `.agentkit/adapters/grok/<kit>/` | `${GROK_HOME:-~/.grok}/` cùng `${AGENTKIT_HOME:-~/.agentkit}/adapters/grok/<kit>/` |
-| Oh My Pi | Package staging OMP cùng lifecycle metadata của project | Package staging OMP cùng lifecycle metadata ở user scope |
+| Oh My Pi | `<project>/.omp/{skills,agents,rules}`, `<project>/AGENTS.md` và `<project>/.agentkit/adapters/omp/<kit>/` | `{skills,agents,rules}` và `AGENTS.md` dưới root OMP đã phân giải, cùng metadata vòng đời ở user scope |
+
+Với bản cài OMP global, phân giải root theo cùng thứ tự như AgentKit:
+`AGENTKIT_OMP_HOME`, `OMP_HOME`, `PI_CODING_AGENT_DIR`, rồi `~/.omp/agent`.
+Kiểm tra `skills/<name>/SKILL.md`, `agents/<name>.md`, `rules/<name>.md` và block
+`AGENTKIT-OMP` theo Kit trong `AGENTS.md`. Export không được hỗ trợ dưới
+`.agentkit/adapters/omp/<kit>/sidecars/` được giữ để quan sát lifecycle; sự tồn
+tại của chúng không biến chúng thành bề mặt OMP đang hoạt động.
 
 ## Kiểm tra adapter, không chỉ sự tồn tại của tệp
 
 ```bash
+ak doctor --json
 ak doctor --adapter claude-code --json
 ak doctor --adapter codex --json
 ak doctor --adapter cursor --json
@@ -55,6 +69,12 @@ hình runtime hợp lệ. Kiểm tra các adapter check và `data.healthy`; doct
 định vẫn thoát `0` khi báo cáo không khỏe. Trên Codex, dùng
 doctor như tín hiệu về sức khỏe adapter, không phải bằng chứng duy nhất cho Skill
 inventory đã cài; hãy xác minh discovery ngay trong runtime.
+
+Bản phát hành này chưa có nhóm check doctor với prefix `omp_`. Với OMP, chạy
+`ak doctor --json` không filter để kiểm tra sức khỏe AgentKit dùng chung, đọc
+`data.healthy`, sau đó xác minh đúng path project hoặc global ở trên và mở một
+session OMP mới. Không xem kết quả rỗng từ `ak doctor --adapter omp` là bằng
+chứng projection OMP khỏe mạnh.
 
 Hãy đọc `codex_install_provenance` như phân loại toàn bộ home, không phải check
 inventory Kit. `${CODEX_HOME:-~/.codex}` là root dùng chung do người dùng sở
