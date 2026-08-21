@@ -30,9 +30,11 @@ $ak:cook Check this project   # Codex
 Agents use a different surface. Claude Code dispatches installed subagents;
 Codex loads TOML-defined Agents and exposes their `agent_<slug>` runtime tools.
 The absence of `/` or `$` invocation syntax does not mean an Agent is missing.
-For Oh My Pi, confirm both the Kit package staging route and the `ak run
-<kit>/<skill> --target omp` dispatch path. Oh My Pi owns its configured backend
-and credentials, so runtime discovery can differ from file presence.
+For Oh My Pi, distinguish installed discovery from direct dispatch. A project
+install discovers Skills, Agents, and rules below `.omp/`; `ak run
+<kit>/<skill> --target omp` resolves and dispatches one Skill separately. Oh My
+Pi owns its configured backend and credentials, so file presence alone still
+does not prove that the runtime loaded the content.
 
 Check the destination that matches the selected delivery:
 
@@ -44,11 +46,19 @@ Check the destination that matches the selected delivery:
 | Codex Agents, config, and hooks | `<project>/<kit>/.codex/` | `${CODEX_HOME:-~/.codex}/` |
 | Cursor | `<project>/.cursor/` | `~/.cursor/` |
 | Grok Build | `<project>/.grok/` plus `.agentkit/adapters/grok/<kit>/` | `${GROK_HOME:-~/.grok}/` plus `${AGENTKIT_HOME:-~/.agentkit}/adapters/grok/<kit>/` |
-| Oh My Pi | OMP package staging plus project lifecycle metadata | OMP package staging plus user-scope lifecycle metadata |
+| Oh My Pi | `<project>/.omp/{skills,agents,rules}`, `<project>/AGENTS.md`, and `<project>/.agentkit/adapters/omp/<kit>/` | `{skills,agents,rules}` and `AGENTS.md` below the resolved OMP root, plus user-scope lifecycle metadata |
+
+For a global OMP install, resolve the root in the same order as AgentKit:
+`AGENTKIT_OMP_HOME`, `OMP_HOME`, `PI_CODING_AGENT_DIR`, then `~/.omp/agent`.
+Check `skills/<name>/SKILL.md`, `agents/<name>.md`, `rules/<name>.md`, and the
+Kit-scoped `AGENTKIT-OMP` block in `AGENTS.md`. Unsupported exports under
+`.agentkit/adapters/omp/<kit>/sidecars/` are retained for lifecycle visibility;
+their presence does not make them active OMP surfaces.
 
 ## Check the adapter, not only file presence
 
 ```bash
+ak doctor --json
 ak doctor --adapter claude-code --json
 ak doctor --adapter codex --json
 ak doctor --adapter cursor --json
@@ -60,6 +70,12 @@ adapter checks and `data.healthy`; the default doctor command still exits `0`
 for an unhealthy report. On Codex, use doctor as an adapter-health signal, not
 as the only proof of the installed Skill inventory; verify discovery inside the
 runtime too.
+
+This release has no `omp_`-prefixed doctor check group. For OMP, run the
+unfiltered `ak doctor --json` for shared AgentKit health, inspect
+`data.healthy`, then verify the exact project or global paths above and start a
+fresh OMP session. Do not treat an empty `ak doctor --adapter omp` result as
+proof that the OMP projection is healthy.
 
 Read `codex_install_provenance` as a whole-home classification, not a Kit
 inventory check. `${CODEX_HOME:-~/.codex}` is a shared, user-owned root, so this
