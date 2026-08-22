@@ -102,11 +102,19 @@ Procedure:
    `from-ref`. See
    [`references/detection.md`](references/detection.md) and
    [`references/audit-tag-convention.md`](references/audit-tag-convention.md).
-3. **Invoke `ak-docs-release-audit` V0.** Present the choice and, on owner
-   confirmation, run `scripts/check-docs-release-update.mjs --mode v0` with
-   the chosen refs and channel. When a manual blind-spot pass finds exact
-   existing Beta prose for an actionable pathless claim, write EN/VI-paired
-   paths as a JSON array and pass `--owner-paths <file>`; nested human-owned
+3. **Invoke `ak-docs-release-audit` V0.** Before the final V0 run, complete
+   the read-only blind-spot classification for CLI prose, Kit identity/body
+   drift, runtime target/status drift, Desktop, and generated bundle claims. If
+   release assets add or remove a runtime package, change runtime manifests, or
+   change public `SKILL.md` bodies, `paths: []` is allowed only with an explicit
+   evidence-backed no-prose-impact note. Distinguish registry Kit projection
+   targets (for example `ak kit init --target pi`) from `ak run` / `ak setup`
+   adapters (for example `omp`); never infer one surface from the other. Present
+   the choice and, on owner confirmation, run
+   `scripts/check-docs-release-update.mjs --mode v0` with the chosen refs and
+   channel. When a manual blind-spot pass finds exact existing Beta prose for an
+   actionable pathless claim, write EN/VI-paired paths as a JSON array and pass
+   `--owner-paths <file>`; nested human-owned
    `content/docs/beta/reference/cli/**` paths are allowed. The request records
    them in `ownerDirectedPaths` and binds the complete final `paths` set without
    rewriting the source-derived impact map. The audit skill emits the ledger,
@@ -131,17 +139,21 @@ Procedure:
      guard still assumes identical Kit routes and counts across channels; if a
      Beta-only Kit addition trips it, fix that guard contract instead of
      mirroring the addition into Stable.
-   - **Runtime targets** — diff release notes, docs-bundle reference text, and
-     kit registry manifests for runtime lifecycle changes (`claude-code`,
-     `codex`, `cursor`, `grok`, `omp`, and future targets). When a runtime moves
-     between local-source spike, signed registry target, native harness target,
-     or unsupported status, route all existing Beta prose that names the old
-     status through owner-directed scope (EN + VI): getting-started install,
-     quickstart, onboarding, runtime-adapters, architecture, installing-kits,
-     runtime discovery troubleshooting, kit-installation troubleshooting,
-     runtime-specific troubleshooting, and human-owned CLI reference prose. Do
-     not assume Kit identity diffs or V0 docs mappings catch runtime status
-     drift; manifests may change while public routes stay unchanged.
+   - **Runtime targets** — diff release notes, docs-bundle reference text, kit
+     registry manifests, runtime support matrices, and package tar layouts for
+     runtime lifecycle changes (`claude-code`, `codex`, `cursor`, `grok`, `omp`,
+     `pi`, and future targets). Classify each changed runtime separately as a Kit
+     projection target, `ak run` dispatch adapter, `ak setup` adapter, native
+     harness target, local-source spike, signed registry target, or unsupported
+     surface. When a runtime moves between these states, route all existing Beta
+     prose that names the old status through owner-directed scope (EN + VI):
+     getting-started install, quickstart, onboarding, runtime-adapters,
+     architecture, installing-kits, runtime discovery troubleshooting,
+     kit-installation troubleshooting, runtime-specific troubleshooting, and
+     human-owned CLI reference prose. Do not assume Kit identity diffs or V0 docs
+     mappings catch runtime status drift; manifests may change while public
+     routes stay unchanged, and generated CLI help may lag a newly registered
+     Kit projection target.
    - **Desktop** — Layer A bump automatically; Layer B semi-auto with
      owner gate; Layer C deferred. See
      [`references/desktop-3-layer.md`](references/desktop-3-layer.md).
@@ -177,6 +189,9 @@ for the next run.
 
 - Never edit prose without going through V0 → approval → V1 authoring in the
   audit skill's guardrail.
+- Never accept a V0 `paths: []` result when runtime packages, runtime manifests,
+  or public Skill bodies changed until the blind-spot pass records why no Beta
+  prose needs owner-directed scope.
 - Never invoke `promote-docs.mjs` without a verified `docs/<promotedFrom>`
   tag whose beta snapshot's `channels.json.beta.tag` matches the manifest
   `promotedFrom`.
