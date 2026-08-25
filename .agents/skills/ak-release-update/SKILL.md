@@ -181,6 +181,15 @@ Procedure:
    `check:assets`, `check:links`. Commit per pass with descriptive
    subjects. Push and open a normal PR into `dev`.
 
+   Treat `.next/` and `out/` as disposable, repo-local build output. Before
+   every `pnpm build` or rebuild, verify both paths resolve inside the current
+   repository, then remove stale copies with `rm -rf -- .next out`; a failed
+   static export can otherwise leave multiple gigabytes behind. Keep the fresh
+   `out/` only through `check:quality`, `check:assets`, `check:links`, and local
+   browser smoke. After those build-dependent checks finish, remove `.next/`
+   and `out/` again to release disk space. Never apply this cleanup to source,
+   release evidence, `node_modules`, or caches outside the repository.
+
 After the PR merges, the orchestrator (or a follow-up run) creates
 `audit/<to-tag>` at the merged commit and pushes it, sealing the audit trail
 for the next run.
