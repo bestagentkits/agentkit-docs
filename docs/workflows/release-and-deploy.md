@@ -16,10 +16,12 @@ Release maintenance is **manual, local, and human-reviewed**:
 5. Open a reviewed **`dev` → `main` PR** for production
    (`docs.agentkit.best`).
 
-Do **not** hand-edit `content/docs/stable/`. Fix Beta (or the bundle), then
-promote. Do **not** treat `repository_dispatch` / `docs-sync.yml` as the
-operating authority for this phase — that path is legacy and non-authoritative
-(see below). Automation may be reintroduced only after the same manual contract
+Do **not** hand-edit `content/docs/stable/`. Ordinary release updates fix Beta
+(or the bundle), then promote. The equal-artifact Kit-closure case below is a
+blocked deterministic reconciliation, not hand authoring or promotion. Do
+**not** treat `repository_dispatch` / `docs-sync.yml` as the operating authority
+for this phase — that path is legacy and non-authoritative (see below).
+Automation may be reintroduced only after the same manual contract
 has succeeded more than once, and it must still open a PR rather than merge
 itself.
 
@@ -55,6 +57,77 @@ If upstream did not attach `docs-bundle.tar.gz` to the release, construct an
 equivalent local directory from the same contract (manifest + notes +
 reference) from an **exact temporary product checkout**. Never mutate a shared
 long-lived product working tree as part of docs ops.
+
+### Stable/Beta Kit evidence and production gate
+
+Run this gate before interpreting channel tag differences, choosing a Kit audit
+route, or opening `dev` → `main`.
+
+For the exact releases bound to the resulting `channels.stable` and
+`channels.beta` states, enumerate the complete Kit release-asset inventory keyed
+by `(kitId, runtime)` for `claude-code`, `codex`, `cursor`,
+`grok`, `omp`, and `pi`. Each key needs exactly one manifest, archive, and
+`.sha256` sidecar. Record the exact expected and observed sorted inventories.
+Validate manifest channel, tag, runtime, Kit ID, and archive metadata, then
+verify the archive SHA-256 against all four sources: downloaded bytes, manifest,
+sidecar, and release-page digest. Missing runtimes, missing or duplicate triad
+members, unbound assets, or digest disagreement block the gate. An `audit/*` or
+`docs/*` tag is lineage, not a substitute for this evidence.
+
+Compare the complete verified key inventories and archive hashes **before**
+interpreting tag, version, timestamp, URL, signature, or source-commit metadata.
+A tag delta alone is not a Kit payload delta.
+
+| Evidence result | Required action |
+| --- | --- |
+| Either channel matrix is incomplete or invalid | Block and repair evidence. |
+| Key inventory or any archive hash differs | Use the normal release audit: identity, full `SKILL.md` body, support-file, and cross-page claim scans. |
+| Complete matrices are equal and Kit-doc closures are exactly equal | Kit production gate passes. |
+| Complete matrices are equal but Kit-doc closures differ | Block `dev` → `main`; use deterministic Kit-closure reconciliation only. |
+
+The **Kit-doc closure** is the normalized path-and-byte inventory under
+`content/docs/<channel>/kits/**`, any channel-specific catalog projection, and
+a deterministic ledger of Kit-derived claim spans elsewhere in that channel.
+The claim scan covers all human-owned MDX, including installation, quickstart,
+onboarding, Kit guides, runtime concepts, troubleshooting, and human-owned CLI
+prose. It records public identities and aliases, invocations, counts, runtime
+availability, install paths, package/version requirements, configuration keys,
+lifecycle behavior, and retired forms. Compare Kit-tree bytes exactly; for a
+cross-page file that also contains unrelated CLI evidence, compare only its
+normalized Kit claim spans.
+
+An equal-artifact closure mismatch is not authority for ordinary Stable hand
+edits, `--stable-docs-exception`, or a whole Beta promotion when unrelated CLI
+or release evidence differs. Reconciliation must be deterministic and bind both
+manifest-set and matrix digests, the exact Beta source commit/blob hashes, the
+Stable destination commit/preimage blob hashes, an exact closure allowlist, and
+all result blob hashes. It must prove no non-allowlisted path changed and finish
+with exact closure equality. Reconciliation validates only the finite external-
+claim ledger supplied by the release audit; it does not discover arbitrary
+cross-page claims, so an incomplete audit remains a blocker. If available
+tooling cannot produce and verify that record, production remains blocked.
+
+The executable gate is:
+
+```bash
+pnpm check:catalog
+pnpm check:kit-docs
+pnpm check:kit-docs:history
+node scripts/reconcile-kit-docs.mjs --check-diff <base-sha>
+```
+
+`check:kit-docs` requires the recorded reconciliation postimages in the current
+Stable tree. `check:kit-docs:history` instead revalidates the immutable manifest,
+embedded catalog triads, historical source/preimages, closure, and claim ledger
+without binding later Stable promotions to those old postimages. CI uses that
+historical check only when Stable is unchanged. Stable reconciliation diffs use
+the exact `--check-diff` allowlist; ordinary promotions use the promotion receipt
+validator described below.
+
+Committed manifest/sidecar evidence lives in `release-evidence/kit-catalog/`;
+reconciliation manifests live in `docs-reconciliations/`. After human review,
+`node scripts/reconcile-kit-docs.mjs --apply` writes only exact preimages and is
+resumable: postimages are skipped, while any third state fails closed.
 
 ### Beta sync (`scripts/sync-release.mjs`)
 
@@ -116,36 +189,25 @@ Beta PR (or an immediate follow-up):
    matches the tracked Git diff; use an empty manifest before authoring and
    regenerate it from the final diff afterward.
 
-2. **Kit catalog + new skill pages.** The docs-bundle contract v1 does **not**
-   carry a kit inventory. New skills added upstream (per-kit `SKILL.md`
-   packages) do not surface in V0. Detect drift by comparing kit tar bundles
-   directly:
+2. **Kit catalog + public skill pages.** The docs-bundle contract v1 does
+   **not** carry Kit inventory. Start with the six-runtime evidence gate above,
+   not tag comparison. If verified key inventory or archive hashes differ,
+   expand every changed archive and compare public identity, complete
+   `SKILL.md` bodies, and all support files, including `skill.yaml`,
+   `.env.example`, scripts, templates, and runtime configuration. Scan every
+   human-owned Beta MDX page for stale or missing Kit-derived claims.
 
-   ```bash
-   gh release download <tag> -R bestagentkits/agentkit \
-     -p 'agentkit-kit-engineer-claude-code-*.tar.gz' \
-     -p 'agentkit-kit-marketing-claude-code-*.tar.gz'
-   ```
+   Under approved Beta scope, add or refresh public EN/VI skill pages,
+   `skills/meta.{json,vi.json}`, skill indexes, Kit overview counts, and
+   `kit-catalog-identities.json`. Skills with
+   `disable-model-invocation: true` but not `user-invocable: true` remain
+   `internal` and get no public route. Keep EN/VI parity and do not copy a
+   Beta-only artifact delta into Stable to satisfy a guard.
 
-   For each new upstream skill that is `user-invocable: true`, author
-   `content/docs/beta/kits/<kit>/skills/<slug>.{en,vi}.mdx`, add the slug to
-   `skills/meta.{json,vi.json}` and `skills/index.{en,vi}.mdx`, refresh
-   `kit-catalog-identities.json` (evidence anchor + bundle SHA256 + new
-   identity entries), and bump the Kit overview `| Skills | N |` count in
-   `content/docs/beta/kits/{engineer,marketing}.{en,vi}.mdx`. Keep EN/VI route
-   parity inside Beta, but do not copy new pages or prose into
-   `content/docs/stable/**`. Stable remains bound to its recorded tag until the
-   reviewed whole-copy promotion consumes the exact Beta snapshot. Skills marked
-   `disable-model-invocation: true` without `user-invocable: true` (for example
-   `ak-common`) stay classified `internal` in the catalog and get no public page.
-
-   The current `check:catalog` guard reads one frozen catalog for both channels
-   and still requires identical Beta/Stable Kit routes, navigation, and overview
-   counts. Until that guard gains per-channel catalog state and `stable ⊆ beta`
-   checks, a legitimate Beta-only Kit addition will fail it. Stop and fix that
-   guard contract; never copy the new Kit page or count into Stable to obtain a
-   green check. The guard also does not detect upstream drift on its own — its
-   catalog evidence must first be refreshed against the new bundle.
+   If verified Stable and Beta matrices are identical, do not run a normal
+   delta audit based on their tags. Require exact Kit-doc closure equality. A
+   mismatch blocks production and follows only the deterministic reconciliation
+   route above, including the complete external claim ledger.
 
 3. **Desktop App section.** `content/docs/beta/desktop-app/**` describes
    product-state for a specific Desktop release: artifact filenames, sizes,
@@ -178,7 +240,16 @@ the fourth release had to absorb the whole delta).
 
 ### Stable promotion (`scripts/promote-docs.mjs`)
 
-Stable is a **whole-copy** of the **exact** Beta docs snapshot named by
+First run the Stable/Beta Kit evidence gate for the target Stable release and
+its exact `promotedFrom` Beta, then rerun it for the resulting current Stable and
+Beta channel states. Different artifacts follow the normal audited release
+route. Equal artifacts must already have exact Kit-doc closure equality; if they
+do not, stop for deterministic reconciliation. Do not
+whole-copy a newer Beta tree merely to repair Kit closure when its unrelated CLI
+or release evidence differs from Stable.
+
+For an ordinary compatible release, Stable is a **whole-copy** of the **exact**
+Beta docs snapshot named by
 `manifest.promotedFrom`. The CLI binds that snapshot via git (default tag
 `docs/{promotedFrom}`; optional `--beta-ref <ref>` must still point at that
 same tree). An arbitrary current `content/docs/beta` working directory is
@@ -193,23 +264,38 @@ After the whole-copy, promote:
    links).
 3. Updates `channels.json.stable` only (`version`, `tag`, `sha`,
    `syncedAt = manifest.generatedAt`).
+4. Atomically writes `docs-promotions/<stable-tag>.json`, binding the base docs
+   commit, exact Beta ref/commit and historical channel proof, source and
+   postimage inventories, channels preimage/postimage, release-note hashes, and
+   the exact changed-Stable allowlist.
 
 Beta content and `channels.json.beta` are never modified. Repeat runs of the
-same inputs are byte-identical. Open a normal PR; do not commit stable as a
-direct push to production.
+same inputs are byte-identical. Commit the receipt with the promotion output and
+open a normal PR; do not commit stable as a direct push to production.
 
 ```bash
 # Real promote — fails closed unless docs/{promotedFrom} (or --beta-ref) resolves:
 node scripts/promote-docs.mjs --bundle path/to/docs-bundle-stable
 node scripts/promote-docs.mjs --bundle path/to/docs-bundle-stable \
   --beta-ref docs/v2.8.0-beta.14
+node scripts/check-stable-promotion.mjs <base-sha> \
+  docs-promotions/<stable-tag>.json
 
-# Fixture dry-run only (not evidence of promotedFrom):
+# Fixture dry-run only (not evidence of promotedFrom; receipt stays outside Git):
 node scripts/promote-docs.mjs \
   --bundle fixtures/docs-bundle-stable \
   --beta-source content/docs/beta \
-  --allow-unverified-beta-source
+  --allow-unverified-beta-source \
+  --receipt-output /tmp/stable-promotion-fixture.json
 ```
+
+The validator uses the CI base to require the receipt in the current diff and
+the receipt's bound base commit to rederive the Stable allowlist, so the same
+commit remains valid when `dev` advances to `main`. It authenticates historical
+Git input, committed Stable output, and `channels.json`. The bundle
+manifest and release-note source byte hashes remain provenance recorded by the
+receipt; CI does **not** authenticate a remote bundle that is unavailable to the
+checkout.
 
 ## Branch → environment
 
@@ -226,7 +312,16 @@ flowchart LR
 | `dev` | `deploy-staging.yml` | staging.docs.agentkit.best |
 | `main` | `deploy-production.yml` | docs.agentkit.best |
 
-Production changes only via reviewed `dev` → `main` merge.
+Production changes only via reviewed `dev` → `main` merge. That PR is blocked
+until both six-runtime Kit matrices are complete and valid and any equal-artifact
+pair has exact Kit-doc closure equality.
+
+Every release handoff reports Beta and Stable separately: bound tag/SHA,
+manifest-set digest, exact expected and observed artifact inventory, sidecar and
+hash result, matrix digest, Kit-tree inventory, body/support-file drift,
+cross-page claim scan, blockers, and reconciliation status. Follow those rows
+with the matrix relation, closure relation, and explicit `dev` → `main`
+decision.
 
 ## CI on every PR
 
@@ -279,7 +374,8 @@ and authoritative for environment publishes after merges.
 ```bash
 node scripts/sync-release.mjs --bundle fixtures/docs-bundle-beta
 node scripts/promote-docs.mjs --bundle fixtures/docs-bundle-stable \
-  --beta-source content/docs/beta --allow-unverified-beta-source
+  --beta-source content/docs/beta --allow-unverified-beta-source \
+  --receipt-output /tmp/stable-promotion-fixture.json
 node scripts/compile-prose.mjs --check
 node scripts/generate-reference.mjs
 pnpm test

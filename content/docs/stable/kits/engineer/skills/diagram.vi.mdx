@@ -1,0 +1,153 @@
+---
+title: Render editorial diagram và animation với ak:diagram
+description: Chuyển Mermaid, editorial template hoặc HTML input thành artifact HTML, PNG, SVG, MP4 hay GIF tái lập được với ranh giới dependency và side effect rõ ràng.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:diagram` khi bạn cần static diagram chất lượng biên tập hoặc animation
+ngắn. Skill cung cấp một rendering surface cho Mermaid source, 24 base editorial
+diagram type và HTML đã chuẩn bị với animated SVG connector effect tùy chọn.
+
+## Chọn ak:diagram theo artifact
+
+### Dùng ak:diagram khi
+
+- Bạn cần trang HTML được tuyển chọn, PNG hoặc SVG có thể extract từ Mermaid hay
+  editorial input.
+- Bạn cần animated diagram được record thành MP4 hoặc GIF.
+- Bạn cần local asset được pin và browser-rendering workflow có thể tái lập.
+
+### Chọn workflow khác khi
+
+- Bạn muốn Mermaid source có thể review mà không có editorial framing. Dùng
+  [`ak:mermaidjs-v11`](./mermaidjs-v11).
+- Bạn cần editable canvas hoặc codebase auto-map. Dùng
+  [`ak:excalidraw`](./excalidraw).
+- Bạn cần khám phá và phân tích large graph. Dùng
+  [`ak:graphify`](./graphify).
+- Bạn đang quyết định visual explanation có hữu ích hay không. Bắt đầu với
+  [`ak:preview`](./preview).
+
+## Gọi Skill, không gọi flag của bundled helper
+
+Hoàn tất [Làm quen](../../../getting-started/onboarding), và xác nhận Engineer Kit
+đã được cài cho runtime cùng scope của bạn. Cung cấp source, artifact mong muốn,
+diagram type hoặc visual goal, output destination và có cho phép browser
+rendering, video capture hay dependency installation không.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:diagram ...` | Dùng Engineer Skill đã cài; quyền truy cập local file, process, browser cùng image review phụ thuộc session. |
+| Cursor | `/ak:diagram ...` | Dùng cách viết slash đã được người dùng xác minh; quyền truy cập bundled helper cùng browser phụ thuộc Cursor session. |
+| Codex | `$ak:diagram ...` | Dùng native Skill discovery; rendering phụ thuộc quyền truy cập filesystem, process, browser cùng dependency trong Codex environment. |
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:diagram "Render checkout-flow.mmd as an editorial PNG and SVG in ./artifacts. Use a dark frame, do not install dependencies, and report any unverified output."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:diagram "Render checkout-flow.mmd as an editorial PNG and SVG in ./artifacts. Use a dark frame, do not install dependencies, and report any unverified output."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:diagram "Render checkout-flow.mmd as an editorial PNG and SVG in ./artifacts. Use a dark frame, do not install dependencies, and report any unverified output."
+```
+
+  </Tab>
+</Tabs>
+
+Khi Skill đã cài khả dụng, hãy yêu cầu outcome bằng natural language như ví dụ
+trên. Các control như `--input`, `--type`, `--out`, `--title`, `--caption`, `--no-png`,
+`--no-svg`, `--dry-run`, `--snapshot-profile`, `--duration`, `--fps`, `--gif`
+và `--keep-frames` thuộc bundled rendering hoặc recording helper. Chúng không
+phải Skill invocation flag được bảo đảm.
+
+## Chọn một trong ba input tier
+
+| Tier | Input | Điều xảy ra | Ranh giới hiện tại |
+| --- | --- | --- | --- |
+| 1 — Mermaid | `.mmd` | Bọc Mermaid source trong editorial frame bằng Mermaid v11.4.1 được vendored, local design token và shared browser pipeline | Mermaid auto-layout cùng font metric vẫn có thể thay đổi ngoài validated renderer profile |
+| 2 — Editorial template | JSON cùng template type | Chọn một trong 24 base type và variant `light`, `dark` hoặc `full`, rồi áp dụng flat slot replacement | Exemplar template hiện tại không khai báo replacement slot, nên structured JSON field chưa điền visible content của template |
+| 3 — Raw HTML | `.html` | Chuyển nguyên trang được cung cấp qua bước rendering hoặc recording | HTML được tin theo nội dung cung cấp và có thể chứa script, asset hoặc network request riêng |
+
+Schema Tier 2 mô tả JSON interface dự kiến, nhưng không phải runtime validation
+và template hiện tại chưa expose slot cần cho structured replacement hữu ích. Để
+customize editorial content ở hiện tại, hãy bắt đầu từ HTML template được chọn,
+sửa nội dung và dùng Tier 3.
+
+## Tách static rendering khỏi video recording
+
+Static rendering helper luôn ghi `<basename>.html` và mặc định còn ghi:
+
+- `<basename>.png` — screenshot 2× với animation được freeze ở final frame;
+- `<basename>.svg` — chỉ khi trang đã render có SVG và có thể extract.
+
+Control `--no-png` và `--no-svg` bỏ các output tương ứng. `--dry-run` ghi HTML
+mà không khởi động browser. HTML là animated surface; PNG là static frame đã
+freeze. SVG extraction serialize SVG đầu tiên được tìm thấy trong rendered DOM; bước này
+không bảo đảm mọi input đều có SVG hoặc page-level CSS, font, asset hay animation
+context vẫn hoạt động độc lập. Hãy kiểm tra static artifact đã extract.
+
+Video là bước recording riêng trên HTML input. MP4 là default; `--gif` của
+recording helper chọn GIF được tạo bằng palette. Helper pause browser animation,
+tăng `currentTime` từng frame theo `--duration` và `--fps` được yêu cầu, chụp
+temporary PNG frame rồi dùng `ffmpeg` để ghép kết quả. Mermaid không có native
+animation primitive trong workflow này: animated Mermaid connector cần
+post-processing, còn HTML đã chuẩn bị có thể dùng tám bundled CSS connector
+effect. Các effect này freeze khi `prefers-reduced-motion: reduce` hoạt động.
+
+## Probe dependency mà không cài đặt
+
+Yêu cầu Skill chạy bundled dependency probe trước rendering. Probe báo readiness
+và không bao giờ tự cài đặt. Probe kiểm tra:
+
+| Probe | Vai trò |
+| --- | --- |
+| Playwright | Điều khiển browser render và frame capture |
+| Chromium | Tạo PNG cùng SVG có thể extract và capture video frame |
+| Vendored Mermaid asset | Render Tier 1 source mà không cần CDN |
+| `ffmpeg` | Ghép MP4 hoặc GIF; chỉ bắt buộc cho video |
+| `mmdc` | Báo optional fast-path availability; editorial renderer vẫn dùng shared HTML pipeline |
+
+HTML-only composition có thể tránh browser bằng `--dry-run` của helper. PNG hoặc
+SVG render qua browser cần Playwright và Chromium. Video cần thêm `ffmpeg`. Hãy
+coi cài đặt dependency còn thiếu là action riêng cần được duyệt.
+
+## Hiểu determinism và visible effect
+
+Mermaid được pin, animation được freeze, browser setting cố định và frame
+stepping hỗ trợ output có thể tái lập với toolchain Chromium, font và `ffmpeg`
+cố định. Snapshot comparison từ chối browser hoặc font profile sai thay vì báo
+hash drift gây hiểu lầm. Ngoài profile đó, browser hoặc `ffmpeg` version, font
+substitution, label wrapping và Mermaid auto-layout có thể làm pixel, encoding
+hoặc hash thay đổi. Animated HTML vẫn động; PNG là một state đã freeze, còn MP4
+hoặc GIF là frame sequence tường minh. Hãy ghi lại tool version thực sự được
+dùng.
+
+<Callout type="warn" title="Rendering ghi file và khởi động local tool">
+  Một lần chạy đọc `.mmd`, JSON hoặc HTML source của bạn, ghi artifact vào
+  destination đã chọn và có thể thay output trùng tên. Browser rendering khởi
+  động headless Chromium. Video capture tạo temporary frame và chạy `ffmpeg`.
+  Hãy review input content cùng output name trước khi tiếp tục.
+</Callout>
+
+Bundled Mermaid, template, style và effect là local, không cần CDN. Tuy nhiên,
+HTML do người dùng cung cấp có thể liên hệ network khi tham chiếu remote script,
+font, image hoặc asset khác. Skill không publish, upload, commit hay push artifact
+được tạo trừ khi workflow riêng được cho phép rõ ràng.
+
+Kết quả đầy đủ báo input tier, type cùng variant đã chọn, exact output,
+dependency thực sự dùng, ranh giới static hoặc video, visual review, network
+activity, file bị overwrite và mọi renderer hoặc font-profile condition chưa
+được xác minh.

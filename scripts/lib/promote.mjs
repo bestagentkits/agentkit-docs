@@ -1,7 +1,8 @@
 import { cp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, relative, resolve, sep } from 'node:path';
 import { validateManifest } from './manifest.mjs';
 import { writeChannelReleaseNotes } from './release-notes.mjs';
+import { worktreeChannelInventory } from './stable-promotion.mjs';
 
 // Stable promotion. A stable release is a WHOLE-COPY of the exact beta docs tree
 // it was promoted from (`manifest.promotedFrom`), checked out by the caller into
@@ -22,6 +23,17 @@ async function readJson(path) {
 
 async function writeJson(path, obj) {
   await writeFile(path, JSON.stringify(obj, null, 2) + '\n');
+}
+
+function assertSourceDoesNotOverlapStable(repoRoot, betaSourceDir) {
+  const source = resolve(betaSourceDir);
+  const stable = resolve(repoRoot, 'content', 'docs', 'stable');
+  const sourceFromStable = relative(stable, source);
+  const stableFromSource = relative(source, stable);
+  const nested = (value) => value !== '' && value !== '..' && !value.startsWith(`..${sep}`);
+  if (source === stable || nested(sourceFromStable) || nested(stableFromSource)) {
+    throw new Error('betaSourceDir must not equal, contain, or be contained by the Stable destination');
+  }
 }
 
 // The promotion invariant: a promoted stable tree must contain no beta-only
@@ -45,12 +57,12 @@ async function assertChannelNeutral(dir) {
 
 /**
  * Promote a beta docs tree into the stable channel.
- * @param {{repoRoot: string, betaSourceDir: string, manifest: object, bundleDir: string}} args
+ * @param {{repoRoot: string, betaSourceDir: string, manifest: object, bundleDir: string, releaseNotesSourceBytes?: Buffer}} args
  *   betaSourceDir: a checkout of `content/docs/beta/` at tag docs/{promotedFrom}
  *   bundleDir: stable docs-bundle directory (manifest + release-notes.md)
  * @returns {Promise<{tag:string, promotedFrom:string, version:string}>}
  */
-export async function promoteToStable({ repoRoot, betaSourceDir, manifest, bundleDir }) {
+export async function promoteToStable({ repoRoot, betaSourceDir, manifest, bundleDir, releaseNotesSourceBytes }) {
   const m = validateManifest(manifest, { expectedChannel: 'stable' });
   const { tag, sha, version, generatedAt, promotedFrom } = m;
   if (!bundleDir) {
@@ -58,6 +70,12 @@ export async function promoteToStable({ repoRoot, betaSourceDir, manifest, bundl
   }
 
   const stableDir = join(repoRoot, 'content', 'docs', 'stable');
+  assertSourceDoesNotOverlapStable(repoRoot, betaSourceDir);
+
+  // Reject unsafe entries and channel-specific source prose before the first
+  // destructive write.
+  await worktreeChannelInventory(repoRoot, 'beta', betaSourceDir);
+  await assertChannelNeutral(betaSourceDir);
 
   // Whole-copy beta tree → stable (delete-then-copy; includes generated dirs).
   await rm(stableDir, { recursive: true, force: true });
@@ -65,7 +83,13 @@ export async function promoteToStable({ repoRoot, betaSourceDir, manifest, bundl
 
   // Overwrite the copied beta release notes with the stable bundle body and
   // stable channel/tag frontmatter. Beta tree is left untouched on disk.
-  const notes = await readFile(join(bundleDir, 'release-notes.md'), 'utf8');
+  const notesBytes = releaseNotesSourceBytes ?? await readFile(join(bundleDir, 'release-notes.md'));
+  let notes;
+  try {
+    notes = new TextDecoder('utf-8', { fatal: true }).decode(notesBytes);
+  } catch {
+    throw new Error('release-notes.md must be valid UTF-8');
+  }
   await writeChannelReleaseNotes({
     channelDir: stableDir,
     channel: 'stable',

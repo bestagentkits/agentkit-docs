@@ -135,6 +135,20 @@ test('stable release notes use stable channel metadata, not copied beta notes', 
   assert.match(betaNotes, /beta channel \(v0\.42\.0-beta\.7\)/);
 });
 
+test('promotion uses the caller-supplied exact release-note source bytes instead of rereading the bundle', async () => {
+  const exactBody = '# Exact in-memory notes\n\nPromoted from v0.42.0-beta.7.\n';
+  await promoteToStable({
+    repoRoot,
+    betaSourceDir: betaSource,
+    manifest: stableManifest,
+    bundleDir: stableBundleDir,
+    releaseNotesSourceBytes: Buffer.from(exactBody),
+  });
+  const notes = await readFile(join(repoRoot, 'content', 'docs', 'stable', 'reference', 'release-notes.mdx'), 'utf8');
+  assert.match(notes, /Exact in-memory notes/);
+  assert.doesNotMatch(notes, /ak kit init --channel/);
+});
+
 test('re-promoting the same stable bundle is idempotent', async () => {
   const args = {
     repoRoot,

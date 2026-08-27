@@ -43,8 +43,8 @@ Before you start:
 - State exclusions such as generated directories, vendor code, large assets,
   secrets, customer data, or unrelated packages.
 - Decide whether local read-only search is sufficient.
-- If you want delegation or an external probe, grant that route explicitly and
-  define non-overlapping directories.
+- If you want ordinary delegation or an external probe, grant that route
+  explicitly and define non-overlapping directories.
 
 | Runtime | Invocation | Availability boundary |
 | --- | --- | --- |
@@ -87,6 +87,26 @@ $ak:scout "Find the pricing-page source, analytics events, related tests, and co
 | Default local route | Native file search, scoped reads, `rg`, `wc`, or `sed` can answer the question | Read-only and handled by the main agent unless delegation was explicitly requested. |
 | Internal Explore route | The user explicitly requests subagents, the runtime exposes delegation, and each Agent has distinct useful scope | No spawn for overlapping directories or merely because the Skill mentions Explore. |
 | `ext` route | Local search is insufficient and the user permits an OpenCode probe | Check `command -v opencode`; keep prompts read-only and scoped. Do not install a tool automatically. |
+| `--ultra` route | The question needs higher-confidence coverage and the extra cost is justified | Requires exactly five independent read-only candidate passes in one parallel wave plus a verifier; hard-stops when that dispatch is unavailable. |
+
+### Run the verifier pass when coverage matters
+
+Append `--ultra` to the normal invocation to run a best-of-5 verifier pass:
+
+```text
+/ak:scout "Find the pricing-page source, analytics events, related tests, and content schema. Read only; exclude generated and vendor directories" --ultra
+```
+
+The controller gives all five candidates the same immutable evidence packet and
+rubric. A strongest-model verifier scores target coverage, path and role
+evidence, signal density, and honesty about gaps, then returns the
+evidence-validated, deduplicated union of findings. A path found by only one
+candidate can remain, but the verifier drops paths it cannot validate.
+
+Unlike ordinary scouting, `--ultra` never degrades to main-agent search. If the
+runtime cannot dispatch five parallel read-only candidates, the Skill stops and
+names the missing capability. The flag is an explicit opt-in to this read-only
+fan-out; it does not grant write access or permission for an `ext` probe.
 
 The external reference uses `opencode run ... --model opencode/grok-code`. That
 is a provider-specific probe, not a required model or a guarantee that OpenCode
@@ -116,8 +136,9 @@ is installed, authenticated, available, or acceptable for private source.
 <Callout type="warn" title="Scouting is read-only authority">
   Permission to search a repository does not authorize edits, generated output,
   dependency installation, network access, sending private files to a provider,
-  subagent delegation, commits, or publication. Approve delegation and the
-  `ext` route separately. External prompts must remain bounded and read-only.
+  subagent delegation, commits, or publication. Approve ordinary delegation and
+  the `ext` route separately; `--ultra` authorizes only its required read-only
+  fan-out. External prompts must remain bounded and read-only.
 </Callout>
 
 Do not use an external CLI to bypass local context limits. Do not send whole

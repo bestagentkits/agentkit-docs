@@ -1,8 +1,8 @@
 ---
 name: ak-docs-release-audit
-description: Audit an AgentKit release delta, map evidence-backed claims to affected documentation, and author only explicitly approved Beta prose. Read-only V0 evidence phase plus owner-approved V1 authoring phase; the deterministic sync/promote scripts and the docs release orchestrator run outside this skill. Use for release docs syncs, exact tag or SHA comparisons, stale-guide audits, release coverage gaps, or preparing an owner-reviewed Beta documentation update; do not use for Stable hand edits or generated CLI reference edits.
+description: Audit an AgentKit release delta, verify Beta/Stable Kit evidence, map evidence-backed claims to affected documentation, and author only explicitly approved Beta prose. Read-only V0 evidence phase plus owner-approved V1 authoring phase; deterministic sync, promote, and Kit-closure reconciliation run outside this skill. Use for release docs syncs, exact tag or SHA comparisons, stale-guide audits, release coverage gaps, or preparing an owner-reviewed Beta documentation update; do not use for Stable hand authoring or generated CLI reference edits.
 user-invocable: true
-when_to_use: "Invoke for release docs syncs, exact tag or SHA comparisons, stale-guide audits, release coverage gaps, or preparing an owner-reviewed Beta documentation update. Do not use for Stable hand edits or generated CLI reference edits."
+when_to_use: "Invoke for release docs syncs, exact tag or SHA comparisons, Stable/Beta Kit evidence checks, stale-guide audits, release coverage gaps, or preparing an owner-reviewed Beta documentation update. Do not use for Stable hand authoring or generated CLI reference edits."
 category: utilities
 keywords: [docs, release, audit, evidence, beta]
 ---
@@ -27,7 +27,9 @@ coverage-gap work. Read
 [impact-map-contract.md](references/impact-map-contract.md) when classifying
 impact. Before V1, read
 [authoring-guardrails.md](references/authoring-guardrails.md) and
-[validation-and-handoff.md](references/validation-and-handoff.md).
+[validation-and-handoff.md](references/validation-and-handoff.md). Read
+[kit-prose-drift.md](references/kit-prose-drift.md) before every Kit pass,
+including Stable promotion verification.
 
 ## Docs-bundle contract v1 blind spots
 
@@ -42,26 +44,19 @@ outside its evidence and need matched manual passes on the same Beta PR:
   present the surfaced claims with proposed nested prose paths, wait for
   `approve REQ-…`, then V1 authoring refreshes those paths (EN + VI
   parity, technical tokens unchanged).
-- **Kit catalog and public skill pages.** Bundle does not carry kit
-  inventory. Detect by downloading
-  `agentkit-kit-<kit>-<runtime>-<tag>.tar.gz` and comparing per-skill
-  `SKILL.md` frontmatter (`user-invocable`, `disable-model-invocation`).
-  Refresh `kit-catalog-identities.json`, add public skill pages EN+VI,
-  update `skills/meta.{json,vi.json}` and skill index tables, and bump the
-  Kit overview `| Skills | N |` count in Beta only. Keep EN/VI route parity
-  inside Beta, but do not mirror Beta-only pages or prose into
-  `content/docs/stable/**`; Stable remains bound to `channels.stable.tag`
-  until a reviewed whole-copy promotion. The current `check:catalog` guard
-  still assumes identical Kit routes and counts across channels; if a
-  legitimate Beta-only Kit addition trips it, stop and fix the guard contract
-  rather than copying the addition into Stable. `disable-model-invocation:
-  true` without `user-invocable: true` stays `internal` (no public page). Identity
-  checks alone miss body drift (existing pages that advertise a retired
-  form when SKILL.md prose, `.env.example`, or `skill.yaml` change with
-  identity stable). Run the body-diff pass in
-  [`references/kit-prose-drift.md`](references/kit-prose-drift.md) in
-  addition to the identity comparison; route stale-page candidates
-  through the same owner-directed scope as CLI prose.
+- **Kit catalog and public skill pages.** The bundle does not carry Kit
+  inventory. Verify release assets for all six runtimes, then compare archive
+  hashes before interpreting tag, version, or source-commit differences. For a
+  normal artifact delta, compare per-skill identity and every changed
+  `SKILL.md` body or support file as defined in
+  [`references/kit-prose-drift.md`](references/kit-prose-drift.md). Refresh
+  `kit-catalog-identities.json`, public skill pages EN+VI,
+  `skills/meta.{json,vi.json}`, skill indexes, and Kit overview counts in Beta
+  only. `disable-model-invocation: true` without `user-invocable: true` stays
+  `internal` with no public page. For complete, hash-identical Stable/Beta
+  artifact matrices, exact Kit-doc closure equality is a production invariant,
+  not a tag-delta authoring decision; use the blocked reconciliation route
+  below when it fails.
 - **Desktop App section** under `content/docs/beta/desktop-app/**`.
   Bundle does not carry Desktop provenance. Detect by inspecting the
   release page's `ak-gui_*` assets and Desktop-tagged release-note
@@ -70,6 +65,44 @@ outside its evidence and need matched manual passes on the same Beta PR:
   from release-note evidence under owner approval; **C.** screenshots
   captured per `public/gui/README.md` from a running Desktop build.
   Layer C requires the binary and often defers.
+
+## Stable/Beta Kit artifact-equivalence gate
+
+Run this read-only gate before using tag differences to choose a Kit audit or
+before approving `dev` → `main`:
+
+1. For each channel's exact bound tag, record the complete sorted Kit artifact
+   inventory keyed by `(kitId, runtime)` for `claude-code`, `codex`, `cursor`,
+   `grok`, `omp`, and `pi`. Each key must have one manifest, archive, and
+   `.sha256` sidecar.
+2. Validate manifest channel/tag/runtime/Kit identity and verify the archive
+   digest against the manifest, sidecar, and release-page digest. Missing,
+   duplicate, unbound, or mismatched evidence blocks the gate.
+3. Compare the verified key inventories and archive SHA-256 values. Do this
+   before interpreting version, source-commit, or tag metadata.
+4. If any key or archive hash differs, use the normal release audit and the
+   identity, body/support-file, and cross-page claim scans.
+5. If the complete matrices are identical, require exact channel-relative
+   Kit-doc closure equality. A mismatch blocks `dev` → `main`; it is not
+   authority for Stable V1 authoring, a Stable docs exception, or an ordinary
+   whole-Beta promotion when unrelated CLI evidence differs.
+
+The only recovery for the last case is deterministic Kit-closure reconciliation
+bound to both manifest-set digests, verified matrix digests, the Beta source blob
+hashes, Stable preimage blob hashes, an exact allowlist, and resulting blob
+hashes. It must prove no unrelated path changed and end with exact closure
+equality. The tool validates only the finite external-claim ledger produced by
+the audit; it does not discover arbitrary cross-page claims. If the scan is
+incomplete or tooling cannot produce that record, remain blocked. See
+[kit-prose-drift.md](references/kit-prose-drift.md) for closure and scan rules.
+
+Executable checks are `pnpm check:catalog` for exact channel inventory and
+full-tree equality, `pnpm check:kit-docs` for the reviewed reconciliation
+manifest, and `node scripts/reconcile-kit-docs.mjs --check-diff <base-sha>` for
+the Stable diff allowlist. Evidence triads live under
+`release-evidence/kit-catalog/`; reviewed manifests live under
+`docs-reconciliations/`. Run `--apply` only after the manifest and preimages are
+reviewed; a rerun resumes exact preimage targets and skips postimages.
 
 ### A clean V0 is not evidence of no impact
 
@@ -113,20 +146,22 @@ under "What Beta sync does *not* refresh".
 ## Run V0
 
 1. Read the repository `README.md`, `AGENTS.md`, and `CLAUDE.md`.
-2. Resolve `from` and `to` to immutable tags and commits. Prefer an exact docs
+2. For release or promotion work, complete the Stable/Beta Kit
+   artifact-equivalence gate before interpreting tag deltas.
+3. Resolve `from` and `to` to immutable tags and commits. Prefer an exact docs
    bundle; label a reproducible source checkout clearly when no bundle exists.
-3. Ensure `plans/releases/` exists and is working-only.
-4. Run `scripts/check-docs-release-update.mjs --mode v0` with explicit
+4. Ensure `plans/releases/` exists and is working-only.
+5. Run `scripts/check-docs-release-update.mjs --mode v0` with explicit
    `--from-ref`, `--to-ref`, `--from-source`, `--to-source`, `--channel`,
    `--repo-root`, `--output-root`, and `--target`. When an actionable release
    claim has no source-supplied docs route but manual review identifies exact
    existing Beta prose, pass a JSON array through `--owner-paths`. The resulting
    request records those entries as `ownerDirectedPaths`; the impact map remains
    blocked so it never misrepresents owner routing as source evidence.
-5. Review `source-ledger`, `docs-impact-map`, `unresolved-evidence`, and
+6. Review `source-ledger`, `docs-impact-map`, `unresolved-evidence`, and
    `approval-request` together. Re-run on identical inputs and require an
    equivalent result.
-6. Stop without editing public docs. Present the request ID, exact claims,
+7. Stop without editing public docs. Present the request ID, exact claims,
    paths, unresolved evidence, and recommended decision to the owner.
 
 For an existing-behavior gap, run the same checker with `--mode coverage-gap`
@@ -162,5 +197,9 @@ Run the focused checks required by the changed page family, then the repository
 catalog, reference, shape, link, and static-export checks as risk warrants.
 Return a handoff listing immutable refs, request and approval IDs, claims
 covered, paths changed, validation results, remaining blockers, and local
-preview routes. Stable promotion stays a separate reviewed whole-copy action.
+preview routes. Report Beta and Stable evidence and docs status separately,
+then state their matrix/closure relation and the `dev` → `main` decision.
+Ordinary Stable promotion stays a separate reviewed whole-copy action;
+equal-artifact Kit-closure reconciliation is a separate deterministic blocked
+recovery, never Stable hand authoring.
 

@@ -1,6 +1,6 @@
 ---
 title: Ship branch đã hoàn tất thành pull request với ak:ship
-description: Merge target branch, chạy release gate, cập nhật release artifact, commit mọi thay đổi chủ đích, push và tạo hoặc cập nhật PR giàu bằng chứng.
+description: Merge target branch, chạy release gate, cập nhật release artifact, commit mọi thay đổi chủ đích, push, tạo hoặc cập nhật PR giàu bằng chứng và tùy chọn chạy reviewed merge với CI convergence.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
@@ -9,8 +9,9 @@ import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 Dùng `ak:ship` khi implementation trên feature branch đã hoàn tất và bạn muốn
 một workflow chuẩn bị branch cho review. Skill đồng bộ target branch, chạy test
 cùng review gate, cập nhật release artifact phù hợp, commit và push branch, rồi
-tạo hoặc cập nhật GitHub pull request giàu bằng chứng. Skill không merge hay
-deploy pull request đó.
+tạo hoặc cập nhật GitHub pull request giàu bằng chứng. Với `--merge`, Skill giao
+PR đó cho `ak:review-pr` để review, fix, reply, merge và CI convergence. Khi
+không có `--merge`, Skill không merge PR. Skill không bao giờ deploy ứng dụng.
 
 ## Chọn ak:ship để chuẩn bị PR
 
@@ -59,13 +60,25 @@ Trước khi bắt đầu:
 | Input hoặc tùy chọn | Tác động | Ranh giới quan trọng |
 | --- | --- | --- |
 | Không có mode | Suy ra official cho `feature/*`, `hotfix/*` hoặc `bugfix/*`; beta cho `dev/*`, `beta/*` hoặc `experiment/*` | Hỏi khi branch naming không rõ |
-| `official` | Nhắm tới default branch đã phát hiện và gồm hành vi docs cùng journal | Không merge PR tạo ra |
-| `beta` | Nhắm tới branch đầu tiên tìm thấy trong `dev`, `beta` hoặc `develop` | Tự động bỏ giai đoạn docs update |
+| `official`, `stable` hoặc `main` | Chuẩn hóa thành official và nhắm tới default branch đã phát hiện | Alias chọn mode, không chọn branch name theo nghĩa đen |
+| `beta`, `dev` hoặc `next` | Chuẩn hóa thành beta và nhắm tới branch đầu tiên tìm thấy trong `dev`, `beta` hoặc `develop` | Tự động bỏ giai đoạn docs update |
+| `--both` | Chạy beta stage trước, sau đó là stable stage có gate | Thay thế positional mode; stable stage không bao giờ bỏ qua branch protection |
+| `--advice` | Chạy ship-to-PR path dưới sự giám sát chỉ tư vấn của `kongming` | Lời khuyên không thay thế test, review hay security gate |
+| `--merge` | Sau khi tạo PR, chạy `ak:review-pr <PR> --fix --reply --merge` | Cần review được approve, merge hoàn tất và post-merge CI xanh trước khi hoàn tất |
 | `--skip-tests` | Bỏ test gate | Chỉ dùng khi đã có bằng chứng tương đương và ghi bằng chứng đó trong PR |
 | `--skip-review` | Bỏ pre-landing review | Giữ rủi ro review rõ ràng; không hàm ý đã approve |
-| `--skip-journal` | Bỏ technical journal chạy nền | Không ảnh hưởng gate code hoặc PR evidence |
+| `--skip-journal` | Bỏ technical journal chạy nền cùng toàn bộ social step | Không soạn draft, render dry-run hay publish social; code và PR evidence gate không đổi |
 | `--skip-docs` | Bỏ docs-update task | Xác nhận thay đổi không có documentation impact bắt buộc |
-| `--dry-run` | Đọc trạng thái pre-flight, in pipeline dự kiến rồi dừng | Không fetch, merge, sửa, commit, push, tạo issue hay tạo PR |
+| `--social` | Sau khi PR đạt green gate bắt buộc, soạn build-in-public journal draft cho social channel đã cấu hình | Chỉ chạy khi opt-in; nếu thiếu `--yes-post`, Skill render post mà không gọi API |
+| `--yes-post` | Cho phép `--social` publish thay vì chỉ render | Không có tác dụng publish nếu thiếu `--social` |
+| `--yes-post-private` | Thêm opt-in rõ ràng lần hai để publish về private repository | Cần cả `--social` lẫn `--yes-post`; CI vẫn phải xanh |
+| `--dry-run` | Đọc trạng thái pre-flight, in pipeline dự kiến rồi dừng | Không delegate cho `kongming` hay `ak:review-pr`, mutate state, publish social content hoặc mô phỏng stable stage của `--both` |
+
+Hành vi technical journal tự động được resolve theo thứ tự: `--skip-journal`,
+`journal.auto` của project, `journal.auto` của user, rồi default `true`. Lỗi khi
+resolve preference hoặc output không mong đợi vẫn giữ journal được bật.
+`journal.auto=false` bỏ journal tự động nhưng không chặn yêu cầu `--social` rõ
+ràng; `--skip-journal` vẫn suppress toàn bộ social step.
 
 <Tabs items={['Claude Code', 'Cursor', 'Codex']}>
   <Tab value="Claude Code">
@@ -92,13 +105,17 @@ $ak:ship official
 </Tabs>
 
 Chạy `--dry-run` trước khi target detection hoặc tệp được bao gồm chưa chắc
-chắn. Request tốt nêu target branch dự kiến, test evidence hiện có, version
-policy, issue liên quan, tệp không được ship và có cho phép tạo issue mới không.
+chắn. Nhiều mode token, mode token không xác định và flag không được nhận diện
+sẽ dừng để làm rõ thay vì được đoán. Request tốt nêu target branch dự kiến, test
+evidence hiện có, version policy, issue liên quan, tệp không được ship và có cho
+phép tạo issue mới không.
 
 ## Theo dõi pipeline có thể quan sát
 
-1. **Pre-flight phân giải release.** Skill kiểm tra branch hiện tại, target mode,
-   status, diff và commit. Chạy trên target branch sẽ abort.
+1. **Pre-flight phân giải release.** Skill chuẩn hóa mode alias và kiểm tra
+   branch hiện tại, target, status, diff cùng commit. Chạy trên target branch sẽ
+   abort. Với `--advice`, `kongming` đưa ra checkpoint go/no-go và rủi ro trước
+   khi mutate.
 2. **Issue linkage được thiết lập.** Issue hiện có được tìm từ bằng chứng branch
    cùng commit; nếu không tìm thấy, workflow có thể tạo GitHub issue có cấu trúc
    để truy vết.
@@ -107,7 +124,8 @@ policy, issue liên quan, tệp không được ship và có cho phép tạo iss
 4. **Test và review chạy.** Test runner đã phát hiện chạy trừ khi bị skip, sau đó
    là review hai lượt critical và informational trừ khi bị skip. Test failure
    chặn ship. Finding critical cần fix, chấp nhận rủi ro rõ ràng hoặc quyết định
-   false-positive.
+   false-positive. Với `--advice`, checkpoint `kongming` thứ hai đánh giá bằng
+   chứng này trước mọi release write hoặc GitHub write.
 5. **Release artifact được cập nhật.** Version source đã phát hiện nhận patch
    bump mặc định; thay đổi đáng kể cần quyết định minor hay patch. Changelog hiện
    có nhận entry được tạo.
@@ -122,6 +140,13 @@ policy, issue liên quan, tệp không được ship và có cho phép tạo iss
    bằng writing language đã cấu hình. Title vẫn là conventional commit tiếng Anh.
 9. **Plan linkage được ghi.** Khi plan đã finalize, index ghi số PR để merge
    workflow sau này đóng plan an toàn.
+10. **Review và merge tùy chọn hội tụ.** Với `--merge`, `ak:review-pr` sở hữu PR
+    review, fix, reply, merge readiness, merge và post-merge CI. Ship dừng trừ
+    khi Skill này báo approve, merge hoàn tất và CI xanh.
+11. **Dual-target ship tiến hành thận trọng.** Với `--both`, beta stage chạy
+    trước. Stable stage chỉ bắt đầu sau khi có beta PR và, với `--merge`, CI của
+    merge đó đã xanh. Repository dùng promotion có thể thay vào đó báo stable
+    stage đang chờ beta merge.
 
 ## Hiểu ranh giới write
 
@@ -138,31 +163,39 @@ Pipeline có thể tạo hoặc sửa tất cả mục sau:
 - Một hoặc nhiều local commit, gồm review fix và ship commit cuối.
 - Remote feature branch qua push bình thường.
 - GitHub issue khi không tìm thấy issue liên quan.
-- Pull request mới hoặc title cùng body của pull request hiện có.
+- Một pull request hoặc, với `--both`, hai pull request, hay title cùng body của
+  pull request hiện có.
+- Với `--merge`, review reply, fix, merge và post-merge CI convergence qua
+  `ak:review-pr`.
 
 Các safety gate vẫn còn:
 
 - Phát hiện secret đã stage sẽ dừng commit. Không bao giờ thêm credential chỉ để
   pipeline tiếp tục.
 - Push không bao giờ force. Push bị từ chối có thể dùng một lần retry rebase có
-  chủ đích; rewrite history phá hủy nằm ngoài workflow.
+  chủ đích; rewrite history phá hủy nằm ngoài workflow. Cả `--merge` lẫn
+  `--both` đều không bỏ qua branch protection hay required check.
 - Thiếu `gh` sẽ dừng sau push, vì vậy branch đã push không phải bằng chứng PR đã
   tồn tại.
 - Background journal hoặc docs work có thể hoàn tất sau khi bước sau đã bắt đầu;
   xác minh tệp của chúng có mặt trước khi chấp nhận final commit evidence.
-- `ak:ship` không merge PR, đóng plan index, publish release hay deploy ứng dụng.
-  Các việc đó cần workflow sau và quyền riêng.
+- Khi không có `--merge`, `ak:ship` không merge PR. Ngay cả với `--merge`, Skill
+  không đóng plan index, publish release hay deploy ứng dụng. Các việc đó cần
+  workflow sau và quyền riêng.
 
 ## Xác minh handoff
 
 Kết quả hoàn chỉnh nên có:
 
-- Mode, source branch, target branch, số commit và diff summary.
+- Canonical mode, source branch, target branch, số commit và diff summary; với
+  `--both`, trạng thái beta stage cùng stable stage riêng biệt.
 - Số issue đã link hoặc tạo.
 - Kết quả target merge, test command cùng số lượng và review finding hoặc bằng
   chứng skip rõ ràng.
 - Kết quả version change, changelog, journal, docs và plan khi phù hợp.
-- Final commit SHA, remote branch đã push và PR URL đã validate.
+- Final commit SHA, remote branch đã push và từng PR URL đã validate.
+- Trạng thái advice checkpoint khi yêu cầu `--advice`, cùng review verdict,
+  merge status và CI status khi yêu cầu `--merge`.
 - PR body giàu bằng chứng với marker `None`, `Not run` hoặc `Unavailable` trung
   thực thay vì hoạt động được bịa ra.
 - Mọi human action, rủi ro critical đã chấp nhận, screenshot thiếu, CI pending
@@ -170,8 +203,7 @@ Kết quả hoàn chỉnh nên có:
 
 Test release trực tiếp bao phủ writing-language resolution và contract section
 PR body EN/VI. Chúng không thực thi toàn pipeline fetch, merge, test, background
-task, commit, push, issue và PR trên repository live. Stable và beta đóng package
-cùng workflow `ak:ship`.
+task, commit, push, issue và PR trên repository live.
 
 ## Khắc phục mà không bỏ qua gate
 

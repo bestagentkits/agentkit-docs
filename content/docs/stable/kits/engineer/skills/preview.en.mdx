@@ -25,7 +25,7 @@ diff reviews, plan reviews, and recent-project recaps.
 ### Choose another workflow when
 
 - Plain prose or a short table already explains the relationship clearly.
-- You need a publish-grade SVG or PNG architecture diagram. Use
+- You need a non-templated, publish-grade SVG or PNG architecture diagram. Use
   `ak:tech-graph`.
 - You need to update durable project documentation after creating a visual. Use
   `ak:docs update`.
@@ -102,6 +102,14 @@ an explicit or conversation-resolved path.
 HTML-only flags imply `--html`. If several generation flags are supplied, the
 first selects the mode and the rest become part of the topic.
 
+HTML modes enable an editorial visual layer by default when the intent matches:
+AntV Infographic for data-heavy panels and diagram-design for intentional
+architecture, concept, quadrant, timeline, and related layouts. Disable both for
+one run with `--no-editorial-visuals`, or disable one with `--no-antv` or
+`--no-diagram-design`. The Skill otherwise resolves `visual.antv.enabled` and
+`visual.diagram_design.enabled` from project then user configuration; there is
+no environment-variable tier.
+
 ## Understand output locations and file effects
 
 Generated Markdown and HTML use a topic slug of at most 80 characters:
@@ -125,14 +133,17 @@ browser command and does not need that viewer server.
 2. **The Skill gathers evidence.** Topic modes inspect relevant project context;
    diff, plan-review, and recap modes collect their defined Git, plan, and source
    evidence.
-3. **The Skill selects a visual form.** Mermaid handles topology; tables handle
-   data; CSS grids handle text-heavy architecture; charts handle real metrics;
-   complex systems use a hybrid overview and detail layout.
+3. **The Skill selects a visual form.** Mermaid handles automatic topology;
+   diagram-design handles intentional editorial layouts; AntV Infographic
+   handles multi-panel KPI, comparison, and timeline compositions; tables and
+   Chart.js remain available for data. Complex systems use a hybrid overview and
+   detail layout.
 4. **The Skill generates the artifact.** Markdown uses the mode template. HTML
    writes one page with its page CSS and JavaScript inline, a light/dark toggle,
    responsive layout, and mode-appropriate interactions.
-5. **The Skill validates diagrams.** Mermaid syntax is checked, then rendered
-   output is inspected for overlaps, collisions, routing, and readability.
+5. **The Skill validates diagrams.** Mermaid syntax is checked. diagram-design
+   runs its vendored advisory validators when `python3` is available. Rendered
+   output is then inspected for overlaps, collisions, routing, and readability.
 6. **The Skill opens the result.** Markdown uses the viewer server; HTML opens
    directly in a browser.
 7. **The Skill reports evidence.** It returns the output path and the full viewer
@@ -176,8 +187,9 @@ Important boundaries:
 - A pull-request diff uses GitHub CLI and therefore depends on network access,
   authentication, and repository permission.
 - Generated HTML keeps page code in one file but may load Google Fonts,
-  Mermaid, Chart.js, or anime.js from approved CDNs. Offline rendering can lose
-  those resources.
+  Mermaid, Chart.js, anime.js, or pinned `@antv/infographic@0.2.19` from approved
+  CDNs. Offline rendering can lose those resources. Use `--no-antv` when that
+  external load is unacceptable.
 - The workflow creates local artifacts and opens them. It does not publish,
   deploy, commit, or push them.
 - The source defines no provider charge. Optional specialist Skills and image
@@ -194,6 +206,8 @@ A complete run should provide:
 - Responsive content without unintended horizontal overflow.
 - Zoom controls and readable labels for Mermaid diagrams.
 - A rendered visual review for diagram modes, not only valid syntax.
+- A logged Mermaid, Chart.js, or table fallback if AntV cannot load or render,
+  or if a diagram-design result remains invalid after correction.
 - Evidence boundaries and missing inputs for diff, plan-review, or recap modes.
 
 ## Troubleshoot safely
@@ -205,6 +219,7 @@ A complete run should provide:
 | The server fails to start | Check whether a viewer is already running, use `--stop`, and inspect port availability. |
 | The browser opens an incomplete HTML page | Check CDN access, console errors, theme initialization, and required library imports. |
 | A diagram is valid but unreadable | Inspect the render, reduce nodes, increase spacing, reroute edges, and regenerate. |
+| An editorial visual fails to load or validate | Confirm the fallback was logged and use Mermaid, Chart.js, or a table; pass `--no-antv` or `--no-diagram-design` to bypass that engine. |
 | `--html --ascii` is rejected | Use `--ascii` for terminal output or `--html --diagram` for HTML. |
 | A PR diff fails | Confirm the project is a Git repository and `gh` is installed and authenticated. |
 | Plan review cannot find a plan | Pass an explicit plan file or run from an active plan context. |
@@ -216,7 +231,10 @@ A complete run should provide:
 - The Markdown viewer execution contract is explicitly Claude Code-specific;
   equivalent Cursor or Codex background-server behavior is not established.
 - HTML artifacts are single files but are not necessarily offline-complete when
-  they use CDN fonts or libraries.
+  they use CDN fonts or libraries. AntV is enabled only for matching intent and
+  has an explicit fallback; diagram-design itself has no runtime dependency.
+- diagram-design validators are advisory and are skipped when `python3` is not
+  available; they do not block artifact delivery.
 - Diff, plan-review, and recap quality is limited to the repository evidence and
   history they can read.
 - Visual self-review improves layout quality but does not prove architectural or
