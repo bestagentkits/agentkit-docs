@@ -13,6 +13,9 @@ import {
 const roots = [];
 const MANIFEST = 'docs-reconciliations/stable-kit-v2.14.0.json';
 const RELEASE_NOTES = 'content/docs/stable/reference/release-notes.mdx';
+const RECEIPT = 'docs-promotions/v2.0.0.json';
+const EVIDENCE_MANIFEST = 'release-evidence/stable-promotions/v2.0.0/manifest.json';
+const EVIDENCE_NOTES = 'release-evidence/stable-promotions/v2.0.0/release-notes.md';
 
 function git(root, args) {
   const result = spawnSync('git', ['-C', root, ...args], { encoding: 'utf8' });
@@ -81,18 +84,22 @@ test('no Stable diff runs historical evidence validation', async () => {
   assert.equal(call.mode, 'history');
 });
 
-test('future promotion-shaped Stable diff runs historical validation', async () => {
+test('future promotion-shaped Stable diff routes its exact receipt to promotion validation', async () => {
   const fixture = await makeFixture();
   await write(fixture.root, 'content/docs/stable/guides/example.mdx', '# Future Stable\n');
   await write(fixture.root, 'channels.json', '{"stable":{"version":"2.0.0"}}\n');
   await write(fixture.root, RELEASE_NOTES, '# Release 2\n');
+  await write(fixture.root, RECEIPT, '{"promotion":true}\n');
+  await write(fixture.root, EVIDENCE_MANIFEST, '{"stableEvidence":true}\n');
+  await write(fixture.root, EVIDENCE_NOTES, '# Reviewed stable source\n');
   commitChanges(fixture.root, 'future promotion');
   const { result, call } = await route(fixture);
-  assert.equal(result.mode, 'history');
-  assert.equal(call.mode, 'history');
+  assert.equal(result.mode, 'promotion');
+  assert.equal(call.mode, 'promotion');
+  assert.equal(call.receiptPath, RECEIPT);
 });
 
-test('arbitrary Stable edit without manifest and promotion anchors fails', async () => {
+test('arbitrary Stable edit without reconciliation or receipt fails', async () => {
   const fixture = await makeFixture();
   await write(fixture.root, 'content/docs/stable/guides/example.mdx', '# Arbitrary edit\n');
   commitChanges(fixture.root, 'arbitrary stable edit');
@@ -101,8 +108,20 @@ test('arbitrary Stable edit without manifest and promotion anchors fails', async
     root: fixture.root,
     base: fixture.base,
     runValidation: async () => { called = true; },
-  }), /Stable changed without reconciliation evidence or both promotion anchors/);
+  }), /exactly one added receipt plus two added promotion evidence files/);
   assert.equal(called, false);
+});
+
+test('arbitrary Stable edit plus channels and release notes still fails without a receipt', async () => {
+  const fixture = await makeFixture();
+  await write(fixture.root, 'content/docs/stable/guides/example.mdx', '# Arbitrary edit\n');
+  await write(fixture.root, 'channels.json', '{"stable":{"version":"2.0.0"}}\n');
+  await write(fixture.root, RELEASE_NOTES, '# Arbitrary notes\n');
+  commitChanges(fixture.root, 'arbitrary anchors');
+  await assert.rejects(
+    () => checkKitDocsCi({ root: fixture.root, base: fixture.base, runValidation: async () => {} }),
+    /exactly one added receipt plus two added promotion evidence files/,
+  );
 });
 
 test('current reconciliation-shaped exact diff runs check-diff with the resolved base', async () => {
@@ -127,6 +146,42 @@ test('deleted reconciliation manifest always fails before validation', async () 
     runValidation: async () => { called = true; },
   }), /manifest was deleted or renamed away/);
   assert.equal(called, false);
+});
+
+test('receipt change without Stable diff fails instead of using history validation', async () => {
+  const fixture = await makeFixture();
+  await write(fixture.root, RECEIPT, '{"orphanPromotion":true}\n');
+  commitChanges(fixture.root, 'orphan receipt');
+  await assert.rejects(
+    () => checkKitDocsCi({ root: fixture.root, base: fixture.base, runValidation: async () => {} }),
+    /promotion receipt\/evidence changed without a Stable diff/,
+  );
+});
+
+test('promotion receipts accept only base-relative Git status A', () => {
+  for (const row of [
+    { status: 'M', path: RECEIPT },
+    { status: 'D', path: RECEIPT },
+    { status: 'R100', oldPath: RECEIPT, path: 'docs-promotions/v2.0.1.json' },
+    { status: 'C100', oldPath: 'fixture.json', path: RECEIPT },
+  ]) {
+    assert.throws(() => selectKitDocsCiMode([row]), /add-only and require Git status A/);
+  }
+});
+
+test('reconciliation route rejects a simultaneous promotion receipt', () => {
+  assert.throws(() => selectKitDocsCiMode([
+    { status: 'M', path: 'content/docs/stable/guides/example.mdx' },
+    { status: 'M', path: MANIFEST },
+    { status: 'A', path: RECEIPT },
+  ]), /reconciliation and promotion transaction changes cannot share/);
+});
+
+test('copying from Stable to an unrelated destination is not a Stable diff', () => {
+  const route = selectKitDocsCiMode([
+    { status: 'C100', oldPath: 'content/docs/stable/guides/example.mdx', path: 'copied-example.mdx' },
+  ]);
+  assert.equal(route.mode, 'history');
 });
 
 test('a Stable rename is a Stable diff and cannot bypass promotion routing', () => {

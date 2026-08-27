@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Stable promotion: whole-copy the exact beta docs tree for
 // manifest.promotedFrom into content/docs/stable, rewrite stable release notes
-// from the bundle, and update channels.json.stable. Emits a branch name for a
-// reviewed PR (stable is never direct-committed under the manual operating model).
+// from the bundle, update channels.json.stable, and atomically write a bound
+// promotion receipt. Emits a branch name for a reviewed PR.
 //
 // Real promotion always binds a git snapshot (default tag docs/{promotedFrom}):
 //   node scripts/promote-docs.mjs --bundle path/to/docs-bundle-stable
@@ -10,23 +10,40 @@
 //
 // Fixture / unit-test only (not evidence of promotedFrom):
 //   node scripts/promote-docs.mjs --bundle fixtures/docs-bundle-stable \
-//     --beta-source /tmp/fixture-beta --allow-unverified-beta-source
+//     --beta-source /tmp/fixture-beta --allow-unverified-beta-source \
+//     --receipt-output /tmp/stable-promotion-fixture.json
 import { parseArgs } from 'node:util';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { readFile, rm } from 'node:fs/promises';
+import { lstat, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { isAbsolute, join, resolve } from 'node:path';
 import { parseManifest } from './lib/manifest.mjs';
 import { promoteToStable } from './lib/promote.mjs';
 import { repoRoot } from './lib/paths.mjs';
+import {
+  absoluteReceiptPath,
+  assertSafeReceiptDestination,
+  canonicalJson,
+  createPromotionEvidence,
+  createPromotionReceipt,
+  gitChannelInventory,
+  promotionBetaRef,
+  promotionReceiptPath,
+  removePromotionEvidence,
+  repositoryRelativePath,
+  resolveCommit,
+  resolvePromotionBetaCommit,
+  stablePromotionEvidencePaths,
+  worktreeChannelInventory,
+} from './lib/stable-promotion.mjs';
 
-function gitRevParse(ref, cwd) {
-  return execFileSync('git', ['rev-parse', '--verify', `${ref}^{commit}`], {
-    cwd,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  }).trim();
+function decodeUtf8(bytes, label) {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    throw new Error(`${label} must be valid UTF-8`);
+  }
 }
 
 function cleanupWorktree(worktree, root) {
@@ -94,24 +111,24 @@ function resolveBetaSource({ values, promotedFrom, root }) {
           'For local fixtures only, also pass --allow-unverified-beta-source.',
       );
     }
-    return { betaSource, worktree: null, boundRef: null };
+    return { betaSource, worktree: null, boundRef: null, betaCommit: null, betaChannelsTagProof: null };
   }
 
-  const ref = betaRefOpt || `docs/${promotedFrom}`;
+  const ref = betaRefOpt || promotionBetaRef(promotedFrom);
+  let betaCommit;
   try {
-    gitRevParse(ref, root);
-  } catch {
+    betaCommit = resolvePromotionBetaCommit(root, promotedFrom, ref);
+  } catch (error) {
     throw new Error(
-      `cannot resolve beta docs snapshot ref ${JSON.stringify(ref)} ` +
-        `(expected the exact docs tree for promotedFrom ${promotedFrom}). ` +
-        'Fetch or create that tag/ref before promoting.',
+      `cannot resolve beta docs snapshot from the required tag ${JSON.stringify(promotionBetaRef(promotedFrom))}: ` +
+        `${error.message}. Fetch that exact tag before promoting.`,
     );
   }
 
   const worktree = mkdtempSync(join(tmpdir(), 'promote-'));
   try {
     // Keep stdout clean (CLI prints one JSON summary line on success).
-    execFileSync('git', ['worktree', 'add', '--detach', worktree, ref], {
+    execFileSync('git', ['worktree', 'add', '--detach', worktree, betaCommit], {
       cwd: root,
       stdio: ['ignore', 'ignore', 'pipe'],
     });
@@ -125,48 +142,149 @@ function resolveBetaSource({ values, promotedFrom, root }) {
     betaSource: join(worktree, 'content', 'docs', 'beta'),
     worktree,
     boundRef: ref,
+    betaCommit,
+    betaChannelsTagProof: promotedFrom,
   };
+}
+
+function assertPromotionTargetsClean(root, receiptRepoPath, stableTag) {
+  const evidencePaths = stablePromotionEvidencePaths(stableTag);
+  const output = execFileSync(
+    'git',
+    ['status', '--porcelain=v1', '-z', '--', 'content/docs/stable', 'channels.json', receiptRepoPath, ...Object.values(evidencePaths)],
+    { cwd: root },
+  );
+  if (output.length) {
+    throw new Error(
+      'real promotion requires clean Stable, channels.json, and target receipt paths before it runs',
+    );
+  }
+}
+
+function resolveReceiptDestination({ root, stableTag, unverified, requested }) {
+  if (!unverified) {
+    if (requested) throw new Error('--receipt-output is fixtures/tests only; real promotions write docs-promotions/<stable-tag>.json');
+    const repoPath = promotionReceiptPath(stableTag);
+    return { absolute: absoluteReceiptPath(root, repoPath), repoPath };
+  }
+  if (!requested) throw new Error('fixture promotion requires --receipt-output <temporary-path>');
+  const absolute = isAbsolute(requested) ? resolve(requested) : resolve(process.cwd(), requested);
+  if (repositoryRelativePath(root, absolute) !== null) {
+    throw new Error('unverified fixture receipts must be written outside the repository');
+  }
+  return { absolute, repoPath: null };
+}
+
+async function assertPromotionPreimageSafe(root) {
+  await worktreeChannelInventory(root, 'stable');
+  const channels = await lstat(join(root, 'channels.json'));
+  if (channels.isSymbolicLink() || !channels.isFile()) {
+    throw new Error('channels.json must be a regular file before promotion');
+  }
+}
+
+async function assertBetaSourceMatchesBinding({ root, betaSource, betaCommit }) {
+  const worktreeInventory = await worktreeChannelInventory(root, 'beta', betaSource);
+  if (!betaCommit) return;
+  const gitInventory = gitChannelInventory(root, betaCommit, 'beta');
+  if (canonicalJson(worktreeInventory) !== canonicalJson(gitInventory)) {
+    throw new Error('checked-out Beta source does not equal the bound Git tree');
+  }
 }
 
 async function main() {
   const { values } = parseArgs({
     options: {
       bundle: { type: 'string' }, // stable bundle dir (manifest.json + release-notes.md)
-      // Exact git snapshot for real promotion (default: docs/{promotedFrom}).
+      // Exact git snapshot for real promotion (must equal refs/tags/docs/{promotedFrom}).
       'beta-ref': { type: 'string' },
       betaRef: { type: 'string' },
       // Fixture-only local tree; requires --allow-unverified-beta-source.
       'beta-source': { type: 'string' },
       betaSource: { type: 'string' },
       'allow-unverified-beta-source': { type: 'boolean', default: false },
+      'receipt-output': { type: 'string' },
       repoRoot: { type: 'string', default: repoRoot },
     },
   });
   if (!values.bundle) throw new Error('provide --bundle <stable-bundle-dir>');
 
-  const manifest = parseManifest(
-    await readFile(join(values.bundle, 'manifest.json'), 'utf8'),
-    { expectedChannel: 'stable' },
-  );
+  const manifestBytes = await readFile(join(values.bundle, 'manifest.json'));
+  const releaseNotesSourceBytes = await readFile(join(values.bundle, 'release-notes.md'));
+  const manifest = parseManifest(decodeUtf8(manifestBytes, 'manifest.json'), { expectedChannel: 'stable' });
+  decodeUtf8(releaseNotesSourceBytes, 'release-notes.md');
   const promotedFrom = manifest.promotedFrom; // validated as a beta tag
+  const unverified = Boolean(values['beta-source'] ?? values.betaSource);
+  if (unverified && values['allow-unverified-beta-source'] !== true) {
+    throw new Error(
+      '--beta-source is fixtures/tests only and requires --allow-unverified-beta-source; real promotion requires a bound Beta git ref',
+    );
+  }
+  const receiptDestination = resolveReceiptDestination({
+    root: values.repoRoot,
+    stableTag: manifest.tag,
+    unverified,
+    requested: values['receipt-output'],
+  });
+  const baseDocsCommit = resolveCommit(values.repoRoot, 'HEAD');
+  if (!unverified) assertPromotionTargetsClean(values.repoRoot, receiptDestination.repoPath, manifest.tag);
+  await assertPromotionPreimageSafe(values.repoRoot);
+  await assertSafeReceiptDestination(values.repoRoot, receiptDestination.absolute);
 
-  const { betaSource, worktree, boundRef } = resolveBetaSource({
+  const { betaSource, worktree, boundRef, betaCommit, betaChannelsTagProof } = resolveBetaSource({
     values,
     promotedFrom,
     root: values.repoRoot,
   });
 
   try {
+    await assertBetaSourceMatchesBinding({ root: values.repoRoot, betaSource, betaCommit });
     const res = await promoteToStable({
       repoRoot: values.repoRoot,
       betaSourceDir: betaSource,
       manifest,
       bundleDir: values.bundle,
+      releaseNotesSourceBytes,
     });
-    const branch = `docs-promotion/${res.tag}`;
-    console.log(JSON.stringify({ ...res, branch, betaRef: boundRef }));
-    const bound = boundRef ? ` from ${boundRef}` : ' from unverified local beta-source';
-    console.error(`promoted ${res.promotedFrom} → stable ${res.tag}${bound}; open PR on branch ${branch}`);
+    let evidenceCreated = false;
+    try {
+      if (boundRef) {
+        await createPromotionEvidence({
+          root: values.repoRoot,
+          stableTag: manifest.tag,
+          manifestBytes,
+          releaseNotesSourceBytes,
+        });
+        evidenceCreated = true;
+      }
+      const receipt = await createPromotionReceipt({
+        root: values.repoRoot,
+        baseDocsCommit,
+        manifest,
+        manifestBytes,
+        releaseNotesSourceBytes,
+        betaRef: boundRef,
+        betaCommit,
+        betaChannelsTagProof,
+        unverifiedBetaSourceDir: boundRef ? null : betaSource,
+        receiptPath: receiptDestination.absolute,
+      });
+      const branch = `docs-promotion/${res.tag}`;
+      console.log(JSON.stringify({
+        ...res,
+        branch,
+        betaRef: boundRef,
+        receipt: receiptDestination.repoPath ?? receiptDestination.absolute,
+        evidence: receipt.evidence,
+        receiptDigest: receipt.receiptDigest,
+      }));
+      const bound = boundRef ? ` from ${boundRef}` : ' from unverified local beta-source';
+      console.error(`promoted ${res.promotedFrom} → stable ${res.tag}${bound}; open PR on branch ${branch}`);
+    } catch (error) {
+      if (evidenceCreated) await removePromotionEvidence(values.repoRoot, manifest.tag).catch(() => {});
+      throw error;
+    }
+    return;
   } finally {
     cleanupWorktree(worktree, values.repoRoot);
     if (worktree) {

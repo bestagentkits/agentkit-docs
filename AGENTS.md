@@ -108,9 +108,12 @@ prompt trust.
     exempts them.
   - Prose lives in `getting-started/` and `guides/`. Keep command invocations
     minimal in prose and lean on the generated reference for exact syntax.
-  - Ordinary `stable/` release changes use a promotion PR (whole-copy from a
-    Beta docs tag). Never hand-edit Stable. If verified Stable and Beta Kit
-    artifact matrices are complete and hash-identical but their Kit-doc closures
+  - Ordinary `stable/` release changes use `scripts/promote-docs.mjs` to
+    whole-copy a bound Beta docs tag. The same run must commit the generated
+    `docs-promotions/<stable-tag>.json` receipt; CI rejects Stable changes without
+    exactly one valid receipt and exact receipt-bound postimages. Never hand-edit
+    Stable or a receipt. If verified Stable and Beta Kit artifact matrices are
+    complete and hash-identical but their Kit-doc closures
     differ, block `dev` → `main` and use only the deterministic, manifest- and
     preimage-bound reconciliation defined in
     [`docs/workflows/release-and-deploy.md`](docs/workflows/release-and-deploy.md).

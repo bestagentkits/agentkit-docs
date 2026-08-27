@@ -119,9 +119,10 @@ node scripts/reconcile-kit-docs.mjs --check-diff <base-sha>
 `check:kit-docs` requires the recorded reconciliation postimages in the current
 Stable tree. `check:kit-docs:history` instead revalidates the immutable manifest,
 embedded catalog triads, historical source/preimages, closure, and claim ledger
-without binding later Stable promotions to those old postimages. CI selects the
-historical check only for no-Stable diffs or ordinary whole-copy promotions;
-reconciliation diffs continue through the exact `--check-diff` allowlist.
+without binding later Stable promotions to those old postimages. CI uses that
+historical check only when Stable is unchanged. Stable reconciliation diffs use
+the exact `--check-diff` allowlist; ordinary promotions use the promotion receipt
+validator described below.
 
 Committed manifest/sidecar evidence lives in `release-evidence/kit-catalog/`;
 reconciliation manifests live in `docs-reconciliations/`. After human review,
@@ -263,23 +264,38 @@ After the whole-copy, promote:
    links).
 3. Updates `channels.json.stable` only (`version`, `tag`, `sha`,
    `syncedAt = manifest.generatedAt`).
+4. Atomically writes `docs-promotions/<stable-tag>.json`, binding the base docs
+   commit, exact Beta ref/commit and historical channel proof, source and
+   postimage inventories, channels preimage/postimage, release-note hashes, and
+   the exact changed-Stable allowlist.
 
 Beta content and `channels.json.beta` are never modified. Repeat runs of the
-same inputs are byte-identical. Open a normal PR; do not commit stable as a
-direct push to production.
+same inputs are byte-identical. Commit the receipt with the promotion output and
+open a normal PR; do not commit stable as a direct push to production.
 
 ```bash
 # Real promote — fails closed unless docs/{promotedFrom} (or --beta-ref) resolves:
 node scripts/promote-docs.mjs --bundle path/to/docs-bundle-stable
 node scripts/promote-docs.mjs --bundle path/to/docs-bundle-stable \
   --beta-ref docs/v2.8.0-beta.14
+node scripts/check-stable-promotion.mjs <base-sha> \
+  docs-promotions/<stable-tag>.json
 
-# Fixture dry-run only (not evidence of promotedFrom):
+# Fixture dry-run only (not evidence of promotedFrom; receipt stays outside Git):
 node scripts/promote-docs.mjs \
   --bundle fixtures/docs-bundle-stable \
   --beta-source content/docs/beta \
-  --allow-unverified-beta-source
+  --allow-unverified-beta-source \
+  --receipt-output /tmp/stable-promotion-fixture.json
 ```
+
+The validator uses the CI base to require the receipt in the current diff and
+the receipt's bound base commit to rederive the Stable allowlist, so the same
+commit remains valid when `dev` advances to `main`. It authenticates historical
+Git input, committed Stable output, and `channels.json`. The bundle
+manifest and release-note source byte hashes remain provenance recorded by the
+receipt; CI does **not** authenticate a remote bundle that is unavailable to the
+checkout.
 
 ## Branch → environment
 
@@ -358,7 +374,8 @@ and authoritative for environment publishes after merges.
 ```bash
 node scripts/sync-release.mjs --bundle fixtures/docs-bundle-beta
 node scripts/promote-docs.mjs --bundle fixtures/docs-bundle-stable \
-  --beta-source content/docs/beta --allow-unverified-beta-source
+  --beta-source content/docs/beta --allow-unverified-beta-source \
+  --receipt-output /tmp/stable-promotion-fixture.json
 node scripts/compile-prose.mjs --check
 node scripts/generate-reference.mjs
 pnpm test
