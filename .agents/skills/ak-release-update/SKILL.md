@@ -124,6 +124,15 @@ Procedure:
    proposed nested prose paths, including any `ownerDirectedPaths`. Await the
    exact statement `approve REQ-…`.
 5. **Handle contract v1 blind spots.** Run the manual passes in one PR:
+   - **Source compare window** — always, and first. Resolve
+     `gh api repos/<owner>/<repo>/compare/<from-sha>...<to-sha>` and classify
+     every changed file that is not a test, plan, or CI config against a docs
+     surface. This is the only arm that sees adapter, runtime, and installer
+     changes; the docs bundle carries none of them, so a V0 with every `cli:*`
+     claim `no-change` and clean Kit archives still proves nothing. Do not diff
+     bundle `release-notes.md` for the delta on a minor or major bump — the
+     generator restarts those notes from project history and the diff is a full
+     dump.
    - **CLI prose** — V1 authoring inside the approved Beta paths only.
    - **Kits** — diff kit tar bundles, author public Beta skill pages EN+VI,
      refresh `kit-catalog-identities.json`, update meta and skill index.

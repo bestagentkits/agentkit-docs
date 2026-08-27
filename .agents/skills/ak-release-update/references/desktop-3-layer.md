@@ -71,14 +71,29 @@ refreshed, drop the callout entirely.
 Runs semi-automatically with an owner gate. Compiles new sections
 from release-note evidence.
 
-**Detection**:
+**Detection** — run all three arms. The prefix arm alone has already missed a
+Desktop change in production, so a zero prefix match is not a Layer B clearance.
 
 1. Diff bundle `release-notes.md` between from and to (see
-   [`default-tab-detection.md`](default-tab-detection.md)).
-2. Filter new entries by prefix:
-   `desktop:`, `gui:`, `ui:`, `branding:`, `onboarding:`, and
-   `analytics:` when the subject mentions Desktop keywords.
-3. Count matched entries.
+   [`default-tab-detection.md`](default-tab-detection.md)). For a minor or major
+   version bump the generator restarts the notes from the beginning of the
+   project, so that diff is a full-history dump and useless as a delta — take
+   the window from
+   `gh api repos/<owner>/<repo>/compare/<from-sha>...<to-sha>` instead.
+2. **Prefix arm.** Filter new entries by prefix: `desktop:`, `gui:`, `gui-api:`,
+   `wails:`, `ui:`, `branding:`, `onboarding:`, `dashboard:`, and `analytics:`
+   when the subject mentions Desktop keywords.
+3. **Subject arm.** Independently of the prefix, match any subject against
+   `Desktop`, `ak-gui`, `Wails`, or `GUI`. A generic scope carries Desktop
+   changes: `v2.15.0-beta.1` shipped
+   `feat(ux): auto-detect and auto-install missing Node.js for Desktop App and CLI`,
+   which no Desktop prefix matched.
+   `scripts/classify-pr-prefix.sh` applies this override for you.
+4. **Changed-path arm.** Scan the compare window for changed files under
+   `apps/cli/internal/gui/**`, `apps/cli/frontend/**`, or
+   `apps/cli/internal/wails/**`. Any hit is a Desktop-facing change regardless
+   of how the commit was scoped.
+5. Count matched entries from the union of the three arms.
 
 **Threshold gates**:
 
