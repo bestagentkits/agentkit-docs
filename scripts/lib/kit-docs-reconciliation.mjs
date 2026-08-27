@@ -623,7 +623,7 @@ function validateShape(manifest) {
   assertLocalePairs(manifest.externalClaims, 'manifest external claims');
 }
 
-export async function validateReconciliation({
+async function validateReconciliationEvidence({
   root,
   manifest,
   registryPath = 'kit-catalog-identities.json',
@@ -632,6 +632,7 @@ export async function validateReconciliation({
   kitIds = DEFAULT_KIT_IDS,
   claimDefinitions = EXTERNAL_CLAIM_DEFINITIONS,
   requireLiveEvidence = false,
+  requireCurrentTargetTree = true,
 } = {}) {
   validateShape(manifest);
   const resolvedBase = resolveCommit(root, baseCommit);
@@ -667,8 +668,12 @@ export async function validateReconciliation({
     const liveClaims = buildExternalClaims(root, resolvedBase, claimDefinitions, liveCatalog.matrixDigest);
     if (!sameCanonical(liveClaims, manifest.externalClaims)) fail('external claims drift from the live catalog matrix');
   }
-  await assertTargetTree(root, manifest.evidence.postimageInventory, { exact: false });
+  if (requireCurrentTargetTree) await assertTargetTree(root, manifest.evidence.postimageInventory, { exact: false });
   return { liveEvidence, expectedTree, embedded };
+}
+
+export async function validateReconciliation(options = {}) {
+  return validateReconciliationEvidence({ ...options, requireCurrentTargetTree: true });
 }
 
 async function writeAtomic(path, bytes, renameImpl = rename, suffix = process.pid, temporaryDirectory = dirname(path)) {
@@ -734,9 +739,15 @@ export async function createReconciliation({
   return { manifest, created: true };
 }
 
+export async function checkReconciliationHistory({ root, manifestPath = DEFAULT_MANIFEST_PATH, ...options } = {}) {
+  const manifest = await readJson(await manifestAbsolute(root, manifestPath));
+  await validateReconciliationEvidence({ ...options, root, manifest, requireCurrentTargetTree: false });
+  return { manifest, checked: manifest.counts.totalOperations };
+}
+
 export async function checkReconciliation({ root, manifestPath = DEFAULT_MANIFEST_PATH, diffBase, ...options } = {}) {
   const manifest = await readJson(await manifestAbsolute(root, manifestPath));
-  await validateReconciliation({ root, manifest, ...options });
+  await validateReconciliation({ ...options, root, manifest });
   const states = await classifyState(root, manifest);
   const pending = states.filter(({ state }) => state === 'pre');
   if (pending.length) fail(`reconciliation has ${pending.length} unapplied target(s), first: ${pending[0].row.targetPath}`);

@@ -5,6 +5,7 @@ import { repoRoot } from './lib/paths.mjs';
 import {
   applyReconciliation,
   checkReconciliation,
+  checkReconciliationHistory,
   createReconciliation,
   DEFAULT_MANIFEST_PATH,
 } from './lib/kit-docs-reconciliation.mjs';
@@ -16,6 +17,7 @@ export async function run(argv = process.argv.slice(2), root = repoRoot) {
     options: {
       create: { type: 'boolean', default: false },
       check: { type: 'boolean', default: false },
+      'check-history': { type: 'boolean', default: false },
       apply: { type: 'boolean', default: false },
       'check-diff': { type: 'string' },
       manifest: { type: 'string', default: DEFAULT_MANIFEST_PATH },
@@ -24,10 +26,11 @@ export async function run(argv = process.argv.slice(2), root = repoRoot) {
   const modes = [
     ...(values.create ? ['create'] : []),
     ...(values.check ? ['check'] : []),
+    ...(values['check-history'] ? ['check-history'] : []),
     ...(values.apply ? ['apply'] : []),
     ...(values['check-diff'] ? ['check-diff'] : []),
   ];
-  if (modes.length > 1) throw new Error('choose exactly one of --create, --check, --apply, or --check-diff <base>');
+  if (modes.length > 1) throw new Error('choose exactly one of --create, --check, --check-history, --apply, or --check-diff <base>');
   const mode = modes[0] ?? 'check';
   const options = { root, manifestPath: values.manifest };
   if (mode === 'create') {
@@ -38,6 +41,11 @@ export async function run(argv = process.argv.slice(2), root = repoRoot) {
   if (mode === 'apply') {
     const result = await applyReconciliation(options);
     console.log(`applied ${values.manifest}: writes=${result.writes}, skipped=${result.skipped}, digest=${result.manifest.manifestDigest}`);
+    return result;
+  }
+  if (mode === 'check-history') {
+    const result = await checkReconciliationHistory(options);
+    console.log(`historically checked ${values.manifest}: operations=${result.checked}, digest=${result.manifest.manifestDigest}`);
     return result;
   }
   const result = await checkReconciliation({ ...options, ...(mode === 'check-diff' ? { diffBase: values['check-diff'] } : {}) });

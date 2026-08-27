@@ -10,6 +10,7 @@ import {
   canonicalJson,
   checkDiffAllowlist,
   checkReconciliation,
+  checkReconciliationHistory,
   closureDigest,
   createReconciliation,
   externalClaimsDigest,
@@ -366,6 +367,45 @@ test('external claims canonical order uses every governance key and digest prese
   const ordered = canonicalExternalClaims(claims);
   assert.deepEqual(ordered.map(({ claimId }) => claimId), ['a', 'b', 'c', 'd', 'e', 'f']);
   assert.notEqual(externalClaimsDigest(ordered), externalClaimsDigest([...ordered].reverse()));
+});
+
+test('historical check ignores future Stable postimages and all current live evidence while current check does not', async () => {
+  const fixture = await makeFixture();
+  const { manifest } = await createReconciliation(fixture.options);
+  await applyReconciliation(fixture.options);
+  const changedTarget = manifest.copyOperations.find((row) => row.targetPreimageSha256 !== null);
+  const deletedTarget = manifest.copyOperations.find((row) => row.targetPath !== changedTarget.targetPath);
+  await writeFile(join(fixture.root, changedTarget.targetPath), 'future promoted bytes\n');
+  await unlink(join(fixture.root, deletedTarget.targetPath));
+  await writeFile(join(fixture.root, changedTarget.sourcePath), 'future Beta source bytes\n');
+  await write(join(fixture.root, 'content/docs/stable/reference/release-notes.mdx'), '# Future release\n');
+  const channels = JSON.parse(await readFile(join(fixture.root, 'channels.json'), 'utf8'));
+  channels.stable.version = '2.0.0';
+  await writeJson(join(fixture.root, 'channels.json'), channels);
+  const registry = JSON.parse(await readFile(fixture.registryPath, 'utf8'));
+  registry.schemaVersion = 999;
+  await writeJson(fixture.registryPath, registry);
+
+  const result = await checkReconciliationHistory(fixture.options);
+  assert.equal(result.checked, result.manifest.counts.totalOperations);
+  await assert.rejects(() => checkReconciliation(fixture.options), /neither exact preimage nor postimage|unapplied target/);
+});
+
+test('historical check fails closed when its recorded Git evidence is unavailable', async () => {
+  const fixture = await makeFixture();
+  await createReconciliation(fixture.options);
+  await applyReconciliation(fixture.options);
+  git(fixture.root, ['add', '.']);
+  git(fixture.root, ['commit', '-qm', 'reconciled']);
+
+  const shallowParent = await mkdtemp(join(tmpdir(), 'kit-reconcile-shallow-'));
+  roots.push(shallowParent);
+  const shallowRoot = join(shallowParent, 'checkout');
+  git(shallowParent, ['clone', '-q', '--depth=1', `file://${fixture.root}`, shallowRoot]);
+  await assert.rejects(
+    () => checkReconciliationHistory({ ...fixture.options, root: shallowRoot }),
+    /git rev-parse .* failed/,
+  );
 });
 
 test('exact target Kit tree rejects extras', async () => {
