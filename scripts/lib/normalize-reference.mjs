@@ -45,12 +45,36 @@ function isUniversalFlag({ flag, desc }) {
   return UNIVERSAL_FLAGS.get(flag) === desc;
 }
 
+// Universal exit codes, keyed by code to every spelling the CLI has published
+// for it. The task-first help contract reworded the base set and stopped
+// treating `3` as universal — it now means user cancel on prompting commands
+// and a completed preview on `ak analytics`, so the current spellings of `3`
+// stay on the page. Older spellings remain so a replayed bundle still dedupes.
 const STANDARD_EXIT_CODES = new Map([
-  ['0', 'success'],
-  ['1', 'runtime error'],
-  ['2', 'invalid flags'],
-  ['3', 'user-cancel (SIGINT, prompt-cancel)'],
+  ['0', new Set(['success'])],
+  ['1', new Set(['command failure', 'runtime error'])],
+  ['2', new Set(['invalid flags or arguments', 'invalid flags'])],
+  ['3', new Set(['user-cancel (SIGINT, prompt-cancel)'])],
 ]);
+
+function isStandardExitCode(row) {
+  return STANDARD_EXIT_CODES.get(row.key)?.has(row.value) ?? false;
+}
+
+// `Exit status:` carries either one comma-joined line when a command adds no
+// code of its own, or an aligned row per code when it does.
+function exitCodeRows(lines) {
+  const rows = kvRows(lines, /^\s*(\d+)\s+(.*)$/);
+  if (rows.length !== 1) return rows;
+  const [only] = rows;
+  const compact = `${only.key} ${only.value}`;
+  if (!/,\s*\d+\s/.test(compact)) return rows;
+  return compact
+    .split(/,\s*(?=\d+\s)/)
+    .map((part) => part.match(/^(\d+)\s+(.*)$/))
+    .filter(Boolean)
+    .map((m) => ({ key: m[1], value: m[2].trim() }));
+}
 
 const CANONICAL_OUTPUT_MODES = [
   ['pretty', 'default on TTY (colors, ASCII markers)'],
@@ -66,7 +90,7 @@ function isCanonicalOutputModes(rows) {
 }
 
 const CONVENTIONS_NOTE =
-  'Global flags, output modes, and the standard exit codes (`0`–`3`) are shared by every ' +
+  'Global flags, output modes, and the base exit codes (`0`–`2`) are shared by every ' +
   'command — see [CLI conventions](../cli-conventions). The sections below list only what ' +
   'is specific to this command.';
 
@@ -341,8 +365,8 @@ export function normalizeReferenceMdx(input, { prose } = {}) {
       examples = decodeEntities(dedent(rest.length ? rest : [inline]).join('\n').replace(/\n+$/, ''));
     } else if (key === 'output modes') {
       outputModes = kvRows(rest, /^\s*(\S+)\s{2,}(.*)$/);
-    } else if (key === 'exit codes') {
-      exitCodes = kvRows(rest, /^\s*(\d+)\s+(.*)$/);
+    } else if (key === 'exit codes' || key === 'exit status') {
+      exitCodes = exitCodeRows(rest.length ? rest : [inline]);
     } else {
       metadata.push(`**${label}:** ${escapeText(proseValue(inline, rest))}`);
     }
@@ -367,9 +391,7 @@ export function normalizeReferenceMdx(input, { prose } = {}) {
   // overrides or extends stays. The pointer paragraph appears only when
   // something was actually filtered.
   const ownFlags = (flags ?? []).filter((r) => !isUniversalFlag(r));
-  const ownExitCodes = (exitCodes ?? []).filter(
-    (r) => STANDARD_EXIT_CODES.get(r.key) !== r.value,
-  );
+  const ownExitCodes = (exitCodes ?? []).filter((r) => !isStandardExitCode(r));
   const filtered =
     (flags?.length ?? 0) > ownFlags.length ||
     (exitCodes?.length ?? 0) > ownExitCodes.length ||
