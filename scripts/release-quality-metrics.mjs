@@ -33,7 +33,7 @@ export const RELEASE_QUALITY_BASELINE = Object.freeze({
     searchBudgetBytes: SEARCH_ASSET_BUDGET_BYTES,
     // Per-channel: stable stays bound to channels.stable.tag; beta may include
     // pages authored ahead of the next stable promote.
-    searchPagesPerLocaleChannel: { stable: 393, beta: 398 },
+    searchPagesPerLocaleChannel: { stable: 398, beta: 398 },
     reviewedSearchOutsideChannelRoutes: ['_showcase'],
     reviewedSearchExcludedPublishedRoutes: ['reference/cli/ak'],
     maxAssetBytesExclusive: MAX_ASSET_BYTES,

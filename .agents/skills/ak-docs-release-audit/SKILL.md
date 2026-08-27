@@ -1,6 +1,10 @@
 ---
 name: ak-docs-release-audit
 description: Audit an AgentKit release delta, map evidence-backed claims to affected documentation, and author only explicitly approved Beta prose. Read-only V0 evidence phase plus owner-approved V1 authoring phase; the deterministic sync/promote scripts and the docs release orchestrator run outside this skill. Use for release docs syncs, exact tag or SHA comparisons, stale-guide audits, release coverage gaps, or preparing an owner-reviewed Beta documentation update; do not use for Stable hand edits or generated CLI reference edits.
+user-invocable: true
+when_to_use: "Invoke for release docs syncs, exact tag or SHA comparisons, stale-guide audits, release coverage gaps, or preparing an owner-reviewed Beta documentation update. Do not use for Stable hand edits or generated CLI reference edits."
+category: utilities
+keywords: [docs, release, audit, evidence, beta]
 ---
 
 # AgentKit Docs Release Audit
@@ -66,6 +70,40 @@ outside its evidence and need matched manual passes on the same Beta PR:
   from release-note evidence under owner approval; **C.** screenshots
   captured per `public/gui/README.md` from a running Desktop build.
   Layer C requires the binary and often defers.
+
+### A clean V0 is not evidence of no impact
+
+An empty V0 delta only says the docs bundle did not change. The bundle carries
+no adapter code, so a release can reverse a documented compatibility boundary
+while every `cli:*` claim reports `no-change` and every Kit archive diffs clean.
+`v2.15.0-beta.1` did exactly that: 171 of 171 CLI claims `no-change`, all six
+runtime Kit archives byte-identical, and yet
+`fix(codex): support Windows directory junctions and symlinks for canonical hooks root`
+falsified a refusal claim on nine EN pages plus their VI pairs.
+
+So whenever V0 surfaces no actionable claim, run the **source compare-window
+pass** before concluding anything:
+
+1. Resolve the window with
+   `gh api repos/<owner>/<repo>/compare/<from-sha>...<to-sha>`.
+2. List every changed file that is not a test, a plan, or CI config.
+3. Classify each remaining file against a docs surface. Adapter, runtime, and
+   installer paths are the ones the bundle hides.
+4. Record the classification even when the answer is "no prose impact", with the
+   reason. `paths: []` needs that note; it is never self-justifying.
+
+### Read the implementing hunk, not the commit subject
+
+A subject states intent, not the shipped contract. In the same release
+`feat(ux): auto-detect and auto-install missing Node.js` reads as unconditional,
+but `runtime/noderunner/installer.go` gates auto-install behind explicit consent
+(`AllowAutoInstall` or `AK_AUTO_INSTALL_NODE=1`), with a code comment recording
+that non-interactive mode must never bypass that gate. Prose written from the
+subject would have shipped a false claim.
+
+Consent gates, opt-out switches, version floors, supported-platform lists, and
+exit codes must each come from the implementing code or a test, never from the
+release note alone.
 
 Batch the manual passes into the same PR as the sync when the drift lands
 on the same release. Full runbook and command examples:

@@ -25,28 +25,51 @@ Chạy lệnh cài từ project sẽ sở hữu nội dung project-scoped. Ghi r
 đích không mơ hồ:
 
 ```bash
-ak kit init engineer --target claude-code
-ak kit init engineer --target codex
+ak kit init engineer --target claude-code --channel <channel>
+ak kit init engineer --target codex --channel <channel>
+ak kit init engineer --target grok --channel <channel>
+ak kit init engineer --target pi --channel <channel>
 ```
 
-Scope mặc định là project hiện tại. `--global` chọn user scope của runtime. Cài
-thành công trong một scope không làm Kit xuất hiện trong project hoặc user
-profile khác.
+Hãy thay `<channel>` bằng kênh phát hành đang chọn trên header tài liệu. Nếu bỏ
+`--channel`, CLI resolve `stable` và có thể trả `version_not_available` cho
+target chỉ tồn tại ở kênh khác. Scope mặc định là project hiện tại; `--global`
+chọn user scope của runtime. Cài thành công trong một scope không làm Kit xuất
+hiện trong project hoặc user profile khác.
 
 Với Claude Code, project-native delivery là mặc định. Plugin delivery là lựa
 chọn riêng:
 
 ```bash
-ak kit init engineer --target claude-code --switch-to-plugin
-ak kit init engineer --target claude-code --global --switch-to-plugin
+ak kit init engineer --target claude-code --switch-to-plugin --channel <channel>
+ak kit init engineer --target claude-code --global --switch-to-plugin --channel <channel>
 ```
 
 Lệnh đầu chọn project plugin; lệnh thứ hai chọn user plugin. Không thêm
 `--switch-to-plugin` vào bản cài Codex.
 
-Với bản phát hành, authenticated remote registry là nguồn mặc định. `--local`
-dành cho nguồn development hoặc CI rõ ràng và yêu cầu `--kits-dir` hoặc
-`AGENTKIT_KITS_DIR`; đây không phải fallback cho lỗi registry.
+Với target đã phát hành, authenticated remote registry là nguồn mặc định.
+`--local` dành cho nguồn development hoặc CI rõ ràng và yêu cầu `--kits-dir`
+hoặc `AGENTKIT_KITS_DIR`; đây không phải fallback cho lỗi registry. `--target
+grok` dùng package registry Grok đã ký theo mặc định. Chỉ thêm `--local
+--kits-dir` khi bạn chủ động chọn nguồn development hoặc CI.
+
+Bản cài Pi native trong project ghi dưới
+`<project>/.pi/{skills,agents,rules,extensions}`. Bản cài Pi global ghi trực tiếp
+dưới profile `PI_CODING_AGENT_DIR` hoặc `~/.pi/agent` đang hoạt động. Theo mặc
+định, bản cài mới sẽ từ chối profile đã có nội dung; chỉ thử lại với `--force`
+sau khi xem các đường dẫn đang chiếm chỗ và quyết định cho phép ghi đè. Nếu
+project đã trust có Skill Codex trùng tên dưới `.agents/skills/`, lệnh cài Pi
+cảnh báo bản nào được ưu tiên: `.pi/skills/` thắng ở scope project, còn
+`.agents/skills/` của project thắng bản trong profile Pi global. Cảnh báo không
+xóa hoặc ghi lại Skill nào.
+
+Bản cài Grok native trong project ghi dưới `<project>/.grok` và lưu quyền sở hữu
+lifecycle dưới `<project>/.agentkit/adapters/grok/<kit>`. Bản cài global dùng
+`${GROK_HOME:-~/.grok}` và
+`${AGENTKIT_HOME:-~/.agentkit}/adapters/grok/<kit>`. Đường này tách biệt với
+việc Grok scan `.claude/settings.json` trong Claude-compat mode. Hook native
+trong project không chạy đến khi bạn chủ động trust project trong Grok.
 
 ## Đọc nhóm lỗi
 
@@ -85,6 +108,12 @@ Khi đích đã có tệp, không thử lại ngay với `--force`. Trước ti�
 nội dung do AgentKit sở hữu, thuộc install mode khác hay chứa thay đổi của người
 dùng.
 
+Với Hook Codex global, đừng xem mọi symlink là tương đương. Trên POSIX, chỉ leaf
+`hooks` cuối cùng được trỏ tới `~/.codex/hooks` canonical của user đã resolve;
+parent có link và target khác bị từ chối. Symlink cùng reparse point trên
+Windows vẫn không được hỗ trợ. Hãy xử lý path không khớp thay vì retry bằng
+`--force`.
+
 ## Kiểm tra runtime và nội dung đã ghi nhận
 
 ```bash
@@ -93,9 +122,11 @@ ak doctor --adapter codex --json
 ```
 
 Chỉ chạy adapter bạn đã chọn. Chọn một adapter được document: `claude-code`,
-`codex` hoặc `cursor`. Tên
-`--check` không tồn tại là lỗi lệnh; dùng `ak doctor --list` để xem các tên mà
-CLI đang cài hỗ trợ. Filter `claude-code` cũng giữ lại các shared check.
+`codex` hoặc `cursor`. Nếu CLI đã cài chưa có filter Doctor riêng cho Grok,
+thay vào đó hãy kiểm tra install summary, native root và khả năng discovery của
+Grok. Tên `--check` không tồn tại là lỗi lệnh;
+dùng `ak doctor --list` để xem các tên mà CLI đang cài hỗ trợ. Filter
+`claude-code` cũng giữ lại các shared check.
 
 Các check integrity và removability của Kit chỉ kiểm tra thư mục có bằng chứng
 ownership AgentKit rõ ràng: lifecycle install manifest khớp hoặc metadata plugin
@@ -144,10 +175,13 @@ phục](./updates) trước khi áp dụng snapshot.
 
 ## Xác minh kết quả
 
-Chạy lại doctor cho adapter. Sau đó mở session runtime mới trong cùng project và
-xác minh Skill hoặc Agent mong đợi đã có. Nếu cài đặt khỏe nhưng runtime vẫn
-không discover được, tiếp tục với [Runtime không tìm thấy Skill hoặc
-Agent](./runtime-cannot-find-skill-or-agent).
+Chạy lại doctor theo adapter ở nơi có check đó. Với Pi, hãy mở session Pi mới
+trong cùng project hoặc profile global đang hoạt động, rồi xác minh
+`.pi/skills/ak-<slug>/SKILL.md`, `.pi/agents/` và `.pi/extensions/` thay vì tìm
+`.pi/commands/`. Với Grok native, hãy mở session mới trong cùng project, trust
+Hook trong project nếu áp dụng và xác minh discovery dưới `.grok`. Sau đó xác nhận Skill hoặc Agent mong đợi đã có. Nếu cài đặt khỏe
+nhưng runtime vẫn không discover được, tiếp tục với [Runtime không tìm thấy Skill
+hoặc Agent](./runtime-cannot-find-skill-or-agent).
 
 ## Trang liên quan
 

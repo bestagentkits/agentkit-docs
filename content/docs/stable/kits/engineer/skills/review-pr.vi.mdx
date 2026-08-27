@@ -1,17 +1,18 @@
 ---
-title: Review, sửa hoặc merge pull request với ak:review-pr
-description: Kiểm tra GitHub pull request, tùy chọn sửa finding, đăng review và chỉ merge sau khi các readiness gate rõ ràng đều đạt.
+title: Review, sửa hoặc merge các pull request với ak:review-pr
+description: Kiểm tra một hoặc nhiều GitHub pull request, tùy chọn sửa finding, đăng review và chỉ merge sau khi các readiness gate rõ ràng đều đạt.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
-Dùng `ak:review-pr` để đánh giá GitHub pull request dựa trên scope đã nêu, code
-xung quanh, quy tắc repository, test, ranh giới bảo mật và trạng thái sẵn sàng
-merge. Mode mặc định chỉ đọc. Các cờ tùy chọn lần lượt mở rộng workflow để sửa
-branch, đăng formal review hoặc merge rồi theo dõi CI sau merge.
+Dùng `ak:review-pr` để đánh giá một hoặc nhiều GitHub pull request dựa trên scope
+đã nêu, code xung quanh, quy tắc repository, test, ranh giới bảo mật và trạng
+thái sẵn sàng merge. Mode mặc định chỉ đọc. Các cờ tùy chọn lần lượt mở rộng
+workflow của từng pull request để sửa branch, đăng formal review hoặc merge rồi
+theo dõi CI sau merge.
 
-## Chọn ak:review-pr cho GitHub pull request hiện có
+## Chọn ak:review-pr cho các GitHub pull request hiện có
 
 ### Dùng ak:review-pr khi
 
@@ -35,8 +36,10 @@ Trước khi bắt đầu:
 
 - Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận Kit đã
   cài có thể dùng trong runtime hiện tại.
-- Chạy trong repository của pull request và cung cấp số hoặc URL của PR.
-- Cài đặt, xác thực `gh` với quyền đọc repository và pull request.
+- Chạy trong repository của pull request. Cung cấp một hoặc nhiều ref dưới dạng
+  số thuần (`123`), số có dấu thăng (`#123`) hoặc URL đầy đủ của PR; phân tách
+  các ref bằng khoảng trắng hoặc dấu phẩy.
+- Cài đặt, xác thực `gh` với quyền đọc repository và các pull request.
 - Với `--fix`, bắt đầu từ đúng head branch của pull request ở trạng thái sạch và
   giữ nguyên thay đổi không liên quan của người dùng.
 - Chỉ cấp quyền write, review, merge và Actions cho các mode bạn định dùng.
@@ -50,17 +53,25 @@ Trước khi bắt đầu:
 ## Chọn quyền hạn có chủ đích
 
 Các cờ có thể đứng theo thứ tự bất kỳ và kết hợp với nhau. Không có cờ, Skill
-chỉ in review ở local.
+in từng review ở local.
 
 | Input | Hành vi | Tác động bên ngoài hoặc local |
 | --- | --- | --- |
-| `<PR number or URL>` | Review và trả về verdict local | Đọc metadata GitHub, diff, check, context liên kết và các tệp repository liên quan |
-| `--fix` | Sửa finding có thể hành động, xác minh, commit, push và review lại | Thay đổi worktree cùng branch PR; có thể lặp đến khi hội tụ hoặc bị chặn |
-| `--reply` | Đăng kết quả cuối thành formal GitHub review | Tạo review event theo ngữ nghĩa approve, request-changes hoặc comment |
-| `--merge` | Chỉ merge sau khi readiness gate đạt, rồi theo dõi CI trên target branch | Có thể merge, bật auto-merge khi required check đang chờ và gửi follow-up fix cho CI |
+| `<PR ref> [<PR ref> ...]` | Review một hoặc nhiều PR và trả về verdict cho từng PR | Đọc metadata GitHub, diff, check, context liên kết và các tệp repository liên quan |
+| `--fix` | Sửa finding có thể hành động, xác minh, commit, push và review lại từng PR | Thay đổi worktree cùng branch PR; có thể lặp theo từng PR đến khi hội tụ hoặc bị chặn |
+| `--reply` | Đăng từng kết quả cuối thành formal GitHub review | Tạo review event theo ngữ nghĩa approve, request-changes hoặc comment |
+| `--merge` | Merge từng PR sẵn sàng sau khi gate đạt, rồi theo dõi CI trên target branch | Có thể merge; đường native có thể bật auto-merge cho check đang chờ, còn REST fallback đợi check terminal-green; có thể gửi follow-up fix cho CI |
 
-`--fix --reply` chỉ đăng lần review lại cuối. Thêm `--merge` sẽ chạy giai đoạn
-merge cuối cùng, sau hành vi sửa và reply.
+`--fix --reply` chỉ đăng lần review lại cuối cho từng PR. Thêm `--merge` sẽ chạy
+giai đoạn merge cuối cùng của PR đó, sau hành vi sửa và reply.
+
+Các ref có thể được phân tách bằng khoảng trắng hoặc dấu phẩy:
+`482 517 --reply` và `482,517 --reply` chọn cùng hai PR. Skill xử lý ref theo thứ
+tự input và hoàn tất toàn bộ flow review, fix, reply, merge cùng advice đã chọn
+cho một PR trước khi bắt đầu PR tiếp theo. Lỗi nghiêm trọng riêng của một PR được
+ghi lại và run tiếp tục với các ref còn lại; chỉ lỗi môi trường không thể khôi
+phục mới dừng toàn bộ run. Truyền một ref vẫn giữ nguyên mode, gate và tác động
+của workflow một PR.
 
 <Tabs items={['Claude Code', 'Cursor', 'Codex']}>
   <Tab value="Claude Code">
@@ -92,6 +103,8 @@ bỏ qua readiness, verification hay bảo vệ của repository.
 
 ## Hiểu review workflow
 
+Với từng PR theo thứ tự input:
+
 1. **Skill phân giải context.** Skill đọc metadata, description, số tệp thay
    đổi, toàn bộ diff và check hiện tại của pull request.
 2. **Skill xác minh công việc đã nêu.** Title, body, issue liên kết, scope và
@@ -109,9 +122,24 @@ bỏ qua readiness, verification hay bảo vệ của repository.
    reply đăng review cuối, còn merge chỉ chạy sau khi mọi điều kiện readiness
    đạt.
 
-Phần review prose dành cho người đọc dùng writing language đã cấu hình khi có
-thể phân giải. Command, path, identifier, GitHub keyword và bằng chứng trích dẫn
-được giữ nguyên.
+Chuỗi đã chọn hoàn tất từ đầu đến cuối cho PR hiện tại trước khi ref tiếp theo
+bắt đầu. Phần review prose dành cho người đọc dùng writing language đã cấu hình
+khi có thể phân giải. Command, path, identifier, GitHub keyword và bằng chứng
+trích dẫn được giữ nguyên.
+
+## Hiểu đường GitHub API thích ứng
+
+Compatibility helper đã cài probe tính khả dụng của GraphQL bằng
+`gh api graphql`. Khi GraphQL bị chặn, các lượt đọc được hỗ trợ cho metadata PR,
+diff, tệp thay đổi, check và body dùng REST. Formal review và comment trên PR
+cũng có REST fallback: session chỉ dùng REST sẽ bỏ qua lần thử native, còn
+session dùng được GraphQL ưu tiên thao tác `gh pr` native rồi thử lại qua REST
+nếu thao tác đó thất bại.
+
+Đây là fallback thích ứng, không phải claim rằng mọi thao tác GitHub đều
+GraphQL-free. Lệnh `gh pr` native vẫn có thể dùng GraphQL, và GitHub chỉ cung cấp
+việc bật auto-merge qua GraphQL. Vì vậy giai đoạn merge dùng hành vi native hoặc
+REST có điều kiện được mô tả bên dưới.
 
 ## Giữ quyền write và merge rõ ràng
 
@@ -129,7 +157,9 @@ Các ranh giới quan trọng:
   self-review lẽ ra Approve dưới dạng comment trung lập và báo rõ việc hạ cấp.
 - Merge gate yêu cầu verdict Approve, không có blocker từ fix loop, PR đang mở
   và mergeable, không còn changes request, đồng thời check đã pass hoặc chỉ đang
-  chờ. Workflow không ép qua conflict hay branch protection.
+  chờ. Với check đang chờ, đường native có thể bật `--auto`; REST fallback không
+  thể bật auto-merge mà phải đợi check terminal-green trước khi merge qua REST.
+  Cả hai đường đều không ép qua check đỏ, conflict hay branch protection.
 - `--fix` không được commit hoặc push khi verification thất bại, phát hiện
   secret hoặc sẽ bao gồm thay đổi không liên quan của người dùng.
 - Chạy lại `--reply` sẽ đăng thêm một review; workflow hiện tại không deduplicate
@@ -140,7 +170,7 @@ Các ranh giới quan trọng:
 
 ## Xác minh bằng chứng
 
-Kết quả hoàn chỉnh nên có:
+Kết quả hoàn chỉnh nên có cho từng PR:
 
 - Summary, risk level, finding theo severity và verdict cuối.
 - Bằng chứng tệp cùng dòng hoặc function cho mọi finding có thể hành động.
@@ -150,10 +180,14 @@ Kết quả hoàn chỉnh nên có:
   follow-up fix.
 - Câu hỏi chưa giải quyết được nêu rõ thay vì claim hoàn tất thiếu căn cứ.
 
-Bằng chứng release bao phủ việc chuyển Skill sang adapter portable; stable và
-beta chứa cùng workflow `ak:review-pr`. Điều này không bảo đảm permission GitHub
-thực tế, quy tắc merge riêng của repository, thời lượng CI hay approval prompt
-giống nhau giữa các runtime.
+Sau khi mọi ref hoàn tất, kết quả cũng tổng hợp số PR đã xử lý, tổng theo verdict,
+mode môi trường `AK_GH_REST=<0|1>` và số lần thực sự dùng đường REST, cùng blocker
+còn lại theo PR. Lần gọi một ref vẫn giữ nguyên kết quả đầy đủ cho PR đó.
+
+Bằng chứng release bao phủ việc chuyển Skill sang adapter portable cùng contract
+multi-PR và API thích ứng được mô tả tại đây. Điều này không bảo đảm permission
+GitHub thực tế, quy tắc merge riêng của repository, thời lượng CI hay approval
+prompt giống nhau giữa các runtime.
 
 ## Khắc phục an toàn
 

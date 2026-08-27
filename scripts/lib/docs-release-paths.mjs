@@ -68,14 +68,36 @@ const BETA_PREFIX = 'content/docs/beta/';
 const BETA_REFERENCE_PREFIX = `${BETA_PREFIX}reference/`;
 const HUMAN_OWNED_CLI_PREFIX = `${BETA_REFERENCE_PREFIX}cli/`;
 
+// Human-owned shared reference pages whose English file carries the bare
+// default-locale name instead of the `.en.mdx` suffix used everywhere else.
+// Enumerated rather than pattern-matched so generated siblings such as
+// reference/release-notes.mdx keep failing closed.
+const DEFAULT_LOCALE_ENGLISH_PAGES = new Set([`${BETA_REFERENCE_PREFIX}cli-conventions.mdx`]);
+
+function viSiblingOf(englishPath) {
+  return `${englishPath.slice(0, -'.mdx'.length)}.vi.mdx`;
+}
+
+/** Resolve either half of a bare-default-locale page family to its English path. */
+function defaultLocaleEnglishPage(path) {
+  if (DEFAULT_LOCALE_ENGLISH_PAGES.has(path)) return path;
+  for (const englishPath of DEFAULT_LOCALE_ENGLISH_PAGES) {
+    if (path === viSiblingOf(englishPath)) return englishPath;
+  }
+  return null;
+}
+
 export function isHumanOwnedBetaFile(path) {
   if (!path.startsWith(BETA_PREFIX)) return false;
-  if (path.startsWith(BETA_REFERENCE_PREFIX) && !path.startsWith(HUMAN_OWNED_CLI_PREFIX)) return false;
   if (path.split('/').includes('reference-derived')) return false;
+  if (defaultLocaleEnglishPage(path)) return true;
+  if (path.startsWith(BETA_REFERENCE_PREFIX) && !path.startsWith(HUMAN_OWNED_CLI_PREFIX)) return false;
   return /\.(?:en|vi)\.mdx$/.test(path) || /(^|\/)meta(?:\.[\w-]+)?\.json$/.test(path);
 }
 
 export function localizedBetaPair(path) {
+  const englishPath = defaultLocaleEnglishPage(path);
+  if (englishPath) return path === englishPath ? viSiblingOf(englishPath) : englishPath;
   if (path.endsWith('.en.mdx')) return `${path.slice(0, -'.en.mdx'.length)}.vi.mdx`;
   if (path.endsWith('.vi.mdx')) return `${path.slice(0, -'.vi.mdx'.length)}.en.mdx`;
   if (path.endsWith('/meta.json')) return `${path.slice(0, -'/meta.json'.length)}/meta.vi.json`;

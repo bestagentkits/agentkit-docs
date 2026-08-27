@@ -28,6 +28,7 @@ import {
 import { digest, stableJson } from './lib/docs-release-normalize.mjs';
 import {
   assertV0WriteScope,
+  localizedBetaPair,
   releaseOutputDir,
   v1WriteViolations,
   validateOwnerDirectedPaths,
@@ -464,7 +465,16 @@ test('owner-directed path input is normalized and fails closed outside modify-on
     'content/docs/beta/reference/cli/activity/list.vi.mdx',
   ];
   assert.deepEqual(validateOwnerDirectedPaths(cliOwnerPaths, repoRoot), cliOwnerPaths);
+  const conventionsOwnerPaths = [
+    'content/docs/beta/reference/cli-conventions.mdx',
+    'content/docs/beta/reference/cli-conventions.vi.mdx',
+  ];
+  assert.deepEqual(validateOwnerDirectedPaths(conventionsOwnerPaths, repoRoot), conventionsOwnerPaths);
+  assert.equal(localizedBetaPair(conventionsOwnerPaths[0]), conventionsOwnerPaths[1]);
+  assert.equal(localizedBetaPair(conventionsOwnerPaths[1]), conventionsOwnerPaths[0]);
   for (const [value, expected] of [
+    [[conventionsOwnerPaths[0]], /requires paired path/],
+    [[conventionsOwnerPaths[1]], /requires paired path/],
     [{ paths: grokOwnerPaths }, /non-empty JSON array/],
     [[], /non-empty JSON array/],
     [[grokOwnerPaths[0]], /requires paired path/],
