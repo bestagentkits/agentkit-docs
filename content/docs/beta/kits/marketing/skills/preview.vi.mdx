@@ -25,8 +25,8 @@ process HTTP local, đọc Git history hoặc liên hệ CDN hay GitHub.
 
 - Bạn cần thay đổi marketing plan, content, code hoặc campaign bên dưới. Hãy
   preview bằng chứng trước rồi dùng workflow sở hữu phần việc đó.
-- Bạn cần artifact kiến trúc SVG hoặc PNG đạt mức publish. Dùng workflow
-  technical graph chuyên biệt khi khả dụng.
+- Bạn cần artifact kiến trúc SVG hoặc PNG không theo template và đạt mức
+  publish. Dùng workflow technical graph chuyên biệt khi khả dụng.
 - Bạn cần image generation hoặc multimodal analysis thay vì visual HTML,
   Markdown, Mermaid hay ASCII.
 - Bạn cần publish, deploy, liên hệ audience, đổi account hoặc spend.
@@ -52,7 +52,7 @@ Trước khi bắt đầu:
 
 | Runtime | Cách gọi | Ranh giới khả dụng |
 | --- | --- | --- |
-| Claude Code | `/ak:preview ...` | Source có instruction riêng cho background task Claude và server `${CLAUDE_PLUGIN_ROOT}`. Mode view và Markdown dựa trên server còn phụ thuộc một viewer Skill riêng mà manifest Marketing hiện tại không export. |
+| Claude Code | `/ak:preview ...` | Claude Code có thể dùng background task native cùng thiết lập server riêng cho runtime. Mode view và Markdown dựa trên server còn phụ thuộc một viewer Skill riêng mà manifest Marketing hiện tại không export. |
 | Cursor | `/ak:preview ...` | Cách gọi bằng slash đã được người dùng xác minh cho AgentKit Skill đã cài. Contract process server riêng cho Claude không phải bằng chứng Cursor parity; generation chỉ bằng tệp phụ thuộc tool khả dụng. |
 | Codex | `$ak:preview ...` | Codex tìm Skill bằng discovery native, nhưng instruction server trong source không phải contract process native của Codex. Generation chỉ bằng tệp và browser action phụ thuộc session hiện tại. |
 
@@ -107,6 +107,39 @@ Argument resolution ưu tiên `--stop` cao nhất. `--html` đổi loại output
 generation flag chọn workflow, còn path hiện có chọn view mode. Nếu không
 resolve được path, Skill nên hỏi thay vì đoán.
 
+## Kiểm soát editorial visual layer
+
+HTML generation giờ mặc định bật hai editorial engine bổ sung khi request ánh
+xạ rõ tới chúng. AntV Infographic có thể render KPI panel, ranked comparison và
+timeline; `diagram-design` có thể render layout architecture, quadrant,
+timeline, security, integration và medallion có chủ đích. Mermaid cùng Chart.js
+vẫn là fallback và tiếp tục xử lý automatic layout cùng interactive chart.
+
+- Tắt cả hai engine bằng `--no-editorial-visuals`, chỉ tắt AntV bằng `--no-antv`
+  hoặc chỉ tắt `diagram-design` bằng `--no-diagram-design`.
+- Thứ tự resolve preference là invocation flag, `.agentkit/config.yaml` của
+  project, `~/.agentkit/config.yaml` của user, rồi tới mặc định enabled. Không
+  có tier environment variable. Nested key đã resolve cho `diagram_design` là
+  `diagramDesign` trong JSON do `ak config prefs resolve --json` trả về.
+- AntV được pin ở `@antv/infographic@0.2.19` và tải
+  `dist/infographic.min.js` từ jsDelivr với SRI. Chỉ dùng nó cho ít nhất ba
+  panel vì bundle có kích thước 874 KB chưa nén và 288 KB sau gzip. Load
+  timeout, render error hay target rỗng sẽ fallback mà không làm hỏng artifact
+  và ghi log `[antv] fell back to <engine>`.
+- `diagram-design` được pin ở commit `09df49d8` và tạo HTML cùng SVG
+  self-contained, không dùng JavaScript. Motion tier mặc định là `none`; các
+  tier tùy chọn `reveal`, `step` và `loop` lấy từ
+  `visual.diagram_design.motion` và phải tôn trọng reduced-motion preference.
+  Các Python validator đi kèm chỉ mang tính advisory và bỏ qua an toàn khi không
+  có `python3`. Sau một geometry failure ban đầu và một lần corrective retry,
+  generation fallback sang Mermaid.
+
+Editorial layer căn chỉnh cả hai engine theo Instrument Serif, Geist và Geist
+Mono. Source chỉ tải reference tương ứng sau khi route request; nó không preload
+cả hai engine. Trong môi trường air-gapped, hãy tắt AntV. Đồng thời tắt mọi engine
+khác dựa trên CDN mà artifact đã chọn yêu cầu nếu output offline hoàn toàn là
+bắt buộc.
+
 ## Hiểu các giai đoạn tệp và process
 
 1. **Resolve request.** Skill chọn view hoặc generation mode, validate topic hay
@@ -148,7 +181,8 @@ Hãy kiểm tra target path trước generation khi công việc cũ có thể t
   render Markdown. Không giả định server là zero-dependency hoặc sửa bằng một
   lần manual install chưa được review.
 - HTML output có thể chứa CDN reference cho Google Fonts, Mermaid, Chart.js,
-  ELK layout hoặc anime.js. Mở tệp có thể liên hệ provider đó và để lộ request
+  AntV Infographic, ELK layout hoặc anime.js. Mở tệp có thể liên hệ provider đó
+  và để lộ request
   metadata; render offline có thể không đầy đủ.
 - Diff theo số PR cần `gh` và quyền truy cập GitHub. Các thao tác đọc Git khác
   dùng trạng thái local trừ khi command riêng refresh remote.
@@ -163,7 +197,8 @@ Một lần chạy hoàn tất nên cung cấp:
 - Artifact Markdown hoặc HTML dưới thư mục `visuals/` của active plan, hoặc
   dưới `plans/visuals/` khi không có active plan.
 - Bằng chứng render và kiểm tra cho diagram, gồm việc sửa overlap, label khó đọc
-  hoặc layout hỏng.
+  hoặc layout hỏng. Với `diagram-design`, còn phải báo kết quả validator
+  advisory và mọi fallback sang Mermaid.
 - Local và network URL chỉ khi process viewer thực sự khởi động.
 - Disclosure về host, port, process đang chạy và cách dừng.
 - Disclosure về quyền truy cập CDN hoặc GitHub khi mode đã chọn cần.
@@ -183,7 +218,7 @@ kết luận.
 | View hoặc Markdown mode không tìm thấy viewer server | Coi đây là dependency gap hiện tại của Marketing. Dùng output HTML chỉ tạo tệp hoặc ASCII, hoặc dừng và chỉ cài qua tuyến được hỗ trợ đã duyệt riêng. |
 | Port bận | Để viewer chọn port tiếp theo và báo URL đầy đủ. Không giả định `3456`. |
 | Content nhạy cảm đã được serve trên `0.0.0.0` | Dừng mọi viewer instance bằng invocation `ak:preview --stop` theo runtime, loại content khỏi scope được serve và review mức phơi bày trước khi khởi động lại. |
-| HTML mở nhưng thiếu diagram hoặc font | Kiểm tra network access cùng CDN reference, hoặc regenerate không dùng external library khi có thể. |
+| HTML mở nhưng thiếu diagram hoặc font | Kiểm tra network access cùng CDN reference. Với AntV, xác nhận `window.AntVInfographic` đã tải từ `dist/infographic.min.js`; nếu không, chấp nhận fallback được báo hoặc regenerate với `--no-antv`. |
 | `--diff` không có Git context | Chạy trong repository dự kiến và nêu ref chính xác. Số PR còn cần `gh`. |
 | `--plan-review` không tìm thấy plan | Cung cấp explicit plan path hoặc thiết lập active plan; không so sánh với tệp đoán. |
 | Output path đã chứa công việc có giá trị | Dừng và di chuyển hoặc đổi tên artifact cũ trước khi generate; source workflow overwrite mà không hỏi. |
@@ -201,7 +236,9 @@ trước khi khôi phục từ thao tác ghi ngoài ý muốn.
 - Source viewer riêng còn cần npm dependency để render Markdown; chỉ có
   `ak:preview` không chứng minh các dependency đó khả dụng.
 - “Một tệp HTML” không nhất thiết nghĩa là offline hoặc không có network vì
-  font và JavaScript library tùy chọn có thể vẫn là CDN import.
+  font và JavaScript library tùy chọn có thể vẫn là CDN import. AntV không được
+  vendor trong release này; `diagram-design` không có runtime JavaScript
+  dependency.
 - Visual review có thể giải thích bằng chứng nhưng không chứng minh hiệu suất
   campaign, conversion, revenue, trạng thái provider hiện tại hay tính đúng của
   source data.

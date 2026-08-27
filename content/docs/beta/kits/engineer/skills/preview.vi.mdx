@@ -25,8 +25,8 @@ plan review và recap project gần đây.
 ### Chọn workflow khác khi
 
 - Prose thường hoặc bảng ngắn đã giải thích rõ quan hệ.
-- Bạn cần sơ đồ kiến trúc SVG hoặc PNG đủ chất lượng xuất bản. Dùng
-  `ak:tech-graph`.
+- Bạn cần sơ đồ kiến trúc SVG hoặc PNG không theo template và đủ chất lượng xuất
+  bản. Dùng `ak:tech-graph`.
 - Bạn cần cập nhật tài liệu project bền vững sau khi tạo visual. Dùng
   `ak:docs update`.
 - Bạn cần kết quả code review mà không cần visual artifact. Dùng
@@ -102,6 +102,14 @@ số ưu tiên `--stop`, sau đó là HTML và generation flag, rồi path tư�
 Flag chỉ dành cho HTML tự ngụ ý `--html`. Nếu cung cấp nhiều generation flag,
 flag đầu chọn mode và phần còn lại trở thành nội dung chủ đề.
 
+HTML mode mặc định bật editorial visual layer khi intent phù hợp: AntV
+Infographic cho panel nhiều dữ liệu và diagram-design cho layout kiến trúc, khái
+niệm, quadrant, timeline cùng các layout liên quan có chủ đích. Tắt cả hai trong
+một lần chạy bằng `--no-editorial-visuals`, hoặc tắt riêng bằng `--no-antv` hay
+`--no-diagram-design`. Nếu không, Skill phân giải `visual.antv.enabled` và
+`visual.diagram_design.enabled` từ cấu hình project rồi cấu hình người dùng;
+không có tầng environment variable.
+
 ## Hiểu vị trí output và hiệu ứng tệp
 
 Markdown và HTML được tạo dùng topic slug tối đa 80 ký tự:
@@ -123,14 +131,16 @@ server đó.
    từ thứ tự đối số.
 2. **Skill thu thập bằng chứng.** Topic mode kiểm tra ngữ cảnh project liên quan;
    diff, plan-review và recap thu thập bằng chứng Git, plan và source đã định.
-3. **Skill chọn dạng visual.** Mermaid xử lý topology; table xử lý dữ liệu; CSS
-   grid xử lý kiến trúc nhiều text; chart xử lý metric thật; hệ thống phức tạp
-   dùng overview và chi tiết kết hợp.
+3. **Skill chọn dạng visual.** Mermaid xử lý topology tự động; diagram-design xử
+   lý editorial layout có chủ đích; AntV Infographic xử lý bố cục nhiều panel cho
+   KPI, so sánh và timeline; table cùng Chart.js vẫn dùng được cho dữ liệu. Hệ
+   thống phức tạp dùng overview và chi tiết kết hợp.
 4. **Skill tạo artifact.** Markdown dùng template của mode. HTML ghi một trang
    với CSS và JavaScript của trang inline, toggle sáng/tối, layout responsive và
    tương tác phù hợp mode.
-5. **Skill xác minh sơ đồ.** Cú pháp Mermaid được kiểm tra, sau đó output render
-   được xem để tìm overlap, va chạm, routing và khả năng đọc.
+5. **Skill xác minh sơ đồ.** Cú pháp Mermaid được kiểm tra. diagram-design chạy
+   các validator tư vấn được đóng gói khi có `python3`. Sau đó output render được
+   xem để tìm overlap, va chạm, routing và khả năng đọc.
 6. **Skill mở kết quả.** Markdown dùng viewer server; HTML mở trực tiếp trong
    browser.
 7. **Skill báo bằng chứng.** Skill trả output path và URL viewer đầy đủ hoặc kết
@@ -172,8 +182,9 @@ Các ranh giới quan trọng:
   dung không nên truy cập được qua local network listener.
 - Diff của pull request dùng GitHub CLI nên phụ thuộc network, xác thực và quyền repo.
 - HTML được tạo giữ page code trong một tệp nhưng có thể tải Google Fonts,
-  Mermaid, Chart.js hoặc anime.js từ CDN được phép. Render offline có thể mất các
-  tài nguyên đó.
+  Mermaid, Chart.js, anime.js hoặc bản pin `@antv/infographic@0.2.19` từ CDN được
+  phép. Render offline có thể mất các tài nguyên đó. Dùng `--no-antv` khi không
+  chấp nhận external load này.
 - Workflow tạo artifact cục bộ và mở chúng. Workflow không xuất bản, deploy,
   commit hay push.
 - Source không định nghĩa phí provider. Skill chuyên môn và tạo ảnh tùy chọn vẫn
@@ -190,6 +201,8 @@ Một lần chạy đầy đủ nên cung cấp:
 - Nội dung responsive không bị overflow ngang ngoài ý muốn.
 - Điều khiển zoom và label dễ đọc cho sơ đồ Mermaid.
 - Review bản render cho diagram mode, không chỉ cú pháp hợp lệ.
+- Fallback sang Mermaid, Chart.js hoặc table được ghi log nếu AntV không thể tải
+  hay render, hoặc nếu kết quả diagram-design vẫn không hợp lệ sau khi sửa.
 - Ranh giới bằng chứng và input còn thiếu cho diff, plan-review hoặc recap.
 
 ## Khắc phục sự cố an toàn
@@ -201,6 +214,7 @@ Một lần chạy đầy đủ nên cung cấp:
 | Server không khởi động | Kiểm tra viewer đã chạy chưa, dùng `--stop` và kiểm tra port. |
 | Browser mở trang HTML chưa đầy đủ | Kiểm tra truy cập CDN, console error, khởi tạo theme và library import bắt buộc. |
 | Sơ đồ hợp lệ nhưng khó đọc | Xem bản render, giảm node, tăng khoảng cách, đổi routing edge và tạo lại. |
+| Editorial visual không tải hoặc không qua validation | Xác nhận fallback đã được ghi log rồi dùng Mermaid, Chart.js hoặc table; truyền `--no-antv` hay `--no-diagram-design` để bỏ qua engine đó. |
 | `--html --ascii` bị từ chối | Dùng `--ascii` cho terminal hoặc `--html --diagram` cho HTML. |
 | PR diff thất bại | Xác nhận project là Git repo và `gh` đã được cài, xác thực. |
 | Plan review không tìm thấy plan | Truyền plan file tường minh hoặc chạy từ active plan context. |
@@ -212,7 +226,10 @@ Một lần chạy đầy đủ nên cung cấp:
 - Contract thực thi Markdown viewer dành riêng cho Claude Code; chưa xác lập hành
   vi background server tương đương trên Cursor hoặc Codex.
 - Artifact HTML là một tệp nhưng không nhất thiết hoạt động đầy đủ offline khi
-  dùng font hoặc thư viện CDN.
+  dùng font hoặc thư viện CDN. AntV chỉ được bật cho intent phù hợp và có
+  fallback tường minh; bản thân diagram-design không có runtime dependency.
+- Validator của diagram-design mang tính tư vấn và được bỏ qua khi không có
+  `python3`; chúng không chặn việc giao artifact.
 - Chất lượng diff, plan-review và recap bị giới hạn bởi bằng chứng repo và lịch
   sử có thể đọc.
 - Visual self-review cải thiện layout nhưng không chứng minh kết luận kiến trúc

@@ -8,15 +8,15 @@ import { repoRoot } from './lib/paths.mjs';
 
 export const RELEASE_SHAPE_BASELINE = Object.freeze({
   schemaVersion: 1,
-  reviewedAt: '2026-08-13',
-  sourceCommit: 'dca7e4d895f45ba8b786f949ae94072855d3a5a4',
+  reviewedAt: '2026-08-27',
+  sourceCommit: 'c92e356c5ee14efc7f2becaec4d9a3a3634e1b34',
   channels: ['beta', 'stable'],
   locales: ['en', 'vi'],
   // Per-channel: stable stays bound to channels.stable.tag; beta may include
   // routes authored ahead of the next stable promote. Beta must remain a
   // superset of stable so a whole-copy promote is safe.
-  sourceRoutesPerLocaleChannel: { stable: 400, beta: 400 },
-  routesPerLocaleChannel: { stable: 399, beta: 399 },
+  sourceRoutesPerLocaleChannel: { stable: 400, beta: 407 },
+  routesPerLocaleChannel: { stable: 399, beta: 406 },
   reviewedSourceOnlyRoutes: [
     {
       route: 'changelog',

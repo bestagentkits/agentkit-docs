@@ -44,10 +44,17 @@ async function makeFixture({
   betaViRoutes,
   stableViRoutes,
   nav,
+  betaViNav,
   stableNav,
+  stableViNav,
   betaIndexRoutes,
   betaViIndexRoutes,
+  stableIndexRoutes,
+  stableViIndexRoutes,
   count = identities.length,
+  betaCount = count,
+  stableCount = count,
+  stableViCount = stableCount,
 } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'ak-kit-catalog-'));
   temporaryRoots.push(root);
@@ -58,20 +65,28 @@ async function makeFixture({
   const publicRoutes = identities
     .filter((entry) => entry.classification === 'public')
     .map((entry) => entry.canonicalRoute.split('/').at(-1));
+  const betaNav = nav ?? publicRoutes;
+  const resolvedStableNav = stableNav ?? betaNav;
   const routesByChannel = {
     beta: {
       en: betaRoutes ?? routed,
       vi: betaViRoutes ?? betaRoutes ?? routed,
-      nav: nav ?? publicRoutes,
+      nav: betaNav,
+      navVi: betaViNav ?? betaNav,
       indexEn: betaIndexRoutes ?? publicRoutes,
       indexVi: betaViIndexRoutes ?? betaIndexRoutes ?? publicRoutes,
+      countEn: betaCount,
+      countVi: betaCount,
     },
     stable: {
       en: stableRoutes ?? betaRoutes ?? routed,
       vi: stableViRoutes ?? stableRoutes ?? betaViRoutes ?? betaRoutes ?? routed,
-      nav: stableNav ?? nav ?? publicRoutes,
-      indexEn: publicRoutes,
-      indexVi: publicRoutes,
+      nav: resolvedStableNav,
+      navVi: stableViNav ?? resolvedStableNav,
+      indexEn: stableIndexRoutes ?? resolvedStableNav,
+      indexVi: stableViIndexRoutes ?? stableIndexRoutes ?? resolvedStableNav,
+      countEn: stableCount,
+      countVi: stableViCount,
     },
   };
   for (const [channel, observed] of Object.entries(routesByChannel)) {
@@ -80,14 +95,15 @@ async function makeFixture({
     for (const slug of observed.en) await writeFile(join(skillsDir, `${slug}.en.mdx`), '---\ntitle: Test\n---\n');
     for (const slug of observed.vi) await writeFile(join(skillsDir, `${slug}.vi.mdx`), '---\ntitle: Test\n---\n');
     await writeJson(join(skillsDir, 'meta.json'), { pages: observed.nav });
-    await writeJson(join(skillsDir, 'meta.vi.json'), { pages: observed.nav });
+    await writeJson(join(skillsDir, 'meta.vi.json'), { pages: observed.navVi });
     const indexBody = (routes) =>
       `---\ntitle: Test\n---\n\n${routes.map((slug) => `[ak:${slug}](./${slug})`).join('\n')}\n`;
     await writeFile(join(skillsDir, 'index.en.mdx'), indexBody(observed.indexEn));
     await writeFile(join(skillsDir, 'index.vi.mdx'), indexBody(observed.indexVi));
-    const overview = `---\ntitle: Test\n---\n\n| Component | Resolved count | Note |\n| --- | ---: | --- |\n| Skills | ${count} | Fixture |\n`;
-    await writeFile(join(docsRoot, channel, 'kits', 'test.en.mdx'), overview);
-    await writeFile(join(docsRoot, channel, 'kits', 'test.vi.mdx'), overview);
+    const overview = (countValue) =>
+      `---\ntitle: Test\n---\n\n| Component | Resolved count | Note |\n| --- | ---: | --- |\n| Skills | ${countValue} | Fixture |\n`;
+    await writeFile(join(docsRoot, channel, 'kits', 'test.en.mdx'), overview(observed.countEn));
+    await writeFile(join(docsRoot, channel, 'kits', 'test.vi.mdx'), overview(observed.countVi));
   }
   const registryPath = join(root, 'kit-catalog-identities.json');
   await writeJson(registryPath, {
@@ -148,9 +164,50 @@ test('rejects a missing locale detail page', async () => {
   await expectFailure(fixture, /Beta EN\/VI details.*missing \[alpha\]/);
 });
 
-test('rejects Stable and Beta route divergence', async () => {
-  const fixture = await makeFixture({ stableRoutes: [] });
-  await expectFailure(fixture, /Beta\/Stable EN details.*missing \[alpha\]/);
+test('accepts Stable as a proper subset of Beta', async () => {
+  const fixture = await makeFixture({
+    identities: [identity('ak-alpha'), identity('ak-beta')],
+    stableRoutes: ['alpha'],
+    stableNav: ['alpha'],
+    stableCount: 1,
+  });
+  await assert.doesNotReject(() => checkKitCatalog(fixture));
+});
+
+test('rejects a Stable detail route absent from Beta', async () => {
+  const fixture = await makeFixture({
+    betaRoutes: ['alpha'],
+    stableRoutes: ['alpha', 'orphan'],
+    stableViRoutes: ['alpha', 'orphan'],
+  });
+  await expectFailure(fixture, /Stable details\/Beta details.*orphan/);
+});
+
+test('rejects Stable locale, navigation, and index divergence', async (t) => {
+  await t.test('detail locale mismatch', async () => {
+    const fixture = await makeFixture({ stableViRoutes: [] });
+    await expectFailure(fixture, /Stable EN\/VI details.*missing \[alpha\]/);
+  });
+  await t.test('navigation locale mismatch', async () => {
+    const fixture = await makeFixture({ stableViNav: [] });
+    await expectFailure(fixture, /Stable EN\/VI nav.*missing \[alpha\]/);
+  });
+  await t.test('index locale mismatch', async () => {
+    const fixture = await makeFixture({ stableViIndexRoutes: [] });
+    await expectFailure(fixture, /Stable EN\/VI public Skill index.*missing \[alpha\]/);
+  });
+  await t.test('navigation/index mismatch', async () => {
+    const fixture = await makeFixture({ stableIndexRoutes: [] });
+    await expectFailure(fixture, /Stable navigation\/index.*missing \[alpha\]/);
+  });
+  await t.test('navigation points outside Stable details', async () => {
+    const fixture = await makeFixture({ stableRoutes: [], stableViRoutes: [] });
+    await expectFailure(fixture, /Stable nav\/details.*alpha/);
+  });
+  await t.test('overview count locale mismatch', async () => {
+    const fixture = await makeFixture({ stableCount: 1, stableViCount: 2 });
+    await expectFailure(fixture, /Stable EN\/VI overview: Skills counts 1 and 2 must match/);
+  });
 });
 
 test('rejects a stale overview count', async () => {
@@ -203,8 +260,8 @@ test('reproduces the reviewed Engineer and Marketing catalog counts', async () =
       navEntries,
     })),
     [
-      { kitId: 'engineer', sourceIdentities: 102, publicIdentities: 101, detailRoutes: 101, navEntries: 101 },
-      { kitId: 'marketing', sourceIdentities: 81, publicIdentities: 79, detailRoutes: 81, navEntries: 79 },
+      { kitId: 'engineer', sourceIdentities: 106, publicIdentities: 105, detailRoutes: 105, navEntries: 105 },
+      { kitId: 'marketing', sourceIdentities: 84, publicIdentities: 84, detailRoutes: 84, navEntries: 84 },
     ],
   );
 });

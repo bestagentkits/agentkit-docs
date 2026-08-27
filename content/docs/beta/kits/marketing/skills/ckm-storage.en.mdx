@@ -1,53 +1,49 @@
 ---
-title: Understand the ak:storage router identity limitation
-description: See why the ak-ckm-storage export is not a safe standalone invocation and review its intended S3 operation boundary.
+title: Use the ak:ckm-storage router
+description: Route list, sync, upload, and URL operations through the ak-ckm-storage export.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
-The `ak-ckm-storage` export is intended to route `list`, `sync`, `upload`, and
-`url` operations to an S3-compatible storage client. It does not have a unique
-runtime identity: its frontmatter declares `ak:storage`, exactly the same name
-as the separate `ak-storage` export.
+The `ak-ckm-storage` export routes `list`, `sync`, `upload`, and `url`
+operations to an S3-compatible storage client. Its frontmatter now declares the
+unique runtime identity `ak:ckm-storage`, distinct from the separate
+`ak-storage` export.
 
-<Callout type="warn" title="Do not invoke this export by canonical name">
-  Current Marketing packages install both exports in separate export
-  directories, but both declare `ak:storage`. Runtime discovery therefore has
-  no documented selector that guarantees which definition handles
-  `/ak:storage` or `$ak:storage`. Both packaged exports contain the same collision.
+<Callout type="info" title="Invoke this export by its canonical name">
+  Use `/ak:ckm-storage` in Claude Code or Cursor and `$ak:ckm-storage` in Codex.
+  The separate `ak-storage` export continues to own `ak:storage`.
 </Callout>
 
-## Use this page to understand the intended boundary
+## Use this page to understand the operation boundary
 
-### Intended scope
+### Scope
 
-- List remote objects, optionally filtered by a prefix.
-- Preview or perform a recursive local-folder sync.
-- Upload one local file to a chosen object key.
-- Construct a public URL for an object key.
+* List remote objects, optionally filtered by a prefix.
+* Preview or perform a recursive local-folder sync.
+* Upload one local file to a chosen object key.
+* Construct a public URL for an object key.
 
 ### Do not use this export when
 
-- You need a dependable production storage workflow before the identity
-  collision is resolved.
-- You need download, delete, access-policy, bucket-creation, lifecycle, or
+* You need download, delete, access-policy, bucket-creation, lifecycle, or
   migration behavior. Those are not router subcommands.
-- You need a guarantee that a constructed URL is public or that an object
+* You need a guarantee that a constructed URL is public or that an object
   exists. Public access remains a provider and bucket-policy decision.
 
 ## Prepare without exposing credentials
 
-The intended client checks these environment variables:
+The client checks these environment variables:
 
-| Variable | Requirement |
-| --- | --- |
-| `S3_ENDPOINT` | Required service endpoint |
-| `S3_ACCESS_KEY_ID` | Required access-key identifier |
-| `S3_SECRET_ACCESS_KEY` | Required secret access key |
-| `S3_BUCKET` | Required bucket name |
-| `S3_REGION` | Optional; the client defaults to `auto` |
-| `S3_PUBLIC_URL` | Optional public base URL or custom domain |
+| Variable               | Requirement                               |
+| ---------------------- | ----------------------------------------- |
+| `S3_ENDPOINT`          | Required service endpoint                 |
+| `S3_ACCESS_KEY_ID`     | Required access-key identifier            |
+| `S3_SECRET_ACCESS_KEY` | Required secret access key                |
+| `S3_BUCKET`            | Required bucket name                      |
+| `S3_REGION`            | Optional; the client defaults to `auto`   |
+| `S3_PUBLIC_URL`        | Optional public base URL or custom domain |
 
 The backing client also requires `@aws-sdk/client-s3` in the environment that
 executes it. Keep credentials in an ignored local environment file, use a
@@ -56,50 +52,44 @@ Skill prompt or output.
 
 ## Runtime identity status
 
-| Runtime | Advertised invocation | Current boundary |
-| --- | --- | --- |
-| Claude Code | `/ak:storage ...` | Ambiguous because both storage exports declare this name; native and plugin directory separation does not select a definition. |
-| Cursor | `/ak:storage ...` | Ambiguous for the same reason; slash discovery does not establish which duplicate definition wins. |
-| Codex | `$ak:storage ...` | Ambiguous because native projection preserves both export directories and both files retain the same canonical name. |
+| Runtime     | Invocation            | Current boundary                                                  |
+| ----------- | --------------------- | ----------------------------------------------------------------- |
+| Claude Code | `/ak:ckm-storage ...` | Routes to the export whose frontmatter declares `ak:ckm-storage`. |
+| Cursor      | `/ak:ckm-storage ...` | Routes to the same unique canonical identity.                     |
+| Codex       | `$ak:ckm-storage ...` | Uses the same canonical identity through Codex invocation syntax. |
 
 <Tabs items={['Claude Code', 'Cursor', 'Codex']}>
   <Tab value="Claude Code">
-
-Do not rely on `/ak:storage list`, `/ak:storage sync`, `/ak:storage upload`, or
-`/ak:storage url` until one export owns the canonical name.
-
+    Use `/ak:ckm-storage list`, `/ak:ckm-storage sync`,
+    `/ak:ckm-storage upload`, or `/ak:ckm-storage url`.
   </Tab>
+
   <Tab value="Cursor">
-
-Do not rely on `/ak:storage list`, `/ak:storage sync`, `/ak:storage upload`, or
-`/ak:storage url` until one export owns the canonical name.
-
+    Use `/ak:ckm-storage list`, `/ak:ckm-storage sync`,
+    `/ak:ckm-storage upload`, or `/ak:ckm-storage url`.
   </Tab>
+
   <Tab value="Codex">
-
-Do not rely on `$ak:storage list`, `$ak:storage sync`, `$ak:storage upload`, or
-`$ak:storage url` until one export owns the canonical name.
-
+    Use `$ak:ckm-storage list`, `$ak:ckm-storage sync`,
+    `$ak:ckm-storage upload`, or `$ak:ckm-storage url`.
   </Tab>
 </Tabs>
 
 See [Runtime adapters](../../../concepts/runtime-adapters) for capability and
-delivery differences. Reinstalling or changing scope does not repair a
-duplicate canonical identity.
+delivery differences. Use the runtime-specific invocation shown above.
 
-## Review the intended operation contract
+## Review the operation contract
 
-| Intended operation | Arguments and options | Effect |
-| --- | --- | --- |
-| `list` | `[prefix]` | Reads up to the backing client's current listing limit and formats key, size, and last-modified data. |
-| `sync` | `<folder> [remote-prefix] [--dry-run] [--extensions=.png,.jpg]` | Recursively scans local files; dry-run returns proposed object keys, while an approved live run uploads matching files. |
-| `upload` | `<path> [remote-path]` | Reads one local file and writes one remote object. If the remote path is omitted, the intended router uses the local relative path. |
-| `url` | `<path>` | Constructs a URL from `S3_PUBLIC_URL` or from endpoint and bucket configuration; existence checking is optional. |
+| Operation | Arguments and options                                           | Effect                                                                                                                     |
+| --------- | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `list`    | `[prefix]`                                                      | Reads up to the backing client's current listing limit and formats key, size, and last-modified data.                      |
+| `sync`    | `<folder> [remote-prefix] [--dry-run] [--extensions=.png,.jpg]` | Recursively scans local files; dry-run returns proposed object keys, while an approved live run uploads matching files.    |
+| `upload`  | `<path> [remote-path]`                                          | Reads one local file and writes one remote object. If the remote path is omitted, the router uses the local relative path. |
+| `url`     | `<path>`                                                        | Constructs a URL from `S3_PUBLIC_URL` or from endpoint and bucket configuration; existence checking is optional.           |
 
-These are intended arguments, not safe invocation examples under the current
-identity collision.
+Pass these arguments after the runtime-specific canonical invocation.
 
-## Understand the intended stages
+## Understand the stages
 
 1. The router parses the first argument as an operation.
 2. It loads the matching operation reference.
@@ -110,43 +100,43 @@ identity collision.
 5. A dry-run sync reports proposed object keys without uploading. A live sync
    uploads files sequentially and reports individual success or failure.
 
-This cross-export dependency is another reason not to treat `ak-ckm-storage`
-as an independent storage implementation.
+This cross-export dependency means `ak-ckm-storage` is a router rather than an
+independent storage implementation.
 
 ## Keep approval and external effects explicit
 
-- `list` and optional existence checks send authenticated read requests to the
+* `list` and optional existence checks send authenticated read requests to the
   configured provider.
-- `upload` and live `sync` read local files and send their contents to the
+* `upload` and live `sync` read local files and send their contents to the
   configured bucket. Approve the exact files, object keys, provider, and data
   classification first.
-- `--dry-run` prevents upload in the backing sync routine, but it still scans
+* `--dry-run` prevents upload in the backing sync routine, but it still scans
   the local folder.
-- URL construction does not change bucket policy and does not make a private
+* URL construction does not change bucket policy and does not make a private
   object public.
-- The intended router does not authorize deletion, publication, CDN changes,
+* The router does not authorize deletion, publication, CDN changes,
   provider billing, or credential creation.
 
 ## Expected evidence
 
-For a future resolved implementation, require:
+For each operation, require:
 
-- The selected operation and resolved local and remote paths.
-- Configuration presence without secret values.
-- A dry-run file-to-object mapping before a multi-file upload.
-- Per-file upload results, failed count, and returned URLs for a live sync.
-- Provider errors preserved verbatim enough to diagnose without exposing
+* The selected operation and resolved local and remote paths.
+* Configuration presence without secret values.
+* A dry-run file-to-object mapping before a multi-file upload.
+* Per-file upload results, failed count, and returned URLs for a live sync.
+* Provider errors preserved verbatim enough to diagnose without exposing
   credentials.
 
 ## Troubleshoot or continue
 
-| Symptom | Safe next step |
-| --- | --- |
-| Two storage entries or inconsistent behavior appear | Stop. Do not guess which export won discovery; keep this as an unresolved package identity defect. |
-| Storage is reported as not configured | Check the required variables and SDK locally without printing their values. Do not add dependencies or credentials until the identity issue is resolved. |
-| A sync is needed now | Use a separately reviewed provider tool or workflow with an explicit dry run, destination, and credential boundary. |
-| A returned URL is inaccessible | Verify object existence, bucket policy, custom-domain routing, and provider behavior outside this ambiguous Skill. |
-| Installation state looks unexpected | Follow [Kit installation problems](../../../troubleshooting/kit-installation) without forcing a reinstall over user files. |
+| Symptom                                                  | Safe next step                                                                                                                                              |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/ak:ckm-storage` or `$ak:ckm-storage` is not discovered | Confirm the installed export's `SKILL.md` declares `name: ak:ckm-storage`; an older package may still declare `ak:storage`.                                 |
+| Storage is reported as not configured                    | Check the required variables and SDK locally without printing their values. Do not add dependencies or credentials until the canonical export is confirmed. |
+| A sync is needed now                                     | Use a separately reviewed provider tool or workflow with an explicit dry run, destination, and credential boundary.                                         |
+| A returned URL is inaccessible                           | Verify object existence, bucket policy, custom-domain routing, and provider behavior outside this Skill.                                                    |
+| Installation state looks unexpected                      | Follow [Kit installation problems](../../../troubleshooting/kit-installation) without forcing a reinstall over user files.                                  |
 
 Continue with the [Marketing Kit overview](../../marketing),
 [Installing kits](../../../guides/installing-kits), or the
@@ -154,10 +144,10 @@ Continue with the [Marketing Kit overview](../../marketing),
 
 ## Know the current limits
 
-- There is no supported way to select `ak-ckm-storage` through its declared
-  canonical name while `ak-storage` declares the same name.
-- The router references a backing client in the other export, so removing one
-  export is not a documented repair.
-- Provider compatibility is shipped intent, not a live guarantee. Endpoint,
+* Select this router through its declared canonical name `ak:ckm-storage`;
+  `ak-storage` retains the separate `ak:storage` identity.
+* The router references a backing client in the other export, so both exports
+  remain part of the documented operation path.
+* Provider compatibility is shipped intent, not a live guarantee. Endpoint,
   authentication, public URL, and billing behavior must be verified with the
   selected provider.
