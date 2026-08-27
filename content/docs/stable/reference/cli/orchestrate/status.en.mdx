@@ -1,0 +1,93 @@
+---
+title: ak orchestrate status
+description: Report an orchestrated run's current lifecycle state through the verified control socket, falling back to fresh identity probes rather than trusting a stale record as still running.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak orchestrate status` to report a run's current lifecycle state. The
+command reaches the run's live worker through its verified control socket
+when reachable; otherwise it reconciles persisted state against a fresh
+identity probe. A stale record alone is never reported as still running.
+
+## Usage
+
+```bash
+ak orchestrate status <run-id>
+```
+
+Supply exactly one positional argument — the run ID printed by
+[`ak orchestrate start`](./start).
+
+## Command flags
+
+Shared flags (`--json`, `--no-interactive`, `--quiet`, `--verbose`, `--yes`)
+are described in [CLI conventions](../cli-conventions). `--json` returns a
+single-object envelope safe for scripted polling.
+
+## Reported fields
+
+For each job the command reports:
+
+- **State** — `queued`, `running`, `completed`, `failed`, `orphaned`, or
+  `unknown`.
+- **PID / PGID** — the verified identity when the worker is reachable.
+- **Heartbeat** — the last time the worker reported activity for the job.
+- **Last output time** — the last write to the job's stdout or stderr log.
+- **Current command label** — the graph-declared label the worker was
+  running when the state was recorded.
+
+<Callout type="warning">
+  A job whose original worker died mid-run is reported as `orphaned`, not
+  `running`. Trusting a persisted PID without a fresh identity probe would
+  risk reporting a reused OS PID from a different process as still supervised
+  work; the command explicitly refuses to do that.
+</Callout>
+
+## Filesystem effects
+
+Read-only, with one exception: a fresh reclassification (for example, the
+worker crashed since the last check) is persisted so subsequent commands
+see the same reality.
+
+## Human and JSON output
+
+`--json` returns:
+
+```json
+{
+  "action": "status",
+  "run_id": "<opaque>",
+  "worker_state": "live | crashed | unreachable",
+  "jobs": [
+    {
+      "id": "<job-id>",
+      "state": "running",
+      "pid": 12345,
+      "pgid": 12345,
+      "heartbeat": "<rfc3339>",
+      "last_output_at": "<rfc3339>",
+      "current_command_label": "<graph-label>"
+    }
+  ]
+}
+```
+
+Human output prints one job per row with the same fields.
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | Status was reported successfully. | Consume the fields; do not infer `running` from a `pid` without matching `worker_state`. |
+| `1` | Run ID not found or run state corrupt/unsupported. | Do not retry the same input; investigate the persisted record. |
+| `2` | Flag parsing failed. | Correct the flags. |
+| `3` | Interrupted. | Re-run status. |
+| `6` | Platform unsupported. | Non-Darwin has no persisted worker to query. |
+
+## Related commands
+
+- [`ak orchestrate`](./)
+- [`ak orchestrate start`](./start)
+- [`ak orchestrate resume`](./resume)
+- [`ak orchestrate stop`](./stop)

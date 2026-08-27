@@ -11,7 +11,7 @@ recognize an expected Skill or Agent.
 Confirm all four details from the original install output:
 
 1. Kit name.
-2. Target runtime: `claude-code` or `codex`.
+2. Target runtime: `claude-code`, `codex`, `cursor`, `dsh`, `grok`, `pi`, or `omp`.
 3. Scope: the current project or `--global`.
 4. Selected Skills, including any `--skills` or `--exclude-skills` filter.
 
@@ -30,6 +30,17 @@ $ak:cook Check this project   # Codex
 Agents use a different surface. Claude Code dispatches installed subagents;
 Codex loads TOML-defined Agents and exposes their `agent_<slug>` runtime tools.
 The absence of `/` or `$` invocation syntax does not mean an Agent is missing.
+For Pi, project installs discover portable Skills below `.pi/skills/`, Agents
+below `.pi/agents/`, rules below `.pi/rules/`, and extensions below
+`.pi/extensions/`. Global installs write directly below the active
+`PI_CODING_AGENT_DIR` or `~/.pi/agent` profile; do not look for an extra `.pi/`
+segment there. Pi has no `ak run --target pi` route in this release.
+
+For Oh My Pi, distinguish installed discovery from direct dispatch. A project
+install discovers Skills, Agents, and rules below `.omp/`; `ak run
+<kit>/<skill> --target omp` resolves and dispatches one Skill separately. Oh My
+Pi owns its configured backend and credentials, so file presence alone still
+does not prove that the runtime loaded the content.
 
 Check the destination that matches the selected delivery:
 
@@ -39,12 +50,26 @@ Check the destination that matches the selected delivery:
 | Claude plugin | `<project>/ak-<kit>/` | `${AGENTKIT_PLUGIN_DIR:-~/.claude/plugins}/ak-<kit>/` |
 | Codex Skills | `<project>/.agents/skills/<name>/` | `~/.agents/skills/<name>/` |
 | Codex Agents, config, and hooks | `<project>/<kit>/.codex/` | `${CODEX_HOME:-~/.codex}/` |
+| Cursor | `<project>/.cursor/` | `~/.cursor/` |
+| DeepSeek Harness | Not a Kit projection target in this release; use `ak run --target dsh` for dispatch | Not a Kit projection target in this release |
+| Grok Build | `<project>/.grok/` plus `.agentkit/adapters/grok/<kit>/` | `${GROK_HOME:-~/.grok}/` plus `${AGENTKIT_HOME:-~/.agentkit}/adapters/grok/<kit>/` |
+| Pi | `<project>/.pi/{skills,agents,rules,extensions}` plus Pi lifecycle metadata | Active Pi coding-agent profile (`PI_CODING_AGENT_DIR` or `~/.pi/agent`) with no extra `.pi/` segment |
+| Oh My Pi | `<project>/.omp/{skills,agents,rules}`, `<project>/AGENTS.md`, and `<project>/.agentkit/adapters/omp/<kit>/` | `{skills,agents,rules}` and `AGENTS.md` below the resolved OMP root, plus user-scope lifecycle metadata |
+
+For a global OMP install, resolve the root in the same order as AgentKit:
+`AGENTKIT_OMP_HOME`, `OMP_HOME`, `PI_CODING_AGENT_DIR`, then `~/.omp/agent`.
+Check `skills/<name>/SKILL.md`, `agents/<name>.md`, `rules/<name>.md`, and the
+Kit-scoped `AGENTKIT-OMP` block in `AGENTS.md`. Unsupported exports under
+`.agentkit/adapters/omp/<kit>/sidecars/` are retained for lifecycle visibility;
+their presence does not make them active OMP surfaces.
 
 ## Check the adapter, not only file presence
 
 ```bash
+ak doctor --json
 ak doctor --adapter claude-code --json
 ak doctor --adapter codex --json
+ak doctor --adapter cursor --json
 ```
 
 Run the command for the target you installed. File presence alone does not prove
@@ -53,6 +78,17 @@ adapter checks and `data.healthy`; the default doctor command still exits `0`
 for an unhealthy report. On Codex, use doctor as an adapter-health signal, not
 as the only proof of the installed Skill inventory; verify discovery inside the
 runtime too.
+
+This release has no `pi_` or `omp_`-prefixed doctor check group. For Pi, verify
+the exact project `.pi/` paths or active global profile paths above and start a
+fresh Pi session; do not treat generic doctor output as proof that Pi loaded the
+projection.
+
+This release has no `omp_`-prefixed doctor check group. For OMP, run the
+unfiltered `ak doctor --json` for shared AgentKit health, inspect
+`data.healthy`, then verify the exact project or global paths above and start a
+fresh OMP session. Do not treat an empty `ak doctor --adapter omp` result as
+proof that the OMP projection is healthy.
 
 Read `codex_install_provenance` as a whole-home classification, not a Kit
 inventory check. `${CODEX_HOME:-~/.codex}` is a shared, user-owned root, so this
@@ -169,6 +205,18 @@ supported `Stop` and `SubagentStop` turn and subagent boundaries. Do not retry
 with `--force`, copy Claude hook configuration into Codex, or delete either
 runtime home to remove the warning.
 
+## A Codex hooks-root link is refused
+
+On POSIX, a wrapper-managed Codex home may link only its final `hooks` leaf to
+the resolved user's canonical `~/.codex/hooks`. AgentKit uses that canonical
+path for Hook commands, writes, rollback, and ownership. A linked parent or any
+other target is refused. On Windows, every symlink or reparse point in this
+boundary is refused.
+
+Inspect the configured `CODEX_HOME`, the `hooks` leaf, and its resolved target.
+Correct the wrapper or filesystem layout; do not use `--force`, replace a parent
+with another link, or redirect the leaf to an arbitrary writable directory.
+
 ## A Codex hook fails on Windows
 
 An eligible `.cjs` hook inside the resolved Codex home can run from a path with
@@ -199,7 +247,7 @@ change hook behavior, but it does not install a missing Skill or Agent. See
 [Configuration problems](./configuration) before editing a file.
 
 After changing hook state storage or reinstalling hook registrations, restart
-active Claude Code and Codex sessions before testing. Existing sessions can
+active sessions for the affected runtime before testing. Existing sessions can
 retain the earlier hook inventory and state paths.
 
 ## Verify the result

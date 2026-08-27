@@ -1,35 +1,40 @@
 ---
 title: AgentKit architecture
-description: See how the CLI, released kits, runtime adapters, and your project work together.
+description: See how the CLI, released or local-source kits, runtime adapters, and your project work together.
 ---
 
-AgentKit sits between released workflow packages and a supported coding
-assistant. The CLI handles installation and lifecycle operations; the assistant
-still runs the AI session and its tools.
+AgentKit sits between Kit sources and coding assistants. The CLI handles
+installation and lifecycle operations and can start adapter dispatch; the
+assistant still runs the AI session and its tools.
 
 ```mermaid
 flowchart TB
-  accTitle: From a verified Kit to runtime surfaces
-  accDescr: An authenticated registry supplies a verified Kit release to the AgentKit CLI. The CLI projects it through an adapter into Claude Code, Codex, or Cursor surfaces.
+  accTitle: From a Kit source to runtime surfaces
+  accDescr: An authenticated registry supplies verified Kit releases for released targets, while an explicit local source supplies Kits for development-only targets. The AgentKit CLI projects each Kit through a runtime adapter.
   registry["Authenticated registry"] --> release["Verified Kit release"]
   release --> cli["AgentKit CLI"]
+  local["Explicit local Kit source<br/>(development or CI)"] --> cli
   cli --> adapter["Adapter projection"]
   adapter --> claude["Claude Code surfaces"]
   adapter --> codex["Codex surfaces"]
   adapter --> cursor["Cursor surfaces"]
+  adapter --> grok["Grok Build native surfaces"]
+  adapter --> omp["Oh My Pi package staging<br/>and dispatch"]
 ```
 
 ## The parts of the system
 
 - **AgentKit CLI (`ak`)** authenticates access, resolves released kit packages,
   verifies release material, installs through a selected adapter, and manages
-  updates, diagnostics, uninstall, and recovery snapshots.
-- **A released Kit** packages workflows and their supporting components as a
-  versioned unit. You may install the whole Kit or select Skills where the
-  command supports selection.
+  updates, diagnostics, uninstall, and recovery snapshots. Source-only targets
+  can instead use an explicit local Kit source for development or CI.
+- **A Kit package** bundles workflows and their supporting components as a unit.
+  Released packages are versioned and verified; a local source is development
+  input, not evidence that a runtime package was released.
 - **A runtime adapter** translates supported Kit surfaces into the files and
-  registrations understood by Claude Code, Codex, or Cursor. It also reports
-  content that the target cannot activate.
+  registrations understood by Claude Code, Codex, Cursor, Grok Build, or Oh My Pi.
+  It also reports content that the target cannot activate. `ak run` can dispatch
+  Skill execution through Oh My Pi with `--target omp`.
 - **A project or user scope** determines where the adapted content is available.
   Project scope is the default for the current workspace. User scope makes the
   installation available through that runtime's user directories.
@@ -58,6 +63,13 @@ runtime and workflow.
 AgentKit owns the installation lifecycle for files it can identify as its own.
 The coding assistant owns execution. Your repository and user-created artifacts
 remain yours.
+
+For native Grok Build, `--target grok` selects AgentKit's signed registry
+package, projection, and dispatch boundary. AgentKit owns its installed paths
+and process launch; Grok and the user own the effective model, authentication,
+project trust, permissions, sandbox, and `.grok/config.toml`. Local-source Grok
+installs remain available for development or CI with an explicit `--local
+--kits-dir` source.
 
 This separation matters during updates and removal: AgentKit can replace or
 remove an unchanged file it previously installed, but it preserves unknown or

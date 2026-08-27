@@ -1,0 +1,90 @@
+---
+title: ak orchestrate
+description: Run and supervise a graph of external CLI jobs under a durable local worker with process-group ownership, persisted run state, crash-safe reconnect, and Darwin-only v1 scope.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak orchestrate` to start, resume, check, and stop a graph of external CLI
+jobs under a dedicated local worker supervisor. The worker owns each job's
+process group, persists durable run state under `AGENTKIT_HOME`, and survives
+the launching client or coordinator exiting. This is the process-lifecycle
+layer that the `/ak:orchestrate` skill delegates to when supervising CLI job
+graphs.
+
+<Callout type="warning">
+  `ak orchestrate` v1 supports **Darwin only** (macOS). Every other GOOS
+  returns an explicit unsupported error with exit code `6`. Callers running
+  on Linux or Windows should fall back to a coordinator-owned subprocess and
+  accept the disclosed interruption gap.
+</Callout>
+
+## Usage
+
+```bash
+ak orchestrate
+```
+
+The bare group command prints help. Use one of the subcommands to act on a
+run.
+
+## Choose an orchestrate subcommand
+
+| Goal | Command | Effect |
+| --- | --- | --- |
+| Launch a new run from a validated job graph | `ak orchestrate start <job-graph.json>` | Validates the graph, generates a fresh opaque run ID, spawns a detached worker that owns every job's process group, blocks until the worker durably persists run state and proves readiness, then prints the run ID and initial status. |
+| Reconnect after a client or coordinator crash | `ak orchestrate resume <run-id> <job-graph.json>` | Confirms the graph's digest still matches the running record and reports its current state — never relaunches jobs or creates a second process tree. Falls back to read-only reclassification when the worker itself crashed. |
+| Report a run's current lifecycle state | `ak orchestrate status <run-id>` | Reaches the run's live worker through its verified control socket when reachable, otherwise reconciles persisted state against a fresh identity probe. Reports PID/PGID, heartbeat, last-output time, and per-job current-command labels. |
+| Cancel a run's live jobs | `ak orchestrate stop <run-id>` | Sends SIGTERM to every signal-authorized job in the verified process group, waits a bounded grace period, then SIGKILLs only a job whose group is still alive under the same verified identity. Never guesses a kill target from persisted state. |
+
+`start` always creates a new run; retrying the same graph does not reuse an
+existing run ID. Only `resume <run-id>` continues an existing run.
+
+## Filesystem and privacy boundary
+
+Each run writes state, per-job output logs, and a control socket under
+`AGENTKIT_HOME/orchestrate/runs/<run-id>/`. The worker never persists
+prompts, raw command arguments, environment values, or secrets — only the
+launch graph, per-job status, PID/PGID identity, and bounded stdout/stderr
+that the graph explicitly captures.
+
+The launch graph digest is bound to the run ID at `start`. `resume` verifies
+this digest against the graph file supplied to it; a mismatch is refused
+with exit code `1` rather than silently continuing under a different graph.
+
+## Job graph shape
+
+The graph file is a JSON document listing jobs by `id`, `command`, `args`,
+`work_dir`, `env`, and `depends_on`. Full schema and validation rules live
+under the `/ak:orchestrate` skill's job specification; this reference page
+covers only the `ak orchestrate` binary's process-lifecycle semantics.
+
+## Output modes
+
+| Mode | Trigger |
+| --- | --- |
+| `pretty` | Default on a TTY (colors, ASCII markers). |
+| `plain` | Auto when stdout is piped or `--no-interactive` is set. |
+| `json` | `--json` (single-object envelope, NDJSON-safe). |
+
+Shared flags (`--json`, `--no-interactive`, `--quiet`, `--verbose`, `--yes`)
+are described in [CLI conventions](../cli-conventions). `--json` implies
+`--no-interactive`.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The requested subcommand succeeded. |
+| `1` | Runtime error (state I/O, launch failure, signal failure, graph digest mismatch, run not found, corrupt state). |
+| `2` | Flag parsing failed. |
+| `3` | User cancelled (SIGINT, prompt-cancel). |
+| `6` | Unsupported platform (v1 requires Darwin). |
+
+## Related commands
+
+- [`ak orchestrate start`](./start)
+- [`ak orchestrate resume`](./resume)
+- [`ak orchestrate status`](./status)
+- [`ak orchestrate stop`](./stop)
+- [CLI conventions](../cli-conventions)

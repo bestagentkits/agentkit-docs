@@ -20,9 +20,10 @@ it can open the setup wizard; a scripted invocation without it fails.
 
 ## Before you run
 
-Released kits resolve from the authenticated remote registry by default. The
-kit channel defaults to `stable`; paid kits require a valid CLI session and
-entitlement before preview or writes.
+Released kits resolve from the authenticated remote registry by default. For
+remote examples, replace `<channel>` with the release channel selected in the
+docs header. Omitting `--channel` selects `stable`; paid kits require a valid
+CLI session and entitlement before preview or writes.
 
 ```bash
 ak whoami
@@ -35,6 +36,13 @@ verified warm cache can cover some offline failures, but an explicit
 entitlement denial does not fall back to cached content.
 
 Use `--local --kits-dir <dir>` only for an intentional development or CI source.
+
+<Callout type="info">
+  Grok Build is a signed registry target for normal Kit installation. Use
+  `--local --kits-dir <dir>` only when intentionally selecting a development or
+  CI source. AgentKit emits Grok runtime files and lifecycle metadata; Grok
+  still owns authentication, model, trust, permission, and sandbox behavior.
+</Callout>
 
 ## Arguments
 
@@ -62,8 +70,9 @@ The command has no alias.
 | `--select-skills` | `false` | Choose Skills interactively; requires a TTY. |
 | `--skills <names>` | Empty | Install only a comma-separated set of Skills. |
 | `--switch-to-plugin` | `false` | Select Claude Code plugin delivery at the chosen scope. |
-| `--target <ids>` | `claude-code` | Select one or more comma-separated emitter targets. |
+| `--target <ids>` | `claude-code` | Select one or more comma-separated emitter targets, including `grok` and `pi`; generated command facts may lag newly registered Kit projection targets. |
 | `--version <version>` | Channel latest | Select a remote kit version. |
+| `--zip` | `false` | With `--target portable`, also write one uploadable ZIP per Skill. |
 
 `--skills`, `--exclude-skills`, and `--select-skills` are alternative selection
 modes. `--out` requires `--build-only` for production targets. Export-only
@@ -80,7 +89,9 @@ are documented in [CLI conventions](../cli-conventions).
 | User Claude plugin | `--target claude-code --global --switch-to-plugin` | `ak-<kit>` under the configured user plugin root. |
 | Project or user Codex | `--target codex` with optional `--global` | Project or user `.agents` and `.codex` surfaces. |
 | Project or user Cursor | `--target cursor` with optional `--global` | Project or user `.cursor` surfaces. |
-| User AGY | `--target agy --global` | Global Gemini/AGY Skill and optional Agent locations, projected from the signed remote `claude-code` package. |
+| Project or user Grok Build | `--target grok` with optional `--global` | Project `.grok` or `$GROK_HOME` (default `~/.grok`) plus lifecycle metadata. |
+| Project or user Pi | `--target pi` with optional `--global` | Project `.pi/{skills,agents,rules,extensions}` or the active Pi coding-agent profile. |
+| User AGY | `--target agy --global` | Global Gemini/AGY Skills plus optional Agents under `~/.gemini/config/agents/<name>/agent.md`, projected from the signed remote `claude-code` package with runtime-compatible frontmatter. |
 | Build or export | `--build-only --out <dir>` or `--target portable --out <dir>` | The selected output directory. |
 
 Project and user installs can coexist. Claude native and plugin delivery are
@@ -96,23 +107,31 @@ init: target "portable" is export-only and has no install mode; re-run with --ou
 ```
 
 `--out` implies build mode and preserves the remote source default. Explicit
-`--build-only --out` uses the local-development source default. AGY is
+`--build-only --out` uses the local-development source default. Add `--zip` when
+a portable export should also produce one uploadable ZIP per Skill. AGY is
 global-only and is not a refresh lifecycle peer.
 
 ## Examples
 
 ```bash
 # Project-native Codex install from the release source.
-ak kit install engineer --target codex
+ak kit install engineer --target codex --channel <channel>
+ak kit install engineer --target pi --channel <channel>
 
 # Explicit user Claude plugin install.
-ak kit install engineer --target claude-code --global --switch-to-plugin
+ak kit install engineer --target claude-code --global --switch-to-plugin --channel <channel>
 
 # Intentional unattended install.
-ak kit install engineer --target codex --yes --no-interactive --json
+ak kit install engineer --target codex --yes --no-interactive --json --channel <channel>
 
 # Local development source with a selected Skill set.
 ak kit install engineer --local --kits-dir ./kits --skills ak-cook,ak-plan --yes
+
+# Grok project install from an explicit local development source.
+ak kit install engineer --local --kits-dir ./kits --target grok --yes
+
+# Portable export with one uploadable ZIP per Skill.
+ak kit install engineer --target portable --out ./ak-export --zip
 ```
 
 ## Confirmation behavior
@@ -196,6 +215,11 @@ projects three narrows and no full drop. Supported matcher atoms remain active.
 On Windows, eligible Codex `.cjs` Hooks inside the Codex home can use owned
 `.cmd` shims for paths containing spaces; external, metacharacter, or unsafe
 non-ASCII paths remain limited and are reported.
+
+On POSIX, a wrapper-managed Codex home may alias only its final `hooks` leaf to
+canonical `~/.codex/hooks`; Hook commands, writes, rollback, and ownership use
+that canonical identity. Linked parents, noncanonical targets, and all Windows
+links or reparse points remain unsupported.
 
 - [`ak kit init`](./kit-init) uses the same installation implementation.
 - [`ak kit refresh`](./kit-refresh) reconciles an existing route and removes stale clean owned output.

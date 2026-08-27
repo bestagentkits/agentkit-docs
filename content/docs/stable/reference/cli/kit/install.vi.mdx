@@ -20,9 +20,10 @@ có thể mở setup wizard; lần gọi từ script thiếu giá trị sẽ th�
 
 ## Trước khi chạy
 
-Theo mặc định, Kit phát hành được resolve từ remote registry có xác thực. Kit
-channel mặc định là `stable`; Kit trả phí cần phiên CLI hợp lệ và entitlement
-trước khi preview hoặc ghi dữ liệu.
+Kit đã phát hành được resolve từ remote registry đã xác thực theo mặc định. Với
+ví dụ remote, hãy thay `<channel>` bằng kênh phát hành đang chọn trên header tài
+liệu. Nếu bỏ `--channel`, CLI chọn `stable`; Kit trả phí cần session CLI hợp lệ
+và entitlement trước preview hoặc ghi dữ liệu.
 
 ```bash
 ak whoami
@@ -35,6 +36,13 @@ xử lý một số lỗi offline, nhưng lỗi từ chối entitlement rõ ràn
 sang cache.
 
 Chỉ dùng `--local --kits-dir <dir>` cho nguồn development hoặc CI có chủ đích.
+
+<Callout type="info">
+  Grok Build là signed registry target cho cài Kit thông thường. Chỉ dùng
+  `--local --kits-dir <dir>` khi bạn chủ động chọn source development hoặc CI.
+  AgentKit emit runtime file và lifecycle metadata cho Grok; Grok vẫn sở hữu
+  authentication, model, trust, permission và sandbox behavior.
+</Callout>
 
 ## Đối số
 
@@ -61,8 +69,9 @@ Lệnh không có alias.
 | `--select-skills` | `false` | Chọn Skill tương tác; cần TTY. |
 | `--skills <names>` | Trống | Chỉ cài tập Skill phân tách bằng dấu phẩy. |
 | `--switch-to-plugin` | `false` | Chọn Claude Code plugin delivery tại scope đã chọn. |
-| `--target <ids>` | `claude-code` | Chọn một hoặc nhiều emitter target phân tách bằng dấu phẩy. |
+| `--target <ids>` | `claude-code` | Chọn một hoặc nhiều emitter target phân tách bằng dấu phẩy, gồm `grok` và `pi`; command facts sinh tự động có thể chậm hơn target projection Kit mới đăng ký. |
 | `--version <version>` | Phiên bản mới nhất của channel | Chọn phiên bản Kit từ xa. |
+| `--zip` | `false` | Với `--target portable`, ghi thêm một ZIP có thể upload cho mỗi Skill. |
 
 `--skills`, `--exclude-skills` và `--select-skills` là các chế độ lựa chọn thay
 thế nhau. `--out` cần `--build-only` với production target. Export-only target
@@ -79,7 +88,9 @@ như `portable` ngầm bật build mode khi có `--out`. Xem các cờ dùng chu
 | Claude plugin của user | `--target claude-code --global --switch-to-plugin` | `ak-<kit>` dưới user plugin root đã cấu hình. |
 | Codex trong project hoặc user | `--target codex` cùng `--global` nếu cần | Các bề mặt `.agents` và `.codex` trong project hoặc user. |
 | Cursor trong project hoặc user | `--target cursor` cùng `--global` nếu cần | Các bề mặt `.cursor` trong project hoặc user. |
-| AGY của user | `--target agy --global` | Vị trí Skill và Agent tùy chọn của Gemini/AGY global, projection từ package remote `claude-code` đã ký. |
+| Grok Build trong project hoặc user | `--target grok` cùng `--global` nếu cần | `.grok` trong project hoặc `$GROK_HOME` (mặc định `~/.grok`) cùng lifecycle metadata. |
+| Pi trong project hoặc user | `--target pi` cùng `--global` nếu cần | `.pi/{skills,agents,rules,extensions}` trong project hoặc profile Pi coding-agent đang hoạt động. |
+| AGY của user | `--target agy --global` | Skill Gemini/AGY global cùng Agent tùy chọn dưới `~/.gemini/config/agents/<name>/agent.md`, projection từ package remote `claude-code` đã ký với frontmatter tương thích runtime. |
 | Build hoặc export | `--build-only --out <dir>` hoặc `--target portable --out <dir>` | Thư mục đầu ra đã chọn. |
 
 Bản cài trong project và user có thể cùng tồn tại. Claude native và plugin là
@@ -95,23 +106,31 @@ init: target "portable" is export-only and has no install mode; re-run with --ou
 ```
 
 `--out` ngầm chọn build mode và giữ source mặc định từ remote. Dùng rõ
-`--build-only --out` chọn source mặc định cho local development. AGY chỉ hỗ trợ
+`--build-only --out` chọn source mặc định cho local development. Thêm `--zip` khi
+portable export cũng cần tạo một ZIP có thể upload cho mỗi Skill. AGY chỉ hỗ trợ
 global và không phải peer trong lifecycle refresh.
 
 ## Ví dụ
 
 ```bash
 # Cài Codex project-native từ nguồn release.
-ak kit install engineer --target codex
+ak kit install engineer --target codex --channel <channel>
+ak kit install engineer --target pi --channel <channel>
 
 # Cài Claude user plugin một cách tường minh.
-ak kit install engineer --target claude-code --global --switch-to-plugin
+ak kit install engineer --target claude-code --global --switch-to-plugin --channel <channel>
 
 # Cài unattended có chủ đích.
-ak kit install engineer --target codex --yes --no-interactive --json
+ak kit install engineer --target codex --yes --no-interactive --json --channel <channel>
 
 # Nguồn development cục bộ với tập Skill đã chọn.
 ak kit install engineer --local --kits-dir ./kits --skills ak-cook,ak-plan --yes
+
+# Cài Grok trong project từ nguồn local development rõ ràng.
+ak kit install engineer --local --kits-dir ./kits --target grok --yes
+
+# Portable export với một ZIP có thể upload cho mỗi Skill.
+ak kit install engineer --target portable --out ./ak-export --zip
 ```
 
 ## Hành vi xác nhận
@@ -197,6 +216,11 @@ Marketing có ba narrow và không có full drop. Matcher atom được hỗ tr�
 thể dùng `.cmd` shim thuộc ownership của AgentKit cho đường dẫn có khoảng trắng;
 đường dẫn bên ngoài, có metacharacter hoặc non-ASCII không an toàn vẫn bị giới
 hạn và được báo rõ.
+
+Trên POSIX, Codex home do wrapper quản lý chỉ được alias leaf `hooks` cuối cùng
+tới `~/.codex/hooks` canonical; command Hook, thao tác ghi, rollback và
+ownership dùng identity canonical đó. Parent có link, target không canonical và
+mọi link hay reparse point trên Windows vẫn không được hỗ trợ.
 
 - [`ak kit init`](./kit-init) dùng cùng implementation cài đặt.
 - [`ak kit refresh`](./kit-refresh) đồng bộ lại route hiện có và xoá đầu ra cũ còn clean và owned.

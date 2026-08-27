@@ -1,6 +1,6 @@
 ---
 title: ak run
-description: Resolve local Kit skill và stream qua Claude Code, Codex hoặc Cursor với hành vi stdin, timeout, output và dependency rõ ràng.
+description: Resolve local Kit skill và stream qua Claude Code, Codex, Cursor, Grok Build hoặc Oh My Pi với hành vi stdin, timeout, output và dependency rõ ràng.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
@@ -23,12 +23,19 @@ chọn skill export `ak-scout`.
 
 | Cờ | Mặc định | Mô tả |
 | --- | --- | --- |
-| `--target <adapter>` | `claude-code` | Chọn `claude-code`, `codex` hoặc `cursor`. |
+| `--target <adapter>` | `claude-code` | Chọn `claude-code`, `codex`, `cursor`, `grok` hoặc `omp`. |
 | `--kits-dir <dir>` | `AGENTKIT_KITS_DIR` hoặc `./kits` | Chọn thư mục Kit source cục bộ. |
 | `--timeout <duration>` | `0s` | Đặt deadline cho invocation; zero tắt command timeout. |
 
 Cờ dùng chung nằm trong [quy ước CLI](../cli-conventions). Không có preview,
 apply, force hay confirmation chung.
+
+Route một invocation qua adapter Grok đã đăng ký, hoặc qua harness dispatch target Oh My Pi. Projection Kit Pi không phải adapter `ak run` trong bản phát hành này; dùng `ak kit init ... --target pi` cho Skill cài vào Pi và dùng discovery riêng của Pi để gọi chúng.
+
+```bash
+ak run engineer/scout --target grok
+ak run engineer/scout --target omp
+```
 
 ## Backend và credential
 
@@ -37,6 +44,17 @@ apply, force hay confirmation chung.
 | `claude-code` | `AGENTKIT_CLAUDE_BIN` hoặc `claude` trên `PATH`; prompt qua stdin. | Cần Anthropic/OpenAI key trong environment hoặc AgentKit config, trừ khi `AK_DISABLE_FIRSTRUN_GATE=1`. |
 | `codex` | `AGENTKIT_CODEX_BIN` hoặc `codex` trên `PATH`; chạy `codex exec -`. | Bỏ provider gate; Codex quản lý auth. |
 | `cursor` | `AGENTKIT_CURSOR_BIN` hoặc `agent` trên `PATH`; dùng non-interactive `stream-json`. | Bỏ provider gate; Cursor quản lý auth. |
+| `grok` | `AGENTKIT_GROK_BIN` hoặc `grok` trên `PATH`; dùng `--prompt-file <temporary-file> --output-format streaming-json`. | Bỏ provider gate; Grok quản lý auth, model, trust, permission, sandbox và `config.toml`. |
+| `omp` | `AGENTKIT_OMP_BIN` hoặc `omp` trên `PATH`; chạy `omp -p --mode json --no-session --cwd <cwd> @<prompt-file>`. | Bỏ provider gate; Oh My Pi sở hữu backend và credential đã cấu hình. |
+
+<Callout type="warning">
+  `ak run --target grok` dispatch qua adapter Grok native và để Grok sở hữu
+  authentication, model, trust, permission cùng sandbox. `ak run --target omp`
+  là harness dispatch cục bộ qua Oh My Pi. Tuyến này tách biệt với các
+  projection Kit có thể cài, gồm `ak kit init <kit> --target pi` và
+  `ak kit init <kit> --target omp`, và không thay thế bản cài Kit ở project hoặc
+  global.
+</Callout>
 
 Với Claude Code, thiếu provider key trong JSON, quiet, noninteractive hoặc
 `CI=1` sẽ ghi warning và thoát `4`. Ở mode mặc định, lệnh đọc stdin và hỏi
@@ -60,6 +78,11 @@ provider.
 Lệnh không redaction secret trong skill text, argument, backend output hay
 error. Tránh truyền credential làm argument. JSON mode escape child bytes thành
 event string; escaping không phải redaction.
+
+Với OMP, AgentKit ghi prompt đã tạo vào file tạm mode `0600`, chỉ truyền tham
+chiếu `@<path>` của file cho process rồi xóa file khi process kết thúc. Cơ chế
+này giữ nội dung prompt khỏi danh sách argument của process; nó không thay đổi
+ranh giới truyền tới provider hoặc redaction ở trên.
 
 Khi skill khai báo Python hoặc Node runtime, AgentKit activate managed
 environment hiện có. Environment thiếu thoát `4` với gợi ý `ak skill install`;
