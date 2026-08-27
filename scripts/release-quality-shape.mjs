@@ -9,7 +9,7 @@ import { repoRoot } from './lib/paths.mjs';
 export const RELEASE_SHAPE_BASELINE = Object.freeze({
   schemaVersion: 1,
   reviewedAt: '2026-08-27',
-  sourceCommit: 'dca7e4d895f45ba8b786f949ae94072855d3a5a4',
+  sourceCommit: 'c92e356c5ee14efc7f2becaec4d9a3a3634e1b34',
   channels: ['beta', 'stable'],
   locales: ['en', 'vi'],
   // Per-channel: stable stays bound to channels.stable.tag; beta may include
