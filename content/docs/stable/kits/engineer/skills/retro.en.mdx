@@ -52,10 +52,36 @@ observed data rather than invented narrative.
 | `timeframe` | `7d` | Accepts `7d`, `2w`, `1m`, `sprint`, or `YYYY-MM-DD:YYYY-MM-DD` |
 | `--compare` | Off | Adds the preceding equal-length period and delta columns |
 | `--team` | Off | Adds a per-author breakdown |
-| `--format` | `md` | Accepts `html` or `md`; writes Markdown or a self-contained HTML report with inline CSS |
+| `--format` | `md` | Accepts `html` or `md`; writes Markdown or HTML with inline CSS; enabled AntV panels load their pinned runtime from jsDelivr |
+| `--no-antv`, `--no-diagram-design`, `--no-editorial-visuals` | Off | Disables one or all additive editorial visuals for this run |
 
 For `sprint`, the Skill asks for a start date when it cannot infer one from Git
 tags. An explicit date pair is preferable when calendar boundaries matter.
+
+### Control HTML editorial visuals
+
+HTML reports add an editorial visual layer by default. Before rendering, the
+Skill reads:
+
+```bash
+ak config prefs resolve --json | jq '.prefs.visual'
+```
+
+Resolved preference keys use camelCase, so `diagram_design` appears as
+`diagramDesign`. When enabled, `.prefs.visual.diagramDesign.enabled` or
+`.prefs.visual.antv.enabled` can select these treatments:
+
+- Commit and pull-request timelines use `diagram-design Timeline` or AntV
+  Infographic `timeline-*`.
+- Plan completion uses AntV Infographic `CircularProgress`.
+- File hotspots use a hand-authored SVG bar or `diagram-design Bar` when the
+  report already contains editorial diagrams.
+- Team velocity uses the existing Chart.js radar or `diagram-design Radar`.
+
+Enabled AntV panels load from jsDelivr when the report is opened. Use
+`--no-antv` when a run must avoid that CDN dependency, `--no-diagram-design` to
+disable that treatment, or `--no-editorial-visuals` to disable the full additive
+visual layer. The default `--format md` output is unchanged.
 
 <Tabs items={['Claude Code', 'Cursor', 'Codex']}>
   <Tab value="Claude Code">
@@ -98,7 +124,8 @@ $ak:retro 2026-07-15:2026-07-28 --compare --team --format md
    and unchecked tasks.
 6. **It writes the report.** Markdown goes to
    `plans/reports/retro-{YYMMDD}-{slug}.md`; HTML uses the same name with
-   `.html` and contains no external assets.
+   `.html` and inline CSS. Enabled AntV panels retain the jsDelivr dependency
+   described above.
 7. **It explains findings.** The result includes two to four factual highlights
    and three to five recommendations grounded in named metrics.
 
@@ -131,7 +158,9 @@ Skill may split it into multiple report files.
   artifacts under `plans/reports/` and a temporary sentinel under `/tmp`.
 - Shell and Git processes run locally and may scan substantial history; large
   repositories or long periods can take longer than the default seven-day run.
-- HTML output uses inline CSS and does not fetch external dependencies.
+- HTML output uses inline CSS. When AntV panels are enabled, opening the report
+  can fetch their pinned runtime from jsDelivr; use the visual opt-outs above
+  when that network dependency is unacceptable.
 - The Skill specifies no paid provider. Any GitHub access inherits the user's
   existing account, permissions, and service terms.
 - Commit, push, issue mutation, publication, sharing, and deployment need
@@ -173,5 +202,5 @@ and confirm no source files changed before sharing the retrospective.
 - The issue completion formula described by the Skill requires opened and closed
   counts, while its example query gathers closed issues only; report the rate as
   `N/A` unless both sides are verified.
-- The current stable and beta packages contain identical `ak:retro` instructions,
-  templates, metric guidance, and invocation behavior.
+- Editorial visuals apply only to `--format html`; `--format md` remains
+  unchanged.

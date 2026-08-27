@@ -41,8 +41,8 @@ Trước khi bắt đầu:
 - Nêu exclusion như generated directory, vendor code, asset lớn, secret, customer
   data hay package không liên quan.
 - Quyết định local read-only search có đủ hay không.
-- Nếu muốn delegation hay external probe, cấp quyền rõ ràng cho route đó và xác
-  định directory không chồng lấp.
+- Nếu muốn delegation thông thường hay external probe, cấp quyền rõ ràng cho
+  route đó và xác định directory không chồng lấp.
 
 | Runtime | Cách gọi | Ranh giới khả dụng |
 | --- | --- | --- |
@@ -85,6 +85,26 @@ $ak:scout "Find the pricing-page source, analytics events, related tests, and co
 | Default local route | Native file search, scoped read, `rg`, `wc` hay `sed` có thể trả lời câu hỏi | Read-only và do main agent xử lý trừ khi delegation được yêu cầu rõ. |
 | Internal Explore route | User yêu cầu subagent rõ ràng, runtime cung cấp delegation và mỗi Agent có scope hữu ích riêng | Không spawn cho directory chồng lấp hay chỉ vì Skill nhắc Explore. |
 | Route `ext` | Local search không đủ và user cho phép OpenCode probe | Kiểm tra `command -v opencode`; giữ prompt read-only cùng đúng scope. Không tự cài tool. |
+| Route `--ultra` | Câu hỏi cần coverage đáng tin cậy hơn và chi phí bổ sung là hợp lý | Yêu cầu đúng năm candidate pass read-only độc lập trong một parallel wave cùng một verifier; hard-stop khi không thể dispatch như vậy. |
+
+### Chạy verifier pass khi coverage quan trọng
+
+Thêm `--ultra` vào invocation thông thường để chạy best-of-5 verifier pass:
+
+```text
+/ak:scout "Find the pricing-page source, analytics events, related tests, and content schema. Read only; exclude generated and vendor directories" --ultra
+```
+
+Controller đưa cùng một immutable evidence packet và rubric cho cả năm
+candidate. Strongest-model verifier chấm coverage của target, bằng chứng về path
+cùng role, signal density và mức trung thực về gap, rồi trả về union finding đã
+được validate bằng evidence và deduplicate. Path chỉ một candidate tìm thấy vẫn
+có thể được giữ lại, nhưng verifier loại path không thể validate.
+
+Khác với scouting thông thường, `--ultra` không bao giờ degrade thành main-agent
+search. Nếu runtime không thể dispatch năm candidate read-only song song, Skill
+dừng và nêu capability còn thiếu. Flag này là opt-in rõ ràng chỉ cho read-only
+fan-out bắt buộc; nó không cấp write access hay permission cho probe `ext`.
 
 External reference dùng `opencode run ... --model opencode/grok-code`. Đây là
 provider-specific probe, không phải model bắt buộc hay bảo đảm OpenCode đã được
@@ -113,8 +133,9 @@ cài, authenticated, khả dụng hoặc phù hợp với private source.
 <Callout type="warn" title="Scouting chỉ có quyền read-only">
   Quyền search repository không cấp quyền edit, generated output, dependency
   installation, network access, gửi private file tới provider, subagent
-  delegation, commit hay publication. Duyệt riêng delegation và route `ext`.
-  External prompt phải giữ đúng scope và read-only.
+  delegation, commit hay publication. Duyệt riêng delegation thông thường và
+  route `ext`; `--ultra` chỉ cấp quyền cho read-only fan-out bắt buộc của chế độ
+  này. External prompt phải giữ đúng scope và read-only.
 </Callout>
 
 Không dùng external CLI để lách local context limit. Không gửi toàn bộ private

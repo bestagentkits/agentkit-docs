@@ -52,10 +52,36 @@ với dữ liệu quan sát được thay vì narrative được tạo ra.
 | `timeframe` | `7d` | Nhận `7d`, `2w`, `1m`, `sprint` hoặc `YYYY-MM-DD:YYYY-MM-DD` |
 | `--compare` | Tắt | Thêm giai đoạn liền trước có độ dài bằng nhau cùng delta column |
 | `--team` | Tắt | Thêm breakdown theo author |
-| `--format` | `md` | Nhận `html` hoặc `md`; ghi Markdown hoặc self-contained HTML report với inline CSS |
+| `--format` | `md` | Nhận `html` hoặc `md`; ghi Markdown hoặc HTML với inline CSS; panel AntV được bật tải runtime đã pin từ jsDelivr |
+| `--no-antv`, `--no-diagram-design`, `--no-editorial-visuals` | Tắt | Tắt một hoặc toàn bộ editorial visual bổ sung cho lần chạy này |
 
 Với `sprint`, Skill hỏi start date khi không thể suy ra từ Git tag. Date pair rõ
 ràng phù hợp hơn khi calendar boundary quan trọng.
+
+### Kiểm soát editorial visual trong HTML
+
+HTML report mặc định thêm một editorial visual layer. Trước khi render, Skill
+đọc:
+
+```bash
+ak config prefs resolve --json | jq '.prefs.visual'
+```
+
+Preference key đã resolve dùng camelCase, nên `diagram_design` xuất hiện dưới
+dạng `diagramDesign`. Khi được bật, `.prefs.visual.diagramDesign.enabled` hoặc
+`.prefs.visual.antv.enabled` có thể chọn các cách trình bày sau:
+
+- Timeline của commit và pull request dùng `diagram-design Timeline` hoặc AntV
+  Infographic `timeline-*`.
+- Plan completion dùng AntV Infographic `CircularProgress`.
+- File hotspot dùng SVG bar được viết thủ công hoặc `diagram-design Bar` khi
+  report đã có editorial diagram.
+- Team velocity dùng Chart.js radar hiện có hoặc `diagram-design Radar`.
+
+Panel AntV được bật tải từ jsDelivr khi report được mở. Dùng `--no-antv` khi
+lần chạy phải tránh dependency CDN đó, `--no-diagram-design` để tắt treatment
+này hoặc `--no-editorial-visuals` để tắt toàn bộ visual layer bổ sung. Output
+`--format md` mặc định không đổi.
 
 <Tabs items={['Claude Code', 'Cursor', 'Codex']}>
   <Tab value="Claude Code">
@@ -98,7 +124,7 @@ $ak:retro 2026-07-15:2026-07-28 --compare --team --format md
    chưa check.
 6. **Skill ghi report.** Markdown vào
    `plans/reports/retro-{YYMMDD}-{slug}.md`; HTML dùng cùng tên với `.html` và
-   không có external asset.
+   inline CSS. Panel AntV được bật vẫn giữ dependency jsDelivr đã mô tả ở trên.
 7. **Skill giải thích finding.** Kết quả gồm hai đến bốn factual highlight cùng
    ba đến năm recommendation dựa trên metric được nêu.
 
@@ -129,7 +155,9 @@ chia thành nhiều report file.
   `plans/reports/` cùng temporary sentinel dưới `/tmp`.
 - Shell cùng Git process chạy local và có thể scan lượng history lớn; repository
   lớn hoặc period dài có thể lâu hơn default bảy ngày.
-- HTML output dùng inline CSS và không fetch external dependency.
+- HTML output dùng inline CSS. Khi panel AntV được bật, việc mở report có thể
+  fetch runtime đã pin từ jsDelivr; dùng visual opt-out ở trên khi dependency
+  network đó không chấp nhận được.
 - Skill không nêu paid provider. Mọi GitHub access kế thừa account, permission
   cùng service term hiện có của user.
 - Commit, push, issue mutation, publication, sharing cùng deployment cần approval riêng.
@@ -169,5 +197,4 @@ xác nhận source file không đổi trước khi share retrospective.
 - Issue completion formula do Skill mô tả cần opened cùng closed count, trong
   khi example query chỉ lấy closed issue; ghi rate là `N/A` trừ khi cả hai phía
   được xác minh.
-- Package stable và beta hiện chứa cùng instruction, template, metric guidance
-  cùng invocation behavior cho `ak:retro`.
+- Editorial visual chỉ áp dụng cho `--format html`; `--format md` vẫn không đổi.
