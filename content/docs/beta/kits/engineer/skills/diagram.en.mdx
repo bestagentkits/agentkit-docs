@@ -1,0 +1,160 @@
+---
+title: Render editorial diagrams and animations with ak:diagram
+description: Turn Mermaid, editorial template, or HTML input into reproducible HTML, PNG, SVG, MP4, or GIF artifacts with explicit dependency and side-effect boundaries.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:diagram` when you need an editorial-grade static diagram or a short
+animation. The Skill provides one rendering surface for Mermaid source, 24 base
+editorial diagram types, and prepared HTML with optional animated SVG connector
+effects.
+
+## Choose ak:diagram by the artifact
+
+### Use ak:diagram when
+
+- You need a curated HTML page, PNG, or extractable SVG from Mermaid or
+  editorial input.
+- You need an animated diagram recorded as MP4 or GIF.
+- You need pinned local assets and a reproducible browser-rendering workflow.
+
+### Choose another workflow when
+
+- You want reviewable Mermaid source without editorial framing. Use
+  [`ak:mermaidjs-v11`](./mermaidjs-v11).
+- You need an editable canvas or codebase auto-map. Use
+  [`ak:excalidraw`](./excalidraw).
+- You need large-graph exploration and analytics. Use
+  [`ak:graphify`](./graphify).
+- You are deciding whether a visual explanation is useful at all. Start with
+  [`ak:preview`](./preview).
+
+## Invoke the Skill, not its bundled helpers
+
+Complete [Onboarding](../../../getting-started/onboarding), and confirm Engineer
+Kit is installed for your runtime and scope. Provide the source, intended
+artifact, diagram type or visual goal, output destination, and whether browser
+rendering, video capture, or dependency installation is allowed.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:diagram ...` | Uses the installed Engineer Skill; local file, process, browser, and image-review access depend on the session. |
+| Cursor | `/ak:diagram ...` | Uses the user-verified slash spelling; bundled-helper and browser access depend on the Cursor session. |
+| Codex | `$ak:diagram ...` | Uses native Skill discovery; rendering depends on filesystem, process, browser, and dependency access in the Codex environment. |
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:diagram "Render checkout-flow.mmd as an editorial PNG and SVG in ./artifacts. Use a dark frame, do not install dependencies, and report any unverified output."
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:diagram "Render checkout-flow.mmd as an editorial PNG and SVG in ./artifacts. Use a dark frame, do not install dependencies, and report any unverified output."
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:diagram "Render checkout-flow.mmd as an editorial PNG and SVG in ./artifacts. Use a dark frame, do not install dependencies, and report any unverified output."
+```
+
+  </Tab>
+</Tabs>
+
+When the installed Skill is available, request the outcome in natural language
+as shown above. Controls such as `--input`, `--type`, `--out`, `--title`, `--caption`, `--no-png`,
+`--no-svg`, `--dry-run`, `--snapshot-profile`, `--duration`, `--fps`, `--gif`,
+and `--keep-frames` belong to the bundled rendering or recording helpers. They
+are not guaranteed Skill invocation flags.
+
+## Choose one of three input tiers
+
+| Tier | Input | What happens | Current boundary |
+| --- | --- | --- | --- |
+| 1 — Mermaid | `.mmd` | Wraps Mermaid source in an editorial frame using vendored Mermaid v11.4.1, local design tokens, and the shared browser pipeline | Mermaid auto-layout and font metrics can still shift outside the validated renderer profile |
+| 2 — Editorial template | JSON plus a template type | Selects one of 24 base types and its `light`, `dark`, or `full` variant, then applies flat slot replacement | Current exemplar templates declare no replacement slots, so structured JSON fields do not populate their visible content yet |
+| 3 — Raw HTML | `.html` | Passes the supplied page through for rendering or recording | The HTML is trusted as supplied and can include its own scripts, assets, or network requests |
+
+Tier 2 schemas describe the intended JSON interface, but they are not runtime
+validation and the current templates do not expose the slots needed for useful
+structured replacement. For customized editorial content today, start from the
+chosen HTML template, edit its content, and use Tier 3.
+
+## Separate static rendering from video recording
+
+The static rendering helper always writes `<basename>.html` and, by default,
+also writes:
+
+- `<basename>.png` — a 2× screenshot with animations frozen at their final
+  frame;
+- `<basename>.svg` — only when an SVG exists in the rendered page and can be
+  extracted.
+
+Its `--no-png` and `--no-svg` controls suppress those outputs. `--dry-run`
+writes HTML without launching the browser. HTML is the animated surface; PNG is
+a frozen static frame. SVG extraction serializes the first SVG found in the rendered DOM; it does not
+promise that every input contains an SVG or that page-level CSS, fonts, assets,
+or animation context remain standalone. Inspect the extracted static artifact.
+
+Video is a separate recording step over an HTML input. MP4 is the default; the
+recording helper's `--gif` selects a palette-generated GIF. It pauses browser
+animations, advances `currentTime` frame by frame at the requested `--duration`
+and `--fps`, captures temporary PNG frames, and asks `ffmpeg` to assemble the
+result. Mermaid has no native animation primitives in this workflow: animated
+Mermaid connectors require post-processing, while prepared HTML can use the
+eight bundled CSS connector effects. Those effects freeze when
+`prefers-reduced-motion: reduce` is active.
+
+## Probe dependencies without installing them
+
+Ask the Skill to run its bundled dependency probe before rendering. The probe
+reports readiness and never installs anything. It checks:
+
+| Probe | Role |
+| --- | --- |
+| Playwright | Drives the browser render and frame capture |
+| Chromium | Produces PNG and extractable SVG output and captures video frames |
+| Vendored Mermaid asset | Renders Tier 1 source without a CDN |
+| `ffmpeg` | Assembles MP4 or GIF; required only for video |
+| `mmdc` | Optional fast-path availability report; the editorial renderer still uses its shared HTML pipeline |
+
+HTML-only composition can avoid the browser with the helper's `--dry-run`.
+Browser-rendered PNG or SVG needs Playwright and Chromium. Video additionally
+needs `ffmpeg`. Treat installation of any missing dependency as a separate
+approved action.
+
+## Understand determinism and visible effects
+
+Pinned Mermaid, frozen animations, fixed browser settings, and frame stepping
+support reproducible output with a fixed Chromium, font, and `ffmpeg` toolchain.
+A snapshot comparison refuses the wrong browser or font profile rather than
+reporting misleading hash drift. Outside that profile, browser or `ffmpeg`
+versions, font substitution, label wrapping, and Mermaid auto-layout can change
+pixels, encoding, or hashes. Animated HTML remains dynamic; the PNG is one
+frozen state, and MP4 or GIF is an explicit frame sequence. Record the actual
+tool versions used.
+
+<Callout type="warn" title="Rendering writes files and launches local tools">
+  A run reads your `.mmd`, JSON, or HTML source, writes artifacts to the selected
+  destination, and can replace same-named outputs. Browser rendering launches
+  headless Chromium. Video capture creates temporary frames and runs `ffmpeg`.
+  Review input content and output names before proceeding.
+</Callout>
+
+Bundled Mermaid, templates, styles, and effects are local and require no CDN.
+However, user-supplied HTML can contact the network when it references remote
+scripts, fonts, images, or other assets. The Skill does not publish, upload,
+commit, or push generated artifacts unless a separate workflow is explicitly
+authorized.
+
+A complete result reports the input tier, selected type and variant, exact
+outputs, dependencies actually used, static or video boundary, visual review,
+network activity, overwritten files, and any unverified renderer or font-profile
+condition.

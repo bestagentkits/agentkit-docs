@@ -105,10 +105,14 @@ $ak:test ui http://localhost:3000/settings
 | `audit [scope]` | Find deceptive, disabled, unfinished, ineffective, redundant, outdated, or unsafe tests and repair evidence-backed findings | Suite or CI scope, trust concerns, known skips, and security-sensitive paths |
 
 For `create`, `optimize`, and `audit`, add `--advice` for `kongming` advisory
-checkpoints, `--ultra` for a best-of-five read-only analysis and verifier pass,
-or `--interview` to approve each proposed change group before edits. Without
-`--interview`, the Skill applies supported changes directly and still reports
-the full change list.
+checkpoints or `--interview` to approve each proposed change group before edits.
+`--ultra` runs five read-only analysis candidates: `create` and `optimize`
+select one winning design unchanged, while `audit` returns the evidence-validated,
+deduplicated union of findings. Five initial candidate slots are dispatched in
+one parallel wave; failed slots are retried once. If parallel read-only dispatch
+is unavailable or fewer than five results are usable after the retry, the run
+fails closed. Without `--interview`, the Skill applies supported changes directly and still
+reports the full change list.
 
 ```text
 /ak:test create "Cover the account recovery workflow" --interview
@@ -158,6 +162,9 @@ The default and `ui` operations follow this validation flow:
 - Test commands may create coverage files, screenshots, build output, temporary
   data, or browser state. State the allowed artifact locations and cleanup
   requirements.
+- Mutation spot-checks for `create` or `audit` may modify product code briefly
+  to prove a test fails against a plausible bug. The workflow must revert every
+  such mutation after observing the result; an unreverted mutation is a blocker.
 - Run suites against a safe test environment. UI flows and end-to-end tests can
   submit forms or mutate data if the application behaves that way.
 - Real Chrome profile testing can access the user's authenticated session. Use
