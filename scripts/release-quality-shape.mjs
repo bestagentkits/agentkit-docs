@@ -15,8 +15,8 @@ export const RELEASE_SHAPE_BASELINE = Object.freeze({
   // Per-channel: stable stays bound to channels.stable.tag; beta may include
   // routes authored ahead of the next stable promote. Beta must remain a
   // superset of stable so a whole-copy promote is safe.
-  sourceRoutesPerLocaleChannel: { stable: 395, beta: 400 },
-  routesPerLocaleChannel: { stable: 394, beta: 399 },
+  sourceRoutesPerLocaleChannel: { stable: 400, beta: 400 },
+  routesPerLocaleChannel: { stable: 399, beta: 399 },
   reviewedSourceOnlyRoutes: [
     {
       route: 'changelog',
