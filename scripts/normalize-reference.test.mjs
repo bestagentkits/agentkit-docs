@@ -151,6 +151,38 @@ test('an overloaded standard code with different meaning survives', () => {
   assert.match(out, /\| `2` \| invalid filters \|/);
 });
 
+test('the task-first Exit status block dedupes the reworded base set', () => {
+  const raw = RAW.replace(
+    'Exit codes:\n  0  success\n  2  invalid flags\n  5  demo target missing',
+    'Exit status:\n  0   success\n  1   command failure\n  2   invalid flags or arguments\n  5   demo target missing',
+  );
+  const out = normalizeReferenceMdx(raw);
+  assert.match(out, /### Exit codes\n\n\| Code \| Meaning \|\n\| --- \| --- \|\n\| `5` \| demo target missing \|/);
+  assert.doesNotMatch(out, /\| `1` \| command failure \|/);
+  assert.doesNotMatch(out, /\| `2` \| invalid flags or arguments \|/);
+  assert.doesNotMatch(out, /\*\*Exit status:\*\*/);
+});
+
+test('a comma-joined Exit status line carrying only the base set is dropped', () => {
+  const raw = RAW.replace(
+    'Exit codes:\n  0  success\n  2  invalid flags\n  5  demo target missing',
+    'Exit status:\n  0 success, 1 command failure, 2 invalid flags or arguments',
+  );
+  const out = normalizeReferenceMdx(raw);
+  assert.doesNotMatch(out, /### Exit codes/);
+  assert.doesNotMatch(out, /\*\*Exit status:\*\*/);
+  assert.match(out, /base exit codes \(`0`–`2`\)/);
+});
+
+test('code 3 is no longer universal and stays on the page', () => {
+  const raw = RAW.replace(
+    'Exit codes:\n  0  success\n  2  invalid flags\n  5  demo target missing',
+    'Exit status:\n  0   success\n  3   preview complete (re-run with --yes to apply)',
+  );
+  const out = normalizeReferenceMdx(raw);
+  assert.match(out, /\| `3` \| preview complete \(re-run with --yes to apply\) \|/);
+});
+
 test('SEE ALSO tabs become a clean related-commands list', () => {
   const out = normalizeReferenceMdx(RAW);
   assert.match(out, /### Related commands\n\n- \[`ak`\]\(\.\/ak\) — AgentKit CLI\n- \[`ak demo child`\]\(\.\/ak_demo_child\) — A child command/);
