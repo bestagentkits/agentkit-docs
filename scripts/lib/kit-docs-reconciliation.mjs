@@ -91,6 +91,7 @@ export function manifestDigest(manifest) {
 }
 
 export function externalClaimsDigest(claims) {
+  // The array order is governance-significant; never sort a copy only for hashing.
   return sha256(Buffer.from(canonicalJson(claims), 'utf8'));
 }
 
@@ -320,6 +321,24 @@ function embeddedCatalogEvidence(evidence) {
   return catalogEvidence(fake, evidence.kitIds ?? []);
 }
 
+function normalizedClaimPath(targetPath) {
+  const prefix = 'content/docs/stable/';
+  if (typeof targetPath !== 'string' || !targetPath.startsWith(prefix)) fail(`external claim target must start with ${prefix}: ${targetPath}`);
+  return targetPath.slice(prefix.length);
+}
+
+function compareExternalClaims(left, right) {
+  return compare(left.normalizedPath, right.normalizedPath) ||
+    compare(left.locale, right.locale) ||
+    compare(left.byteSpan.start, right.byteSpan.start) ||
+    compare(left.evidenceAnchor, right.evidenceAnchor) ||
+    compare(left.claimId, right.claimId);
+}
+
+export function canonicalExternalClaims(claims) {
+  return [...claims].sort(compareExternalClaims);
+}
+
 function assertLocalePairs(rows, label) {
   const pairs = new Map();
   for (const row of rows) {
@@ -332,7 +351,9 @@ function assertLocalePairs(rows, label) {
   }
 }
 
-function buildExternalClaims(root, baseCommit, definitions) {
+function buildExternalClaims(root, baseCommit, definitions, matrixDigest) {
+  if (!HEX_64.test(matrixDigest ?? '')) fail('external claims require a verified catalog matrixDigest');
+  const evidenceAnchor = `matrix-sha256:${matrixDigest}`;
   const claims = [];
   for (const definition of definitions) {
     const sourcePath = `content/docs/beta/${definition.relativePath}`;
@@ -345,14 +366,24 @@ function buildExternalClaims(root, baseCommit, definitions) {
     const oldFragment = extractFragment(targetText, definition.oldStart, definition.end, `${targetPath} old fragment`);
     const newFragment = extractFragment(sourceText, definition.newStart, definition.end, `${sourcePath} new fragment`);
     if (!oldFragment || !newFragment || oldFragment === newFragment) fail(`${targetPath}: external claim must change bytes`);
+    const oldFragmentBytes = Buffer.from(oldFragment, 'utf8');
+    const byteStart = target.bytes.indexOf(oldFragmentBytes);
+    if (byteStart < 0 || target.bytes.indexOf(oldFragmentBytes, byteStart + 1) >= 0) fail(`${targetPath}: old fragment bytes are not unique in the whole-file preimage`);
     const postimage = Buffer.from(replaceExactlyOnce(targetText, oldFragment, newFragment, targetPath));
     claims.push({
+      ledgerSchemaVersion: 1,
       claimId: definition.claimId,
       rationale: definition.rationale,
       pairId: definition.pairId,
       locale: definition.locale,
       sourcePath,
       targetPath,
+      normalizedPath: normalizedClaimPath(targetPath),
+      byteSpan: {
+        start: byteStart,
+        end: byteStart + oldFragmentBytes.length,
+      },
+      evidenceAnchor,
       oldFragment,
       newFragment,
       occurrence: 1,
@@ -361,11 +392,11 @@ function buildExternalClaims(root, baseCommit, definitions) {
       wholeFilePostimageSha256: sha256(postimage),
     });
   }
-  claims.sort((left, right) => compare(left.claimId, right.claimId));
-  if (new Set(claims.map((claim) => claim.claimId)).size !== claims.length) fail('duplicate external claimId');
-  if (new Set(claims.map((claim) => claim.targetPath)).size !== claims.length) fail('duplicate external claim target');
-  assertLocalePairs(claims, 'external claims');
-  return claims;
+  const orderedClaims = canonicalExternalClaims(claims);
+  if (new Set(orderedClaims.map((claim) => claim.claimId)).size !== orderedClaims.length) fail('duplicate external claimId');
+  if (new Set(orderedClaims.map((claim) => claim.targetPath)).size !== orderedClaims.length) fail('duplicate external claim target');
+  assertLocalePairs(orderedClaims, 'external claims');
+  return orderedClaims;
 }
 
 function treeEvidence(root, baseCommit, externalClaims) {
@@ -547,10 +578,14 @@ function validateShape(manifest) {
   for (const row of manifest.copyOperations) exactKeys(row, [
     'sourcePath', 'targetPath', 'sourceSha256', 'targetPreimageSha256', 'expectedPostimageSha256',
   ], `copy operation ${row?.targetPath ?? '<unknown>'}`);
-  for (const row of manifest.externalClaims) exactKeys(row, [
-    'claimId', 'rationale', 'pairId', 'locale', 'sourcePath', 'targetPath', 'oldFragment', 'newFragment',
-    'occurrence', 'sourceSha256', 'wholeFilePreimageSha256', 'wholeFilePostimageSha256',
-  ], `external claim ${row?.claimId ?? '<unknown>'}`);
+  for (const row of manifest.externalClaims) {
+    exactKeys(row, [
+      'ledgerSchemaVersion', 'claimId', 'rationale', 'pairId', 'locale', 'sourcePath', 'targetPath',
+      'normalizedPath', 'byteSpan', 'evidenceAnchor', 'oldFragment', 'newFragment', 'occurrence',
+      'sourceSha256', 'wholeFilePreimageSha256', 'wholeFilePostimageSha256',
+    ], `external claim ${row?.claimId ?? '<unknown>'}`);
+    exactKeys(row.byteSpan, ['start', 'end'], `external claim ${row?.claimId ?? '<unknown>'} byteSpan`);
+  }
   for (const inventory of ['sourceInventory', 'preimageInventory', 'postimageInventory']) {
     if (!Array.isArray(manifest.evidence[inventory])) fail(`${inventory} must be an array`);
     for (const row of manifest.evidence[inventory]) exactKeys(row, ['path', 'mode', 'sha256', 'size'], `${inventory} row`);
@@ -573,10 +608,17 @@ function validateShape(manifest) {
     if (!HEX_64.test(row.postimageSha256 ?? '')) fail(`invalid postimage hash: ${row.targetPath}`);
   }
   for (const claim of manifest.externalClaims) {
-    if (claim.occurrence !== 1 || !claim.claimId || !claim.rationale || !claim.pairId || !['en', 'vi'].includes(claim.locale) ||
+    if (claim.ledgerSchemaVersion !== 1 || claim.occurrence !== 1 || !claim.claimId || !claim.rationale || !claim.pairId ||
+        !['en', 'vi'].includes(claim.locale) || claim.normalizedPath !== normalizedClaimPath(claim.targetPath) ||
+        !Number.isSafeInteger(claim.byteSpan.start) || !Number.isSafeInteger(claim.byteSpan.end) ||
+        claim.byteSpan.start < 0 || claim.byteSpan.end <= claim.byteSpan.start ||
+        !/^matrix-sha256:[a-f0-9]{64}$/.test(claim.evidenceAnchor ?? '') ||
         typeof claim.oldFragment !== 'string' || typeof claim.newFragment !== 'string' || !claim.oldFragment || claim.oldFragment === claim.newFragment) {
       fail(`invalid external claim: ${claim.claimId ?? '<unknown>'}`);
     }
+  }
+  if (!sameCanonical(manifest.externalClaims, canonicalExternalClaims(manifest.externalClaims))) {
+    fail('external claims are not in canonical ledger order');
   }
   assertLocalePairs(manifest.externalClaims, 'manifest external claims');
 }
@@ -595,7 +637,11 @@ export async function validateReconciliation({
   const resolvedBase = resolveCommit(root, baseCommit);
   if (manifest.evidence.baseDocsCommit !== resolvedBase) fail(`manifest base commit must be ${resolvedBase}`);
   if (manifest.evidence.externalClaimsPolicy !== CLAIM_SCOPE) fail('external claim validation scope is missing or changed');
-  const expectedClaims = buildExternalClaims(root, resolvedBase, claimDefinitions);
+  const embedded = embeddedCatalogEvidence(manifest.evidence);
+  for (const key of ['stable', 'beta', 'kitIds', 'snapshots', 'bindings', 'triadRows', 'digestDefinitions', 'manifestSetDigest', 'matrixDigest']) {
+    if (!sameCanonical(embedded[key], manifest.evidence[key])) fail(`embedded catalog ${key} drift`);
+  }
+  const expectedClaims = buildExternalClaims(root, resolvedBase, claimDefinitions, embedded.matrixDigest);
   if (!sameCanonical(expectedClaims, manifest.externalClaims)) fail('external claims drift from the finite approved ledger');
   const expectedTree = treeEvidence(root, resolvedBase, expectedClaims);
   for (const key of ['sourceInventory', 'sourceInventoryDigest', 'preimageInventory', 'preimageInventoryDigest', 'postimageInventory', 'postimageInventoryDigest']) {
@@ -606,10 +652,6 @@ export async function validateReconciliation({
   if (!sameCanonical(expectedCounts, manifest.counts)) fail('manifest operation counts are inconsistent');
   if (manifest.counts.totalOperations !== manifest.counts.targetWrites) fail('operation targets are not unique');
 
-  const embedded = embeddedCatalogEvidence(manifest.evidence);
-  for (const key of ['stable', 'beta', 'kitIds', 'snapshots', 'bindings', 'triadRows', 'digestDefinitions', 'manifestSetDigest', 'matrixDigest']) {
-    if (!sameCanonical(embedded[key], manifest.evidence[key])) fail(`embedded catalog ${key} drift`);
-  }
   if (!sameCanonical(manifest.evidence.kitIds, sorted(kitIds))) fail('manifest selected Kit set is unauthorized');
 
   let liveEvidence = null;
@@ -622,6 +664,8 @@ export async function validateReconciliation({
     for (const key of Object.keys(liveCatalog)) {
       if (!sameCanonical(liveCatalog[key], manifest.evidence[key])) fail(`live catalog ${key} drift from manifest evidence`);
     }
+    const liveClaims = buildExternalClaims(root, resolvedBase, claimDefinitions, liveCatalog.matrixDigest);
+    if (!sameCanonical(liveClaims, manifest.externalClaims)) fail('external claims drift from the live catalog matrix');
   }
   await assertTargetTree(root, manifest.evidence.postimageInventory, { exact: false });
   return { liveEvidence, expectedTree, embedded };
@@ -666,7 +710,7 @@ export async function createReconciliation({
   const resolvedBase = resolveCommit(root, baseCommit);
   const liveEvidence = await readEvidence(root, registryPath, channelsPath);
   const catalog = catalogEvidence(liveEvidence, kitIds);
-  const claims = buildExternalClaims(root, resolvedBase, claimDefinitions);
+  const claims = buildExternalClaims(root, resolvedBase, claimDefinitions, catalog.matrixDigest);
   const tree = treeEvidence(root, resolvedBase, claims);
   const evidence = {
     baseDocsCommit: resolvedBase,

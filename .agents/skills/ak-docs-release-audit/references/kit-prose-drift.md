@@ -61,8 +61,20 @@ For a channel, the Kit-doc closure is:
   workflows, overview counts, and lifecycle pages;
 - any channel-specific catalog projection used to validate that tree; and
 - a deterministic ledger of Kit-artifact-derived claims outside `kits/**`.
-  Each ledger row contains extractor/schema version, channel-prefix-stripped
-  path, locale, exact claim text and byte span, and evidence anchor.
+  Every ledger row is an exact object with these fields and no others:
+  `ledgerSchemaVersion`, `claimId`, `rationale`, `pairId`, `locale`,
+  `sourcePath`, `targetPath`, `normalizedPath`, `byteSpan`, `evidenceAnchor`,
+  `oldFragment`, `newFragment`, `occurrence`, `sourceSha256`,
+  `wholeFilePreimageSha256`, and `wholeFilePostimageSha256`.
+  `ledgerSchemaVersion` is the integer `1`. `normalizedPath` is `targetPath`
+  with the exact `content/docs/stable/` prefix removed. `byteSpan` is the exact
+  `{start,end}` range of `oldFragment` in the raw whole-file preimage: offsets
+  are zero-based UTF-8 byte offsets, `start` is inclusive, and `end` is
+  exclusive. Preserve BOMs, line endings, Unicode normalization, and all claim
+  bytes; do not compute spans from JavaScript string indexes or normalized
+  prose. The preimage bytes in `[start,end)` must decode to `oldFragment`.
+  `evidenceAnchor` is exactly `matrix-sha256:<matrixDigest>` for the selected,
+  verified catalog matrix embedded in or live-selected for that ledger.
 
 Build the external claim ledger by scanning every human-owned channel MDX page,
 not only pages whose filenames mention Kits. Include installation, quickstart,
@@ -72,9 +84,14 @@ runtime availability, install locations, required packages and versions,
 configuration keys, lifecycle behavior, and retired tokens or phrases found in
 the archive comparison.
 
-Sort Kit-tree rows by normalized path and ledger rows by path, locale, span, and
-anchor; preserve claim bytes without prose normalization. Record separate
-SHA-256 digests for the Kit tree and external ledger. Compute
+Sort Kit-tree rows by normalized path. Sort external ledger rows canonically by
+`normalizedPath`, `locale`, numeric `byteSpan.start`, `evidenceAnchor`, then
+`claimId`, in that precedence, using ascending ordinal/code-unit comparison for
+string keys. No unlisted tie-breaker is permitted. `externalClaimsDigest` is
+SHA-256 over the UTF-8 canonical JSON of that complete array in exactly this
+order; validators must reject a differently ordered array rather than sorting
+only for hashing. Preserve claim bytes without prose normalization. Record
+separate SHA-256 digests for the Kit tree and external ledger. Compute
 `closureDigest = sha256(UTF8(canonical-json({postimageInventoryDigest, externalClaimsDigest})))`,
 where canonical JSON has no insignificant whitespace or trailing newline.
 `manifestDigest` remains a separate digest of the reconciliation manifest.

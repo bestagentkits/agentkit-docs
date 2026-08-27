@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import {
   applyReconciliation,
+  canonicalExternalClaims,
   canonicalJson,
   checkDiffAllowlist,
   checkReconciliation,
@@ -113,9 +114,9 @@ async function makeFixture() {
   }
   for (const locale of ['en', 'vi']) {
     await write(join(root, `content/docs/stable/guides/team.${locale}.mdx`),
-      `PREFIX ${locale}\nOLD TEAM CAPABILITY${locale === 'vi' ? ' VI' : ''}\nEND\nSTABLE ONLY ${locale}\n`);
+      `TIỀN TỐ ${locale}\nOLD TEAM CAPABILITY${locale === 'vi' ? ' VI' : ''}\nEND\nSTABLE ONLY ${locale}\n`);
     await write(join(root, `content/docs/beta/guides/team.${locale}.mdx`),
-      `PREFIX ${locale}\nNEW TEAM CAPABILITY${locale === 'vi' ? ' VI' : ''}\nEND\nBETA ONLY ${locale}\n`);
+      `TIỀN TỐ ${locale}\nNEW TEAM CAPABILITY${locale === 'vi' ? ' VI' : ''}\nEND\nBETA ONLY ${locale}\n`);
   }
 
   git(root, ['add', '.']);
@@ -126,7 +127,7 @@ async function makeFixture() {
     manifestPath: 'docs-reconciliations/test.json',
     baseCommit,
     kitIds: ['test'],
-    claimDefinitions,
+    claimDefinitions: [...claimDefinitions].reverse(),
   };
   return { root, options, baseCommit, registryPath: join(root, 'kit-catalog-identities.json') };
 }
@@ -142,10 +143,14 @@ async function writeManifest(fixture, manifest) {
   await writeFile(join(fixture.root, fixture.options.manifestPath), `${canonicalJson(manifest)}\n`);
 }
 
-async function sourceBytes(fixture, row) {
-  const result = spawnSync('git', ['-C', fixture.root, 'show', `${fixture.baseCommit}:${row.sourcePath}`]);
+async function gitBytes(fixture, path) {
+  const result = spawnSync('git', ['-C', fixture.root, 'show', `${fixture.baseCommit}:${path}`]);
   assert.equal(result.status, 0, result.stderr?.toString());
   return result.stdout;
+}
+
+async function sourceBytes(fixture, row) {
+  return gitBytes(fixture, row.sourcePath);
 }
 
 afterEach(async () => {
@@ -163,6 +168,19 @@ test('canonical manifest derives full-tree inventories, triad digests, finite cl
   assert.ok(manifest.copyOperations.some((row) => row.targetPath.endsWith('test/hooks/index.en.mdx')));
   assert.ok(manifest.copyOperations.some((row) => row.targetPath.endsWith('test/hooks/index.vi.mdx')));
   assert.equal(manifest.externalClaims.length, 2);
+  assert.deepEqual(manifest.externalClaims.map((row) => row.normalizedPath), [
+    'guides/team.en.mdx',
+    'guides/team.vi.mdx',
+  ]);
+  for (const row of manifest.externalClaims) {
+    assert.equal(row.ledgerSchemaVersion, 1);
+    assert.equal(row.normalizedPath, row.targetPath.replace(/^content\/docs\/stable\//, ''));
+    assert.equal(row.evidenceAnchor, `matrix-sha256:${manifest.evidence.matrixDigest}`);
+    assert.deepEqual(Object.keys(row.byteSpan).sort(), ['end', 'start']);
+    const preimage = await gitBytes(fixture, row.targetPath);
+    assert.equal(preimage.subarray(row.byteSpan.start, row.byteSpan.end).toString('utf8'), row.oldFragment);
+    assert.notEqual(row.byteSpan.start, preimage.toString('utf8').indexOf(row.oldFragment));
+  }
   assert.equal(manifest.counts.totalOperations, 8);
   assert.equal(manifest.counts.targetWrites, 8);
   assert.equal(manifest.evidence.triadRows.length, 12);
@@ -288,6 +306,66 @@ test('finite external claims require authorized rationale, EN/VI pairing, occurr
   manifest.externalClaims[0].rationale = 'unauthorized';
   await writeManifest(fixture, manifest);
   await assert.rejects(() => validateReconciliation({ ...fixture.options, manifest }), /external claims drift/);
+});
+
+test('external claim ledger schema, normalized path, UTF-8 span, evidence anchor, and order reject resealed tampering', async (t) => {
+  async function tampered(mutator) {
+    const fixture = await makeFixture();
+    await createReconciliation(fixture.options);
+    const manifest = await readManifest(fixture);
+    mutator(manifest);
+    await writeManifest(fixture, manifest);
+    return { fixture, manifest };
+  }
+
+  await t.test('schema field', async () => {
+    const { fixture, manifest } = await tampered((value) => { delete value.externalClaims[0].ledgerSchemaVersion; });
+    await assert.rejects(() => validateReconciliation({ ...fixture.options, manifest }), /fields are not exact/);
+  });
+
+  await t.test('normalized path', async () => {
+    const { fixture, manifest } = await tampered((value) => { value.externalClaims[0].normalizedPath = 'wrong/path.mdx'; });
+    await assert.rejects(() => validateReconciliation({ ...fixture.options, manifest }), /invalid external claim/);
+  });
+
+  await t.test('byte span', async () => {
+    const { fixture, manifest } = await tampered((value) => {
+      value.externalClaims[0].byteSpan.start += 1;
+      value.externalClaims[0].byteSpan.end += 1;
+    });
+    await assert.rejects(() => validateReconciliation({ ...fixture.options, manifest }), /external claims drift/);
+  });
+
+  await t.test('evidence anchor', async () => {
+    const { fixture, manifest } = await tampered((value) => {
+      value.externalClaims[0].evidenceAnchor = `matrix-sha256:${OTHER_HASH}`;
+    });
+    await assert.rejects(() => validateReconciliation({ ...fixture.options, manifest }), /external claims drift/);
+  });
+
+  await t.test('canonical row order', async () => {
+    const { fixture, manifest } = await tampered((value) => { value.externalClaims.reverse(); });
+    await assert.rejects(() => validateReconciliation({ ...fixture.options, manifest }), /canonical ledger order/);
+  });
+});
+
+test('external claims canonical order uses every governance key and digest preserves that exact array order', () => {
+  const row = (claimId, normalizedPath, locale, start, evidenceAnchor) => ({
+    claimId, normalizedPath, locale, byteSpan: { start, end: start + 1 }, evidenceAnchor,
+  });
+  const anchorA = `matrix-sha256:${HASH}`;
+  const anchorB = `matrix-sha256:${OTHER_HASH}`;
+  const claims = [
+    row('f', 'b.mdx', 'en', 10, anchorB),
+    row('e', 'b.mdx', 'en', 10, anchorA),
+    row('d', 'b.mdx', 'en', 10, anchorA),
+    row('c', 'b.mdx', 'en', 2, anchorB),
+    row('b', 'a.mdx', 'vi', 0, anchorA),
+    row('a', 'a.mdx', 'en', 9, anchorB),
+  ];
+  const ordered = canonicalExternalClaims(claims);
+  assert.deepEqual(ordered.map(({ claimId }) => claimId), ['a', 'b', 'c', 'd', 'e', 'f']);
+  assert.notEqual(externalClaimsDigest(ordered), externalClaimsDigest([...ordered].reverse()));
 });
 
 test('exact target Kit tree rejects extras', async () => {
