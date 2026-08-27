@@ -10,7 +10,8 @@ Use `ak:review-pr` to evaluate one or more GitHub pull requests against their
 stated scope, the surrounding code, repository rules, tests, security
 boundaries, and merge readiness. The default mode is read-only. Optional flags
 deliberately expand each pull request's workflow to repair its branch, post a
-formal review, or merge and watch post-merge CI.
+formal review, merge and watch post-merge CI, request advisory supervision, or
+run a best-of-five verifier pass.
 
 ## Choose ak:review-pr for existing GitHub pull requests
 
@@ -63,9 +64,13 @@ review locally.
 | `--fix` | Fixes actionable findings, verifies, commits, pushes, and re-reviews each PR | Mutates the worktree and pull request branch; may repeat per PR until converged or blocked |
 | `--reply` | Posts each final result as a formal GitHub review | Creates a review event using approve, request-changes, or comment semantics |
 | `--merge` | Merges each ready PR after its gates pass, then watches target-branch CI | Can merge; the native path may enable auto-merge for pending checks, while the REST fallback waits for terminal-green checks; may ship follow-up CI fixes |
+| `--advice` | Adds `kongming` counsel at the Skill's per-PR checkpoints, with host-specific model routing | Advisory only; the main workflow remains responsible for every decision, edit, and gate |
+| `--ultra` | Runs the initial review through exactly five independent read-only candidates, then an evidence-checking verifier | Reads one immutable evidence packet per PR; the later fix, reply, and merge stages retain their own authority boundaries |
 
 `--fix --reply` posts only the final re-review for each PR. Adding `--merge` runs
 the merge stage last for that PR, after repair and reply behavior completes.
+`--ultra` applies only to the initial review; fix-loop re-reviews remain
+single-pass.
 
 Refs may be separated by whitespace or commas: `482 517 --reply` and
 `482,517 --reply` select the same two PRs. The Skill processes refs in input
@@ -116,7 +121,9 @@ For each PR in input order:
    established patterns.
 4. **It classifies findings.** Correctness, security, breaking changes, tests,
    and maintainability findings become Critical, Important, or Suggestion
-   items with concrete evidence.
+   items with concrete evidence. With `--ultra`, five candidates review the
+   same packet in parallel and a verifier returns the evidence-validated,
+   deduplicated union rather than selecting one candidate wholesale.
 5. **It returns a verdict.** Approve means no Critical or Important finding;
    Request changes means blockers remain; Comment means only minor suggestions.
 6. **Optional stages run in order.** The fix loop repairs and re-reviews, reply
@@ -131,7 +138,9 @@ quoted evidence stay unchanged.
 ## Understand the adaptive GitHub API path
 
 The installed compatibility helper probes GraphQL availability with
-`gh api graphql`. When GraphQL is blocked, supported reads for PR metadata,
+`gh api graphql`. Its loader checks project-scoped, user-scoped, monorepo, and
+`${CLAUDE_PLUGIN_ROOT}` plugin-delivered locations, then fails explicitly if no
+helper is found. When GraphQL is blocked, supported reads for PR metadata,
 diffs, changed files, checks, and body content use REST instead. Formal reviews
 and PR comments also have REST fallbacks: REST-only sessions skip the native
 attempt, while GraphQL-capable sessions prefer the native `gh pr` operation and
@@ -147,7 +156,8 @@ qualified native or REST behavior described below.
 <Callout type="warn" title="The default is read-only; each flag adds authority">
   `--fix` authorizes edits, commits, and pushes to the pull request branch.
   `--reply` authorizes a GitHub review. `--merge` authorizes merging a ready
-  pull request and handling post-merge CI. Use only the stages you intend.
+  pull request and handling post-merge CI. `--advice` and `--ultra` do not add
+  write authority. Use only the stages you intend.
 </Callout>
 
 Important boundaries:
@@ -201,6 +211,7 @@ approval prompts across runtimes.
 | The pull request cannot be loaded | Confirm the repository, PR number or URL, network access, and `gh auth status`. |
 | The diff is too broad to judge confidently | Split the review by domain while still reading every changed file; do not infer correctness from the summary. |
 | The fix loop repeats the same finding | Stop after three unsuccessful attempts and report the unresolved evidence for human handoff. |
+| `--ultra` cannot produce five usable candidates or a verifier | Treat the initial review as blocked; use a supported runtime or rerun without `--ultra` rather than silently downgrading it. |
 | Reply did not reach GitHub | Use the complete local review, repair `gh` installation or authentication, then rerun only with deliberate posting authority. |
 | Merge is refused | Resolve the named verdict, conflict, review-decision, check, or branch-protection gate; do not add force flags. |
 | Post-merge CI stays red | Preserve failing run links and attempted fixes; the merge workflow stops after its bounded retries or an external blocker. |
