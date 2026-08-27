@@ -51,8 +51,9 @@ từng component.
 
 ## Chạy Skill
 
-Argument đầu tiên chọn `init`, `update`, `summarize` hoặc `agent-context`. Input
-trống hay không rõ khiến Skill hỏi lại; Skill không bao giờ tự giả định `init`.
+Argument đầu tiên chọn `init`, `update`, `summarize`, `agent-context`, `agents`
+hoặc `llms`. Input trống hay không rõ khiến Skill hỏi lại; Skill không bao giờ
+tự giả định `init`.
 
 <Tabs items={['Claude Code', 'Cursor', 'Codex']}>
   <Tab value="Claude Code">
@@ -84,12 +85,23 @@ $ak:docs update Đối chiếu tài liệu launch với campaign workflow đã d
 | `update` | Chỉ đối chiếu tài liệu bị ảnh hưởng bởi intent hoặc bằng chứng đã đổi. | Có thể sửa hoặc xóa prose cũ hay trùng; tài liệu hợp lệ không liên quan được giữ nguyên. |
 | `summarize` | Trả về bản tóm tắt dựa trên bằng chứng. | Không tạo file trừ khi project chỉ định hoặc bạn yêu cầu target lâu dài. |
 | `agent-context` | Author, audit hoặc tối ưu process memory tại repository root. | Nhắm tới `CLAUDE.md` của Claude Code hoặc `AGENTS.md` của Codex; mọi lần ghi vẫn cần xác nhận. |
+| `agents` | Khai thác git và CI history có giới hạn để tìm failure lặp lại cùng gotcha không thể tự suy ra. | Đề xuất tối đa năm candidate rule DO/DON'T cho root context file; chỉ ghi thay đổi đã xác nhận. |
+| `llms` | Tạo hoặc cập nhật docs index cho AI cùng bản companion chứa toàn bộ nội dung của project. | Ghi `llms.txt` và `llms-full.txt` cạnh nhau trong thư mục public/static hoặc repository root. |
 
 Với root context, `/ak:docs agent-context --advice` hỏi `kongming` trước khi đề
 xuất ghi. `/ak:docs agent-context --audit` trình bày từng quyết định keep, cut,
-fix hoặc migrate và chỉ áp dụng thay đổi đã xác nhận. Trong Codex, dùng
-`$ak:docs`. Setting và cấu hình Hook deterministic chỉ được khuyến nghị, và chưa
-có filename root context cho Cursor. Chỉ dùng `ak:folder-context` cho thư mục con.
+fix hoặc migrate và chỉ áp dụng thay đổi đã xác nhận. `/ak:docs agents` mặc định
+đã bao gồm lượt review của `kongming`; `--advice` là dư thừa. Skill mặc định
+khai thác giới hạn nhỏ hơn giữa 90 ngày và 300 commit, cùng tối đa 200 CI run.
+Nếu `gh` chưa được xác thực, Skill chuyển sang chỉ khai thác Git và báo rằng đã
+bỏ qua CI signal. `--source` thêm source-tree mining chỉ đọc; `--dry-run` dừng
+sau khi xếp hạng signal, không đề xuất rule, không gọi advisor và không ghi tệp;
+`--audit` xác nhận từng rule được đề xuất. `/ak:docs llms` đối chiếu cả
+`llms.txt` và `llms-full.txt` thay vì thay thế mù quáng nội dung đã tuyển chọn.
+Trong Codex,
+dùng `$ak:docs`. Setting và cấu hình Hook deterministic chỉ được khuyến nghị,
+và chưa có filename root context cho Cursor. Chỉ dùng `ak:folder-context` cho
+thư mục con.
 
 ## Theo các giai đoạn dựa trên bằng chứng
 
@@ -105,6 +117,10 @@ có filename root context cho Cursor. Chỉ dùng `ak:folder-context` cho thư m
 6. **Xác minh.** Kiểm tra link, path, example, configuration key, command và
    owning script khi thực tế.
 
+Khi tài liệu bị ảnh hưởng có nội dung về thiết lập, chạy hoặc cấu trúc test,
+Skill cũng áp dụng các nguyên tắc testing thực tiễn đi kèm nhưng vẫn giữ kết quả
+riêng cho project và dựa trên bằng chứng.
+
 ## Giữ thay đổi tài liệu trong phạm vi quyền hạn
 
 <Callout type="warn" title="Công việc tài liệu không cấp quyền hành động bên ngoài">
@@ -119,7 +135,9 @@ Review đề xuất thay route tài liệu đã thiết lập trước khi ghi t
 
 ## Xác minh output và bằng chứng
 
-Không có output filename cố định. Một lần chạy hoàn tất nên xác định:
+Output path tùy theo thao tác: `llms` có cặp `llms.txt` và `llms-full.txt` cố
+định, còn các thao tác khác theo route của project hoặc trả về response. Một lần
+chạy hoàn tất nên xác định:
 
 - tài liệu được tạo, thay đổi, giữ lại hoặc xóa;
 - audience và quyết định mà mỗi tài liệu đã đổi phục vụ;
@@ -127,16 +145,16 @@ Không có output filename cố định. Một lần chạy hoàn tất nên xá
 - link, path, example và validator đã kiểm tra; và
 - uncertainty còn lại hay hành động vẫn cần phê duyệt.
 
-Với `summarize`, hãy chờ response trừ khi bạn nêu target lâu dài. Với `init`
-hoặc `update`, hãy kiểm tra diff và xác nhận không có product code hay tài liệu
-không liên quan bị thay đổi.
+Với `summarize`, hãy chờ response trừ khi bạn nêu target lâu dài. Với `init`,
+`update`, `agent-context`, `agents` hoặc `llms`, hãy kiểm tra diff và xác nhận
+không có product code hay tài liệu không liên quan bị thay đổi.
 
 ## Khắc phục và hiểu giới hạn
 
 | Triệu chứng | Bước tiếp theo an toàn |
 | --- | --- |
 | Runtime không nhận diện `ak:docs` | Xác nhận target cùng scope, mở session mới, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
-| Skill hỏi cần dùng thao tác nào | Chọn `init`, `update` hoặc `summarize`; bổ sung audience, outcome, bằng chứng và cách lưu. |
+| Skill hỏi cần dùng thao tác nào | Chọn `init`, `update`, `summarize`, `agent-context`, `agents` hoặc `llms`; bổ sung audience, outcome, bằng chứng và cách lưu. |
 | Cây đề xuất có vẻ chung chung hoặc quá lớn | Trỏ tới instruction cùng navigation hiện có; yêu cầu information boundary thực sự nhỏ nhất. |
 | Behavior hiện tại bị sao chép vào prose | Thay bằng pointer tới executable owner. |
 | Summary file xuất hiện ngoài dự kiến | Giữ summary trong response trừ khi project hoặc yêu cầu của bạn chỉ định file đó. |

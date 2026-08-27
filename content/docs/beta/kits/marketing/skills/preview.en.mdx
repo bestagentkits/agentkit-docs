@@ -28,8 +28,8 @@ contacts a CDN or GitHub.
 
 - You need to change the underlying marketing plan, content, code, or campaign.
   Preview the evidence first, then use the owning workflow.
-- You need a publish-grade SVG or PNG architecture artifact. Use the specialized
-  technical-graph workflow when available.
+- You need a non-templated, publish-grade SVG or PNG architecture artifact. Use
+  the specialized technical-graph workflow when available.
 - You need generated imagery or multimodal analysis rather than an HTML,
   Markdown, Mermaid, or ASCII visual.
 - You need to publish, deploy, contact an audience, change an account, or spend.
@@ -56,7 +56,7 @@ Before starting:
 
 | Runtime | Invocation | Availability boundary |
 | --- | --- | --- |
-| Claude Code | `/ak:preview ...` | The source includes Claude-specific background-task and `${CLAUDE_PLUGIN_ROOT}` server instructions. Server-backed view and Markdown modes also depend on a separate viewer Skill that the current Marketing manifest does not export. |
+| Claude Code | `/ak:preview ...` | Claude Code can use native background tasks and its runtime-specific server setup. Server-backed view and Markdown modes also depend on a separate viewer Skill that the current Marketing manifest does not export. |
 | Cursor | `/ak:preview ...` | Slash invocation is user-verified for installed AgentKit Skills. The Claude-specific server process contract is not evidence of Cursor parity; file-only generation depends on available tools. |
 | Codex | `$ak:preview ...` | Codex discovers the Skill natively, but the source server instructions are not a native Codex process contract. File-only generation and browser actions depend on the current session. |
 
@@ -111,6 +111,38 @@ Argument resolution gives `--stop` highest priority. `--html` changes the output
 type, generation flags select the workflow, and an existing path selects view
 mode. If a path cannot be resolved, the Skill should ask rather than guess.
 
+## Control the editorial visual layer
+
+HTML generation now enables two additive editorial engines when the request
+maps cleanly to them. AntV Infographic can render KPI panels, ranked comparisons,
+and timelines; `diagram-design` can render intentional architecture, quadrant,
+timeline, security, integration, and medallion layouts. Mermaid and Chart.js
+remain the fallbacks and still handle automatic layout and interactive charts.
+
+- Disable both engines with `--no-editorial-visuals`, only AntV with `--no-antv`,
+  or only `diagram-design` with `--no-diagram-design`.
+- Preference resolution is invocation flag, project `.agentkit/config.yaml`, user
+  `~/.agentkit/config.yaml`, then the enabled default. There is no environment
+  variable tier. The resolved nested key for `diagram_design` is
+  `diagramDesign` in the JSON returned by `ak config prefs resolve --json`.
+- AntV is pinned to `@antv/infographic@0.2.19` and loads
+  `dist/infographic.min.js` from jsDelivr with SRI. Use it only for at least
+  three panels because the bundle is 874 KB uncompressed and 288 KB gzipped.
+  A load timeout, render error, or empty target falls back without failing the
+  artifact and logs `[antv] fell back to <engine>`.
+- `diagram-design` is pinned to commit `09df49d8` and produces zero-JavaScript,
+  self-contained HTML and SVG. Its default motion tier is `none`; the optional
+  `reveal`, `step`, and `loop` tiers come from `visual.diagram_design.motion`
+  and must respect reduced-motion preferences. Its bundled Python validators
+  are advisory and skip cleanly when `python3` is unavailable. After an initial
+  geometry failure and one corrective retry, generation falls back to Mermaid.
+
+The editorial layer aligns both engines on Instrument Serif, Geist, and Geist
+Mono. The source loads the matching reference only after routing the request;
+it does not preload both engines. In an air-gapped environment, disable AntV. Also
+disable any other CDN-backed engine required by the selected artifact if fully
+offline output is mandatory.
+
 ## Understand file and process stages
 
 1. **Resolve the request.** The Skill selects view or generation mode, validates
@@ -154,7 +186,8 @@ prior work may exist.
   dependencies for Markdown rendering. Do not assume the server is
   zero-dependency or repair it with an unreviewed manual install.
 - HTML output can contain CDN references for Google Fonts, Mermaid, Chart.js,
-  ELK layout, or anime.js. Opening such a file can contact those providers and
+  AntV Infographic, ELK layout, or anime.js. Opening such a file can contact
+  those providers and
   disclose request metadata; offline rendering may be incomplete.
 - A PR-number diff requires `gh` and GitHub access. Other Git reads use local
   state unless a separate command refreshes remotes.
@@ -170,7 +203,8 @@ A complete run should provide:
 - A Markdown or HTML artifact under the active plan’s `visuals/` directory, or
   under `plans/visuals/` when no plan is active.
 - Render-and-inspect evidence for diagrams, including correction of overlap,
-  unreadable labels, or broken layout.
+  unreadable labels, or broken layout. For `diagram-design`, also report the
+  advisory validator result and any Mermaid fallback.
 - A local and network URL only when a viewer process actually started.
 - Disclosure of the host, port, running process, and how to stop it.
 - Disclosure of CDN or GitHub access when the selected mode needs it.
@@ -190,7 +224,7 @@ the repository before accepting conclusions.
 | View or Markdown mode cannot find the viewer server | Treat it as the current Marketing dependency gap. Use file-only HTML or ASCII output, or stop and install only through a separately approved supported route. |
 | A port is busy | Let the viewer select the next port and report the full URL. Do not assume `3456`. |
 | Sensitive content was served on `0.0.0.0` | Stop all viewer instances with the runtime-specific `ak:preview --stop` invocation, remove the content from the served scope, and review exposure before restarting. |
-| HTML opens without diagrams or fonts | Check network access and CDN references, or regenerate without external libraries when possible. |
+| HTML opens without diagrams or fonts | Check network access and CDN references. For AntV, confirm `window.AntVInfographic` loaded from `dist/infographic.min.js`; otherwise accept the reported fallback or regenerate with `--no-antv`. |
 | `--diff` has no Git context | Run inside the intended repository and state the exact ref. A PR number additionally needs `gh`. |
 | `--plan-review` cannot find a plan | Provide the explicit plan path or establish an active plan; do not compare against a guessed file. |
 | The output path already contains valued work | Stop and move or rename the prior artifact before generating; the source workflow overwrites without prompting. |
@@ -210,7 +244,9 @@ before recovering from an unintended write.
 - The separate viewer source also requires its own Markdown-rendering npm
   dependencies; their availability is not established by `ak:preview` alone.
 - “Single HTML file” does not necessarily mean offline or network-free because
-  optional fonts and JavaScript libraries can remain CDN imports.
+  optional fonts and JavaScript libraries can remain CDN imports. AntV is not
+  vendored in this release; `diagram-design` has no runtime JavaScript
+  dependency.
 - Visual review can explain evidence but cannot prove campaign performance,
   conversion, revenue, current provider state, or the correctness of source
   data.

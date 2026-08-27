@@ -42,6 +42,11 @@ function addDifference(errors, label, expected, actual) {
   }
 }
 
+function addSubsetViolation(errors, label, subset, superset) {
+  const extra = sorted([...subset].filter((value) => !superset.has(value)));
+  if (extra.length) errors.push(`${label}: not present in superset [${extra.join(', ')}]`);
+}
+
 async function readJson(path) {
   return JSON.parse(await readFile(path, 'utf8'));
 }
@@ -176,17 +181,22 @@ async function overviewCount(path) {
 
 async function validateOverview(root, kit, expected, errors) {
   const betaEn = resolve(root, kit.overviewPath);
-  const paths = [
-    betaEn,
-    betaEn.replace(/\.en\.mdx$/, '.vi.mdx'),
-    betaEn.replace('/beta/', '/stable/'),
-    betaEn.replace('/beta/', '/stable/').replace(/\.en\.mdx$/, '.vi.mdx'),
-  ];
-  for (const path of paths) {
+  const betaVi = betaEn.replace(/\.en\.mdx$/, '.vi.mdx');
+  for (const path of [betaEn, betaVi]) {
     const count = existsSync(path) ? await overviewCount(path) : null;
     if (count !== expected) {
       errors.push(`${relative(root, path)}: Skills count ${count ?? 'missing'} does not match ${kit.overviewMetric} ${expected}`);
     }
+  }
+
+  const stableEn = betaEn.replace('/beta/', '/stable/');
+  const stableVi = betaVi.replace('/beta/', '/stable/');
+  const stableEnCount = existsSync(stableEn) ? await overviewCount(stableEn) : null;
+  const stableViCount = existsSync(stableVi) ? await overviewCount(stableVi) : null;
+  if (stableEnCount === null || stableViCount === null || stableEnCount !== stableViCount) {
+    errors.push(
+      `${kit.kitId} Stable EN/VI overview: Skills counts ${stableEnCount ?? 'missing'} and ${stableViCount ?? 'missing'} must match`,
+    );
   }
 }
 
@@ -229,10 +239,13 @@ export async function checkKitCatalog({
     const stable = await observeChannel(docsRoot, 'stable', kit.kitId);
     addDifference(errors, `${kit.kitId} Beta EN/VI details`, beta.en, beta.vi);
     addDifference(errors, `${kit.kitId} Stable EN/VI details`, stable.en, stable.vi);
-    addDifference(errors, `${kit.kitId} Beta/Stable EN details`, beta.en, stable.en);
     addDifference(errors, `${kit.kitId} Beta EN/VI nav`, beta.nav, beta.navVi);
     addDifference(errors, `${kit.kitId} Stable EN/VI nav`, stable.nav, stable.navVi);
-    addDifference(errors, `${kit.kitId} Beta/Stable nav`, beta.nav, stable.nav);
+    addDifference(errors, `${kit.kitId} Stable EN/VI public Skill index`, stable.indexEn, stable.indexVi);
+    addDifference(errors, `${kit.kitId} Stable navigation/index`, stable.nav, stable.indexEn);
+    addSubsetViolation(errors, `${kit.kitId} Stable details/Beta details`, stable.en, beta.en);
+    addSubsetViolation(errors, `${kit.kitId} Stable nav/Beta nav`, stable.nav, beta.nav);
+    addSubsetViolation(errors, `${kit.kitId} Stable nav/details`, stable.nav, stable.en);
 
     const routed = new Set();
     const publicRoutes = new Set();

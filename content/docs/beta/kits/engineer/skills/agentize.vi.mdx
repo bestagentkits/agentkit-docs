@@ -84,7 +84,16 @@ Default là `--both --auto`.
 | `--mcp` | Chỉ tạo MCP surface nhưng giữ core boundary để mở rộng sau |
 | `--auto` | Phân tích, quyết định và triển khai không có câu hỏi thường lệ; nếu credential decision chưa rõ, mode chuyển riêng trục đó sang câu hỏi thay vì đoán |
 | `--ask` | Dừng sau phân tích để challenge scope, mutation, credential, deployment, package metadata và ownership decision |
+| `--ultra` | Chạy phase phân tích và quyết định dưới dạng đúng năm candidate read-only độc lập, rồi để verifier dùng model mạnh nhất chọn một decision record; scouting và implementation vẫn chỉ chạy một lần |
+| `--advice` | Thêm checkpoint tư vấn-only với `kongming` sau scouting và analysis, trước decision cùng package handoff, và khi bị kẹt; mode này không sửa code hay bỏ qua gate |
 | `--yagni` | Challenge và cắt capability không cần thiết cho outcome đã nêu; flag được chuyển nguyên cho các Skill downstream và công việc được giao |
+
+Với `--ultra --ask`, một user interview chạy trước khi fan-out; cả năm candidate
+nhận cùng câu trả lời và không tự hỏi riêng. Năm candidate slot ban đầu được
+dispatch trong một parallel wave. Slot thất bại được retry một lần và sau đó cả
+năm kết quả đều phải usable. Nếu không có khả năng dispatch song song read-only,
+vẫn có dưới năm kết quả usable sau retry hoặc verifier reject tất cả candidate,
+workflow fail closed và dừng trước implementation.
 
 Khi không có `--yagni`, workflow cung cấp đầy đủ mọi capability được yêu cầu và
 không thêm phần việc ngoài yêu cầu. Phân tích low-value có thể loại passthrough
@@ -132,12 +141,20 @@ Một request hữu ích xác định:
 
 Với CLI surface, workflow yêu cầu machine-readable output, help cùng version
 command, exit class nhất quán, quiet cùng verbose control và credential
-diagnostic xác định source mà không in value.
+diagnostic xác định source mà không in value. Khi wrap một HTTP API có
+documentation, workflow ưu tiên CLI động theo schema từ machine-readable
+manifest thay vì viết thủ công một command cho mỗi endpoint. Runtime package
+nên giảm dependency, tránh script `preinstall` cùng `postinstall`, và hoạt động
+trên nhiều platform.
 
 Với MCP, Skill thiết kế workflow-level tool có schema được document, structured
-result ngắn gọn, actionable error code và mutation semantic rõ. Local stdio dùng
-local credential chain. Remote SSE và Streamable HTTP dùng bearer authentication
-tại transport boundary.
+result ngắn gọn, actionable error code và mutation semantic rõ. Local `stdio`
+dùng local credential chain. `Streamable HTTP` là remote transport chính;
+`SSE` chỉ còn để tương thích legacy đã deprecated. Remote HTTP dùng `OAuth 2.1`
+với `PKCE` hoặc bearer authentication. Server có thể chạy `stateless` để scale
+hoặc `stateful` cho behavior theo session, với `tasks` ở trạng thái experimental
+cho operation chạy lâu. Với workload có nhiều tool hoặc chain, workflow có thể
+cân nhắc `Code Mode` thay vì dùng làm default.
 
 Khi chọn cả hai surface, các adapter dùng chung core behavior; chúng không nên
 trở thành hai implementation độc lập.
@@ -173,7 +190,8 @@ Một lần chạy hoàn tất nên cung cấp:
   các output này áp dụng.
 - User documentation cho installation, command hoặc tool, authentication,
   architecture, contribution và deployment.
-- Companion Skill và release checklist.
+- Companion `SKILL.md`, marketplace metadata, cross-marketplace distribution
+  guidance và release checklist.
 - Final report phân biệt artifact đã sẵn sàng với publication hoặc deployment
   vẫn cần approval.
 
@@ -206,4 +224,3 @@ Tiếp tục với `ak:cook` cho implementation còn lại đã được chấp 
   deployment cần external tooling, credential cùng service availability.
 - Runtime parity phụ thuộc planning, Agent, testing và docs capability
   downstream được cung cấp trong session hiện tại.
-- Stable và beta chứa nội dung cùng default `ak:agentize` giống nhau.

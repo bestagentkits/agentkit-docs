@@ -1,163 +1,199 @@
 ---
-title: Understand the ak:storage integration identity limitation
-description: Review the S3-compatible client shipped by ak-storage without treating its duplicate canonical name as a supported invocation.
+title: Use the ak:storage S3-compatible integration
+description: Configure and invoke the uniquely named ak-storage integration for reviewed object upload, download, listing, deletion, existence checks, URL construction, and folder sync.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
-The `ak-storage` export supplies a JavaScript client for S3-compatible object
-storage. It can upload, download, list, remove, check, and sync objects when it
-is called by a compatible workflow. Its `SKILL.md` also declares `ak:storage`,
-which collides with the separate `ak-ckm-storage` router.
+The `ak-storage` export owns the unique runtime identity `ak:storage`. Use it to
+work with marketing assets through an S3-compatible client after reviewing the
+credentials, local paths, object keys, provider effects, and dependency change.
+The separate `ak-ckm-storage` export now owns `ak:ckm-storage` and remains a
+router with its own operation contract.
 
-<Callout type="warn" title="This is not a normal invocation page">
-  The package preserves both export directories but gives both Skill files the
-  same canonical name. There is no documented runtime selector for choosing
-  the integration definition instead of the router definition. Do not use
-  `/ak:storage` or `$ak:storage` as a dependable entry point.
+<Callout type="info" title="Invoke the integration by its canonical name">
+  Use `/ak:storage` in Claude Code or Cursor and `$ak:storage` in Codex. Do not
+  substitute `ak:ckm-storage`: that name selects the separate router, not this
+  integration Skill.
 </Callout>
 
-## Use this page to review the integration boundary
+## Choose ak:storage for the client integration
 
-### Intended integration scope
+### Supported integration scope
 
-- Upload a local file to a chosen object key.
-- Download an object to a local path.
-- List objects under an optional prefix, currently up to `1000` per request.
-- Remove one object or test whether an object exists.
-- Construct a URL or sync a local folder to remote keys.
+- Upload one local file to a chosen object key.
+- Download one object to an approved local path.
+- List objects under an optional prefix.
+- Remove one object or check whether an object exists.
+- Construct an object URL from configuration.
+- Preview or perform a recursive local-folder sync.
 
 ### Choose another workflow when
 
-- You need a supported user-facing storage invocation. The duplicate identity
-  blocks that contract.
-- You need bucket creation, bucket policy, signed URLs, pagination beyond the
-  current list call, versioning, lifecycle rules, or migration orchestration.
-- You need provider-specific support guarantees. The source names example
-  providers, but current service behavior is not verified by the package.
+- You specifically need the `list`, `sync`, `upload`, or `url` subcommand
+  grammar of the [`ak:ckm-storage` router](./ckm-storage).
+- You need bucket creation, bucket policy changes, signed URLs, versioning,
+  lifecycle rules, migration orchestration, retries, or transactional rollback.
+- You need provider-specific support guarantees. Named providers describe
+  compatibility intent, not verified current service behavior.
 
-## Prepare the client deliberately
+## Prepare credentials and the dependency deliberately
 
 | Variable | Requirement |
 | --- | --- |
-| `S3_ENDPOINT` | Required endpoint |
+| `S3_ENDPOINT` | Required service endpoint |
 | `S3_ACCESS_KEY_ID` | Required access-key identifier |
 | `S3_SECRET_ACCESS_KEY` | Required secret access key |
-| `S3_BUCKET` | Required bucket |
+| `S3_BUCKET` | Required bucket name |
 | `S3_REGION` | Optional; defaults to `auto` |
-| `S3_PUBLIC_URL` | Optional base URL for returned object URLs |
+| `S3_PUBLIC_URL` | Optional public base URL or custom domain |
 
-The JavaScript module lazy-loads `@aws-sdk/client-s3`. Adding that package with
+Keep credentials in an ignored local environment file, use a bucket-scoped
+least-privilege credential, and never paste or print secret values in the Skill
+prompt or output.
+
+The integration lazy-loads `@aws-sdk/client-s3`. Installing it with
 `npm install @aws-sdk/client-s3` changes the current project's dependencies and
-lockfile, so review and approve that mutation separately. Without both the SDK
-and required configuration, client creation fails closed and operations return
-an error result instead of contacting storage.
+lockfile, so review and approve that mutation separately from storage access.
+`isConfigured()` checks only whether the four required variables are present;
+it does not verify SDK availability, credential validity, connectivity, bucket
+access, or provider health. Provider-backed operations fail closed when client
+creation cannot proceed and generally report `S3 not configured`. That shared
+message does not distinguish a missing SDK from missing configuration.
+`getPublicUrl()` still constructs a string without the SDK or a provider
+request, while sync dry run can scan and map files when required configuration
+is present because it does not upload.
 
 ## Runtime identity status
 
-| Runtime | Advertised invocation | Current boundary |
+| Runtime | Invocation | Current boundary |
 | --- | --- | --- |
-| Claude Code | `/ak:storage ...` | Unsupported as a selector: the router export declares the same name. |
-| Cursor | `/ak:storage ...` | Unsupported as a selector: distinct projected directories do not disambiguate canonical discovery. |
-| Codex | `$ak:storage ...` | Unsupported as a selector: both projected Skill files retain `ak:storage`. |
+| Claude Code | `/ak:storage ...` | Selects the `ak-storage` integration with the unique `ak:storage` identity. |
+| Cursor | `/ak:storage ...` | Selects the same canonical integration; available filesystem and network access remains environment-specific. |
+| Codex | `$ak:storage ...` | Uses the same integration identity through Codex invocation syntax. |
 
 <Tabs items={['Claude Code', 'Cursor', 'Codex']}>
   <Tab value="Claude Code">
 
-Do not rely on `/ak:storage` to load this integration definition. Review the
-identity defect before authorizing dependencies, credentials, or object writes.
+```text
+/ak:storage "Preview syncing ./approved-assets to campaign/launch, show every object key, and wait for approval before any upload"
+```
 
   </Tab>
   <Tab value="Cursor">
 
-Do not rely on `/ak:storage` to load this integration definition. Review the
-identity defect before authorizing dependencies, credentials, or object writes.
+```text
+/ak:storage "Preview syncing ./approved-assets to campaign/launch, show every object key, and wait for approval before any upload"
+```
 
   </Tab>
   <Tab value="Codex">
 
-Do not rely on `$ak:storage` to load this integration definition. Review the
-identity defect before authorizing dependencies, credentials, or object writes.
+```text
+$ak:storage "Preview syncing ./approved-assets to campaign/launch, show every object key, and wait for approval before any upload"
+```
 
   </Tab>
 </Tabs>
 
-See [Runtime adapters](../../../concepts/runtime-adapters) for projection
-boundaries and [Installing kits](../../../guides/installing-kits) for lifecycle
-options. Neither runtime choice nor reinstall resolves the duplicate name.
+The Skill source does not define router-style positional subcommands. State the
+operation, local path, object key or prefix, and approval boundary in the
+request. Use `ak:ckm-storage` only when you intend to use that router's distinct
+argument contract.
 
-## Understand the client operations
+## Review the client operation contract
 
 | Client operation | Local effect | Provider effect |
 | --- | --- | --- |
 | `upload(localPath, remotePath, options)` | Reads the entire local file | Sends `PutObject` with inferred or supplied content type and optional metadata |
-| `download(remotePath, localPath)` | Creates parent directories and writes the downloaded bytes | Sends `GetObject` |
-| `list(prefix, maxKeys)` | None | Sends `ListObjectsV2`; default `maxKeys` is `1000` and pagination is not implemented |
-| `remove(remotePath)` | None | Sends `DeleteObject` for one key |
+| `download(remotePath, localPath)` | Creates parent directories and writes downloaded bytes | Sends `GetObject` |
+| `list(prefix, maxKeys)` | None | Sends `ListObjectsV2`; the default is `1000` objects and continuation-token pagination is not implemented |
+| `remove(remotePath)` | None | Sends `DeleteObject` for exactly one key |
 | `exists(remotePath)` | None | Sends `HeadObject` |
-| `getPublicUrl(remotePath)` | None | Makes no request; constructs a string from configuration |
-| `sync(localFolder, remotePrefix, options)` | Recursively scans a local folder | Uploads matching files sequentially unless `dryRun` is true |
+| `getPublicUrl(remotePath)` | None | Sends no request; constructs a string from endpoint, bucket, or `S3_PUBLIC_URL` configuration |
+| `sync(localFolder, remotePrefix, options)` | Recursively scans a local folder | Uploads matching files sequentially unless dry run is enabled |
 
-These are module functions shown by the shipped integration, not canonical
-runtime subcommands.
+These are integration client functions, not the `ak:ckm-storage` router's
+user-facing subcommands. Upload and sync infer common content types; unknown
+extensions use `application/octet-stream`.
 
 ## Understand the integration stages
 
-1. The client reads configuration from environment variables without logging
-   secret values.
-2. It lazy-loads the AWS S3 SDK and creates a path-style client for the selected
+1. Read configuration from environment variables without logging secret values.
+2. Lazy-load the AWS S3 SDK and create a path-style client for the configured
    endpoint.
-3. Each operation validates enough local state to proceed, then sends the
-   corresponding provider request.
-4. Upload and sync infer content type from common file extensions; unknown
-   extensions use `application/octet-stream`.
-5. Operations return structured success or error values. The client does not
-   provide retries, transactions, rollback, or cross-file atomicity.
+3. Validate enough local state for the selected operation.
+4. Send the corresponding provider request, or construct a URL without a
+   request.
+5. Return the operation-specific result: structured result objects for provider
+   operations, an existence result for `exists()`, or a URL string for
+   `getPublicUrl()`. Live sync uploads files one at a time and preserves a
+   result for each file.
 
-## Keep approval and safety with you
+Cloudflare R2, AWS S3, MinIO, Backblaze B2, and DigitalOcean Spaces are named as
+compatible examples. Endpoint shape, authentication, public access,
+availability, pricing, and billing effects still require current verification
+with the selected provider.
 
-- Approve dependency installation separately from storage access.
-- Approve each provider, bucket, prefix, and data class before a read or write.
-- Treat download destinations and sync source folders as workspace mutations
-  or data-disclosure boundaries.
-- Treat `remove` as destructive and require the exact object key plus explicit
-  approval. The client has no built-in recovery step.
-- A URL returned by `getPublicUrl` is not proof of object existence or public
+## Keep approval and external effects explicit
+
+<Callout type="warn" title="Credentials do not authorize storage effects">
+  Approve the exact provider, bucket, prefix, object keys, local paths, and data
+  classification before a read or write. Storage requests can create or delete
+  provider-side data, transfer local content, generate network traffic, and
+  incur cost.
+</Callout>
+
+- Approve dependency installation separately from credential use and storage
   access.
-- Storage requests can create provider-side data, network traffic, and cost.
-  The Skill does not authorize any of them merely because credentials exist.
+- Treat download destinations and sync source folders as workspace mutation or
+  data-disclosure boundaries.
+- Preview the complete file-to-object mapping before recursive sync. A dry run
+  scans the local folder but does not upload.
+- Treat `remove` as destructive. Require the exact key and explicit approval;
+  the client has no recycle bin or built-in recovery step.
+- A URL from `getPublicUrl` is not proof that the object exists or is public.
+  URL construction does not change bucket policy.
+- The client provides no retries, transaction, rollback, or cross-file
+  atomicity. A failed sync can leave earlier files uploaded successfully.
 
-## Expected evidence
+## Verify operation evidence
 
 A reviewed integration call should report:
 
-- The operation, bucket, endpoint host, local path, and object key without
-  exposing credential values.
-- A preview mapping before recursive sync.
-- Structured success or failure per object.
-- The exact local file written by download or the exact remote key removed.
-- Remaining partial failures and a manual recovery path.
+- the selected operation, bucket, endpoint host, local path, and object key or
+  prefix without credential values;
+- a preview mapping before recursive sync;
+- structured success or failure per object;
+- the exact local file written by download, or the key submitted to
+  `DeleteObject` and its returned result;
+- uploaded and failed counts for sync, including partial failures;
+- a manual recovery path for any non-atomic result.
 
-## Troubleshoot or continue
+## Troubleshoot safely
 
 | Symptom | Safe next step |
 | --- | --- |
-| Runtime behavior differs between runs | Stop using the canonical name; the duplicate export identity remains unresolved. |
-| Every operation reports `S3 not configured` | Check required variables and SDK presence without printing secrets. Do not assume the same message distinguishes missing SDK from missing configuration. |
-| A list omits expected objects | Check the prefix and the `1000`-object limit; the shipped client does not follow continuation tokens. |
-| A returned URL fails | Verify object existence, endpoint shape, bucket policy, and `S3_PUBLIC_URL`; URL construction performs no request. |
-| A sync partly fails | Preserve the per-file results. The operation is not atomic and does not roll back successful uploads. |
+| `/ak:storage` or `$ak:storage` is not discovered | Confirm the installed `ak-storage` export declares `name: ak:storage`; do not switch to the router unless you want its contract. |
+| Every operation reports `S3 not configured` | Check SDK presence and required variables without printing secrets; the message covers both failure classes. |
+| A list omits expected objects | Check the prefix and `1000`-object default limit; the client does not follow continuation tokens. |
+| A returned URL fails | Verify object existence, endpoint shape, bucket policy, and `S3_PUBLIC_URL`; construction performs no request. |
+| `exists()` returns `exists: false` | Inspect the accompanying error. The result can mean absence or another `HeadObject` failure such as authorization or network failure. |
+| A sync partly fails | Preserve per-file results; successful earlier uploads are not rolled back. |
+| A delete targets the wrong key | Stop before the request and require the exact approved key; there is no built-in recovery. |
 
 Continue with the [Marketing Kit overview](../../marketing),
-[Kit installation problems](../../../troubleshooting/kit-installation), or the
-[CLI reference](../../../reference/cli).
+[Installing kits](../../../guides/installing-kits), or
+[Runtime adapters](../../../concepts/runtime-adapters).
 
 ## Know the current limits
 
-- `ak-storage` is both a Skill export and a backing library, but its source does
-  not define a unique user-facing argument contract.
-- `ak-ckm-storage` depends on this export's client while declaring the same
-  canonical name; simply removing either export is not a documented fix.
-- Named provider examples are compatibility intent, not verified current
-  support, pricing, public-access, or availability guarantees.
+- `ak:storage` identifies the integration; `ak:ckm-storage` identifies the
+  separate router that depends on this client.
+- The integration exposes client operations but no unique positional argument
+  grammar, so requests must state operation and boundaries explicitly.
+- Listing is one request without continuation-token pagination.
+- Sync is sequential and non-atomic, with no rollback for completed uploads.
+- Provider compatibility is shipped intent, not a guarantee of current support,
+  public access, availability, pricing, or billing behavior.

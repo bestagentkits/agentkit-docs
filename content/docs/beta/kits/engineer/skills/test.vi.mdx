@@ -1,6 +1,6 @@
 ---
-title: Tạo bằng chứng validation với ak:test
-description: Chạy validation cho code hoặc UI, giữ mọi failure, đo coverage khi hữu ích và nhận QA report có cấu trúc mà không bắt đầu sửa lỗi.
+title: Test và cải thiện suite với ak:test
+description: Chạy validation cho code hoặc UI, tạo hay tối ưu test suite, audit test yếu và nhận bằng chứng có cấu trúc về kết quả.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
@@ -8,8 +8,8 @@ import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
 Dùng `ak:test` để biến một thay đổi hoặc câu hỏi quality thành bằng chứng
 validation mới. Skill có thể chạy unit, integration, end-to-end, build,
-coverage và browser-based UI check, rồi báo cáo command, kết quả, failure cùng
-gap mà không che output bất tiện.
+coverage và browser-based UI check. Skill cũng có thể tạo test suite bao phủ,
+tối ưu suite cùng chi phí CI hoặc audit và sửa test yếu.
 
 ## Chọn ak:test khi validation là outcome
 
@@ -18,7 +18,8 @@ gap mà không che output bất tiện.
 - Bạn cần bằng chứng test tập trung hoặc rộng sau implementation hay bug repair.
 - Project cần type, lint, build hoặc coverage validation trước handoff.
 - Website cần kiểm tra visual, responsive, accessibility, form hoặc console.
-- Bạn cần QA report có cấu trúc thay vì implementation mới.
+- Bạn cần QA report có cấu trúc, test suite mới, tối ưu CI an toàn hơn hoặc
+  test audit dựa trên bằng chứng.
 
 ### Chọn workflow khác khi
 
@@ -51,11 +52,12 @@ Trước khi bắt đầu:
 | Cursor | `/ak:test ...` | Cách gọi bằng slash đã được người dùng xác minh. Điều này không thiết lập runtime parity đầy đủ. |
 | Codex | `$ak:test ...` | Skill dùng discovery native của Codex; không suy ra parity rộng hơn cho Hook và statusline Engineer. |
 
-## Chọn kiểm thử code hoặc UI
+## Chọn operation
 
 Nếu bạn cung cấp scope, Skill tiếp tục với code validation liên quan. Khi không
-có argument, Skill hỏi bạn muốn chạy code test hay UI test. Dùng `ui <url>` để
-chọn trực tiếp browser workflow.
+có argument, Skill hỏi operation cần chạy. Dùng `ui <url>` để chọn trực tiếp
+browser workflow hoặc bắt đầu bằng `create`, `optimize` hay `audit` để làm việc
+trên chính test suite.
 
 <Tabs items={['Claude Code', 'Cursor', 'Codex']}>
   <Tab value="Claude Code">
@@ -97,12 +99,33 @@ $ak:test ui http://localhost:3000/settings
 | --- | --- | --- |
 | Kiểm thử code | Type hoặc syntax check, unit, integration, end-to-end, coverage và production build | Behavior đã đổi, module bị ảnh hưởng, command bắt buộc, threshold project và giới hạn thời gian |
 | `ui <url>` | Page discovery, screenshot, responsive behavior, accessibility, form, console error và user flow đã chọn | URL, state mong đợi, viewport, cách auth, ranh giới data safety và browser availability |
+| `create [scope]` | Scout code cùng docs, lập coverage matrix, rồi tạo hoặc mở rộng test suite | Feature hoặc workflow cần bao phủ, framework hiện có, critical path và threshold project |
+| `optimize [scope]` | Phân tích CI/CD, git history, code cùng docs, rồi giảm thời gian và chi phí test mà không mất coverage | Job chậm, bằng chứng CI timing, group quan trọng về safety và workflow change được phép |
+| `audit [scope]` | Tìm test deceptive, disabled, unfinished, ineffective, redundant, outdated hoặc unsafe và sửa finding có bằng chứng | Scope suite hoặc CI, lo ngại về độ tin cậy, skip đã biết và path nhạy cảm về security |
+
+Với `create`, `optimize` và `audit`, thêm `--advice` để dùng checkpoint tư vấn
+của `kongming` hoặc `--interview` để duyệt từng proposed change group trước khi
+edit. `--ultra` chạy năm analysis candidate read-only: `create` và `optimize`
+chọn nguyên vẹn một design thắng cuộc, còn `audit` trả về union finding đã được
+xác minh bằng bằng chứng và deduplicate. Năm candidate slot ban đầu được dispatch
+trong một parallel wave; slot thất bại được retry một lần. Nếu không có khả năng
+dispatch song song read-only hoặc sau retry vẫn có dưới năm kết quả usable, lần
+chạy fail closed. Khi không có `--interview`, Skill áp dụng trực tiếp thay đổi
+được bằng chứng hỗ trợ và vẫn báo cáo đầy đủ change list.
+
+```text
+/ak:test create "Cover the account recovery workflow" --interview
+/ak:test optimize "Reduce pull-request CI time" --advice
+/ak:test audit "Check skipped and ineffective authorization tests" --ultra
+```
 
 Command và threshold do project định nghĩa được ưu tiên. Khi project không có
 coverage policy, reference guidance của Skill dùng 80% line và 70% branch
 coverage làm target chung, đồng thời chú ý đặc biệt tới critical path.
 
 ## Hiểu điều gì xảy ra trong một lần chạy
+
+Operation mặc định và `ui` theo validation flow này:
 
 1. **Skill xác định scope.** Skill nối thay đổi gần đây hoặc requirement với bề
    mặt validation nhỏ nhất hữu ích, rồi xác định critical path cùng error
@@ -135,18 +158,23 @@ coverage làm target chung, đồng thời chú ý đặc biệt tới critical 
 - Test command có thể tạo coverage file, screenshot, build output, temporary
   data hoặc browser state. Hãy nêu artifact location và yêu cầu cleanup được
   phép.
+- Mutation spot-check cho `create` hoặc `audit` có thể sửa product code trong
+  thời gian ngắn để chứng minh test thất bại trước một bug hợp lý. Workflow phải
+  revert mọi mutation như vậy sau khi quan sát kết quả; mutation chưa revert là
+  blocker.
 - Chạy suite trên test environment an toàn. UI flow và end-to-end test có thể
   submit form hoặc mutate data nếu application hoạt động như vậy.
 - Test bằng Chrome profile thật có thể truy cập authenticated session của người
   dùng. Chỉ dùng khi state đó cần thiết và bind đúng tab nhận biết profile.
 - URL bên ngoài, hosted browser, performance service hoặc environment giống
   production có thể phát sinh chi phí provider hay vận hành và cần quyền riêng.
-- `ak:test` báo defect; Skill không bắt đầu triển khai fix. Dùng `ak:debug` và
-  `ak:fix` để chuyển sang bước đó.
+- Operation mặc định và `ui` báo product defect mà không triển khai fix.
+  `audit` có thể sửa test suite cùng bằng chứng CI, nhưng root-cause work của
+  product vẫn thuộc `ak:debug` và `ak:fix`.
 
 ## Xác minh report
 
-Kết quả test hoàn chỉnh nên cung cấp:
+Kết quả hoàn chỉnh của operation mặc định hoặc `ui` nên cung cấp:
 
 - Scope chính xác cùng mọi command đã chạy.
 - Tổng số test pass, fail và skip cùng duration.
@@ -187,4 +215,4 @@ Bàn giao failure cho `ak:debug` và `ak:fix`, hoặc tiếp tục với
   native có thể lặp lại của project.
 - Cách gọi Cursor bằng slash là bằng chứng do người dùng xác minh, không phải
   chứng minh runtime parity đầy đủ.
-- Package stable và beta chứa cùng operation và report workflow `ak:test`.
+- Operation khả dụng phụ thuộc vào release Engineer Kit đã cài.
