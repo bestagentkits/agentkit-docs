@@ -21,7 +21,7 @@ import { collectPublishedChannelRoutes, inspectReleaseShape } from './release-qu
 export const RELEASE_QUALITY_BASELINE = Object.freeze({
   schemaVersion: 1,
   reviewedAt: '2026-08-27',
-  sourceCommit: 'c92e356c5ee14efc7f2becaec4d9a3a3634e1b34',
+  sourceCommit: '506cf5b11e17001af6afe5622765674dc80865d4',
   channels: ['beta', 'stable'],
   locales: ['en', 'vi'],
   deterministic: {
