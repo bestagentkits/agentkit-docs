@@ -42,6 +42,13 @@ hoặc không xác minh được sẽ bị từ chối an toàn.
 Chỉ dùng `--local --kits-dir <dir>` khi chủ động chọn nguồn development hoặc
 CI. Đây không phải phương án dự phòng khi xác thực hoặc entitlement thất bại.
 
+<Callout type="info">
+  Grok Build là signed registry target cho cài Kit thông thường. Chỉ dùng
+  `--local --kits-dir <dir>` khi bạn chủ động chọn source development hoặc CI.
+  AgentKit emit runtime file và lifecycle metadata cho Grok; Grok vẫn sở hữu
+  authentication, model, trust, permission và sandbox behavior.
+</Callout>
+
 ## Cách dùng
 
 ```bash
@@ -50,6 +57,9 @@ ak kit init <kit-name>
 
 Trong script, hãy cung cấp một tên Kit có thể cài. Trên TTY tương tác, việc bỏ
 trống tên có thể mở wizard thiết lập; lần gọi từ script thiếu tên sẽ thất bại.
+
+Với ví dụ remote, hãy thay `<channel>` bằng kênh phát hành đang chọn trên header
+tài liệu. Nếu bỏ `--channel`, CLI chọn `stable`.
 
 ## Tuỳ chọn của lệnh
 
@@ -69,8 +79,9 @@ trống tên có thể mở wizard thiết lập; lần gọi từ script thiế
 | `--select-skills` | `false` | Chọn Skill của Kit bằng giao diện tương tác. |
 | `--skills <names>` | Trống | Chỉ cài tập Skill phân tách bằng dấu phẩy. |
 | `--switch-to-plugin` | `false` | Chọn Claude Code plugin delivery tại scope đã chọn. |
-| `--target <ids>` | `claude-code` | Chọn một hoặc nhiều emitter target ID phân tách bằng dấu phẩy. |
+| `--target <ids>` | `claude-code` | Chọn một hoặc nhiều emitter target ID phân tách bằng dấu phẩy, gồm `grok` và `pi`; command facts sinh tự động có thể chậm hơn target projection Kit mới đăng ký. |
 | `--version <version>` | Phiên bản mới nhất của channel | Chọn phiên bản Kit từ xa. |
+| `--zip` | `false` | Với `--target portable`, ghi thêm một ZIP có thể upload cho mỗi Skill. |
 
 `--skills`, `--exclude-skills` và `--select-skills` là các chế độ lựa chọn thay
 thế nhau. `--select-skills` cần terminal tương tác. Các cờ dùng chung được liệt
@@ -84,7 +95,9 @@ kê trong [quy ước CLI](../cli-conventions).
 | Claude Code plugin | `ak-<kit>` trong project | `ak-<kit>` dưới thư mục gốc Claude plugin đã cấu hình | Thêm `--switch-to-plugin`; thêm `--global` cho user scope. |
 | Codex native | Skill trong `.agents/skills` và các bề mặt `.codex` khác của project | Skill trong `~/.agents/skills` và các bề mặt `~/.codex` khác | `--target codex`; thêm `--global` cho user scope. |
 | Cursor | Các bề mặt `.cursor` của project | Các bề mặt `.cursor` của user | `--target cursor`; thêm `--global` cho user scope. |
-| AGY | Không được hỗ trợ | Skill trong cả `~/.gemini/config/skills` và `~/.gemini/antigravity-cli/skills`, Agent tùy chọn trong `~/.gemini/config/agents` | Dùng `--target agy --global`; remote source phân giải package `claude-code` đã ký. |
+| Grok Build native | Tệp runtime dưới `.grok` cùng lifecycle metadata dưới `.agentkit/adapters/grok/<kit>/` | Tệp runtime dưới `$GROK_HOME` (mặc định `~/.grok`) cùng lifecycle metadata dưới `${AGENTKIT_HOME:-~/.agentkit}/adapters/grok/<kit>/` | Dùng `--target grok`; thêm `--global` cho user scope. |
+| Pi native spike | Tệp runtime dưới `.pi/skills`, `.pi/agents`, `.pi/rules` và `.pi/extensions` | Profile Pi coding-agent đang hoạt động (`PI_CODING_AGENT_DIR` hoặc `~/.pi/agent`) không có đoạn `.pi/` bổ sung | Dùng `--target pi`; thêm `--global` cho user scope. Profile đã có nội dung sẽ bị từ chối trừ khi `--force` cho phép ghi đè rõ ràng. |
+| AGY | Không được hỗ trợ | Skill trong cả `~/.gemini/config/skills` và `~/.gemini/antigravity-cli/skills`, Agent tùy chọn trong `~/.gemini/config/agents/<name>/agent.md` | Dùng `--target agy --global`; remote source phân giải package `claude-code` đã ký, đánh dấu Agent đã projection là subagent và bỏ tool frontmatter không tương thích. |
 | Local build | Thư mục `--out` đã chọn | Không phải install scope | Dùng `--build-only --out <dir>`. |
 | Portable export | Thư mục `--out` đã chọn | Không phải install scope | Dùng `--target portable --out <dir>`; build mode được ngầm chọn. |
 
@@ -93,6 +106,11 @@ plugin delivery là hai mode riêng trong cùng scope; việc chuyển mode là 
 snapshot bảo vệ. Codex không có đầy đủ mức tương đương với Claude về command,
 Hook hoặc status line, vì vậy hãy xem kỹ cảnh báo thay vì giả định mọi
 component đều được chiếu sang runtime.
+
+Với Hook Codex global trên POSIX, wrapper đã thiết lập chỉ được alias leaf
+`hooks` cuối cùng tới `~/.codex/hooks` canonical của user đã resolve. AgentKit
+dùng path canonical đó cho command, thao tác ghi, rollback và ownership. Parent
+có link, target khác và mọi link hay reparse point trên Windows đều bị từ chối.
 
 `portable` chỉ để export. `--target portable` không có `--out` trả mã `1` trước
 preview, xác nhận, phân giải source, lifecycle preflight hoặc ghi đĩa:
@@ -103,8 +121,11 @@ init: target "portable" is export-only and has no install mode; re-run with --ou
 
 Chỉ dùng `--out` sẽ giữ source mặc định từ remote và JSON báo `mode: "build"`.
 Dùng rõ `--build-only --out` vẫn hợp lệ và chọn source mặc định cho local
-development. Portable không ghi install record. AGY chỉ hỗ trợ global và không
-phải peer trong lifecycle refresh.
+development. Thêm `--zip` khi portable export cũng cần tạo một ZIP có thể upload
+cho mỗi Skill. Portable không ghi install record. AGY chỉ hỗ trợ global và không
+phải peer trong lifecycle refresh. Pi là target projection cài đặt, không phải
+adapter `ak run`; dùng discovery riêng của Pi cho `.pi/skills` đã emit và đừng
+thay bằng `--target omp` trừ khi bạn muốn dispatch qua Oh My Pi.
 
 ## Xem lại hành vi xác nhận
 
@@ -126,7 +147,16 @@ không phải install destination.
 Khi chủ động tự động hoá, hãy chỉ định rõ route và xác nhận:
 
 ```bash
-ak kit init engineer --target codex --yes --no-interactive --json
+ak kit init engineer --target codex --yes --no-interactive --json --channel <channel>
+
+# Cài Grok trong project từ nguồn local development rõ ràng.
+ak kit init engineer --local --kits-dir ./kits --target grok --yes
+
+# Cài Grok cho user từ cùng nguồn cục bộ rõ ràng.
+ak kit init engineer --local --kits-dir ./kits --target grok --global --yes
+
+# Portable export với một ZIP có thể upload cho mỗi Skill.
+ak kit init engineer --target portable --out ./ak-export --zip
 ```
 
 ## Hiểu tác động trên đĩa

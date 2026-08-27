@@ -1,0 +1,89 @@
+---
+title: ak orchestrate stop
+description: Terminate các job live của run orchestrate bằng SIGTERM, một khoảng grace bounded, rồi SIGKILL — luôn chống lại identity worker đã verify, không bao giờ đoán từ PID persisted cũ.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak orchestrate stop` để gửi SIGTERM tới mọi job được cấp signal
+trong process group đã verify của run qua control socket của worker, chờ
+khoảng grace bounded, rồi SIGKILL chỉ job có group vẫn còn sống dưới cùng
+identity đã verify. Nếu không có worker live, đã verify tới được, lệnh
+báo điều đó thay vì đoán target kill.
+
+<Callout type="warning">
+  Stop không bao giờ fallback về signalling chỉ dựa trên PID persisted.
+  Một OS PID được tái dùng từ process khác không phải target kill hợp lệ;
+  lệnh từ chối signal nó và yêu cầu operator điều tra.
+</Callout>
+
+## Cách dùng
+
+```bash
+ak orchestrate stop <run-id>
+```
+
+Cung cấp đúng một argument theo vị trí — run ID do
+[`ak orchestrate start`](./start) in.
+
+## Cờ của lệnh
+
+Các cờ dùng chung (`--json`, `--no-interactive`, `--quiet`, `--verbose`,
+`--yes`) được mô tả trong [quy ước CLI](../cli-conventions). Stop tôn
+trọng `--yes` và `--no-interactive` cho cancellation dạng script; chính
+chuỗi shutdown không hỏi prompt.
+
+## Chuỗi shutdown
+
+1. **Verify worker.** Liên hệ control socket của run và xác nhận identity
+   của worker khớp với identity đã ghi ở `start`.
+2. **SIGTERM process group.** Mọi job được cấp signal trong group đã
+   verify nhận SIGTERM.
+3. **Chờ khoảng grace.** Worker cho mỗi job một khoảng thời gian bounded
+   để thoát sạch.
+4. **SIGKILL các job sống sót.** Chỉ job có group vẫn còn sống dưới cùng
+   identity đã verify nhận SIGKILL.
+5. **Persist kết quả.** Yêu cầu stop và kết quả từng job được ghi vào
+   state file của run.
+
+Nếu bước 1 thất bại — ví dụ, chính worker đã crash — không signal nào
+được gửi. Stop báo worker không tới được và thoát `1` thay vì signal PID
+persisted mà giờ có thể thuộc process khác.
+
+## Tác động filesystem
+
+Persist yêu cầu stop và kết quả của nó vào state file của run. Không xoá
+run state, log output, hay launch graph; các file đó vẫn để lại để kiểm
+tra.
+
+## Đầu ra dành cho người dùng và JSON
+
+`--json` trả về:
+
+```json
+{
+  "action": "stop",
+  "run_id": "<opaque>",
+  "worker_state": "live | crashed | unreachable",
+  "signalled": ["<job-id>", "..."],
+  "killed": ["<job-id>", "..."],
+  "survived": []
+}
+```
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Mọi job tới được, được cấp signal đã bị terminate. | Chạy `ak orchestrate status <run-id>` để xác minh. |
+| `1` | Không có worker live, đã verify tới được, hoặc một bước stop thất bại. | Điều tra; đừng force-signal PID persisted bằng tay. |
+| `2` | Parse cờ thất bại. | Sửa các cờ. |
+| `3` | Người dùng huỷ trong yêu cầu shutdown. | Chạy lại stop khi sẵn sàng. |
+| `6` | Nền tảng không hỗ trợ. | Ngoài Darwin không có worker persisted để stop. |
+
+## Lệnh liên quan
+
+- [`ak orchestrate`](./)
+- [`ak orchestrate start`](./start)
+- [`ak orchestrate resume`](./resume)
+- [`ak orchestrate status`](./status)

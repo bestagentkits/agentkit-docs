@@ -25,11 +25,16 @@ Run the install from the project that should own project-scoped content. Name
 the runtime explicitly so the destination is unambiguous:
 
 ```bash
-ak kit init engineer --target claude-code
-ak kit init engineer --target codex
+ak kit init engineer --target claude-code --channel <channel>
+ak kit init engineer --target codex --channel <channel>
+ak kit init engineer --target grok --channel <channel>
+ak kit init engineer --target pi --channel <channel>
 ```
 
-The default scope is the current project. `--global` selects the runtime's user
+Replace `<channel>` with the release channel selected in the docs header.
+Omitting `--channel` resolves `stable` and can return
+`version_not_available` for a target available only on another channel. The
+default scope is the current project; `--global` selects the runtime's user
 scope. Installing successfully in one scope does not make the Kit visible in a
 different project or user profile.
 
@@ -37,16 +42,38 @@ For Claude Code, project-native delivery is the default. Plugin delivery is a
 separate choice:
 
 ```bash
-ak kit init engineer --target claude-code --switch-to-plugin
-ak kit init engineer --target claude-code --global --switch-to-plugin
+ak kit init engineer --target claude-code --switch-to-plugin --channel <channel>
+ak kit init engineer --target claude-code --global --switch-to-plugin --channel <channel>
 ```
 
 The first command selects a project plugin; the second selects a user plugin.
 Do not add `--switch-to-plugin` to a Codex install.
 
-For release installs, the authenticated remote registry is the default source.
+For released targets, the authenticated remote registry is the default source.
 `--local` is for an explicit development or CI source and requires `--kits-dir`
-or `AGENTKIT_KITS_DIR`; it is not a fallback for a registry failure.
+or `AGENTKIT_KITS_DIR`; it is not a fallback for a registry failure. `--target grok` uses the signed Grok registry package by default. Add `--local
+--kits-dir` only for an explicit development or CI source; do not use local
+source as a fallback for a registry failure.
+
+A native Pi project install writes below `<project>/.pi/{skills,agents,rules,extensions}`.
+A Pi global install writes directly below the active `PI_CODING_AGENT_DIR` or
+`~/.pi/agent` profile. A fresh install refuses an occupied profile by default;
+retry with `--force` only after reviewing the occupied paths and deciding to
+authorize the overwrite. Pi installs do not provide `ak run --target pi` and do
+not write `.pi/commands/`.
+
+If the trusted project also contains a matching Codex Skill under
+`.agents/skills/`, a Pi install warns about which copy takes precedence.
+Project `.pi/skills/` wins for a project Pi install; the trusted project's
+`.agents/skills/` copy wins over a global Pi profile copy. The warning does not
+delete or rewrite either Skill.
+
+A native Grok project install writes below `<project>/.grok` and records
+lifecycle ownership below `<project>/.agentkit/adapters/grok/<kit>`. A global
+install uses `${GROK_HOME:-~/.grok}` and
+`${AGENTKIT_HOME:-~/.agentkit}/adapters/grok/<kit>`. This is separate from Grok
+scanning `.claude/settings.json` in Claude-compat mode. Native project Hooks do
+not run until you explicitly trust the project in Grok.
 
 ## Read the failure class
 
@@ -86,6 +113,12 @@ When the target already contains files, do not immediately retry with
 `--force`. First determine whether the content is AgentKit-owned, belongs to
 another install mode, or contains user changes.
 
+For global Codex Hooks, do not treat every symlink as interchangeable. On POSIX,
+only the final `hooks` leaf may point to the resolved user's canonical
+`~/.codex/hooks`; linked parents and other targets are refused. Windows
+symlinks and reparse points remain unsupported. Resolve the path mismatch
+instead of retrying with `--force`.
+
 ## Check runtime health and recorded content
 
 ```bash
@@ -93,11 +126,13 @@ ak doctor --adapter claude-code --json
 ak doctor --adapter codex --json
 ```
 
-Run only the adapter you targeted. Pass one of the documented adapter values:
-`claude-code`, `codex`, or `cursor`.
-An unknown `--check` name is a command error; use `ak doctor --list` for the
-names supported by the installed CLI. The `claude-code` filter also retains
-shared checks.
+Run only the adapter you targeted. Pass one of the documented adapter values
+that the installed CLI lists for Doctor; this release documents
+`claude-code`, `codex`, or `cursor` for adapter-specific checks. If a Grok-specific Doctor filter is not
+available in the installed CLI, inspect the install summary, native roots, and
+Grok discovery instead. An unknown `--check` name is a command
+error; use `ak doctor --list` for the names supported by the installed CLI. The
+`claude-code` filter also retains shared checks.
 
 Kit integrity and removability checks inspect only directories with positive
 AgentKit ownership evidence: a matching lifecycle install manifest or
@@ -147,10 +182,13 @@ applying a snapshot.
 
 ## Verify the result
 
-Run the adapter-specific doctor check again. Then start a new runtime session
-in the same project and verify that the expected Skill or Agent is available.
-If the install is healthy but runtime discovery still fails, continue with
-[Runtime cannot find a Skill or Agent](./runtime-cannot-find-skill-or-agent).
+Run the adapter-specific doctor check again where one exists. For Pi, start a fresh Pi session in the same project or active global profile,
+then verify `.pi/skills/ak-<slug>/SKILL.md`, `.pi/agents/`, and
+`.pi/extensions/` instead of looking for `.pi/commands/`. For Grok, start a
+new session in the same project, trust project Hooks if applicable, and verify
+discovery below `.grok`. Then confirm that the expected Skill or Agent is
+available. If the install is healthy but runtime discovery still fails, continue
+with [Runtime cannot find a Skill or Agent](./runtime-cannot-find-skill-or-agent).
 
 ## Related pages
 

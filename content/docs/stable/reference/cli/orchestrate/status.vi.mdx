@@ -1,0 +1,93 @@
+---
+title: ak orchestrate status
+description: Báo state lifecycle hiện tại của một run orchestrate qua control socket đã verify, fallback về identity probe mới thay vì tin record cũ như vẫn đang chạy.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak orchestrate status` để báo state lifecycle hiện tại của một run.
+Lệnh với qua control socket đã verify của worker live khi tới được; ngược
+lại reconcile persisted state so với identity probe mới. Chỉ mỗi record cũ
+không bao giờ được báo là vẫn đang chạy.
+
+## Cách dùng
+
+```bash
+ak orchestrate status <run-id>
+```
+
+Cung cấp đúng một argument theo vị trí — run ID do
+[`ak orchestrate start`](./start) in.
+
+## Cờ của lệnh
+
+Các cờ dùng chung (`--json`, `--no-interactive`, `--quiet`, `--verbose`,
+`--yes`) được mô tả trong [quy ước CLI](../cli-conventions). `--json` trả
+về envelope một object an toàn để script polling.
+
+## Field được báo
+
+Với mỗi job, lệnh báo:
+
+- **State** — `queued`, `running`, `completed`, `failed`, `orphaned`, hoặc
+  `unknown`.
+- **PID / PGID** — identity đã verify khi worker tới được.
+- **Heartbeat** — thời điểm cuối worker báo hoạt động cho job.
+- **Thời gian output cuối** — lần ghi cuối vào log stdout hoặc stderr của
+  job.
+- **Nhãn command hiện tại** — nhãn do graph khai báo mà worker đang chạy
+  lúc state được ghi.
+
+<Callout type="warning">
+  Job có worker gốc chết giữa chừng được báo là `orphaned`, không phải
+  `running`. Tin PID đã persist mà không có identity probe mới sẽ có nguy
+  cơ báo một OS PID được tái dùng từ process khác như công việc đang được
+  giám sát; lệnh từ chối rõ ràng làm việc đó.
+</Callout>
+
+## Tác động filesystem
+
+Read-only, với một ngoại lệ: reclassification mới (ví dụ, worker đã crash
+kể từ lần check trước) được persist để các lệnh sau thấy cùng thực tế.
+
+## Đầu ra dành cho người dùng và JSON
+
+`--json` trả về:
+
+```json
+{
+  "action": "status",
+  "run_id": "<opaque>",
+  "worker_state": "live | crashed | unreachable",
+  "jobs": [
+    {
+      "id": "<job-id>",
+      "state": "running",
+      "pid": 12345,
+      "pgid": 12345,
+      "heartbeat": "<rfc3339>",
+      "last_output_at": "<rfc3339>",
+      "current_command_label": "<graph-label>"
+    }
+  ]
+}
+```
+
+Đầu ra dành cho người dùng in một job mỗi hàng với cùng field.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Status được báo thành công. | Dùng các field; đừng suy `running` từ `pid` mà không có `worker_state` khớp. |
+| `1` | Run ID không tìm thấy hoặc state hỏng/không hỗ trợ. | Không retry cùng input; điều tra record persisted. |
+| `2` | Parse cờ thất bại. | Sửa các cờ. |
+| `3` | Bị interrupt. | Chạy lại status. |
+| `6` | Nền tảng không hỗ trợ. | Ngoài Darwin không có worker persisted để query. |
+
+## Lệnh liên quan
+
+- [`ak orchestrate`](./)
+- [`ak orchestrate start`](./start)
+- [`ak orchestrate resume`](./resume)
+- [`ak orchestrate stop`](./stop)

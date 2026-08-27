@@ -1,15 +1,23 @@
 ---
-title: Lỗi Hook trên Grok CLI
-description: Tắt lỗi Hook Claude-compat trên Grok mà không sửa settings.json do AgentKit quản lý, rồi bật lại scan Claude sau bản AgentKit gộp command Hook global.
+title: Lỗi Hook Claude-compat trên Grok
+description: Sửa lỗi Hook Claude-compat trên Grok mà không nhầm scanner này với target Grok native của AgentKit.
 ---
 
-Dùng trang này khi Grok CLI báo lỗi Hook mỗi lần gửi prompt hoặc gọi tool, đặc
-biệt khi thiếu `~/.claude/node`, sau khi cài Kit AgentKit global cho Claude
-Code.
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng trang này khi Grok báo lỗi Hook sau khi Kit được cài cho Claude Code và
+Grok đang scan settings Claude. Trang này không mô tả bản cài native
+`--target grok`.
+
+<Callout type="warning">
+  `--target grok` native là target registry đã ký riêng. Target này ghi dưới
+  `.grok`, không phải `.claude`. Chỉ dùng `--local --kits-dir` cho nguồn
+  development hoặc CI. Xem [Cài đặt Kit](../guides/installing-kits).
+</Callout>
 
 ## Xác nhận triệu chứng
 
-Dấu hiệu thường gặp:
+Dấu hiệu thường gặp trên đường Claude-compat:
 
 - Grok báo lỗi Hook trên `SessionStart`, `UserPromptSubmit`, `PreToolUse`,
   `PostToolUse` hoặc `Stop`.
@@ -17,15 +25,24 @@ Dấu hiệu thường gặp:
 - Hook one-liner đã nằm trong một chuỗi `command` vẫn chạy. Entry
   `"command": "node"` kèm mảng `args` thì thất bại.
 
-Grok mặc định đọc `~/.claude/settings.json`. Nó coi `command` là đường dẫn
-tương đối so với file JSON đó, hoặc là lệnh shell nội tuyến khi chuỗi có
-khoảng trắng. Nó không dùng mảng `args` của Claude.
+Trong compatibility mode này, Grok mặc định đọc `~/.claude/settings.json`. Nó
+coi `command` là đường dẫn tương đối so với file JSON đó, hoặc là lệnh shell nội
+tuyến khi chuỗi có khoảng trắng. Nó không dùng mảng `args` của Claude.
+
+## Chọn một nguồn Hook
+
+- **Claude-compat scanning:** Kit được cài bằng `--target claude-code`, còn Grok
+  đọc `~/.claude/settings.json` hoặc `<project>/.claude/settings.json`. Tiếp tục
+  với workaround trên trang này.
+- **Native Grok projection:** Kit được cài bằng `--target grok` từ nguồn
+  `--local --kits-dir` rõ ràng. Grok đọc file native do AgentKit quản lý dưới
+  `.grok`; không áp dụng workaround cho settings Claude hoặc thêm overlay trùng.
 
 ## Không sửa settings do AgentKit quản lý
 
 Không viết lại `command` / `args` trong `~/.claude/settings.json` hoặc
 `<project>/.claude/settings.json`. `ak kit update` nhận diện Hook được quản lý
-theo đường dẫn script `.cjs` rồi ghi lại dạng exec-form.
+theo đường dẫn script `.cjs` rồi ghi lại cấu trúc do AgentKit quản lý.
 
 Không tạo `~/.claude/node` thành symlink tới Node thật. Grok vẫn bỏ `args`,
 nên shim đó chỉ mở Node mà không chạy script.
@@ -33,82 +50,63 @@ nên shim đó chỉ mở Node mà không chạy script.
 Không thêm bản sao Hook dưới `~/.grok/hooks/` khi vẫn bật scan Claude compat.
 Grok merge các nguồn và Hook sẽ chạy hai lần.
 
-## Workaround cho đến khi AgentKit gộp Hook global
+## Sửa đường Claude-compat
 
-Giữ Claude Code trên file settings do AgentKit quản lý. Cho Grok dùng file Hook
-của chính nó và tắt scan Hook Claude.
+Từ `v2.13.0-beta.7`, AgentKit gộp mỗi Hook Node global được quản lý thành một
+`command` shell-form đã quote, chứa Node runner tuyệt đối và đường dẫn script,
+rồi xóa `args`. Grok có thể chạy dạng này qua Claude compatibility scanner.
+Settings Claude project-native vẫn giữ dạng portable `node "<script>"`.
 
-1. Trong `~/.grok/config.toml`:
-
-```toml
-[compat.claude]
-hooks = false
-```
-
-Cùng một công tắc cho một process: `GROK_CLAUDE_HOOKS_ENABLED=0`.
-
-2. Thêm file Hook native của Grok dưới `~/.grok/hooks/`. Dùng `command` one-liner
-   có đường dẫn script, đúng form Grok đã chấp nhận:
-
-```json
-{
-  "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node '/Users/you/.claude/hooks/session-init.cjs'"
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
-Chỉ copy các Hook AgentKit bạn cần từ `~/.claude/settings.json`. Giữ timeout và
-matcher. Quote đường dẫn có khoảng trắng.
-
-3. Khởi động lại Grok và kiểm tra `/hooks`. Hook ở project còn cần
-   `/hooks-trust` hoặc `--trust` trước khi chạy.
-
-Overlay này nằm ngoài ownership của AgentKit. Cập nhật hoặc gỡ Kit sẽ không tạo,
-làm mới, hay xóa `~/.grok/hooks/`. Kiểm tra lại overlay khi Kit thêm hoặc bớt
-Hook.
-
-Settings Claude **project-native** đã emit dạng portable `node "<script>"`.
-Lỗi nằm ở exec-form **global** trong `~/.claude/settings.json`.
-
-## Sau khi bản sửa AgentKit được cài
-
-Sửa bền là AgentKit gộp Hook Node global thành một command shell-form đã quote,
-kèm absolute Node runner, rồi xóa `args`. Theo dõi
-[agentkit#1607](https://github.com/bestagentkits/agentkit/issues/1607).
-
-Khi CLI đó đã cài:
+Settings global hiện có sẽ được migrate trong lần cập nhật Kit tiếp theo:
 
 ```bash
 ak kit update engineer --target claude-code --global
 ```
 
-Dùng đúng tên Kit bạn đã cài. Sau đó xóa overlay Grok nếu không còn cần, đặt
-`[compat.claude] hooks = true` (hoặc xóa key đó; mặc định là bật), rồi mở
-session Grok mới.
+Dùng đúng tên Kit bạn đã cài. `ak kit update` thay entry exec-form cũ được quản
+lý theo identity `.cjs` và giữ nguyên Hook bên ngoài. Không tự viết lại command
+được tạo.
 
-`ak doctor` có thể xác nhận Node runner vẫn resolve được. Đừng coi output
-doctor là bằng chứng schema stdin của Grok.
+Nếu trước đây bạn đã cài overlay tạm dưới `~/.grok/hooks/`:
 
-## Hành vi còn lại trên Grok
+1. Giữ scan Hook Claude ở trạng thái tắt trong lúc cập nhật Kit.
+2. Chỉ xóa các bản sao Hook AgentKit mà bạn đã thêm dưới `~/.grok/hooks/`.
+3. Trong `~/.grok/config.toml`, đặt `[compat.claude] hooks = true`, hoặc xóa key
+   `hooks` vì mặc định là bật. Đồng thời ngừng đặt
+   `GROK_CLAUDE_HOOKS_ENABLED=0` nếu bạn đã dùng override ở cấp process.
+4. Mở session Grok mới và kiểm tra `/hooks`. Hook ở project vẫn cần
+   `/hooks-trust` hoặc `--trust` trước khi chạy.
 
-Dù `command` đã chạy được, một số Hook AgentKit được viết cho JSON stdin
-snake_case của Claude Code. Grok gửi field camelCase như `hookEventName` và
-`toolName`. Các Hook đó có thể no-op hoặc fail-open trên Grok. Đó là lệch
-schema riêng, không phải lỗi thiếu `~/.claude/node`.
+Không giữ overlay sau khi bật lại scan Hook Claude. Grok merge cả hai nguồn, nên
+Hook trùng lặp sẽ chạy hai lần.
+
+Bản sửa được phát hành trong
+[agentkit#1609](https://github.com/bestagentkits/agentkit/pull/1609), giải quyết
+[agentkit#1607](https://github.com/bestagentkits/agentkit/issues/1607).
+`ak doctor` có thể xác nhận Node runner vẫn resolve được. Đừng coi output doctor
+là bằng chứng schema stdin của Grok.
+
+## Hiểu ranh giới schema
+
+Bản sửa Claude-compat ở trên chỉ sửa cách load command. Grok vẫn gửi raw stdin
+envelope camelCase tới Hook được khám phá qua `.claude`, vì vậy Hook cần field
+snake_case của Claude có thể no-op hoặc fail open.
+
+`--target grok` native xử lý Hook command exec-form theo cách khác: AgentKit emit
+launcher `agentkit-grok-envelope-shim.cjs` thuộc quyền sở hữu để bổ sung field,
+event value và tên tool theo dạng Claude mà script trong Kit cần. Shim cũng
+chuyển một block exit-2 `PreToolUse` áp dụng được thành deny decision của Grok.
+HTTP handler và command handler không có argument exec-form không được wrap và
+vẫn nhận raw envelope của Grok.
+
+Hook native trong project không hoạt động đến khi bạn chủ động trust project.
+Timeout, crash, output sai định dạng và lỗi shim đều fail open; chỉ một denial
+`PreToolUse` áp dụng được mới chặn action. Hãy coi quyền của Grok là ranh giới
+enforcement thay vì chỉ dựa vào Hook.
 
 ## Trang liên quan
 
+- [Cài đặt Kit](../guides/installing-kits)
 - [Lỗi cấu hình](./configuration)
 - [Lỗi cài Kit](./kit-installation)
 - [Cập nhật và khôi phục](./updates)

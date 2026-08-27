@@ -88,7 +88,7 @@ are:
 | `cp` | Performs the commit workflow | Pushes the current branch after committing |
 | `pr [to-branch] [from-branch]` | Analyzes the remote branch comparison | Pushes the source branch when needed and creates a GitHub pull request; target defaults to `main`, source to the current branch |
 | `merge [to-branch] [from-branch]` | Checks out and updates the target, then merges `origin/<from-branch>` with a merge commit | Pushes the target branch; target defaults to `main`, source to the current branch |
-| `merge-pr <pr-ref>` | Inspects PR state and repository conventions | Merges the GitHub PR, can enable auto-merge for pending checks, and watches post-merge CI |
+| `merge-pr <pr-ref>` | Inspects PR state and repository conventions | Merges the GitHub PR; the native path may enable auto-merge for pending checks, while the REST fallback waits for terminal-green checks before merging; then watches post-merge CI |
 
 `merge-pr` requires a PR number or URL. The other branch arguments use the
 documented defaults when omitted.
@@ -133,16 +133,23 @@ rejected pushes remain visible for manual resolution.
 
 ### GitHub PR merge
 
+The workflow first probes GraphQL availability. Readiness reads use native
+`gh pr` commands when available and REST fallbacks when GraphQL is blocked.
+This adaptive path does not make every GitHub operation GraphQL-free: native
+`gh pr merge` and auto-merge enablement still rely on GraphQL.
+
 The `merge-pr` workflow:
 
 1. **Checks readiness.** The PR must be open, mergeable, free of requested
    changes, allowed by branch policy, and not have red CI.
 2. **Selects a merge method.** It follows project instructions, recent merged
    PRs, repository settings, then defaults to a merge commit.
-3. **Merges or enables auto-merge.** Pending checks can use `--auto`; red checks
-   and conflicts stop the workflow.
-4. **Waits for the actual merge.** Auto-merge is polled before post-merge work
-   begins; a wait beyond 30 minutes is reported as a blocker.
+3. **Uses the available merge path.** With GraphQL available, pending checks may
+   use `--auto`. The REST fallback cannot enable auto-merge; it polls until
+   checks are terminal-green, refuses non-green results, and then merges through
+   REST. Red checks and conflicts stop either path.
+4. **Waits for the actual merge.** Native auto-merge is polled before post-merge
+   work begins; a wait beyond 30 minutes is reported as a blocker.
 5. **Watches target-branch CI.** Runs for the merge commit are watched to a
    conclusion.
 6. **Handles deterministic failures.** A repository-fixable post-merge failure
@@ -212,4 +219,5 @@ Expected evidence includes:
   outages, missing permissions, required review, or branch protection.
 - Cursor slash invocation is user-verified evidence, not proof of agent or
   GitHub-tool parity.
-- Stable and beta package the same `ak:git` operations and gates.
+- Release evidence establishes the `ak:git` operations and gates described here;
+  do not infer parity with another Skill version or runtime projection.

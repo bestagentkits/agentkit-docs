@@ -42,6 +42,13 @@ cache fails closed.
 Use `--local --kits-dir <dir>` only for an explicit development or CI source.
 It is not a fallback for failed authentication or entitlement.
 
+<Callout type="info">
+  Grok Build is a signed registry target for normal Kit installation. Use
+  `--local --kits-dir <dir>` only when intentionally selecting a development or
+  CI source. AgentKit emits Grok runtime files and lifecycle metadata; Grok
+  still owns authentication, model, trust, permission, and sandbox behavior.
+</Callout>
+
 ## Usage
 
 ```bash
@@ -50,6 +57,9 @@ ak kit init <kit-name>
 
 Supply one installable kit name in scripts. On an interactive TTY, omitting the
 name can open the setup wizard; a scripted invocation without the name fails.
+
+For remote examples, replace `<channel>` with the release channel selected in
+the docs header. Omitting `--channel` selects `stable`.
 
 ## Command flags
 
@@ -69,8 +79,9 @@ name can open the setup wizard; a scripted invocation without the name fails.
 | `--select-skills` | `false` | Choose kit skills interactively. |
 | `--skills <names>` | Empty | Install only a comma-separated set of skills. |
 | `--switch-to-plugin` | `false` | Select Claude Code plugin delivery at the chosen scope. |
-| `--target <ids>` | `claude-code` | Select one or more comma-separated emitter target IDs. |
+| `--target <ids>` | `claude-code` | Select one or more comma-separated emitter target IDs, including `grok` and `pi`; generated command facts may lag newly registered Kit projection targets. |
 | `--version <version>` | Channel latest | Select a remote kit version. |
+| `--zip` | `false` | With `--target portable`, also write one uploadable ZIP per Skill. |
 
 `--skills`, `--exclude-skills`, and `--select-skills` are alternative selection
 modes. `--select-skills` requires an interactive terminal. Shared flags are
@@ -84,7 +95,9 @@ listed in [CLI conventions](../cli-conventions).
 | Claude Code plugin | `ak-<kit>` in the project | `ak-<kit>` under the configured Claude plugin root | Add `--switch-to-plugin`; add `--global` for user scope. |
 | Codex native | Skills under `.agents/skills` and other project `.codex` surfaces | Skills under `~/.agents/skills` and other `~/.codex` surfaces | `--target codex`; add `--global` for user scope. |
 | Cursor | Project `.cursor` surfaces | User `.cursor` surfaces | `--target cursor`; add `--global` for user scope. |
-| AGY | Unsupported | Skills under both `~/.gemini/config/skills` and `~/.gemini/antigravity-cli/skills`, with optional Agents under `~/.gemini/config/agents` | Use `--target agy --global`; remote source resolves the signed `claude-code` package. |
+| Grok Build native | Runtime files under `.grok` plus lifecycle metadata under `.agentkit/adapters/grok/<kit>/` | Runtime files under `$GROK_HOME` (default `~/.grok`) plus lifecycle metadata under `${AGENTKIT_HOME:-~/.agentkit}/adapters/grok/<kit>/` | Use `--target grok`; add `--global` for user scope. |
+| Pi native spike | Runtime files under `.pi/skills`, `.pi/agents`, `.pi/rules`, and `.pi/extensions` | Active Pi coding-agent profile (`PI_CODING_AGENT_DIR` or `~/.pi/agent`) with no extra `.pi/` segment | Use `--target pi`; add `--global` for user scope. An occupied profile is refused unless `--force` explicitly authorizes the overwrite. |
+| AGY | Unsupported | Skills under both `~/.gemini/config/skills` and `~/.gemini/antigravity-cli/skills`, with optional Agents under `~/.gemini/config/agents/<name>/agent.md` | Use `--target agy --global`; remote source resolves the signed `claude-code` package, marks projected Agents as subagents, and strips incompatible tool frontmatter. |
 | Local build | The selected `--out` directory | Not an install scope | Use `--build-only --out <dir>`. |
 | Portable export | The selected `--out` directory | Not an install scope | Use `--target portable --out <dir>`; build mode is implied. |
 
@@ -93,6 +106,11 @@ separate modes within a scope; switching modes is an explicit, snapshot-backed
 transition. Codex does not provide full Claude command, Hook, or status-line
 parity, so review emitted warnings instead of assuming every component was
 projected.
+
+For global Codex Hooks on POSIX, an established wrapper may alias only the final
+`hooks` leaf to the resolved user's canonical `~/.codex/hooks`. AgentKit uses
+that canonical path for commands, writes, rollback, and ownership. Linked
+parents, other targets, and all Windows links or reparse points are rejected.
 
 `portable` is export-only. `--target portable` without `--out` exits `1` before
 preview, confirmation, source resolution, lifecycle preflight, or disk writes:
@@ -103,8 +121,11 @@ init: target "portable" is export-only and has no install mode; re-run with --ou
 
 `--out` alone preserves the remote source default and reports `mode: "build"` in
 JSON. Explicit `--build-only --out` remains valid and selects the
-local-development source default. Portable writes no install record. AGY is
-global-only and is not a refresh lifecycle peer.
+local-development source default. Add `--zip` when a portable export should also
+produce one uploadable ZIP per Skill. Portable writes no install record. AGY is
+global-only and is not a refresh lifecycle peer. Pi is an install projection
+target, not an `ak run` adapter; use Pi's own discovery for emitted `.pi/skills`
+and do not substitute `--target omp` unless you intend Oh My Pi dispatch.
 
 ## Review confirmation behavior
 
@@ -124,7 +145,16 @@ than an install destination.
 For intentional automation, specify the route and confirmation explicitly:
 
 ```bash
-ak kit init engineer --target codex --yes --no-interactive --json
+ak kit init engineer --target codex --yes --no-interactive --json --channel <channel>
+
+# Grok project install from an explicit local development source.
+ak kit init engineer --local --kits-dir ./kits --target grok --yes
+
+# Grok user install from the same explicit local source.
+ak kit init engineer --local --kits-dir ./kits --target grok --global --yes
+
+# Portable export with one uploadable ZIP per Skill.
+ak kit init engineer --target portable --out ./ak-export --zip
 ```
 
 ## Understand disk effects

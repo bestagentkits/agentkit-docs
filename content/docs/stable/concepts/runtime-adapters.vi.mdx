@@ -1,6 +1,6 @@
 ---
 title: Runtime adapter
-description: So sánh cách AgentKit cung cấp capability được hỗ trợ cho Claude Code, Codex và Cursor.
+description: So sánh runtime adapter cho Claude Code, Codex, Cursor, DeepSeek Harness, Grok, Pi và Oh My Pi.
 ---
 
 Các coding assistant không dùng chung cấu trúc tệp, bộ công cụ hay mô hình
@@ -42,8 +42,11 @@ Cách phân phối trả lời câu hỏi **runtime tải bản cài như thế 
 
 Scope và cách phân phối độc lập với nhau. Vì vậy, Claude Code có thể dùng native
 theo project, native theo người dùng, plugin theo project hoặc plugin theo người
-dùng. Bản cài Codex và Cursor dùng cấu trúc native theo project hoặc người dùng;
-`--switch-to-plugin` không chọn cách phân phối plugin cho hai runtime này.
+dùng. Bản cài Codex, Cursor, Grok, Pi và Oh My Pi dùng cấu trúc native theo
+project hoặc người dùng. DeepSeek Harness hiện là adapter dispatch `ak run --target dsh`,
+không phải target projection Kit. Cài Grok từ nguồn cục bộ vẫn khả dụng cho development và CI với source `--local --kits-dir` rõ ràng, nhưng
+chỉ từ nguồn Kit cục bộ rõ ràng. `--switch-to-plugin` không chọn cách phân phối
+plugin cho các target này.
 
 Trong cùng một scope, phân phối native và plugin cho cùng một Claude Code Kit
 loại trừ lẫn nhau. Chọn mode còn lại sẽ bắt đầu một lần chuyển đổi rõ ràng; thao
@@ -63,6 +66,64 @@ các bề mặt hoạt động khác nhau:
 | Claude Code | Phân phối native hoặc plugin được chọn rõ ràng. Skills, agents, slash commands, rules, hooks và status line của AgentKit có thể hoạt động ở scope project hoặc người dùng. |
 | Codex | Khám phá Skill theo cơ chế native, rules và giao việc cho Agent qua AgentKit runtime cục bộ. Hook chỉ được hỗ trợ một phần; group không được hỗ trợ sẽ không được chuyển sang runtime, còn trạng thái task được làm mới tại ranh giới lượt làm việc và subagent được hỗ trợ thay vì sau mọi lần gọi công cụ task. Tệp command của Kit chỉ được giữ làm nội dung hỗ trợ không hoạt động và Codex không có bề mặt status line của AgentKit. |
 | Cursor | Adapter chuyển Skills, agents, rules và hooks sang scope project hoặc người dùng. Tệp command của Kit chỉ được giữ làm nội dung hỗ trợ không hoạt động, không có bề mặt status line của AgentKit và adapter không cung cấp công cụ quản lý plan chuyên biệt. Phạm vi xác minh cài đặt, cập nhật và invocation trực tiếp chưa đầy đủ trên mọi thiết lập provider, vì vậy không suy ra parity hoàn toàn chỉ từ việc source có hỗ trợ. |
+| DeepSeek Harness | Adapter dispatch cho `ak run --target dsh`. Setup ghi adapter đã bật và resolve `AGENTKIT_DSH_BIN` hoặc `dsh`, nhưng Kit projection chưa được đăng ký cho `ak kit init --target dsh`; hãy dùng target projection Kit khác cho inventory đã cài. |
+| Grok Build | Target Kit registry đã ký với projection native. Rule, Skill, Agent và Hook được hỗ trợ nằm dưới `<project>/.grok` hoặc `${GROK_HOME:-~/.grok}`; metadata lifecycle nằm riêng dưới `<project>/.agentkit/adapters/grok/<kit>` hoặc `${AGENTKIT_HOME:-~/.agentkit}/adapters/grok/<kit>`. Command và export không được hỗ trợ vẫn là sidecar không hoạt động. Cài từ nguồn cục bộ vẫn khả dụng cho development và CI. |
+| Pi | Projection Kit `--target pi` đã đăng ký ở source. Bản cài project ghi Skill portable `ak-<slug>` dưới `.pi/skills/`, Agent đã remap dưới `.pi/agents/`, rule thuộc sở hữu dưới `.pi/rules/` và extension first-party dưới `.pi/extensions/`. Bản cài global có điều kiện ghi trực tiếp dưới profile Pi coding-agent đang hoạt động. Pi vẫn là target spike: không có `ak run --target pi`, không wrap harness đầy đủ, không ghi `.pi/commands/`, và sidecar không hoạt động vẫn nằm trong lifecycle ownership. |
+| Oh My Pi | Target cài native cho scope project hoặc người dùng, đồng thời hỗ trợ dispatch Skill không tương tác qua `ak run --target omp`. Skill, Agent, rule và instruction của Kit dùng các bề mặt discovery native của OMP; export không được hỗ trợ vẫn là sidecar không hoạt động. Oh My Pi tự quản backend và credential đã cấu hình. |
+
+### Projection và discovery trên Pi
+
+Bản cài project bằng `ak kit init <kit> --target pi` ghi các thư mục Skill
+portable như `.pi/skills/ak-cook/SKILL.md`, Agent đã remap như
+`.pi/agents/Explore.md`, `.pi/agents/Plan.md` và `.pi/agents/ak-<kit>-*.md`,
+cùng rule thuộc sở hữu dưới `.pi/rules/`. Hook, file coding-level, statusline,
+script chạy được và sidecar nằm dưới `.pi/extensions/agentkit-hooks-<kit>/`;
+Agent runner dùng chung nằm dưới `.pi/extensions/agentkit-agent/`. AgentKit
+không ghi `.pi/commands/` và không đăng ký slash command của Pi.
+
+Với `--global`, AgentKit ghi trực tiếp dưới profile Pi coding-agent đang hoạt
+động, phân giải từ `PI_CODING_AGENT_DIR` hoặc `~/.pi/agent`; lệnh không thêm một
+đoạn `.pi/` nữa dưới profile đó. Theo mặc định, bản cài mới sẽ từ chối profile đã
+có nội dung. Chỉ truyền `--force` sau khi xem các đường dẫn đang chiếm chỗ và
+quyết định cho phép ghi đè. Projection Pi tách biệt với dispatch Oh My Pi: bản
+phát hành này không có `ak run --target pi` và không wrap agent loop của Pi.
+
+### Projection và discovery trên Oh My Pi
+
+Bản cài project bằng `ak kit init <kit> --target omp` ghi Skill bên dưới
+`.omp/skills/<name>/`, Agent vào `.omp/agents/<name>.md` và rule vào
+`.omp/rules/<name>.md`. AgentKit cũng thêm một block theo Kit vào `AGENTS.md`
+của project, giới hạn bởi `<!-- AGENTKIT-OMP:START:<kit> -->` và
+`<!-- AGENTKIT-OMP:END:<kit> -->`. Khi cập nhật hoặc gỡ Kit đó, AgentKit chỉ thay
+đổi block được quản lý và giữ nguyên nội dung của người dùng.
+
+Với `--global`, AgentKit phân giải root OMP theo thứ tự:
+`AGENTKIT_OMP_HOME`, `OMP_HOME`, `PI_CODING_AGENT_DIR`, rồi `~/.omp/agent`.
+Các thư mục `skills/`, `agents/`, `rules/` cùng `AGENTS.md` nằm dưới root đã
+phân giải. Command, Hook, schema, script, file status line và các bề mặt Kit
+không được hỗ trợ khác được giữ ở trạng thái không hoạt động dưới
+`.agentkit/adapters/omp/<kit>/sidecars/` thay vì được project thành behavior
+native của OMP.
+
+Cài đặt và dispatch là hai tuyến riêng. `ak kit init ... --target omp` tạo
+projection Kit để runtime discover; `ak run <kit>/<skill> --target omp` chạy
+một Skill đã resolve qua OMP CLI cục bộ mà không thay thế inventory đã cài.
+
+Hook command exec-form native trên Grok dùng launcher
+`agentkit-grok-envelope-shim.cjs` thuộc quyền sở hữu để bổ sung field và tên tool
+theo dạng Claude mà script trong Kit cần. HTTP handler và command handler không
+có argument exec-form nhận raw envelope camelCase của Grok. Hook trong project
+không hoạt động đến khi bạn chủ động trust project. Timeout, crash, output sai
+định dạng và lỗi shim đều fail open; chỉ một denial `PreToolUse` áp dụng được mới
+chặn action, vì vậy hãy kết hợp Hook nhạy cảm về an toàn với quyền của Grok.
+
+`ak run <kit>/<skill> --target dsh` và `ak run <kit>/<skill> --target grok` là
+các tuyến dispatch native của AgentKit. DeepSeek Harness resolve `AGENTKIT_DSH_BIN`
+hoặc `dsh`; Grok resolve `AGENTKIT_GROK_BIN` hoặc `grok`. AgentKit sở hữu việc
+đóng khung process, còn runtime và người dùng sở hữu model, xác thực, trust,
+quyền, sandbox và cấu hình native. Dispatch Grok tách biệt với Claude-compat
+scanner của Grok đọc settings `.claude`. Remote Grok init và refresh dùng package
+registry đã ký; chỉ dùng `--local --kits-dir` khi bạn chủ động chọn nguồn development hoặc CI.
 
 Với Hook native của Claude Code, AgentKit kiểm tra toàn bộ runtime closure trước
 khi thay đổi tệp. Preflight dừng mà không sửa gì nếu nội dung chưa được theo dõi
@@ -94,6 +155,12 @@ Argument rỗng bị từ chối với cảnh báo riêng, shim cùng path và c
 deduplicate, còn xung đột cùng path giữ nội dung emit đầu tiên rồi cảnh báo.
 Đường dẫn không cần shim tiếp tục dùng lệnh trực tiếp.
 
+Trên POSIX, Codex home do wrapper quản lý chỉ được liên kết leaf `hooks` cuối
+cùng tới thư mục canonical `~/.codex/hooks` của user đã resolve. AgentKit resolve
+alias đó một lần rồi dùng path canonical cho thao tác ghi Hook, command,
+rollback và ownership. Parent có link, target khác hoặc mọi symlink hay reparse
+point trên Windows đều bị từ chối.
+
 Không suy ra runtime được hỗ trợ chỉ từ tên tệp hoặc hành vi của runtime khác.
 Hãy dùng phần tóm tắt sau khi cài và tài liệu Skill liên quan làm căn cứ cho nội
 dung nào đã hoạt động. Cảnh báo về nội dung được giữ lại hoặc bị bỏ qua là kết
@@ -105,9 +172,14 @@ quả capability, không nhất thiết là cài đặt thất bại.
 2. Chọn scope project hoặc người dùng theo nơi workflow cần khả dụng.
 3. Với Claude Code, giữ cách phân phối native trừ khi bạn chủ động muốn cơ chế
    kích hoạt và lifecycle của plugin.
-4. Review cảnh báo của adapter sau khi cài, đặc biệt với Hooks và các bề mặt UI
+4. Chọn DeepSeek Harness bằng `ak run --target dsh` khi bạn muốn dispatch Skill
+   trực tiếp qua binary `dsh` cục bộ; đây không phải target cài Kit.
+5. Chọn Grok Build với `--target grok` khi bạn muốn package Grok đã ký; chỉ
+   thêm `--local --kits-dir` cho nguồn development hoặc CI.
+6. Chọn Oh My Pi bằng `--target omp` khi cần package OMP Kit đã ký, hoặc dùng `ak run --target omp` để dispatch Skill trực tiếp.
+7. Review cảnh báo của adapter sau khi cài, đặc biệt với Hook và các bề mặt UI
    chỉ có ở một số runtime.
-5. Bắt đầu một phiên runtime mới nếu assistant chưa tải lại nội dung vừa cài.
+8. Bắt đầu một phiên runtime mới nếu assistant chưa tải lại nội dung vừa cài.
 
 Xem [Cài đặt Kit](../guides/installing-kits) để biết lệnh cài đặt. Xem
 [Kits, Skills, Agents và Hooks](./building-blocks) để hiểu mô hình thành phần.
