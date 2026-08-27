@@ -12,11 +12,11 @@ export const RELEASE_SHAPE_BASELINE = Object.freeze({
   sourceCommit: 'c92e356c5ee14efc7f2becaec4d9a3a3634e1b34',
   channels: ['beta', 'stable'],
   locales: ['en', 'vi'],
-  // Per-channel: stable stays bound to channels.stable.tag; beta may include
-  // routes authored ahead of the next stable promote. Beta must remain a
-  // superset of stable so a whole-copy promote is safe.
-  sourceRoutesPerLocaleChannel: { stable: 400, beta: 407 },
-  routesPerLocaleChannel: { stable: 399, beta: 406 },
+  // Per-channel route counts follow each channel's immutable evidence. The
+  // shape guard still requires Beta to contain every Stable route; the Kit
+  // catalog guard separately enforces each channel's exact inventory snapshot.
+  sourceRoutesPerLocaleChannel: { stable: 407, beta: 407 },
+  routesPerLocaleChannel: { stable: 406, beta: 406 },
   reviewedSourceOnlyRoutes: [
     {
       route: 'changelog',

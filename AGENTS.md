@@ -63,8 +63,11 @@ continuous with the marketing site. Do **not** invent colours, fonts, or radii.
   each channel, EN and VI must publish the same route shape. Across channels,
   Stable must remain a subset of Beta; Beta may add routes and prose ahead of
   the next promotion. Never mirror Beta-only content into `stable/` to satisfy
-  parity checks — Stable changes only through the whole-copy promotion pipeline.
-  The executable contract lives in `scripts/release-quality-shape.mjs`,
+  parity checks. Ordinary Stable release updates use the whole-copy promotion
+  pipeline. The only narrower path is a blocked equal-artifact Kit-closure
+  reconciliation, which must be deterministic and manifest/preimage-bound; it
+  is never an ordinary hand edit or a substitute for promotion. The executable
+  route contract lives in `scripts/release-quality-shape.mjs`,
   `scripts/release-quality-metrics.mjs`, and the route tests.
 - **Bilingual:** Fumadocs i18n (`lib/i18n.ts`), locales `en` (default) + `vi`,
   URL-prefixed (`/en`, `/vi`). Files use `.en.mdx` / `.vi.mdx`; nav labels use
@@ -105,8 +108,17 @@ prompt trust.
     exempts them.
   - Prose lives in `getting-started/` and `guides/`. Keep command invocations
     minimal in prose and lean on the generated reference for exact syntax.
-  - `stable/` changes **only** via a promotion PR (whole-copy from a beta docs
-    tag). Never hand-edit `stable/` to fix something — fix `beta/`, it promotes.
+  - Ordinary `stable/` release changes use a promotion PR (whole-copy from a
+    Beta docs tag). Never hand-edit Stable. If verified Stable and Beta Kit
+    artifact matrices are complete and hash-identical but their Kit-doc closures
+    differ, block `dev` → `main` and use only the deterministic, manifest- and
+    preimage-bound reconciliation defined in
+    [`docs/workflows/release-and-deploy.md`](docs/workflows/release-and-deploy.md).
+    Do not whole-copy Beta when unrelated CLI or release evidence differs. The
+    executable gate is `pnpm check:catalog`, `pnpm check:kit-docs`, and
+    `node scripts/reconcile-kit-docs.mjs --check-diff <base-sha>`; evidence and
+    reconciliation records are committed under `release-evidence/kit-catalog/`
+    and `docs-reconciliations/`.
   - Keep content channel-neutral: no `beta`/`stable` wording or `/docs/<channel>/`
     links baked into pages. Channel identity is path-keyed in the layout (the
     beta banner); promotion asserts nothing channel-specific survives the copy.
@@ -127,6 +139,11 @@ prompt trust.
   - **Reviewer note:** release notes are semi-trusted input (generated from PR
     titles). The agent has no write power beyond a guarded PR, but read agent PR
     diffs on their merits.
+- **Kit production gate:** before interpreting Beta/Stable tag differences,
+  verify the manifest/archive/sidecar inventory and hashes for `claude-code`,
+  `codex`, `cursor`, `grok`, `omp`, and `pi`. Equal complete artifact matrices
+  require exact Kit-doc closure equality; a mismatch blocks production. Record
+  exact per-channel inventories and separate channel statuses in the handoff.
 - **docs-bundle contract + secrets + runbook:** see the README pipeline section.
 - **Workflow diagrams:** [`docs/README.md`](docs/README.md) (CLI reference layers, release sync, deploy, CI).
 

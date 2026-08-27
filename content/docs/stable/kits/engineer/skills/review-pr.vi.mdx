@@ -9,8 +9,9 @@ import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 Dùng `ak:review-pr` để đánh giá một hoặc nhiều GitHub pull request dựa trên scope
 đã nêu, code xung quanh, quy tắc repository, test, ranh giới bảo mật và trạng
 thái sẵn sàng merge. Mode mặc định chỉ đọc. Các cờ tùy chọn lần lượt mở rộng
-workflow của từng pull request để sửa branch, đăng formal review hoặc merge rồi
-theo dõi CI sau merge.
+workflow của từng pull request để sửa branch, đăng formal review, merge rồi theo
+dõi CI sau merge, yêu cầu advisory supervision hoặc chạy verifier pass
+best-of-five.
 
 ## Chọn ak:review-pr cho các GitHub pull request hiện có
 
@@ -61,9 +62,12 @@ in từng review ở local.
 | `--fix` | Sửa finding có thể hành động, xác minh, commit, push và review lại từng PR | Thay đổi worktree cùng branch PR; có thể lặp theo từng PR đến khi hội tụ hoặc bị chặn |
 | `--reply` | Đăng từng kết quả cuối thành formal GitHub review | Tạo review event theo ngữ nghĩa approve, request-changes hoặc comment |
 | `--merge` | Merge từng PR sẵn sàng sau khi gate đạt, rồi theo dõi CI trên target branch | Có thể merge; đường native có thể bật auto-merge cho check đang chờ, còn REST fallback đợi check terminal-green; có thể gửi follow-up fix cho CI |
+| `--advice` | Thêm counsel từ `kongming` tại các checkpoint theo từng PR của Skill, với model routing riêng theo host | Chỉ tư vấn; workflow chính vẫn chịu trách nhiệm cho mọi quyết định, chỉnh sửa và gate |
+| `--ultra` | Chạy initial review qua đúng năm candidate độc lập chỉ đọc, rồi qua verifier kiểm tra bằng chứng | Đọc một immutable evidence packet cho mỗi PR; các giai đoạn fix, reply và merge sau đó vẫn giữ ranh giới quyền hạn riêng |
 
 `--fix --reply` chỉ đăng lần review lại cuối cho từng PR. Thêm `--merge` sẽ chạy
-giai đoạn merge cuối cùng của PR đó, sau hành vi sửa và reply.
+giai đoạn merge cuối cùng của PR đó, sau hành vi sửa và reply. `--ultra` chỉ áp
+dụng cho initial review; các lượt review lại trong fix loop vẫn là single-pass.
 
 Các ref có thể được phân tách bằng khoảng trắng hoặc dấu phẩy:
 `482 517 --reply` và `482,517 --reply` chọn cùng hai PR. Skill xử lý ref theo thứ
@@ -114,7 +118,9 @@ Với từng PR theo thứ tự input:
    project.
 4. **Skill phân loại finding.** Finding về correctness, security, breaking
    change, test và maintainability trở thành mục Critical, Important hoặc
-   Suggestion với bằng chứng cụ thể.
+   Suggestion với bằng chứng cụ thể. Với `--ultra`, năm candidate review cùng
+   một packet song song, rồi verifier trả về union đã được xác minh theo bằng
+   chứng và deduplicate thay vì chọn nguyên một candidate.
 5. **Skill trả về verdict.** Approve nghĩa là không có finding Critical hoặc
    Important; Request changes nghĩa là còn blocker; Comment nghĩa là chỉ có gợi
    ý nhỏ.
@@ -130,8 +136,9 @@ trích dẫn được giữ nguyên.
 ## Hiểu đường GitHub API thích ứng
 
 Compatibility helper đã cài probe tính khả dụng của GraphQL bằng
-`gh api graphql`. Khi GraphQL bị chặn, các lượt đọc được hỗ trợ cho metadata PR,
-diff, tệp thay đổi, check và body dùng REST. Formal review và comment trên PR
+`gh api graphql` và báo lỗi rõ ràng khi support bắt buộc không khả dụng. Khi
+GraphQL bị chặn, các lượt đọc được hỗ trợ cho metadata PR, diff, tệp thay đổi,
+check và body dùng REST. Formal review và comment trên PR
 cũng có REST fallback: session chỉ dùng REST sẽ bỏ qua lần thử native, còn
 session dùng được GraphQL ưu tiên thao tác `gh pr` native rồi thử lại qua REST
 nếu thao tác đó thất bại.
@@ -146,7 +153,8 @@ REST có điều kiện được mô tả bên dưới.
 <Callout type="warn" title="Mặc định chỉ đọc; mỗi cờ bổ sung quyền hạn">
   `--fix` cho phép sửa, commit và push lên branch của pull request. `--reply`
   cho phép tạo GitHub review. `--merge` cho phép merge pull request đã sẵn sàng
-  và xử lý CI sau merge. Chỉ dùng các giai đoạn bạn thực sự muốn.
+  và xử lý CI sau merge. `--advice` và `--ultra` không bổ sung quyền write. Chỉ
+  dùng các giai đoạn bạn thực sự muốn.
 </Callout>
 
 Các ranh giới quan trọng:
@@ -196,6 +204,7 @@ prompt giống nhau giữa các runtime.
 | Không tải được pull request | Xác nhận repository, số hoặc URL PR, network access và `gh auth status`. |
 | Diff quá rộng để đánh giá chắc chắn | Chia review theo domain nhưng vẫn đọc mọi tệp thay đổi; đừng suy ra correctness từ summary. |
 | Fix loop lặp lại cùng finding | Dừng sau ba lần không thành công và báo bằng chứng chưa giải quyết để người dùng tiếp quản. |
+| `--ultra` không tạo được năm candidate khả dụng hoặc một verifier | Xem initial review là bị chặn; dùng runtime được hỗ trợ hoặc chạy lại mà không có `--ultra` thay vì âm thầm hạ cấp mode này. |
 | Reply không tới GitHub | Dùng review local đầy đủ, sửa cài đặt hoặc xác thực `gh`, rồi chỉ chạy lại khi chủ động cấp quyền đăng. |
 | Merge bị từ chối | Xử lý verdict, conflict, review-decision, check hoặc branch-protection gate được nêu; không thêm force flag. |
 | CI sau merge vẫn đỏ | Giữ link run thất bại và các fix đã thử; merge workflow dừng sau số lần retry giới hạn hoặc khi có blocker bên ngoài. |

@@ -75,6 +75,9 @@ Forbidden scope:
 - Any prose that claims a Beta-only product behavior is available in Stable.
 - Any partial locale copy. EN and VI route shape must stay aligned.
 - Any broad directory copy that would amount to a Stable promotion.
+- Equal-artifact Kit-closure reconciliation. That path requires its own
+  deterministic manifest/preimage-bound operation and production gate; this
+  docs exception never authorizes it.
 
 Procedure:
 
@@ -93,10 +96,15 @@ Procedure:
 
 ## Pipeline (seven steps)
 
-1. **Resolve evidence.** Read the current `channels.json`, resolve the `to`
-   tag via `gh api releases/tags/<tag>`, download the docs bundle and matching
-   kit bundles, and verify every SHA-256 against the release-page asset
-   digest and the `.sha256` sidecar.
+1. **Resolve evidence and Kit equivalence first.** Read `channels.json` and
+   resolve exact release refs. For the resulting Stable and Beta channel states,
+   enumerate the complete Kit asset inventory keyed by `(kitId, runtime)` for `claude-code`, `codex`,
+   `cursor`, `grok`, `omp`, and `pi`. Require one manifest, archive, and
+   `.sha256` sidecar per key; validate manifest identity and verify archive
+   SHA-256 against the manifest, sidecar, and release-page digest. Compare the
+   verified key inventories and hashes before interpreting tag, version, or
+   source-commit deltas. Record exact per-channel inventories and matrix
+   digests. An `audit/*` or `docs/*` tag does not replace this evidence.
 2. **Detect the audit gap.** Read `git tag audit/*`; compare
    `channels.beta.tag` against the audit trail; propose the correct
    `from-ref`. See
@@ -134,20 +142,17 @@ Procedure:
      generator restarts those notes from project history and the diff is a full
      dump.
    - **CLI prose** — V1 authoring inside the approved Beta paths only.
-   - **Kits** — diff kit tar bundles, author public Beta skill pages EN+VI,
-     refresh `kit-catalog-identities.json`, update meta and skill index.
-     See [`references/default-tab-detection.md`](references/default-tab-detection.md)
-     for the diff-first classification. Also run the body-diff pass in
-     the audit skill's
-     [`references/kit-prose-drift.md`](../ak-docs-release-audit/references/kit-prose-drift.md)
-     against existing kit skill pages — identity checks miss prose drift
-     when a skill's SKILL.md body, `.env.example`, or `skill.yaml`
-     changes while frontmatter stays stable. Do not copy Beta-only Kit or
-     CLI changes into Stable; `stable ⊆ beta` is the cross-channel contract,
-     and Stable changes only through promotion. The current `check:catalog`
-     guard still assumes identical Kit routes and counts across channels; if a
-     Beta-only Kit addition trips it, fix that guard contract instead of
-     mirroring the addition into Stable.
+   - **Kits** — use the artifact result from step 1. Different inventories or
+     hashes take the normal release audit: diff archive identities, complete
+     `SKILL.md` bodies, and all support files; refresh approved Beta pages,
+     `kit-catalog-identities.json`, metadata, and indexes; then scan every
+     human-owned Beta page for stale Kit-derived claims. Complete,
+     hash-identical Stable/Beta matrices instead require exact Kit-doc closure
+     equality. A mismatch blocks production and takes only deterministic
+     Kit-closure reconciliation; never use Stable V1 hand authoring, the Stable
+     docs exception, or whole-Beta promotion when unrelated CLI evidence
+     differs. Follow
+     [`references/kit-prose-drift.md`](../ak-docs-release-audit/references/kit-prose-drift.md).
    - **Runtime targets** — diff release notes, docs-bundle reference text, kit
      registry manifests, runtime support matrices, and package tar layouts for
      runtime lifecycle changes (`claude-code`, `codex`, `cursor`, `grok`, `omp`,
@@ -168,8 +173,14 @@ Procedure:
      [`references/desktop-3-layer.md`](references/desktop-3-layer.md).
 6. **Run deterministic scripts.**
    - Beta: `node scripts/sync-release.mjs --bundle <bundle-dir>`.
-   - Stable: verify `git tag docs/<promotedFrom>` matches
-     `channels.beta.tag`, then
+   - Stable: before routing to promotion, verify the target Stable release
+     against its exact `promotedFrom` Beta, then verify the resulting current
+     Stable and Beta channel states. Different artifacts use the normal audited
+     promotion path.
+     Equal artifacts require exact Kit-doc closure equality; if closure differs,
+     stop for deterministic manifest/preimage-bound reconciliation instead.
+     Only after this gate, verify `git tag docs/<promotedFrom>` matches
+     `channels.beta.tag`, then run
      `node scripts/promote-docs.mjs --bundle <stable-bundle-dir>`.
      `promote-docs.mjs` whole-copies the bound beta snapshot into
      `content/docs/stable/**`, which pulls the source beta's
@@ -182,7 +193,13 @@ Procedure:
    the Stable docs exception procedure instead.
 7. **Validate, commit, and open PR.**
    Preserve exact EN/VI source, published, and searchable route parity within
-   each channel and `stable ⊆ beta` across channels. Per-channel route and search counts may differ when Beta contains
+   each channel and `stable ⊆ beta` across channels. Before any `dev` → `main`
+   PR, rerun the two-channel Kit gate. Incomplete matrices or equal artifacts
+   with divergent Kit-doc closure block production. Reconciliation must bind
+   both manifest and matrix digests, Beta source blobs, Stable preimage blobs,
+   the exact allowlist, and result blobs; prove no unrelated path changed. If no
+   deterministic operation can produce that record, remain blocked.
+   Per-channel route and search counts may differ when Beta contains
    features awaiting promotion; update reviewed baselines only from a fresh
    build, never by copying those features into Stable.
    Run `pnpm install --frozen-lockfile`, `test`, `typecheck`, `lint`,
@@ -214,7 +231,13 @@ for the next run.
   tag whose beta snapshot's `channels.json.beta.tag` matches the manifest
   `promotedFrom`.
 - Never use Stable docs exception for release notes, generated reference,
-  Kit/CLI release drift, Desktop artifact bumps, or Beta-only product behavior.
+  Kit/CLI release drift, Desktop artifact bumps, Beta-only product behavior, or
+  equal-artifact Kit-closure reconciliation.
+- Never infer Kit payload drift from tags before comparing verified artifact
+  hashes for all six runtimes.
+- Never clear `dev` → `main` with an incomplete matrix or an equal-artifact
+  closure mismatch. Do not emulate reconciliation with ordinary hand edits or
+  whole-Beta promotion when unrelated CLI evidence differs.
 - Never merge, deploy, force-push, or modify unrelated PRs.
 - Never write files outside the current repository.
 - Never touch the user's local `../agentkit` checkout. Use temporary clones
@@ -233,6 +256,9 @@ Owner may override at invocation time via CLI flags described in
 ## Finish
 
 Return a handoff listing every exact ref, request ID, approval nonce,
-paths changed, validation results, PR URL, CI status, and remaining
-blockers. Point out any `audit/<tag>` tag the run created so the next
-release inherits a consistent trail.
+paths changed, validation results, PR URL, CI status, and remaining blockers.
+Give Beta and Stable separate rows with manifest-set digest, exact artifact
+inventory, sidecar/hash result, matrix digest, Kit closure, body/support-file
+and cross-page scan results, and reconciliation status. Then state the pair
+relation and `dev` → `main` decision. Point out any `audit/<tag>` tag the run
+created so the next release inherits a consistent trail.

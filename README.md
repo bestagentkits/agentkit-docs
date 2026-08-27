@@ -82,6 +82,14 @@ exact release evidence
 
 Diagrams and the full runbook: [`docs/workflows/release-and-deploy.md`](docs/workflows/release-and-deploy.md).
 
+Before interpreting Stable/Beta tag differences or promoting to production,
+verify the manifest/archive/sidecar matrix for every Kit and all six runtimes.
+Compare archive hashes first. Complete equal matrices require exact Kit-doc
+closure equality; divergence blocks `dev` → `main` until deterministic,
+manifest/preimage-bound reconciliation. Do not use ordinary Stable hand edits or
+whole-copy Beta when unrelated CLI evidence differs. Release handoffs report
+Beta and Stable evidence and docs status separately.
+
 The CLI reference is **two layers**: the _facts_ (usage, examples, flags, exit codes, related commands) are projected mechanically from `ak --help` — always exact, never drifting — while the _narrative_ (overview + when-to-use + notes) is reviewed prose in `reference-prose/<slug>.md`. The help dump under `reference-derived/` is **derived**; published CLI docs under `content/docs/<channel>/reference/cli/` are human-authored: `generateReference` = normalize(`reference-raw/<slug>.mdx` source + prose overlay). Because they are a pure function of committed sources, CI regenerates them and asserts a zero diff — so the reference can't silently drift or be hand-edited. See [`reference-prose/README.md`](reference-prose/README.md) for the authoring contract and [`docs/workflows/cli-reference-pipeline.md`](docs/workflows/cli-reference-pipeline.md) for diagrams.
 
 ### docs-bundle contract (v1)
@@ -102,7 +110,7 @@ When upstream publishes the asset, treat its **manifest** as evidence and verify
 - `scripts/sync-release.mjs --bundle <dir|tar.gz> | --tag <vX.Y.Z-beta.N>` — **beta** ingestion: refresh `reference-raw/` from the bundle (hygiene-scrubbed: private-repo links → public support repo), derive `reference-derived/`, rewrite the `.generated` marker, write beta `release-notes.mdx` via the shared release-note renderer, update `channels.json.beta`. Idempotent (`generatedAt` comes from the manifest, never the clock).
 - `scripts/compile-prose.mjs [--check] [--slug <name>] [--export-missing]` — render `reference-prose-json/<slug>.json` (LLM/agent wire format) → `reference-prose/<slug>.md`. `--check` fails when markdown drift from JSON; `--export-missing` bootstraps JSON from existing markdown.
 - `scripts/generate-reference.mjs [--channel beta]` — regenerate the derived pages from `reference-raw/` + `reference-prose/` via `scripts/lib/normalize-reference.mjs` (raw `cobra/doc` → web-native MDX, prose overlay merged, shared boilerplate deduped to the `cli-conventions` page, `cli/index` compiled into a grouped TOC via `scripts/lib/reference-index.mjs`). Idempotent. CI runs it and asserts a zero diff to prove the reference is exactly `generator(source + overlays)`.
-- `scripts/promote-docs.mjs --bundle <stable-bundle-dir> [--beta-ref <git-ref>]` — **stable** promotion: whole-copy the **exact** beta docs snapshot for `manifest.promotedFrom` (default git tag `docs/{promotedFrom}`; override only with `--beta-ref` pointing at that same snapshot), **rewrite** `content/docs/stable/reference/release-notes.mdx` from the stable bundle's `release-notes.md` (shared renderer: stable channel + stable tag frontmatter + hygiene), assert channel-neutral prose, update `channels.json.stable` only. Beta is never mutated. Repeat runs are byte-identical. Open a normal PR; do not hand-edit `stable/`. An arbitrary `content/docs/beta` working tree is **not** sufficient evidence. `--beta-source` exists only for fixtures/tests and requires `--allow-unverified-beta-source`.
+- `scripts/promote-docs.mjs --bundle <stable-bundle-dir> [--beta-ref <git-ref>]` — ordinary **stable** promotion after the Kit evidence/closure gate: whole-copy the **exact** beta docs snapshot for `manifest.promotedFrom` (default git tag `docs/{promotedFrom}`; override only with `--beta-ref` pointing at that same snapshot), **rewrite** `content/docs/stable/reference/release-notes.mdx` from the stable bundle's `release-notes.md` (shared renderer: stable channel + stable tag frontmatter + hygiene), assert channel-neutral prose, update `channels.json.stable` only. Beta is never mutated. Repeat runs are byte-identical. Open a normal PR; do not hand-edit `stable/`. An arbitrary `content/docs/beta` working tree is **not** sufficient evidence. `--beta-source` exists only for fixtures/tests and requires `--allow-unverified-beta-source`.
 - `scripts/check-generated.mjs --base <ref>` — CI guard: fails any hand edit to a `.generated`-marked dir's generated pages (ownership judged at the base ref, so bootstrapping a new generated dir is allowed; `meta*.json` nav is exempt); the sync bot (`GITHUB_ACTOR`) is exempt. Dirs covered by the regenerate-and-diff reproducibility step (`REPRODUCIBLE_DIRS`, e.g. beta's reference) are exempt here — that check is stronger, so generator-change PRs need no bot bypass.
 - `scripts/check-agent-pr.mjs --base <ref>` — agent-PR scope guard (modify-only, `content/docs/beta/{getting-started,guides}` prose).
 - `scripts/check-links.mjs` — internal link checker over `out/`.
@@ -147,7 +155,16 @@ Branch protection / rulesets:
    pnpm test
    ```
    Open a normal PR into `dev`. After merge, confirm staging.
-3. **Stable promote:** ensure the exact docs snapshot for `manifest.promotedFrom` exists as a git ref (normally tag `docs/{promotedFrom}`). Then:
+3. **Stable promote:** first verify the target Stable release against its exact
+   `promotedFrom` Beta, then verify the resulting current Stable and Beta Kit
+   artifact matrices for `claude-code`, `codex`, `cursor`, `grok`, `omp`, and `pi`, including every
+   manifest and `.sha256` sidecar. Compare archive hashes before tags. Different
+   artifacts use the normal release audit; equal artifacts require exact Kit-doc
+   closure equality. If equal artifacts have divergent docs, block production
+   and use only deterministic manifest/preimage-bound reconciliation. Do not
+   whole-copy unrelated Beta CLI evidence. Once the gate passes, ensure the exact
+   docs snapshot for `manifest.promotedFrom` exists as a git ref (normally tag
+   `docs/{promotedFrom}`). Then:
    ```bash
    # Binds docs/{promotedFrom} automatically — fails closed if the ref is missing.
    node scripts/promote-docs.mjs --bundle path/to/docs-bundle-stable
