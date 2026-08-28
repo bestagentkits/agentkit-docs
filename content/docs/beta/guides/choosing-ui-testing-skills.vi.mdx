@@ -1,0 +1,193 @@
+---
+title: Chọn đúng Skill để kiểm tra UI
+description: Phân biệt ak:test, ak:test ui, ak:web-testing và ak:agent-browser khi cần bằng chứng từ code, journey đã deploy hoặc customer review mang tính khám phá.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Một app có thể pass test suite và hoàn thành journey đã deploy nhưng vẫn làm
+customer bối rối. Các kết quả này không mâu thuẫn: mỗi workflow đặt một câu hỏi
+khác nhau và tạo ra một loại bằng chứng khác nhau.
+
+Dùng hướng dẫn này khi chọn giữa [`ak:test`](../kits/engineer/skills/test),
+[`ak:web-testing`](../kits/engineer/skills/web-testing) và
+[`ak:agent-browser`](../kits/engineer/skills/agent-browser).
+
+## Bắt đầu từ câu hỏi cần trả lời
+
+| Workflow | Câu hỏi chính | Bằng chứng phù hợp nhất | Dùng khi |
+| --- | --- | --- | --- |
+| `ak:test` | Project còn giữ đúng các contract code và integration đã chọn không? | Output của runner, assertion cùng kết quả type-check, coverage hoặc build có liên quan | Source code thay đổi và bạn cần độ tin cậy ở cấp repository |
+| `ak:test ui <URL>` | UI đang chạy có vấn đề dễ quan sát nào không? | Screenshot, quan sát responsive và accessibility, kết quả form cùng console error | Bạn muốn quét QA tổng quát website local hoặc đã deploy |
+| `ak:web-testing` | Một web journey đã xác định có pass ổn định qua nhiều lần chạy không? | Playwright assertion, trace, video, screenshot, visual diff và report máy đọc được | Journey cần chạy lại ở local hoặc CI |
+| `ak:agent-browser` | Điều gì xảy ra khi khám phá app trực tiếp qua browser? | Accessibility-tree snapshot, screenshot, recording, browser state và bước tái hiện | Bạn cần khám phá không phụ thuộc Chrome profile, bug hunt hoặc review từ góc nhìn customer |
+
+Quy tắc ngắn nhất:
+
+- Chọn `ak:test` cho **validation ở cấp code**.
+- Chọn `ak:test ui` để **kiểm tra rộng UI đang chạy**.
+- Chọn `ak:web-testing` cho **coverage journey bền vững, chạy lại được**.
+- Chọn `ak:agent-browser` để **khám phá trực tiếp qua browser**.
+
+## Hiểu phần giao nhau
+
+`ak:test` là workflow validation rộng. Khi không có `ui`, Skill xác định scope
+được yêu cầu, chạy type-check hoặc analyze khi phù hợp rồi chạy các suite hiện
+có liên quan. Coverage và build verification chỉ được thêm khi cần; Skill không
+hứa chạy mọi gate có thể có trong mỗi lần gọi.
+
+Với `ui <URL>`, `ak:test` chuyển sang workflow UI live. Skill có thể route browser
+work qua `ak:agent-browser`, `ak:chrome-profile`, `ak:web-testing` hoặc runner
+sẵn có của project rồi tạo QA report có cấu trúc.
+
+`ak:web-testing` chuyên về test strategy và runner chạy lại được như Playwright,
+Vitest, axe, Lighthouse và k6. Hãy cung cấp journey đã biết, expected behavior,
+test data, environment cùng artifact cần giữ. Đây là lựa chọn mạnh nhất khi kết
+quả PASS hoặc FAIL cần được tái hiện về sau.
+
+`ak:agent-browser` điều khiển trực tiếp một browser mới hoặc do tool quản lý.
+Skill hỗ trợ session tự động dài, snapshot, screenshot, tương tác form, lưu state
+và quay video. Workflow exploratory QA phù hợp khi chưa biết đầy đủ path từ đầu.
+Skill không tự tạo nhiều customer độc lập: persona review là contract trong
+prompt và phải có account, session, viewport cùng ranh giới reset rõ ràng.
+
+<Callout type="info" title="Cùng browser, khác contract">
+  Việc mở cùng một URL không làm các workflow trở thành một. Contract mới là
+  phần quyết định: kiểm tra rộng, assertion lặp lại được hay hành vi user mang
+  tính khám phá.
+</Callout>
+
+## So sánh trên cùng một deployed journey
+
+Giả sử customer kết nối một provider, thấy trạng thái `Connected`, refresh
+trang và kỳ vọng kết nối vẫn còn.
+
+### Kiểm tra rộng UI đang chạy
+
+```text
+/ak:test ui https://app.example.com
+
+Kiểm tra connection flow trên desktop và mobile. Thu bằng chứng cho form,
+responsive, accessibility và console. Chỉ dùng test account được cung cấp và
+không thay đổi production data không liên quan.
+```
+
+Lần chạy này có thể phát hiện form mobile bị cắt, browser error hoặc độ tương
+phản kém. Đây là lượt quét hữu ích nhưng không tự biến mọi quan sát thành
+regression test lâu dài.
+
+### Biến journey thành test chạy lại được
+
+```text
+/ak:web-testing e2e "Trên https://app.example.com, xác minh connected journey:
+đăng nhập bằng test account đã duyệt, kết nối test provider, assert chính xác
+trạng thái Connected, refresh rồi assert kết nối đó vẫn tồn tại. Chạy tuần tự
+trên Chromium. Giữ Playwright trace và failure screenshot. Không liên hệ billing,
+gửi message hoặc thay đổi production data không liên quan."
+```
+
+Chọn workflow này khi expected state đã rõ và cùng một check cần bảo vệ các
+release sau.
+
+### Review qua nhiều góc nhìn customer
+
+```text
+/ak:agent-browser https://app.example.com
+
+Chạy bốn lượt khám phá tách biệt: customer mới, customer quay lại, customer dùng
+mobile và power user. Với mỗi lượt, dùng account hoặc browser session, viewport,
+starting state và ranh giới reset đã duyệt. Chỉ tương tác qua UI hiển thị. Ghi
+lại điểm gây bối rối, bước bị chặn, trạng thái bất ngờ và khả năng phục hồi.
+Chụp screenshot tại trạng thái quan sát được và trả về bước tái hiện. Không bịa
+hoặc dựng lại evidence sau lần chạy.
+```
+
+Đây là các lượt khám phá theo persona, không phải bốn customer thật hoặc bốn
+Agent độc lập. Dùng account hay session riêng khi persona cần server state hoặc
+browser state khác nhau.
+
+## Chọn đúng cách xác thực
+
+`ak:agent-browser` dành cho công việc không phụ thuộc profile, trong browser mới
+hoặc do tool quản lý. Dùng `ak:chrome-profile` khi journey cần cookie, login state,
+Google account, tenant hay workspace đang mở trong Chrome thật của user. Khi có
+thể, hãy dùng auth fixture của project cho test cần chạy lại.
+
+## Chuyển khám phá thành coverage bền vững
+
+1. Chạy `ak:test` trước deploy cho các code-level gate đã chọn.
+2. Chạy `ak:web-testing` cho journey quan trọng cần assertion lặp lại được.
+3. Dùng `ak:test ui <URL>` khi cần quét site live rộng hơn.
+4. Dùng `ak:agent-browser` để tìm khoảng trống requirement chưa dự đoán được.
+5. Chuyển functional regression đã xác nhận thành test `ak:web-testing` tập trung.
+
+Giữ finding về customer friction trong product hoặc UX review nếu automated
+assertion không thể diễn đạt nó trung thực. Hãy dùng workflow nhỏ nhất có thể
+chứng minh rủi ro cần kiểm soát.
+
+## Yêu cầu bằng chứng rõ ràng
+
+Chỉ gọi tên Skill không đảm bảo đúng loại report. Hãy nêu evidence contract:
+
+- Target environment và journey chính xác;
+- Test account, session, fixture, starting state và ranh giới cleanup;
+- Trạng thái mong đợi sau từng action quan trọng;
+- Browser, device, viewport và auth method;
+- Screenshot, trace, video, visual diff hoặc console evidence cần giữ;
+- Tách riêng pass, fail, blocked, skipped và unverified;
+- Finding ID liên kết từng kết luận với evidence;
+- Data và external service không được phép chạm tới.
+
+`ak:agent-browser` có thể lưu browser artifact như screenshot và video nhưng
+không định nghĩa schema cho Markdown report. Hãy yêu cầu agent gọi Skill hoặc
+workflow `ak:test ui` materialize finding cùng artifact link thành report đã
+được review.
+
+## Tạo HTML showcase trực quan
+
+[`ak:show-off`](../kits/engineer/skills/show-off) tạo showcase có thiết kế; đây
+không phải forensic renderer. Workflow có thể research tài liệu hỗ trợ, viết lại
+content, thêm visual treatment và chụp screenshot mới của trang đã tạo. Các ảnh
+showcase phát sinh đó không phải evidence của app.
+
+Trước tiên hãy review Markdown report và browser artifact gốc. Sau đó yêu cầu
+một lượt local chỉ để trình bày:
+
+```text
+/ak:show-off artifacts/customer-review/report.md --no-publish --no-screenshots
+--no-editorial-visuals --languages vi
+
+Tạo HTML customer-review showcase local từ source này. Giữ nguyên mọi finding ID
+và ảnh evidence gốc. Giữ finding blocked và unverified ở trạng thái rõ ràng.
+Không thêm product finding, số liệu, screenshot hoặc claim không có trong source
+đã review. Trả về đường dẫn HTML local.
+```
+
+Ngay cả với các control này, vẫn phải review HTML sinh ra so với source report.
+HTML chỉ chứng minh finding đã được trình bày, không kiểm chứng app thêm một lần
+nữa. Nếu cần renderer bảo toàn byte hoặc deterministic, hãy dùng report generator
+chuyên dụng thay vì `ak:show-off`.
+
+## Bảo vệ production
+
+<Callout type="warn" title="Browser test có thể thay đổi production">
+  Click qua một deployed journey có thể tạo account hoặc record, gửi email,
+  charge integration, dùng quota hoặc xóa data. Production URL không mặc định là
+  bằng chứng read-only.
+</Callout>
+
+Trước khi test production, hãy xác định account cùng test-data namespace đã
+duyệt, thao tác ghi được phép, action bị cấm, isolation cho integration, cleanup
+ownership và điều kiện dừng. Không chạy load, destructive, security, payment
+hoặc irreversible lifecycle check lên production khi chưa có quyền chính xác
+cùng kế hoạch isolation.
+
+## Chọn nhanh
+
+| Khi bạn đang nói… | Bắt đầu bằng |
+| --- | --- |
+| “Tôi vừa sửa implementation; hãy chứng minh các contract đã chọn vẫn đúng.” | `ak:test` |
+| “Quét deployed UI này xem có vấn đề dễ quan sát nào không.” | `ak:test ui <URL>` |
+| “Checkout hoặc connection journey này không được phép regression.” | `ak:web-testing` |
+| “Khám phá app qua nhiều góc nhìn customer.” | `ak:agent-browser` với session và state rõ ràng |
+| “Biến evidence đã review thành HTML showcase local.” | `ak:show-off` sau khi tắt publish và screenshot phát sinh |
