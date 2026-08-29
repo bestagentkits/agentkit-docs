@@ -21,6 +21,34 @@ AgentKit authentication grants access to licensed kits. It does not sign Claude
 Code, Codex, Cursor, Grok, Pi, or Oh My Pi in to their providers, and runtime
 login does not grant AgentKit kit entitlement.
 
+
+## First-run conductor
+
+```bash
+ak onboard
+```
+
+`ak onboard` is the first-run wizard: it runs setup when basic configuration is
+incomplete, signs you in on a TTY with email OTP or an API key, then installs a
+kit. It does not replace `ak setup` for later preference edits. Scripted or
+non-TTY use needs an existing CLI session; otherwise the command exits `2`.
+Canceling the wizard exits `3`. `--yes` never becomes `--force`; the first
+install is preserve-only.
+
+From your home directory, choose a global install or cancel and `cd` into a
+repository. `--project-dir` must not be the user home unless you also pass
+`--global`.
+
+```bash
+ak onboard --kit engineer --target claude-code
+ak onboard --global --yes
+```
+
+`ak onboard --channel stable` or `ak onboard --channel beta` writes both
+`kit.channel` and `updates.channel`. Other `--channel` values exit `2` and leave
+config unchanged. When `--channel` is omitted, onboard copies a single set
+channel onto the other key, or writes `stable` for both when neither is set.
+
 ## Configure AgentKit
 
 ```bash
@@ -36,11 +64,11 @@ Use these commands for different jobs:
 
 | Command | Use it for | Main result |
 | --- | --- | --- |
+| `ak onboard` | First-run setup, login, and kit install | May write config, a CLI session, and kit files |
 | `ak setup` | Configure this user's AgentKit preferences | Updates AgentKit configuration; no kit content |
 | `ak init [dir]` | Adopt an existing directory | Creates or updates its AgentKit ownership manifest |
 | `ak new <project-name>` | Start a new project directory | Creates the directory and its ownership manifest |
 | `ak kit init <kit>` | Add a kit to a runtime | Writes runtime-ready kit content at project or user scope |
-
 You do not need `ak init` before installing a project-scoped kit; use it when you
 want AgentKit to adopt and track an existing project as a whole.
 
@@ -162,7 +190,8 @@ ak kit init engineer --target pi --channel <channel>
 </Tabs>
 
 Replace `<channel>` with the release channel selected in the docs header.
-Omitting `--channel` resolves the `stable` Kit channel, which can return
+Omitting `--channel` on `ak kit init` uses persisted `kit.channel` when that
+key is set; otherwise it resolves `stable`. A `stable` resolution can return
 `version_not_available` for a runtime package available only on another
 channel. For Claude Code, plugin delivery requires `--switch-to-plugin`;
 independently, `--global` selects the runtime's user scope instead of project
@@ -219,16 +248,22 @@ request, and begins the skill workflow in the current project.
 
 ## Recovery and common failures
 
-- **`ak whoami` is unauthenticated:** run one explicit `ak login` method again.
+- **`ak whoami` is unauthenticated:** run `ak onboard` on a TTY, or one explicit
+  `ak login` method again. Non-interactive `ak onboard` exits `2` without a
+  session.
 - **Engineer Kit is absent from `ak licenses`:** confirm you used the purchasing
   account. Reinstalling cannot create entitlement.
 - **Runtime missing or logged out:** install or sign in to the selected runtime
-  with its provider account, then re-run `ak setup`.
+  with its provider account, then re-run `ak setup` or `ak onboard`.
 - **The skill is not recognized:** confirm the install summary named the intended
   target, restart the assistant, and run `ak doctor --exit-on-fail` before
-  reinstalling.
+  reinstalling. `ak doctor` can warn `onboard_incomplete` with suggested
+  `ak onboard`.
+- **Binary and kit channels disagree:** `ak doctor` can warn `channel_drift`.
+  Align them with `ak onboard --channel stable` or `ak onboard --channel beta`.
 - **The destination conflicts with existing content:** stop and review the
-  ownership warning. Do not add `--force` as a first response.
+  ownership warning. Do not add `--force` as a first response. `ak onboard`
+  never turns `--yes` into `--force`.
 
 AgentKit preserves unknown and user-modified files during normal kit operations.
 When a supported destructive change needs a recovery snapshot, the CLI prints a

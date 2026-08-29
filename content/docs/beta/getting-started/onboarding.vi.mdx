@@ -22,6 +22,32 @@ Xác thực AgentKit cấp quyền truy cập các Kit có license. Nó không �
 Claude Code, Codex, Cursor, Grok, Pi hoặc Oh My Pi vào provider, và đăng nhập
 runtime không cấp quyền sử dụng Kit AgentKit.
 
+## Wizard lần chạy đầu
+
+```bash
+ak onboard
+```
+
+`ak onboard` là wizard lần chạy đầu: nó chạy setup khi cấu hình cơ bản chưa
+đủ, đăng nhập trên TTY bằng email OTP hoặc API key, rồi cài một kit. Lệnh này
+không thay `ak setup` cho các lần sửa tuỳ chọn sau. Chế độ scripted hoặc không
+có TTY cần phiên CLI sẵn có; nếu không, lệnh thoát `2`. Huỷ wizard thoát `3`.
+`--yes` không bao giờ trở thành `--force`; lần cài đầu chỉ preserve.
+
+Từ thư mục home, hãy chọn cài global hoặc huỷ rồi `cd` vào repository.
+`--project-dir` không được là home của người dùng trừ khi bạn cũng truyền
+`--global`.
+
+```bash
+ak onboard --kit engineer --target claude-code
+ak onboard --global --yes
+```
+
+`ak onboard --channel stable` hoặc `ak onboard --channel beta` ghi cả
+`kit.channel` và `updates.channel`. Giá trị `--channel` khác thoát `2` và không
+đổi config. Khi bỏ `--channel`, onboard sao chép kênh đã đặt sang khóa còn lại,
+hoặc ghi `stable` cho cả hai khi chưa khóa nào được đặt.
+
 ## Cấu hình AgentKit
 
 ```bash
@@ -37,6 +63,7 @@ Dùng các lệnh sau cho những mục đích khác nhau:
 
 | Lệnh | Khi dùng | Kết quả chính |
 | --- | --- | --- |
+| `ak onboard` | Setup, đăng nhập và cài kit lần chạy đầu | Có thể ghi config, phiên CLI và tệp kit |
 | `ak setup` | Cấu hình tùy chọn AgentKit của người dùng này | Cập nhật cấu hình AgentKit; không có nội dung kit |
 | `ak init [dir]` | Tiếp nhận một thư mục hiện có | Tạo hoặc cập nhật ownership manifest AgentKit |
 | `ak new <project-name>` | Bắt đầu một thư mục project mới | Tạo thư mục và ownership manifest |
@@ -164,8 +191,9 @@ ak kit init engineer --target pi --channel <channel>
 </Tabs>
 
 Hãy thay `<channel>` bằng kênh phát hành đang chọn trên header tài liệu. Nếu bỏ
-`--channel`, CLI resolve kênh Kit `stable`; runtime package chỉ có ở kênh khác
-có thể trả `version_not_available`. Với Claude Code, delivery dạng plugin yêu
+`--channel` trên `ak kit init`, lệnh dùng `kit.channel` đã lưu khi khóa đó đã
+được đặt; nếu không thì resolve `stable`. Resolve `stable` có thể trả
+`version_not_available` khi runtime package chỉ có ở kênh khác. Với Claude Code, delivery dạng plugin yêu
 cầu `--switch-to-plugin`; độc lập với lựa chọn đó, `--global` chọn scope người
 dùng của runtime thay vì scope project. Phần tóm tắt thành công nêu `engineer`,
 vị trí đầu ra, install mode, scope và số tệp đã ghi.
@@ -219,15 +247,21 @@ workflow của skill trong project hiện tại.
 
 ## Khôi phục và lỗi thường gặp
 
-- **`ak whoami` báo chưa xác thực:** chạy lại một phương thức `ak login` cụ thể.
+- **`ak whoami` báo chưa xác thực:** chạy `ak onboard` trên TTY, hoặc chạy lại
+  một phương thức `ak login` cụ thể. `ak onboard` không tương tác thoát `2` khi
+  chưa có phiên.
 - **Engineer Kit không có trong `ak licenses`:** xác nhận bạn dùng tài khoản đã
   mua kit. Cài lại không thể tạo quyền sử dụng.
 - **Runtime chưa có hoặc chưa đăng nhập:** cài hoặc đăng nhập runtime đã chọn bằng
-  tài khoản provider của nó, rồi chạy lại `ak setup`.
+  tài khoản provider của nó, rồi chạy lại `ak setup` hoặc `ak onboard`.
 - **Skill không được nhận diện:** xác nhận phần tóm tắt cài đặt ghi đúng target,
   khởi động lại trợ lý và chạy `ak doctor --exit-on-fail` trước khi cài lại.
+  `ak doctor` có thể cảnh báo `onboard_incomplete` với gợi ý `ak onboard`.
+- **Kênh binary và kit không khớp:** `ak doctor` có thể cảnh báo `channel_drift`.
+  Hãy căn bằng `ak onboard --channel stable` hoặc `ak onboard --channel beta`.
 - **Đích xung đột với nội dung hiện có:** dừng lại và xem cảnh báo quyền sở hữu.
-  Đừng dùng `--force` như phản ứng đầu tiên.
+  Đừng dùng `--force` như phản ứng đầu tiên. `ak onboard` không bao giờ biến
+  `--yes` thành `--force`.
 
 AgentKit giữ các tệp không rõ nguồn gốc và tệp người dùng đã sửa trong thao tác
 kit thông thường. Khi một thay đổi phá hủy được hỗ trợ cần snapshot khôi phục,
