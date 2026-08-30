@@ -36,10 +36,16 @@ ak update --yes
 ```
 
 `--yes` accepts the offered steps, but the signed CLI update or minimum-version
-check remains a hard gate before any kit mutation. Use the scoped commands below
-when you want to update only one layer. A CLI hard-gate failure, partial kit
-failure, or interruption after mutation exits `1`; an invalid target or scope
-exits `2`.
+check remains a hard gate before any Kit mutation. Use the scoped commands below
+when you want to update only one layer. A CLI hard-gate failure, partial Kit
+failure, or interruption after mutation exits `1`; an invalid target, scope, or
+source exits `2`.
+
+The wizard projects one `--target` selection onto each step. For example, `pi`
+remains eligible for the project step but is omitted from the global Kit step;
+if no selected target applies globally, the wizard skips that step and continues.
+A local-source-only global target such as `dsh` is invalid while the remote source
+is selected; use `--local --kits-dir <dir>` deliberately instead.
 
 ## Review the CLI release
 
@@ -126,12 +132,21 @@ ak update --global --kits engineer --target codex --channel stable --yes
 ak update --global --kits engineer --local --kits-dir ./kits --target grok --yes
 ```
 
-Global update is preserve-only for user-modified files. A runtime you selected
-but have not installed globally is reported as skipped rather than created. Use
-`--target` or its `--runtime` alias to select installed runtimes such as
-`claude-code`, `codex`, `cursor`, `grok`, or `omp`; pass only one of the two flag names.
-The same implicit-preview exit `3` and explicit-dry-run exit `0` distinction
-applies at global scope.
+Global update is preserve-only for user-modified files. Target validity depends
+on both scope and source: remote project updates accept exactly one of
+`claude-code`, `codex`, `cursor`, `grok`, `omp`, or `pi`; remote global updates
+accept `claude-code`, `codex`, `cursor`, `grok`, or `omp`; local global updates
+also accept `dsh`. Use `--target` or its `--runtime` alias, but pass only one flag
+name. An explicit target that does not apply to the selected scope and source is
+rejected before discovery or mutation.
+
+A selected runtime that is not installed globally is reported as skipped rather
+than created. In an unfiltered remote `--global` run, an existing local-only
+install remains visible as a skipped result with reason `source_inapplicable`;
+it is not refreshed from another source implicitly. Follow its `next` guidance
+and run `ak update --global --local --kits-dir <dir>`. The same implicit-preview
+exit `3` and
+explicit-dry-run exit `0` distinction applies at global scope.
 
 If global Claude Code discovery reaches a Claude home that is not marked as
 AgentKit-owned, the update refuses the foreign-home takeover before any emitter
@@ -172,8 +187,13 @@ After updating:
 3. Reopen each affected runtime.
 4. Invoke one important installed skill in each updated target.
 
-If the kit requires a newer CLI, update `ak` on the same channel first, then
-repeat the kit preview.
+If the Kit requires a newer CLI, update `ak` on the same channel first, then
+repeat the Kit preview.
+
+When you filter follow-up diagnostics, `ak doctor --adapter` accepts only
+`claude-code`, `codex`, and `cursor`, which have dedicated doctor suites. Any
+other adapter value is invalid and exits `2` instead of returning an empty
+successful check set.
 
 ## If the expected files did not change
 

@@ -24,6 +24,22 @@ ak update --global [options]
 
 `[project-dir]` selects a project. Without it, project mode discovers the current project unless `--global` is set. The command has no aliases.
 
+## Runtime targets and sources
+
+Target validation uses both the selected scope and source:
+
+| Scope and source | Valid targets |
+| --- | --- |
+| Project, remote | Exactly one of `claude-code`, `codex`, `cursor`, `grok`, `omp`, or `pi` |
+| Global, remote | `claude-code`, `codex`, `cursor`, `grok`, or `omp` |
+| Global, local | `claude-code`, `codex`, `cursor`, `dsh`, `grok`, or `omp` |
+
+An explicit target that does not apply to its scope or source is rejected before
+discovery or mutation and exits `2`. In the unified wizard, the same selection
+is projected onto each step: a project-only target such as `pi` is omitted from
+the global step but remains available to the project step. If no selected target
+applies globally, the wizard skips that step and continues.
+
 ## Options
 
 | Option | Default | Purpose |
@@ -38,9 +54,9 @@ ak update --global [options]
 | `--local` | `false` | Use the local kit source. |
 | `--registry-url <url>` | Empty | Override the registry URL. |
 | `--remote` | `true` | Use the remote registry. |
-| `--runtime <runtime>` | `claude-code` | Alias of `--target`; select global runtime(s), comma-separated, such as `claude-code`, `codex`, `cursor`, or `grok`. |
+| `--runtime <runtime>` | `claude-code` | Alias of `--target`; select runtime(s) from the scope-and-source matrix above. |
 | `--show-diff` | `false` | Include file diffs in the plan. |
-| `--target <target>` | Empty | Select update runtime(s), comma-separated, such as `claude-code`, `codex`, `cursor`, or `grok`; pass only one of `--target` or `--runtime`. |
+| `--target <target>` | Empty | Select runtime(s) from the scope-and-source matrix above; pass only one of `--target` or `--runtime`. |
 | `--version <version>` | Empty | Pin a kit version. |
 
 ## Examples
@@ -68,7 +84,17 @@ ak update --global --dry-run --kits core --local --kits-dir ./kits --target grok
 
 With `--json`, stdout uses the shared envelope with `"kind": "update"`. Project `data` includes `project_dir`, `files_updated`, `files_skipped`, `files_new`, and `dry_run`; it can also include snapshot fields, `skipped`, `diffs`, `project_config`, `project_config_created`, and `scope`.
 
-Global output also includes `locations`, `kits`, and `skipped_targets`. Each kit result can report `kit`, `runtime`, `status`, `channel`, `reason`, `error`, `why`, `next`, snapshot fields, `locations`, and `warnings`. A selected runtime that is not installed globally is reported as skipped rather than created. An implicit JSON preview prints a success envelope to stdout and then exits `3`. Structured command errors go to stderr; parse errors remain plain text.
+Global output also includes `locations`, `kits`, and `skipped_targets`. Each Kit result can report `kit`, `runtime`, `status`, `channel`, `reason`, `error`, `why`, `next`, snapshot fields, `locations`, and `warnings`. A selected runtime that is not installed globally is reported as skipped rather than created.
+
+An unfiltered remote global run may discover an existing local-only install. It
+reports that install with `status: "skipped"` and `reason: "source_inapplicable"`
+instead of changing sources implicitly. Follow its `next` guidance and run
+`ak update --global --local --kits-dir <dir>` to refresh from an explicit local
+source. An
+explicit source-incompatible target is an exit-`2` validation error, not a
+`source_inapplicable` result.
+
+An implicit JSON preview prints a success envelope to stdout and then exits `3`. Structured command errors go to stderr; parse errors remain plain text.
 
 ## Exit status
 
@@ -76,7 +102,7 @@ Global output also includes `locations`, `kits`, and `skipped_targets`. Each kit
 | --- | --- |
 | `0` | Update applied, explicit dry-run completed, or an interactive prompt was declined. |
 | `1` | Runtime, lifecycle, source, snapshot, write, or partial global update failed. |
-| `2` | Flags, scope, target, or eligible global installation selection is invalid. |
+| `2` | Flags, scope, source, target, or eligible global installation selection is invalid. |
 | `3` | A non-interactive implicit preview requires `--yes` to apply. |
 
 ## Effects, safety, and recovery
@@ -87,4 +113,4 @@ Writes are sequential, so an error can leave a partial update. Global updates co
 
 ## Related commands and limitations
 
-Use [`ak new`](./new) for a new project, [`ak uninstall`](./uninstall) to remove owned files, and [`ak doctor`](./doctor) after a partial failure. See [CLI conventions](../cli-conventions) for shared flags.
+Use [`ak new`](./new) for a new project and [`ak uninstall`](./uninstall) to remove owned files. After a partial failure, [`ak doctor`](./doctor) can filter dedicated suites only for `claude-code`, `codex`, and `cursor`; any other `--adapter` value is invalid and exits `2`. See [CLI conventions](../cli-conventions) for shared flags.
