@@ -22,7 +22,23 @@ ak update --global [options]
 
 ## Đối số
 
-`[project-dir]` chọn một dự án. Nếu bỏ qua, chế độ dự án tìm dự án hiện tại trừ khi đặt `--global`. Lệnh không có alias.
+`[project-dir]` chọn một project. Nếu bỏ qua, chế độ project tìm project hiện tại trừ khi đặt `--global`. Lệnh không có alias.
+
+## Target runtime và nguồn
+
+Việc xác minh target dùng cả scope và nguồn đã chọn:
+
+| Scope và nguồn | Target hợp lệ |
+| --- | --- |
+| Project, remote | Chính xác một trong `claude-code`, `codex`, `cursor`, `grok`, `omp` hoặc `pi` |
+| Global, remote | `claude-code`, `codex`, `cursor`, `grok` hoặc `omp` |
+| Global, local | `claude-code`, `codex`, `cursor`, `dsh`, `grok` hoặc `omp` |
+
+Target tường minh không áp dụng cho scope hoặc nguồn sẽ bị từ chối trước
+discovery hay mutation và trả mã `2`. Trong wizard hợp nhất, cùng lựa chọn đó
+được chiếu lên từng bước: target chỉ dành cho project như `pi` bị bỏ qua ở bước
+global nhưng vẫn khả dụng cho bước project. Nếu không target nào đã chọn áp
+dụng được ở global scope, wizard bỏ qua bước đó rồi tiếp tục.
 
 ## Tùy chọn
 
@@ -38,9 +54,9 @@ ak update --global [options]
 | `--local` | `false` | Dùng nguồn kit cục bộ. |
 | `--registry-url <url>` | Trống | Ghi đè URL registry. |
 | `--remote` | `true` | Dùng registry từ xa. |
-| `--runtime <runtime>` | `claude-code` | Alias của `--target`; chọn runtime toàn cục, phân tách bằng dấu phẩy, như `claude-code`, `codex`, `cursor` hoặc `grok`. |
+| `--runtime <runtime>` | `claude-code` | Alias của `--target`; chọn runtime từ ma trận scope và nguồn bên trên. |
 | `--show-diff` | `false` | Bao gồm diff tệp trong kế hoạch. |
-| `--target <target>` | Trống | Chọn runtime cần cập nhật, phân tách bằng dấu phẩy, như `claude-code`, `codex`, `cursor` hoặc `grok`; chỉ truyền một trong hai cờ `--target` hoặc `--runtime`. |
+| `--target <target>` | Trống | Chọn runtime từ ma trận scope và nguồn bên trên; chỉ truyền một trong hai cờ `--target` hoặc `--runtime`. |
 | `--version <version>` | Trống | Ghim phiên bản kit. |
 
 ## Ví dụ
@@ -68,7 +84,16 @@ ak update --global --dry-run --kits core --local --kits-dir ./kits --target grok
 
 Với `--json`, stdout dùng envelope chung có `"kind": "update"`. `data` của dự án gồm `project_dir`, `files_updated`, `files_skipped`, `files_new` và `dry_run`; nó cũng có thể gồm các trường snapshot, `skipped`, `diffs`, `project_config`, `project_config_created` và `scope`.
 
-Đầu ra toàn cục còn có `locations`, `kits` và `skipped_targets`. Mỗi kết quả kit có thể báo cáo `kit`, `runtime`, `status`, `channel`, `reason`, `error`, `why`, `next`, các trường snapshot, `locations` và `warnings`. Runtime đã chọn nhưng chưa cài global được báo là bỏ qua thay vì được tạo mới. Lần xem trước JSON ngầm định in envelope thành công ra stdout rồi thoát `3`. Lỗi lệnh có cấu trúc đi tới stderr; lỗi phân tích vẫn là văn bản thuần.
+Đầu ra global còn có `locations`, `kits` và `skipped_targets`. Mỗi kết quả Kit có thể báo cáo `kit`, `runtime`, `status`, `channel`, `reason`, `error`, `why`, `next`, các trường snapshot, `locations` và `warnings`. Runtime đã chọn nhưng chưa cài global được báo là bỏ qua thay vì được tạo mới.
+
+Lần chạy remote global không có bộ lọc có thể discover một bản cài hiện có chỉ
+dùng nguồn local. Lệnh báo bản cài đó bằng `status: "skipped"` và
+`reason: "source_inapplicable"` thay vì ngầm đổi nguồn. Hãy làm theo hướng dẫn
+`next` và chạy `ak update --global --local --kits-dir <dir>` để refresh từ nguồn
+local tường minh. Target tường minh không tương thích với nguồn là lỗi xác minh trả mã
+`2`, không phải kết quả `source_inapplicable`.
+
+Lần xem trước JSON ngầm định in envelope thành công ra stdout rồi thoát `3`. Lỗi lệnh có cấu trúc đi tới stderr; lỗi phân tích vẫn là văn bản thuần.
 
 ## Trạng thái thoát
 
@@ -76,7 +101,7 @@ Với `--json`, stdout dùng envelope chung có `"kind": "update"`. `data` của
 | --- | --- |
 | `0` | Đã áp dụng cập nhật, hoàn tất dry-run tường minh hoặc từ chối lời nhắc tương tác. |
 | `1` | Runtime, vòng đời, nguồn, snapshot, ghi hoặc cập nhật toàn cục một phần thất bại. |
-| `2` | Cờ, phạm vi, mục tiêu hoặc lựa chọn bản cài toàn cục đủ điều kiện không hợp lệ. |
+| `2` | Flag, scope, nguồn, target hoặc lựa chọn bản cài global đủ điều kiện không hợp lệ. |
 | `3` | Lần xem trước ngầm định không tương tác cần `--yes` để áp dụng. |
 
 ## Tác động, an toàn và khôi phục
@@ -87,4 +112,4 @@ Các tệp được ghi tuần tự nên lỗi có thể để lại cập nhậ
 
 ## Lệnh liên quan và giới hạn
 
-Dùng [`ak new`](./new) cho dự án mới, [`ak uninstall`](./uninstall) để xóa tệp thuộc quyền sở hữu và [`ak doctor`](./doctor) sau lỗi một phần. Xem [quy ước CLI](../cli-conventions) về cờ dùng chung.
+Dùng [`ak new`](./new) cho project mới và [`ak uninstall`](./uninstall) để xóa file thuộc quyền sở hữu. Sau lỗi một phần, [`ak doctor`](./doctor) chỉ có thể lọc doctor suite riêng cho `claude-code`, `codex` và `cursor`; mọi giá trị `--adapter` khác đều không hợp lệ và trả mã `2`. Xem [quy ước CLI](../cli-conventions) về flag dùng chung.
