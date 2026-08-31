@@ -33,13 +33,15 @@ cd /path/to/project
 ak onboard
 ```
 
-`ak onboard` checks three states in order and runs only the missing work:
+`ak onboard` runs one state-aware pipeline:
 
-| Step | Runs when | Result |
-| --- | --- | --- |
-| Setup | Basic AgentKit configuration is incomplete | Selects a runtime adapter, default Kit, and telemetry preference in `~/.agentkit/config.yaml` |
-| Login | No renewable AgentKit CLI session exists | Signs in with email OTP or a user API key on a TTY |
-| Kit install | No install receipt exists for the selected Kit, target, and scope | Installs the Kit through the normal Kit service in preserve-only mode |
+| Stage | Behavior |
+| --- | --- |
+| 1. Setup | When `adapters.enabled` or `kit.default` is missing, runs the TTY wizard or writes scripted defaults. |
+| 2. Channel | Fills both `updates.channel` and `kit.channel`. |
+| 3. Scope | Resolves project or global scope before asking for login. |
+| 4. Login | Skips a renewable CLI session; otherwise offers email OTP or a user API key on a TTY. |
+| 5. Kit | Skips an existing install receipt; otherwise calls the normal Kit service in preserve-only mode. |
 
 Completed steps are reported as `skipped`, so you can rerun the command after a
 partial or interrupted first use. `--yes` accepts prompts but never becomes
@@ -52,22 +54,42 @@ repeatable result:
 ak onboard --kit engineer --target codex --channel <channel>
 ```
 
-Replace `<channel>` with the channel selected in the docs header. An explicit
-`--channel stable` or `--channel beta` aligns both Kit downloads and binary
-updates. With no channel flag, onboard preserves a configured channel, fills a
-missing paired value, or uses `stable` when neither value exists.
+Replace `<channel>` with the channel selected in the docs header. Channel
+selection prioritizes an explicit `stable` or `beta`, a published `-beta` CLI,
+a persisted `kit.channel`, then version inference (`beta` for a Beta CLI;
+`stable` for development and Stable builds). An unsupported value such as
+`nightly` exits `2` without changing config.
 
-The current project is the default install scope. From your home directory,
-choose a user-wide install or cancel and change to a repository:
+Kit selection falls back from `--kit` to `kit.default`, then `engineer`; a
+configured default of `none` also resolves to `engineer`. Target selection falls
+back from `--target` to the first enabled adapter, then asks on a TTY or exits
+`2` in non-interactive mode.
+
+Every directory except your user home is valid project scope, including a new,
+empty directory without `.git` or `.agentkit/ownership.json`. From your home
+directory, choose a user-wide install or cancel and change directories:
 
 ```bash
 ak onboard --global --kit engineer --target codex --channel <channel>
 ```
 
-`--project-dir` selects another project, but it cannot be the user home unless
-you also pass `--global`. A project is recognized by `.git` or an existing
-`.agentkit/ownership.json`; you do not need to run `ak init` before a
-project-scoped Kit install.
+| Location | Behavior |
+| --- | --- |
+| Any directory except the user home | Uses that directory as project scope and installs the Kit there. |
+| User home on a TTY | Runs missing setup, then offers global install or cancel. It never writes project Kit files into the home directory. |
+| User home without a TTY | Exits `2` before login and tells you to change directories or use `--global`. |
+| `--global` | Skips the project check and installs the user-wide Kit, including when run from home. |
+| `--project-dir <path>` | Uses that path instead of the current directory; the user home still requires `--global`. |
+
+| Stage | New user | Returning user |
+| --- | --- | --- |
+| Setup | Runs setup | Skips when basic config exists |
+| Login | Offers email OTP or user API key | Skips when the session can renew |
+| Kit | Installs the selected route | Skips an existing receipt; if only the receipt is missing, installs only the Kit |
+
+Email OTP is the default TTY login method. `--email <address>` bypasses the
+method picker and goes directly to OTP. An interactive install authentication
+failure triggers login and one installation retry.
 
 ## Use onboarding in automation
 
@@ -86,9 +108,10 @@ ak onboard \
 ```
 
 Without a usable session, non-interactive onboard exits `2` instead of opening
-a login prompt. Keep real API keys, OTPs, license keys, session files, and
-provider credentials out of source control, screenshots, diagnostics, and
-shared shell history.
+a login prompt. When basic setup is missing, scripted setup uses `--kit` or
+`engineer`, `--target` or `claude-code`, and disables telemetry. Keep real API
+keys, OTPs, license keys, session files, and provider credentials out of source
+control, screenshots, diagnostics, and shared shell history.
 
 ## When to use the individual commands
 

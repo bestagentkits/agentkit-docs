@@ -20,8 +20,9 @@ The command accepts no positional arguments and has no aliases.
 ## Before you run
 
 Interactive onboarding needs terminal input and output when it must configure
-preferences or create a login session. Run it from a Git repository or an
-AgentKit-owned project, or select user scope with `--global`.
+preferences or create a login session. Every directory except the user home is
+valid project scope, including an empty directory with no `.git` or ownership
+manifest. Select user scope with `--global`.
 
 ```bash
 ak onboard
@@ -37,7 +38,7 @@ or Oh My Pi in to their providers.
 
 | Flag | Default | Description |
 | --- | --- | --- |
-| `--channel <channel>` | Configured value, otherwise `stable` | Persist and use `stable` or `beta` for both Kit downloads and binary updates. |
+| `--channel <channel>` | Published channel, persisted preference, or version inference | Persist and use `stable` or `beta` for both Kit downloads and binary updates. |
 | `--email <address>` | Empty | Use this email for TTY OTP login when no CLI session exists. |
 | `-g, --global` | `false` | Install the Kit at user scope instead of project scope. |
 | `--kit <name>` | `kit.default`, otherwise `engineer` | Select the Kit to install. |
@@ -52,9 +53,10 @@ described in [CLI conventions](../cli-conventions).
 Onboard evaluates these stages in order:
 
 1. Run basic setup only when `adapters.enabled` or `kit.default` is missing.
-2. Resolve and persist the release channel, then validate project or global scope.
-3. Prompt for email OTP or a user API key only when no renewable CLI session exists.
-4. Resolve the Kit and target, then install only when the selected route has no install receipt.
+2. Resolve and persist both `updates.channel` and `kit.channel`.
+3. Resolve project or global scope before login.
+4. Prompt for email OTP or a user API key only when no renewable CLI session exists.
+5. Resolve the Kit and target, then install only when the selected route has no install receipt.
 
 An existing stage is returned as `skipped`; a completed stage is not replayed
 just because a later stage is missing. If installation reports an authentication
@@ -66,11 +68,36 @@ once.
   never enables force, replacement, or ownership takeover.
 </Callout>
 
+## Scope and channel resolution
+
+| Invocation location | Behavior |
+| --- | --- |
+| Any directory except the user home | Treats that directory as project scope and installs the Kit there. |
+| User home on a TTY | Runs missing setup, warns that home is not project scope, then offers global install or cancellation. Cancellation exits `3`. |
+| User home without a TTY | Exits `2` before login and suggests changing directories or using `--global`. |
+| `--global` | Skips project validation and installs user-wide, including from the user home. |
+| `--project-dir <path>` | Replaces the current directory; the user home remains blocked unless `--global` is also present. |
+
+Channel selection prioritizes an explicit `--channel stable|beta`, a published
+`-beta` CLI, a persisted `kit.channel`, then version inference. Beta binaries
+resolve `beta`; development and Stable binaries resolve `stable`. Unsupported
+explicit values exit `2` without changing config.
+
+Kit selection uses `--kit`, then `kit.default`, then `engineer`; a configured
+default of `none` also resolves to `engineer`. Target selection uses `--target`,
+then the first enabled adapter, then a TTY prompt. Without a TTY, a missing
+target exits `2`.
+
+Email OTP is the default TTY login method. `--email <address>` skips the method
+picker and goes directly to OTP. An authentication failure during interactive
+installation triggers login and exactly one retry.
+
 ## Non-interactive behavior
 
 `--json`, `--quiet`, non-terminal output, or explicit `--no-interactive`
 selects the scripted path. Scripted onboarding can fill basic configuration,
-but it cannot collect a new credential. Create a CLI session first:
+using `--kit` or `engineer`, `--target` or `claude-code`, and telemetry disabled.
+It cannot collect a new credential. Create a CLI session first:
 
 ```bash
 ak login --api-key ak_live_... --no-interactive
@@ -90,7 +117,7 @@ envelope. Diagnostics and structured command errors use stderr.
 | Exit | Meaning | Safe next step |
 | --- | --- | --- |
 | `0` | Every required stage is known-good for this invocation. | Restart the runtime and invoke an installed Skill. |
-| `1` | Setup, authentication, runtime resolution, or Kit installation failed. | Read the reported stage and correct that layer before rerunning. |
+| `1` | Setup, authentication, runtime resolution, or Kit installation failed. | Read the reported stage and correct that layer before rerunning; a TTY may offer to open a GitHub issue. |
 | `2` | The invocation is incomplete or invalid, including missing non-interactive state. | Add the required session, target, project, or supported channel. |
 | `3` | The user cancelled the terminal wizard. | Rerun when ready; do not assume later stages completed. |
 

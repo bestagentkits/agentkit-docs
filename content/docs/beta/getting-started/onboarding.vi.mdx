@@ -33,13 +33,15 @@ cd /path/to/project
 ak onboard
 ```
 
-`ak onboard` kiểm tra ba trạng thái theo thứ tự và chỉ chạy phần còn thiếu:
+`ak onboard` chạy một pipeline có kiểm tra trạng thái:
 
-| Bước | Chạy khi | Kết quả |
-| --- | --- | --- |
-| Setup | Cấu hình AgentKit cơ bản chưa đủ | Chọn runtime adapter, Kit mặc định và tuỳ chọn telemetry trong `~/.agentkit/config.yaml` |
-| Login | Chưa có phiên CLI AgentKit có thể gia hạn | Đăng nhập bằng email OTP hoặc user API key trên TTY |
-| Cài Kit | Chưa có install receipt cho đúng Kit, target và scope | Cài Kit qua dịch vụ Kit thông thường ở chế độ preserve-only |
+| Stage | Behavior |
+| --- | --- |
+| 1. Setup | Khi thiếu `adapters.enabled` hoặc `kit.default`, chạy wizard trên TTY hoặc ghi mặc định cho script. |
+| 2. Channel | Điền cả `updates.channel` và `kit.channel`. |
+| 3. Scope | Resolve scope project hoặc global trước khi hỏi login. |
+| 4. Login | Skip phiên CLI có thể gia hạn; nếu thiếu thì cho chọn email OTP hoặc user API key trên TTY. |
+| 5. Kit | Skip khi đã có install receipt; nếu thiếu thì gọi dịch vụ Kit thông thường ở chế độ preserve-only. |
 
 Bước đã hoàn tất được báo là `skipped`, nên bạn có thể chạy lại lệnh sau lần đầu
 bị gián đoạn hoặc mới hoàn thành một phần. `--yes` chấp nhận prompt nhưng không
@@ -51,22 +53,42 @@ Hãy chỉ định rõ Kit, runtime và kênh phát hành khi cần kết quả 
 ak onboard --kit engineer --target codex --channel <channel>
 ```
 
-Thay `<channel>` bằng kênh đang chọn trong header tài liệu. `--channel stable`
-hoặc `--channel beta` sẽ căn cả kênh tải Kit và cập nhật binary. Khi bỏ cờ
-channel, onboard giữ kênh đã cấu hình, điền giá trị còn thiếu trong cặp, hoặc
-dùng `stable` khi cả hai chưa có.
+Thay `<channel>` bằng kênh đang chọn trong header tài liệu. Thứ tự ưu tiên là
+`stable` hoặc `beta` được truyền rõ ràng, CLI published `-beta`,
+`kit.channel` đã lưu, rồi suy ra từ version (`beta` cho Beta CLI; `stable` cho
+development và Stable build). Giá trị không được hỗ trợ như `nightly` thoát `2`
+mà không đổi config.
 
-Scope mặc định là project hiện tại. Từ thư mục home, hãy chọn cài cho toàn bộ
-user hoặc huỷ rồi chuyển vào repository:
+Kit được chọn theo `--kit`, rồi `kit.default`, cuối cùng là `engineer`; default
+đã cấu hình là `none` cũng resolve thành `engineer`. Target được chọn theo
+`--target`, rồi adapter đầu tiên đang bật, sau đó hỏi trên TTY hoặc thoát `2`
+trong chế độ không tương tác.
+
+Mọi thư mục trừ home của user đều là scope project hợp lệ, kể cả folder mới,
+trống và chưa có `.git` hay `.agentkit/ownership.json`. Từ home, hãy chọn cài
+cho toàn bộ user hoặc huỷ rồi chuyển sang thư mục khác:
 
 ```bash
 ak onboard --global --kit engineer --target codex --channel <channel>
 ```
 
-`--project-dir` chọn một project khác, nhưng không được trỏ tới home của user trừ
-khi có cả `--global`. Một project được nhận diện qua `.git` hoặc
-`.agentkit/ownership.json`; bạn không cần chạy `ak init` trước khi cài Kit ở
-scope project.
+| Nơi chạy | Behavior |
+| --- | --- |
+| Mọi thư mục trừ home của user | Dùng thư mục đó làm scope project và cài Kit vào đó. |
+| Home của user trên TTY | Chạy setup còn thiếu, rồi cho chọn cài global hoặc huỷ. Không ghi tệp Kit project vào home. |
+| Home của user không có TTY | Thoát `2` trước login và yêu cầu chuyển thư mục hoặc dùng `--global`. |
+| `--global` | Bỏ kiểm tra project và cài Kit user-wide, kể cả khi chạy từ home. |
+| `--project-dir <path>` | Dùng path đó thay thư mục hiện tại; home vẫn yêu cầu `--global`. |
+
+| Stage | User mới | User đã dùng AgentKit |
+| --- | --- | --- |
+| Setup | Chạy setup | Skip khi config cơ bản đã có |
+| Login | Cho chọn email OTP hoặc user API key | Skip khi session có thể gia hạn |
+| Kit | Cài route đã chọn | Skip receipt đã có; nếu chỉ thiếu receipt thì chỉ cài Kit |
+
+Email OTP là phương thức login mặc định trên TTY. `--email <address>` bỏ qua
+bước chọn phương thức và đi thẳng tới OTP. Lỗi xác thực khi cài tương tác sẽ
+kích hoạt login và thử cài lại một lần.
 
 ## Dùng onboarding trong automation
 
@@ -85,9 +107,10 @@ ak onboard \
 ```
 
 Nếu chưa có phiên dùng được, onboard không tương tác thoát `2` thay vì mở prompt
-đăng nhập. Không đưa API key, OTP, license key, tệp phiên hoặc credential
-provider thật vào source control, ảnh chụp, diagnostics hay lịch sử shell dùng
-chung.
+đăng nhập. Khi thiếu setup cơ bản, đường script dùng `--kit` hoặc `engineer`,
+`--target` hoặc `claude-code`, và tắt telemetry. Không đưa API key, OTP, license
+key, tệp phiên hoặc credential provider thật vào source control, ảnh chụp,
+diagnostics hay lịch sử shell dùng chung.
 
 ## Khi nào dùng từng lệnh riêng
 
