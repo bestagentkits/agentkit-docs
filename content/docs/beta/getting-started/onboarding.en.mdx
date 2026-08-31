@@ -1,220 +1,128 @@
 ---
 title: Onboarding
-description: Configure AgentKit, authenticate safely, install Engineer Kit, and verify your first runtime.
+description: Run the first-use conductor, install Engineer Kit, and verify your coding runtime.
 ---
 
+import { Callout } from 'fumadocs-ui/components/callout';
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
 Onboarding is complete when your chosen coding assistant recognizes an Engineer
-Kit skill in a project you control.
+Kit Skill in a project you control.
 
 ## Before you start
 
 You need:
 
 - `ak` on your `PATH` — see [Installation](./installation).
-- A supported coding runtime installed and signed in with that runtime's own account.
+- A supported coding runtime installed and signed in with its own provider.
 - An AgentKit account with access to Engineer Kit.
-- A test project where you are comfortable adding runtime configuration.
+- A test project where you can add runtime configuration.
 
-AgentKit authentication grants access to licensed kits. It does not sign Claude
-Code, Codex, Cursor, Grok, Pi, or Oh My Pi in to their providers, and runtime
-login does not grant AgentKit kit entitlement.
+<Callout type="info">
+  AgentKit authentication grants access to licensed Kits. It does not sign
+  Claude Code, Codex, Cursor, Grok, Pi, or Oh My Pi in to their providers, and
+  runtime login does not grant AgentKit Kit access.
+</Callout>
 
+## Run onboarding
 
-## First-run conductor
+Change to the project where you want the Kit, then run the conductor:
 
 ```bash
+cd /path/to/project
 ak onboard
 ```
 
-`ak onboard` is the first-run wizard: it runs setup when basic configuration is
-incomplete, signs you in on a TTY with email OTP or an API key, then installs a
-kit. It does not replace `ak setup` for later preference edits. Scripted or
-non-TTY use needs an existing CLI session; otherwise the command exits `2`.
-Canceling the wizard exits `3`. `--yes` never becomes `--force`; the first
-install is preserve-only.
+`ak onboard` checks three states in order and runs only the missing work:
 
-From your home directory, choose a global install or cancel and `cd` into a
-repository. `--project-dir` must not be the user home unless you also pass
-`--global`.
-
-```bash
-ak onboard --kit engineer --target claude-code
-ak onboard --global --yes
-```
-
-`ak onboard --channel stable` or `ak onboard --channel beta` writes both
-`kit.channel` and `updates.channel`. Other `--channel` values exit `2` and leave
-config unchanged. When `--channel` is omitted, onboard copies a single set
-channel onto the other key, or writes `stable` for both when neither is set.
-
-## Configure AgentKit
-
-```bash
-ak setup
-```
-
-The wizard detects available runtime login state, lets you choose enabled
-runtime adapters, and atomically updates `~/.agentkit/config.yaml` with the
-default kit and telemetry preference. Re-running it is idempotent. Basic setup
-does not copy runtime credentials and does not install a kit.
-
-Use these commands for different jobs:
-
-| Command | Use it for | Main result |
+| Step | Runs when | Result |
 | --- | --- | --- |
-| `ak onboard` | First-run setup, login, and kit install | May write config, a CLI session, and kit files |
-| `ak setup` | Configure this user's AgentKit preferences | Updates AgentKit configuration; no kit content |
-| `ak init [dir]` | Adopt an existing directory | Creates or updates its AgentKit ownership manifest |
-| `ak new <project-name>` | Start a new project directory | Creates the directory and its ownership manifest |
-| `ak kit init <kit>` | Add a kit to a runtime | Writes runtime-ready kit content at project or user scope |
-You do not need `ak init` before installing a project-scoped kit; use it when you
-want AgentKit to adopt and track an existing project as a whole.
+| Setup | Basic AgentKit configuration is incomplete | Selects a runtime adapter, default Kit, and telemetry preference in `~/.agentkit/config.yaml` |
+| Login | No renewable AgentKit CLI session exists | Signs in with email OTP or a user API key on a TTY |
+| Kit install | No install receipt exists for the selected Kit, target, and scope | Installs the Kit through the normal Kit service in preserve-only mode |
 
-If the project already uses `docs/` or `plans/` for another purpose, choose
-project-relative AgentKit locations while adopting it:
+Completed steps are reported as `skipped`, so you can rerun the command after a
+partial or interrupted first use. `--yes` accepts prompts but never becomes
+`--force`.
+
+Choose the Kit, runtime, and release channel explicitly when you want a
+repeatable result:
 
 ```bash
-ak init ./myproj --docs-dir handbook --plans-dir work/plans
+ak onboard --kit engineer --target codex --channel <channel>
 ```
 
-The command persists the values as `paths.docs` and `paths.plans` in
-`.agentkit/config.yaml`. Relative values must remain inside the project and
-cannot point into `.agentkit`; an invalid value exits before initialization
-writes project state. A relative `paths.plans` value is used by Engineer Skills,
-`ak plan`, journals, and the Desktop/dashboard plan views.
+Replace `<channel>` with the channel selected in the docs header. An explicit
+`--channel stable` or `--channel beta` aligns both Kit downloads and binary
+updates. With no channel flag, onboard preserves a configured channel, fills a
+missing paired value, or uses `stable` when neither value exists.
 
-## Sign in to AgentKit
+The current project is the default install scope. From your home directory,
+choose a user-wide install or cancel and change to a repository:
 
-Use the same AgentKit account that owns the kit. A successful login with a
-different account can still return no Engineer Kit grant.
+```bash
+ak onboard --global --kit engineer --target codex --channel <channel>
+```
 
-### User API key (recommended)
+`--project-dir` selects another project, but it cannot be the user home unless
+you also pass `--global`. A project is recognized by `.git` or an existing
+`.agentkit/ownership.json`; you do not need to run `ak init` before a
+project-scoped Kit install.
 
-Create a user API key in the [Account Dashboard](https://agentkit.best/account/api-keys),
-then run this locally with your real key:
+## Use onboarding in automation
+
+Non-interactive onboard cannot collect a new credential. Create the CLI session
+first, then pass every choice the job depends on:
 
 ```bash
 ak login --api-key ak_live_... --no-interactive
+ak onboard \
+  --no-interactive \
+  --yes \
+  --project-dir /path/to/project \
+  --kit engineer \
+  --target codex \
+  --channel <channel>
 ```
 
-This method suits regular use and non-interactive environments. AgentKit stores
-the API key and CLI session in restricted files under `~/.agentkit/auth` (or
-`%USERPROFILE%\.agentkit\auth` on Windows) so the session can renew.
+Without a usable session, non-interactive onboard exits `2` instead of opening
+a login prompt. Keep real API keys, OTPs, license keys, session files, and
+provider credentials out of source control, screenshots, diagnostics, and
+shared shell history.
 
-### Email OTP
+## When to use the individual commands
 
-```bash
-ak login --email you@example.com
-```
+You normally do not need to run setup, login, and Kit installation separately
+during first use. Use their standalone forms when you need to change or recover
+one layer without replaying the whole conductor:
 
-AgentKit sends a one-time code to that address and prompts for it. The OTP is not
-persisted; the resulting renewable session is stored locally. If the message
-does not arrive, check Spam, Junk, and Promotions, then confirm the address is
-the account that owns the kit.
+| Command | Use it when |
+| --- | --- |
+| [`ak setup`](../reference/cli/setup) | Change adapters, the default Kit, telemetry, or advanced provider/model preferences after onboarding |
+| [`ak login`](../reference/cli/login) | Switch AgentKit accounts, rotate a user API key, recover authentication, or create a session before automation |
+| [`ak kit init`](../reference/cli/kit/init) | Install a specific Kit route after configuration and authentication are already known-good |
+| [`ak init`](../reference/cli/init) | Ask AgentKit to adopt and track an existing project as a whole, including its ownership manifest and custom docs/plan paths |
 
-### License key device activation
+These commands remain part of the CLI contract, but they are supporting paths,
+not extra onboarding steps.
 
-```bash
-ak login --license-key ak_license_... --no-interactive
-```
+## Verify the result
 
-This activates the current device and stores an App device session separately
-from the CLI session created by API-key or email login. Add
-`--device-name <name>` only when you need an explicit device label. Kit grants
-are still checked separately.
-
-<Callout type="warn">
-  Never put a real API key, license key, OTP, session file, or provider
-  credential in source control, documentation, screenshots, diagnostics, or a
-  support message. Avoid leaving literal secrets in shared shell history; rotate
-  any credential that may have been exposed.
-</Callout>
-
-## Verify identity and entitlement
+Confirm the AgentKit account, Kit grant, and local installation health:
 
 ```bash
 ak whoami
 ak licenses
+ak doctor --exit-on-fail
 ```
 
-`ak whoami` confirms the current account and live authentication state.
-`ak licenses` lists its per-kit grants. Continue only when Engineer Kit appears.
-Sign-in and entitlement are separate checks: logging in successfully does not
-create a missing grant. With no local session, `ak whoami` reports an
-unauthenticated state and exits `0`; scripts must inspect the result instead of
-treating a zero exit code as proof of login.
-
-## Install Engineer Kit
-
-Change to your test project, choose the runtime, and review the installation
-preview before confirming.
-
-<Tabs items={['Claude Code', 'Codex', 'Cursor', 'Grok Build', 'Pi']}>
-  <Tab value="Claude Code">
-
-```bash
-ak kit init engineer --target claude-code --channel <channel>
-```
-
-  </Tab>
-  <Tab value="Codex">
-
-```bash
-ak kit init engineer --target codex --channel <channel>
-```
-
-  </Tab>
-  <Tab value="Cursor">
-
-```bash
-ak kit init engineer --target cursor --channel <channel>
-```
-
-  </Tab>
-  <Tab value="Grok Build">
-
-```bash
-ak kit init engineer --target grok --channel <channel>
-```
-
-  </Tab>
-  <Tab value="Pi">
-
-```bash
-ak kit init engineer --target pi --channel <channel>
-```
-
-  </Tab>
-</Tabs>
-
-Replace `<channel>` with the release channel selected in the docs header.
-Omitting `--channel` on `ak kit init` uses persisted `kit.channel` when that
-key is set; otherwise it resolves `stable`. A `stable` resolution can return
-`version_not_available` for a runtime package available only on another
-channel. For Claude Code, plugin delivery requires `--switch-to-plugin`;
-independently, `--global` selects the runtime's user scope instead of project
-scope. A successful summary names `engineer`, the output location, install mode,
-scope, and number of files written.
-
-On Codex, success can disclose both fully dropped Hook groups and partially
-narrowed matchers. Engineer currently projects one full drop—the unsupported
-`PostToolUse` task-state group—and two shared matcher narrows that keep their
-supported tool atoms active. Human output uses **Hooks dropped (unsupported on
-this target)** and **Hook matchers narrowed (some tool matches unsupported on
-this target)**; neither disclosure means the install failed.
-
-On Windows, eligible `.cjs` Hooks inside the resolved Codex home can use managed
-sibling `.cmd` shims when paths contain spaces. Engineer's plan reminder is
-registered on `Stop`: it stays silent when no active plan is bound and otherwise
-returns valid, nonblocking JSON. The reminder is not shipped as a
-`SubagentStop` registration.
-
-## Run and verify the first skill
+`ak whoami` exits `0` even when it reports an unauthenticated state. Scripts
+must inspect the result rather than treating exit code zero as proof of login.
+Continue only when `ak licenses` lists Engineer Kit and doctor reports no
+blocking failure.
 
 Restart the assistant or open a new session so it reloads the installed content,
-then invoke:
+then invoke one Skill:
 
 <Tabs items={['Claude Code', 'Codex']}>
   <Tab value="Claude Code">
@@ -223,8 +131,6 @@ then invoke:
 /ak:cook Add a health-check endpoint
 ```
 
-Use the `/ak:...` slash-command form in Claude Code.
-
   </Tab>
   <Tab value="Codex">
 
@@ -232,56 +138,29 @@ Use the `/ak:...` slash-command form in Claude Code.
 $ak:cook Add a health-check endpoint
 ```
 
-Use the `$ak:...` dollar-prefixed skill form in Codex.
-
   </Tab>
 </Tabs>
 
-For Cursor, Grok Build, and Pi, verify the installed Skill through that
-runtime's current discovery and invocation surface before treating onboarding as
-complete. Pi installs portable `ak-<slug>` Skills under `.pi/skills/`; Oh My Pi
-is available for Kit package staging and for Skill dispatch through
-`ak run --target omp`.
-
-Onboarding is complete when the assistant recognizes `ak:cook`, reads the
-request, and begins the skill workflow in the current project.
+For Cursor, Grok Build, and Pi, use that runtime's current Skill discovery and
+invocation surface. Onboarding is complete when the assistant recognizes the
+Skill, reads the request, and begins its workflow in the current project.
 
 ## Recovery and common failures
 
-- **`ak whoami` is unauthenticated:** run `ak onboard` on a TTY, or one explicit
-  `ak login` method again. Non-interactive `ak onboard` exits `2` without a
-  session.
-- **Engineer Kit is absent from `ak licenses`:** confirm you used the purchasing
-  account. Reinstalling cannot create entitlement.
-- **Runtime missing or logged out:** install or sign in to the selected runtime
-  with its provider account, then re-run `ak setup` or `ak onboard`.
-- **The skill is not recognized:** confirm the install summary named the intended
+- **No AgentKit session:** rerun `ak onboard` on a TTY, or use an explicit
+  [`ak login`](../reference/cli/login) method.
+- **Engineer Kit is absent from `ak licenses`:** sign in with the account that
+  owns the Kit. Reinstalling cannot create a missing grant.
+- **Runtime missing or signed out:** install or sign in to that runtime with its
+  provider account, then rerun onboard.
+- **Skill not recognized:** confirm the install summary names the intended
   target, restart the assistant, and run `ak doctor --exit-on-fail` before
-  reinstalling. `ak doctor` can warn `onboard_incomplete` with suggested
-  `ak onboard`.
-- **Binary and kit channels disagree:** `ak doctor` can warn `channel_drift`.
-  Align them with `ak onboard --channel stable` or `ak onboard --channel beta`.
-- **The destination conflicts with existing content:** stop and review the
-  ownership warning. Do not add `--force` as a first response. `ak onboard`
-  never turns `--yes` into `--force`.
+  reinstalling.
+- **`channel_drift` warning:** align both channels with
+  `ak onboard --channel stable` or `ak onboard --channel beta`.
+- **Ownership conflict:** stop and inspect the reported destination. Do not add
+  `--force` as the first response; onboard always uses preserve-only install.
 
-AgentKit preserves unknown and user-modified files during normal kit operations.
-When a supported destructive change needs a recovery snapshot, the CLI prints a
-backup ID. Keep it until you have verified the result. Inspect, verify, and
-preview the snapshot before applying it:
-
-```bash
-ak backups show <backup-id>
-ak backups verify <backup-id>
-ak recover <backup-id> --dry-run
-ak recover <backup-id>
-```
-
-Restore is replace-only: it restores captured paths but normally preserves
-unrelated files created later. A multi-file restore is not transactional and can
-stop after some writes if the host fails. For a project bundle, repeat the exact
-`--allow-root` values shown by `ak backups show` when the restore requests them.
-
-Continue with the focused [Quickstart](./quickstart), or read
-[Installing kits](../guides/installing-kits) before changing scope, selecting
-skills, or refreshing an installation.
+For detailed Kit scope, target compatibility, refresh, uninstall, and recovery
+behavior, continue with [Installing Kits](../guides/installing-kits). Otherwise,
+go to the focused [Quickstart](./quickstart).
