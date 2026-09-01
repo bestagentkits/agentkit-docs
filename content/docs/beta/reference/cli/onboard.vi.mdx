@@ -1,0 +1,138 @@
+---
+title: ak onboard
+description: Hoàn tất setup lần đầu, đăng nhập AgentKit và cài Kit bằng một conductor có kiểm tra trạng thái.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak onboard` cho lần thiết lập AgentKit đầu tiên trên máy hoặc trong một
+project. Lệnh kiểm tra setup, xác thực CLI và route Kit đã chọn, rồi chỉ chạy
+phần còn thiếu.
+
+## Cách dùng
+
+```bash
+ak onboard [flags]
+```
+
+Lệnh không nhận đối số vị trí và không có alias.
+
+## Trước khi chạy
+
+Onboarding tương tác cần cả đầu vào và đầu ra terminal khi phải cấu hình tuỳ
+chọn hoặc tạo phiên đăng nhập. Mọi thư mục trừ home của user đều là scope
+project hợp lệ, kể cả folder trống chưa có `.git` hoặc ownership manifest. Chọn
+scope user bằng `--global`.
+
+```bash
+ak onboard
+ak onboard --kit engineer --target codex --channel <channel>
+ak onboard --global --yes
+```
+
+Đăng nhập AgentKit và đăng nhập provider của runtime là hai việc riêng. Onboard
+có thể tạo phiên CLI AgentKit, nhưng không đăng nhập Claude Code, Codex, Cursor,
+Grok, Pi hoặc Oh My Pi vào provider của chúng.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--channel <channel>` | Published channel, tuỳ chọn đã lưu hoặc suy ra từ version | Ghi và dùng `stable` hoặc `beta` cho cả tải Kit và cập nhật binary. |
+| `--email <address>` | Trống | Dùng email này cho đăng nhập OTP trên TTY khi chưa có phiên CLI. |
+| `-g, --global` | `false` | Cài Kit ở scope user thay vì scope project. |
+| `--kit <name>` | `kit.default`, nếu chưa có thì `engineer` | Chọn Kit sẽ cài. |
+| `--project-dir <path>` | Thư mục hiện tại | Chọn thư mục project; home của user yêu cầu `--global`. |
+| `--target <runtime>` | Adapter đầu tiên đang bật | Chọn runtime target. Chế độ không tương tác cần cờ này khi chưa cấu hình adapter. |
+
+Các cờ dùng chung như `--json`, `--no-interactive`, `--quiet` và `--yes` được mô
+tả trong [quy ước CLI](../cli-conventions).
+
+## Thực thi theo trạng thái
+
+Onboard đánh giá các stage theo thứ tự:
+
+1. Chỉ chạy basic setup khi thiếu `adapters.enabled` hoặc `kit.default`.
+2. Resolve và ghi cả `updates.channel` và `kit.channel`.
+3. Resolve scope project hoặc global trước login.
+4. Chỉ hỏi email OTP hoặc user API key khi chưa có phiên CLI có thể gia hạn.
+5. Resolve Kit và target, rồi chỉ cài khi route đã chọn chưa có install receipt.
+
+Stage đã có được trả về là `skipped`; lệnh không chạy lại một stage hoàn chỉnh
+chỉ vì stage phía sau còn thiếu. Nếu cài đặt báo lỗi xác thực trong chế độ tương
+tác, onboard có thể đăng nhập và thử cài lại một lần.
+
+<Callout type="warning">
+  Lần cài đầu chỉ preserve. `--yes` chấp nhận prompt xác nhận nhưng không bao
+  giờ bật force, replacement hay tiếp quản ownership.
+</Callout>
+
+## Resolve scope và channel
+
+| Nơi gọi lệnh | Behavior |
+| --- | --- |
+| Mọi thư mục trừ home của user | Xem thư mục đó là scope project và cài Kit vào đó. |
+| Home của user trên TTY | Chạy setup còn thiếu, cảnh báo home không phải scope project, rồi cho chọn cài global hoặc huỷ. Huỷ thoát `3`. |
+| Home của user không có TTY | Thoát `2` trước login và gợi ý chuyển thư mục hoặc dùng `--global`. |
+| `--global` | Bỏ xác minh project và cài user-wide, kể cả từ home của user. |
+| `--project-dir <path>` | Thay thế thư mục hiện tại; home vẫn bị chặn trừ khi có cả `--global`. |
+
+Thứ tự chọn channel là `--channel stable|beta` rõ ràng, CLI published `-beta`,
+`kit.channel` đã lưu, rồi suy ra từ version. Beta binary resolve `beta`;
+development và Stable binary resolve `stable`. Giá trị không được hỗ trợ thoát
+`2` mà không đổi config.
+
+Kit được chọn theo `--kit`, rồi `kit.default`, cuối cùng là `engineer`; default
+đã cấu hình là `none` cũng resolve thành `engineer`. Target được chọn theo
+`--target`, rồi adapter đầu tiên đang bật, sau đó là prompt trên TTY. Khi không
+có TTY, thiếu target sẽ thoát `2`.
+
+Email OTP là phương thức login mặc định trên TTY. `--email <address>` bỏ qua
+bước chọn phương thức và đi thẳng tới OTP. Lỗi xác thực trong lúc cài tương tác
+sẽ kích hoạt login và đúng một lần retry.
+
+## Hành vi không tương tác
+
+`--json`, `--quiet`, đầu ra không phải terminal hoặc `--no-interactive` rõ ràng
+sẽ chọn đường chạy script. Onboarding bằng script có thể điền cấu hình cơ bản
+bằng `--kit` hoặc `engineer`, `--target` hoặc `claude-code`, và tắt telemetry.
+Nó không thể thu credential mới. Hãy tạo phiên CLI trước:
+
+```bash
+ak login --api-key ak_live_... --no-interactive
+ak onboard --no-interactive --yes --project-dir /path/to/project \
+  --kit engineer --target codex --channel <channel>
+```
+
+Thiếu session, target hoặc scope project hợp lệ sẽ thoát `2` thay vì mở prompt.
+
+## Đầu ra và mã thoát
+
+Đầu ra thành công dạng human và JSON báo `setup`, `login`, `kit` là `ran` hoặc
+`skipped`, kèm hành động tiếp theo. Kết quả JSON dùng envelope chuẩn
+`kind=onboard`. Diagnostics và lỗi lệnh có cấu trúc dùng stderr.
+
+| Mã | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Mọi stage bắt buộc đều ở trạng thái tốt cho lần gọi này. | Khởi động lại runtime và gọi một Skill đã cài. |
+| `1` | Setup, xác thực, resolve runtime hoặc cài Kit thất bại. | Đọc stage được báo và sửa lớp đó trước khi chạy lại; TTY có thể đề nghị mở GitHub issue. |
+| `2` | Lần gọi chưa đủ hoặc không hợp lệ, gồm cả trạng thái bắt buộc còn thiếu khi chạy không tương tác. | Bổ sung session, target, project hoặc channel được hỗ trợ. |
+| `3` | Người dùng huỷ wizard trong terminal. | Chạy lại khi sẵn sàng; đừng giả định các stage sau đã hoàn tất. |
+
+## Tác động và xác minh
+
+Tuỳ trạng thái còn thiếu, onboard có thể cập nhật `~/.agentkit/config.yaml`, lưu
+phiên CLI với quyền hạn chế và ghi tệp Kit ở scope project hoặc user. Lệnh không
+tiếp nhận repository thành project do AgentKit sở hữu; dùng `ak init` cho thao
+tác riêng đó.
+
+Sau khi thành công, chạy `ak whoami`, `ak licenses` và
+`ak doctor --exit-on-fail`, rồi mở lại runtime và gọi một Skill đã cài.
+
+## Lệnh liên quan
+
+- [Sửa tuỳ chọn AgentKit](./setup)
+- [Tạo hoặc thay phiên CLI AgentKit](./login)
+- [Cài một route Kit cụ thể](./kit/init)
+- [Tiếp nhận project hiện có](./init)
+- [Hướng dẫn onboarding](../../getting-started/onboarding)
