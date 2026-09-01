@@ -87,10 +87,17 @@ Procedure:
    route. Keep content channel-neutral; remove or reject Beta-only claims.
 4. Update only the matching Stable nav metadata required for the approved
    routes.
-5. Run `pnpm typecheck`, `pnpm lint`, `pnpm build`, and `pnpm check:quality`.
+5. Add exactly one add-only receipt under
+   `stable-docs-exceptions/<route-or-change-id>.json`. The receipt must bind the
+   exact docs base commit, unchanged Stable tag and `channels.json` bytes,
+   approved route list, EN/VI Beta and Stable postimages, optional ancestor nav
+   postimages, and its canonical digest. Run
+   `node scripts/check-kit-docs-ci.mjs <base-commit>` and require the router to
+   select `exception` for that receipt.
+6. Run `pnpm typecheck`, `pnpm lint`, `pnpm build`, and `pnpm check:quality`.
    If Stable route or search counts change, update reviewed baselines only from
    that fresh build.
-6. In the handoff, label the change as a stable docs exception, list every
+7. In the handoff, label the change as a stable docs exception, list every
    copied route, state that `channels.json.stable` was unchanged, and say which
    stable release gap made promotion unavailable.
 
