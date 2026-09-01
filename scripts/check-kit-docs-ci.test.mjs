@@ -16,6 +16,7 @@ const RELEASE_NOTES = 'content/docs/stable/reference/release-notes.mdx';
 const RECEIPT = 'docs-promotions/v2.0.0.json';
 const EVIDENCE_MANIFEST = 'release-evidence/stable-promotions/v2.0.0/manifest.json';
 const EVIDENCE_NOTES = 'release-evidence/stable-promotions/v2.0.0/release-notes.md';
+const EXCEPTION = 'stable-docs-exceptions/example-guide.json';
 
 function git(root, args) {
   const result = spawnSync('git', ['-C', root, ...args], { encoding: 'utf8' });
@@ -99,6 +100,17 @@ test('future promotion-shaped Stable diff routes its exact receipt to promotion 
   assert.equal(call.receiptPath, RECEIPT);
 });
 
+test('Stable authored docs diff routes its exact exception receipt to exception validation', async () => {
+  const fixture = await makeFixture();
+  await write(fixture.root, 'content/docs/stable/guides/example.mdx', '# Stable exception\n');
+  await write(fixture.root, EXCEPTION, '{"exception":true}\n');
+  commitChanges(fixture.root, 'stable docs exception');
+  const { result, call } = await route(fixture);
+  assert.equal(result.mode, 'exception');
+  assert.equal(call.mode, 'exception');
+  assert.equal(call.receiptPath, EXCEPTION);
+});
+
 test('arbitrary Stable edit without reconciliation or receipt fails', async () => {
   const fixture = await makeFixture();
   await write(fixture.root, 'content/docs/stable/guides/example.mdx', '# Arbitrary edit\n');
@@ -108,7 +120,7 @@ test('arbitrary Stable edit without reconciliation or receipt fails', async () =
     root: fixture.root,
     base: fixture.base,
     runValidation: async () => { called = true; },
-  }), /exactly one added receipt plus two added promotion evidence files/);
+  }), /without reconciliation evidence, a docs exception receipt/);
   assert.equal(called, false);
 });
 
@@ -120,7 +132,7 @@ test('arbitrary Stable edit plus channels and release notes still fails without 
   commitChanges(fixture.root, 'arbitrary anchors');
   await assert.rejects(
     () => checkKitDocsCi({ root: fixture.root, base: fixture.base, runValidation: async () => {} }),
-    /exactly one added receipt plus two added promotion evidence files/,
+    /without reconciliation evidence, a docs exception receipt/,
   );
 });
 
@@ -154,8 +166,24 @@ test('receipt change without Stable diff fails instead of using history validati
   commitChanges(fixture.root, 'orphan receipt');
   await assert.rejects(
     () => checkKitDocsCi({ root: fixture.root, base: fixture.base, runValidation: async () => {} }),
-    /promotion receipt\/evidence changed without a Stable diff/,
+    /Stable transaction receipt\/evidence changed without a Stable diff/,
   );
+});
+
+test('Stable docs exception receipts accept only one add-only normalized JSON path', () => {
+  for (const row of [
+    { status: 'M', path: EXCEPTION },
+    { status: 'D', path: EXCEPTION },
+    { status: 'R100', oldPath: EXCEPTION, path: 'stable-docs-exceptions/renamed.json' },
+    { status: 'A', path: 'stable-docs-exceptions/NON_NORMAL.json' },
+  ]) {
+    assert.throws(() => selectKitDocsCiMode([row]), /exception receipts are add-only/);
+  }
+  assert.throws(() => selectKitDocsCiMode([
+    { status: 'M', path: 'content/docs/stable/guides/example.mdx' },
+    { status: 'A', path: EXCEPTION },
+    { status: 'A', path: 'stable-docs-exceptions/other.json' },
+  ]), /exactly one add-only receipt/);
 });
 
 test('promotion receipts accept only base-relative Git status A', () => {
@@ -174,7 +202,20 @@ test('reconciliation route rejects a simultaneous promotion receipt', () => {
     { status: 'M', path: 'content/docs/stable/guides/example.mdx' },
     { status: 'M', path: MANIFEST },
     { status: 'A', path: RECEIPT },
-  ]), /reconciliation and promotion transaction changes cannot share/);
+  ]), /reconciliation and another Stable transaction cannot share/);
+});
+
+test('Stable docs exception rejects promotion and reconciliation transactions', () => {
+  assert.throws(() => selectKitDocsCiMode([
+    { status: 'M', path: 'content/docs/stable/guides/example.mdx' },
+    { status: 'A', path: EXCEPTION },
+    { status: 'A', path: RECEIPT },
+  ]), /exception and promotion transaction changes cannot share/);
+  assert.throws(() => selectKitDocsCiMode([
+    { status: 'M', path: 'content/docs/stable/guides/example.mdx' },
+    { status: 'A', path: EXCEPTION },
+    { status: 'M', path: MANIFEST },
+  ]), /reconciliation and another Stable transaction cannot share/);
 });
 
 test('copying from Stable to an unrelated destination is not a Stable diff', () => {

@@ -11,6 +11,8 @@ và quyết định cuối cùng.
 Điều này quan trọng vì vài công cụ nghe khá giống nhau:
 
 - Built-in advisor của Claude Code là advisor tool native của runtime.
+- Native advisor của Oh My Pi là background reviewer theo dõi session và có thể
+  steer hoặc interrupt main agent.
 - Subagent thông thường là worker cô lập có thể chạy task loop riêng.
 - AgentKit `kongming` là Agent tư vấn one-shot dùng tại checkpoint của workflow.
 - AgentKit `advisor` là Agent phỏng vấn phía sau `/ak:advise --agent`.
@@ -25,6 +27,11 @@ workflow AgentKit tới checkpoint khó và cần counsel được đóng gói r
 từ một Agent tư vấn mới. Dùng `/ak:advise` khi chính problem cần được reframe
 qua interview với người dùng. Dùng subagent thông thường khi bạn muốn giao việc,
 không chỉ xin counsel.
+
+Dùng advisor của Oh My Pi khi bạn muốn review liên tục qua các completed turn,
+bao gồm note theo severity có thể steer công việc đang chạy. Bạn có thể kết hợp
+nó với AgentKit `--advice`: native advisor theo dõi session, còn `kongming`
+review one-shot tại các workflow checkpoint rõ ràng.
 
 `kongming` và `advisor` là Agent của AgentKit. Theo contract, chúng chỉ tư vấn.
 Chúng có thể kiểm tra evidence mà runtime cho phép, nhưng không trở thành chủ sở
@@ -57,6 +64,46 @@ Xem tài liệu công khai của Claude về
 [advisor tool](https://docs.anthropic.com/en/agents-and-tools/tool-use/advisor-tool),
 [CLI flag của Claude Code](https://docs.anthropic.com/en/docs/claude-code/cli-reference)
 và [Claude Code settings](https://docs.anthropic.com/en/docs/claude-code/settings).
+
+## Native advisor trong Oh My Pi
+
+Oh My Pi cung cấp một runtime-native advisor có lifecycle khác. Nó chạy như
+background reviewer và theo dõi các completed turn của main agent, gồm prompt,
+response, reasoning cùng tool activity. Các review tool mặc định có thể đọc và
+search project để kiểm tra claim dựa trên workspace evidence.
+
+Note được chấp nhận có ba severity:
+
+| Severity | Tác dụng |
+| --- | --- |
+| `nit` | Thêm note cleanup hoặc low-risk không gây gián đoạn tại ranh giới an toàn |
+| `concern` | Có thể steer active work khi phát hiện material risk hoặc constraint bị bỏ sót |
+| `blocker` | Có thể interrupt active work khi tiếp tục dễ lãng phí công sức hoặc tạo kết quả hỏng |
+
+Để bật, cần cả assignment `modelRoles.advisor` resolve được và advisor runtime
+được enable: persistent bằng `advisor.enabled`, tạm thời bằng `/advisor on`,
+hoặc cho headless run bằng `--advisor`. `WATCHDOG.md` thêm review priority mà
+không đưa cùng guidance vào ordinary context của main agent. `WATCHDOG.yml` có
+thể khai báo roster gồm nhiều advisor chuyên biệt.
+
+```mermaid
+flowchart TB
+  accTitle: Luồng native advisor của Oh My Pi
+  accDescr: OMP advisor theo dõi completed turn của main agent trong background, kiểm tra evidence bằng review tool và trả severity-aware note có thể steer hoặc interrupt main agent.
+  user["User"] --> main["OMP main agent"]
+  main -. "completed turn và tool activity" .-> advisor["OMP advisor"]
+  watchdog["WATCHDOG.md hoặc WATCHDOG.yml"] --> advisor
+  advisor --> severity{"Severity"}
+  severity -->|nit| aside["Aside không gây gián đoạn"]
+  severity -->|concern| steer["Steer active work"]
+  severity -->|blocker| interrupt["Interrupt active work"]
+  aside --> main
+  steer --> main
+  interrupt --> main
+```
+
+Xem tài liệu công khai của Oh My Pi về
+[Advisor và WATCHDOG.md](https://github.com/can1357/oh-my-pi/blob/main/docs/advisor-watchdog.md).
 
 ## Subagent thông thường
 
@@ -159,6 +206,64 @@ Hãy coi advice của `kongming` là input chất lượng cao, không phải ve
 thực thi. Workflow chính vẫn phải giải quyết conflict, chọn hướng đi, sửa code,
 chạy validation, đáp ứng approval gate và ghi lại điều đã xảy ra.
 
+## Kết hợp Oh My Pi advisor với AgentKit --advice
+
+Hai cơ chế có thể chạy cùng nhau vì chúng hoạt động ở hai lớp khác nhau:
+
+- Oh My Pi advisor review liên tục main session và phát severity-aware note;
+- AgentKit `--advice` gọi một Agent `kongming` mới để nhận counsel one-shot tại
+  các checkpoint do Skill đang chạy định nghĩa.
+
+Trên target Oh My Pi, AgentKit project Skill và Agent vào native discovery
+location của OMP. Runtime đã cài vẫn sở hữu model resolution, credential và live
+Agent delegation. Tệp `kongming` đã được project chỉ chứng minh Agent có thể được
+discover; nó không chứng minh model yêu cầu resolve được hoặc checkpoint
+invocation đã hoàn tất.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant User
+  participant Main as OMP main agent
+  participant Native as OMP advisor
+  participant Kongming as AgentKit kongming
+  participant Gates as Test và approval gate
+
+  User->>Main: Chạy AgentKit Skill với --advice
+  Main->>Main: Research, plan hoặc implement
+  Main-->>Native: Completed turn và tool activity
+  Native-->>Main: nit, concern hoặc blocker
+  Main->>Kongming: Checkpoint evidence và exact question
+  Kongming-->>Main: One-shot counsel
+  Main->>Gates: Decide, edit, test và review
+  Gates-->>Main: Authoritative evidence
+  Main-->>Native: Completion turn
+  Native-->>Main: Final review note khi phù hợp
+  Main-->>User: Kết quả, verification và unresolved risk
+```
+
+Cách tách role tối thiểu:
+
+```yaml
+modelRoles:
+  default: provider/main-model
+  advisor: provider/review-model
+
+advisor:
+  enabled: true
+  subagents: false
+```
+
+Giữ `advisor.subagents: false` khi mới kết hợp hai cơ chế. Nếu bật, native
+advisor cũng chạy trong các spawned subagent session đủ điều kiện, khiến
+background reviewer có thể supervise chính `kongming`. Lớp bổ sung này thường
+trùng lặp và làm tăng cost cùng latency.
+
+Nếu cả hai cơ chế resolve qua cùng advisor role, chúng vẫn tạo request và
+context riêng, nhưng không tạo model diversity. Nếu advisor role bị thiếu hoặc
+không khả dụng, coi native advisor cùng mọi `kongming` checkpoint bị ảnh hưởng
+là chưa hoàn tất; không báo rằng hai independent review đã xảy ra.
+
 ## ak:advise inline và ak:advise --agent
 
 AgentKit `advisor` khác với `kongming`.
@@ -210,6 +315,7 @@ Runtime không hỗ trợ giống hệt nhau.
 | Claude Code | `/ak:advise` không có `--agent` chạy inline trong main session. `/ak:advise --agent` giao interview cho AgentKit `advisor` Agent. AgentKit đánh dấu `kongming` và `advisor` bằng model tier `fable`. Claude Code cũng có built-in advisor riêng, tách biệt với các Agent của AgentKit. |
 | Codex | AgentKit map `kongming` sang frontier model override của Codex với high reasoning effort. Frontmatter `fable` dùng chung vẫn portable, nhưng model ID riêng của Codex chỉ do adapter Codex emit. `/ak:advise --agent` không đồng nghĩa có relay path của Claude Code; dùng inline `ak:advise` trừ khi runtime đã cài báo hỗ trợ. |
 | Cursor | AgentKit có thể project Agents và Skills, nhưng đừng suy ra behavior của Claude Code advisor hoặc parity của relay `advisor` trong AgentKit chỉ từ việc file tồn tại. Kiểm tra output của runtime adapter và trang Skill để biết surface đang active. |
+| Oh My Pi | AgentKit project Skill và Agent vào native discovery surface của OMP. `--advice` cần live Agent delegation cùng model resolve được cho `kongming`; native OMP advisor là background-review subsystem riêng. Hai cơ chế có thể chạy cùng nhau, nhưng chỉ có tệp không chứng minh review nào đã hoàn tất. |
 
 ### Claude Code
 
@@ -266,6 +372,20 @@ hiện tại của AgentKit vẫn ghi live canary cho Cursor Agent install, upda
 invocation là deferred, và model availability có thể khác nhau theo Cursor plan.
 Hãy coi adapter output và session Cursor đang active là nguồn sự thật.
 
+### Oh My Pi
+
+AgentKit cài Skill portable dưới `.omp/skills/`, Agent dưới `.omp/agents/` và
+rule dưới `.omp/rules/` cho OMP projection ở project scope. Global projection
+dùng root của active OMP profile. Installation và dispatch vẫn là hai tuyến
+riêng: installation tạo inventory có thể discover, còn `ak run --target omp`
+dispatch Skill đã resolve qua OMP CLI cục bộ.
+
+Oh My Pi sở hữu backend, credential, model role và live Agent capability đã cấu
+hình. Trước khi dựa vào `--advice`, hãy kiểm tra Agent `kongming` đã cài, xác
+nhận model nó yêu cầu resolve được và xác minh active OMP session có thể delegate
+tới Agent đó. Cấu hình và kiểm tra native advisor riêng; đừng suy ra
+`advisor.enabled` chỉ từ việc AgentKit file tồn tại.
+
 ### Model availability và fallback
 
 AgentKit không tự động downgrade các Agent tư vấn khi subscription, provider
@@ -301,7 +421,9 @@ workflow tiếp tục mà không có checkpoint đó.
 | Nhu cầu | Dùng |
 | --- | --- |
 | Second opinion native giữa lúc sinh phản hồi trong Claude Code | Built-in advisor của Claude Code |
+| Continuous severity-aware review qua các turn của Oh My Pi | Native advisor của Oh My Pi |
 | Strategic checkpoint one-shot trong workflow AgentKit | `kongming`, thường qua `--advice` |
+| Continuous OMP review cộng checkpoint rõ của workflow | Oh My Pi advisor cùng AgentKit `--advice`, sau khi xác minh cả hai model path |
 | Reframing có interview trước khi quyết định làm gì | `/ak:advise`, hoặc `/ak:advise --agent` trên Claude Code |
 | Research, testing, review hoặc implementation cô lập | Subagent thông thường với task có ranh giới |
 | Điều phối parallel hoặc nhiều session | Agent team hoặc workflow support, không chỉ advisory supervision |
