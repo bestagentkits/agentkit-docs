@@ -1,0 +1,154 @@
+---
+title: Quản lý Hook preference
+description: Set, kiểm tra và khôi phục soft preference của một Hook bằng ak config prefs, tách biệt với việc cài đặt hoặc gỡ chính Hook đó.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+**Hook preference** là một soft toggle ở runtime, ví dụ `hooks.simplify-gate`,
+mà một Hook script có thể kiểm tra trước khi chạy. Hướng dẫn này nói về việc
+set, kiểm tra và khôi phục preference đó bằng `ak config prefs`. Nó không cài
+đặt, đăng ký hay gỡ một Hook.
+
+<Callout type="info">
+  `ak config prefs` chỉ sửa `hooks.<name>`, `journal.auto` và `worktree.root`.
+  Nó không bao giờ đụng đến provider key, token hay cấu hình thuộc phần setup
+  khác. Xem [tham chiếu `ak config
+  prefs`](../reference/cli/config/prefs) để biết đầy đủ nhóm lệnh.
+</Callout>
+
+## Preference khác với cài đặt
+
+Đây là hai vòng đời khác nhau. Đổi cái này không đổi cái kia:
+
+| Mục tiêu | Lệnh | Hiệu ứng |
+| --- | --- | --- |
+| Set soft preference của một Hook | `ak config prefs set hooks.<name> <true\|false>` | Ghi một giá trị boolean `hooks.<name>` vào tệp cấu hình. Hook nào honor preference này có thể thoát sớm ở lần chạy kế tiếp. |
+| Khôi phục preference mặc định/kế thừa | `ak config prefs unset hooks.<name>` | Xóa override tường minh; giá trị fallback về scope còn lại hoặc default tích hợp của Hook. |
+| Cài đặt, refresh hoặc gỡ chính Hook | [`ak kit init`](../reference/cli/kit/init), `ak kit refresh`, `ak kit uninstall` | Đổi những tệp Hook và registration runtime nào tồn tại. |
+| Xác nhận một Hook surface đang thực sự hoạt động | `ak doctor --adapter <adapter> --json` | Báo cáo Hook surface đã đăng ký theo scope và delivery mode. |
+
+Set `hooks.<name>` sang bất kỳ giá trị nào không chứng minh Hook đó đã được
+cài, và không bao giờ hủy đăng ký hay xóa tệp Hook. Một preference bị tắt trên
+một Hook chưa từng được cài thì không có hiệu ứng quan sát được.
+
+## Set một preference
+
+```bash
+ak config prefs set <key> <true|false>
+```
+
+`<key>` phải là `hooks.<name>` (lowercase kebab-case, không có dấu chấm phụ),
+đúng literal `journal.auto`, hoặc đúng literal `worktree.root`. Với Hook
+preference, `<value>` phải là đúng literal viết thường `true` hoặc `false` —
+không chấp nhận cách viết khác.
+
+### Scope user (mặc định)
+
+```bash
+ak config prefs set hooks.simplify-gate false
+```
+
+Ghi vào `$AGENTKIT_HOME/config.yaml` (mặc định `~/.agentkit/config.yaml`). Áp
+dụng cho mọi project trừ khi có giá trị scope project ghi đè.
+
+### Scope project
+
+```bash
+ak config prefs set hooks.simplify-gate false --scope project
+```
+
+Ghi vào `.agentkit/config.yaml` dưới working directory hiện tại thay vào đó.
+Scope project được ưu tiên hơn scope user cho cùng key. Tệp này dự định được
+commit, nên không bao giờ đặt credential vào đây.
+
+`simplify-gate` là tên Hook duy nhất được nhắc tới trong toàn bộ docs; nó chỉ
+là ví dụ ở đây. Kiểm tra tài liệu riêng của Hook, hoặc chạy `ak doctor
+--adapter <adapter> --json`, để xác nhận Hook thực sự honor key preference nào
+trước khi phụ thuộc vào nó.
+
+## Kiểm tra giá trị có hiệu lực
+
+Preference từ scope user và project được deep-merge, nên hãy kiểm tra kết quả
+đã merge thay vì chỉ một tệp:
+
+```bash
+ak config prefs resolve
+ak config prefs resolve --json
+```
+
+Output dạng người đọc liệt kê cả hai tệp nguồn là `present` hoặc `absent`, sau
+đó là preference đã merge. Nếu không có preference nào được authored, nó in
+`No preferences are set; hooks use their built-in defaults.` Chạy lệnh này từ
+đúng project directory với runtime session đang chẩn đoán, vì scope project
+được resolve từ working directory hiện tại.
+
+## Validate trước và sau khi sửa
+
+```bash
+ak config prefs validate
+```
+
+Kiểm tra các tệp cấu hình user và project đang tồn tại theo schema nhúng trong
+CLI đã cài. Thoát `0` nghĩa là không có lỗi (vẫn có thể có warning về cách viết
+cũ); thoát `1` nghĩa là một tệp không parse được hoặc vi phạm schema. Validate
+một tệp cụ thể, ví dụ tệp đang review trong CI, bằng `--file`:
+
+```bash
+ak config prefs validate --file ./config.yaml
+```
+
+## Khôi phục hành vi mặc định/kế thừa
+
+```bash
+ak config prefs unset hooks.simplify-gate
+ak config prefs unset hooks.simplify-gate --scope project
+```
+
+`unset` chỉ xóa preference tường minh ở scope đã chọn. Sau khi xóa, giá trị
+fallback về giá trị scope còn lại nếu có, hoặc về default tích hợp của Hook
+nếu không scope nào set. Nếu key đã vắng mặt từ trước, `unset` vẫn thành công
+như một no-op — nó không tạo hay ghi lại tệp.
+
+## Validation và giới hạn
+
+- Chỉ chấp nhận các key `hooks.<name>`, `journal.auto` và `worktree.root`.
+  `keys.anthropic`, `api.token`, `telemetry.enabled` và các path thuộc phần
+  setup khác bị từ chối trước khi ghi — lệnh này không phải một trình sửa
+  cấu hình tổng quát.
+- `hooks.<name>` phải khớp `^[a-z0-9]+(?:-[a-z0-9]+)*$`; tên như
+  `hooks.Bad-Name` hoặc `hooks.a.b` bị từ chối.
+- `true`/`false` phải là literal viết thường cho Hook và `journal.auto`
+  preference; cách viết khác sẽ lỗi.
+- Khi tệp đích đã tồn tại, `set` và `unset` sao chép nó vào
+  `$AGENTKIT_HOME/backups/config/` trước khi ghi lại atomic, và lệnh báo cáo
+  đường dẫn backup. Khi tạo tệp cấu hình mới (lần `set` đầu tiên trong một
+  scope), lệnh ghi trực tiếp và không báo đường dẫn backup vì chưa có gì để
+  backup.
+
+## Khắc phục kết quả không mong đợi
+
+1. Chạy `ak config prefs resolve` từ project bị ảnh hưởng để xem scope nào
+   đang thắng.
+2. Chạy `ak config prefs validate` để loại trừ lỗi schema hoặc YAML. Một `set`
+   bị từ chối vì lý do schema sẽ giữ nguyên tệp đích, nhưng một tệp đã bị sửa
+   tay mà không parse được sẽ làm cả `resolve` thất bại thay vì fallback về
+   default.
+3. Nếu preference trông đúng nhưng Hook vẫn hoạt động như chưa được set, hãy
+   xác nhận Hook thực sự được cài và đăng ký bằng `ak doctor --adapter
+   <adapter> --json` — đổi preference không bao giờ cài một Hook chưa tồn tại.
+4. Để khôi phục sau một thay đổi không mong muốn, hãy set lại preference về
+   giá trị bạn muốn, hoặc khôi phục đúng đường dẫn backup mà lệnh `set`/`unset`
+   đã báo cáo. Không xóa `~/.agentkit`, `.agentkit`, `~/.claude` hoặc
+   `~/.codex` như một lối tắt.
+
+Để biết vòng chẩn đoán sâu hơn và lỗi Hook riêng của Grok, xem [Lỗi cấu
+hình](../troubleshooting/configuration).
+
+## Trang liên quan
+
+- [Tham chiếu `ak config prefs`](../reference/cli/config/prefs)
+- [Lỗi cấu hình](../troubleshooting/configuration)
+- [Engineer Hooks và runtime](../kits/engineer/hooks)
+- [Marketing Hooks và runtime](../kits/marketing/hooks)
+- [Cài đặt Kit](./installing-kits)

@@ -1,0 +1,156 @@
+---
+title: Managing Hook preferences
+description: Set, inspect, and restore a Hook's soft preference with ak config prefs, and keep it separate from installing or removing the Hook itself.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+A **Hook preference** is a soft runtime toggle, such as `hooks.simplify-gate`,
+that a Hook script can check before it runs. This guide covers setting,
+inspecting, and restoring that preference with `ak config prefs`. It does not
+install, register, or remove a Hook.
+
+<Callout type="info">
+  `ak config prefs` only edits `hooks.<name>`, `journal.auto`, and
+  `worktree.root`. It never touches provider keys, tokens, or other setup-owned
+  configuration. See the [`ak config prefs`
+  reference](../reference/cli/config/prefs) for the full command family.
+</Callout>
+
+## Preference vs. installation
+
+These are two different lifecycles. Changing one does not change the other:
+
+| Goal | Command | Effect |
+| --- | --- | --- |
+| Set a Hook's soft preference | `ak config prefs set hooks.<name> <true\|false>` | Writes one `hooks.<name>` boolean to a config file. A Hook that honors this preference can exit early on its next run. |
+| Restore the inherited/default preference | `ak config prefs unset hooks.<name>` | Removes the explicit override; the value falls back to the other scope or the Hook's own built-in default. |
+| Install, refresh, or remove the Hook itself | [`ak kit init`](../reference/cli/kit/init), `ak kit refresh`, `ak kit uninstall` | Changes which Hook files and runtime registrations exist. |
+| Confirm a Hook surface is actually active | `ak doctor --adapter <adapter> --json` | Reports registered Hook surfaces by scope and delivery mode. |
+
+Setting `hooks.<name>` to any value does not prove that Hook is installed, and
+it never unregisters or deletes Hook files. A disabled preference on a Hook
+that was never installed has no observable effect.
+
+## Set a preference
+
+```bash
+ak config prefs set <key> <true|false>
+```
+
+`<key>` must be `hooks.<name>` (lowercase kebab-case, no extra dot), the exact
+literal `journal.auto`, or the exact literal `worktree.root`. For a Hook
+preference, `<value>` must be the exact lowercase literal `true` or `false` —
+no other spelling is accepted.
+
+### User scope (default)
+
+```bash
+ak config prefs set hooks.simplify-gate false
+```
+
+Writes to `$AGENTKIT_HOME/config.yaml` (`~/.agentkit/config.yaml` by default).
+This applies to every project unless a project-scoped value overrides it.
+
+### Project scope
+
+```bash
+ak config prefs set hooks.simplify-gate false --scope project
+```
+
+Writes to `.agentkit/config.yaml` under the current working directory instead.
+Project scope wins over user scope for the same key. This file is intended to
+be committed, so never place credentials in it.
+
+`simplify-gate` is the only Hook name referenced across the docs; it is used
+here only as an example. Check the Hook's own documentation, or run `ak doctor
+--adapter <adapter> --json`, to confirm which preference key a given Hook
+actually honors before relying on it.
+
+## Inspect the effective value
+
+Preferences from user and project scope are deep-merged, so check the merged
+result rather than either file alone:
+
+```bash
+ak config prefs resolve
+ak config prefs resolve --json
+```
+
+Human output lists both source files as `present` or `absent`, then the
+merged preferences. With no preference authored anywhere, it prints
+`No preferences are set; hooks use their built-in defaults.` Run this from the
+same project directory as the runtime session you are diagnosing, since project
+scope resolves from the current working directory.
+
+## Validate before and after editing
+
+```bash
+ak config prefs validate
+```
+
+Checks whichever of the user and project config files exist against the
+schema embedded in the installed CLI. Exit `0` means no errors (warnings about
+legacy spellings can still appear); exit `1` means a file could not be parsed
+or violates the schema. Validate a specific file, such as one under review in
+CI, with `--file`:
+
+```bash
+ak config prefs validate --file ./config.yaml
+```
+
+## Restore the default or inherited behavior
+
+```bash
+ak config prefs unset hooks.simplify-gate
+ak config prefs unset hooks.simplify-gate --scope project
+```
+
+`unset` removes only the explicit preference at the selected scope. After
+removal, the value falls back to the other scope's value when one exists, or
+to the Hook's own built-in default when neither scope sets it. If the key was
+already absent, `unset` succeeds as a no-op — it does not create or rewrite a
+file.
+
+## Validation and limits
+
+- Only `hooks.<name>`, `journal.auto`, and `worktree.root` are accepted keys.
+  `keys.anthropic`, `api.token`, `telemetry.enabled`, and similar setup-owned
+  paths are rejected before any write — this command is not a general config
+  editor.
+- `hooks.<name>` must match `^[a-z0-9]+(?:-[a-z0-9]+)*$`; a name such as
+  `hooks.Bad-Name` or `hooks.a.b` is rejected.
+- `true`/`false` must be lowercase literals for Hook and `journal.auto`
+  preferences; other spellings fail.
+- When the target file already exists, `set` and `unset` copy it to
+  `$AGENTKIT_HOME/backups/config/` before the atomic rewrite and report the
+  backup path. Creating a new config file (first `set` in a scope) writes
+  directly and reports no backup path, since there is nothing to back up.
+
+## Troubleshoot unexpected results
+
+1. Run `ak config prefs resolve` from the affected project to see which scope
+   currently wins.
+2. Run `ak config prefs validate` to rule out a schema or YAML error. A `set`
+   rejected for schema reasons leaves the existing target untouched, but a
+   hand-edited file that fails to parse fails the whole `resolve` instead of
+   falling back to a default.
+3. If the preference looks correct but the Hook still behaves as if it were
+   unset, confirm the Hook is actually installed and registered with
+   `ak doctor --adapter <adapter> --json` — a preference change never installs
+   a Hook that is not there.
+4. To recover from an unwanted change, either set the preference again to the
+   value you want or restore the exact backup path reported by the `set`/`unset`
+   command. Do not delete `~/.agentkit`, `.agentkit`, `~/.claude`, or `~/.codex`
+   as a shortcut.
+
+For the deeper diagnostic loop and Grok-specific Hook errors, see
+[Configuration problems](../troubleshooting/configuration).
+
+## Related pages
+
+- [`ak config prefs` reference](../reference/cli/config/prefs)
+- [Configuration problems](../troubleshooting/configuration)
+- [Engineer Hooks and runtime](../kits/engineer/hooks)
+- [Marketing Hooks and runtime](../kits/marketing/hooks)
+- [Installing kits](./installing-kits)
