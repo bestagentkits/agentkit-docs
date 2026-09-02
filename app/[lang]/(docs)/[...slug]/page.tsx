@@ -126,5 +126,14 @@ export async function generateMetadata(
     openGraph: {
       images: getPageImage(page).url,
     },
+    // No explicit title/description/images: Next resolves twitter:title and
+    // twitter:description from the page's own `title`/`description` above,
+    // and twitter:image from `openGraph.images` — setting them again here
+    // would bypass the site title template (`app/[lang]/layout.tsx`), which
+    // otherwise brands og:title as "Page · AgentKit Docs" but would leave
+    // twitter:title as the bare page title.
+    twitter: {
+      card: 'summary_large_image',
+    },
   });
 }
