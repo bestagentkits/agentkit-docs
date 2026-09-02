@@ -104,6 +104,32 @@ receipt-bound `scripts/promote-docs.mjs` whole-copy promotion — a hand-authore
 Beta guide must never be proposed directly against `main`. This overrides
 `ak:ship`'s generic "official → default branch" auto-detection for this repo.
 
+## CI fix: release quality route-count baseline
+
+First CI run on PR #114 failed at `pnpm check:quality:shape` (job `build`,
+run 33604090021): "beta/en: route count 408 does not match reviewed baseline
+407" (and the source-route/vi equivalents). Root cause: `scripts/release-quality-shape.mjs`
+(`RELEASE_SHAPE_BASELINE`) and `scripts/release-quality-metrics.mjs`
+(`RELEASE_QUALITY_BASELINE.deterministic.searchPagesPerLocaleChannel`) pin
+exact reviewed Beta route/searchable-page counts; adding the new guide route
+(`guides/managing-hook-preferences`) requires bumping these by 1, matching
+the exact precedent in commit `165e359` (`docs: streamline onboarding and add
+CLI reference (#107)`), which made the identical +1 change for its own new
+Beta route with no other baseline fields touched.
+
+Fix applied and pushed (commit `500dd85`):
+- `release-quality-shape.mjs`: `sourceRoutesPerLocaleChannel.beta` 408→409,
+  `routesPerLocaleChannel.beta` 407→408.
+- `release-quality-metrics.mjs`: `deterministic.searchPagesPerLocaleChannel.beta`
+  406→407.
+
+Re-verified locally end-to-end after the fix: `pnpm build`, `pnpm check:quality`
+(shape + metrics, including output/file/search budgets and fixed search
+relevance queries), `pnpm typecheck`, `pnpm lint`, `pnpm test` (319/319),
+`pnpm check:catalog`, `pnpm check:reference`, `compile-prose.mjs --check`,
+`generate-reference.mjs` (no drift), `pnpm check:assets`, `check-links.mjs`
+(155,032 links) — all clean.
+
 ## Red-team (self-check, evidence-based)
 
 - Risk: guide duplicates/conflicts with `troubleshooting/configuration.mdx`.
