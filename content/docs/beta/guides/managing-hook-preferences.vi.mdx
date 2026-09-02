@@ -1,0 +1,154 @@
+---
+title: Quản lý preference của Hook
+description: Bật, tắt, kiểm tra và khôi phục soft-preference của Kit Hook an toàn bằng ak config prefs.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+**Preference của Hook** là một toggle runtime mềm mà script Hook kiểm tra
+trước khi chạy check hoặc tự động hóa bình thường của nó. Dùng
+`ak config prefs` để đặt, xóa và xác minh các toggle này mà không cần chỉnh
+tay YAML.
+
+<Callout type="warning" title="Preference không phải gỡ cài đặt">
+  Đặt `hooks.<name>` thành `false` cho phép một Hook tuân theo preference này
+  thoát sớm ở lần chạy tiếp theo. Nó không hủy đăng ký Hook, không xóa file của
+  Hook và không đổi đăng ký Hook trên Claude Code/Codex/Cursor. Một preference
+  bị tắt và một Hook bị thiếu hoặc chưa đăng ký trông khác nhau khi chẩn đoán;
+  xem [Phân biệt preference với sự cố đăng
+  ký](#phân-biệt-preference-với-sự-cố-đăng-ký).
+</Callout>
+
+## Bật hoặc tắt một Hook
+
+Chọn đúng key `hooks.<name>` cho Hook bạn muốn đổi. `<name>` là tên script
+Hook dạng kebab-case chữ thường, ví dụ `simplify-gate`.
+
+```bash
+ak config prefs set hooks.simplify-gate true
+ak config prefs set hooks.simplify-gate false
+```
+
+`true` ghi nhận rằng bạn muốn Hook hoạt động; `false` cho phép một Hook đọc
+preference này bỏ qua hành vi bình thường ở lần chạy tiếp theo. Chỉ chấp nhận
+đúng literal chữ thường `true` hoặc `false`.
+
+## Khôi phục default bằng unset
+
+`unset` xóa override tường minh của bạn để preference fallback về scope còn
+lại, sau đó về default tích hợp của chính Hook đó:
+
+```bash
+ak config prefs unset hooks.simplify-gate
+```
+
+Nếu key đã vắng mặt từ trước, `unset` thành công như một no-op. Dùng `unset`
+thay vì chỉnh tay hoặc xóa toàn bộ tệp cấu hình để hoàn tác một thay đổi.
+
+## Chọn scope
+
+`set` và `unset` mặc định dùng scope **user**. Truyền `--scope project` để chỉ
+đổi project hiện tại:
+
+```bash
+# Scope user (mặc định) — áp dụng ở mọi nơi user này chạy AgentKit
+ak config prefs set hooks.simplify-gate false
+
+# Chỉ project hiện tại
+ak config prefs set hooks.simplify-gate false --scope project
+```
+
+| Scope | Lưu tại | Hiệu lực |
+| --- | --- | --- |
+| `user` (mặc định) | `$AGENTKIT_HOME/config.yaml`, mặc định `~/.agentkit/config.yaml` | Áp dụng cho mọi project của user này, trừ khi project ghi đè. |
+| `project` | `.agentkit/config.yaml` dưới working directory hiện tại | Chỉ áp dụng cho project đó. Được thiết kế để commit, nên đừng đặt credential vào đây. |
+
+Khi cả hai scope cùng đặt một key `hooks.<name>`, AgentKit deep-merge project
+lên trên user, nên **giá trị project thắng**. Chạy `set`, `unset` và `resolve`
+từ đúng thư mục project mà `.agentkit/config.yaml` của nó bạn muốn thay đổi —
+scope dựa trên working directory của process, không phải một project đã đăng
+ký ở nơi khác.
+
+## Xác minh giá trị có hiệu lực
+
+Trước và sau khi thay đổi, resolve để xem Hook thực sự thấy gì:
+
+```bash
+ak config prefs resolve
+ak config prefs resolve --json
+```
+
+`resolve` deep-merge tệp user và project, đồng thời báo scope nào đang tồn
+tại. Nếu không tệp nào author key đó, output nói preference chưa được đặt và
+Hook dùng default tích hợp của chính nó — `resolve` không bao giờ tự điền một
+giá trị default.
+
+Validate YAML bên dưới bất cứ khi nào một thay đổi có vẻ không có hiệu lực:
+
+```bash
+ak config prefs validate
+```
+
+`validate` kiểm tra cấu trúc và schema cho cả hai tệp (hoặc một `--file`) và
+không ghi gì. Chạy lệnh này sau khi chỉnh tay hoặc trước khi phụ thuộc vào một
+preference mới trong CI.
+
+## Lệnh này sẽ và sẽ không đổi những gì
+
+`ak config prefs set`/`unset` chỉ chấp nhận đúng ba dạng key: `hooks.<name>`,
+`journal.auto` và `worktree.root`. Chỉ `hooks.<name>` là preference của Hook;
+hai key còn lại là soft preference khác (bước `/ak:journal` tự động và vị trí
+worktree mặc định) dùng chung nhóm lệnh này.
+
+- `<name>` phải khớp `^[a-z0-9]+(?:-[a-z0-9]+)*$` và không được chứa dấu chấm
+  khác. `hooks.Bad-Name` và `hooks.a.b` bị từ chối.
+- Giá trị phải là đúng literal chữ thường `true` hoặc `false`.
+- Các key ngoài allowlist này — `keys.anthropic`, `api.token`,
+  `telemetry.enabled`, hay bất kỳ field thuộc phần setup nào khác — đều bị từ
+  chối. Đừng dùng `ak config prefs` để quản lý API key, telemetry hay các
+  nhóm cấu hình khác; chúng có lệnh setup riêng.
+
+Một key hoặc giá trị bị từ chối sẽ thoát `1` trước khi bất kỳ tệp nào bị đụng
+tới.
+
+## Phân biệt preference với sự cố đăng ký
+
+Một Hook không bao giờ chạy có thể do preference bảo nó bỏ qua, hoặc do Hook
+chưa được đăng ký. Hãy resolve preference trước:
+
+```bash
+ak config prefs resolve --json
+```
+
+Nếu `hooks.<name>` là `false` (hoặc kế thừa `false` từ scope khác), đó chính
+là lý do bị bỏ qua — cách sửa là `unset` hoặc `set ... true`. Nếu key vắng mặt
+mà triệu chứng vẫn còn, vấn đề nhiều khả năng là cài đặt hoặc đăng ký, không
+phải preference. Hãy kiểm tra các surface đang active thay vì đoán:
+
+```bash
+ak doctor --adapter claude-code --json
+ak doctor --adapter codex --json
+```
+
+`ak doctor` so sánh kỳ vọng đã cài với đăng ký Hook và entrypoint thực tế của
+runtime; một preference bị tắt qua AgentKit được loại khỏi các kỳ vọng đó, nên
+nó sẽ không hiện ra như một lỗi đăng ký. Xem [Engineer Hooks và hỗ trợ
+runtime](../kits/engineer/hooks) để biết mỗi event graph thực sự làm gì, và
+[Lỗi cấu hình](../troubleshooting/configuration) cho vòng chẩn đoán đầy đủ khi
+resolve và validate chưa đủ.
+
+## Khôi phục sau một thay đổi không mong muốn
+
+Mỗi lần `set` hoặc `unset` thành công có đụng tới tệp đều báo một đường dẫn
+backup dưới `$AGENTKIT_HOME/backups/config/` trước khi ghi lại target. Nếu một
+thay đổi bị sai, hãy ưu tiên đặt lại giá trị mong muốn hoặc chạy `unset` thay
+vì khôi phục tay từ backup cũ; chỉ dùng đường dẫn backup được báo khi bạn cũng
+cần khôi phục một thay đổi không liên quan trong cùng tệp đó.
+
+## Trang liên quan
+
+- [Tham chiếu `ak config prefs`](../reference/cli/config/prefs)
+- [Tham chiếu `ak config prefs set`](../reference/cli/config/prefs/set)
+- [Tham chiếu `ak config prefs unset`](../reference/cli/config/prefs/unset)
+- [Lỗi cấu hình](../troubleshooting/configuration)
+- [Engineer Hooks và hỗ trợ runtime](../kits/engineer/hooks)
