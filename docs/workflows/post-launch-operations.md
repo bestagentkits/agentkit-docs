@@ -18,6 +18,7 @@ pnpm build
 pnpm check:quality
 pnpm check:assets
 pnpm check:links
+pnpm check:seo
 pnpm --silent quality:receipt > quality-receipt.json
 ```
 
@@ -99,6 +100,40 @@ The benchmark receipt records both expected and observed CPU, core count,
 memory, OS product/build, kernel, architecture, Node, and pnpm values.
 `--strict-advisory` fails on a profile mismatch as well as a threshold
 regression; an unverified machine must never be labelled as the pinned profile.
+
+## SEO / sitemap indexing policy
+
+`app/sitemap.ts` and `app/robots.ts` (Next.js Metadata Route convention;
+require `export const dynamic = 'force-static'` under `output: 'export'` —
+Next.js 16.2.10 otherwise fails collecting page data for these routes)
+generate `out/sitemap.xml` and `out/robots.txt` from `source.getPages()`,
+filtered to real channel routes. `pnpm check:seo` (CI-blocking, after
+`pnpm build`) enforces the policy below against the built `out/` artifact;
+see `scripts/check-seo.mjs` for the exact assertions and
+`plans/260902-0844-260902-61-seo-sitemap-robots/plan.md`'s Decisions/Red Team
+Review sections for full rationale.
+
+- Both `stable` and `beta` channels are indexable — Beta is a real, public,
+  versioned release, not a staging environment.
+- `lastmod` is intentionally omitted: no per-page timestamp in this repo is
+  trustworthy at content-revision granularity (`channels.json`'s `syncedAt`
+  is one timestamp shared by an entire channel).
+- The `.md` sibling of every docs page (`scripts/emit-markdown-siblings.mjs`)
+  is excluded from the sitemap and served with `X-Robots-Tag: noindex`
+  (`public/_headers`) — it is a byte-identical duplicate of the HTML page.
+- No English-fallback Vietnamese canonical/hreflang mechanism ships yet:
+  zero such routes exist today (verified against the full content tree), and
+  `check:quality:shape` already blocks a new one from landing silently. A
+  real per-route canonical + sitemap-exclusion + hreflang-alternate-removal
+  mechanism is deferred to a follow-up issue once one is approved.
+- `BreadcrumbList` structured data is not added: no route currently renders
+  a visible breadcrumb trail (`page.tsx` disables it), which is the same
+  condition the original request itself gates this data on.
+- `staging.docs.agentkit.best` serves the same `out/` artifact as
+  production (`wrangler.toml`), so it currently ships the same
+  `Allow: /` and sitemap reference; the pages already self-declare
+  non-canonical via `metadataBase` pointing at the production origin.
+  A real environment-aware override is tracked as a follow-up.
 
 ## Representative browser matrix
 

@@ -126,5 +126,11 @@ export async function generateMetadata(
     openGraph: {
       images: getPageImage(page).url,
     },
+    twitter: {
+      card: 'summary_large_image',
+      title: page.data.title,
+      description: page.data.description,
+      images: [getPageImage(page).url],
+    },
   });
 }
