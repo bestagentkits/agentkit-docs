@@ -20,8 +20,8 @@ import { collectPublishedChannelRoutes, inspectReleaseShape } from './release-qu
 
 export const RELEASE_QUALITY_BASELINE = Object.freeze({
   schemaVersion: 1,
-  reviewedAt: '2026-08-27',
-  sourceCommit: '506cf5b11e17001af6afe5622765674dc80865d4',
+  reviewedAt: '2026-09-02',
+  sourceCommit: 'e9158df8d84251a1fb986f989d068a0f3ff5ba81',
   channels: ['beta', 'stable'],
   locales: ['en', 'vi'],
   deterministic: {
@@ -33,7 +33,7 @@ export const RELEASE_QUALITY_BASELINE = Object.freeze({
     searchBudgetBytes: SEARCH_ASSET_BUDGET_BYTES,
     // Counts follow each channel's reviewed route inventory. Equal Kit artifact
     // snapshots require equal Kit route coverage across Stable and Beta.
-    searchPagesPerLocaleChannel: { stable: 405, beta: 406 },
+    searchPagesPerLocaleChannel: { stable: 405, beta: 407 },
     reviewedSearchOutsideChannelRoutes: ['_showcase'],
     reviewedSearchExcludedPublishedRoutes: ['reference/cli/ak'],
     maxAssetBytesExclusive: MAX_ASSET_BYTES,
