@@ -24,11 +24,29 @@ export const metadata: Metadata = {
     template: `%s · ${appName} Docs`,
   },
   description: `Official documentation for the ${appName} (ak) CLI.`,
+  openGraph: {
+    type: 'website',
+    siteName: `${appName} Docs`,
+  },
+  twitter: {
+    card: 'summary_large_image',
+  },
 };
 
 export function generateStaticParams() {
   return i18n.languages.map((lang) => ({ lang }));
 }
+
+// Minimal, factual `WebSite` structured data — name and URL only. No
+// `SearchAction`: search here is a client-side JS modal with no navigable
+// `?q=` URL, so a SearchAction would claim capability the page doesn't have
+// (issue #61 forbids unsubstantiated schema).
+const websiteJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebSite',
+  name: `${appName} Docs`,
+  url: 'https://docs.agentkit.best',
+};
 
 export default async function Layout({
   params,
@@ -43,6 +61,11 @@ export default async function Layout({
       suppressHydrationWarning
     >
       <body className="flex flex-col min-h-screen font-sans">
+        <script
+          type="application/ld+json"
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
+        />
         <Provider locale={lang}>{children}</Provider>
       </body>
     </html>

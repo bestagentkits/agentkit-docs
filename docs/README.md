@@ -11,6 +11,7 @@ user-facing content see `content/docs/`.
 | [CLI reference i18n (Vietnamese)](./workflows/cli-reference-i18n.md) | **Proposal:** full VI translation of the derived reference with source-fingerprinted anti-drift guards |
 | [Release maintenance & deploy](./workflows/release-and-deploy.md) | Skill-first release audit, reviewed channel updates, deploy, CI |
 | [Post-launch quality & operations](./workflows/post-launch-operations.md) | Route/search/output baselines, browser matrix, promotion evidence, exact rollback and cleanup |
+| [SEO indexing policy](./workflows/seo-indexing-policy.md) | sitemap.xml/robots.txt generation, stable-vs-beta and locale-fallback indexing decisions |
 
 ## Related
 

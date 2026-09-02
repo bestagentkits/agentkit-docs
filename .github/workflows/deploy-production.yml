@@ -73,3 +73,23 @@ jobs:
             sleep 10
           done
           exit 1
+
+      - name: Smoke sitemap.xml and robots.txt (issue #61)
+        run: |
+          set -euo pipefail
+          check() {
+            local path="$1" expected_type="$2"
+            local out
+            out=$(curl -sS -D - -o /tmp/smoke-body --max-time 20 "https://docs.agentkit.best${path}")
+            local code
+            code=$(printf '%s' "$out" | head -1 | grep -oE '[0-9]{3}')
+            echo "$path → HTTP $code"
+            [[ "$code" == "200" ]] || { echo "::error::$path returned $code, expected 200"; exit 1; }
+            printf '%s' "$out" | grep -qi "^content-type: .*${expected_type}" \
+              || { echo "::error::$path content-type did not match ${expected_type}"; printf '%s' "$out"; exit 1; }
+          }
+          check /sitemap.xml xml
+          check /robots.txt text/plain
+          curl -sS --max-time 20 "https://docs.agentkit.best/robots.txt" \
+            | grep -q '^Sitemap: https://docs.agentkit.best/sitemap.xml$' \
+            || { echo "::error::robots.txt does not reference the production sitemap"; exit 1; }

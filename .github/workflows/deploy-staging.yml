@@ -73,3 +73,17 @@ jobs:
             sleep 10
           done
           exit 1
+
+      - name: Smoke staging sitemap.xml (issue #61)
+        run: |
+          set -euo pipefail
+          # app/sitemap.ts hardcodes the production origin (there is only ever
+          # one indexable sitemap) — staging must still serve it verbatim, not
+          # a staging-origin copy that would mislead a crawler that reaches it.
+          body=$(curl -sS --max-time 20 "https://staging.docs.agentkit.best/sitemap.xml")
+          echo "$body" | grep -q '<urlset' || { echo "::error::staging sitemap.xml is not well-formed"; exit 1; }
+          if echo "$body" | grep -oE '<loc>[^<]+</loc>' | grep -qv '<loc>https://docs\.agentkit\.best/'; then
+            echo "::error::staging sitemap.xml contains a <loc> not on the production origin"
+            echo "$body" | grep -oE '<loc>[^<]+</loc>' | grep -v '<loc>https://docs\.agentkit\.best/'
+            exit 1
+          fi

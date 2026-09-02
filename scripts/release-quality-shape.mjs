@@ -5,6 +5,7 @@ import { join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { repoRoot } from './lib/paths.mjs';
+import { parseVariant, resolveVariant } from '../lib/route-variant.mjs';
 
 export const RELEASE_SHAPE_BASELINE = Object.freeze({
   schemaVersion: 1,
@@ -108,25 +109,6 @@ export async function collectPublishedChannelRoutes(outDir, channel, locales) {
     if (existsSync(rootPage)) routes[locale].add('');
   }
   return routes;
-}
-
-function parseVariant(path) {
-  const match = path.match(/^(.*)\.(en|vi)\.mdx$/);
-  const sourceRoute = match ? match[1] : path.slice(0, -'.mdx'.length);
-  const route = sourceRoute === 'index'
-    ? ''
-    : sourceRoute.endsWith('/index')
-      ? sourceRoute.slice(0, -'/index'.length)
-      : sourceRoute;
-  return { route, variant: match ? match[2] : 'shared' };
-}
-
-function resolveVariant(variants, locale) {
-  if (variants.has(locale)) return 'native';
-  if (locale === 'en' && variants.has('shared')) return 'shared-default';
-  if (locale === 'vi' && variants.has('en')) return 'english-fallback';
-  if (variants.has('shared')) return 'shared-fallback';
-  return null;
 }
 
 function variantKey(entry) {

@@ -14,10 +14,18 @@ export function canonicalUrl(locale: string, ...segments: string[]): string {
   return `https://docs.agentkit.best${localePath(locale, ...segments)}`;
 }
 
-/** hreflang alternates for en + vi from the same slug segments. */
-export function localeAlternates(...segments: string[]): Record<string, string> {
+/**
+ * hreflang alternates from the same slug segments, restricted to `locales`
+ * (default: every configured language). Callers exclude a locale here when it
+ * has no real translation at this slug — see `lib/route-variant.ts` — so a
+ * silent `fallbackLanguage` copy is never asserted as a distinct translation.
+ */
+export function localeAlternates(
+  segments: string[],
+  locales: readonly string[] = i18n.languages,
+): Record<string, string> {
   const languages = Object.fromEntries(
-    i18n.languages.map((lang) => [lang, canonicalUrl(lang, ...segments)]),
+    locales.map((lang) => [lang, canonicalUrl(lang, ...segments)]),
   );
   return {
     ...languages,
