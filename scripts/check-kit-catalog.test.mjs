@@ -678,8 +678,10 @@ test('real registry validates all 24 evidence triads and 48 committed files', as
   ]));
   assert.equal(byKit.engineer.length, 2);
   assert.equal(byKit.marketing.length, 2);
-  assert.ok(byKit.engineer.every((value) => value.identities.length === 106));
-  assert.ok(byKit.marketing.every((value) => value.identities.length === 84));
+  assert.ok(byKit.engineer.some((value) => value.identities.length === 106));
+  assert.ok(byKit.engineer.some((value) => value.identities.length === 107));
+  assert.ok(byKit.marketing.some((value) => value.identities.length === 84));
+  assert.ok(byKit.marketing.some((value) => value.identities.length === 85));
   assert.notEqual(registry.channels.stable.kits.engineer.snapshotDigest, registry.channels.beta.kits.engineer.snapshotDigest);
   assert.notEqual(registry.channels.stable.kits.marketing.snapshotDigest, registry.channels.beta.kits.marketing.snapshotDigest);
 });
