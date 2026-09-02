@@ -13,7 +13,14 @@ import { repoRoot } from './lib/paths.mjs';
 
 export const SITE_ORIGIN = 'https://docs.agentkit.best';
 export const MIN_SITEMAP_ENTRIES = 1000;
-const SPOT_CHECK_PAGE = 'en/stable/getting-started/installation.html';
+const SPOT_CHECK_PAGES = [
+  'en/stable/getting-started/installation.html',
+  'vi/stable/getting-started/installation.html',
+  'en/beta/getting-started/installation.html',
+  'vi/beta/getting-started/installation.html',
+];
+
+const ESCAPED_SITE_ORIGIN = SITE_ORIGIN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // Excludes real duplicate/non-page surfaces that must never appear in the
 // sitemap: `.md` siblings, the top-level `/api/*` route, and the
@@ -21,7 +28,7 @@ const SPOT_CHECK_PAGE = 'en/stable/getting-started/installation.html';
 // locale, not a path that merely contains one of these words, e.g.
 // `reference/cli/api/start` is a real page, matched by neither branch below).
 const EXCLUDED_LOC_PATTERN = new RegExp(
-  `^${SITE_ORIGIN}/api/|^${SITE_ORIGIN}/(en|vi)/og/|^${SITE_ORIGIN}/(en|vi)/llms|\\.md$`,
+  `^${ESCAPED_SITE_ORIGIN}/api/|^${ESCAPED_SITE_ORIGIN}/(en|vi)/og/|^${ESCAPED_SITE_ORIGIN}/(en|vi)/llms|\\.md$`,
 );
 
 export function extractLocs(sitemapXml) {
@@ -64,11 +71,14 @@ export function checkRobotsTxt(robotsTxt) {
 export function checkHeadersNoindex(headers) {
   const lines = headers.split('\n');
   const ruleIndex = lines.indexOf('/*.md');
+  if (ruleIndex === -1) {
+    return ['_headers /*.md block is missing "X-Robots-Tag: noindex"'];
+  }
   const blockLines = [];
   for (let i = ruleIndex + 1; i < lines.length && /^\s/.test(lines[i]); i++) {
     blockLines.push(lines[i].trim());
   }
-  if (ruleIndex === -1 || !blockLines.includes('X-Robots-Tag: noindex')) {
+  if (!blockLines.includes('X-Robots-Tag: noindex')) {
     return ['_headers /*.md block is missing "X-Robots-Tag: noindex"'];
   }
   return [];
@@ -141,13 +151,15 @@ async function main() {
     errors.push(...checkHeadersNoindex(await readFile(headersPath, 'utf8')));
   }
 
-  const pagePath = join(outDir, SPOT_CHECK_PAGE);
-  if (!existsSync(pagePath)) {
-    errors.push(`spot-check page missing: out/${SPOT_CHECK_PAGE}`);
-  } else {
-    errors.push(
-      ...checkPageMetadata(await readFile(pagePath, 'utf8'), `out/${SPOT_CHECK_PAGE}`),
-    );
+  for (const spotCheckPage of SPOT_CHECK_PAGES) {
+    const pagePath = join(outDir, spotCheckPage);
+    if (!existsSync(pagePath)) {
+      errors.push(`spot-check page missing: out/${spotCheckPage}`);
+    } else {
+      errors.push(
+        ...checkPageMetadata(await readFile(pagePath, 'utf8'), `out/${spotCheckPage}`),
+      );
+    }
   }
 
   if (errors.length) {

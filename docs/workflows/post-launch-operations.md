@@ -110,8 +110,8 @@ generate `out/sitemap.xml` and `out/robots.txt` from `source.getPages()`,
 filtered to real channel routes. `pnpm check:seo` (CI-blocking, after
 `pnpm build`) enforces the policy below against the built `out/` artifact;
 see `scripts/check-seo.mjs` for the exact assertions and
-`plans/260902-0844-260902-61-seo-sitemap-robots/plan.md`'s Decisions/Red Team
-Review sections for full rationale.
+[issue #61](https://github.com/bestagentkits/agentkit-docs/issues/61) for the
+full rationale and scope decisions.
 
 - Both `stable` and `beta` channels are indexable — Beta is a real, public,
   versioned release, not a staging environment.
@@ -125,15 +125,19 @@ Review sections for full rationale.
   zero such routes exist today (verified against the full content tree), and
   `check:quality:shape` already blocks a new one from landing silently. A
   real per-route canonical + sitemap-exclusion + hreflang-alternate-removal
-  mechanism is deferred to a follow-up issue once one is approved.
+  mechanism is deferred to
+  [issue #119](https://github.com/bestagentkits/agentkit-docs/issues/119),
+  to implement once one is approved.
 - `BreadcrumbList` structured data is not added: no route currently renders
   a visible breadcrumb trail (`page.tsx` disables it), which is the same
-  condition the original request itself gates this data on.
+  condition the original request itself gates this data on. Tracked in
+  [issue #120](https://github.com/bestagentkits/agentkit-docs/issues/120).
 - `staging.docs.agentkit.best` serves the same `out/` artifact as
   production (`wrangler.toml`), so it currently ships the same
   `Allow: /` and sitemap reference; the pages already self-declare
-  non-canonical via `metadataBase` pointing at the production origin.
-  A real environment-aware override is tracked as a follow-up.
+  non-canonical via `metadataBase` pointing at the production origin. A real
+  environment-aware override is tracked in
+  [issue #118](https://github.com/bestagentkits/agentkit-docs/issues/118).
 
 ## Representative browser matrix
 
