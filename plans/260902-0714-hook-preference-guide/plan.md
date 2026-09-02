@@ -104,6 +104,29 @@ receipt-bound `scripts/promote-docs.mjs` whole-copy promotion — a hand-authore
 Beta guide must never be proposed directly against `main`. This overrides
 `ak:ship`'s generic "official → default branch" auto-detection for this repo.
 
+## Outcome: superseded by a parallel session (duplicate work)
+
+PR #114 (this branch) was closed without merging at 2026-09-02T07:58:53Z.
+Root cause: two sessions were dispatched for issue #111 within about a
+minute of each other (a race on the `ai-handle`/`in progress` labeling
+precondition — both labels were already present when this session started,
+per the earlier duplicate-work risk assessment in this plan, which in
+hindsight was the actual concurrent session rather than upstream automation
+applying both labels together). The other session opened PR #113 for the
+same issue, merged first (squash `63f07ef` into `dev`) and closed #111 as
+completed. A PR-114-closing comment (posted by the other session, or a
+later session that detected the collision) confirms: "#113 already merged
+... and closed #111 ... the equivalent content, plus a couple of
+content-correctness fixes from an advisory review pass, already ships on
+`dev`."
+
+No further action taken on PR #114 or this branch per standing instruction
+("Do not reopen this PR or open a new PR for the same change unless the
+user explicitly asks"). Issue #111's stale `in progress` / `ai-handle`
+labels were cleared since the issue is already closed/completed via #113.
+The CI route-count baseline fix recorded below remains correct in isolation
+(same fix would apply to #113's content) but never merged from this branch.
+
 ## CI fix: release quality route-count baseline
 
 First CI run on PR #114 failed at `pnpm check:quality:shape` (job `build`,
