@@ -19,6 +19,22 @@ const productLabels: Record<'en' | 'vi', Record<ProductKey, string>> = {
     desktop: 'Ứng dụng Desktop',
   },
 };
+const skillCatalogLabels: Record<'en' | 'vi', string> = {
+  en: 'Skill Catalog',
+  vi: 'Danh mục Skill',
+};
+
+function resolveLocaleAndChannel(node: PageTree.Node): {
+  locale: 'en' | 'vi';
+  channel: string;
+} {
+  const url = firstPageUrl(node);
+  if (!url) return { locale: 'en', channel: 'stable' };
+  const segments = url.split('/').filter(Boolean);
+  const locale = segments[0] === 'vi' ? 'vi' : 'en';
+  const channel = segments[1] === 'beta' ? 'beta' : 'stable';
+  return { locale, channel };
+}
 
 function productFromUrl(url: string): ProductKey {
   const section = url.split('/').filter(Boolean)[2];
@@ -62,11 +78,70 @@ function filterChannelRoot(
 ): PageTree.Node {
   if (node.type !== 'folder' || !node.root) return node;
 
+  const { locale, channel } = resolveLocaleAndChannel(node);
+  const catalogUrl = `/${locale}/${channel}/kits`;
+  const catalogTitle = skillCatalogLabels[locale];
+
+  const skillCatalogPageNode: PageTree.Item = {
+    type: 'page',
+    name: catalogTitle,
+    url: catalogUrl,
+  };
+
+  const children = node.children.filter(
+    (child) => productFromNode(child) === product,
+  );
+
+  if (product === 'docs') {
+    const overviewIndex = children.findIndex(
+      (child) => child.type === 'page' && child.url === `/${locale}/${channel}`,
+    );
+
+    const newChildren = [...children];
+    if (overviewIndex >= 0) {
+      newChildren.splice(overviewIndex + 1, 0, skillCatalogPageNode);
+    } else {
+      newChildren.unshift(skillCatalogPageNode);
+    }
+
+    return {
+      ...node,
+      children: newChildren,
+    };
+  }
+
+  if (product === 'kits') {
+    const newChildren = children.map((child) => {
+      if (
+        child.type === 'folder' &&
+        (child.index?.url === catalogUrl ||
+          child.name === 'Kits' ||
+          child.name === 'Bộ kit')
+      ) {
+        return {
+          ...child,
+          name: catalogTitle,
+        };
+      }
+      return child;
+    });
+
+    return {
+      ...node,
+      children: newChildren,
+    };
+  }
+
+  if (product === 'cli' || product === 'desktop') {
+    return {
+      ...node,
+      children: [skillCatalogPageNode, ...children],
+    };
+  }
+
   return {
     ...node,
-    children: node.children.filter(
-      (child) => productFromNode(child) === product,
-    ),
+    children,
   };
 }
 
