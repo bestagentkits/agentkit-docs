@@ -51,6 +51,12 @@ Accepted arguments may be route slugs such as
 must include matching EN and VI files and the minimal Stable `meta.json` /
 `meta.vi.json` nav updates needed to publish it.
 
+Each run also adds one deterministic, add-only receipt under
+`stable-docs-exceptions/`. CI rederives the receipt against the PR base and
+rejects a changed Stable tag or `channels.json`, a partial locale copy,
+Beta/Stable byte drift, an unlisted Stable path, receipt mutation, or a mixed
+promotion/reconciliation transaction.
+
 ## Options
 
 | Flag | Semantics | Default |

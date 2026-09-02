@@ -11,6 +11,8 @@ edits, tests, approvals, and final decision.
 This matters because several tools sound similar:
 
 - Claude Code's built-in advisor is a runtime-native advisor tool.
+- Oh My Pi's native advisor is a background reviewer that follows the session
+  and can steer or interrupt the main agent.
 - An ordinary subagent is an isolated worker that can run its own task loop.
 - AgentKit `kongming` is a one-shot advisory Agent used at workflow checkpoints.
 - AgentKit `advisor` is the interview-driven Agent behind
@@ -27,6 +29,11 @@ when an AgentKit workflow reaches a hard checkpoint and needs explicit,
 evidence-packed counsel from a fresh advisory Agent. Use `/ak:advise` when the
 problem itself needs to be reframed through a user interview. Use an ordinary
 subagent when you want delegated work, not just counsel.
+
+Use the Oh My Pi advisor when you want continuous review across completed turns,
+including severity-aware notes that may steer active work. You can combine it
+with AgentKit `--advice`: the native advisor watches the session, while
+`kongming` performs explicit one-shot reviews at workflow checkpoints.
 
 `kongming` and `advisor` are AgentKit Agents. They are advisory-only by
 contract. They may inspect evidence that the runtime allows them to inspect, but
@@ -60,6 +67,46 @@ See the public Claude documentation for the
 [advisor tool](https://docs.anthropic.com/en/agents-and-tools/tool-use/advisor-tool),
 the [Claude Code CLI flag](https://docs.anthropic.com/en/docs/claude-code/cli-reference),
 and [Claude Code settings](https://docs.anthropic.com/en/docs/claude-code/settings).
+
+## Native advisor in Oh My Pi
+
+Oh My Pi provides a different runtime-native advisor. It runs as a background
+reviewer and follows completed main-agent turns, including prompts, responses,
+reasoning, and tool activity. Its default review tools can read and search the
+project so it can verify claims against workspace evidence.
+
+Accepted notes have three severities:
+
+| Severity | Effect |
+| --- | --- |
+| `nit` | Adds a non-interrupting cleanup or low-risk note at a safe boundary |
+| `concern` | Can steer active work when it finds a material risk or missed constraint |
+| `blocker` | Can interrupt active work when continuing is likely to waste effort or produce a broken result |
+
+Enablement requires both a resolvable `modelRoles.advisor` assignment and an
+enabled advisor runtime, either persistently with `advisor.enabled`, temporarily
+with `/advisor on`, or for a headless run with `--advisor`. `WATCHDOG.md` adds
+review priorities without putting the same guidance in the main agent's ordinary
+context. `WATCHDOG.yml` can define a roster of specialized advisors.
+
+```mermaid
+flowchart TB
+  accTitle: Oh My Pi native advisor flow
+  accDescr: The OMP advisor follows completed main-agent turns in the background, verifies evidence with review tools, and returns a severity-aware note that may steer or interrupt the main agent.
+  user["User"] --> main["OMP main agent"]
+  main -. "completed turns and tool activity" .-> advisor["OMP advisor"]
+  watchdog["WATCHDOG.md or WATCHDOG.yml"] --> advisor
+  advisor --> severity{"Severity"}
+  severity -->|nit| aside["Non-interrupting aside"]
+  severity -->|concern| steer["Steer active work"]
+  severity -->|blocker| interrupt["Interrupt active work"]
+  aside --> main
+  steer --> main
+  interrupt --> main
+```
+
+See the public Oh My Pi documentation for
+[Advisor and WATCHDOG.md](https://github.com/can1357/oh-my-pi/blob/main/docs/advisor-watchdog.md).
 
 ## Ordinary subagents
 
@@ -163,6 +210,66 @@ Treat `kongming` advice as a high-quality input, not as a verdict that executes
 itself. The main workflow must still resolve conflicts, choose the path, make
 the edits, run validation, satisfy approval gates, and record what happened.
 
+## Combine the Oh My Pi advisor with AgentKit --advice
+
+The two mechanisms can run together because they operate at different layers:
+
+- the Oh My Pi advisor continuously reviews the main session and emits
+  severity-aware notes;
+- AgentKit `--advice` asks a fresh `kongming` Agent for one-shot counsel at the
+  checkpoints defined by the active Skill.
+
+On the Oh My Pi target, AgentKit projects Skills and Agents to OMP-native
+discovery locations. The installed runtime still owns model resolution,
+credentials, and live Agent delegation. A projected `kongming` file proves that
+the Agent is discoverable; it does not prove that its requested model resolves
+or that a checkpoint invocation completed.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant User
+  participant Main as OMP main agent
+  participant Native as OMP advisor
+  participant Kongming as AgentKit kongming
+  participant Gates as Tests and approval gates
+
+  User->>Main: Run an AgentKit Skill with --advice
+  Main->>Main: Research, plan, or implement
+  Main-->>Native: Completed turns and tool activity
+  Native-->>Main: nit, concern, or blocker
+  Main->>Kongming: Checkpoint evidence and exact question
+  Kongming-->>Main: One-shot counsel
+  Main->>Gates: Decide, edit, test, and review
+  Gates-->>Main: Authoritative evidence
+  Main-->>Native: Completion turn
+  Native-->>Main: Final review note when applicable
+  Main-->>User: Result, verification, and unresolved risks
+```
+
+A minimal separation of roles looks like this:
+
+```yaml
+modelRoles:
+  default: provider/main-model
+  advisor: provider/review-model
+
+advisor:
+  enabled: true
+  subagents: false
+```
+
+Keep `advisor.subagents: false` when first combining the two mechanisms. Turning
+it on also enables the native advisor inside eligible spawned subagent sessions,
+which can make the background reviewer supervise `kongming` itself. That extra
+layer is usually redundant and adds cost and latency.
+
+If both mechanisms resolve through the same advisor role, they still make
+separate requests with separate contexts, but they do not provide model
+diversity. If the advisor role is missing or unavailable, treat the native
+advisor and any affected `kongming` checkpoint as not completed; do not report
+that two independent reviews occurred.
+
 ## ak:advise inline and ak:advise --agent
 
 AgentKit `advisor` is different from `kongming`.
@@ -216,6 +323,7 @@ Runtime support is not identical.
 | Claude Code | `/ak:advise` without `--agent` runs inline in the main session. `/ak:advise --agent` delegates the interview to the AgentKit `advisor` Agent. AgentKit marks `kongming` and `advisor` with the `fable` model tier. Claude Code also has its own built-in advisor, which is separate from AgentKit Agents. |
 | Codex | AgentKit maps `kongming` to a Codex frontier model override with high reasoning effort. The shared `fable` frontmatter remains portable, but Codex-specific model IDs are emitted only by the Codex adapter. `/ak:advise --agent` does not imply the Claude Code relay path; use inline `ak:advise` unless your installed runtime reports support. |
 | Cursor | AgentKit can project Agents and Skills, but do not assume Claude Code advisor behavior or AgentKit `advisor` relay parity from file presence alone. Check the runtime adapter output and the Skill page for the active surface. |
+| Oh My Pi | AgentKit projects Skills and Agents to OMP-native discovery surfaces. `--advice` requires live Agent delegation and a resolvable model for `kongming`; the native OMP advisor is a separate background-review subsystem. Both can run together, but file presence alone does not prove either review completed. |
 
 ### Claude Code
 
@@ -275,6 +383,21 @@ invocation canary coverage as deferred, and model availability can vary by
 Cursor plan. Treat adapter output and the active Cursor session as the source of
 truth.
 
+### Oh My Pi
+
+AgentKit installs portable Skills below `.omp/skills/`, Agents below
+`.omp/agents/`, and rules below `.omp/rules/` for a project-scoped OMP
+projection. A global projection uses the active OMP profile root. Installation
+and dispatch remain separate: installation creates discoverable inventory,
+while `ak run --target omp` dispatches a resolved Skill through the local OMP
+CLI.
+
+Oh My Pi owns the configured backend, credentials, model roles, and live Agent
+capabilities. Before relying on `--advice`, inspect the installed `kongming`
+Agent, confirm its requested model resolves, and verify that the active OMP
+session can delegate to it. Configure and check the native advisor separately;
+do not infer `advisor.enabled` from the presence of AgentKit files.
+
 ### Model availability and fallback
 
 AgentKit does not silently downgrade advisory Agents when a subscription,
@@ -312,7 +435,9 @@ For broader installation differences, see [Runtime adapters](./runtime-adapters)
 | Need | Use |
 | --- | --- |
 | Native mid-generation second opinion inside Claude Code | Claude Code built-in advisor |
+| Continuous severity-aware review across Oh My Pi turns | Oh My Pi native advisor |
 | One-shot strategic checkpoint inside an AgentKit workflow | `kongming`, usually through `--advice` |
+| Continuous OMP review plus explicit workflow checkpoints | Oh My Pi advisor together with AgentKit `--advice`, after both model paths are verified |
 | Interview-driven reframing before deciding what to do | `/ak:advise`, or `/ak:advise --agent` on Claude Code |
 | Isolated research, testing, review, or implementation work | An ordinary subagent with a bounded task |
 | Parallel or multi-session coordination | Agent team or workflow support, not advisory supervision alone |

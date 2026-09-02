@@ -15,8 +15,8 @@ export const RELEASE_SHAPE_BASELINE = Object.freeze({
   // Per-channel route counts follow each channel's immutable evidence. The
   // shape guard still requires Beta to contain every Stable route; the Kit
   // catalog guard separately enforces each channel's exact inventory snapshot.
-  sourceRoutesPerLocaleChannel: { stable: 407, beta: 407 },
-  routesPerLocaleChannel: { stable: 406, beta: 406 },
+  sourceRoutesPerLocaleChannel: { stable: 407, beta: 408 },
+  routesPerLocaleChannel: { stable: 406, beta: 407 },
   reviewedSourceOnlyRoutes: [
     {
       route: 'changelog',
