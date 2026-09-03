@@ -242,7 +242,7 @@ sequenceDiagram
   Main-->>User: Kết quả, verification và unresolved risk
 ```
 
-Cách tách role tối thiểu:
+Topology tối thiểu nên ghi rõ policy dành cho subagent:
 
 ```yaml
 modelRoles:
@@ -251,18 +251,49 @@ modelRoles:
 
 advisor:
   enabled: true
-  subagents: false
+
+task:
+  agentAdvisor:
+    kongming: "off"
 ```
 
-Giữ `advisor.subagents: false` khi mới kết hợp hai cơ chế. Nếu bật, native
-advisor cũng chạy trong các spawned subagent session đủ điều kiện, khiến
-background reviewer có thể supervise chính `kongming`. Lớp bổ sung này thường
-trùng lặp và làm tăng cost cùng latency.
+Mặc định, OMP không chạy native advisor bên trong subagent. `task.agentAdvisor`
+điều khiển nested advisor theo từng Agent; setting này không chọn primary model
+của Agent. Vì vậy `kongming: "off"` là dư thừa nếu không có Agent frontmatter
+hoặc lớp cấu hình khác bật nó, nhưng giúp topology dự kiến trở nên rõ ràng. Không
+dùng setting legacy `advisor.subagents` cho mục đích này: giá trị `true` chỉ
+migrate bundled Agent `task` sang `task.agentAdvisor: { task: "on" }`, không
+bật mọi Agent và không bật `kongming`.
 
-Nếu cả hai cơ chế resolve qua cùng advisor role, chúng vẫn tạo request và
-context riêng, nhưng không tạo model diversity. Nếu advisor role bị thiếu hoặc
-không khả dụng, coi native advisor cùng mọi `kongming` checkpoint bị ảnh hưởng
-là chưa hoàn tất; không báo rằng hai independent review đã xảy ra.
+Trên OMP, AgentKit map tier `fable` của `kongming` thành
+`model: "@advisor"`. Nếu không override, native default advisor và `kongming`
+đều resolve qua `modelRoles.advisor`. Chúng vẫn tạo request và context riêng,
+nhưng không tạo model diversity.
+
+Để dùng primary model riêng cho `kongming`, override Agent đã được project:
+
+```yaml
+modelRoles:
+  default: provider/main-model
+  advisor: provider/background-review-model
+
+advisor:
+  enabled: true
+
+task:
+  agentModelOverrides:
+    kongming: provider/checkpoint-model
+  agentAdvisor:
+    kongming: "off"
+```
+
+`task.agentModelOverrides.kongming` có precedence cao hơn
+`model: "@advisor"` trong Agent đã được project. Giữ
+`task.agentAdvisor.kongming` ở `off`, trừ khi bạn chủ động muốn có thêm một
+native OMP advisor bên trong mỗi spawned `kongming` session. Nếu
+`modelRoles.advisor` bị thiếu hoặc không khả dụng, native default advisor và
+`kongming` chưa được override sẽ không resolve được model; explicit model trong
+roster và explicit override cho `kongming` không phụ thuộc role này.
 
 ## ak:advise inline và ak:advise --agent
 
