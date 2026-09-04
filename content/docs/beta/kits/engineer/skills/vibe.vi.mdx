@@ -88,6 +88,7 @@ $ak:vibe --beta "Add exportable audit logs with existing authorization, focused 
 | `--ship --beta` | Dùng beta target, merge ready PR và converge beta CI |
 | `--both` | Bao gồm merge authority; hoàn tất beta merge cùng green CI trước stable promotion, merge và green CI |
 | `--advice` | Thêm Kongming checkpoint và post post-CI assessment lên PR cùng source issue; compose với mọi ship mode |
+| `--ultra` | Chạy best-of-5 verifier pass ở giai đoạn plan-validation cùng local-review trước khi tiếp tục; compose với mọi ship mode |
 
 Mode resolution là `--both` trên `--beta` trên default stable. Khi cả hai flag
 cùng xuất hiện, Skill cảnh báo một lần rồi tiếp tục dual-stage mode. Với
@@ -95,6 +96,15 @@ cùng xuất hiện, Skill cảnh báo một lần rồi tiếp tục dual-stage
 5 cho Claude subscription, `gpt-5.6-sol` với high effort cho Codex hoặc
 `claude-fable-5-high` cho Cursor. Kongming chỉ trả về counsel, không trả về
 code; main agent vẫn chịu trách nhiệm cho mọi decision, edit cùng gate.
+`--advice` propagate tới mọi Skill được pipeline gọi — `ak:plan`, `ak:cook`
+hoặc `ak:fix`, `ak:code-review`, `ak:ship` và `ak:review-pr` đều chạy với
+`--advice` riêng và post Kongming checkpoint riêng, thay vì chỉ orchestrator
+chạy một lượt check duy nhất ở cấp cao nhất.
+
+`--ultra` chạy best-of-5 verifier pass: pipeline tạo nhiều independent
+evaluation rồi giữ lại kết quả mạnh nhất trước khi tiếp tục. Nó chỉ ảnh hưởng
+giai đoạn plan-validation cùng local-review; mọi giai đoạn khác vẫn chạy một
+lượt như bình thường.
 
 <Callout type="warn" title="PR readiness vẫn mutate Git và GitHub">
   Bỏ `--ship` ngăn merge, nhưng pipeline vẫn tạo hoặc update issue, tạo label,
@@ -107,30 +117,43 @@ code; main agent vẫn chịu trách nhiệm cho mọi decision, edit cùng gate
 1. **Skill resolve request.** Skill xác minh repository identity, đọc issue
    title, body cùng comment khi được cung cấp, extract contract, chọn feature
    hoặc bugfix route và tìm existing durable plan.
-2. **Skill tạo isolation.** `ak:worktree` tạo hoặc reuse matching clean worktree
-   cùng descriptive branch. Skill không implement trực tiếp trên common protected
-   hoặc integration branch.
-3. **Skill validate plan.** Existing `plan.md` hợp lệ được reuse; nếu không,
+2. **Skill investigate trước khi plan khi cần.** Ở bugfix route, Skill chạy
+   `/ak:debug` trước để xác lập root cause đã chứng minh. Khi request đụng tới
+   technology chưa có trong repository, Skill chạy `/ak:research` trước. Cả hai
+   stage đưa bằng chứng vào plan; không thay thế cho plan.
+3. **Skill tạo isolation.** `ak:worktree` tạo hoặc tự động reuse matching clean
+   worktree cùng branch xuyên suốt các stage của run, nên cùng một isolated
+   checkout mang theo qua planning, implementation và review. Skill không
+   implement trực tiếp trên common protected hoặc integration branch. Khi run
+   spawn parallel subagent, mỗi subagent sở hữu tập file rời rạc (disjoint); edit
+   vào file mà nhiều hơn một subagent cần được serialize thay vì áp dụng đồng
+   thời.
+4. **Skill validate plan.** Existing `plan.md` hợp lệ được reuse; nếu không,
    `ak:plan --tdd` tạo plan. Validation, red-team cùng whole-plan consistency
-   sweep luôn chạy trước implementation.
-4. **Skill project state lên GitHub.** Workflow tạo delivery label còn thiếu,
+   sweep luôn chạy trước implementation; `--ultra` thêm best-of-5 verifier pass
+   ở stage này.
+5. **Skill project state lên GitHub.** Workflow tạo delivery label còn thiếu,
    tạo hoặc update source issue, ghi branch, route, plan, mode cùng acceptance
    criteria, rồi link issue vào local plan index.
-5. **Skill implement scoped work.** Feature dùng `ak:cook --tdd --auto`; bugfix
+6. **Skill implement scoped work.** Feature dùng `ak:cook --tdd --auto`; bugfix
    dùng `ak:fix --auto`. Issue đổi từ `ready to cook` sang `in progress` trước
    khi code change bắt đầu.
-6. **Skill thực hiện local review.** `ak:code-review --pending` kiểm tra spec
-   compliance cùng quality. Critical và Important finding được fix rồi relevant
-   validation chạy lại.
-7. **Skill ship PR.** `ak:ship beta` hoặc `ak:ship official` finalize plan file,
+7. **Skill chạy conditional testing cùng documentation sync.** Tùy theo change
+   cần gì, Skill chạy `/ak:test create`, `/ak:test audit` hoặc
+   `/ak:test optimize`, rồi `/ak:docs update` theo mode khớp resolved ship
+   target để documentation luôn nhất quán với change.
+8. **Skill thực hiện local review.** `ak:code-review --pending` kiểm tra spec
+   compliance cùng quality; `--ultra` thêm best-of-5 verifier pass ở đây luôn.
+   Critical và Important finding được fix rồi relevant validation chạy lại.
+9. **Skill ship PR.** `ak:ship beta` hoặc `ak:ship official` finalize plan file,
    merge target branch vào feature branch, test, review, commit, push, mở PR và
    ghi linked PR.
-8. **Skill converge PR review.** `ak:review-pr --fix --reply` review full PR, fix
-   actionable finding, push verified fix, post final review và chờ required check
-   thành terminal cùng green.
-9. **Skill đánh dấu readiness.** Issue và PR nhận ready label đúng; stale
-   implementation label được remove.
-10. **Skill tùy chọn merge và monitor.** `--ship` cùng `--both` merge theo
+10. **Skill converge PR review.** `ak:review-pr --fix --reply` review full PR,
+    fix actionable finding, push verified fix, post final review và chờ
+    required check thành terminal cùng green.
+11. **Skill đánh dấu readiness.** Issue và PR nhận ready label đúng; stale
+    implementation label được remove.
+12. **Skill tùy chọn merge và monitor.** `--ship` cùng `--both` merge theo
     repository convention, watch target-branch CI hoặc deploy workflow và chạy
     bounded follow-up fix branch cho deterministic failure.
 
@@ -205,5 +228,6 @@ và CI riêng cho beta cùng stable.
 - Natural-language input gây GitHub issue creation sau plan gate; đây không phải
   local-only shortcut.
 - Automatic implementation không loại business hoặc irreversible-action gate.
-- Package stable và beta hiện chứa cùng instruction cùng invocation behavior cho
-  `ak:vibe`.
+- Trang này mô tả `ak:vibe` 1.3.0, gồm `--ultra`, `--advice` propagate,
+  conditional pre-plan investigation, conditional testing cùng documentation
+  sync, và subagent orchestration rule.

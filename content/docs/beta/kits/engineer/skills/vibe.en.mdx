@@ -90,13 +90,23 @@ $ak:vibe --beta "Add exportable audit logs with existing authorization, focused 
 | `--ship --beta` | Uses the beta target, merges a ready PR, and converges beta CI |
 | `--both` | Implies merge authority; completes beta merge and green CI before stable promotion, merge, and green CI |
 | `--advice` | Adds Kongming checkpoints and posts its post-CI assessment to the PR and source issue; composes with every ship mode |
+| `--ultra` | Runs a best-of-5 verifier pass at the plan-validation and local-review stages before continuing; composes with every ship mode |
 
 Mode resolution is `--both` over `--beta` over default stable. When both flags
 appear, the Skill warns once and continues in dual-stage mode. With `--advice`,
 shared advisory supervision detects the host and routes Kongming to Fable 5 for
 a Claude subscription, `gpt-5.6-sol` with high effort for Codex, or
 `claude-fable-5-high` for Cursor. Kongming returns counsel, never code; the main
-agent remains responsible for every decision, edit, and gate.
+agent remains responsible for every decision, edit, and gate. `--advice`
+propagates to every supporting Skill the pipeline invokes — `ak:plan`,
+`ak:cook` or `ak:fix`, `ak:code-review`, `ak:ship`, and `ak:review-pr` each run
+with their own `--advice` flag and post their own Kongming checkpoint, rather
+than the orchestrator running a single top-level check.
+
+`--ultra` runs a best-of-5 verifier pass where the pipeline produces multiple
+independent evaluations and keeps the strongest result before continuing. It
+only affects the plan-validation and local-review stages; every other stage
+runs once as usual.
 
 <Callout type="warn" title="PR readiness still mutates Git and GitHub">
   Omitting `--ship` prevents merge, but the pipeline still creates or updates an
@@ -110,30 +120,44 @@ agent remains responsible for every decision, edit, and gate.
 1. **The Skill resolves the request.** It verifies repository identity, reads
    issue title, body, and comments when supplied, extracts the contract, chooses
    feature or bugfix route, and searches for an existing durable plan.
-2. **It creates isolation.** `ak:worktree` creates or reuses a matching clean
-   worktree and descriptive branch. It never implements directly on common
-   protected or integration branches.
-3. **It validates the plan.** A valid existing `plan.md` is reused; otherwise
+2. **It investigates before planning when needed.** On the bugfix route, it
+   runs `/ak:debug` first to establish a proven root cause. When the request
+   touches technologies not already present in the repository, it runs
+   `/ak:research` first. Both stages feed evidence into the plan; neither is a
+   substitute for it.
+3. **It creates isolation.** `ak:worktree` creates or automatically reuses a
+   matching clean worktree and branch across the run's stages, so the same
+   isolated checkout carries through planning, implementation, and review. It
+   never implements directly on common protected or integration branches. When
+   the run spawns parallel subagents, each owns a disjoint set of files;
+   edits to a file more than one subagent needs are serialized rather than
+   applied concurrently.
+4. **It validates the plan.** A valid existing `plan.md` is reused; otherwise
    `ak:plan --tdd` creates one. Validation, red-team, and a whole-plan
-   consistency sweep always run before implementation.
-4. **It projects state to GitHub.** The workflow creates missing delivery labels,
+   consistency sweep always run before implementation; `--ultra` adds a
+   best-of-5 verifier pass at this stage.
+5. **It projects state to GitHub.** The workflow creates missing delivery labels,
    creates or updates the source issue, records branch, route, plan, mode, and
    acceptance criteria, then links the issue into the local plan index.
-5. **It implements the scoped work.** Features use `ak:cook --tdd --auto`;
+6. **It implements the scoped work.** Features use `ak:cook --tdd --auto`;
    bugfixes use `ak:fix --auto`. The issue changes from `ready to cook` to
    `in progress` before code changes begin.
-6. **It performs local review.** `ak:code-review --pending` checks spec
-   compliance and quality. Critical and Important findings are fixed and
-   relevant validation reruns.
-7. **It ships a PR.** `ak:ship beta` or `ak:ship official` finalizes plan files,
+7. **It runs conditional testing and documentation sync.** Depending on what
+   the change needs, it runs `/ak:test create`, `/ak:test audit`, or
+   `/ak:test optimize`, then `/ak:docs update` in the mode matching the
+   resolved ship target so documentation stays consistent with the change.
+8. **It performs local review.** `ak:code-review --pending` checks spec
+   compliance and quality; `--ultra` adds a best-of-5 verifier pass here too.
+   Critical and Important findings are fixed and relevant validation reruns.
+9. **It ships a PR.** `ak:ship beta` or `ak:ship official` finalizes plan files,
    merges the target branch into the feature branch, tests, reviews, commits,
    pushes, opens the PR, and records the linked PR.
-8. **It converges PR review.** `ak:review-pr --fix --reply` reviews the full PR,
-   fixes actionable findings, pushes verified fixes, posts the final review,
-   and waits for required checks to become terminal and green.
-9. **It marks readiness.** The issue and PR receive the correct ready label;
-   stale implementation labels are removed.
-10. **It optionally merges and monitors.** `--ship` and `--both` merge through
+10. **It converges PR review.** `ak:review-pr --fix --reply` reviews the full
+    PR, fixes actionable findings, pushes verified fixes, posts the final
+    review, and waits for required checks to become terminal and green.
+11. **It marks readiness.** The issue and PR receive the correct ready label;
+    stale implementation labels are removed.
+12. **It optionally merges and monitors.** `--ship` and `--both` merge through
     repository conventions, watch target-branch CI or deploy workflows, and run
     bounded follow-up fix branches for deterministic failures.
 
@@ -209,5 +233,6 @@ requires separate beta and stable PR/merge/CI evidence.
 - Natural-language input causes GitHub issue creation after plan gates; it is not
   a local-only shortcut.
 - Automatic implementation does not remove business or irreversible-action gates.
-- The current stable and beta packages contain identical `ak:vibe` instructions
-  and invocation behavior.
+- This page documents `ak:vibe` 1.3.0, including `--ultra`, propagated
+  `--advice`, conditional pre-plan investigation, conditional testing and
+  documentation sync, and subagent orchestration rules.
