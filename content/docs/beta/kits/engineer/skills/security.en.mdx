@@ -6,11 +6,11 @@ description: Run a STRIDE and OWASP audit, optionally add red-team discovery, an
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
-Use `ak:security` when you need a threat-led audit rather than a fast pattern
-scan. It reads the selected code, traces attack surfaces through STRIDE and the
-OWASP Top 10, audits dependencies, detects secrets, and ranks evidence by
-severity. Optional red-team and fix modes add deeper discovery and local code
-changes.
+Use `ak:security` for a secret, dependency, and code-pattern scan plus STRIDE
+and OWASP threat modeling. Default invocation is that comprehensive pass.
+`--secrets-only` and `--deps-only` skip code patterns and threat modeling;
+combining them still skips code patterns. Optional red-team and fix modes add
+deeper discovery and local code changes.
 
 ## Choose ak:security for threat-modelled review
 
@@ -24,7 +24,7 @@ changes.
 
 ### Choose another workflow when
 
-- You only need a fast secret and dependency scan. Use `ak:security-scan`.
+- You only need a fast secret or dependency pass. Stay on `ak:security` and pass `--secrets-only`, `--deps-only`, or both.
 - The change is cosmetic and does not affect data or user-facing behavior.
 - You need a real penetration test against a running service; this Skill is a
   source-led audit and does not claim exploit execution.
@@ -55,9 +55,11 @@ Before you start:
 
 | Input or option | Result | Effects and limits |
 | --- | --- | --- |
-| `<scope>` | One-shot STRIDE, OWASP, dependency, and secret audit | Reads in-scope files; dependency tools may use network and caches |
+| `<scope>` | Comprehensive secrets, dependency, code-pattern, STRIDE, and OWASP audit | Omitting scope scans the project root; dependency tools may use network and caches |
 | `full` | Expands the audit to the project | Higher disk, context, process, and dependency-audit cost |
-| `--red-team` | Adds four attacker-persona phases before the final sweep | Appends discovery evidence to `security-audit-results.tsv` |
+| `--secrets-only` | Secret and credential scan only | Skips dependency audit, code patterns, STRIDE, and red-team |
+| `--deps-only` | Package-advisory audit only | Skips code patterns, STRIDE, and red-team |
+| `--red-team` | Adds four attacker-persona phases before the final sweep | Appends discovery evidence to `security-audit-results.tsv`; fast flags win if combined |
 | `--iterations N` | Caps red-team discovery or fix iterations for the selected mode | `N` must be chosen by the user; no default numeric cap is documented |
 | `--fix` | Applies targeted fixes, runs a guard, and commits successful iterations | Mutates source and Git history; stops when a guard fails |
 | `--red-team --fix` | Discovers broadly, then fixes confirmed Critical and High findings | Still requires scoped authority and usable verification commands |
@@ -66,6 +68,8 @@ Before you start:
   <Tab value="Claude Code">
 
 ```text
+/ak:security --secrets-only
+/ak:security --deps-only
 /ak:security src/auth/ --red-team --iterations 12
 ```
 
@@ -73,6 +77,8 @@ Before you start:
   <Tab value="Cursor">
 
 ```text
+/ak:security --secrets-only
+/ak:security --deps-only
 /ak:security src/auth/ --red-team --iterations 12
 ```
 
@@ -80,6 +86,8 @@ Before you start:
   <Tab value="Codex">
 
 ```text
+$ak:security --secrets-only
+$ak:security --deps-only
 $ak:security src/auth/ --red-team --iterations 12
 ```
 
@@ -145,8 +153,7 @@ A complete audit should provide:
 
 The packaged evidence confirms installation coverage for the Skill; it does
 not provide an end-to-end test of the full audit, live advisory services, or
-fix quality. Stable and beta contain the same `ak:security` source and
-references.
+fix quality.
 
 ## Troubleshoot and interpret limits
 
@@ -160,6 +167,5 @@ references.
 | A fix guard fails | Stop at that commit boundary, inspect the regression, and hand the evidence to `ak:fix` or a human reviewer. |
 | The runtime does not recognize the Skill | Confirm target and scope, restart the runtime session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
 
-Compare [`ak:security-scan`](./security-scan) for a faster scanner or continue
-with [`ak:plan`](./plan) to schedule findings that should not be fixed
-immediately.
+The retired `ak:security-scan` invocation maps to `ak:security`. Continue with
+[`ak:plan`](./plan) to schedule findings that should not be fixed immediately.
