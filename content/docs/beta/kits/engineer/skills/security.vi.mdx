@@ -6,10 +6,10 @@ description: Chạy audit theo STRIDE và OWASP, tùy chọn thêm red-team disc
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
-Dùng `ak:security` khi bạn cần audit dựa trên threat model thay vì quét pattern
-nhanh. Skill đọc code trong scope, lần theo attack surface bằng STRIDE và OWASP
-Top 10, audit dependency, phát hiện secret rồi xếp hạng bằng chứng theo severity.
-Mode red-team và fix tùy chọn bổ sung discovery sâu hơn cùng thay đổi code local.
+Dùng `ak:security` để quét secret, dependency và code pattern, kèm STRIDE và
+OWASP. Cách gọi mặc định chạy lượt comprehensive đó. `--secrets-only` và
+`--deps-only` bỏ code pattern và threat modeling; dùng cả hai vẫn bỏ code
+pattern. Mode red-team và fix tùy chọn bổ sung discovery sâu hơn cùng thay đổi code local.
 
 ## Chọn ak:security cho review theo threat model
 
@@ -23,7 +23,7 @@ Mode red-team và fix tùy chọn bổ sung discovery sâu hơn cùng thay đổ
 
 ### Chọn workflow khác khi
 
-- Bạn chỉ cần quét nhanh secret và dependency. Dùng `ak:security-scan`.
+- Bạn chỉ cần lượt nhanh secret hoặc dependency. Ở lại `ak:security` và truyền `--secrets-only`, `--deps-only`, hoặc cả hai.
 - Thay đổi chỉ có tính thẩm mỹ và không ảnh hưởng dữ liệu hay hành vi người dùng.
 - Bạn cần penetration test thực trên service đang chạy; Skill này audit dựa trên
   source và không tuyên bố thực thi exploit.
@@ -54,9 +54,11 @@ Trước khi bắt đầu:
 
 | Input hoặc tùy chọn | Kết quả | Tác động và giới hạn |
 | --- | --- | --- |
-| `<scope>` | Audit một lượt theo STRIDE, OWASP, dependency và secret | Đọc tệp trong scope; dependency tool có thể dùng network và cache |
+| `<scope>` | Audit comprehensive cho secret, dependency, code pattern, STRIDE và OWASP | Bỏ scope thì quét project root; dependency tool có thể dùng network và cache |
 | `full` | Mở rộng audit ra toàn project | Tăng chi phí disk, context, process và dependency audit |
-| `--red-team` | Thêm bốn phase attacker persona trước sweep cuối | Ghi nối tiếp bằng chứng discovery vào `security-audit-results.tsv` |
+| `--secrets-only` | Chỉ quét secret và credential | Bỏ dependency audit, code pattern, STRIDE và red-team |
+| `--deps-only` | Chỉ audit package advisory | Bỏ code pattern, STRIDE và red-team |
+| `--red-team` | Thêm bốn phase attacker persona trước sweep cuối | Ghi nối tiếp bằng chứng discovery vào `security-audit-results.tsv`; fast flag thắng nếu kết hợp |
 | `--iterations N` | Giới hạn iteration red-team discovery hoặc fix cho mode đã chọn | Người dùng phải chọn `N`; source không định nghĩa numeric cap mặc định |
 | `--fix` | Áp dụng fix tập trung, chạy guard và commit iteration thành công | Thay đổi source cùng Git history; dừng khi guard thất bại |
 | `--red-team --fix` | Discovery rộng, sau đó sửa finding Critical và High đã xác nhận | Vẫn cần quyền có scope và command verification dùng được |
@@ -65,6 +67,8 @@ Trước khi bắt đầu:
   <Tab value="Claude Code">
 
 ```text
+/ak:security --secrets-only
+/ak:security --deps-only
 /ak:security src/auth/ --red-team --iterations 12
 ```
 
@@ -72,6 +76,8 @@ Trước khi bắt đầu:
   <Tab value="Cursor">
 
 ```text
+/ak:security --secrets-only
+/ak:security --deps-only
 /ak:security src/auth/ --red-team --iterations 12
 ```
 
@@ -79,6 +85,8 @@ Trước khi bắt đầu:
   <Tab value="Codex">
 
 ```text
+$ak:security --secrets-only
+$ak:security --deps-only
 $ak:security src/auth/ --red-team --iterations 12
 ```
 
@@ -143,8 +151,7 @@ Audit hoàn chỉnh nên cung cấp:
   iteration bị dừng và finding chưa xử lý.
 
 Bằng chứng package xác nhận coverage cài đặt cho Skill; nó không phải test
-end-to-end của toàn bộ audit, advisory service live hay chất lượng fix. Stable
-và beta chứa cùng source cùng reference của `ak:security`.
+end-to-end của toàn bộ audit, advisory service live hay chất lượng fix.
 
 ## Khắc phục và hiểu giới hạn
 
@@ -158,5 +165,5 @@ và beta chứa cùng source cùng reference của `ak:security`.
 | Fix guard thất bại | Dừng tại commit boundary đó, kiểm tra regression và bàn giao bằng chứng cho `ak:fix` hoặc reviewer. |
 | Runtime không nhận ra Skill | Xác nhận target và scope, khởi động lại runtime session, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
 
-So sánh [`ak:security-scan`](./security-scan) cho scanner nhanh hơn hoặc tiếp tục
-với [`ak:plan`](./plan) để lên lịch finding chưa nên sửa ngay.
+Invocation đã retired `ak:security-scan` map sang `ak:security`. Tiếp tục với
+[`ak:plan`](./plan) để lên lịch finding chưa nên sửa ngay.

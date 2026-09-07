@@ -285,6 +285,59 @@ function validateIdentities(snapshot, digest, errors) {
   }
 }
 
+function validateRetiredSkillRoutes(routes, snapshot, label, errors) {
+  if (!Array.isArray(routes)) {
+    errors.push(`${label}: must be an array`);
+    return;
+  }
+  const routedSlugs = new Set(
+    (Array.isArray(snapshot?.identities) ? snapshot.identities : [])
+      .filter((entry) => isObject(entry) && ROUTED.has(entry.classification))
+      .map((entry) => typeof entry.sourceIdentity === 'string' ? entry.sourceIdentity.replace(/^ak-/, '') : ''),
+  );
+  const slugs = routes.map((entry) => entry?.slug ?? '');
+  if (!sameArray(slugs, sorted(slugs))) errors.push(`${label}: must be sorted by slug`);
+  const duplicates = duplicateValues(slugs);
+  if (duplicates.length) errors.push(`${label}: duplicate slug [${duplicates.join(', ')}]`);
+  for (const entry of routes) {
+    const slug = entry?.slug ?? '<missing>';
+    const entryLabel = `${label}.${slug}`;
+    if (!exactFields(entry, ['slug', 'reviewedException'], entryLabel, errors)) continue;
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(entry.slug)) errors.push(`${entryLabel}.slug: invalid skill slug`);
+    if (typeof entry.reviewedException !== 'string' || !entry.reviewedException) errors.push(`${entryLabel}.reviewedException: required`);
+    if (routedSlugs.has(entry.slug)) errors.push(`${entryLabel}: retired slug must not also be a routed catalog identity`);
+  }
+}
+
+function skillMembersNames(channel, version, kitId, runtime) {
+  const names = evidenceNames(channel, version, kitId, runtime);
+  return {
+    name: `agentkit-kit-${kitId}-${runtime}-${version}.skill-members.json`,
+    path: `${names.directory}/agentkit-kit-${kitId}-${runtime}-${version}.skill-members.json`,
+  };
+}
+
+function validateKitBindingExtras(binding, snapshot, channel, kitId, version, errors) {
+  const bindingLabel = `channels.${channel}.kits.${kitId}`;
+  if (channel === 'beta' && kitId === 'engineer' && !Object.hasOwn(binding, 'skillMembers')) {
+    errors.push(`${bindingLabel}.skillMembers: required for the Beta engineer binding`);
+  }
+  if (Object.hasOwn(binding, 'reviewedRetiredSkillRoutes')) {
+    validateRetiredSkillRoutes(binding.reviewedRetiredSkillRoutes, snapshot, `${bindingLabel}.reviewedRetiredSkillRoutes`, errors);
+  }
+  if (!Object.hasOwn(binding, 'skillMembers')) return;
+  const record = binding.skillMembers;
+  const recordLabel = `${bindingLabel}.skillMembers`;
+  if (!exactFields(record, ['path', 'name', 'sha256', 'size', 'runtime', 'archiveSha256'], recordLabel, errors)) return;
+  if (!RUNTIMES.includes(record.runtime)) errors.push(`${recordLabel}.runtime: unsupported runtime`);
+  const expected = skillMembersNames(channel, version, kitId, record.runtime);
+  if (record.name !== expected.name || basename(record.name) !== record.name) errors.push(`${recordLabel}.name: expected ${expected.name}`);
+  if (record.path !== expected.path) errors.push(`${recordLabel}.path: expected ${expected.path}`);
+  validateDigestSize(record, recordLabel, errors);
+  const archiveSha = binding.artifacts?.[record.runtime]?.archive?.sha256;
+  if (record.archiveSha256 !== archiveSha) errors.push(`${recordLabel}.archiveSha256: must match ${record.runtime} archive sha256`);
+}
+
 export function validateRegistry(registry, channelsIdentity) {
   const errors = [];
   if (!exactFields(registry, ROOT_FIELDS, 'registry', errors)) return errors;
@@ -326,7 +379,7 @@ export function validateRegistry(registry, channelsIdentity) {
     }
     for (const [kitId, binding] of Object.entries(value.kits)) {
       const bindingLabel = `${label}.kits.${kitId}`;
-      if (!exactFields(binding, KIT_BINDING_FIELDS, bindingLabel, errors)) continue;
+      if (!exactFields(binding, KIT_BINDING_FIELDS, bindingLabel, errors, ['reviewedRetiredSkillRoutes', 'skillMembers'])) continue;
       referenced.add(binding.snapshotDigest);
       const snapshot = registry.inventorySnapshots[binding.snapshotDigest];
       if (!snapshot) errors.push(`${bindingLabel}.snapshotDigest: unknown snapshot ${binding.snapshotDigest}`);
@@ -371,6 +424,7 @@ export function validateRegistry(registry, channelsIdentity) {
           if (hash && !evidenceHashes.has(hash)) errors.push(`${bindingLabel}: ${identity.sourceIdentity} evidence hash is not one of this channel's artifacts`);
         }
       }
+      validateKitBindingExtras(binding, snapshot, channel, kitId, value.version, errors);
     }
   }
   const stableKits = new Set(Object.keys(registry.channels.stable?.kits ?? {}));
@@ -603,6 +657,69 @@ export async function validateCatalogEvidence({ registry, channelsIdentity, root
           }
         }
       }
+      if (isObject(binding.skillMembers)) {
+        const record = binding.skillMembers;
+        const membersLabel = `channels.${channel}.kits.${kitId}.skillMembers`;
+        const expected = skillMembersNames(channel, channelValue.version, kitId, record.runtime);
+        if (typeof record.path === 'string') {
+          if (paths.has(record.path)) errors.push(`${membersLabel}: duplicate evidence path ${record.path}`);
+          paths.add(record.path);
+        }
+        const membersBytes = await readEvidenceBytes({
+          root,
+          rootReal,
+          record,
+          expectedPath: expected.path,
+          label: membersLabel,
+          errors,
+        });
+        if (membersBytes) {
+          let document;
+          try {
+            document = parseJsonStrict(membersBytes.toString('utf8'), membersLabel);
+          } catch (error) {
+            errors.push(`${membersLabel}: invalid JSON: ${error.message}`);
+            document = null;
+          }
+          if (document) {
+            if (!exactFields(document, ['schemaVersion', 'kitId', 'runtime', 'archiveSha256', 'members'], membersLabel, errors)) {
+              document = null;
+            }
+          }
+          if (document) {
+            if (document.schemaVersion !== 1) errors.push(`${membersLabel}: unsupported schemaVersion`);
+            if (document.kitId !== kitId) errors.push(`${membersLabel}: kitId must be ${kitId}`);
+            if (document.runtime !== record.runtime) errors.push(`${membersLabel}: runtime must match binding`);
+            if (document.archiveSha256 !== record.archiveSha256) errors.push(`${membersLabel}: archiveSha256 must match binding`);
+            const archiveSha = binding.artifacts?.[record.runtime]?.archive?.sha256;
+            if (document.archiveSha256 !== archiveSha) errors.push(`${membersLabel}: archiveSha256 must match ${record.runtime} archive`);
+            if (!Array.isArray(document.members) || document.members.some((value) => typeof value !== 'string')) {
+              errors.push(`${membersLabel}.members: must be an array of strings`);
+            } else {
+              if (!sameArray(document.members, sorted([...new Set(document.members)]))) {
+                errors.push(`${membersLabel}.members: must be sorted unique paths`);
+              }
+              const memberPattern = new RegExp(`^${kitId}/skills/ak-[a-z0-9-]+/SKILL\\.md$`);
+              const memberSet = new Set(document.members);
+              for (const member of document.members) {
+                if (!memberPattern.test(member)) errors.push(`${membersLabel}.members: invalid path ${member}`);
+              }
+              const snapshot = registry.inventorySnapshots[binding.snapshotDigest];
+              const identityPaths = new Set();
+              for (const entry of snapshot?.identities ?? []) {
+                if (!isObject(entry) || typeof entry.evidenceRef !== 'string') continue;
+                const evidence = entry.evidenceRef.match(/^release-asset:sha256:([a-f0-9]{64})#(.+)$/);
+                if (!evidence) continue;
+                if (evidence[1] !== record.archiveSha256) {
+                  errors.push(`${membersLabel}: ${entry.sourceIdentity} evidenceRef hash must equal skillMembers.archiveSha256`);
+                }
+                identityPaths.add(evidence[2]);
+              }
+              addDifference(errors, `${membersLabel} snapshot/member SKILL.md paths`, identityPaths, memberSet);
+            }
+          }
+        }
+      }
     }
   }
   addDifference(errors, 'catalog evidence files', paths, actualPaths);
@@ -665,7 +782,7 @@ async function closureFile(path, key, closure, errors, root) {
   }
 }
 
-export async function observeKitDocs({ docsRoot, channel, kitId, snapshot, errors }) {
+export async function observeKitDocs({ docsRoot, channel, kitId, snapshot, reviewedRetiredSkillRoutes = [], errors }) {
   const prefix = `${channel}/${kitId}`;
   const skillsDir = join(docsRoot, channel, 'kits', kitId, 'skills');
   const overviewEnPath = join(docsRoot, channel, 'kits', `${kitId}.en.mdx`);
@@ -682,10 +799,19 @@ export async function observeKitDocs({ docsRoot, channel, kitId, snapshot, error
   const indexVi = await indexSlugs(indexViPath, `${prefix} public index VI`, errors);
   const routed = new Set(snapshot.identities.filter((entry) => ROUTED.has(entry.classification)).map((entry) => entry.canonicalRoute.split('/').at(-1)));
   const publicRoutes = new Set(snapshot.identities.filter((entry) => entry.classification === 'public').map((entry) => entry.canonicalRoute.split('/').at(-1)));
+  const retired = new Set((reviewedRetiredSkillRoutes ?? []).map((entry) => entry.slug).filter(Boolean));
+  for (const slug of sorted(retired)) {
+    if (routed.has(slug)) errors.push(`${prefix} reviewed retired skill ${slug}: must not be a routed catalog identity`);
+    if (!en.has(slug) || !vi.has(slug)) errors.push(`${prefix} reviewed retired skill ${slug}: missing EN/VI pages`);
+    if (nav.includes(slug) || navVi.includes(slug)) errors.push(`${prefix} reviewed retired skill ${slug}: must not appear in public nav`);
+    if (indexEn.has(slug) || indexVi.has(slug)) errors.push(`${prefix} reviewed retired skill ${slug}: must not appear in the public catalog index`);
+  }
+  const observedEn = new Set([...en].filter((slug) => !retired.has(slug)));
+  const observedVi = new Set([...vi].filter((slug) => !retired.has(slug)));
 
   addDifference(errors, `${prefix} EN/VI details`, en, vi);
-  addDifference(errors, `${prefix} exact routed details EN`, routed, en);
-  addDifference(errors, `${prefix} exact routed details VI`, routed, vi);
+  addDifference(errors, `${prefix} exact routed details EN`, routed, observedEn);
+  addDifference(errors, `${prefix} exact routed details VI`, routed, observedVi);
   addDifference(errors, `${prefix} EN/VI public nav`, new Set(nav), new Set(navVi));
   addDifference(errors, `${prefix} exact public nav EN`, publicRoutes, new Set(nav));
   addDifference(errors, `${prefix} exact public nav VI`, publicRoutes, new Set(navVi));
