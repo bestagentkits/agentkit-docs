@@ -40,6 +40,11 @@ jobs:
         run: pnpm typecheck
 
       - name: Build (static export)
+        env:
+          # Signals app/robots.ts to emit a disallow-all robots.txt instead of
+          # production's — staging serves the same static-export artifact
+          # shape as production, just from a different Worker (see #118).
+          DOCS_DEPLOY_ENV: staging
         run: pnpm build
 
       - name: Static asset limits
@@ -51,6 +56,9 @@ jobs:
           test -f out/vi/stable/getting-started/installation.html
           test -f out/_redirects
           test ! -d out/_next/server
+          grep -qx 'Disallow: /' out/robots.txt
+          ! grep -q '^Allow: /$' out/robots.txt
+          ! grep -q '^Sitemap:' out/robots.txt
 
       - name: Deploy staging Worker
         env:
