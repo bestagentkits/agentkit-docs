@@ -41,11 +41,11 @@ ak onboard
 | 2. Channel | Fills both `updates.channel` and `kit.channel`. |
 | 3. Scope | Resolves project or global scope before asking for login. |
 | 4. Login | Skips a renewable CLI session; otherwise offers email OTP or a user API key on a TTY. |
-| 5. Kit | Skips an existing install receipt; otherwise calls the normal Kit service in preserve-only mode. |
+| 5. Kit | Skips an existing install receipt; otherwise confirms kit and runtime on a TTY, then installs. |
 
 Completed steps are reported as `skipped`, so you can rerun the command after a
-partial or interrupted first use. `--yes` accepts prompts but never becomes
-`--force`.
+partial or interrupted first use. `--yes` accepts confirmation prompts but never
+becomes `--force`.
 
 Choose the Kit, runtime, and release channel explicitly when you want a
 repeatable result:
@@ -62,12 +62,16 @@ a persisted `kit.channel`, then version inference (`beta` for a Beta CLI;
 
 Kit selection falls back from `--kit` to `kit.default`, then `engineer`; a
 configured default of `none` also resolves to `engineer`. Target selection falls
-back from `--target` to the first enabled adapter, then asks on a TTY or exits
-`2` in non-interactive mode.
+back from `--target` to the first enabled adapter. On a TTY, onboard confirms
+both values before install unless `--kit` or `--target` already locked that
+axis. Non-interactive mode keeps those defaults and exits `2` if no target can
+be resolved.
 
 Every directory except your user home is valid project scope, including a new,
-empty directory without `.git` or `.agentkit/ownership.json`. From your home
-directory, choose a user-wide install or cancel and change directories:
+empty directory without `.git` or `.agentkit/ownership.json`. Running from your
+home directory is not project scope. Onboard warns, tells you to change into a
+project, and exits `2`. Pass `--project-dir` or `--global` instead of expecting
+a TTY offer to install globally:
 
 ```bash
 ak onboard --global --kit engineer --target codex --channel <channel>
@@ -76,7 +80,7 @@ ak onboard --global --kit engineer --target codex --channel <channel>
 | Location | Behavior |
 | --- | --- |
 | Any directory except the user home | Uses that directory as project scope and installs the Kit there. |
-| User home on a TTY | Runs missing setup, then offers global install or cancel. It never writes project Kit files into the home directory. |
+| User home on a TTY | Warns that home is not a project, prints the next command, and exits `2`. It never writes project Kit files into the home directory. |
 | User home without a TTY | Exits `2` before login and tells you to change directories or use `--global`. |
 | `--global` | Skips the project check and installs the user-wide Kit, including when run from home. |
 | `--project-dir <path>` | Uses that path instead of the current directory; the user home still requires `--global`. |
@@ -181,8 +185,9 @@ Skill, reads the request, and begins its workflow in the current project.
   reinstalling.
 - **`channel_drift` warning:** align both channels with
   `ak onboard --channel stable` or `ak onboard --channel beta`.
-- **Ownership conflict:** stop and inspect the reported destination. Do not add
-  `--force` as the first response; onboard always uses preserve-only install.
+- **Occupied runtime files:** on a TTY, onboard can ask to overwrite AgentKit
+  collision paths and retry once with `--force`. Unrelated custom files stay.
+  `--yes` and non-interactive mode never auto-force; cancel exits `3`.
 
 For detailed Kit scope, target compatibility, refresh, uninstall, and recovery
 behavior, continue with [Installing Kits](../guides/installing-kits). Otherwise,

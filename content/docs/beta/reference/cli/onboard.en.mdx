@@ -56,16 +56,18 @@ Onboard evaluates these stages in order:
 2. Resolve and persist both `updates.channel` and `kit.channel`.
 3. Resolve project or global scope before login.
 4. Prompt for email OTP or a user API key only when no renewable CLI session exists.
-5. Resolve the Kit and target, then install only when the selected route has no install receipt.
+5. Resolve the Kit and target, confirm them on a TTY unless `--kit` or `--target` locked that axis, then install only when the selected route has no install receipt.
 
 An existing stage is returned as `skipped`; a completed stage is not replayed
 just because a later stage is missing. If installation reports an authentication
 failure during interactive use, onboard can log in and retry the installation
-once.
+once. If the runtime already has AgentKit collision files, a TTY can confirm one
+overwrite retry with `--force`; unrelated custom files stay.
 
 <Callout type="warning">
-  First installation is preserve-only. `--yes` accepts confirmation prompts but
-  never enables force, replacement, or ownership takeover.
+  First installation starts preserve-only. `--yes` and non-interactive mode never
+  enable force. Only an explicit TTY overwrite confirmation retries occupied
+  collision paths with `--force`.
 </Callout>
 
 ## Scope and channel resolution
@@ -73,7 +75,7 @@ once.
 | Invocation location | Behavior |
 | --- | --- |
 | Any directory except the user home | Treats that directory as project scope and installs the Kit there. |
-| User home on a TTY | Runs missing setup, warns that home is not project scope, then offers global install or cancellation. Cancellation exits `3`. |
+| User home on a TTY | Warns that home is not a project, prints `cd` / `--project-dir` / `--global` next steps, and exits `2`. |
 | User home without a TTY | Exits `2` before login and suggests changing directories or using `--global`. |
 | `--global` | Skips project validation and installs user-wide, including from the user home. |
 | `--project-dir <path>` | Replaces the current directory; the user home remains blocked unless `--global` is also present. |
@@ -85,8 +87,9 @@ explicit values exit `2` without changing config.
 
 Kit selection uses `--kit`, then `kit.default`, then `engineer`; a configured
 default of `none` also resolves to `engineer`. Target selection uses `--target`,
-then the first enabled adapter, then a TTY prompt. Without a TTY, a missing
-target exits `2`.
+then the first enabled adapter. On a TTY, onboard confirms both values before
+install unless the matching flag already locked that axis. Without a TTY, a
+missing target exits `2`.
 
 Email OTP is the default TTY login method. `--email <address>` skips the method
 picker and goes directly to OTP. An authentication failure during interactive
