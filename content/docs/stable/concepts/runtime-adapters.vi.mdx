@@ -68,7 +68,7 @@ các bề mặt hoạt động khác nhau:
 | Cursor | Adapter chuyển Skills, agents, rules và hooks sang scope project hoặc người dùng. Tệp command của Kit chỉ được giữ làm nội dung hỗ trợ không hoạt động, không có bề mặt status line của AgentKit và adapter không cung cấp công cụ quản lý plan chuyên biệt. Phạm vi xác minh cài đặt, cập nhật và invocation trực tiếp chưa đầy đủ trên mọi thiết lập provider, vì vậy không suy ra parity hoàn toàn chỉ từ việc source có hỗ trợ. |
 | DeepSeek Harness | Adapter dispatch cho `ak run --target dsh`. Setup ghi adapter đã bật và resolve `AGENTKIT_DSH_BIN` hoặc `dsh`, nhưng Kit projection chưa được đăng ký cho `ak kit init --target dsh`; hãy dùng target projection Kit khác cho inventory đã cài. |
 | Grok Build | Target Kit registry đã ký với projection native. Rule, Skill, Agent và Hook được hỗ trợ nằm dưới `<project>/.grok` hoặc `${GROK_HOME:-~/.grok}`; metadata lifecycle nằm riêng dưới `<project>/.agentkit/adapters/grok/<kit>` hoặc `${AGENTKIT_HOME:-~/.agentkit}/adapters/grok/<kit>`. Command và export không được hỗ trợ vẫn là sidecar không hoạt động. Cài từ nguồn cục bộ vẫn khả dụng cho development và CI. |
-| Pi | Projection Kit `--target pi` đã đăng ký ở source. Bản cài project ghi Skill portable `ak-<slug>` dưới `.pi/skills/`, Agent đã remap dưới `.pi/agents/`, rule thuộc sở hữu dưới `.pi/rules/` và extension first-party dưới `.pi/extensions/`. Bản cài global có điều kiện ghi trực tiếp dưới profile Pi coding-agent đang hoạt động. Pi vẫn là target spike: không có `ak run --target pi`, không wrap harness đầy đủ, không ghi `.pi/commands/`, và sidecar không hoạt động vẫn nằm trong lifecycle ownership. |
+| Pi | Projection Kit `--target pi` đã đăng ký ở source. `ak setup --adapter` và onboard `--target` liệt kê `pi` như Kit target chỉ emit. Bản cài project ghi Skill portable `ak-<slug>` dưới `.pi/skills/`, Agent đã remap dưới `.pi/agents/`, rule thuộc sở hữu dưới `.pi/rules/` và extension first-party dưới `.pi/extensions/`. Bản cài global có điều kiện ghi trực tiếp dưới profile Pi coding-agent đang hoạt động. Pi vẫn là spike cho dispatch: không có `ak run --target pi`, không wrap harness đầy đủ, không ghi `.pi/commands/`, và sidecar không hoạt động vẫn nằm trong lifecycle ownership. Pi giữ native TUI footer theo mặc định; AgentKit chỉ gọi `setFooter` khi được truyền `statuslineMode` khác `none` một cách tường minh. |
 | Oh My Pi | Target cài native cho scope project hoặc người dùng, đồng thời hỗ trợ dispatch Skill không tương tác qua `ak run --target omp`. Skill, Agent, rule và instruction của Kit dùng các bề mặt discovery native của OMP; export không được hỗ trợ vẫn là sidecar không hoạt động. Oh My Pi tự quản backend và credential đã cấu hình. |
 
 ### Projection và discovery trên Pi
@@ -76,10 +76,13 @@ các bề mặt hoạt động khác nhau:
 Bản cài project bằng `ak kit init <kit> --target pi` ghi các thư mục Skill
 portable như `.pi/skills/ak-cook/SKILL.md`, Agent đã remap như
 `.pi/agents/Explore.md`, `.pi/agents/Plan.md` và `.pi/agents/ak-<kit>-*.md`,
-cùng rule thuộc sở hữu dưới `.pi/rules/`. Hook, file coding-level, statusline,
-script chạy được và sidecar nằm dưới `.pi/extensions/agentkit-hooks-<kit>/`;
-Agent runner dùng chung nằm dưới `.pi/extensions/agentkit-agent/`. AgentKit
-không ghi `.pi/commands/` và không đăng ký slash command của Pi.
+cùng rule thuộc sở hữu dưới `.pi/rules/`. Hook, file coding-level, file
+statusline `.cjs` được emit, script chạy được và sidecar nằm dưới
+`.pi/extensions/agentkit-hooks-<kit>/`; Agent runner dùng chung nằm dưới
+`.pi/extensions/agentkit-agent/`. AgentKit không ghi `.pi/commands/` và không
+đăng ký slash command của Pi. File statusline của kit được emit cạnh
+extension; Pi giữ native TUI footer trừ khi bạn truyền `statuslineMode` khác
+`none` một cách tường minh.
 
 Với `--global`, AgentKit ghi trực tiếp dưới profile Pi coding-agent đang hoạt
 động, phân giải từ `PI_CODING_AGENT_DIR` hoặc `~/.pi/agent`; lệnh không thêm một
@@ -90,9 +93,11 @@ phát hành này không có `ak run --target pi` và không wrap agent loop củ
 
 ### Projection và discovery trên Oh My Pi
 
-Bản cài project bằng `ak kit init <kit> --target omp` ghi Skill bên dưới
-`.omp/skills/<name>/`, Agent vào `.omp/agents/<name>.md` và rule vào
-`.omp/rules/<name>.md`. AgentKit cũng thêm một block theo Kit vào `AGENTS.md`
+Bản cài project bằng `ak kit init <kit> --target omp` ghi Skill portable bên
+dưới `.omp/skills/ak-<slug>/`, với `name: ak-<slug>` ở top-level trong mỗi
+`SKILL.md` đã projection. Agent được ghi vào `.omp/agents/<name>.md`, còn rule
+vào `.omp/rules/<name>.md`. Alias trong body như `/ak:cook` và `$ak:cook` không
+bị viết lại. AgentKit cũng thêm một block theo Kit vào `AGENTS.md`
 của project, giới hạn bởi `<!-- AGENTKIT-OMP:START:<kit> -->` và
 `<!-- AGENTKIT-OMP:END:<kit> -->`. Khi cập nhật hoặc gỡ Kit đó, AgentKit chỉ thay
 đổi block được quản lý và giữ nguyên nội dung của người dùng.
@@ -107,7 +112,16 @@ native của OMP.
 
 Cài đặt và dispatch là hai tuyến riêng. `ak kit init ... --target omp` tạo
 projection Kit để runtime discover; `ak run <kit>/<skill> --target omp` chạy
-một Skill đã resolve qua OMP CLI cục bộ mà không thay thế inventory đã cài.
+một Skill đã resolve qua OMP CLI cục bộ mà không thay thế inventory đã cài hoặc
+thay đổi selector `<kit>/<skill>`.
+
+OMP trong project đã trust cũng discover `.agents/skills` của project. Nếu các
+dạng canonical như `ak:advise` và `ak-advise` xung đột, bản cài OMP project dưới
+`.omp/skills` che bản trong `.agents/skills` của project. Khi dùng bản cài OMP
+global từ project đã trust đó, bản `.agents/skills` của project che bản trong
+profile OMP. `ak kit init --target omp` cảnh báo rồi tiếp tục: lệnh vẫn emit nội
+dung OMP, không xóa hoặc viết lại Skill nào, không thay đổi `.agents` hay setting
+OMP, đồng thời không cần `--force` và không trả exit `6`.
 
 Hook command exec-form native trên Grok dùng launcher
 `agentkit-grok-envelope-shim.cjs` thuộc quyền sở hữu để bổ sung field và tên tool
@@ -155,11 +169,12 @@ Argument rỗng bị từ chối với cảnh báo riêng, shim cùng path và c
 deduplicate, còn xung đột cùng path giữ nội dung emit đầu tiên rồi cảnh báo.
 Đường dẫn không cần shim tiếp tục dùng lệnh trực tiếp.
 
-Trên POSIX, Codex home do wrapper quản lý chỉ được liên kết leaf `hooks` cuối
-cùng tới thư mục canonical `~/.codex/hooks` của user đã resolve. AgentKit resolve
-alias đó một lần rồi dùng path canonical cho thao tác ghi Hook, command,
-rollback và ownership. Parent có link, target khác hoặc mọi symlink hay reparse
-point trên Windows đều bị từ chối.
+Codex home do wrapper quản lý chỉ được liên kết leaf `hooks` cuối cùng tới thư
+mục canonical `~/.codex/hooks` của user đã resolve. Link đó có thể là symlink
+POSIX hoặc directory junction trên Windows. AgentKit resolve alias đó một lần
+rồi dùng path canonical cho thao tác ghi Hook, command, rollback và ownership.
+Parent có link, hoặc leaf resolve ra bất kỳ đích nào khác thư mục hooks
+canonical của user, đều bị từ chối.
 
 Không suy ra runtime được hỗ trợ chỉ từ tên tệp hoặc hành vi của runtime khác.
 Hãy dùng phần tóm tắt sau khi cài và tài liệu Skill liên quan làm căn cứ cho nội

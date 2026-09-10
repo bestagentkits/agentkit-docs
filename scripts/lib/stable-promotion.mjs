@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { link, lstat, mkdir, open, readFile, readdir, rename, rm } from 'node:fs/promises';
 import { dirname, isAbsolute, join, posix, relative, resolve, sep } from 'node:path';
 import { parseManifest } from './manifest.mjs';
+import { applyDesktopLayerAText, buildPlatformMap } from './desktop-assets.mjs';
 import { renderReleaseNotesMdx } from './release-notes.mjs';
 
 export const PROMOTION_RECEIPT_SCHEMA_VERSION = 1;
@@ -565,9 +566,27 @@ function promotionTransactionDiffStatus(root, base, head) {
     row.path.startsWith(STABLE_PROMOTION_EVIDENCE_PREFIX) || row.oldPath?.startsWith(STABLE_PROMOTION_EVIDENCE_PREFIX));
 }
 
-function assertDerivedPostimage(receipt, derivedReleaseNotes) {
+function desktopLayerAEvidencePath(stableTag) {
+  return `release-evidence/desktop/${stableTag}.json`;
+}
+
+function loadDesktopLayerAAssets(root, head, receipt) {
+  const path = desktopLayerAEvidencePath(receipt.stableTag);
+  const listed = git(root, ['ls-tree', '-z', head, '--', path], { allowFailure: true });
+  if (listed.status !== 0 || listed.stdout.length === 0) return null;
+  const parsed = parseJsonBytes(gitPathBytes(root, head, path), 'desktop Layer A evidence');
+  if (!isObject(parsed) || parsed.schemaVersion !== 1) fail('desktop Layer A evidence schemaVersion must be 1');
+  if (parsed.tag !== receipt.stableTag) fail('desktop Layer A evidence tag must equal the receipt stable tag');
+  if (parsed.fromTag !== receipt.promotedFrom) fail('desktop Layer A evidence fromTag must equal promotedFrom');
+  if (!Array.isArray(parsed.assets)) fail('desktop Layer A evidence assets must be an array');
+  buildPlatformMap(parsed.assets);
+  return parsed.assets;
+}
+
+function assertDerivedPostimage({ root, receipt, derivedReleaseNotes }) {
   const expectedByPath = new Map(receipt.stablePostimageInventory.map((row) => [row.path, row]));
   if (expectedByPath.size !== receipt.betaSourceInventory.length) fail('Stable postimage path set does not equal the Beta source path set');
+  const desktopAssets = loadDesktopLayerAAssets(root, resolveCommit(root, 'HEAD'), receipt);
   for (const beta of receipt.betaSourceInventory) {
     const stable = expectedByPath.get(beta.path);
     if (!stable) fail(`Stable postimage is missing Beta path ${beta.path}`);
@@ -576,6 +595,22 @@ function assertDerivedPostimage(receipt, derivedReleaseNotes) {
       if (!same(stable, derived) || stable.sha256 !== receipt.releaseNotesOutputSha256) {
         fail('Stable release-notes postimage is not the deterministically rederived output');
       }
+    } else if (beta.path === 'desktop-app' || beta.path.startsWith('desktop-app/')) {
+      if (stable.mode !== beta.mode) fail(`Stable desktop Layer A mode drifted from Beta: ${beta.path}`);
+      if (!desktopAssets || !beta.path.endsWith('.mdx')) {
+        if (!same(beta, stable)) fail(`Stable postimage is not an exact Beta copy: ${beta.path}`);
+        continue;
+      }
+      const betaBytes = gitPathBytes(root, receipt.betaCommit, `content/docs/beta/${beta.path}`);
+      const derivedText = applyDesktopLayerAText(
+        decodeUtf8Bytes(betaBytes, `Beta ${beta.path}`),
+        receipt.promotedFrom,
+        receipt.stableTag,
+        desktopAssets,
+      );
+      const derivedBytes = Buffer.from(derivedText, 'utf8');
+      const derived = { path: beta.path, mode: beta.mode, size: derivedBytes.length, sha256: sha256(derivedBytes) };
+      if (!same(stable, derived)) fail(`Stable desktop Layer A is not the derived Beta transform: ${beta.path}`);
     } else if (!same(beta, stable)) {
       fail(`Stable postimage is not an exact Beta copy: ${beta.path}`);
     }
@@ -709,7 +744,7 @@ export async function checkStablePromotion({ root, base, receiptPath = null }) {
   const betaInventory = gitChannelInventory(root, resolvedBeta, 'beta');
   if (!same(betaInventory, receipt.betaSourceInventory)) fail('Beta source inventory drift from historical Git tree');
   if (inventoryDigest(betaInventory) !== receipt.betaSourceInventoryDigest) fail('historical Beta inventory digest mismatch');
-  assertDerivedPostimage(receipt, derivedReleaseNotes);
+  assertDerivedPostimage({ root, receipt, derivedReleaseNotes });
 
   const stableInventory = gitChannelInventory(root, head, 'stable');
   const ciBaseStableInventory = gitChannelInventory(root, resolvedBase, 'stable');
