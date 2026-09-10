@@ -1,22 +1,24 @@
 ---
 title: ak orchestrate
-description: Run and supervise a graph of external CLI jobs under a durable local worker with process-group ownership, persisted run state, crash-safe reconnect, and Darwin-only v1 scope.
+description: Coordinate and inspect agent jobs. External process supervision is Darwin-only; observation and runtime discovery do not claim process-control support.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
 Use `ak orchestrate` to start, resume, check, and stop a graph of external CLI
-jobs under a dedicated local worker supervisor. The worker owns each job's
-process group, persists durable run state under `AGENTKIT_HOME`, and survives
-the launching client or coordinator exiting. This is the process-lifecycle
-layer that the `/ak:orchestrate` skill delegates to when supervising CLI job
-graphs.
+jobs, and to inspect durable events, redacted output, and installed runtimes.
+The worker owns each job's process group, persists durable run state under
+`AGENTKIT_HOME`, and survives the launching client or coordinator exiting.
+This is the process-lifecycle and observation layer that the `/ak:orchestrate`
+skill delegates to when supervising CLI job graphs.
 
 <Callout type="warning">
-  `ak orchestrate` v1 supports **Darwin only** (macOS). Every other GOOS
-  returns an explicit unsupported error with exit code `6`. Callers running
-  on Linux or Windows should fall back to a coordinator-owned subprocess and
-  accept the disclosed interruption gap.
+  External process supervision in `ak orchestrate` v1 supports **Darwin only**
+  (macOS). `start`, `resume`, `stop`, and plan dispatch that spawn CLI jobs
+  return exit code `6` on every other GOOS. Historical observation (`events`,
+  `output`, `diagnose`) and runtime discovery (`probe`) do not claim
+  process-control support. Callers on Linux or Windows should not treat those
+  read paths as proof that jobs can be supervised on that host.
 </Callout>
 
 ## Usage
@@ -32,21 +34,27 @@ run.
 
 | Goal | Command | Effect |
 | --- | --- | --- |
-| Launch a new run from a validated job graph | `ak orchestrate start <job-graph.json>` | Validates the graph, generates a fresh opaque run ID, spawns a detached worker that owns every job's process group, blocks until the worker durably persists run state and proves readiness, then prints the run ID and initial status. |
+| Launch a new run from a validated job graph | `ak orchestrate start <job-graph.json>` | Validates the graph, generates a fresh opaque run ID, spawns a detached worker that owns every job's process group, blocks until the worker durably persists run state and proves readiness, then prints the run ID and initial status. Darwin only. |
 | Reconnect after a client or coordinator crash | `ak orchestrate resume <run-id> <job-graph.json>` | Confirms the graph's digest still matches the running record and reports its current state — never relaunches jobs or creates a second process tree. Falls back to read-only reclassification when the worker itself crashed. |
 | Report a run's current lifecycle state | `ak orchestrate status <run-id>` | Reaches the run's live worker through its verified control socket when reachable, otherwise reconciles persisted state against a fresh identity probe. Reports PID/PGID, heartbeat, last-output time, and per-job current-command labels. |
-| Cancel a run's live jobs | `ak orchestrate stop <run-id>` | Sends SIGTERM to every signal-authorized job in the verified process group, waits a bounded grace period, then SIGKILLs only a job whose group is still alive under the same verified identity. Never guesses a kill target from persisted state. |
-
-`start` always creates a new run; retrying the same graph does not reuse an
-existing run ID. Only `resume <run-id>` continues an existing run.
+| Cancel a run's live jobs | `ak orchestrate stop <run-id>` | Sends SIGTERM to every signal-authorized job in the verified process group, waits a bounded grace period, then SIGKILLs only a job whose group is still alive under the same verified identity. Never guesses a kill target from persisted state. Darwin only. |
+| Page durable run events | `ak orchestrate events <run-id>` | Read-only replay of persisted observations. `--after` is the sequence cursor (default `0`); `--limit` is `1`–`1000` (default `100`). Missing or truncated observations are not proof of progress. |
+| Page redacted job output | `ak orchestrate output <run-id> <job-id>` | Read-only bounded capture by `--offset` (default `0`) and `--limit` (`1`–`65536`, default `16384`). Does not open private invocation files. |
+| Export a diagnosis bundle | `ak orchestrate diagnose <run-id>` | Read-only redacted snapshot plus a bounded event/output budget. Redirect `--json` to save it. Never a substitute for private graph or job-spec files. |
+| Discover installed coding runtimes | `ak orchestrate probe` | Runs version/help only, optional `--path runtime=executable`, `--runtime` filter, `--refresh`, `--timeout` (default `3s`, max `30s`). Writes an owned metadata cache. Does not install runtimes, read credentials, prove authentication, or invoke inference. |
+| Persist a resolved plan | `ak orchestrate prepare <jobs.yaml> <run-dir>` | Validates and writes private plan state. CLI dispatch that follows requires Darwin; internal harness dispatch does not. |
+| Dispatch dependency-ready jobs | `ak orchestrate advance <run-dir>` | Reconciles attempts and may copy declared artifacts and spawn CLI jobs. Do not bypass an uncertain attempt by calling `start` manually. |
+| Accept a settled attempt | `ak orchestrate accept <run-dir> <job-id> --attempt <id> --result <receipt.json>` | Verifies one attempt's artifact receipt. Mutating. |
+| Inspect plan state | `ak orchestrate plan-status <run-dir>` | Inspects persisted plan state and may invalidate stale evidence. |
 
 ## Filesystem and privacy boundary
 
-Each run writes state, per-job output logs, and a control socket under
-`AGENTKIT_HOME/orchestrate/runs/<run-id>/`. The worker never persists
-prompts, raw command arguments, environment values, or secrets — only the
-launch graph, per-job status, PID/PGID identity, and bounded stdout/stderr
-that the graph explicitly captures.
+Each run writes private state, bounded redacted logs, events, and a launch
+graph under `AGENTKIT_HOME/orchestrate/runs/<run-id>/`. The launch graph
+retains argv and environment for recovery. Keep credentials out of job specs.
+Do not export invocation files or `graph.json` in diagnostic bundles; use
+`ak orchestrate diagnose --json` instead. Bounded stdout/stderr capture is
+redacted and reports truncation.
 
 The launch graph digest is bound to the run ID at `start`. `resume` verifies
 this digest against the graph file supplied to it; a mismatch is refused
