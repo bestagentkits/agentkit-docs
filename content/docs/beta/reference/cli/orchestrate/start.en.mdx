@@ -28,8 +28,8 @@ invalid graph exits with code `1` and no run state is written.
 
 Shared flags (`--json`, `--no-interactive`, `--quiet`, `--verbose`, `--yes`)
 are described in [CLI conventions](../cli-conventions). `--json` implies
-`--no-interactive` and returns a single-object envelope suitable for
-scripted `run-id` extraction.
+`--no-interactive` and returns a wrapped JSON envelope (`kind` plus `data`)
+suitable for scripted `run_id` extraction.
 
 ## Job graph validation
 
@@ -47,13 +47,13 @@ unknown job id rejects the graph before the worker is spawned.
 
 ## Filesystem effects
 
-On successful launch, the worker writes:
+On successful launch, the worker writes under
+`AGENTKIT_HOME/orchestrate/runs/<run-id>/`:
 
-- `AGENTKIT_HOME/orchestrate/runs/<run-id>/state.json` — durable run state.
-- `AGENTKIT_HOME/orchestrate/runs/<run-id>/jobs/<job-id>/stdout.log` and
-  `stderr.log` — bounded per-job output.
-- `AGENTKIT_HOME/orchestrate/runs/<run-id>/launch-graph.json` — the exact
-  graph digest bound to this run.
+- `state.json` — durable run state.
+- `output-<job-id>.log` — bounded redacted merged output per job.
+- `events.jsonl` — bounded observation journal.
+- `graph.json` — private launch graph; may contain argv and environment.
 - A control socket used by [`ak orchestrate status`](./status),
   [`ak orchestrate resume`](./resume), and [`ak orchestrate stop`](./stop).
 
@@ -62,19 +62,34 @@ out of job specs, and exclude invocation files from diagnostic exports.
 
 ## Human and JSON output
 
-Human success prints the run ID and per-job initial status. `--json`
-returns:
+Human success prints the run ID and per-job initial status. `--json` wraps a
+`runVM` as `kind: "orchestrate.start"`:
 
 ```json
 {
-  "action": "start",
-  "run_id": "<opaque>",
-  "graph_digest": "sha256:<hex>",
-  "jobs": [
-    { "id": "<job-id>", "state": "queued" }
-  ]
+  "kind": "orchestrate.start",
+  "data": {
+    "run_id": "<opaque>",
+    "status": "<run-status>",
+    "all_settled": false,
+    "revision": 0,
+    "events_truncated": false,
+    "status_counts": { "queued": 1 },
+    "jobs": [
+      {
+        "job_id": "<job-id>",
+        "status": "queued",
+        "route_source": "declared-in-graph",
+        "output_bytes": 0,
+        "output_truncated": false
+      }
+    ]
+  }
 }
 ```
+
+Do not parse a top-level `action` or job `id`/`state` pair. The envelope
+carries `data.run_id`, `data.all_settled`, and per-job `job_id`/`status`.
 
 ## Exit behavior
 

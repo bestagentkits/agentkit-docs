@@ -27,8 +27,8 @@ thoát với mã `1` và không có run state nào được ghi.
 
 Các cờ dùng chung (`--json`, `--no-interactive`, `--quiet`, `--verbose`,
 `--yes`) được mô tả trong [quy ước CLI](../cli-conventions). `--json` ngầm
-định `--no-interactive` và trả về envelope một object phù hợp để script
-trích xuất `run-id`.
+định `--no-interactive` và trả về envelope JSON được wrap (`kind` cùng `data`)
+phù hợp để script trích xuất `run_id`.
 
 ## Validate job graph
 
@@ -46,14 +46,13 @@ hoặc job id không xác định sẽ từ chối graph trước khi worker đ�
 
 ## Tác động filesystem
 
-Khi launch thành công, worker ghi:
+Khi launch thành công, worker ghi dưới
+`AGENTKIT_HOME/orchestrate/runs/<run-id>/`:
 
-- `AGENTKIT_HOME/orchestrate/runs/<run-id>/state.json` — run state bền
-  vững.
-- `AGENTKIT_HOME/orchestrate/runs/<run-id>/jobs/<job-id>/stdout.log` và
-  `stderr.log` — output bounded từng job.
-- `AGENTKIT_HOME/orchestrate/runs/<run-id>/launch-graph.json` — digest
-  graph chính xác gắn với run này.
+- `state.json` — run state bền vững.
+- `output-<job-id>.log` — output gộp, bounded, đã redact cho từng job.
+- `events.jsonl` — journal quan sát bounded.
+- `graph.json` — launch graph riêng; có thể chứa argv và environment.
 - Một control socket dùng bởi [`ak orchestrate status`](./status),
   [`ak orchestrate resume`](./resume) và [`ak orchestrate stop`](./stop).
 
@@ -62,19 +61,34 @@ spec, và loại file invocation khỏi export chẩn đoán.
 
 ## Đầu ra dành cho người dùng và JSON
 
-Thành công dạng người dùng in run ID và status ban đầu từng job. `--json`
-trả về:
+Thành công dạng người dùng in run ID và status ban đầu từng job. `--json` wrap
+một `runVM` với `kind: "orchestrate.start"`:
 
 ```json
 {
-  "action": "start",
-  "run_id": "<opaque>",
-  "graph_digest": "sha256:<hex>",
-  "jobs": [
-    { "id": "<job-id>", "state": "queued" }
-  ]
+  "kind": "orchestrate.start",
+  "data": {
+    "run_id": "<opaque>",
+    "status": "<run-status>",
+    "all_settled": false,
+    "revision": 0,
+    "events_truncated": false,
+    "status_counts": { "queued": 1 },
+    "jobs": [
+      {
+        "job_id": "<job-id>",
+        "status": "queued",
+        "route_source": "declared-in-graph",
+        "output_bytes": 0,
+        "output_truncated": false
+      }
+    ]
+  }
 }
 ```
+
+Đừng parse cặp `action` top-level hoặc `id`/`state` của job. Envelope mang
+`data.run_id`, `data.all_settled`, và từng job `job_id`/`status`.
 
 ## Kết quả và mã thoát
 
