@@ -54,9 +54,11 @@ nội dung Kit cài được, còn Oh My Pi cũng có thể được chọn bằ
 `ak run --target omp` cho Skill dispatch.
 
 Mỗi thao tác Kit remote bên dưới đều truyền `--channel <channel>`. Hãy thay
-`<channel>` bằng kênh phát hành đang chọn trên header tài liệu. Nếu bỏ cờ này,
-CLI resolve `stable`; target chỉ có package ở kênh khác có thể trả
-`version_not_available`.
+`<channel>` bằng kênh phát hành đang chọn trên header tài liệu. Nếu bỏ cờ này
+trên `ak kit init` và `ak kit refresh`, lệnh dùng `kit.channel` đã lưu khi khóa
+đó đã được đặt; nếu không thì resolve `stable`. Target chỉ có package ở kênh
+khác có thể trả `version_not_available`. `ak kit install` vẫn resolve `stable`
+khi bỏ cờ.
 
 Phạm vi mặc định là project hiện tại. Thêm `--global` khi bạn muốn cài Kit vào
 thư mục người dùng của runtime để dùng ngoài một project. Target, scope và
@@ -185,8 +187,11 @@ ak kit init engineer --target omp --channel <channel>
 ak kit init engineer --target omp --global --channel <channel>
 ```
 
-Bản cài project ghi `.omp/skills/<name>/SKILL.md`,
-`.omp/agents/<name>.md` và `.omp/rules/<name>.md`. Instruction của Kit được merge
+Bản cài project ghi Skill portable vào
+`.omp/skills/ak-<slug>/SKILL.md`; mỗi file đã projection dùng `name: ak-<slug>` ở
+top-level. Agent được ghi vào `.omp/agents/<name>.md`, còn rule vào
+`.omp/rules/<name>.md`. Alias trong body như `/ak:cook` và `$ak:cook` được giữ
+nguyên. Instruction của Kit được merge
 vào `AGENTS.md` của project giữa `<!-- AGENTKIT-OMP:START:<kit> -->` và
 `<!-- AGENTKIT-OMP:END:<kit> -->`; AgentKit giữ nguyên nội dung bên ngoài block
 được quản lý của Kit đó. Bề mặt không được hỗ trợ được giữ làm nội dung không
@@ -196,6 +201,13 @@ Với `--global`, root OMP được phân giải từ `AGENTKIT_OMP_HOME`, rồi
 `PI_CODING_AGENT_DIR` và cuối cùng `~/.omp/agent`. Skill, Agent, rule và
 `AGENTS.md` dùng các đường dẫn tương ứng dưới root đó. Hãy review preview khi
 ghi đè root để đích được chọn luôn rõ ràng.
+
+OMP trong project đã trust cũng discover `.agents/skills` của project. Với xung
+đột canonical như `ak:advise` và `ak-advise`, `.omp/skills` của project che bản
+trong `.agents/skills` sau bản cài OMP project. Khi dùng bản cài OMP global từ
+project đã trust đó, `.agents/skills` của project che bản trong profile OMP. Lệnh
+cài cảnh báo rồi tiếp tục mà không bỏ qua emission OMP, xóa hoặc viết lại Skill,
+thay đổi `.agents` hay setting OMP, yêu cầu `--force` hoặc trả exit `6`.
 
 Dùng `ak run <kit>/<skill> --target omp` khi bạn muốn dispatch một Skill cục bộ
 không tương tác qua OMP. Đây là tuyến execution riêng; lệnh không thay thế bản
@@ -280,8 +292,10 @@ Skill đã chọn cần dùng.
 
 ## Chọn kênh phát hành
 
-Cài đặt và làm mới Kit dùng kênh registry `stable` theo mặc định. Để thử Kit
-prerelease, hãy chủ động chọn `beta` và giữ CLI trên kênh tương thích:
+`ak kit install` vẫn dùng kênh registry `stable` khi bỏ `--channel`. `ak kit
+init`, `ak kit refresh` và `ak update` dùng `kit.channel` đã lưu khi khóa đó đã
+được đặt. Để thử Kit prerelease, hãy chủ động chọn `beta` và giữ CLI trên kênh
+tương thích:
 
 ```bash
 ak kit install engineer --target claude-code --channel beta
@@ -305,9 +319,10 @@ vì nhận mọi thứ đang tồn tại ở đích làm nội dung được qu�
 
 Symlink, chuyển tiếp đường dẫn không an toàn và trạng thái filesystem mơ hồ khác
 thường fail closed hoặc được giữ lại. Exception có giới hạn là leaf `hooks` của
-Codex trên POSIX trỏ chính xác tới `~/.codex/hooks` canonical của user đã
-resolve; AgentKit dùng identity canonical đó cho toàn bộ lifecycle Hook. Parent
-có link, target khác và link hay reparse point trên Windows vẫn fail closed.
+Codex trỏ chính xác tới `~/.codex/hooks` canonical của user đã resolve, qua
+symlink POSIX hoặc directory junction trên Windows; AgentKit dùng identity
+canonical đó cho toàn bộ lifecycle Hook. Parent có link và target khác vẫn fail
+closed.
 Bằng chứng ownership giới hạn cleanup; nó không bao giờ có nghĩa xóa toàn bộ
 `.claude`, `.codex`, `.grok` hoặc thư mục runtime của người dùng.
 
@@ -410,10 +425,10 @@ Engineer hiện có một full drop và hai shared narrow; Marketing không có 
 và có ba narrow. Đây là giới hạn capability của runtime, không phải lỗi cài đặt;
 cài lại với `--force` không khôi phục matcher atom chưa được hỗ trợ.
 
-Với Hook Codex global trên POSIX, Codex home do wrapper quản lý chỉ được alias
-leaf `hooks` cuối cùng tới `~/.codex/hooks` canonical. Đừng mở rộng exception
-này sang Codex home có link hoặc target Hook tùy ý; các trường hợp đó vẫn bị từ
-chối, cũng như mọi link và reparse point trên Windows.
+Với Hook Codex global, Codex home do wrapper quản lý chỉ được alias leaf `hooks`
+cuối cùng tới `~/.codex/hooks` canonical, bằng symlink POSIX hoặc directory
+junction trên Windows. Đừng mở rộng exception này sang Codex home có link hoặc
+target Hook tùy ý; các trường hợp đó vẫn bị từ chối.
 
 ## Xác minh kết quả
 

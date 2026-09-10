@@ -1,0 +1,51 @@
+# AgentKit v2.15.0
+
+## Features
+
+- **ux:** Auto-detect and auto-install missing Node.js for Desktop App and CLI ([#1740](https://github.com/bestagentkits/agentkit-support/pull/1740))
+- **cli:** Add ak onboard first-run conductor ([#1756](https://github.com/bestagentkits/agentkit-support/pull/1756))
+- **skills:** Add ak:explain, Archify-informed ak:diagram, unified HTML composition ([#1766](https://github.com/bestagentkits/agentkit-support/pull/1766))
+- **planstore:** Fix UTC clock discrepancy, expose plan&#95;dir in JSON, and standardize ref symmetry ([#1776](https://github.com/bestagentkits/agentkit-support/pull/1776))
+- **diagram:** Refine interactive diagram documentation, layout, and styling ([#1786](https://github.com/bestagentkits/agentkit-support/pull/1786))
+- **skills:** Expand fable-thinking, add skill-creator long-horizon, trim agentize ([#1790](https://github.com/bestagentkits/agentkit-support/pull/1790))
+- **skills:** Add ak:webmcp core skill for in-browser agent tools ([#1794](https://github.com/bestagentkits/agentkit-support/pull/1794))
+- **skills:** Enhance ak:vibe, merge ak-security-scan into ak-security, add missing argument-hints ([#1796](https://github.com/bestagentkits/agentkit-support/pull/1796))
+- **cli:** Confirm onboard kit, runtime, and occupied overwrite ([#1777](https://github.com/bestagentkits/agentkit-support/pull/1777))
+- **skills:** Make ak:context-engineering an operating protocol for weaker models ([#1799](https://github.com/bestagentkits/agentkit-support/pull/1799))
+- **updater:** Implement Windows desktop app handoff helper and full changelog display ([#1802](https://github.com/bestagentkits/agentkit-support/pull/1802))
+- **skills:** Add --advice handover-plan contract and verify-fail escalation ([#1805](https://github.com/bestagentkits/agentkit-support/pull/1805))
+- **cli:** Add --no-backup flag to ak update ([#1811](https://github.com/bestagentkits/agentkit-support/pull/1811))
+
+## Fixes and security
+
+- **codex:** Support Windows directory junctions and symlinks for canonical hooks root &#40;&#35;1744&#41; ([#1745](https://github.com/bestagentkits/agentkit-support/pull/1745))
+- **pi:** Canonicalize profile paths ([#1749](https://github.com/bestagentkits/agentkit-support/pull/1749))
+- **update:** Skip Cursor home in pre-force snapshot ([#1751](https://github.com/bestagentkits/agentkit-support/pull/1751))
+- **omp:** Project portable skill names ([#1753](https://github.com/bestagentkits/agentkit-support/pull/1753))
+- **cli:** Align update targets and doctor adapters ([#1757](https://github.com/bestagentkits/agentkit-support/pull/1757))
+- **omp:** Use atomic file replacement and strict no-link validation on Windows ([#1759](https://github.com/bestagentkits/agentkit-support/pull/1759))
+- **cli:** Onboard pi listing, cancel support, and beta channel default ([#1760](https://github.com/bestagentkits/agentkit-support/pull/1760))
+- **pi:** Keep native TUI footer by default ([#1762](https://github.com/bestagentkits/agentkit-support/pull/1762))
+- **cli:** Skip GitHub issue prompt on onboard Ctrl-C ([#1763](https://github.com/bestagentkits/agentkit-support/pull/1763))
+- **skills:** Serialize computed theme styles into diagram share-card export ([#1767](https://github.com/bestagentkits/agentkit-support/pull/1767))
+- **codex:** Journal linked config targets and fix Windows rollback handle lifetime &#40;&#35;1746&#41; ([#1765](https://github.com/bestagentkits/agentkit-support/pull/1765))
+- **skills:** Gate ai-multimodal Multix by native vision and credential capability ([#1775](https://github.com/bestagentkits/agentkit-support/pull/1775))
+- **codex:** Authorize canonical home alongside custom CODEX&#95;HOME during global refresh ([#1779](https://github.com/bestagentkits/agentkit-support/pull/1779))
+- **updater:** Complete Windows lifecycle CLI updates in-place so ak update succeeds on first run ([#1782](https://github.com/bestagentkits/agentkit-support/pull/1782))
+- **ak-skill-creator:** Quote-free rephrase to fix invalid YAML frontmatter ([#1792](https://github.com/bestagentkits/agentkit-support/pull/1792))
+- **skills:** Refine secret redaction, drop docs advice in vibe, fix lint warnings ([#1797](https://github.com/bestagentkits/agentkit-support/pull/1797))
+- **skills:** Extend secret detector, restore emphasis reasons, bump versions ([#1798](https://github.com/bestagentkits/agentkit-support/pull/1798))
+- **codex:** Prune dangling agent entries and emit top-level role schema ([#1801](https://github.com/bestagentkits/agentkit-support/pull/1801))
+
+## Documentation
+
+- **policy:** Clarify documentation follow-up rules ([#1774](https://github.com/bestagentkits/agentkit-support/pull/1774))
+
+## Release provenance
+
+- Previous stable tag: `v2.14.0`
+- Previous promoted source: `405ea37ecb6b3e6f6de895bca4d7a132b6dfce04`
+- Promoted source: `8fe89ed8e160dd1948525cbc2ad986b80e3ad76f`
+- Stable snapshot commit: `c8ce34dc906c71605a3f59fd5bc92c80cecc43b4`
+- Full promoted change set: [compare source commits](https://github.com/bestagentkits/agentkit-support/compare/405ea37ecb6b3e6f6de895bca4d7a132b6dfce04...8fe89ed8e160dd1948525cbc2ad986b80e3ad76f)
+- Artifact checksums: [release-provenance.json](https://github.com/bestagentkits/agentkit-support/releases/download/v2.15.0/release-provenance.json)
