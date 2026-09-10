@@ -89,7 +89,7 @@ $ak:vibe --beta "Add exportable audit logs with existing authorization, focused 
 | `--ship` | Uses the stable target, merges a ready PR, and watches or fixes target-branch CI |
 | `--ship --beta` | Uses the beta target, merges a ready PR, and converges beta CI |
 | `--both` | Implies merge authority; completes beta merge and green CI before stable promotion, merge, and green CI |
-| `--advice` | Adds Kongming checkpoints and posts its post-CI assessment to the PR and source issue; composes with every ship mode |
+| `--advice` | Adds Kongming checkpoints, forwards the plan handover contract at planning, stops for `kongming` on the first unexpected failed verification, and posts its post-CI assessment to the PR and source issue; composes with every ship mode |
 | `--ultra` | Runs `/ak:plan` and `/ak:code-review` in best-of-5 verifier mode only; opt-in, higher cost and time |
 
 Mode resolution is `--both` over `--beta` over default stable. When both flags
@@ -100,7 +100,11 @@ a Claude subscription, `gpt-5.6-sol` with high effort for Codex, or
 `claude-fable-5-high` for Cursor. Kongming returns counsel, never code; the main
 agent remains responsible for every decision, edit, and gate. `--advice` is
 forwarded to supporting Skills that accept it: `ak:plan`, `ak:cook`, `ak:fix`,
-`ak:code-review`, `ak:ship`, `ak:review-pr`, and `ak:test`. Pipeline runs do not
+`ak:code-review`, `ak:ship`, `ak:review-pr`, and `ak:test`. At planning it
+forwards the handover contract so phase files include explicit success
+criteria, mechanical Verify conditions, and a Failure Protocol. `ak:cook` and
+`ak:fix` inherit that contract and stop for `kongming` before self-reasoning
+on the first unexpected failed verification. Pipeline runs do not
 forward `--advice` to `ak:docs`, because that Skill prompts for confirmation.
 Kongming also checkpoints after investigation, plan gates, implementation, local
 review, testing/docs, and after PR CI is terminal and green.
@@ -125,17 +129,20 @@ review, testing/docs, and after PR CI is terminal and green.
    `ak:research`. Those Skills do not replace the plan gate.
 4. **It validates the plan.** A valid existing `plan.md` is reused; otherwise
    `ak:plan --tdd` creates one. `--ultra` and `--advice` are forwarded to plan
-   when you set them on vibe. Validation, red-team, and a whole-plan consistency
-   sweep always run before implementation.
+   when you set them on vibe. With `--advice`, that planning step authors
+   handover phase files with explicit success criteria, mechanical Verify
+   conditions, and a Failure Protocol. Validation, red-team, and a whole-plan
+   consistency sweep always run before implementation.
 5. **It projects state to GitHub.** The workflow creates missing delivery labels,
    creates or updates the source issue, records branch, route, plan, mode, and
    acceptance criteria, then links the issue into the local plan index.
 6. **It implements the scoped work.** Features use `ak:cook --tdd --auto`;
-   bugfixes use `ak:fix --auto`. `--advice` is forwarded to cook or fix when set.
-   Parallel implementation uses disjoint file ownership, serializes shared
-   files, and prefers a separate worktree when two writers would touch the same
-   file. The issue changes from `ready to cook` to `in progress` before code
-   changes begin.
+   bugfixes use `ak:fix --auto`. `--advice` is forwarded to cook or fix when set,
+   so they honor the plan Failure Protocol and stop for `kongming` on the first
+   unexpected failed verification before self-reasoning. Parallel implementation
+   uses disjoint file ownership, serializes shared files, and prefers a separate
+   worktree when two writers would touch the same file. The issue changes from
+   `ready to cook` to `in progress` before code changes begin.
 7. **It performs local review.** `ak:code-review --pending` checks spec
    compliance and quality. `--ultra` and `--advice` are forwarded here when set.
    Critical and Important findings are fixed and relevant validation reruns.
