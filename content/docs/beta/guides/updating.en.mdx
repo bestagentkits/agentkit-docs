@@ -41,7 +41,7 @@ when you want to update only one layer. A CLI hard-gate failure, partial Kit
 failure, or interruption after mutation exits `1`; an invalid target, scope, or
 source exits `2`.
 
-On Windows, that CLI gate applies the replacement in place under an exclusive update lock, validates the running binary preimage, then re-executes the original `ak update` command so Kit refresh continues on the first invocation. Standalone `ak self-update` still uses the staged detached helper. Windows paired Desktop apply remains rejected.
+On Windows, that CLI gate applies the replacement in place under an exclusive update lock, validates the running binary preimage, then re-executes the original `ak update` command so Kit refresh continues on the first invocation. Standalone `ak self-update` still uses the staged detached helper. Paired Desktop apply stages the matching CLI and Desktop artifacts, then a trusted helper commits the swap after the parent process releases the executables.
 
 The wizard projects one `--target` selection onto each step. For example, `pi`
 remains eligible for the project step but is omitted from the global Kit step;
@@ -111,21 +111,24 @@ reviewed plan with:
 ak update . --kits engineer --channel stable --yes
 ```
 
-An applied project update creates a pre-update snapshot before mutation. By
-default, user-modified files are preserved. Use `--force` only after reviewing
-the exact diff and deciding that the snapshot is sufficient recovery; it is not
-a routine refresh flag.
+An applied project update creates a pre-update snapshot before mutation unless
+you pass `--no-backup`. By default, user-modified files are preserved. Use
+`--force` only after reviewing the exact diff and deciding that the snapshot is
+sufficient recovery; it is not a routine refresh flag.
 
-<Callout type="warn" title="ak update has no --no-backup flag">
-  The default preview and explicit `--dry-run` do not write files or create a
-  snapshot, but they are previews, not an apply-without-backup mode. An
-  applied update always takes the pre-update snapshot first; `--force`
-  overwrites user-modified files but does not skip that snapshot. `--no-backup`
-  exists only on [`ak init`](../reference/cli/init),
+<Callout type="warn" title="--no-backup skips recovery snapshots">
+  Preview and `--dry-run` still write nothing. Applied project, global, and
+  unified-wizard `ak update` paths snapshot first by default (`--no-backup`
+  defaults to `false`). Passing the flag is an explicit opt-out: the command
+  warns on stderr, and `--force --no-backup` adds an escalated warning.
+  Structured results report `backup_skipped` so a missing `snapshot_id` is not
+  enough to tell an intentional skip from a no-op. Desktop apply still always
+  snapshots and does not accept `--no-backup`. The same flag also exists on
+  [`ak init`](../reference/cli/init),
   [`ak kit init`](../reference/cli/kit/init),
   [`ak kit install`](../reference/cli/kit/install), and
   [`ak kit refresh`](../reference/cli/kit/refresh) — review the data-loss
-  warning on those pages before using it.
+  warning before using it.
 </Callout>
 
 ## Preview global kit updates
