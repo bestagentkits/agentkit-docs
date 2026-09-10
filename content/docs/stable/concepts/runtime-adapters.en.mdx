@@ -67,7 +67,7 @@ surfaces differ:
 | Cursor | The adapter projects Skills, agents, rules, and hooks at project or user scope. Kit command files remain inactive supporting content, there is no AgentKit status-line surface, and the adapter does not expose a dedicated plan-management tool. Live install, update, and invocation coverage is not complete across provider setups, so do not infer full parity from source support alone. |
 | DeepSeek Harness | Dispatch adapter for `ak run --target dsh`. Setup records the enabled adapter and resolves `AGENTKIT_DSH_BIN` or `dsh`, but Kit projection is not registered for `ak kit init --target dsh`; use another Kit projection target for installed inventory. |
 | Grok Build | Signed registry Kit target with native projection. Rules, Skills, agents, and supported Hooks go below `<project>/.grok` or `${GROK_HOME:-~/.grok}`; lifecycle metadata stays separately below `<project>/.agentkit/adapters/grok/<kit>` or `${AGENTKIT_HOME:-~/.agentkit}/adapters/grok/<kit>`. Commands and unsupported exports remain inactive sidecars. Explicit local-source installs remain available for development and CI. |
-| Pi | Source-registered `--target pi` Kit projection. Project installs write portable `ak-<slug>` Skills below `.pi/skills/`, remapped Agents below `.pi/agents/`, owned rules below `.pi/rules/`, and first-party extensions below `.pi/extensions/`. Conditional global installs write directly under the active Pi coding-agent profile. Pi remains a spike target: no `ak run --target pi`, no complete harness wrapper, no `.pi/commands/`, and inactive sidecars stay under lifecycle ownership. |
+| Pi | Source-registered `--target pi` Kit projection. `ak setup --adapter` and onboard `--target` list `pi` as an emitter-only Kit target. Project installs write portable `ak-<slug>` Skills below `.pi/skills/`, remapped Agents below `.pi/agents/`, owned rules below `.pi/rules/`, and first-party extensions below `.pi/extensions/`. Conditional global installs write directly under the active Pi coding-agent profile. Pi remains a spike for dispatch: no `ak run --target pi`, no complete harness wrapper, no `.pi/commands/`, and inactive sidecars stay under lifecycle ownership. Pi keeps its native TUI footer by default; AgentKit calls `setFooter` only when an explicit non-`none` `statuslineMode` is supplied. |
 | Oh My Pi | Native install target for project or user scope, plus non-interactive Skill dispatch through `ak run --target omp`. Skills, Agents, rules, and Kit instructions use OMP-native discovery surfaces; unsupported exports remain inactive sidecars. Oh My Pi owns its configured backend and credentials. |
 
 ### Pi projection and discovery
@@ -76,10 +76,12 @@ A project install with `ak kit init <kit> --target pi` writes portable Skill
 directories such as `.pi/skills/ak-cook/SKILL.md`, remapped Agents such as
 `.pi/agents/Explore.md`, `.pi/agents/Plan.md`, and kit-scoped
 `.pi/agents/ak-<kit>-*.md`, plus owned rules under `.pi/rules/`. Hooks,
-coding-level files, statusline support, runnable scripts, and sidecars live under
-`.pi/extensions/agentkit-hooks-<kit>/`; the shared Agent runner lives under
-`.pi/extensions/agentkit-agent/`. AgentKit does not write `.pi/commands/` or
-register Pi slash commands.
+coding-level files, the emitted kit statusline `.cjs`, runnable scripts, and
+sidecars live under `.pi/extensions/agentkit-hooks-<kit>/`; the shared Agent
+runner lives under `.pi/extensions/agentkit-agent/`. AgentKit does not write
+`.pi/commands/` or register Pi slash commands. The kit statusline file is
+emitted beside the extension; Pi keeps its native TUI footer unless you pass an
+explicit non-`none` `statuslineMode`.
 
 With `--global`, AgentKit writes directly below the active Pi coding-agent
 profile, resolved from `PI_CODING_AGENT_DIR` or `~/.pi/agent`; it does not add an
@@ -91,9 +93,11 @@ loop.
 
 ### Oh My Pi projection and discovery
 
-A project install with `ak kit init <kit> --target omp` writes Skills below
-`.omp/skills/<name>/`, Agents to `.omp/agents/<name>.md`, and rules to
-`.omp/rules/<name>.md`. AgentKit also adds one Kit-scoped block to the project's
+A project install with `ak kit init <kit> --target omp` writes portable Skills
+below `.omp/skills/ak-<slug>/`, with top-level `name: ak-<slug>` in each projected
+`SKILL.md`. Agents go to `.omp/agents/<name>.md`, and rules go to
+`.omp/rules/<name>.md`. Body aliases such as `/ak:cook` and `$ak:cook` are not
+rewritten. AgentKit also adds one Kit-scoped block to the project's
 `AGENTS.md`, delimited by `<!-- AGENTKIT-OMP:START:<kit> -->` and
 `<!-- AGENTKIT-OMP:END:<kit> -->`. Updating or uninstalling that Kit changes only
 its managed block and preserves user content.
@@ -109,7 +113,15 @@ OMP behavior.
 Installation and dispatch are separate routes. `ak kit init ... --target omp`
 creates the discoverable Kit projection; `ak run <kit>/<skill> --target omp`
 runs one resolved Skill through the local OMP CLI without replacing that
-installed inventory.
+installed inventory or changing the `<kit>/<skill>` selector.
+
+Trusted project OMP also discovers project `.agents/skills`. If canonical forms
+such as `ak:advise` and `ak-advise` collide, a project OMP install in
+`.omp/skills` shadows the project `.agents/skills` copy. When you use a global
+OMP install from that trusted project, the project `.agents/skills` copy shadows
+the OMP profile copy. `ak kit init --target omp` warns and continues: it still
+emits OMP content, does not delete or rewrite either Skill, does not alter
+`.agents` or OMP settings, and does not require `--force` or return exit `6`.
 
 Native Grok exec-form command Hooks use the owned
 `agentkit-grok-envelope-shim.cjs` launcher to add the Claude-shaped fields and
@@ -157,11 +169,12 @@ are rejected distinctly, identical same-path shims deduplicate, and a conflictin
 same-path shim keeps the first emitted content and warns. Paths that do not need
 a shim continue to use the direct command.
 
-On POSIX, a wrapper-managed Codex home may link only its final `hooks` leaf to
-the resolved user's canonical `~/.codex/hooks` directory. AgentKit resolves
-that alias once and uses the canonical path for Hook writes, commands, rollback,
-and ownership. A linked parent, a different target, or any Windows symlink or
-reparse point is refused.
+A wrapper-managed Codex home may link only its final `hooks` leaf to the
+resolved user's canonical `~/.codex/hooks` directory. The link may be a POSIX
+symlink or a Windows directory junction. AgentKit resolves that alias once and
+uses the canonical path for Hook writes, commands, rollback, and ownership. A
+linked parent, or a leaf that resolves to anything other than the canonical user
+hooks directory, is refused.
 
 Do not infer runtime support from a file name or from another runtime's behavior.
 Use the install summary and the relevant Skill documentation as the authority

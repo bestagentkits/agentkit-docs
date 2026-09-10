@@ -66,18 +66,33 @@ function escapeForRegex(literal) {
  * The row shape (filename column, size column, sha256 column) is invariant
  * across EN and VI installation pages, so one regex covers both.
  */
-function rewriteArtifactTable(source, platforms, toVersion) {
+function rewriteArtifactTable(source, platforms) {
   let out = source;
-  for (const [key, meta] of Object.entries(platforms)) {
+  for (const meta of Object.values(platforms)) {
     const escapedName = escapeForRegex(meta.name);
-    // Row pattern: | ... | `<filename>` | <size> | `<sha256>` |
-    const rowRe = new RegExp(
-      `(\\| \`${escapedName}\` \\| )[\\d,]+( \\| \`)[a-f0-9]{64}(\` \\|)`,
-      'g',
-    );
-    out = out.replace(rowRe, (_, pre, mid, tail) => `${pre}${meta.size.toLocaleString('en-US')}${mid}${meta.sha256}${tail}`);
+    const size = meta.size.toLocaleString('en-US');
+    const replacements = [
+      new RegExp(`(\\| \`${escapedName}\` \\| )[\\d,]+( \\| \`)[a-f0-9]{64}(\` \\|)`, 'g'),
+      new RegExp(
+        `(\\| \\\[\`${escapedName}\`\\\]\\([^)]+\\) \\| )[\\d,]+( \\| \`)[a-f0-9]{64}(\` \\|)`,
+        'g',
+      ),
+    ];
+    for (const rowRe of replacements) {
+      out = out.replace(rowRe, (_, pre, mid, tail) => `${pre}${size}${mid}${meta.sha256}${tail}`);
+    }
   }
   return out;
+}
+
+export function applyDesktopLayerAText(source, fromTag, toTag, assets) {
+  if (!fromTag || !toTag) throw new Error('applyDesktopLayerAText requires fromTag and toTag');
+  const platforms = buildPlatformMap(assets);
+  if (fromTag === toTag) return source;
+  const fromToken = fromTag.replace(/^v/, '');
+  const toToken = toTag.replace(/^v/, '');
+  const tokenRe = new RegExp(escapeForRegex(fromToken), 'g');
+  return rewriteArtifactTable(source.replace(tokenRe, toToken), platforms);
 }
 
 /**
@@ -94,25 +109,19 @@ function rewriteArtifactTable(source, platforms, toVersion) {
  */
 export async function syncDesktopAssets({ repoRoot, channel, fromTag, toTag, assets }) {
   if (!fromTag || !toTag) throw new Error('syncDesktopAssets requires fromTag and toTag');
-  const platforms = buildPlatformMap(assets);
-  if (fromTag === toTag) return { changed: [], platforms: Object.keys(platforms).length };
+  buildPlatformMap(assets);
+  if (fromTag === toTag) return { changed: [], platforms: PLATFORM_KEYS.length };
 
   const desktopDir = join(repoRoot, 'content', 'docs', channel, 'desktop-app');
   const files = await collectMdx(desktopDir);
-  // Strip the leading v so both `v2.12.1-beta.8` and `2.12.1-beta.8` land in one pass.
-  const fromToken = fromTag.replace(/^v/, '');
-  const toToken = toTag.replace(/^v/, '');
-  const tokenRe = new RegExp(escapeForRegex(fromToken), 'g');
-
   const changed = [];
   for (const path of files) {
     const before = await readFile(path, 'utf8');
-    let after = before.replace(tokenRe, toToken);
-    after = rewriteArtifactTable(after, platforms, toToken);
+    const after = applyDesktopLayerAText(before, fromTag, toTag, assets);
     if (after !== before) {
       await writeFile(path, after);
       changed.push(path);
     }
   }
-  return { changed, platforms: Object.keys(platforms).length };
+  return { changed, platforms: PLATFORM_KEYS.length };
 }
