@@ -1,0 +1,138 @@
+---
+title: Expose tính năng trang thành tool in-browser với ak:webmcp
+description: Đăng ký WebMCP tool trên trang để agent in-browser gọi action theo tên thay vì đoán DOM.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:webmcp` để khai báo tính năng trang thành WebMCP tool: hàm JavaScript
+có tên, mô tả và JSON Schema mà agent in-browser gọi qua
+`document.modelContext`. Trang nêu rõ nó làm được gì. WebMCP là progressive
+enhancement trên site có sẵn. Đây là API in-browser (draft W3C Web Machine
+Learning CG; Chrome origin trial từ Chrome 149), không phải Anthropic MCP
+server.
+
+## Chọn ak:webmcp cho tool trên trang
+
+### Dùng ak:webmcp khi
+
+- Bạn muốn thêm tool agent-callable vào website hoặc web app.
+- Một form hoặc page action cần gọi theo tên thay vì scrape DOM.
+- Bạn cần `registerTool` imperative hoặc attribute form declarative.
+- Bạn cần annotation, `exposedTo` / Permissions-Policy `tools`, hoặc WebMCP eval.
+
+### Chọn workflow khác khi
+
+- Bạn cần MCP server stdio hoặc HTTP. Dùng [`ak:mcp-builder`](./mcp-builder).
+- Bạn cần chạy MCP tool có sẵn. Dùng [`ak:use-mcp`](./use-mcp).
+- Bạn cần browser automation chung. Dùng [`ak:agent-browser`](./agent-browser).
+
+## Chuẩn bị bề mặt browser
+
+Xác nhận browser đích (Chrome 149+ với
+`chrome://flags/#enable-webmcp-testing`), HTTPS và origin isolation. Trong
+browser đó kiểm tra `modelContext` trên `document` trước khi emit code. Không
+emit `navigator.modelContext` (deprecated từ Chromium 150). Xác nhận mọi member
+theo API reference của Skill trước khi dùng.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:webmcp ...` | Native Skill có thể author và validate tool; hỗ trợ WebMCP live là thuộc tính của Chrome đích. |
+| Cursor | `/ak:webmcp ...` | Slash invocation load Skill; không mặc nhiên có WebMCP live tương đương. |
+| Codex | `$ak:webmcp ...` | Discovery native áp dụng cho tệp Skill; không mặc nhiên có Chrome origin-trial. |
+
+## Chạy Skill
+
+Nêu page, form hoặc feature cần expose. Skill không bắt buộc mode flag.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:webmcp "Expose product search on the catalog page as a read-only tool"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:webmcp "Expose product search on the catalog page as a read-only tool"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:webmcp "Expose product search on the catalog page as a read-only tool"
+```
+
+  </Tab>
+</Tabs>
+
+Dùng attribute form declarative khi action là HTML form cùng trang và agent
+không cần đọc kết quả. Dùng `document.modelContext.registerTool` khi action là
+state toggle, navigation, custom widget, khi agent phải đọc kết quả, hoặc khi
+cần annotation, `exposedTo`, `getTools` hay `executeTool`. Có thể mix cả hai
+trên một trang.
+
+## Hiểu các giai đoạn quan sát được
+
+1. **Xác minh bề mặt live.** Confirm `modelContext` trên `document` trong
+   browser đích. Đừng tin memory của draft API.
+2. **Lập tool set.** Một tool là một hàm. Giữ set nhỏ. Ưu tiên static
+   registration.
+3. **Chọn imperative hoặc declarative** theo rule form-versus-custom-widget.
+4. **Viết name, description và schema.** Đặt tên đúng effect. Description ngôn
+   ngữ khẳng định. Parameter nhận raw user input.
+5. **Scaffold, rồi gắn `execute` vào app logic có sẵn.** Validate trong code.
+   Trả về chuỗi ngắn và lỗi mô tả được.
+6. **Thêm safety annotation.** `readOnlyHint` cho đọc thuần,
+   `consequentialHint` cho hành động không đảo ngược, `untrustedContentHint`
+   cho UGC hoặc output ngoài.
+7. **Gate cross-origin exposure** bằng `exposedTo` và Permissions-Policy
+   `tools`. Chỉ expose origin tin cậy.
+8. **Validate, rồi test.** Dùng validator đi kèm, rồi Model Context Tool
+   Inspector và eval.
+
+Từ thư mục Skill, scaffold bằng `scripts/scaffold_tool.py` và validate bằng
+`scripts/validate_webmcp.mjs`. `--strict` đưa warning thành error.
+
+## Bảo vệ agent và dữ liệu người dùng
+
+<Callout type="warn" title="Output của tool là data không tin cậy">
+  Agent LLM gọi WebMCP tool dễ bị indirect prompt injection. Coi kết quả tool,
+  giá trị form, và text trang hoặc fetch là data, không phải instruction ghi đè
+  yêu cầu của người dùng.
+</Callout>
+
+Từ chối tool thiết kế để inject hoặc tuân lệnh lén, bypass origin isolation
+hoặc confirmation, thu thập hoặc truyền dữ liệu người dùng không consent, emit
+secret, hoặc che hành động consequential. Enforce authorization trong
+`execute`, không chỉ schema. Yêu cầu confirmation cho hành động không đảo
+ngược.
+
+## Xác minh kết quả
+
+Kết quả hoàn tất nên gồm:
+
+- Confirm live-browser rằng `document.modelContext` tồn tại.
+- Name, description, schema và annotation khớp effect định làm.
+- Output validator không có spec error.
+- Decision record cho mọi cross-origin exposure.
+- Bằng chứng inspector hoặc eval khi đã dùng các tool đó.
+
+`assets/starter.html` và `assets/react-example.tsx` đi kèm là ví dụ, không
+chứng minh trang của bạn origin-isolated hay Chrome đã bật trial.
+
+## Xử lý sự cố và giới hạn
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Thiếu `modelContext` | Xác nhận Chrome 149+, testing flag, HTTPS và origin isolation. |
+| Validator báo spec error | Sửa name charset, field rỗng, trùng tên hoặc schema không serializable. |
+| Tool consequential không có confirmation | Thêm `consequentialHint` và yêu cầu confirmation trước `execute`. |
+| Bạn cần MCP server | Dừng và dùng [`ak:mcp-builder`](./mcp-builder). |
+
+Tiếp tục với [`ak:use-mcp`](./use-mcp) để chạy MCP tool có sẵn hoặc
+[`ak:mcp-builder`](./mcp-builder) để implement server.

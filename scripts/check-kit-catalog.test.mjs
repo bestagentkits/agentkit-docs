@@ -42,8 +42,8 @@ function identity(sourceIdentity, classification = 'public', overrides = {}) {
   };
 }
 
-function snapshot(identities) {
-  return { kitId: 'test', identities };
+function snapshot(identities, extras = {}) {
+  return { kitId: 'test', identities, ...extras };
 }
 
 function artifact(channel, runtime, hash = HASH) {
@@ -124,12 +124,12 @@ async function writeCatalogEvidence(root, registry) {
   }
 }
 
-function binding(channel, digest, mismatchRuntime) {
+function binding(channel, digest, mismatchRuntime, betaMismatchRuntime) {
   return {
     snapshotDigest: digest,
     artifacts: Object.fromEntries(RUNTIMES.map((runtime) => [
       runtime,
-      artifact(channel, runtime, channel === 'stable' && runtime === mismatchRuntime ? OTHER_HASH : HASH),
+      artifact(channel, runtime, (channel === 'stable' && runtime === mismatchRuntime) || (channel === 'beta' && runtime === betaMismatchRuntime) ? OTHER_HASH : HASH),
     ])),
   };
 }
@@ -175,12 +175,16 @@ async function makeFixture({
   stableDocs = {},
   betaDocs = {},
   mismatchRuntime,
+  betaMismatchRuntime,
   mutateRegistry,
+  betaSnapshotExtras = {},
+  betaBindingExtras = {},
+  skillMembersDocument,
 } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'ak-kit-catalog-v2-'));
   temporaryRoots.push(root);
   const stableSnapshot = snapshot(stableIdentities);
-  const betaSnapshot = snapshot(betaIdentities);
+  const betaSnapshot = snapshot(betaIdentities, betaSnapshotExtras);
   const stableDigest = canonicalSnapshotDigest(stableSnapshot);
   const betaDigest = canonicalSnapshotDigest(betaSnapshot);
   const registry = {
@@ -193,10 +197,19 @@ async function makeFixture({
       version: release.version,
       sourceCommit: release.sha,
       releaseUrl: `https://github.com/bestagentkits/agentkit/releases/tag/${release.tag}`,
-      kits: { test: binding(channel, channel === 'stable' ? stableDigest : betaDigest, mismatchRuntime) },
+      kits: { test: binding(channel, channel === 'stable' ? stableDigest : betaDigest, mismatchRuntime, betaMismatchRuntime) },
     }])),
   };
+  Object.assign(registry.channels.beta.kits.test, betaBindingExtras);
   await writeCatalogEvidence(root, registry);
+  if (betaBindingExtras.skillMembers && skillMembersDocument) {
+    const membersPath = join(root, betaBindingExtras.skillMembers.path);
+    await mkdir(join(membersPath, '..'), { recursive: true });
+    const membersBytes = Buffer.from(`${JSON.stringify(skillMembersDocument, null, 2)}\n`);
+    await writeFile(membersPath, membersBytes);
+    betaBindingExtras.skillMembers.sha256 = byteHash(membersBytes);
+    betaBindingExtras.skillMembers.size = membersBytes.length;
+  }
   if (mutateRegistry) mutateRegistry(registry, { stableDigest, betaDigest });
   const registryPath = join(root, 'kit-catalog-identities.json');
   const channelsPath = join(root, 'channels.json');
@@ -597,6 +610,21 @@ test('rejects locale, navigation, index, and overview errors independently by ch
     const fixture = await makeFixture({ betaDocs: { en: ['alpha', 'orphan'] } });
     await expectFailure(fixture, /beta\/test exact routed details EN:.*extra \[orphan\]/);
   });
+  await t.test('reviewed retired extra detail is allowed', async () => {
+    const fixture = await makeFixture({
+      mismatchRuntime: 'omp',
+      betaDocs: { en: ['alpha', 'orphan'], vi: ['alpha', 'orphan'] },
+      betaBindingExtras: {
+        reviewedRetiredSkillRoutes: [{ slug: 'orphan', reviewedException: 'keep retired migration page' }],
+      },
+    });
+    await assert.doesNotReject(() => checkKitCatalog(fixture));
+  });
+  await t.test('unreviewed extra detail still rejected', async () => {
+    const fixture = await makeFixture({ betaDocs: { en: ['alpha', 'orphan'] } });
+    await expectFailure(fixture, /beta\/test exact routed details EN:.*extra \[orphan\]/);
+  });
+
   await t.test('locale nav mismatch', async () => {
     const fixture = await makeFixture({ stableDocs: { navVi: [] } });
     await expectFailure(fixture, /stable\/test EN\/VI public nav: missing \[alpha\]/);
@@ -618,6 +646,128 @@ test('rejects locale, navigation, index, and overview errors independently by ch
     await expectFailure(fixture, /beta\/test overview EN: Skills count 2 does not match snapshot total 1/);
   });
 });
+
+test('rejects evidenceRef whose SKILL.md is absent from bound archive member inventory', async () => {
+  const fixture = await makeFixture({
+    betaBindingExtras: {
+      skillMembers: {
+        path: 'release-evidence/kit-catalog/beta-v1.1.0-beta.1/agentkit-kit-test-claude-code-1.1.0-beta.1.skill-members.json',
+        name: 'agentkit-kit-test-claude-code-1.1.0-beta.1.skill-members.json',
+        sha256: HASH,
+        size: 1,
+        runtime: 'claude-code',
+        archiveSha256: HASH,
+      },
+    },
+    skillMembersDocument: {
+      schemaVersion: 1,
+      kitId: 'test',
+      runtime: 'claude-code',
+      archiveSha256: HASH,
+      members: ['test/skills/ak-other/SKILL.md'],
+    },
+  });
+  await expectFailure(fixture, /snapshot\/member SKILL.md paths: missing \[test\/skills\/ak-alpha\/SKILL.md\]/);
+});
+
+test('accepts evidenceRef listed in the bound archive member inventory', async () => {
+  const fixture = await makeFixture({
+    betaBindingExtras: {
+      skillMembers: {
+        path: 'release-evidence/kit-catalog/beta-v1.1.0-beta.1/agentkit-kit-test-claude-code-1.1.0-beta.1.skill-members.json',
+        name: 'agentkit-kit-test-claude-code-1.1.0-beta.1.skill-members.json',
+        sha256: HASH,
+        size: 1,
+        runtime: 'claude-code',
+        archiveSha256: HASH,
+      },
+    },
+    skillMembersDocument: {
+      schemaVersion: 1,
+      kitId: 'test',
+      runtime: 'claude-code',
+      archiveSha256: HASH,
+      members: ['test/skills/ak-alpha/SKILL.md'],
+    },
+  });
+  await assert.doesNotReject(() => checkKitCatalog(fixture));
+});
+
+test('rejects archive member inventory bound to a different archive sha256', async () => {
+  const fixture = await makeFixture({
+    betaBindingExtras: {
+      skillMembers: {
+        path: 'release-evidence/kit-catalog/beta-v1.1.0-beta.1/agentkit-kit-test-claude-code-1.1.0-beta.1.skill-members.json',
+        name: 'agentkit-kit-test-claude-code-1.1.0-beta.1.skill-members.json',
+        sha256: HASH,
+        size: 1,
+        runtime: 'claude-code',
+        archiveSha256: OTHER_HASH,
+      },
+    },
+    skillMembersDocument: {
+      schemaVersion: 1,
+      kitId: 'test',
+      runtime: 'claude-code',
+      archiveSha256: OTHER_HASH,
+      members: ['test/skills/ak-alpha/SKILL.md'],
+    },
+  });
+  await expectFailure(fixture, /archiveSha256: must match claude-code archive sha256/);
+});
+
+test('rejects archive member inventory that lists a SKILL.md absent from the snapshot', async () => {
+  const fixture = await makeFixture({
+    betaBindingExtras: {
+      skillMembers: {
+        path: 'release-evidence/kit-catalog/beta-v1.1.0-beta.1/agentkit-kit-test-claude-code-1.1.0-beta.1.skill-members.json',
+        name: 'agentkit-kit-test-claude-code-1.1.0-beta.1.skill-members.json',
+        sha256: HASH,
+        size: 1,
+        runtime: 'claude-code',
+        archiveSha256: HASH,
+      },
+    },
+    skillMembersDocument: {
+      schemaVersion: 1,
+      kitId: 'test',
+      runtime: 'claude-code',
+      archiveSha256: HASH,
+      members: ['test/skills/ak-alpha/SKILL.md', 'test/skills/ak-other/SKILL.md'],
+    },
+  });
+  await expectFailure(fixture, /snapshot\/member SKILL.md paths:.*extra \[test\/skills\/ak-other\/SKILL.md\]/);
+});
+
+test('rejects evidenceRef hash that does not match skillMembers.archiveSha256', async () => {
+  const fixture = await makeFixture({
+    betaMismatchRuntime: 'pi',
+    stableIdentities: [identity('ak-alpha')],
+    betaIdentities: [identity('ak-alpha', 'public', { evidenceRef: `release-asset:sha256:${OTHER_HASH}#test/skills/ak-alpha/SKILL.md` })],
+    betaBindingExtras: {
+      skillMembers: {
+        path: 'release-evidence/kit-catalog/beta-v1.1.0-beta.1/agentkit-kit-test-claude-code-1.1.0-beta.1.skill-members.json',
+        name: 'agentkit-kit-test-claude-code-1.1.0-beta.1.skill-members.json',
+        sha256: HASH,
+        size: 1,
+        runtime: 'claude-code',
+        archiveSha256: HASH,
+      },
+    },
+    skillMembersDocument: {
+      schemaVersion: 1,
+      kitId: 'test',
+      runtime: 'claude-code',
+      archiveSha256: HASH,
+      members: ['test/skills/ak-alpha/SKILL.md'],
+    },
+  });
+  await expectFailure(fixture, /ak-alpha evidenceRef hash must equal skillMembers.archiveSha256/);
+});
+
+
+
+
 
 test('compares channel-scoped optional inventories including invocation identity', async () => {
   const fixture = await makeFixture();
@@ -647,7 +797,7 @@ test('closed-world evidence rejects a 49th orphan archive file', async () => {
   assert.ok(errors.some((error) => error === `catalog evidence files: missing []; extra [${orphan}]`), errors.join('\n'));
 });
 
-test('real registry validates all 24 evidence triads and 48 committed files', async () => {
+test('real registry validates all 24 evidence triads and 49 committed files', async () => {
   const root = join(import.meta.dirname, '..');
   const [registry, channels] = await Promise.all([
     readFile(join(root, 'kit-catalog-identities.json'), 'utf8').then(JSON.parse),
@@ -662,6 +812,7 @@ test('real registry validates all 24 evidence triads and 48 committed files', as
     assert.equal(Object.keys(registry.channels[channel].kits.engineer.artifacts).length, 6);
     assert.equal(Object.keys(registry.channels[channel].kits.marketing.artifacts).length, 6);
     for (const [kitId, bindingValue] of Object.entries(registry.channels[channel].kits)) {
+      if (bindingValue.skillMembers?.path) evidencePaths.add(bindingValue.skillMembers.path);
       for (const [runtime, triad] of Object.entries(bindingValue.artifacts)) {
         triads.push(`${channel}/${kitId}/${runtime}`);
         evidencePaths.add(triad.manifest.path);
@@ -670,7 +821,7 @@ test('real registry validates all 24 evidence triads and 48 committed files', as
     }
   }
   assert.equal(new Set(triads).size, 24);
-  assert.equal(evidencePaths.size, 48);
+  assert.equal(evidencePaths.size, 49);
   const snapshots = Object.values(registry.inventorySnapshots);
   const byKit = Object.fromEntries(['engineer', 'marketing'].map((kitId) => [
     kitId,
@@ -678,10 +829,8 @@ test('real registry validates all 24 evidence triads and 48 committed files', as
   ]));
   assert.equal(byKit.engineer.length, 2);
   assert.equal(byKit.marketing.length, 2);
-  assert.ok(byKit.engineer.some((value) => value.identities.length === 106));
-  assert.ok(byKit.engineer.some((value) => value.identities.length === 107));
-  assert.ok(byKit.marketing.some((value) => value.identities.length === 84));
-  assert.ok(byKit.marketing.some((value) => value.identities.length === 85));
+  assert.ok(byKit.engineer.every((snapshot) => snapshot.identities.length === 107));
+  assert.ok(byKit.marketing.every((snapshot) => snapshot.identities.length === 85));
   assert.notEqual(registry.channels.stable.kits.engineer.snapshotDigest, registry.channels.beta.kits.engineer.snapshotDigest);
   assert.notEqual(registry.channels.stable.kits.marketing.snapshotDigest, registry.channels.beta.kits.marketing.snapshotDigest);
 });

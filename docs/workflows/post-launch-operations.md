@@ -132,11 +132,18 @@ full rationale and scope decisions.
   a visible breadcrumb trail (`page.tsx` disables it), which is the same
   condition the original request itself gates this data on. Tracked in
   [issue #120](https://github.com/bestagentkits/agentkit-docs/issues/120).
-- `staging.docs.agentkit.best` serves the same `out/` artifact as
-  production (`wrangler.toml`), so it currently ships the same
-  `Allow: /` and sitemap reference; the pages already self-declare
-  non-canonical via `metadataBase` pointing at the production origin. A real
-  environment-aware override is tracked in
+- `staging.docs.agentkit.best` and production deploy the same `out/`
+  artifact shape (`wrangler.toml`) but from separate CI build+deploy jobs
+  (`deploy-staging.yml` / `deploy-production.yml`), each running its own
+  `pnpm build`. The staging build sets `DOCS_DEPLOY_ENV=staging` (only in
+  `deploy-staging.yml` and the local `deploy:staging` script), which
+  `app/robots.ts` reads at build time to emit `Disallow: /` with no
+  `Sitemap:` line instead of production's `Allow: /` plus the production
+  sitemap URL. Production and `pnpm check:seo` (CI's plain, unflagged build)
+  are unaffected. `out/sitemap.xml` still ships on staging with production
+  URLs — harmless since it is unadvertised and crawl-blocked, but not
+  filtered; pages also self-declare non-canonical via `metadataBase`
+  pointing at the production origin. Landed in
   [issue #118](https://github.com/bestagentkits/agentkit-docs/issues/118).
 
 ## Representative browser matrix

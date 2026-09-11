@@ -247,7 +247,7 @@ sequenceDiagram
   Main-->>User: Result, verification, and unresolved risks
 ```
 
-A minimal separation of roles looks like this:
+A minimal topology makes the subagent policy explicit:
 
 ```yaml
 modelRoles:
@@ -256,19 +256,49 @@ modelRoles:
 
 advisor:
   enabled: true
-  subagents: false
+
+task:
+  agentAdvisor:
+    kongming: "off"
 ```
 
-Keep `advisor.subagents: false` when first combining the two mechanisms. Turning
-it on also enables the native advisor inside eligible spawned subagent sessions,
-which can make the background reviewer supervise `kongming` itself. That extra
-layer is usually redundant and adds cost and latency.
+OMP subagents run without their own native advisor by default.
+`task.agentAdvisor` controls that nested advisor per Agent; it does not select
+the Agent's primary model. Setting `kongming: "off"` is therefore redundant
+unless Agent frontmatter or another configuration layer enables it, but it makes
+the intended topology explicit. Do not use the legacy `advisor.subagents`
+switch for this purpose: `true` migrates only the bundled generic `task` Agent
+to `task.agentAdvisor: { task: "on" }`, not every Agent and not `kongming`.
 
-If both mechanisms resolve through the same advisor role, they still make
-separate requests with separate contexts, but they do not provide model
-diversity. If the advisor role is missing or unavailable, treat the native
-advisor and any affected `kongming` checkpoint as not completed; do not report
-that two independent reviews occurred.
+On OMP, AgentKit maps `kongming`'s `fable` tier to `model: "@advisor"`.
+Without an override, the native default advisor and `kongming` therefore both
+resolve through `modelRoles.advisor`. They still make separate requests with
+separate contexts, but they do not provide model diversity.
+
+To give `kongming` a different primary model, override the projected Agent:
+
+```yaml
+modelRoles:
+  default: provider/main-model
+  advisor: provider/background-review-model
+
+advisor:
+  enabled: true
+
+task:
+  agentModelOverrides:
+    kongming: provider/checkpoint-model
+  agentAdvisor:
+    kongming: "off"
+```
+
+`task.agentModelOverrides.kongming` takes precedence over the Agent's projected
+`model: "@advisor"`. Keep `task.agentAdvisor.kongming` off unless you
+deliberately want a second, native OMP advisor inside each spawned `kongming`
+session. If `modelRoles.advisor` is missing or unavailable, the native default
+advisor and an unoverridden `kongming` checkpoint cannot resolve their model;
+explicit roster models and an explicit `kongming` override are independent of
+that role.
 
 ## ak:advise inline and ak:advise --agent
 

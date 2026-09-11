@@ -33,7 +33,7 @@ For each job the command reports:
   `unknown`.
 - **PID / PGID** — the verified identity when the worker is reachable.
 - **Heartbeat** — the last time the worker reported activity for the job.
-- **Last output time** — the last write to the job's stdout or stderr log.
+- **Last output time** — the last write to `output-<job-id>.log`.
 - **Current command label** — the graph-declared label the worker was
   running when the state was recorded.
 
@@ -52,34 +52,46 @@ see the same reality.
 
 ## Human and JSON output
 
-`--json` returns:
+`--json` wraps a `runVM` as `kind: "orchestrate.status"`:
 
 ```json
 {
-  "action": "status",
-  "run_id": "<opaque>",
-  "worker_state": "live | crashed | unreachable",
-  "jobs": [
-    {
-      "id": "<job-id>",
-      "state": "running",
-      "pid": 12345,
-      "pgid": 12345,
-      "heartbeat": "<rfc3339>",
-      "last_output_at": "<rfc3339>",
-      "current_command_label": "<graph-label>"
-    }
-  ]
+  "schema_version": 1,
+  "kind": "orchestrate.status",
+  "data": {
+    "run_id": "<opaque>",
+    "status": "<run-status>",
+    "all_settled": false,
+    "revision": 0,
+    "events_truncated": false,
+    "status_counts": { "running": 1 },
+    "jobs": [
+      {
+        "job_id": "<job-id>",
+        "status": "running",
+        "route_source": "declared-in-graph",
+        "pid": 12345,
+        "pgid": 12345,
+        "heartbeat": "<rfc3339>",
+        "last_output_at": "<rfc3339>",
+        "command_label": "<graph-label>",
+        "output_bytes": 0,
+        "output_truncated": false
+      }
+    ]
+  }
 }
 ```
 
-Human output prints one job per row with the same fields.
+Do not parse a top-level `action`, `worker_state`, or job `id`/`state` pair.
+Human output prints one job per row from the same `runVM`.
+
 
 ## Exit behavior
 
 | Exit | Meaning | Safe next step |
 | --- | --- | --- |
-| `0` | Status was reported successfully. | Consume the fields; do not infer `running` from a `pid` without matching `worker_state`. |
+| `0` | Status was reported successfully. | Consume `data.status` and per-job `status`; do not infer `running` from a `pid` alone. |
 | `1` | Run ID not found or run state corrupt/unsupported. | Do not retry the same input; investigate the persisted record. |
 | `2` | Flag parsing failed. | Correct the flags. |
 | `3` | Interrupted. | Re-run status. |

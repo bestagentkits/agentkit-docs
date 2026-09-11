@@ -39,8 +39,16 @@ ak update --yes
 `--yes` chấp nhận các bước được đề xuất, nhưng kiểm tra bản cập nhật CLI đã ký
 hoặc phiên bản tối thiểu vẫn là cổng bắt buộc trước mọi thay đổi Kit. Dùng các
 lệnh có phạm vi bên dưới khi bạn chỉ muốn cập nhật một lớp. Lỗi ở cổng CLI, lỗi
-một phần khi cập nhật Kit hoặc gián đoạn sau khi đã thay đổi trả mã `1`; target
-hoặc phạm vi không hợp lệ trả `2`.
+một phần khi cập nhật Kit hoặc gián đoạn sau khi đã thay đổi trả mã `1`; target,
+phạm vi hoặc nguồn không hợp lệ trả `2`.
+
+Trên Windows, cổng CLI đó thay binary tại chỗ dưới update lock độc quyền, kiểm tra preimage của binary đang chạy, rồi re-execute lệnh `ak update` gốc để Kit refresh tiếp tục ngay lần gọi đầu. `ak self-update` độc lập vẫn dùng staged detached helper. Paired Desktop apply stage các artifact CLI và Desktop khớp nhau, rồi helper đáng tin cậy commit thao tác thay thế sau khi process cha nhả các executable.
+
+Wizard chiếu một lựa chọn `--target` lên từng bước. Ví dụ, `pi` vẫn hợp lệ cho
+bước project nhưng bị bỏ qua ở bước Kit global; nếu không target nào đã chọn áp
+dụng được ở global scope, wizard bỏ qua bước đó rồi tiếp tục. Target global chỉ
+có ở nguồn local như `dsh` không hợp lệ khi đang chọn nguồn remote; hãy chủ động
+dùng `--local --kits-dir <dir>` thay thế.
 
 ## Xem lại bản phát hành CLI
 
@@ -103,10 +111,25 @@ hoạch đã review bằng:
 ak update . --kits engineer --channel stable --yes
 ```
 
-Khi áp dụng, cập nhật project tạo snapshot trước thay đổi. Theo mặc định, file
-do người dùng sửa được giữ lại. Chỉ dùng `--force` sau khi review chính xác diff
-và quyết định snapshot là đủ để khôi phục; đây không phải flag làm mới thông
-thường.
+Khi áp dụng, cập nhật project tạo snapshot trước thay đổi trừ khi bạn truyền
+`--no-backup`. Theo mặc định, file do người dùng sửa được giữ lại. Chỉ dùng
+`--force` sau khi review chính xác diff và quyết định snapshot là đủ để khôi
+phục; đây không phải flag làm mới thông thường.
+
+<Callout type="warn" title="--no-backup bỏ qua recovery snapshot">
+  Bản xem trước và `--dry-run` vẫn không ghi gì. Các đường `ak update` đã apply
+  ở project, global và wizard hợp nhất mặc định tạo snapshot trước (`--no-backup`
+  mặc định là `false`). Truyền flag này là opt-out tường minh: lệnh cảnh báo
+  trên stderr, và `--force --no-backup` thêm cảnh báo nghiêm trọng hơn. Kết quả
+  có cấu trúc báo `backup_skipped` nên `snapshot_id` trống chưa đủ để phân biệt
+  skip chủ ý với lần chạy không có gì để capture. Apply trên Desktop vẫn luôn
+  tạo snapshot và không nhận `--no-backup`. Flag này cũng có trên
+  [`ak init`](../reference/cli/init),
+  [`ak kit init`](../reference/cli/kit/init),
+  [`ak kit install`](../reference/cli/kit/install) và
+  [`ak kit refresh`](../reference/cli/kit/refresh) — hãy xem cảnh báo mất dữ
+  liệu trước khi dùng.
+</Callout>
 
 ## Xem trước cập nhật Kit global
 
@@ -126,11 +149,20 @@ ak update --global --kits engineer --target codex --channel stable --yes
 ak update --global --kits engineer --local --kits-dir ./kits --target grok --yes
 ```
 
-Cập nhật global luôn giữ file do người dùng sửa. Runtime bạn đã chọn nhưng chưa
-cài global được báo là bỏ qua thay vì được tạo mới. Dùng `--target` hoặc alias
-`--runtime` để chọn runtime đã cài như `claude-code`, `codex`, `cursor`,
-`grok` hoặc `omp`; chỉ truyền một trong hai tên cờ. Phân biệt giữa bản xem trước ngầm định
-trả `3` và dry run rõ ràng trả `0` cũng áp dụng ở phạm vi global.
+Cập nhật global luôn giữ file do người dùng sửa. Tính hợp lệ của target phụ
+thuộc cả scope và nguồn: cập nhật project từ remote chấp nhận chính xác một
+trong `claude-code`, `codex`, `cursor`, `grok`, `omp` hoặc `pi`; cập nhật global
+từ remote chấp nhận `claude-code`, `codex`, `cursor`, `grok` hoặc `omp`; cập
+nhật global từ local còn chấp nhận `dsh`. Dùng `--target` hoặc alias `--runtime`,
+nhưng chỉ truyền một tên flag. Target tường minh không áp dụng cho scope và
+nguồn đã chọn sẽ bị từ chối trước discovery hoặc mutation.
+
+Runtime đã chọn nhưng chưa cài global được báo là bỏ qua thay vì được tạo mới.
+Trong lần chạy remote `--global` không có bộ lọc, bản cài chỉ dùng nguồn local
+vẫn xuất hiện dưới dạng kết quả bỏ qua với reason `source_inapplicable`; lệnh
+không ngầm refresh từ nguồn khác. Hãy làm theo hướng dẫn `next` và chạy
+`ak update --global --local --kits-dir <dir>`. Phân biệt giữa bản xem trước ngầm
+định trả `3` và dry run tường minh trả `0` cũng áp dụng ở global scope.
 
 Nếu discovery Claude Code global đi tới một Claude home không được đánh dấu là
 do AgentKit sở hữu, lệnh update từ chối takeover foreign home trước mọi mutation
@@ -173,6 +205,11 @@ Sau khi cập nhật:
 
 Nếu Kit cần CLI mới hơn, hãy cập nhật `ak` trên cùng kênh trước rồi chạy lại bản
 xem trước của Kit.
+
+Khi lọc chẩn đoán tiếp theo, `ak doctor --adapter` chỉ chấp nhận `claude-code`,
+`codex` và `cursor`, là các adapter có doctor suite riêng. Mọi giá trị adapter
+khác đều không hợp lệ và trả mã `2` thay vì trả về tập kiểm tra rỗng nhưng thành
+công.
 
 ## Nếu các file mong đợi không thay đổi
 
