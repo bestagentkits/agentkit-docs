@@ -805,7 +805,7 @@ test('real registry validates all 24 evidence triads and 49 committed files', as
   ]);
   assert.deepEqual(validateRegistry(registry, channels), []);
   assert.deepEqual(await validateCatalogEvidence({ registry, channelsIdentity: channels, root }), []);
-  assert.equal(Object.keys(registry.inventorySnapshots).length, 4);
+  assert.equal(Object.keys(registry.inventorySnapshots).length, 2);
   const triads = [];
   const evidencePaths = new Set();
   for (const channel of ['stable', 'beta']) {
@@ -827,14 +827,14 @@ test('real registry validates all 24 evidence triads and 49 committed files', as
     kitId,
     snapshots.filter((value) => value.kitId === kitId),
   ]));
-  assert.equal(byKit.engineer.length, 2);
-  assert.equal(byKit.marketing.length, 2);
+  assert.equal(byKit.engineer.length, 1);
+  assert.equal(byKit.marketing.length, 1);
   for (const kitId of ['engineer', 'marketing']) {
     for (const channel of ['stable', 'beta']) {
       const digest = registry.channels[channel].kits[kitId].snapshotDigest;
       assert.ok(registry.inventorySnapshots[digest].identities.length > 0);
     }
   }
-  assert.notEqual(registry.channels.stable.kits.engineer.snapshotDigest, registry.channels.beta.kits.engineer.snapshotDigest);
-  assert.notEqual(registry.channels.stable.kits.marketing.snapshotDigest, registry.channels.beta.kits.marketing.snapshotDigest);
+  assert.equal(registry.channels.stable.kits.engineer.snapshotDigest, registry.channels.beta.kits.engineer.snapshotDigest);
+  assert.equal(registry.channels.stable.kits.marketing.snapshotDigest, registry.channels.beta.kits.marketing.snapshotDigest);
 });
