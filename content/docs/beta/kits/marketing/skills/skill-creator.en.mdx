@@ -1,0 +1,151 @@
+---
+title: Create, update, audit, and optimize a Skill with ak:skill-creator
+description: Run create, update, audit, or optimize on a Skill, including prompt-cruft linting, consumer evaluation, and --long-horizon layout.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:skill-creator` to create, update, audit, or optimize a reusable Skill.
+`create` scaffolds a new Skill. `update` applies a requested change in place.
+`audit` reports inventory, provenance, and dated prompt patterns without writing
+Skill files. `optimize` rewrites High and Medium findings and writes only with
+`--apply`. New Skills stay in the current project by default; user-scope
+authoring requires an explicit request. Pass `--long-horizon` when the Skill
+needs a repository for observations, experiments, evals, benchmarks, gates, and
+decisions.
+
+This Skill-authoring workflow is resolved through Marketing Kit. Use Marketing domain Skills for campaign content; use `ak:skill-creator` to create or audit a reusable Skill.
+
+## Choose ak:skill-creator for repeatable workflows
+
+### Use ak:skill-creator when
+
+* You need a new Skill (`create`) or a bounded in-place change (`update`).
+* An existing Skill should be inventoried for dated prompt patterns (`audit`).
+* You want a proposed rewrite applied only after you pass `--apply` (`optimize`).
+* You need a long-horizon Skill repository (`--long-horizon`).
+* You want validation and consumer-evaluation evidence before distribution.
+
+### Choose another workflow when
+
+* The need is a one-off prompt, one personal preference, or general model knowledge.
+* You need a bundle with commands, tools, MCP configuration, Hooks, or apps in
+  addition to Skills. Use a plugin workflow.
+* You only want to install an existing Skill. Use the appropriate discovery and
+  installation workflow instead of authoring a duplicate.
+
+## Prepare intent and scope
+
+Provide real usage examples, trigger phrases, expected outputs, non-goals,
+security boundaries, and whether objective evaluation is worthwhile. Confirm
+the output directory before scaffolding. The canonical artifact is `SKILL.md`
+plus only the `scripts/`, `references/`, `agents/`, and `assets/` the workflow
+actually needs.
+
+| Runtime     | Invocation              | Availability boundary                                                                                                                      |
+| ----------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Claude Code | `/ak:skill-creator ...` | The released workflow and generated conventions are Claude-first, including Claude Skill metadata and plugin distribution references.      |
+| Cursor      | `/ak:skill-creator ...` | Slash invocation can guide authoring, but generated discovery, metadata, and tool assumptions require Cursor-specific verification.        |
+| Codex       | `$ak:skill-creator ...` | Codex can author and inspect the files, but a portable Skill must be tested against Codex discovery and supported capabilities separately. |
+
+## Run the Skill
+
+Choose a subcommand first: `create`, `update`, `audit`, or `optimize`. Pass
+`--long-horizon` when the Skill needs a long-lived repository. Add `--advice`
+for advisory-only `kongming` supervision. Advice never bypasses validation,
+packaging checks, or security policy. `optimize` writes files only with
+`--apply`.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+    ```text
+    /ak:skill-creator create "Create a project-scoped release-notes Skill that validates headings and never publishes" --advice
+    ```
+  </Tab>
+
+  <Tab value="Cursor">
+    ```text
+    /ak:skill-creator create "Create a project-scoped release-notes Skill that validates headings and never publishes"
+    ```
+  </Tab>
+
+  <Tab value="Codex">
+    ```text
+    $ak:skill-creator create "Create a project-scoped release-notes Skill that validates headings and never publishes"
+    ```
+  </Tab>
+</Tabs>
+
+Recommended flow for an existing Skill: `audit`, review the report, then
+`optimize --apply --from-audit <report>`. `create` refuses to write over an
+existing directory.
+
+## Understand the observable stages
+
+1. **Choose the subcommand.** `create` and `update` write files. `audit` writes
+   a report only. `optimize` writes only with `--apply`.
+2. **Choose the target.** Default is the current project. Kit scope is for the
+   AgentKit repository. User scope requires an explicit request.
+3. **`create` captures intent, researches duplicates, scaffolds, writes, then
+   validates.** It refuses to finish while the prompt-cruft linter reports a
+   High finding.
+4. **`update` scouts the existing Skill and its users, applies the requested
+   change only, lints every changed line, and bumps `metadata.version`.**
+5. **`audit` inventories provenance and dated patterns.** It can target one
+   Skill, a kit, or `--all`. It does not fail an existing Skill for findings.
+6. **`optimize` rewrites High and Medium findings from an audit report or
+   path.** Confirm the diff, then pass `--apply --from-audit <report>` to write.
+7. **Validate.** Run the bundled quick validator and prompt-cruft linter before
+   you treat the Skill as finished.
+8. **Evaluate routing and outcomes.** `create` compares against no Skill;
+   `update` compares against the original and must keep accepted behaviors.
+   Use structured cases with real artifact assertions. Record model, runtime,
+   snapshot hash, quality, and observed cost. Blocked or ungraded is not a
+   pass. `scripts/eval_skill.py` validates cases, grades artifacts, and
+   summarizes observed runs.
+
+## Keep file writes and distribution deliberate
+
+<Callout type="warn" title="Scaffolding and packaging write to disk">
+  Approve the exact project path before initialization and the output directory
+  before packaging. Review unfamiliar third-party Skill content as untrusted;
+  do not execute copied scripts or expose secrets while evaluating it.
+</Callout>
+
+The initializer creates directories and placeholder files. Packaging writes
+`<skill-directory-name>.zip` and can replace an existing archive with that name,
+so inspect the destination first. It excludes `node_modules/`, `venv/`, `.venv/`,
+and `.env`; ship `.env.example` instead. Tests, benchmark models, documentation
+lookup, ephemeral dependency runners, and package installation can use network
+access, compute, tokens, and provider cost. Never place credentials, personal
+data, private paths, or internal prompts in Skill text, examples, logs, or
+assets.
+
+## Verify generated artifacts
+
+A complete result depends on the subcommand:
+
+* `create` / `update`: a Skill directory with a valid `SKILL.md`, only the
+  needed references and scripts, a clean prompt-cruft lint for High findings,
+  and a consumer comparison that is not blocked or ungraded.
+* `audit`: a report with findings and a proposed diff. Skill files are unchanged.
+* `optimize --apply`: rewritten High and Medium findings, linter and kit
+  validation evidence, and no writes if `--apply` was omitted.
+* `--long-horizon`: the extra observations, experiments, evals, benchmarks, and
+  gates layout when that flag was requested.
+
+The bundled quick validator checks typed YAML, duplicate keys, placeholders,
+and resource links. The prompt-cruft linter checks dated instruction patterns.
+Neither proves runtime portability; review that before distribution.
+
+## Troubleshoot and limits
+
+| Symptom | Safe next step |
+| --- | --- |
+| Initialization says the directory exists | Inspect the Skill and use `update`; do not overwrite it with `create`. |
+| `create` or `update` stops on a High lint | Fix the dated prompt pattern, rerun the linter, then finish. |
+| `optimize` changed nothing | Confirm you passed `--apply` after reviewing the audit report. |
+| Packaging rejects frontmatter | Fix the name or description format, rerun quick validation, then package again. |
+| A Skill works in one runtime only | Isolate the runtime-specific capability, add a safe fallback, and test each claimed runtime. |
+| Evaluation is blocked or ungraded | Do not treat the Skill as finished; expand from the failing cases, then rerun `scripts/eval_skill.py`. |
