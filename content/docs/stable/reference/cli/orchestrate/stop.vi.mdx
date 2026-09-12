@@ -53,23 +53,42 @@ persisted mà giờ có thể thuộc process khác.
 ## Tác động filesystem
 
 Persist yêu cầu stop và kết quả của nó vào state file của run. Không xoá
-run state, log output, hay launch graph; các file đó vẫn để lại để kiểm
-tra.
+run state, `output-<job-id>.log`, `events.jsonl`, hay `graph.json`; các file
+đó vẫn để lại để kiểm tra.
 
 ## Đầu ra dành cho người dùng và JSON
 
-`--json` trả về:
+`--json` wrap một `runVM` với `kind: "orchestrate.stop"` theo envelope thành
+công dùng chung (`schema_version` 1, `kind`, `data`):
 
 ```json
 {
-  "action": "stop",
-  "run_id": "<opaque>",
-  "worker_state": "live | crashed | unreachable",
-  "signalled": ["<job-id>", "..."],
-  "killed": ["<job-id>", "..."],
-  "survived": []
+  "schema_version": 1,
+  "kind": "orchestrate.stop",
+  "data": {
+    "run_id": "<opaque>",
+    "status": "<run-status>",
+    "all_settled": true,
+    "revision": 0,
+    "events_truncated": false,
+    "status_counts": { "failed": 1 },
+    "jobs": [
+      {
+        "job_id": "<job-id>",
+        "status": "failed",
+        "route_source": "declared-in-graph",
+        "terminated_by": "<signal>",
+        "output_bytes": 0,
+        "output_truncated": false
+      }
+    ]
+  }
 }
 ```
+
+Đừng parse `action` top-level, `worker_state`, hay mảng `signalled` /
+`killed` / `survived`. Kết quả từng job là `data.jobs[].status` và
+`terminated_by`.
 
 ## Kết quả và mã thoát
 

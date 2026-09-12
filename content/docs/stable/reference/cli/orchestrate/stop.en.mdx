@@ -53,23 +53,42 @@ signalling a persisted PID that may now belong to a different process.
 ## Filesystem effects
 
 Persists the stop request and its outcome to the run's state file. Does
-not delete run state, output logs, or the launch graph; those remain for
-inspection.
+not delete run state, `output-<job-id>.log`, `events.jsonl`, or `graph.json`;
+those remain for inspection.
 
 ## Human and JSON output
 
-`--json` returns:
+`--json` wraps a `runVM` as `kind: "orchestrate.stop"` with the shared success
+envelope (`schema_version` 1, `kind`, `data`):
 
 ```json
 {
-  "action": "stop",
-  "run_id": "<opaque>",
-  "worker_state": "live | crashed | unreachable",
-  "signalled": ["<job-id>", "..."],
-  "killed": ["<job-id>", "..."],
-  "survived": []
+  "schema_version": 1,
+  "kind": "orchestrate.stop",
+  "data": {
+    "run_id": "<opaque>",
+    "status": "<run-status>",
+    "all_settled": true,
+    "revision": 0,
+    "events_truncated": false,
+    "status_counts": { "failed": 1 },
+    "jobs": [
+      {
+        "job_id": "<job-id>",
+        "status": "failed",
+        "route_source": "declared-in-graph",
+        "terminated_by": "<signal>",
+        "output_bytes": 0,
+        "output_truncated": false
+      }
+    ]
+  }
 }
 ```
+
+Do not parse a top-level `action`, `worker_state`, `signalled`, `killed`, or
+`survived` array. Per-job outcome is `data.jobs[].status` and
+`terminated_by`.
 
 ## Exit behavior
 

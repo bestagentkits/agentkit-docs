@@ -1,6 +1,6 @@
 ---
 title: Tạo, cập nhật, audit và optimize Skill với ak:skill-creator
-description: Chạy create, update, audit hoặc optimize trên một Skill, gồm lint prompt-cruft và layout --long-horizon.
+description: Chạy create, update, audit hoặc optimize trên một Skill, gồm lint prompt-cruft, evaluation consumer và layout --long-horizon.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
@@ -22,7 +22,7 @@ benchmark, gate và decision.
 * Skill hiện có cần inventory dated prompt pattern (`audit`).
 * Bạn muốn rewrite đề xuất chỉ sau khi truyền `--apply` (`optimize`).
 * Bạn cần repository Skill long-horizon (`--long-horizon`).
-* Bạn muốn bằng chứng validation trước distribution.
+* Bạn muốn bằng chứng validation và evaluation consumer trước distribution.
 
 ### Chọn workflow khác khi
 
@@ -91,6 +91,11 @@ Luồng khuyến nghị cho Skill đã có: `audit`, review report, rồi
    diff, rồi truyền `--apply --from-audit <report>` để ghi.
 7. **Validate.** Chạy quick validator và linter prompt-cruft trước khi coi Skill
    đã xong.
+8. **Evaluate routing và outcome.** `create` so với không có Skill; `update` so
+   với bản gốc và phải giữ behavior đã chấp nhận. Dùng case có cấu trúc với
+   assertion artifact thật. Ghi model, runtime, snapshot hash, chất lượng và
+   chi phí quan sát được. Blocked hoặc ungraded không phải pass.
+   `scripts/eval_skill.py` kiểm tra case, chấm artifact và tóm tắt lần chạy.
 
 ## Giữ file write và distribution có chủ đích
 
@@ -113,16 +118,17 @@ internal prompt trong Skill text, ví dụ, log hay asset.
 Kết quả hoàn tất phụ thuộc subcommand:
 
 * `create` / `update`: Skill directory với `SKILL.md` hợp lệ, chỉ reference và
-  script cần thiết, và lint prompt-cruft sạch High finding.
+  script cần thiết, lint prompt-cruft sạch High finding, và so sánh consumer
+  không blocked hay ungraded.
 * `audit`: report kèm finding và proposed diff. Tệp Skill không đổi.
 * `optimize --apply`: finding High và Medium đã viết lại, bằng chứng linter và
   kit validation, và không ghi nếu thiếu `--apply`.
 * `--long-horizon`: layout observation, experiment, eval, benchmark và gate khi
   flag đó được yêu cầu.
 
-Quick validator kiểm tra frontmatter cơ bản. Linter prompt-cruft kiểm tra dated
-instruction pattern. Cả hai không chứng minh runtime portability; review trước
-distribution.
+Quick validator kiểm tra YAML typed, duplicate key, placeholder và resource
+link. Linter prompt-cruft kiểm tra dated instruction pattern. Cả hai không
+chứng minh runtime portability; review trước distribution.
 
 ## Xử lý sự cố và giới hạn
 
@@ -133,3 +139,4 @@ distribution.
 | `optimize` không đổi gì | Xác nhận đã truyền `--apply` sau khi review audit report. |
 | Packaging từ chối frontmatter | Sửa format name hoặc description, chạy lại quick validation rồi package lại. |
 | Skill chỉ chạy ở một runtime | Tách capability riêng runtime, thêm fallback an toàn và test mỗi runtime được claim. |
+| Evaluation bị blocked hoặc ungraded | Không coi Skill đã xong; mở rộng từ case fail, rồi chạy lại `scripts/eval_skill.py`. |
