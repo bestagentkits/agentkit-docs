@@ -1,16 +1,16 @@
 ---
 title: Thiết kế context đáng tin cậy với ak:context-engineering
-description: Giữ session trong token budget bằng protocol máy móc, rồi thiết kế hệ context có giới hạn mà không đọc credential.
+description: Quản lý context, task budget, compaction và chọn model từ evidence outcome mà không đọc credential.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
-Dùng `ak:context-engineering` để giữ session trong context window và thiết kế
-memory, isolation, tool cùng compression. Skill là protocol máy móc cho mọi
-runtime: đo file trước khi đọc, cắt tool output, giữ ledger, checkpoint trước
-khi compact và hand off sạch. Skill không đổi model setting, API key, billing
-hay provider quota.
+Dùng `ak:context-engineering` để hoàn tất công việc được yêu cầu với ít lãng phí
+context, chi phí, thời gian và bước agent hơn. Tối ưu outcome đầy đủ, gồm
+failure, retry và verification. Không cắt scope hay verification bắt buộc để đạt
+mục tiêu hiệu quả. Skill không đổi model setting, API key, billing hay provider
+quota.
 
 ## Chọn ak:context-engineering cho vấn đề context
 
@@ -80,18 +80,26 @@ $ak:context-engineering "Tool output chiếm phần lớn một debugging sessio
 </Tabs>
 
 Skill nhận một topic hoặc câu hỏi và không công bố mode flag. Hãy yêu cầu output
-cụ thể như diagnosis, budget, compression policy, memory design, tool review
-hoặc evaluation plan.
+cụ thể như diagnosis, budget, compression policy, so sánh chọn model, memory
+design, tool review hoặc evaluation plan.
+
+Khi so sánh model hoặc harness, giữ đủ bốn metric cốt lõi: chi phí trung bình
+mỗi task, thời lượng task trung bình, chi phí ước tính cho lần thành công đầu,
+và số bước agent trung bình. Trước hết yêu cầu success đủ cho task. Sau đó so
+sánh chi phí per first-attempt success và duration. Dùng raw cost để lập ngân
+sách và steps để chẩn đoán lãng phí. Đừng gộp metric tương quan thành một điểm.
+Trường thiếu vẫn unknown; không có ranking cứng hay tự đổi model.
 
 ### Analyzer cục bộ tùy chọn
 
 | Thao tác | Input | Output quan sát được |
 | --- | --- | --- |
 | Đo kích thước tệp | Path cần đo trước khi đọc cả file | JSON trên standard output khuyên đọc whole-file, range hoặc search-first |
-| Phân tích context | Context JSON UTF-8, token limit và critical keyword tùy chọn | JSON trên standard output với token ước tính, utilization, health signal và recommendation |
-| Tính budget | Token allocation cho system, tool, docs và history; buffer tùy chọn | JSON trên standard output với allocation, tổng budget và threshold |
-| Đánh giá nén | Context JSON gốc và tệp text đã nén | JSON trên standard output với compression ratio heuristic, quality score, dimension score và recommendation |
-| Tạo probe | Context JSON UTF-8 | Danh sách probe JSON trên standard output cho recall, artifact, continuation và decision |
+| Phân tích context | Context JSON UTF-8, token limit tùy chọn | Chẩn đoán capacity và lexical; không có health hay poisoning score đo được |
+| Tính budget | Kế toán window và cumulative task | JSON tách occupancy context khỏi cumulative task spend |
+| Đánh giá nén | Context gốc kèm text đã nén hoặc grade tường minh | Chẩn đoán lexical hoặc grading được cung cấp; không phải oracle chất lượng tự động |
+| Tổng hợp benchmark | Run record được cung cấp | Tổng hợp cost, duration và agent steps; không chạy model |
+
 Các utility Python đọc tệp tối đa 100 MiB và không tự tạo output file. Shell
 redirection hoặc yêu cầu ghi riêng sẽ thay đổi ranh giới này. Evaluator dùng
 heuristic; comment trong source dành model-based judging thật cho implementation

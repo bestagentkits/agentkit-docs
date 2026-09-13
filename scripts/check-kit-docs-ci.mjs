@@ -182,7 +182,7 @@ export async function checkKitDocsCi({
   if (typeof base !== 'string' || !base) fail('a Git base revision is required');
   const resolvedBase = git(root, ['rev-parse', '--verify', '--end-of-options', `${base}^{commit}`]).toString('utf8').trim();
   if (!/^[a-f0-9]{40}$/.test(resolvedBase)) fail(`invalid Git base revision ${base}`);
-  const rows = parseNameStatus(git(root, ['diff', '--name-status', '-z', '--find-renames', '--find-copies-harder', resolvedBase, 'HEAD', '--']));
+  const rows = parseNameStatus(git(root, ['diff', '--name-status', '-z', '--find-renames', resolvedBase, 'HEAD', '--']));
   const route = selectKitDocsCiMode(rows, { manifestPath });
   console.log(`Kit docs CI route: ${route.mode} (${route.reason}); base=${resolvedBase}`);
   await runValidation({ root: resolve(root), mode: route.mode, base: resolvedBase, rows, receiptPath: route.receiptPath });
