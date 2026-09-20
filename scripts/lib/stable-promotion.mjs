@@ -559,8 +559,11 @@ function parseNameStatus(output) {
 }
 
 function promotionTransactionDiffStatus(root, base, head) {
+  // Rename detection still catches moved receipts. Copy detection does not:
+  // successive promotion receipts share inventory shape and Git reports them
+  // as C09x even though the previous receipt remains. Add-only is path-based.
   return parseNameStatus(git(root, [
-    'diff', '--name-status', '-z', '--find-renames', '--find-copies-harder', base, head, '--',
+    'diff', '--name-status', '-z', '--find-renames', base, head, '--',
   ]).stdout).filter((row) =>
     row.path.startsWith(PROMOTIONS_PREFIX) || row.oldPath?.startsWith(PROMOTIONS_PREFIX) ||
     row.path.startsWith(STABLE_PROMOTION_EVIDENCE_PREFIX) || row.oldPath?.startsWith(STABLE_PROMOTION_EVIDENCE_PREFIX));

@@ -1,22 +1,25 @@
 ---
 title: ak orchestrate
-description: Chạy và giám sát một graph các job CLI bên ngoài dưới worker cục bộ bền bỉ với process-group ownership, run state bền vững, reconnect an toàn khi crash và phạm vi v1 chỉ hỗ trợ Darwin.
+description: Điều phối và kiểm tra job agent. Giám sát process bên ngoài chỉ trên Darwin; quan sát lịch sử và discovery runtime không khẳng định hỗ trợ điều khiển process.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
 Dùng `ak orchestrate` để start, resume, check và stop một graph các job CLI
-bên ngoài dưới một worker supervisor cục bộ chuyên biệt. Worker sở hữu
-process group của mỗi job, ghi run state bền vững dưới `AGENTKIT_HOME`, và
-tồn tại qua sự kiện client hay coordinator đã launch thoát. Đây là lớp
-process-lifecycle mà skill `/ak:orchestrate` uỷ quyền tới khi giám sát job
-graph CLI.
+bên ngoài, đồng thời kiểm tra event bền vững, output đã redact, và runtime đã
+cài. Worker sở hữu process group của mỗi job, ghi run state bền vững dưới
+`AGENTKIT_HOME`, và tồn tại qua sự kiện client hay coordinator đã launch thoát.
+Đây là lớp process-lifecycle và quan sát mà skill `/ak:orchestrate` uỷ quyền
+tới khi giám sát job graph CLI.
 
 <Callout type="warning">
-  `ak orchestrate` v1 chỉ hỗ trợ **Darwin** (macOS). Mọi GOOS khác trả về lỗi
-  unsupported rõ ràng với mã thoát `6`. Caller chạy trên Linux hay Windows
-  nên fallback về subprocess do coordinator sở hữu và chấp nhận khoảng
-  trống khi bị interrupt được ghi chú công khai.
+  Giám sát process bên ngoài trong `ak orchestrate` v1 chỉ hỗ trợ **Darwin**
+  (macOS). `start`, `resume` và `stop` trả về mã thoát `6` trên mọi GOOS khác.
+  Lệnh plan spawn job CLI yêu cầu Darwin cho dispatch đó; lỗi từ các lệnh đó
+  map sang mã thoát `1`, không phải `6`. Quan sát lịch sử (`events`, `output`,
+  `diagnose`) và discovery runtime (`probe`) không khẳng định hỗ trợ điều khiển
+  process. Caller trên Linux hay Windows không được coi các đường đọc đó là
+  bằng chứng job có thể được giám sát trên host đó.
 </Callout>
 
 ## Cách dùng
@@ -32,21 +35,27 @@ một run.
 
 | Mục tiêu | Lệnh | Tác động |
 | --- | --- | --- |
-| Launch run mới từ job graph đã validate | `ak orchestrate start <job-graph.json>` | Validate graph, sinh run ID opaque mới, spawn worker detached sở hữu process group của mọi job, block đến khi worker durably persist run state và chứng minh readiness, rồi in run ID và status ban đầu. |
+| Launch run mới từ job graph đã validate | `ak orchestrate start <job-graph.json>` | Validate graph, sinh run ID opaque mới, spawn worker detached sở hữu process group của mọi job, block đến khi worker durably persist run state và chứng minh readiness, rồi in run ID và status ban đầu. Chỉ Darwin. |
 | Reconnect sau khi client hoặc coordinator crash | `ak orchestrate resume <run-id> <job-graph.json>` | Xác nhận digest của graph còn khớp với record đang chạy và báo state hiện tại — không bao giờ relaunch job hay tạo process tree thứ hai. Fallback về reclassification read-only khi chính worker đã crash. |
 | Báo state lifecycle hiện tại của run | `ak orchestrate status <run-id>` | Với qua control socket đã verify của worker live khi tới được, ngược lại reconcile persisted state so với identity probe mới. Báo PID/PGID, heartbeat, thời gian output cuối và nhãn current-command cho từng job. |
-| Cancel các job live của run | `ak orchestrate stop <run-id>` | Gửi SIGTERM tới mọi job được cấp signal trong process group đã verify, chờ khoảng grace bounded, rồi SIGKILL chỉ job có group vẫn còn sống dưới cùng identity đã verify. Không bao giờ đoán target kill từ persisted state. |
-
-`start` luôn tạo run mới; retry cùng graph không tái dùng run ID cũ. Chỉ
-`resume <run-id>` mới tiếp tục một run có sẵn.
+| Cancel các job live của run | `ak orchestrate stop <run-id>` | Gửi SIGTERM tới mọi job được cấp signal trong process group đã verify, chờ khoảng grace bounded, rồi SIGKILL chỉ job có group vẫn còn sống dưới cùng identity đã verify. Không bao giờ đoán target kill từ persisted state. Chỉ Darwin. |
+| Đọc trang event bền vững | `ak orchestrate events <run-id>` | Replay read-only các observation đã persist. `--after` là cursor sequence (mặc định `0`); `--limit` từ `1`–`1000` (mặc định `100`). Observation thiếu hoặc bị cắt không phải bằng chứng tiến độ. |
+| Đọc output job đã redact | `ak orchestrate output <run-id> <job-id>` | Capture bounded read-only theo `--offset` (mặc định `0`) và `--limit` (`1`–`65536`, mặc định `16384`). Không mở file invocation riêng. |
+| Xuất bundle chẩn đoán | `ak orchestrate diagnose <run-id>` | Snapshot đã redact kèm ngân sách event/output bounded. Redirect `--json` để lưu. Không thay thế file graph hay job-spec riêng. |
+| Discovery coding runtime đã cài | `ak orchestrate probe` | Chỉ chạy version/help, tuỳ chọn `--path runtime=executable`, lọc `--runtime`, `--refresh`, `--timeout` (mặc định `3s`, tối đa `30s`). Ghi metadata cache thuộc sở hữu. Không cài runtime, không đọc credential, không chứng minh authentication, không gọi inference. |
+| Persist plan đã resolve | `ak orchestrate prepare <jobs.yaml> <run-dir>` | Validate và ghi plan state riêng. CLI dispatch sau đó yêu cầu Darwin; dispatch harness nội bộ thì không. |
+| Dispatch job sẵn dependency | `ak orchestrate advance <run-dir>` | Reconcile attempt và có thể copy artifact đã khai báo rồi spawn job CLI. Đừng bypass attempt chưa chắc bằng cách gọi `start` thủ công. |
+| Accept một attempt đã settle | `ak orchestrate accept <run-dir> <job-id> --attempt <id> --result <receipt.json>` | Verify artifact receipt của một attempt. Mutating. |
+| Kiểm tra plan state | `ak orchestrate plan-status <run-dir>` | Kiểm tra plan state đã persist và có thể vô hiệu evidence cũ. |
 
 ## Ranh giới filesystem và quyền riêng tư
 
-Mỗi run ghi state, log output từng job và một control socket dưới
-`AGENTKIT_HOME/orchestrate/runs/<run-id>/`. Worker không persist prompt,
-argument command thô, giá trị environment hay secret — chỉ launch graph,
-status từng job, identity PID/PGID và stdout/stderr bounded mà graph chỉ
-định capture.
+Mỗi run ghi state riêng, log đã redact bounded, event, và launch graph dưới
+`AGENTKIT_HOME/orchestrate/runs/<run-id>/`. Launch graph giữ argv và
+environment để recovery. Giữ credential ngoài job spec. Đừng export file
+invocation hay `graph.json` trong bundle chẩn đoán; dùng
+`ak orchestrate diagnose <run-id> --json`. Capture stdout/stderr bounded được redact
+và báo truncation.
 
 Digest launch graph gắn với run ID ở `start`. `resume` verify digest này so
 với file graph được cấp cho nó; mismatch bị từ chối với mã thoát `1` thay

@@ -33,8 +33,7 @@ Với mỗi job, lệnh báo:
   `unknown`.
 - **PID / PGID** — identity đã verify khi worker tới được.
 - **Heartbeat** — thời điểm cuối worker báo hoạt động cho job.
-- **Thời gian output cuối** — lần ghi cuối vào log stdout hoặc stderr của
-  job.
+- **Thời gian output cuối** — lần ghi cuối vào `output-<job-id>.log`.
 - **Nhãn command hiện tại** — nhãn do graph khai báo mà worker đang chạy
   lúc state được ghi.
 
@@ -52,34 +51,45 @@ kể từ lần check trước) được persist để các lệnh sau thấy c�
 
 ## Đầu ra dành cho người dùng và JSON
 
-`--json` trả về:
+`--json` wrap một `runVM` với `kind: "orchestrate.status"`:
 
 ```json
 {
-  "action": "status",
-  "run_id": "<opaque>",
-  "worker_state": "live | crashed | unreachable",
-  "jobs": [
-    {
-      "id": "<job-id>",
-      "state": "running",
-      "pid": 12345,
-      "pgid": 12345,
-      "heartbeat": "<rfc3339>",
-      "last_output_at": "<rfc3339>",
-      "current_command_label": "<graph-label>"
-    }
-  ]
+  "schema_version": 1,
+  "kind": "orchestrate.status",
+  "data": {
+    "run_id": "<opaque>",
+    "status": "<run-status>",
+    "all_settled": false,
+    "revision": 0,
+    "events_truncated": false,
+    "status_counts": { "running": 1 },
+    "jobs": [
+      {
+        "job_id": "<job-id>",
+        "status": "running",
+        "route_source": "declared-in-graph",
+        "pid": 12345,
+        "pgid": 12345,
+        "heartbeat": "<rfc3339>",
+        "last_output_at": "<rfc3339>",
+        "command_label": "<graph-label>",
+        "output_bytes": 0,
+        "output_truncated": false
+      }
+    ]
+  }
 }
 ```
 
-Đầu ra dành cho người dùng in một job mỗi hàng với cùng field.
+Đừng parse `action` top-level, `worker_state`, hoặc cặp `id`/`state` của job.
+Đầu ra dành cho người dùng in một job mỗi hàng từ cùng `runVM`.
 
 ## Kết quả và mã thoát
 
 | Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
 | --- | --- | --- |
-| `0` | Status được báo thành công. | Dùng các field; đừng suy `running` từ `pid` mà không có `worker_state` khớp. |
+| `0` | Status được báo thành công. | Dùng `data.status` và `status` từng job; đừng suy `running` từ `pid` đơn lẻ. |
 | `1` | Run ID không tìm thấy hoặc state hỏng/không hỗ trợ. | Không retry cùng input; điều tra record persisted. |
 | `2` | Parse cờ thất bại. | Sửa các cờ. |
 | `3` | Bị interrupt. | Chạy lại status. |
