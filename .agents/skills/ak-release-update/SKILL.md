@@ -119,10 +119,17 @@ Procedure:
    [`references/audit-tag-convention.md`](references/audit-tag-convention.md).
 3. **Invoke `ak-docs-release-audit` V0.** Before the final V0 run, complete
    the read-only blind-spot classification for CLI prose, Kit identity/body
-   drift, runtime target/status drift, Desktop, and generated bundle claims. If
+   drift, runtime target/status drift, Desktop, and generated bundle claims. Kit
+   drift includes the complete public Skill disposition gate from
+   [`kit-prose-drift.md`](../ak-docs-release-audit/references/kit-prose-drift.md):
+   every public Skill identity whose subtree changes in any verified runtime
+   must be classified as `update`, `no-prose-impact`, `retired-route-ok`, or
+   `blocked`, with exact EN/VI owner-directed paths for every `update`. If
    release assets add or remove a runtime package, change runtime manifests, or
-   change public `SKILL.md` bodies, `paths: []` is allowed only with an explicit
-   evidence-backed no-prose-impact note. Distinguish registry Kit projection
+   change public `SKILL.md` bodies or support files, `paths: []` is allowed only
+   when the disposition table has zero unclassified or blocked rows and every
+   changed public Skill has an evidence-backed no-prose-impact or
+   retired-route-ok note. Distinguish registry Kit projection
    targets (for example `ak kit init --target pi`) from `ak run` / `ak setup`
    adapters (for example `omp`); never infer one surface from the other. Present
    the choice and, on owner confirmation, run
@@ -151,9 +158,15 @@ Procedure:
    - **CLI prose** — V1 authoring inside the approved Beta paths only.
    - **Kits** — use the artifact result from step 1. Different inventories or
      hashes take the normal release audit: diff archive identities, complete
-     `SKILL.md` bodies, and all support files; refresh approved Beta pages,
-     `kit-catalog-identities.json`, metadata, and indexes; then scan every
-     human-owned Beta page for stale Kit-derived claims. Complete,
+     `SKILL.md` bodies, and all support files across every verified runtime;
+     produce the public Skill disposition table before V0 approval; refresh
+     approved Beta pages, `kit-catalog-identities.json`, metadata, and indexes;
+     then scan every human-owned Beta page for stale Kit-derived claims. A
+     public Skill with body/support-file drift is not cleared by unchanged
+     catalog identity. It is cleared only by `update` with approved EN/VI paths,
+     `no-prose-impact` with concrete evidence, or `retired-route-ok` with the
+     retained-route/catalog-exception evidence. Any unclassified or `blocked`
+     row stops V1 and PR-ready status. Complete,
      hash-identical Stable/Beta matrices instead require exact Kit-doc closure
      equality. A mismatch blocks production and takes only deterministic
      Kit-closure reconciliation; never use Stable V1 hand authoring, the Stable
@@ -232,8 +245,9 @@ for the next run.
 - Never edit prose without going through V0 → approval → V1 authoring in the
   audit skill's guardrail.
 - Never accept a V0 `paths: []` result when runtime packages, runtime manifests,
-  or public Skill bodies changed until the blind-spot pass records why no Beta
-  prose needs owner-directed scope.
+  or public Skill bodies/support files changed until the blind-spot pass records
+  a complete public Skill disposition table with zero unclassified or blocked
+  rows and explains why no Beta prose needs owner-directed scope.
 - Never invoke `promote-docs.mjs` without a verified `docs/<promotedFrom>`
   tag whose beta snapshot's `channels.json.beta.tag` matches the manifest
   `promotedFrom`.
@@ -266,6 +280,9 @@ Return a handoff listing every exact ref, request ID, approval nonce,
 paths changed, validation results, PR URL, CI status, and remaining blockers.
 Give Beta and Stable separate rows with manifest-set digest, exact artifact
 inventory, sidecar/hash result, matrix digest, Kit closure, body/support-file
-and cross-page scan results, and reconciliation status. Then state the pair
-relation and `dev` → `main` decision. Point out any `audit/<tag>` tag the run
-created so the next release inherits a consistent trail.
+and cross-page scan results, and reconciliation status. Include the public Skill
+disposition summary: counts by disposition, every `update` path set, every
+`blocked` row, and the evidence file or PR-body section that binds the full
+row set. Then state the pair relation and `dev` → `main` decision. Point out any
+`audit/<tag>` tag the run created so the next release inherits a consistent
+trail.
