@@ -1,19 +1,20 @@
 ---
 title: ak config prefs set
-description: Đặt một boolean Hook có giới hạn, preference journal.auto, hoặc mặc định worktree.root với hành vi chính xác về scope, schema, backup, atomic write, đầu ra và khôi phục thủ công.
+description: Đặt một boolean Hook có giới hạn, preference journal.auto, mặc định worktree.root, hoặc một agent model theo capability tier của runtime với hành vi chính xác về scope, schema, backup, atomic write, đầu ra và khôi phục thủ công.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
 Dùng `ak config prefs set` để ghim một soft-preference của Hook, preference
-`journal.auto`, hoặc mặc định `worktree.root` trong config user hay config
+`journal.auto`, mặc định `worktree.root`, hoặc một agent model theo capability
+tier của runtime trong config user hay config
 của project hiện tại. Lệnh thay đổi tệp đã chọn ngay; lệnh không unregister
 hay cài Hook và không chặn `/ak:journal` gọi tường minh.
 
 ## Cách dùng
 
 ```bash
-ak config prefs set <key> <true|false>
+ak config prefs set <key> <value>
 ```
 
 Cung cấp đúng hai argument theo vị trí.
@@ -30,18 +31,23 @@ không có `--dry-run`, `--force` hay preview mode.
 
 ## Validate key và value
 
-Ba dạng key được chấp nhận:
+Bốn dạng key được chấp nhận:
 
 - `hooks.<name>` — `<name>` phải là basename Hook script dạng kebab-case chữ
   thường, khớp `^[a-z0-9]+(?:-[a-z0-9]+)*$` và không được chứa thêm dấu chấm.
 - `journal.auto` — literal chính xác, không có key con nào dưới `journal`.
 - `worktree.root` — literal chính xác, không có key con nào dưới `worktree`.
+- `agent_models.<runtime>.<tier>` — `<runtime>` là tập đóng `cursor`, và
+  `<tier>` là một trong `inherit`, `sonnet`, `opus`, `fable`, hoặc `haiku`.
 
 Với `hooks.<name>` và `journal.auto`, value phải là literal chữ thường chính
 xác `true` hoặc `false`. Với `worktree.root`, value là một filesystem path;
 project scope chỉ chấp nhận relative path (resolve theo project root), còn
 user scope chấp nhận cả relative path (cũng resolve theo project root) lẫn
-absolute path.
+absolute path. Với `agent_models.<runtime>.<tier>`, value là model ID sẽ được
+emit cho tier đó: một token không rỗng, chỉ kiểm tra hình dạng chứ không kiểm
+tra catalog có entry với ID đó hay không. Runtime hoặc tier bạn không ghi sẽ
+giữ default catalog tích hợp của adapter tương ứng.
 
 ```bash
 ak config prefs set hooks.simplify-gate false
@@ -49,10 +55,13 @@ ak config prefs set hooks.simplify-gate true --scope project
 ak config prefs set journal.auto false
 ak config prefs set worktree.root /Volumes/Portable/agentkit-worktrees
 ak config prefs set worktree.root ../my-app-worktrees --scope project
+ak config prefs set agent_models.cursor.sonnet claude-sonnet-4-6
 ```
 
 Key như `keys.anthropic`, `api.token`, `telemetry.enabled`, `hooks.Bad-Name`,
-`hooks.a.b`, mọi `journal.<other>`, và mọi `worktree.<other>` bị từ chối
+`hooks.a.b`, mọi `journal.<other>`, mọi `worktree.<other>`, mọi
+`agent_models.<runtime>` khác `cursor`, và mọi
+`agent_models.<runtime>.<tier>` không nằm trong tập tier ở trên bị từ chối
 trước khi ghi preference. Allowlist này ngăn lệnh trở thành editor config
 hoặc secret tổng quát.
 
@@ -80,7 +89,8 @@ tích hợp là unset, nên `ak:worktree` tiếp tục fallback về biến môi
 | `user` | `$AGENTKIT_HOME/config.yaml`, thường là `~/.agentkit/config.yaml` | Tệp thiếu sẽ được tạo. |
 | `project` | `<cwd>/.agentkit/config.yaml` | Nếu thiếu, AgentKit scaffold project template và `.agentkit/.gitignore` trước. Project config được thiết kế để commit, vì vậy không đặt credential vào đó. |
 
-Writer chỉ thay leaf `hooks.<name>`, `journal.auto`, hoặc `worktree.root` đã
+Writer chỉ thay leaf `hooks.<name>`, `journal.auto`, `worktree.root`, hoặc
+`agent_models.<runtime>.<tier>` đã
 chọn. Các section khác, YAML chưa được model, comment, thứ tự key và schema
 editor directive được giữ lại. Nếu `hooks`, `journal`, hoặc `worktree` đã
 tồn tại nhưng không phải mapping, lệnh từ chối ghi.
