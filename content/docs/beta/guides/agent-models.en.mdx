@@ -1,0 +1,270 @@
+---
+title: Agent models across runtimes
+description: Understand when AgentKit delegates work, how each runtime maps Agent models, and where to configure OMP roles and overrides.
+---
+
+AgentKit defines the workflow and each Agent's specialist instructions. The
+runtime discovers the installed Agent, launches it, and resolves its model.
+Choosing a model does not itself launch an Agent or authorize more delegation.
+
+This guide describes the published Kit mappings for the release selected in the
+docs header. OMP configuration examples follow OMP 18.2.8. Installed Kit versions,
+user overrides, model access, and runtime versions can change the result; inspect
+the installed definition and the actual run before assuming a model was used.
+
+## When a workflow delegates
+
+A small edit or lookup can stay in the main session. A workflow may delegate
+when a specialist prompt, independent review, fresh context, or parallel work
+adds value and your instructions and runtime permit it.
+
+| Work | Typical Agent | Trigger |
+| --- | --- | --- |
+| Explore or research | `Explore`, `researcher` | Independent code areas or an unfamiliar technology |
+| Plan or compare approaches | `planner`, `brainstormer` | A substantial change or a difficult design decision |
+| Implement | `fullstack-developer` | Bounded work with explicit file ownership; parallel workers must not edit the same files |
+| Verify or review | `tester`, `code-reviewer` | Independent checks add coverage, especially for public contracts, security, or cross-module changes |
+| Diagnose or seek counsel | `debugger`, `kongming` | Repeated failures, conflicting evidence, or a high-stakes decision |
+| Finish | `docs-manager`, `journal-writer` | Documentation changed or a durable lesson needs recording |
+
+These are opportunities, not a mandatory sequence of Agents. A Skill's explicit
+mode can add checkpoints: `ak:cook --parallel` delegates independent work when
+available, while `ak:cook --advice` calls `kongming` after phases, when stuck,
+on failed verification, and before high-stakes decisions. An expected-red TDD
+step is not a failed completion check. Use the invocation form installed for
+your runtime; Skill flags are not universal `omp` or `ak` CLI flags.
+
+## Compare runtime behavior
+
+| Runtime | Agent projection and model selection | Where to inspect or configure |
+| --- | --- | --- |
+| Claude Code | Native Agent definitions retain the Kit's `sonnet`, `opus`, `haiku`, `fable`, or `inherit` selector | Active `.claude/agents` definitions or the installed plugin's Agents; model access belongs to Claude Code |
+| Codex | Per-Agent TOML pins model and reasoning effort; these can override the shared Kit tier | Active `.codex/agents/*.toml` and AgentKit's registered Agent runtime |
+| Cursor | Kit tiers become concrete Cursor model IDs at projection time | Active `.cursor/agents/*.md`; AgentKit's `agent_models.cursor` configuration |
+| Oh My Pi (OMP) | Kit tiers become role aliases resolved when an Agent is launched | Active `.omp` Agent definitions, `modelRoles`, and `task.agentModelOverrides` |
+| Pi | Claude tiers are omitted; the AgentKit bridge inherits the parent's model unless a supported explicit Agent model is present | Active `.pi/agents` definitions and the extension handling the Agent call |
+| Grok Build | Incompatible model and tool frontmatter is removed; AgentKit does not pin a replacement model | Active `.grok/agents` definitions and Grok runtime selection |
+| DeepSeek Harness (DSH) | Kit Agent definitions remain inactive supporting content; native DSH delegation does not automatically activate those definitions | DSH's own plugins or presets, not an assumed Kit model mapping |
+
+Antigravity (`agy`) uses a separate global projection and strips incompatible
+model tiers. OpenCode and portable export do not establish an active AgentKit
+subagent/model mapping. A target accepting Skills or exporting files does not
+prove it can dispatch every named Agent. See [Runtime adapters](../concepts/runtime-adapters)
+for broader capability and delivery differences.
+
+## Engineer Agent mapping
+
+The following grouping covers all 16 Engineer Agents. The second column is the
+Kit selector retained for Claude Code. OMP translates it into a role alias;
+it does not require the model vendor suggested by the original tier name.
+
+| Agents | Kit / Claude Code selector | OMP selector |
+| --- | --- | --- |
+| `fullstack-developer`, `researcher`, `debugger`, `docs-manager`, `project-manager`, `journal-writer` | `sonnet` | `@task` |
+| `planner`, `brainstormer`, `code-reviewer`, `code-simplifier` | `opus` | `@plan` |
+| `Explore`, `tester`, `git-manager` | `haiku` | `@smol` |
+| `kongming`, `advisor` | `fable` | `@advisor` |
+| `ui-ux-designer` | `inherit` | No model field: inherit the active parent/session model |
+
+A selector retained in a file is not proof your account can use it. In
+particular, verify access before relying on `fable` counsel. The `@plan` role
+selects a model; it does not put a reviewer into read-only plan mode.
+
+### Codex pins
+
+Codex uses per-Agent pins rather than the four OMP roles:
+
+| Engineer Agents | Model | Reasoning effort |
+| --- | --- | --- |
+| `Explore` (Codex slug `explore`), `git-manager` | `gpt-5.4-mini` | Runtime default; no effort emitted |
+| `fullstack-developer`, `ui-ux-designer` | `gpt-5.6-luna` | `max` |
+| `project-manager`, `researcher`, `docs-manager`, `journal-writer` | `gpt-5.6-luna` | `high` |
+| `planner`, `brainstormer`, `code-reviewer`, `code-simplifier`, `debugger`, `tester` | `gpt-5.6-sol` | `medium` |
+| `kongming`, `advisor` | `gpt-6-astra` | `low` |
+
+For example, Engineer's `tester` uses the `haiku` Kit tier but is pinned to
+Sol / medium on Codex. Its `ui-ux-designer` is pinned to Luna / max despite the
+shared `inherit` selector. Read the top-level TOML fields, not a `model:` line
+quoted inside `developer_instructions`.
+
+AgentKit's Codex integration can expose Agents through the registered local
+Agent runtime. Merely finding a TOML file is not proof the current session has
+a callable delegation tool. Follow [Agent discovery troubleshooting](../troubleshooting/runtime-cannot-find-skill-or-agent)
+if the Agent is unavailable.
+
+### Cursor defaults and overrides
+
+| Kit tier | Emitted Cursor selector |
+| --- | --- |
+| `sonnet` | `claude-sonnet-5-high` |
+| `opus` | `claude-opus-4-8-thinking-high` |
+| `haiku` | `composer-2.5-fast` |
+| `fable` | `claude-fable-5-high` |
+| `inherit` | `inherit` |
+
+These are emitted defaults, not a guarantee that every current Cursor account
+has each model. AgentKit accepts `agent_models.cursor.<tier>` overrides in its
+own configuration. User configuration normally lives in
+`~/.agentkit/config.yaml`; project configuration lives in `.agentkit/config.yaml`.
+For example, replace the placeholder below with a model ID available in Cursor:
+
+```yaml
+agent_models:
+  cursor:
+    sonnet: YOUR_CURSOR_MODEL_ID
+```
+
+The project value applies to a project install; a global install uses user
+configuration. This is a projection-time setting, not a live OMP-style role.
+After applying the appropriate [Kit lifecycle operation](./installing-kits),
+inspect the emitted file. Do not assume editing config changes an already
+running worker or overwrites a user-modified Agent file.
+
+## Marketing Kit differences
+
+Do not apply Engineer's per-Agent Codex table to Marketing Kit. In the published
+Marketing Codex package, all 32 emitted Agent roles use `gpt-5.6-luna` with
+`model_reasoning_effort = "max"`, including `kongming` and roles also present
+in Engineer Kit. This is the package default, not a claim that an advice
+invocation cannot explicitly request a different model.
+
+For tier-based runtimes, use the Marketing Agent's own frontmatter: a name
+shared with Engineer need not have the same tier. For example, Marketing's
+`code-reviewer` uses `sonnet`, which maps to OMP `@task`; Engineer's
+`code-reviewer` uses `opus`, which maps to `@plan`. The same tier-to-role and
+tier-to-Cursor tables apply. See the [Marketing Agent roster](../kits/marketing/agents)
+and inspect the active installed definition when both Kits provide a name.
+
+## Configure OMP roles
+
+OMP normally reads user settings from `~/.omp/agent/config.yml` and project
+settings from `.omp/config.yml`. A named profile or environment override can
+change the user root; `omp config path` identifies the active Agent directory.
+Project settings override global values, explicit config overlays override
+those, and runtime overrides take precedence over persisted settings.
+
+Use `/model` and its Roles view to assign available models to `task`, `plan`,
+`smol`, and `advisor`. Equivalently, merge the following shape into your config,
+replacing every placeholder with a model selector supported by your provider:
+
+```yaml
+modelRoles:
+  task: YOUR_PROVIDER/YOUR_WORKER_MODEL:high
+  plan: YOUR_PROVIDER/YOUR_PLANNING_MODEL:high
+  smol: YOUR_PROVIDER/YOUR_FAST_MODEL:medium
+  advisor: YOUR_PROVIDER/YOUR_COUNSEL_MODEL:high
+```
+
+The effort suffix is optional and must be supported by the selected model.
+AgentKit emits the aliases; it does not populate these user model choices.
+Changing only the main session's model does not remap Agents using explicit
+roles. `slow` and `plan` are separate roles even when you assign the same model.
+
+### Override one Agent
+
+For an ordinary OMP `task` dispatch, selection precedence is:
+
+1. `task.agentModelOverrides[agentName]`.
+2. The Agent's frontmatter model, with role aliases expanded through `modelRoles`.
+3. The active parent model, then configured/default fallback when the Agent inherits.
+
+OMP's eval bridge can also supply an invocation-local model override; the
+ordinary `task` schema does not expose that field. Names are exact and
+case-sensitive: `Explore` is not `explore`.
+
+For example, merge these entries into existing mappings:
+
+```yaml
+modelRoles:
+  review: YOUR_PROVIDER/YOUR_REVIEW_MODEL:high
+
+task:
+  agentModelOverrides:
+    code-reviewer: "@review"
+    kongming: "@advisor"
+```
+
+A custom role named `review` or `REVIEWER` does not automatically bind to
+`code-reviewer`; the override above creates that connection. You can use a
+concrete `provider/model:effort` instead of an alias, but that Agent then stops
+following changes to the former role. Remove its override to use its frontmatter
+again. OMP defaults `task.agentModelOverrides` to an empty mapping; AgentKit does
+not install a personal `kongming` override for you.
+
+### Keep model choice separate from advisor supervision
+
+Three similarly named controls do different jobs:
+
+| Control | Meaning |
+| --- | --- |
+| Agent frontmatter `model: "@advisor"` | Choose the worker model from the `advisor` role |
+| AK Skill `--advice` | Call `kongming` at that Skill's advisory checkpoints |
+| OMP `--advisor` / `advisor.enabled` | Enable an advisor that observes a session and offers feedback |
+
+To avoid adding another advisory layer to Kongming's own counsel session, keep
+its per-Agent advisor disabled unless you deliberately need that second layer:
+
+```yaml
+task:
+  agentAdvisor:
+    kongming: "off"
+```
+
+This does not disable Kongming or prevent AK's `--advice` checkpoints from
+spawning it. It only disables a separate advisor attached to that child session.
+OMP subagents do not opt into advisor supervision by default; per-Agent
+settings override the Agent's `advisor` frontmatter. You do not need `--advisor`
+merely to use `model: "@advisor"`.
+
+### Other controls that can change the run
+
+- `task.agentPrewalk` can hand a worker to another model; `task.prewalk` enables
+  the default for the bundled generic `task` Agent, not every AK Agent.
+- `task.enableEffort` exposes per-task effort hints; `task.maxEffort` caps those
+  hints, not every explicit model suffix. A task effort hint takes precedence
+  over an explicit model effort suffix, then the Agent's default effort.
+- `task.maxConcurrency` and `task.maxRecursionDepth` limit execution, not model
+  selection. They do not instruct the main Agent to use the maximum capacity.
+- `tier.subagent` and `task.agentServiceTierOverrides` control service tier,
+  independently of model and reasoning effort.
+- Retry fallback can change the serving model. A configured selector is not
+  proof of the model that completed a task.
+
+Use `omp config get modelRoles` and `omp config get task.agentModelOverrides`
+to inspect configuration. Use Agent Hub (`Alt+A`) to inspect the launched Agent
+and its reported model. OMP owns these keys; do not copy them into another
+runtime's config. See OMP's [Agent discovery documentation](https://github.com/can1357/oh-my-pi/blob/v18.2.8/docs/task-agent-discovery.md)
+and [settings documentation](https://github.com/can1357/oh-my-pi/blob/v18.2.8/docs/settings.md)
+for its full runtime contract.
+
+## Pi, Grok, and runtime-specific extensions
+
+Pi's AgentKit bridge launches a child using the parent's active model when the
+Agent has no supported model pin. A separate Pi subagent extension may expose
+`subagents.agentOverrides.<name>.model` or `subagents.defaultModel`; those belong
+to that extension, not OMP and not the AgentKit bridge's automatic config reader.
+Confirm which tool handled the call before applying an extension's precedence.
+
+Grok's Agent projection removes incompatible model frontmatter without replacing
+it with a vendor-specific pin. Use the model controls your Grok runtime exposes;
+do not assume an omitted model becomes an OMP role or a particular provider.
+
+Likewise, `--advice` expresses a workflow request for counsel, not a universal
+background-advisor implementation. On a runtime that cannot select a separate
+model, counsel may use the same model as the parent; on one without delegation,
+report that advisory supervision is unavailable rather than claiming it ran.
+
+## Check an unexpected model
+
+1. Identify the Kit, installed version, runtime, scope, and active profile.
+2. Inspect the native Agent definition actually discovered, including name
+   casing. A packaged source file or a shadowed global copy is not the active file.
+3. Check model overrides before changing roles. In OMP, inspect both
+   `task.agentModelOverrides` and `modelRoles`.
+4. Separate model, effort, service tier, advisor, and prewalk settings.
+5. Confirm the model reported by the running Agent; check fallback and provider
+   access if it differs from the configured selector.
+
+For role descriptions, use [Engineer Agents](../kits/engineer/agents) or
+[Marketing Agents](../kits/marketing/agents). For install and refresh boundaries,
+use [Installing kits](./installing-kits).
