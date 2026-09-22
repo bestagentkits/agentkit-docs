@@ -1,9 +1,6 @@
-// Layer A of the Desktop three-layer refresh: mechanical rewrite of every
-// ak-gui reference in content/docs/<channel>/desktop-app/**. The docs bundle
-// carries no Desktop payload, so evidence comes from the release-page
-// ak-gui_*.zip/AppImage metadata (name, size, sha256).
-//
-// Deterministic: same (fromTag, toTag, assets) → same file bytes.
+// Desktop release evidence acquisition and historical text replay.
+// Current marker-based pages resolve immutable metadata at build time.
+// Legacy snapshots retain deterministic (fromTag, toTag, assets) rewrites.
 
 import { readFile, readdir, writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -122,7 +119,12 @@ export async function syncDesktopAssets({ repoRoot, channel, fromTag, toTag, ass
   const evidenceText = JSON.stringify({ schemaVersion: 1, tag: toTag, fromTag, assets }, null, 2) + '\n';
   let previous;
   try { previous = await readFile(evidencePath, 'utf8'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
-  if (previous && previous !== evidenceText) throw new Error(`Conflicting Desktop evidence: ${toTag}`);
+  if (previous && previous !== evidenceText) {
+    const recorded = JSON.parse(previous);
+    // A same-tag coverage audit preserves the original transition provenance.
+    const sameRelease = fromTag === toTag && recorded.schemaVersion === 1 && recorded.tag === toTag && JSON.stringify(recorded.assets) === JSON.stringify(assets);
+    if (!sameRelease) throw new Error(`Conflicting Desktop evidence: ${toTag}`);
+  }
   if (!previous) await writeFile(evidencePath, evidenceText);
   const desktopDir = join(repoRoot, 'content', 'docs', channel, 'desktop-app');
   const files = await collectMdx(desktopDir);

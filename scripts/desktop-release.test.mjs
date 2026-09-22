@@ -20,6 +20,10 @@ test('release-only bump keeps MDX bytes and resolves exact channel data into Mar
       await writeFile(join(root, 'channels.json'), JSON.stringify({ beta: { tag: `v${version}`, version } }));
       await syncDesktopAssets({ repoRoot: root, channel: 'beta', fromTag: 'v1.0.0', toTag: `v${version}`, assets: assets(version) });
       assert.equal(await readFile(path, 'utf8'), source);
+      const evidencePath = join(root, `release-evidence/desktop/v${version}.json`);
+      const evidenceBefore = await readFile(evidencePath, 'utf8');
+      await syncDesktopAssets({ repoRoot: root, channel: 'beta', fromTag: `v${version}`, toTag: `v${version}`, assets: assets(version) });
+      assert.equal(await readFile(evidencePath, 'utf8'), evidenceBefore);
       const dependencies = [];
       remarkDesktopRelease({ root })({ type: 'root', children: [{ type: 'text', value: 'AK_DESKTOP_VERSION' }] }, { path, data: { _compiler: { addDependency: p => dependencies.push(p) } } });
       assert.deepEqual(dependencies, [join(root, 'channels.json'), join(root, `release-evidence/desktop/v${version}.json`)]);

@@ -15,7 +15,7 @@
 import { parseArgs } from 'node:util';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { lstat, readFile, rm } from 'node:fs/promises';
+import { lstat, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
 import { parseManifest } from './lib/manifest.mjs';
@@ -245,6 +245,15 @@ async function main() {
     let desktop;
     try { desktop = JSON.parse(await readFile(desktopPath, 'utf8')); }
     catch (error) { if (error.code !== 'ENOENT') throw error; }
+    if (!desktop) {
+      const desktopDir = join(betaSource, 'desktop-app');
+      let entries = [];
+      try { entries = await readdir(desktopDir, { recursive: true }); }
+      catch (error) { if (error.code !== 'ENOENT') throw error; }
+      for (const path of entries.filter(path => path.endsWith('.mdx'))) {
+        if (/AK_DESKTOP_|<DesktopDownloads/.test(await readFile(join(desktopDir, path), 'utf8'))) throw new Error('Marker-based Desktop promotion requires target release evidence before mutation');
+      }
+    }
     if (desktop) {
       if (desktop.tag !== manifest.tag || desktop.fromTag !== promotedFrom || desktop.schemaVersion !== 1) throw new Error('Desktop evidence does not match promotion');
       for (const asset of Object.values(buildPlatformMap(desktop.assets))) {
