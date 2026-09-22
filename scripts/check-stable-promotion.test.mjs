@@ -8,6 +8,7 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import {
   checkStablePromotion,
+  resolvePromotionBetaCommit,
   createPromotionReceipt,
   inventoryDigest,
   promotionReceiptDigest,
@@ -323,4 +324,22 @@ test('resealed arbitrary desktop prose fails derived Layer A postimage', async (
     () => checkStablePromotion({ root: fixture.root, base: fixture.base }),
     /Stable desktop Layer A is not the derived Beta transform/,
   );
+});
+
+
+test('immutable correction preserves original tag ancestry and channel identity', async () => {
+  const { root, base } = await makePromotedFixture();
+  git(root, ['checkout', '-q', '-b', 'correction', base]);
+  await write(root, 'content/docs/beta/guides/example.mdx', 'Corrected release-matched guidance.\n');
+  const corrected = commit(root, 'correct historical guidance');
+  const ref = 'refs/tags/docs/v0.42.0-beta.7-correction.1';
+  git(root, ['tag', ref.slice('refs/tags/'.length), corrected]);
+  assert.equal(resolvePromotionBetaCommit(root, 'v0.42.0-beta.7', ref), corrected);
+  assert.equal(resolvePromotionBetaCommit(root, 'v0.42.0-beta.7'), base);
+  const channels = JSON.parse(await readFile(join(root, 'channels.json'), 'utf8'));
+  channels.beta.sha = 'c'.repeat(40);
+  await write(root, 'channels.json', JSON.stringify(channels));
+  const changed = commit(root, 'different product source');
+  git(root, ['tag', 'docs/v0.42.0-beta.7-correction.2', changed]);
+  assert.throws(() => resolvePromotionBetaCommit(root, 'v0.42.0-beta.7', 'refs/tags/docs/v0.42.0-beta.7-correction.2'), /preserve the original channel identity/);
 });

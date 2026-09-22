@@ -19,6 +19,7 @@ import { lstat, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
 import { parseManifest } from './lib/manifest.mjs';
+import { buildPlatformMap, syncDesktopAssets } from './lib/desktop-assets.mjs';
 import { promoteToStable } from './lib/promote.mjs';
 import { repoRoot } from './lib/paths.mjs';
 import {
@@ -239,6 +240,17 @@ async function main() {
 
   try {
     await assertBetaSourceMatchesBinding({ root: values.repoRoot, betaSource, betaCommit });
+    // Finalize Desktop metadata/legacy text before binding final postimages.
+    const desktopPath = join(values.repoRoot, 'release-evidence', 'desktop', `${manifest.tag}.json`);
+    let desktop;
+    try { desktop = JSON.parse(await readFile(desktopPath, 'utf8')); }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
+    if (desktop) {
+      if (desktop.tag !== manifest.tag || desktop.fromTag !== promotedFrom || desktop.schemaVersion !== 1) throw new Error('Desktop evidence does not match promotion');
+      for (const asset of Object.values(buildPlatformMap(desktop.assets))) {
+        if (!Number.isSafeInteger(asset.size) || asset.size <= 0 || !asset.name.startsWith(`ak-gui_${manifest.version}_`)) throw new Error('Desktop evidence asset version/size mismatch');
+      }
+    }
     const res = await promoteToStable({
       repoRoot: values.repoRoot,
       betaSourceDir: betaSource,
@@ -246,6 +258,7 @@ async function main() {
       bundleDir: values.bundle,
       releaseNotesSourceBytes,
     });
+    if (desktop) await syncDesktopAssets({ repoRoot: values.repoRoot, channel: 'stable', fromTag: promotedFrom, toTag: manifest.tag, assets: desktop.assets });
     let evidenceCreated = false;
     try {
       if (boundRef) {

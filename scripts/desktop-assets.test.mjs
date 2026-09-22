@@ -125,7 +125,7 @@ test('syncDesktopAssets is idempotent when fromTag equals toTag', async () => {
     channel: 'beta',
     fromTag: FROM_TAG,
     toTag: FROM_TAG,
-    assets: NEW_ASSETS,
+    assets: NEW_ASSETS.map(asset => ({ ...asset, name: asset.name.replace(TO_TAG.slice(1), FROM_TAG.slice(1)) })),
   });
   assert.deepEqual(res.changed, []);
   const after = await readFile(join(desktopDir, 'installation.en.mdx'), 'utf8');
