@@ -11,11 +11,12 @@ import {
   atomicWrite,
   releaseOutputDir,
   validateOwnerDirectedPaths,
+  validateOwnerDirectedActions,
 } from './lib/docs-release-paths.mjs';
 import { validateLedger } from './lib/docs-release-schema.mjs';
 
 const REQUIRED_FLAGS = ['--ledger', '--repo-root', '--output-root', '--target'];
-const FLAGS = [...REQUIRED_FLAGS, '--owner-paths'];
+const FLAGS = [...REQUIRED_FLAGS, '--owner-paths', '--owner-actions'];
 
 export async function runImpactMap(options) {
   const ledger = validateLedger(await readJson(options.ledger, 'source ledger'));
@@ -23,7 +24,11 @@ export async function runImpactMap(options) {
   const ownerPaths = options.ownerPaths === undefined
     ? []
     : validateOwnerDirectedPaths(options.ownerPaths, options.repoRoot);
-  const request = createApprovalRequest({ ledger, impactMap, target: options.target, ownerPaths });
+  if (options.ownerPaths !== undefined && options.ownerActions !== undefined) throw new Error('owner paths and owner actions are mutually exclusive');
+  const ownerActions = options.ownerActions === undefined
+    ? []
+    : validateOwnerDirectedActions(options.ownerActions, options.repoRoot);
+  const request = createApprovalRequest({ ledger, impactMap, target: options.target, ownerPaths, ownerActions });
   const outputDir = releaseOutputDir(options.outputRoot, options.target);
   await assertNoSymlinkPath(options.outputRoot, outputDir);
   const files = new Map([
@@ -45,6 +50,9 @@ export async function main(argv = process.argv.slice(2)) {
     target: args['--target'],
     ...(args['--owner-paths'] ? {
       ownerPaths: await readJson(args['--owner-paths'], 'owner-directed paths'),
+    } : {}),
+    ...(args['--owner-actions'] ? {
+      ownerActions: await readJson(args['--owner-actions'], 'owner-directed actions'),
     } : {}),
   });
   process.stdout.write(stableJson({ status: result.request.status, outputDir: result.outputDir, files: result.files }));

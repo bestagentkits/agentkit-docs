@@ -8,15 +8,15 @@ import { repoRoot } from './lib/paths.mjs';
 
 export const RELEASE_SHAPE_BASELINE = Object.freeze({
   schemaVersion: 1,
-  reviewedAt: '2026-09-05',
-  sourceCommit: '7d335583f34b21a98f1e607e37cfe6295f3f08e6',
+  reviewedAt: '2026-09-22',
+  sourceCommit: 'fdaec4a4092d21babbb2a9ba40fb3900e3cf3a42',
   channels: ['beta', 'stable'],
   locales: ['en', 'vi'],
   // Per-channel route counts follow each channel's immutable evidence. The
   // shape guard still requires Beta to contain every Stable route; the Kit
   // catalog guard separately enforces each channel's exact inventory snapshot.
-  sourceRoutesPerLocaleChannel: { stable: 412, beta: 412 },
-  routesPerLocaleChannel: { stable: 411, beta: 411 },
+  sourceRoutesPerLocaleChannel: { stable: 450, beta: 450 },
+  routesPerLocaleChannel: { stable: 449, beta: 449 },
   reviewedSourceOnlyRoutes: [
     {
       route: 'changelog',
