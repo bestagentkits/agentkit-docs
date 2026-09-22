@@ -1,0 +1,270 @@
+---
+title: Model của Agent trên từng runtime
+description: Hiểu khi nào AgentKit giao việc, cách từng runtime ánh xạ model của Agent và nơi cấu hình role, override của OMP.
+---
+
+AgentKit định nghĩa workflow và chỉ dẫn chuyên môn của từng Agent. Runtime
+nhận diện Agent đã cài, khởi chạy và resolve model. Chọn model không tự spawn
+Agent hay cho phép tăng mức delegation.
+
+Guide này mô tả mapping trong các Kit đã phát hành của phiên bản đang chọn
+trên docs. Ví dụ cấu hình OMP theo OMP 18.2.8. Phiên bản Kit đã cài, override,
+quyền truy cập model và phiên bản runtime có thể làm kết quả khác đi; hãy kiểm
+tra định nghĩa đang được nạp và lượt chạy thực tế trước khi kết luận model nào
+đã được dùng.
+
+## Khi nào workflow giao việc
+
+Một chỉnh sửa nhỏ hoặc lookup có thể do phiên chính xử lý. Workflow có thể
+giao việc khi prompt chuyên môn, review độc lập, context mới hoặc công việc
+song song mang lại lợi ích và được chỉ dẫn của bạn cùng runtime cho phép.
+
+| Công việc | Agent thường dùng | Khi nào cần |
+| --- | --- | --- |
+| Khảo sát hoặc nghiên cứu | `Explore`, `researcher` | Các vùng code độc lập hoặc công nghệ chưa rõ |
+| Lập kế hoạch hoặc so sánh phương án | `planner`, `brainstormer` | Thay đổi lớn hoặc quyết định thiết kế khó |
+| Implement | `fullstack-developer` | Phần việc có phạm vi và quyền sửa file rõ ràng; worker song song không sửa trùng file |
+| Kiểm chứng hoặc review | `tester`, `code-reviewer` | Kiểm tra độc lập bổ sung coverage, nhất là với public contract, bảo mật hoặc nhiều module |
+| Chẩn đoán hoặc xin tư vấn | `debugger`, `kongming` | Lỗi lặp lại, bằng chứng mâu thuẫn hoặc quyết định rủi ro cao |
+| Hoàn tất | `docs-manager`, `journal-writer` | Tài liệu cần thay đổi hoặc có bài học cần lưu lại |
+
+Đây là các cơ hội delegation, không phải chuỗi Agent bắt buộc. Mode cụ thể của
+Skill có thể thêm checkpoint: `ak:cook --parallel` giao phần việc độc lập khi
+có khả năng delegation; `ak:cook --advice` gọi `kongming` sau mỗi phase, khi bị
+kẹt, khi verification thất bại và trước quyết định rủi ro cao. Bước test cố ý
+đỏ trong TDD không phải verification thất bại của công việc đã hoàn thành.
+Dùng cú pháp gọi Skill được cài cho runtime; flag của Skill không phải flag
+CLI dùng chung cho `omp` hay `ak`.
+
+## So sánh hành vi runtime
+
+| Runtime | Cách xuất Agent và chọn model | Nơi kiểm tra hoặc cấu hình |
+| --- | --- | --- |
+| Claude Code | Định nghĩa Agent native giữ selector `sonnet`, `opus`, `haiku`, `fable` hoặc `inherit` của Kit | Định nghĩa đang dùng trong `.claude/agents` hoặc Agent của plugin đã cài; Claude Code quản lý quyền truy cập model |
+| Codex | TOML riêng cho từng Agent pin model và reasoning effort; pin này có thể ghi đè tier chung của Kit | `.codex/agents/*.toml` đang dùng và Agent runtime do AgentKit đăng ký |
+| Cursor | Tier của Kit được chuyển thành model ID cụ thể khi xuất cấu hình | `.cursor/agents/*.md` đang dùng; cấu hình `agent_models.cursor` của AgentKit |
+| Oh My Pi (OMP) | Tier của Kit trở thành alias role, được resolve khi Agent khởi chạy | Định nghĩa Agent trong `.omp`, `modelRoles` và `task.agentModelOverrides` |
+| Pi | Bỏ tier Claude; bridge của AgentKit kế thừa model phiên cha trừ khi Agent có model pin tường minh được hỗ trợ | Định nghĩa `.pi/agents` đang dùng và extension xử lý lượt gọi Agent |
+| Grok Build | Bỏ frontmatter model và tool không tương thích; AgentKit không pin model thay thế | Định nghĩa `.grok/agents` đang dùng và lựa chọn model của Grok |
+| DeepSeek Harness (DSH) | Định nghĩa Agent của Kit được giữ làm nội dung hỗ trợ chưa kích hoạt; delegation native của DSH không tự kích hoạt chúng | Plugin hoặc preset của DSH; không giả định có mapping model từ Kit |
+
+Antigravity (`agy`) dùng projection global riêng và bỏ tier model không tương
+thích. OpenCode và portable export không thiết lập mapping subagent/model đang
+hoạt động của AgentKit. Một target nhận Skill hoặc xuất file không chứng minh
+nó có thể dispatch mọi Agent có tên. Xem [Runtime adapter](../concepts/runtime-adapters)
+để hiểu thêm khác biệt về khả năng và cách phân phối.
+
+## Mapping Agent của Engineer
+
+Bảng sau bao phủ cả 16 Agent của Engineer. Cột thứ hai là selector của Kit được
+giữ cho Claude Code. OMP chuyển nó thành alias role; tên tier gốc không bắt
+buộc bạn dùng model của một vendor cụ thể.
+
+| Agent | Selector Kit / Claude Code | Selector OMP |
+| --- | --- | --- |
+| `fullstack-developer`, `researcher`, `debugger`, `docs-manager`, `project-manager`, `journal-writer` | `sonnet` | `@task` |
+| `planner`, `brainstormer`, `code-reviewer`, `code-simplifier` | `opus` | `@plan` |
+| `Explore`, `tester`, `git-manager` | `haiku` | `@smol` |
+| `kongming`, `advisor` | `fable` | `@advisor` |
+| `ui-ux-designer` | `inherit` | Không ghi model: kế thừa model đang chạy của phiên cha/session |
+
+Selector có trong file không chứng minh tài khoản của bạn dùng được nó. Đặc
+biệt, hãy kiểm tra quyền truy cập trước khi dựa vào tư vấn bằng `fable`. Role
+`@plan` chọn model; nó không đưa reviewer vào chế độ plan chỉ đọc.
+
+### Pin của Codex
+
+Codex dùng pin theo từng Agent thay vì bốn role OMP:
+
+| Agent của Engineer | Model | Reasoning effort |
+| --- | --- | --- |
+| `Explore` (slug Codex là `explore`), `git-manager` | `gpt-5.4-mini` | Mặc định runtime; không ghi effort |
+| `fullstack-developer`, `ui-ux-designer` | `gpt-5.6-luna` | `max` |
+| `project-manager`, `researcher`, `docs-manager`, `journal-writer` | `gpt-5.6-luna` | `high` |
+| `planner`, `brainstormer`, `code-reviewer`, `code-simplifier`, `debugger`, `tester` | `gpt-5.6-sol` | `medium` |
+| `kongming`, `advisor` | `gpt-6-astra` | `low` |
+
+Ví dụ, `tester` của Engineer dùng tier Kit `haiku` nhưng được pin Sol / medium
+trên Codex. `ui-ux-designer` được pin Luna / max dù selector chung là `inherit`.
+Đọc các field TOML cấp cao nhất, không lấy dòng `model:` được trích trong
+`developer_instructions` làm cấu hình runtime.
+
+Tích hợp Codex của AgentKit có thể cung cấp Agent qua Agent runtime local đã
+đăng ký. Chỉ thấy file TOML không chứng minh phiên hiện tại có tool delegation
+gọi được. Nếu không tìm thấy Agent, làm theo [Hướng dẫn xử lý lỗi nhận diện Agent](../troubleshooting/runtime-cannot-find-skill-or-agent).
+
+### Mặc định và override của Cursor
+
+| Tier Kit | Selector xuất cho Cursor |
+| --- | --- |
+| `sonnet` | `claude-sonnet-5-high` |
+| `opus` | `claude-opus-4-8-thinking-high` |
+| `haiku` | `composer-2.5-fast` |
+| `fable` | `claude-fable-5-high` |
+| `inherit` | `inherit` |
+
+Đây là giá trị mặc định được xuất, không bảo đảm mọi tài khoản Cursor hiện tại
+đều có các model đó. AgentKit nhận override `agent_models.cursor.<tier>` trong
+cấu hình riêng. Cấu hình user thường ở `~/.agentkit/config.yaml`; cấu hình
+project ở `.agentkit/config.yaml`. Ví dụ, thay placeholder bên dưới bằng model
+ID đang khả dụng trong Cursor:
+
+```yaml
+agent_models:
+  cursor:
+    sonnet: YOUR_CURSOR_MODEL_ID
+```
+
+Giá trị project áp dụng cho bản cài project; bản cài global dùng cấu hình user.
+Đây là thiết lập lúc xuất cấu hình, không phải role được resolve khi chạy như
+OMP. Sau [thao tác vòng đời Kit](./installing-kits) phù hợp, kiểm tra file đã
+xuất. Không giả định sửa config sẽ đổi worker đang chạy hay ghi đè file Agent
+đã được người dùng chỉnh sửa.
+
+## Khác biệt của Marketing Kit
+
+Không áp dụng bảng Codex của Engineer cho Marketing Kit. Trong package
+Marketing Codex đã phát hành, cả 32 Agent được xuất đều dùng `gpt-5.6-luna` với
+`model_reasoning_effort = "max"`, gồm `kongming` và các vai trò cũng có trong
+Engineer Kit. Đây là mặc định package, không có nghĩa một lượt gọi tư vấn
+không thể yêu cầu model khác một cách tường minh.
+
+Với runtime ánh xạ theo tier, hãy đọc frontmatter của chính Agent Marketing:
+tên giống Engineer không bảo đảm tier giống nhau. Ví dụ, `code-reviewer` của
+Marketing dùng `sonnet`, tương ứng OMP `@task`; `code-reviewer` của Engineer dùng
+`opus`, tương ứng `@plan`. Bảng tier-to-role và tier-to-Cursor vẫn áp dụng. Xem
+[danh sách Agent Marketing](../kits/marketing/agents) và kiểm tra định nghĩa
+thực sự được nạp khi hai Kit cùng cung cấp một tên.
+
+## Cấu hình role OMP
+
+OMP thường đọc thiết lập user từ `~/.omp/agent/config.yml` và project từ
+`.omp/config.yml`. Profile có tên hoặc biến môi trường có thể đổi user root;
+`omp config path` cho biết thư mục Agent đang dùng. Thiết lập project ghi đè
+giá trị global, config overlay tường minh ghi đè các lớp đó, và runtime override
+ưu tiên hơn thiết lập đã lưu.
+
+Vào `/model`, chọn Roles để gán model khả dụng cho `task`, `plan`, `smol` và
+`advisor`. Hoặc merge cấu trúc dưới đây vào config, thay mọi placeholder bằng
+selector model được provider của bạn hỗ trợ:
+
+```yaml
+modelRoles:
+  task: YOUR_PROVIDER/YOUR_WORKER_MODEL:high
+  plan: YOUR_PROVIDER/YOUR_PLANNING_MODEL:high
+  smol: YOUR_PROVIDER/YOUR_FAST_MODEL:medium
+  advisor: YOUR_PROVIDER/YOUR_COUNSEL_MODEL:high
+```
+
+Suffix effort là tùy chọn và phải được model hỗ trợ. AgentKit xuất alias;
+nó không tự điền các lựa chọn model cá nhân này. Chỉ đổi model phiên chính
+không đổi mapping của Agent có role tường minh. `slow` và `plan` là hai role
+riêng dù bạn gán cùng một model.
+
+### Override một Agent
+
+Với dispatch qua tool `task` thông thường của OMP, thứ tự chọn là:
+
+1. `task.agentModelOverrides[agentName]`.
+2. Model trong frontmatter Agent, mở rộng alias qua `modelRoles`.
+3. Model đang chạy của phiên cha, rồi fallback cấu hình/mặc định khi Agent kế thừa.
+
+Eval bridge của OMP còn có thể truyền model override riêng cho một invocation;
+schema `task` thông thường không có field đó. Tên được tra chính xác và phân
+biệt hoa thường: `Explore` không phải `explore`.
+
+Ví dụ, merge các entry sau vào mapping đã có:
+
+```yaml
+modelRoles:
+  review: YOUR_PROVIDER/YOUR_REVIEW_MODEL:high
+
+task:
+  agentModelOverrides:
+    code-reviewer: "@review"
+    kongming: "@advisor"
+```
+
+Role tùy chỉnh tên `review` hay `REVIEWER` không tự nối với `code-reviewer`;
+override trên tạo liên kết đó. Bạn có thể dùng `provider/model:effort` cụ thể
+thay alias, nhưng Agent sẽ không còn theo thay đổi của role trước đó. Xóa
+override riêng để trở lại frontmatter. OMP mặc định để `task.agentModelOverrides`
+rỗng; AgentKit không tự cài override model cá nhân cho `kongming`.
+
+### Phân biệt chọn model và advisor theo dõi phiên
+
+Ba điều khiển có tên gần giống nhau thực hiện ba việc khác nhau:
+
+| Điều khiển | Ý nghĩa |
+| --- | --- |
+| Frontmatter Agent `model: "@advisor"` | Chọn model chạy worker từ role `advisor` |
+| `--advice` của Skill AK | Gọi `kongming` tại checkpoint tư vấn của Skill |
+| `--advisor` / `advisor.enabled` của OMP | Bật advisor theo dõi và góp ý cho một phiên |
+
+Để tránh thêm một lớp tư vấn vào chính phiên tư vấn của Kongming, giữ advisor
+riêng của nó ở trạng thái tắt, trừ khi bạn chủ động cần lớp thứ hai:
+
+```yaml
+task:
+  agentAdvisor:
+    kongming: "off"
+```
+
+Cấu hình này không tắt Kongming hay ngăn checkpoint `--advice` của AK spawn nó.
+Nó chỉ tắt advisor riêng gắn với phiên con đó. Subagent OMP mặc định không tự
+bật advisor; thiết lập theo Agent ghi đè frontmatter `advisor`. Không cần
+`--advisor` chỉ để dùng `model: "@advisor"`.
+
+### Các điều khiển khác có thể đổi lượt chạy
+
+- `task.agentPrewalk` có thể chuyển worker sang model khác; `task.prewalk` bật
+  mặc định cho Agent generic `task` đi kèm OMP, không phải mọi Agent AK.
+- `task.enableEffort` mở tham số effort theo task; `task.maxEffort` giới hạn
+  các hint đó, không giới hạn mọi suffix model tường minh. Hint effort của task
+  ưu tiên hơn suffix effort tường minh, rồi đến effort mặc định của Agent.
+- `task.maxConcurrency` và `task.maxRecursionDepth` giới hạn thực thi, không
+  chọn model. Chúng không yêu cầu Agent chính dùng hết mức tối đa.
+- `tier.subagent` và `task.agentServiceTierOverrides` điều khiển service tier,
+  độc lập với model và reasoning effort.
+- Retry fallback có thể đổi model thực thi. Selector cấu hình không chứng minh
+  model nào đã hoàn thành task.
+
+Dùng `omp config get modelRoles` và `omp config get task.agentModelOverrides`
+để xem cấu hình. Dùng Agent Hub (`Alt+A`) để kiểm tra Agent đã spawn và model
+được báo cáo. Các key này thuộc OMP; không chép sang config runtime khác. Xem
+[tài liệu nhận diện Agent](https://github.com/can1357/oh-my-pi/blob/v18.2.8/docs/task-agent-discovery.md)
+và [tài liệu settings](https://github.com/can1357/oh-my-pi/blob/v18.2.8/docs/settings.md)
+của OMP để đọc đầy đủ contract runtime.
+
+## Pi, Grok và extension riêng của runtime
+
+Bridge của AgentKit trên Pi khởi chạy child bằng model đang chạy của phiên cha
+khi Agent không có model pin được hỗ trợ. Một extension subagent riêng của Pi
+có thể cung cấp `subagents.agentOverrides.<name>.model` hoặc
+`subagents.defaultModel`; chúng thuộc extension đó, không thuộc OMP và không
+phải cấu hình bridge AgentKit tự đọc. Xác định tool nào xử lý lượt gọi trước
+khi áp dụng thứ tự ưu tiên của extension.
+
+Projection Agent cho Grok bỏ frontmatter model không tương thích mà không thêm
+pin thay thế theo vendor. Dùng điều khiển model mà Grok runtime cung cấp;
+không suy ra model bị bỏ sẽ thành role OMP hay model của provider cụ thể.
+
+Tương tự, `--advice` thể hiện yêu cầu tư vấn của workflow, không phải cơ chế
+advisor nền dùng chung. Trên runtime không chọn được model riêng, tư vấn có
+thể dùng cùng model với phiên cha; trên runtime không có delegation, cần báo
+advisory supervision không khả dụng thay vì tuyên bố đã chạy.
+
+## Kiểm tra khi model khác mong đợi
+
+1. Xác định Kit, phiên bản đã cài, runtime, scope và profile đang dùng.
+2. Kiểm tra định nghĩa Agent native thực sự được nhận diện, gồm cả hoa thường
+   trong tên. File nguồn trong package hoặc bản global bị che khuất không phải file đang chạy.
+3. Kiểm tra override trước khi đổi role. Với OMP, xem cả
+   `task.agentModelOverrides` và `modelRoles`.
+4. Phân biệt model, effort, service tier, advisor và prewalk.
+5. Xác nhận model được Agent đang chạy báo cáo; kiểm tra fallback và quyền truy
+   cập provider nếu khác selector cấu hình.
+
+Để xem vai trò chuyên môn, đọc [Agent Engineer](../kits/engineer/agents) hoặc
+[Agent Marketing](../kits/marketing/agents). Để hiểu ranh giới cài đặt và refresh,
+xem [Cài đặt Kit](./installing-kits).
