@@ -15,6 +15,7 @@ import {
   assertV0WriteScope,
   normalizeRepoPath,
   v1WriteViolations,
+  validateOwnerDirectedActions,
   validateOwnerDirectedPaths,
 } from './lib/docs-release-paths.mjs';
 import { writeV0Reports } from './lib/docs-release-reports.mjs';
@@ -25,14 +26,14 @@ const FLAGS = [
   '--repo-root', '--output-root', '--target', '--request', '--approval', '--changes',
   '--ledger', '--impact-map', '--manifest', '--source-repository', '--docs-repository',
   '--docs-base-sha', '--target-branch', '--now', '--used-nonces', '--output-prefix',
-  '--audit-source', '--source-root', '--issue-body', '--owner-paths',
+  '--audit-source', '--source-root', '--issue-body', '--owner-paths', '--owner-actions',
 ];
 
 const HELP = `Usage:
   node scripts/check-docs-release-update.mjs --mode v0 \\
     --from-ref <ref> --to-ref <ref> \\
     --from-source <path> --to-source <path> --channel <beta|stable> \\
-    --repo-root <path> --output-root <path> --target <name> [--owner-paths <json>]
+    --repo-root <path> --output-root <path> --target <name> [--owner-paths <json> | --owner-actions <json>]
 
   node scripts/check-docs-release-update.mjs --mode coverage-gap \\
     --audit-source <path> --source-root <path> \\
@@ -61,11 +62,15 @@ async function runV0(args) {
   const to = await loadReleaseSource(args['--to-source'], { ref: args['--to-ref'], channel: args['--channel'] });
   const ledger = createReleaseLedger(from, to, args['--channel']);
   const impactMap = createImpactMap(ledger, { repoRoot: args['--repo-root'] });
+  if (args['--owner-paths'] && args['--owner-actions']) throw new Error('--owner-paths and --owner-actions are mutually exclusive');
   const ownerPaths = args['--owner-paths']
     ? validateOwnerDirectedPaths(
       await readJson(args['--owner-paths'], 'owner-directed paths'),
       args['--repo-root'],
     )
+    : [];
+  const ownerActions = args['--owner-actions']
+    ? validateOwnerDirectedActions(await readJson(args['--owner-actions'], 'owner-directed actions'), args['--repo-root'])
     : [];
   const result = await writeV0Reports({
     ledger,
@@ -73,6 +78,7 @@ async function runV0(args) {
     outputRoot: args['--output-root'],
     target: args['--target'],
     ownerPaths,
+    ownerActions,
   });
   return {
     mode: 'v0',
@@ -163,7 +169,7 @@ async function runV1(args) {
     suppliedChanges,
     await resolveV1GitChanges(args['--repo-root'], args['--docs-base-sha']),
   );
-  const violations = v1WriteViolations(changes, request.paths);
+  const violations = v1WriteViolations(changes, request.paths, request.pathActions ?? []);
   if (violations.length) throw new Error(`V1 write scope rejected:\n${violations.map((item) => `- ${item}`).join('\n')}`);
   if (isCoverageApprovalRequest(request)) {
     await verifyCoverageV1Physical({

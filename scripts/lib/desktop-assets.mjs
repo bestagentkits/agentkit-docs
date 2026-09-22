@@ -1,11 +1,8 @@
-// Layer A of the Desktop three-layer refresh: mechanical rewrite of every
-// ak-gui reference in content/docs/<channel>/desktop-app/**. The docs bundle
-// carries no Desktop payload, so evidence comes from the release-page
-// ak-gui_*.zip/AppImage metadata (name, size, sha256).
-//
-// Deterministic: same (fromTag, toTag, assets) → same file bytes.
+// Desktop release evidence acquisition and historical text replay.
+// Current marker-based pages resolve immutable metadata at build time.
+// Legacy snapshots retain deterministic (fromTag, toTag, assets) rewrites.
 
-import { readFile, readdir, writeFile } from 'node:fs/promises';
+import { readFile, readdir, writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const PLATFORM_KEYS = ['darwin_amd64', 'darwin_arm64', 'linux_amd64', 'windows_amd64'];
@@ -96,8 +93,8 @@ export function applyDesktopLayerAText(source, fromTag, toTag, assets) {
 }
 
 /**
- * Apply Desktop Layer A refresh: bulk swap the tag and rewrite the artifact
- * table across every *.mdx in content/docs/<channel>/desktop-app/.
+ * Persist release evidence; marker-based pages require no source edits.
+ * Replay the legacy text transform only for historical snapshots.
  *
  * @param {object} args
  * @param {string} args.repoRoot
@@ -109,15 +106,32 @@ export function applyDesktopLayerAText(source, fromTag, toTag, assets) {
  */
 export async function syncDesktopAssets({ repoRoot, channel, fromTag, toTag, assets }) {
   if (!fromTag || !toTag) throw new Error('syncDesktopAssets requires fromTag and toTag');
-  buildPlatformMap(assets);
-  if (fromTag === toTag) return { changed: [], platforms: PLATFORM_KEYS.length };
+  if (!['beta', 'stable'].includes(channel)) throw new Error('Invalid Desktop channel');
+  const platforms = buildPlatformMap(assets);
+  for (const asset of Object.values(platforms)) {
+    if (!Number.isSafeInteger(asset.size) || asset.size <= 0 || !asset.name.startsWith(`ak-gui_${toTag.slice(1)}_`)) throw new Error('Desktop asset version/size mismatch');
+  }
 
+  if (!/^v\d+\.\d+\.\d+(?:-[\w.-]+)?$/.test(toTag)) throw new Error('Invalid Desktop evidence tag');
+  const evidenceDir = join(repoRoot, 'release-evidence', 'desktop');
+  await mkdir(evidenceDir, { recursive: true });
+  const evidencePath = join(evidenceDir, `${toTag}.json`);
+  const evidenceText = JSON.stringify({ schemaVersion: 1, tag: toTag, fromTag, assets }, null, 2) + '\n';
+  let previous;
+  try { previous = await readFile(evidencePath, 'utf8'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  if (previous && previous !== evidenceText) {
+    const recorded = JSON.parse(previous);
+    // A same-tag coverage audit preserves the original transition provenance.
+    const sameRelease = fromTag === toTag && recorded.schemaVersion === 1 && recorded.tag === toTag && JSON.stringify(recorded.assets) === JSON.stringify(assets);
+    if (!sameRelease) throw new Error(`Conflicting Desktop evidence: ${toTag}`);
+  }
+  if (!previous) await writeFile(evidencePath, evidenceText);
   const desktopDir = join(repoRoot, 'content', 'docs', channel, 'desktop-app');
   const files = await collectMdx(desktopDir);
   const changed = [];
   for (const path of files) {
     const before = await readFile(path, 'utf8');
-    const after = applyDesktopLayerAText(before, fromTag, toTag, assets);
+    const after = /AK_DESKTOP_|<DesktopDownloads/.test(before) ? before : applyDesktopLayerAText(before, fromTag, toTag, assets);
     if (after !== before) {
       await writeFile(path, after);
       changed.push(path);

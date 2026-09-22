@@ -149,8 +149,76 @@ export function validateOwnerDirectedPaths(paths, repoRoot) {
   return normalized;
 }
 
-export function v1WriteViolations(changes, approvedPaths) {
+const OWNER_ACTIONS = new Set(['modify', 'add', 'retire']);
+
+export function normalizeOwnerDirectedActions(actions) {
+  if (!Array.isArray(actions) || actions.length === 0) {
+    throw new ReleasePathError('owner actions must be a non-empty JSON array');
+  }
+  const entries = [];
+  for (const item of actions) {
+    if (!item || typeof item !== 'object' || Array.isArray(item) || !OWNER_ACTIONS.has(item.action)) {
+      throw new ReleasePathError('owner action entries require action (modify|add|retire) and non-empty paths');
+    }
+    const paths = Array.isArray(item.paths) ? item.paths : (typeof item.path === 'string' ? [item.path] : []);
+    if (paths.length === 0) throw new ReleasePathError('owner action entries require action (modify|add|retire) and non-empty paths');
+    for (const rawPath of paths) {
+      const path = normalizeRepoPath(rawPath);
+      if (!isHumanOwnedBetaFile(path)) throw new ReleasePathError(`${path}: owner-directed path is outside human-owned Beta prose/metadata scope`);
+      entries.push({ action: item.action, path });
+    }
+  }
+  entries.sort((left, right) => left.path.localeCompare(right.path) || left.action.localeCompare(right.action));
+  const seen = new Set();
+  for (const entry of entries) {
+    if (seen.has(entry.path)) throw new ReleasePathError(`${entry.path}: owner action path may appear only once`);
+    seen.add(entry.path);
+  }
+  const actionByPath = new Map(entries.map((entry) => [entry.path, entry.action]));
+  for (const entry of entries) {
+    const pair = localizedBetaPair(entry.path);
+    if (!pair || actionByPath.get(pair) !== entry.action) {
+      throw new ReleasePathError(`owner action path ${entry.path} requires paired ${entry.action} path ${pair}`);
+    }
+  }
+  return entries;
+}
+
+export function validateOwnerDirectedActions(actions, repoRoot) {
+  const entries = normalizeOwnerDirectedActions(actions);
+  for (const { action, path } of entries) {
+    const destination = resolveWithin(repoRoot, path);
+    let cursor = resolve(repoRoot);
+    const parts = path.split('/');
+    for (let index = 0; index < parts.length; index += 1) {
+      cursor = resolve(cursor, parts[index]);
+      try {
+        const stat = lstatSync(cursor);
+        if (stat.isSymbolicLink()) throw new ReleasePathError(`${path}: owner-directed path must not traverse a symlink`);
+        if (index < parts.length - 1 && !stat.isDirectory()) throw new ReleasePathError(`${path}: parent is not a directory`);
+        if (index === parts.length - 1) {
+          if (action === 'add') throw new ReleasePathError(`${path}: add path already exists`);
+          if (!stat.isFile()) throw new ReleasePathError(`${path}: owner-directed path must be an existing regular file`);
+        }
+      } catch (error) {
+        if (error.code === 'ENOENT') {
+          if (action !== 'add' || index !== parts.length - 1) throw new ReleasePathError(`${path}: ${action} path does not exist`);
+          continue;
+        }
+        throw error;
+      }
+    }
+    if (action === 'add' && !path.endsWith('.en.mdx') && !path.endsWith('.vi.mdx')) {
+      throw new ReleasePathError(`${path}: add is limited to paired MDX prose files`);
+    }
+    void destination;
+  }
+  return entries;
+}
+
+export function v1WriteViolations(changes, approvedPaths, pathActions = []) {
   const approved = new Set(approvedPaths.map(normalizeRepoPath));
+  const actionByPath = new Map(pathActions.map(({ path, action }) => [normalizeRepoPath(path), action]));
   const modified = new Set();
   const violations = [];
   for (const change of changes) {
@@ -161,8 +229,9 @@ export function v1WriteViolations(changes, approvedPaths) {
       violations.push(`${change.path}: ${error.message}`);
       continue;
     }
-    if (String(change.status).toUpperCase() !== 'M') {
-      violations.push(`${path}: V1 may only modify existing files`);
+    const expectedStatus = { modify: 'M', add: 'A', retire: 'D' }[actionByPath.get(path) ?? 'modify'];
+    if (String(change.status).toUpperCase() !== expectedStatus) {
+      violations.push(`${path}: V1 requires ${expectedStatus} for approved ${actionByPath.get(path) ?? 'modify'} action`);
     } else if (!isHumanOwnedBetaFile(path)) {
       violations.push(`${path}: outside human-owned Beta prose/metadata scope`);
     } else if (!approved.has(path)) {

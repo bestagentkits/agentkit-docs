@@ -797,7 +797,7 @@ test('closed-world evidence rejects a 49th orphan archive file', async () => {
   assert.ok(errors.some((error) => error === `catalog evidence files: missing []; extra [${orphan}]`), errors.join('\n'));
 });
 
-test('real registry validates all 24 evidence triads and 49 committed files', async () => {
+test('real registry validates every release-bound evidence triad', async () => {
   const root = join(import.meta.dirname, '..');
   const [registry, channels] = await Promise.all([
     readFile(join(root, 'kit-catalog-identities.json'), 'utf8').then(JSON.parse),
@@ -805,12 +805,12 @@ test('real registry validates all 24 evidence triads and 49 committed files', as
   ]);
   assert.deepEqual(validateRegistry(registry, channels), []);
   assert.deepEqual(await validateCatalogEvidence({ registry, channelsIdentity: channels, root }), []);
-  assert.equal(Object.keys(registry.inventorySnapshots).length, 4);
+  assert.equal(Object.keys(registry.inventorySnapshots).length, new Set(Object.values(registry.channels).flatMap(c => Object.values(c.kits).map(k => k.snapshotDigest))).size);
   const triads = [];
   const evidencePaths = new Set();
   for (const channel of ['stable', 'beta']) {
-    assert.equal(Object.keys(registry.channels[channel].kits.engineer.artifacts).length, 6);
-    assert.equal(Object.keys(registry.channels[channel].kits.marketing.artifacts).length, 6);
+    assert.equal(Object.keys(registry.channels[channel].kits.engineer.artifacts).length, registry.channels[channel].runtimes.length);
+    assert.equal(Object.keys(registry.channels[channel].kits.marketing.artifacts).length, registry.channels[channel].runtimes.length);
     for (const [kitId, bindingValue] of Object.entries(registry.channels[channel].kits)) {
       if (bindingValue.skillMembers?.path) evidencePaths.add(bindingValue.skillMembers.path);
       for (const [runtime, triad] of Object.entries(bindingValue.artifacts)) {
@@ -820,15 +820,15 @@ test('real registry validates all 24 evidence triads and 49 committed files', as
       }
     }
   }
-  assert.equal(new Set(triads).size, 24);
-  assert.equal(evidencePaths.size, 49);
+  assert.equal(new Set(triads).size, Object.values(registry.channels).reduce((n, c) => n + c.runtimes.length * Object.keys(c.kits).length, 0));
+  assert.equal(evidencePaths.size, triads.length * 2 + Object.values(registry.channels).flatMap(c => Object.values(c.kits)).filter(k => k.skillMembers).length);
   const snapshots = Object.values(registry.inventorySnapshots);
   const byKit = Object.fromEntries(['engineer', 'marketing'].map((kitId) => [
     kitId,
     snapshots.filter((value) => value.kitId === kitId),
   ]));
-  assert.equal(byKit.engineer.length, 2);
-  assert.equal(byKit.marketing.length, 2);
+  assert.equal(byKit.engineer.length, new Set(Object.values(registry.channels).map(c => c.kits.engineer.snapshotDigest)).size);
+  assert.equal(byKit.marketing.length, new Set(Object.values(registry.channels).map(c => c.kits.marketing.snapshotDigest)).size);
   for (const kitId of ['engineer', 'marketing']) {
     for (const channel of ['stable', 'beta']) {
       const digest = registry.channels[channel].kits[kitId].snapshotDigest;
@@ -837,4 +837,21 @@ test('real registry validates all 24 evidence triads and 49 committed files', as
   }
   assert.notEqual(registry.channels.stable.kits.engineer.snapshotDigest, registry.channels.beta.kits.engineer.snapshotDigest);
   assert.notEqual(registry.channels.stable.kits.marketing.snapshotDigest, registry.channels.beta.kits.marketing.snapshotDigest);
+});
+
+test('schema 3 binds different historical/current cohorts and detects omitted package evidence', async () => {
+  const fixture = await makeFixture();
+  const registry = structuredClone(fixture.registry);
+  registry.schemaVersion = 3;
+  registry.runtimes = [...RUNTIMES, 'dsh'];
+  for (const channel of ['stable', 'beta']) {
+    const value = registry.channels[channel];
+    value.runtimes = channel === 'stable' ? [...RUNTIMES] : [...RUNTIMES, 'dsh'];
+    value.runtimeContract = { path: `release-evidence/runtime-contracts/${value.sourceCommit}.json`, name: `${value.sourceCommit}.json`, size: 1, sha256: HASH };
+  }
+  const errors = validateRegistry(registry, releases);
+  assert(errors.some(e => e.includes('artifacts') && e.includes('dsh')), errors.join('\n'));
+  assert(!errors.some(e => e.includes('channels.stable') && e.includes('dsh')), errors.join('\n'));
+  registry.channels.beta.runtimes.push('agy');
+  assert(validateRegistry(registry, releases).some(e => e.includes('union')));
 });

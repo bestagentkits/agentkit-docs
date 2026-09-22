@@ -12,7 +12,7 @@ import {
 } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { dirname, join, posix, relative, resolve, sep } from 'node:path';
-import { canonicalSnapshotDigest, RUNTIMES, validateRegistry } from './kit-catalog.mjs';
+import { canonicalSnapshotDigest, channelRuntimes, validateRegistry } from './kit-catalog.mjs';
 
 export const BASE_DOCS_COMMIT = '2ca17fab83097dfe96da28c5407337224f87f688';
 export const DEFAULT_MANIFEST_PATH = 'docs-reconciliations/stable-kit-v2.14.0.json';
@@ -273,7 +273,7 @@ function catalogEvidence(evidence, kitIds) {
     }
     snapshots.push({ kitId, snapshotDigest: stable.snapshotDigest, snapshot: structuredClone(snapshot) });
     bindings.push({ kitId, stable: structuredClone(stable), beta: structuredClone(beta) });
-    for (const runtime of RUNTIMES) {
+    for (const runtime of new Set([...channelRuntimes(evidence.registry, 'stable'), ...channelRuntimes(evidence.registry, 'beta')])) {
       const stableTriad = stable.artifacts[runtime];
       const betaTriad = beta.artifacts[runtime];
       if (!stableTriad || !betaTriad || stableTriad.archive?.sha256 !== betaTriad.archive?.sha256) {

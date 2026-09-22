@@ -38,46 +38,12 @@ itself*.
 
 ## Safe operating protocol
 
-Follow every step in order. Do not skip the inspect step even when the
-command name is familiar — the installed binary may be older or newer than
-the appendix.
-
-1. **Triage the goal.** Classify the intent as `read-only`, `mutating`, or
-   `diagnostic` (long-running or interactive; user judgement is the main
-   side effect).
-2. **Inspect before acting.** Run `ak <cmd> --help` for the intended
-   subcommand. For read-only scripted work, also pass `--json
-   --no-interactive` so the response is a versioned envelope
-   (`schema_version`, `kind`, `data`). For human diagnostics, use `--verbose`
-   on a safe read-only reproduction or the next authorized invocation. Never
-   repeat a mutating command solely for diagnostic detail; inspect partial
-   state and confirm the retry first. `--quiet` overrides `--verbose`, and
-   `--verbose` does not change the typed JSON envelope.
-3. **Confirm scope.** Where does this command act? Project scope (current
-   working tree), user or global scope (`~/.claude`, `~/.agents`, `~/.codex`,
-   or the equivalent adapter home), kit installation source, or adapter or
-   delivery mode.
-4. **Prefer status or inspect before lifecycle mutation.** Before
-   `ak update`, `ak kit refresh`, `ak self-update`, `ak uninstall`, or
-   `ak recover`, run the corresponding read-only path — `ak doctor`,
-   `ak kit list-kits`, `ak kit validate`, `ak skill verify`, `ak plan
-   status`, `ak sessions list`, `ak backups list`, `ak diagnostics
-   export`.
-5. **Snapshot before mutate.** Before `ak recover`, `ak backups restore`,
-   `ak uninstall`, or any command combined with `--fresh`, first run
-   `ak backups create` — or confirm a current backup with `ak backups list`.
-6. **Preserve unknown files.** AgentKit mutates only paths it owns. Never
-   suggest `--force` combined with `--fresh`; never propose a destructive
-   reset unless the user has explicitly asked. Surface a conflict.
-7. **Report the exact command, scope, and result.** Include the resolved
-   `--json` envelope where relevant. Name what changed on disk and any
-   unresolved constraint.
-
-<Callout type="warning">
-  Never pass `--no-interactive` or `--yes` to a mutating command without
-  explicit user approval. Those flags suppress the confirmation prompt that
-  is the only human gate before disk mutation.
-</Callout>
+1. Classify the requested operation and identify its project/user scope, Kit, runtime and delivery mode.
+2. Inspect the installed binary's version and command help. Reuse that evidence within the session while the binary, version and target are unchanged; inspect again after an update or target change.
+3. Use read-only status/validation before lifecycle changes. Inspect partial state before a retry; a retry within the existing authorized scope does not require repeated confirmation.
+4. Continue additive or safely reconcilable changes inside existing user authorization. `--yes` and `--no-interactive` are appropriate for authorized scripted work when supported by that command. A prompt is not the only mutation boundary; some writers act directly.
+5. Destructive overwrite, reset, restore or removal needs explicit scope authorization and the supported preview/snapshot safeguards. Preserve unknown and modified files. Never combine `--force` and `--fresh`.
+6. Report the exact command, scope, result and unresolved evidence. Use `--json` for machine-readable output. `--quiet` overrides `--verbose`; do not rerun a mutation merely to obtain verbose logs.
 
 ## Command families by task
 
@@ -126,7 +92,7 @@ the appendix.
 
 The generated command appendix carries a version stamp. If it lags behind
 `ak --version`, treat it as a starting hint and re-check flags with
-`ak <cmd> --help` before any mutating call. `ak self-update` advances the
+`ak <cmd> --help` when the binary, version, target, or command contract changes. `ak self-update` advances the
 binary independently of installed skill content, so version skew is normal
 after self-update and before the next `ak update` refresh.
 
@@ -155,3 +121,5 @@ Authoritative surfaces, in order:
 - [`ak:skill-creator`](./skill-creator) — author Claude Skills.
 - [`ak:plan`](./plan) — implementation plan lifecycle.
 - [`ak:journal`](./journal) — technical journal entries.
+
+For effectiveness and local usage, see [`ak insights`](../../../reference/cli/insights), [`ak eval`](../../../reference/cli/eval) and [`ak usage`](../../../reference/cli/usage). Collection, evaluation, consent and contribution have different effects; inspect each command before invoking it.
