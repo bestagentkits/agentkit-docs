@@ -63,6 +63,49 @@ the operation or fall back to API-key login automatically; sign in, then rerun
 the command yourself. During an update, the original failure remains explicit
 alongside that guidance instead of being hidden.
 
+## API-key login and creation errors
+
+Starting with CLI v2.18.1, `ak login --api-key` and API-key creation at
+`/account/api-keys` return specific error messages instead of a generic
+failure. Match the case below; for any auth code the CLI does not
+specifically handle, it falls back to the message the server sends.
+
+**Valid key, but the account has no Engineer/Marketing kit** (for example, the
+account only holds an AgentKit App license). The server answers
+`403 no_kit_entitlement`. The CLI reports that the key is valid but the
+account has no kit, and points to `ak login --license-key`. Take the license
+key from `/account/licenses`:
+
+```bash
+ak login --license-key ak_license_... --no-interactive
+```
+
+**Unknown, revoked, or expired key.** The server answers
+`401 invalid_api_key` ("API key invalid or revoked"). Create or rotate a key
+at `/account/api-keys`, then retry:
+
+```bash
+ak login --api-key ak_live_... --no-interactive
+```
+
+**Server-side lookup failure.** The server answers `500`. This is not a
+credential problem — retry the same key instead of rotating it. If it keeps
+failing, follow [If it still fails](#if-it-still-fails) below.
+
+**Creating a key at `/account/api-keys` on an App-license-only account.**
+Only kit owners can create a user API key: a direct purchase, a team seat, or
+a paid waitlist grant. An account whose only license is an AgentKit App
+license sees "Kit License Required" and the API returns
+`403 APP_LICENSE_NOT_ELIGIBLE`. Sign in to the App with the license key
+instead:
+
+```bash
+ak login --license-key ak_license_... --no-interactive
+```
+
+See [API key vs license key](../reference/cli/login#api-key-vs-license-key)
+for which credential to use.
+
 ## App activation is a different check
 
 `ak login --license-key ak_license_... --no-interactive` activates an App device session. It
