@@ -26,10 +26,10 @@ export const RELEASE_QUALITY_BASELINE = Object.freeze({
   locales: ['en', 'vi'],
   deterministic: {
     outputBytes: 3_047_146_912,
-    // Preserve the previous per-route allowance as coverage grows 411 -> 449.
-    outputBudgetBytes: 3_135_614_429,
+    // Preserve the previous per-route allowance as coverage grows 411 -> 449 -> 456.
+    outputBudgetBytes: 3_184_499_285,
     fileCount: 23_584,
-    fileCountBudget: 25_294,
+    fileCountBudget: 25_687,
     searchBytes: 20_067_964,
     searchBudgetBytes: SEARCH_ASSET_BUDGET_BYTES,
     // Counts follow each channel's reviewed route inventory. Equal Kit artifact
