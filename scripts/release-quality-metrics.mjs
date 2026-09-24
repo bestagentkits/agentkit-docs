@@ -35,7 +35,7 @@ export const RELEASE_QUALITY_BASELINE = Object.freeze({
     // Counts follow each channel's reviewed route inventory. Equal Kit artifact
     // snapshots require equal Kit route coverage across Stable and Beta.
     // Beta includes the bilingual guides/pi-extensions page ahead of promotion.
-    searchPagesPerLocaleChannel: { stable: 449, beta: 456 },
+    searchPagesPerLocaleChannel: { stable: 456, beta: 456 },
     reviewedSearchOutsideChannelRoutes: ['_showcase'],
     reviewedSearchExcludedPublishedRoutes: ['reference/cli/ak'],
     maxAssetBytesExclusive: MAX_ASSET_BYTES,
