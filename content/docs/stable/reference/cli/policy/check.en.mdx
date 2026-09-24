@@ -1,0 +1,122 @@
+---
+title: ak policy check
+description: Ask the project policy what it says about writing one path, running one command, or landing one diff.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak policy check` to ask the project's policy about one operation before an
+agent or a script performs it. The answer carries an outcome, a one-sentence
+explanation, and every rule that matched, with where each rule came from. A hook
+or CI job can act on the exit code alone.
+
+## Usage
+
+```bash
+ak policy check [flags] [-- command args...]
+```
+
+Describe the operation with flags, and put a command's argv after `--`. The argv
+is taken literally; a command rule matches on the base name of its first
+element.
+
+## Command flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--dir <path>` | `.` | Project directory holding `.agentkit/policy.yaml`. |
+| `--path <path>` | Empty | File path an edit would touch. Checked against `protected_path` rules. |
+| `--changed <path>` | None | Changed path in the diff being landed. Repeatable. Checked against `required_check` and `diff_class` rules. |
+| `--ran <check>` | None | A check you have already run, so a matching required check counts as satisfied. Repeatable. |
+| `--no-bypass` | `false` | Ignore `AGENTKIT_POLICY_BYPASS`, so a rule that would have fired is reported as firing. |
+
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+Ask one question per call. If rules about different operations match the same
+request and disagree, the engine refuses to answer rather than ranking them.
+
+## Common examples
+
+### Check a file write
+
+```bash
+ak policy check --path internal/gen/api.pb.go
+```
+
+### Check a command
+
+```bash
+ak policy check -- npm install
+```
+
+If a `rewrite` rule matches, the output quotes the command the rule asks for
+instead, such as `pnpm install`. The command is not run for you.
+
+### Check a diff before landing it
+
+```bash
+ak policy check --changed docs/a.md --changed README.md --ran lint --json
+```
+
+The result lists the checks the diff requires, whether each was reported with
+`--ran`, and the checks its diff class may skip. A required check you did not
+report turns the outcome into `warn`, or `block` when its rule's action is
+`block`.
+
+## Outcomes
+
+| Outcome | Meaning | Exit |
+| --- | --- | --- |
+| `allow` | No rule objected, or a bypass waived the rules that did. | `0` |
+| `warn` | A rule objected but does not stop the operation. | `0` |
+| `rewrite` | A rule names a different program to run. | `0` |
+| `block` | A rule says the operation must not happen. | `3` |
+| `error` | The engine refused to answer: the document conflicts, or the matching rules disagree. | `4` |
+
+A compiled rule whose source instruction has changed still enforces; its match
+reports the drift.
+
+<Callout type="info">
+  Setting `AGENTKIT_POLICY_BYPASS` to `1` or `true` turns `block`, `warn`, and
+  `rewrite` into `allow`, sets `bypassed` to `true`, and lists the waived rules
+  in `suppressed`. It never changes an `error`. Use `--no-bypass` in CI to prove
+  a rule would have fired.
+</Callout>
+
+## Automation output
+
+`kind` is `policy.check`. The `data` payload contains `document` and a
+`decision` with these fields:
+
+| Field | Description |
+| --- | --- |
+| `outcome` | `allow`, `warn`, `rewrite`, `block`, or `error`. |
+| `reason` | `no_matching_rule`, `matched_rule`, `document_conflict`, `ambiguous_match`, or `bypassed`. |
+| `explanation` | One sentence stating the cause. |
+| `matches` | Matched rules: `rule`, `kind`, `action`, `reason`, `matched`, `origin`, `source`, `stale`, and `stale_reason`. |
+| `rewrite` | The replacement command, when the outcome is `rewrite`. |
+| `required_checks` | Checks the diff requires: `check`, `rule`, `action`, and `satisfied`. |
+| `skippable_checks` | Checks the diff may skip: `check` and `rule`. |
+| `conflicts` | Conflicting rule pairs, when the document did not load. |
+| `bypassed` | `true` when `AGENTKIT_POLICY_BYPASS` waived the decision. |
+| `suppressed` | The rules a bypass waived. |
+
+The payload is written even when the command exits `3` or `4`.
+
+## Exit behavior
+
+| Exit | Meaning | What to do |
+| --- | --- | --- |
+| `0` | The outcome is `allow`, `warn`, or `rewrite`. | Show any warning or proposed rewrite to the user. |
+| `1` | The policy document is missing or unreadable. | Run [`ak policy compile`](./policy-compile) and [`ak policy adopt`](./policy-adopt), or fix the file. |
+| `2` | Arguments were invalid. | Correct the invocation. |
+| `3` | A rule blocks this operation. | Do not perform the operation; read the explanation. |
+| `4` | The engine refused to answer. | Run [`ak policy validate`](./policy-validate) and resolve the conflict. |
+
+Treat `4` as "the policy could not answer", not as a block or an allow.
+
+## Related commands
+
+- [`ak policy`](./policy)
+- [`ak policy status`](./policy-status)
+- [`ak policy validate`](./policy-validate)
