@@ -60,17 +60,74 @@ and read both rolling windows (`5h` and the trailing 7-day window) from the
 local analytics index.
 
 The badge itself reads as one of four states — `ok`, `warn`, `danger`, or
-`stale` — and the popover auto-refreshes every 60 seconds. Rows currently
-carry `raw_only` provenance: counts read straight from the local index, with
-no fabricated quota percentage. The badge and popover stay empty until the
+`stale`. By default the popover auto-refreshes every 60 seconds and rows carry
+`raw_only` provenance: counts read straight from the local index, with no
+fabricated quota percentage. The badge and popover stay empty until the
 local index has counted usage; run
 [`ak analytics enable`](../reference/cli/analytics/enable) first if you have
 not opted in.
 
 A cold or absent index returns zeroed windows together with an index state, so
-the view explains the empty state instead of showing a misleading zero. Nothing
-leaves this machine; rebuild the index from the Database tab when the windows
-look stale.
+the view explains the empty state instead of showing a misleading zero. Unless
+you turn on advanced polling, nothing leaves this machine; rebuild the index
+from the Database tab when the windows look stale.
+
+### Advanced provider polling (experimental)
+
+Advanced polling is off by default. When you turn it on, AgentKit asks each
+enabled provider for its own usage percentages and adds them to the same rows.
+The **Advanced polling** panel appears in Settings only when Desktop, or the
+browser dashboard, was started with `AGENTKIT_ADVANCED_POLLING=1` in its
+environment. Without that variable the panel stays hidden and polling cannot
+be turned on.
+
+Setting **Advanced provider polling** to **On** opens an acknowledgement
+dialog. **Enable polling** stays disabled until you tick all three statements:
+
+- The usage endpoints are undocumented, and polling them may be against the
+  provider's terms of service.
+- The provider can change or remove the endpoints at any time, and polling then
+  stops working without notice.
+- Polling may lead the provider to rate-limit, restrict, or suspend your
+  account.
+
+The acknowledgement is not remembered: turning polling off and on again shows
+the dialog again, with every box cleared. While polling is on, the panel shows
+when you last acknowledged. Turning polling off takes effect immediately.
+
+While polling is on, the panel shows a switch for each provider (Claude Code
+and Codex, both on by default) and a **Refresh interval** of 30 s, 60 s
+(default), 2 min, or 5 min. The badge, popover, and Dashboard card refresh at
+that interval. Between polls every surface reads the cached answer, and each
+provider is capped at a burst of three requests a minute.
+
+AgentKit reuses the access token the official CLI already stored. It never
+requests, refreshes, or writes a token.
+
+| Provider | Endpoint | Token lookup order |
+| --- | --- | --- |
+| Claude Code | `GET https://api.anthropic.com/api/oauth/usage` | `ANTHROPIC_OAUTH_TOKEN`, then `.credentials.json` in `CLAUDE_CONFIG_DIR` or `~/.claude`, then the `Claude Code-credentials` item in the macOS keychain |
+| Codex | `GET https://chatgpt.com/backend-api/wham/usage` | `OPENAI_SESSION_TOKEN`, then `auth.json` in `CODEX_HOME`, `~/.codex`, or (outside Windows) `codex` under `XDG_CONFIG_HOME` or `~/.config` |
+
+On macOS, the first fetch asks you to allow access to the Claude Code keychain
+item. If you deny it, Claude keeps showing local counts and polling stays on;
+allow access later from Keychain Access, or set `ANTHROPIC_OAUTH_TOKEN`
+instead.
+
+Rows the provider answered switch to `provider_reported` provenance and show
+the provider's used percent; the local token counts stay. When a poll fails,
+the rows keep their local counts and show the reason, such as a missing or
+expired token, a rate limit, or an endpoint error. A provider that has answered
+before keeps serving its last values, marked stale. If the provider rejects the
+stored token, AgentKit switches polling off for that provider and marks it
+auto-disabled; refresh the token in Claude Code or the Codex CLI, then turn the
+provider back on. A build compiled without advanced polling keeps showing local
+counts.
+
+These settings live under `usage_limits` in the AgentKit config
+(`~/.agentkit/config.yaml`) and are shared with
+[`ak usage limits`](../reference/cli/usage/limits), which uses provider
+figures only when it also runs with `AGENTKIT_ADVANCED_POLLING=1`.
 
 ## Review Skill and agent insights
 

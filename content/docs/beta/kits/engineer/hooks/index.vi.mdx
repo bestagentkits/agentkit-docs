@@ -11,8 +11,8 @@ một thao tác không an toàn hoặc quá rộng, hay cập nhật trạng th�
 giới hạn. Bạn không gọi Hook như Skill hoặc command; runtime đã chọn sẽ gọi các
 handler được hỗ trợ khi event tương ứng xảy ra.
 
-Package Engineer đã resolve có **44 entry Hook**. Con số này là inventory của
-artifact, không phải 44 behavior độc lập. Nó bao gồm manifest của Hook, event
+Package Engineer đã resolve có **54 entry Hook**. Con số này là inventory của
+artifact, không phải 54 behavior độc lập. Nó bao gồm manifest của Hook, event
 handler, thư viện hỗ trợ dùng chung, cùng helper về trạng thái và statusline
 riêng của Engineer. Một handler có thể tham gia nhiều event, còn tệp hỗ trợ có
 thể không bao giờ tự chạy.
@@ -30,17 +30,50 @@ package:
 
 | Event | Điều bạn có thể quan sát |
 | --- | --- |
-| `PreToolUse` | Cung cấp hướng dẫn đặt tên cho tệp mới, kiểm tra truy cập tệp nhạy cảm và dừng hoạt động scout quá rộng hoặc đi vào path bị bỏ qua khi request vượt ngoài ranh giới được hỗ trợ. Check có thể cho phép request, trả về hướng dẫn hoặc yêu cầu phê duyệt. |
-| `PostToolUse` | Giữ định dạng plan nhất quán sau khi edit và write, làm mới trạng thái task/session sau thao tác task được hỗ trợ và cập nhật trạng thái sử dụng sau hoạt động của tool. |
-| `PreCompact` | Ghi lại đủ định hướng workflow để tiếp tục sau khi compact context. |
+| `PreToolUse` | Cung cấp hướng dẫn đặt tên cho tệp mới, kiểm tra truy cập tệp nhạy cảm, dừng hoạt động scout quá rộng hoặc đi vào path bị bỏ qua khi request vượt ngoài ranh giới được hỗ trợ, và kiểm tra lượng nội dung mà một lệnh read, search hoặc shell có thể trả về. Check có thể cho phép request, trả về hướng dẫn hoặc yêu cầu phê duyệt. |
+| `PostToolUse` | Giữ định dạng plan nhất quán sau khi edit và write, làm mới trạng thái task/session sau thao tác task được hỗ trợ, cập nhật trạng thái sử dụng sau hoạt động của tool và ghi lại số liệu tổng hợp có giới hạn về hoạt động tool cho agent behavior linter. |
+| `PreCompact` | Ghi lại đủ định hướng workflow để tiếp tục sau khi compact context và đánh dấu lần compact đó cho agent behavior linter. |
 | `SessionStart` | Khởi tạo context của project và session cho phiên mới. |
 | `SubagentStart` | Khởi tạo trạng thái subagent và cung cấp team context liên quan. |
-| `Stop` | Làm mới trạng thái session và usage. Khi có plan đang hoạt động, lời nhắc plan có thể trả JSON hợp lệ, không chặn với `continue` và `systemMessage`; nếu không, hook thoát im lặng. |
+| `Stop` | Làm mới trạng thái session và usage. Khi có plan đang hoạt động, lời nhắc plan có thể trả JSON hợp lệ, không chặn với `continue` và `systemMessage`; nếu không, hook thoát im lặng. Agent behavior linter có thể thêm một báo cáo session mang tính tư vấn. |
 | `SubagentStop` | Làm mới trạng thái session dùng chung tại ranh giới subagent. |
 | `UserPromptSubmit` | Cung cấp hướng dẫn phát triển theo project, kiểm tra rủi ro output giống secret, áp dụng gate đơn giản hóa trước khi ship khi phù hợp và làm mới trạng thái usage. |
 
 Những kết quả này hỗ trợ workflow Engineer; chúng không tự phê duyệt plan,
 commit, merge, deploy hay phát hành công việc thay bạn.
+
+## Context firewall và agent behavior linter
+
+Hook `context-firewall` chạy trước các lệnh `Bash`, `Read`, `Grep` và `Glob`,
+rồi ước tính lượng nội dung mà lệnh đó có thể trả về. Hook cho phép lệnh thông
+thường, cảnh báo mà không chặn, hoặc chặn lệnh và nêu một cách thay thế có giới
+hạn:
+
+| Lệnh | Cảnh báo | Chặn |
+| --- | --- | --- |
+| Đọc toàn bộ tệp mà không có `offset`, `limit` hay khoảng trang | Tệp từ 256 KB trở lên | Tệp từ 2 MB trở lên |
+| Search ở output mode `content` mà không có `head_limit` từ 100 trở xuống | Mọi pattern khác | Pattern mà check scout đã xem là quá rộng |
+| Lệnh shell in toàn bộ một tệp, ví dụ `cat` | Tệp từ 128 KB trở lên | Tệp từ 512 KB trở lên |
+| Stream log không giới hạn, search hoặc duyệt cây thư mục đệ quy, hay toàn bộ lịch sử hoặc diff Git | Luôn luôn | — |
+
+Khi cùng một thao tác đã bị cảnh báo chạm tới lần can thiệp thứ ba trong một
+session, cảnh báo trở thành chặn. Mỗi lần can thiệp được ghi vào một bản ghi
+theo session có giới hạn, với giá trị credential đã được che. Firewall luôn
+fail-open: nếu Hook gặp lỗi ngoài dự kiến, lệnh vẫn được thực hiện.
+
+Hook `agent-behavior-linter` quan sát hoạt động tool trong session và, tại
+`Stop`, có thể báo cáo các pattern mà nó chứng minh được từ hoạt động đó: đọc
+lại một tệp không thay đổi, chạy lại một lệnh thất bại với cùng lỗi, search
+rộng lặp lại, output tool lớn mà không tệp nào thay đổi, và chạy toàn bộ test
+suite sau một thay đổi chỉ liên quan tài liệu. Mỗi phát hiện nêu điều đã quan
+sát, việc nên làm thay thế và nguyên tắc tương ứng trong `ak:context-engineering`.
+Linter chỉ giữ số liệu tổng hợp có giới hạn trong trạng thái riêng theo
+session, không bao giờ chặn lệnh tool và không in báo cáo khi không có phát
+hiện nào.
+
+Cả hai Hook đều bật theo mặc định. Để tắt một Hook, đặt `hooks.context-firewall`
+hoặc `hooks.agent-behavior-linter` thành `false`; xem [Quản lý preference của
+Hook](../../../guides/managing-hook-preferences).
 
 ## Path đã cấu hình khi bắt đầu session
 
@@ -79,7 +112,7 @@ statusline chỉ vì package chứa tệp hỗ trợ statusline.
 ## Hỗ trợ một phần trên Codex
 
 Codex có event model và matcher model nhỏ hơn Claude Code. Engineer projection
-một group bị drop hoàn toàn và hai matcher bị thu hẹp:
+một group bị drop hoàn toàn và ba matcher bị thu hẹp:
 
 - Matcher `PostToolUse` `Agent|Task|TodoWrite|TodoRead` với handler
   `session-state.cjs` bị drop hoàn toàn. Các đăng ký `Stop` và `SubagentStop`
@@ -88,6 +121,11 @@ một group bị drop hoàn toàn và hai matcher bị thu hẹp:
   `privacy-block.cjs` hoạt động cho các atom được hỗ trợ.
 - `Bash|Read` trở thành `Bash`, bỏ `Read` nhưng giữ `scout-block.cjs` hoạt động
   cho Bash.
+- `Bash|Read|Grep|Glob` trở thành `Bash`, bỏ `Read`, `Grep` và `Glob` nhưng giữ
+  `context-firewall.cjs` hoạt động cho Bash.
+
+Các đăng ký `agent-behavior-linter.cjs` trên `PostToolUse`, `PreCompact` và
+`Stop` được projection mà không bị thu hẹp.
 
 Drop hoặc narrow không làm cài đặt thất bại. Output cho người dùng liệt kê chúng
 dưới **Hook groups not projected** và **Hook matchers narrowed

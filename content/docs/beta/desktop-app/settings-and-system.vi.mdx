@@ -58,16 +58,72 @@ limits trên Dashboard. Mở badge đó, chọn provider (`claude`, `codex` ho�
 analytics cục bộ.
 
 Bản thân badge đọc là một trong bốn trạng thái — `ok`, `warn`, `danger` hoặc
-`stale` — và popover tự làm mới mỗi 60 giây. Các hàng hiện mang provenance
+`stale`. Mặc định popover tự làm mới mỗi 60 giây và các hàng mang provenance
 `raw_only`: số đếm lấy thẳng từ index cục bộ, không có phần trăm quota bịa
 đặt. Badge và popover vẫn rỗng cho tới khi index cục bộ đã đếm được usage;
 hãy chạy [`ak analytics enable`](../reference/cli/analytics/enable) trước nếu
 bạn chưa opt-in.
 
 Index trống hoặc chưa dựng trả về các cửa sổ bằng 0 kèm trạng thái index, nên
-màn hình giải thích trạng thái rỗng thay vì hiển thị số 0 gây hiểu nhầm. Không
-có gì rời khỏi máy này; hãy dựng lại index từ tab Database khi các cửa sổ số
-liệu có vẻ cũ.
+màn hình giải thích trạng thái rỗng thay vì hiển thị số 0 gây hiểu nhầm. Trừ khi
+bạn bật advanced polling, không có gì rời khỏi máy này; hãy dựng lại index từ
+tab Database khi các cửa sổ số liệu có vẻ cũ.
+
+### Advanced provider polling (thử nghiệm)
+
+Advanced polling mặc định tắt. Khi bạn bật, AgentKit hỏi từng provider đang bật
+về phần trăm sử dụng do chính provider báo và thêm vào cùng các hàng đó. Panel
+**Advanced polling** chỉ xuất hiện trong Settings khi Desktop, hoặc browser
+dashboard, được khởi động với `AGENTKIT_ADVANCED_POLLING=1` trong môi trường của
+nó. Nếu không có biến này, panel bị ẩn và không thể bật polling.
+
+Chuyển **Advanced provider polling** sang **On** sẽ mở hộp thoại xác nhận rủi
+ro. Nút **Enable polling** chỉ bật khi bạn đã tích cả ba mục:
+
+- Các usage endpoint này không được công bố chính thức, và việc polling chúng có
+  thể vi phạm điều khoản dịch vụ của provider.
+- Provider có thể thay đổi hoặc gỡ bỏ endpoint bất cứ lúc nào, và khi đó polling
+  ngừng hoạt động mà không báo trước.
+- Polling có thể khiến provider giới hạn tốc độ, hạn chế hoặc tạm khoá tài khoản
+  của bạn.
+
+Xác nhận không được ghi nhớ: tắt rồi bật lại polling sẽ hiện lại hộp thoại, với
+mọi ô đều bỏ trống. Khi polling đang bật, panel hiển thị thời điểm bạn xác nhận
+gần nhất. Tắt polling có hiệu lực ngay lập tức.
+
+Khi polling bật, panel hiển thị một công tắc cho từng provider (Claude Code và
+Codex, mặc định cả hai đều bật) và **Refresh interval** gồm 30 s, 60 s (mặc
+định), 2 min hoặc 5 min. Badge, popover và card trên Dashboard làm mới theo
+khoảng thời gian đó. Giữa hai lần poll, mọi bề mặt đọc kết quả đã cache, và mỗi
+provider bị giới hạn ở mức tối đa ba request liên tiếp mỗi phút.
+
+AgentKit dùng lại access token mà CLI chính thức đã lưu. Nó không bao giờ yêu
+cầu, làm mới hay ghi token.
+
+| Provider | Endpoint | Thứ tự tìm token |
+| --- | --- | --- |
+| Claude Code | `GET https://api.anthropic.com/api/oauth/usage` | `ANTHROPIC_OAUTH_TOKEN`, rồi `.credentials.json` trong `CLAUDE_CONFIG_DIR` hoặc `~/.claude`, rồi mục `Claude Code-credentials` trong macOS keychain |
+| Codex | `GET https://chatgpt.com/backend-api/wham/usage` | `OPENAI_SESSION_TOKEN`, rồi `auth.json` trong `CODEX_HOME`, `~/.codex`, hoặc (ngoài Windows) `codex` dưới `XDG_CONFIG_HOME` hoặc `~/.config` |
+
+Trên macOS, lần fetch đầu tiên sẽ hỏi bạn cho phép truy cập mục keychain của
+Claude Code. Nếu bạn từ chối, Claude tiếp tục hiển thị số đếm cục bộ và polling
+vẫn bật; bạn có thể cho phép sau trong Keychain Access, hoặc đặt
+`ANTHROPIC_OAUTH_TOKEN` thay thế.
+
+Các hàng mà provider đã trả lời chuyển sang provenance `provider_reported` và
+hiển thị phần trăm đã dùng do provider báo; số token cục bộ vẫn giữ nguyên. Khi
+một lần poll thất bại, các hàng giữ số đếm cục bộ và hiển thị lý do, chẳng hạn
+thiếu hoặc hết hạn token, bị giới hạn tốc độ, hoặc lỗi endpoint. Provider đã
+từng trả lời sẽ tiếp tục hiển thị giá trị gần nhất, được đánh dấu là cũ. Nếu
+provider từ chối token đã lưu, AgentKit tắt polling cho provider đó và đánh dấu
+auto-disabled; hãy làm mới token trong Claude Code hoặc Codex CLI, rồi bật lại
+provider. Bản build được biên dịch không có advanced polling vẫn chỉ hiển thị số
+đếm cục bộ.
+
+Các thiết lập này nằm dưới `usage_limits` trong config AgentKit
+(`~/.agentkit/config.yaml`) và được dùng chung với
+[`ak usage limits`](../reference/cli/usage/limits); lệnh này chỉ dùng số liệu
+của provider khi cũng chạy với `AGENTKIT_ADVANCED_POLLING=1`.
 
 ## Xem insight về Skill và agent
 
