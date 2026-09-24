@@ -1,0 +1,86 @@
+---
+title: ak policy compile
+description: Propose policy rules from the project's instruction files without changing what is enforced.
+---
+
+Use `ak policy compile` to read your project's instruction files and propose a
+rule for each sentence that matches a known form. Proposals go to
+`.agentkit/policy-candidates.yaml`, which the engine never evaluates. Nothing
+takes effect until you promote it with [`ak policy adopt`](./policy-adopt).
+
+## Usage
+
+```bash
+ak policy compile [flags]
+```
+
+The command accepts no positional arguments. It replaces any previous proposals
+and never writes `.agentkit/policy.yaml`.
+
+## Command flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--dir <path>` | `.` | Project directory holding `.agentkit/policy.yaml`. |
+| `--source <file>` | The document's `sources` | Instruction file to read, relative to the project directory. Repeatable. |
+
+Without `--source`, the command reads the `sources` listed in the active policy
+document, or `AGENTS.md` and `CLAUDE.md` when there is none. A source file that
+does not exist is skipped. A source that points outside the project is refused.
+
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+## Common examples
+
+```bash
+ak policy compile
+ak policy compile --source CLAUDE.md --json
+```
+
+## Recognised sentence forms
+
+The compiler understands a closed set of forms. A leading list marker is
+ignored, and paths may be wrapped in backticks or quotes.
+
+| Instruction form | Proposed rule | Action |
+| --- | --- | --- |
+| `Never edit <path>` (also `do not`/`don't`, and `modify`, `change`, `write to`) | `protected_path` | `warn` |
+| `<path> is read-only` | `protected_path` | `warn` |
+| `Use <program>, never <other>` (also `not`, `instead of`) | `command` rewriting `<other>` to `<program>` | `rewrite` |
+| `Never run <program>` (also `do not`/`don't`) | `command` | `warn` |
+| `Run <check> after changing <path>` (also `editing`, `touching`) | `required_check` | `warn` |
+| `After changing <path>, run <check>` | `required_check` | `warn` |
+| `Do not run <check> for docs changes` | `diff_class` | `warn` |
+
+A path must look like a path, so it needs a `/`, `.`, `*`, or `?`. The diff-class
+form accepts `docs`, `documentation`, `markdown`, `test`, and `tests` (with an
+optional `-only` suffix) followed by `changes` or `diffs`.
+
+A line that starts like an instruction (`never`, `do not`, `don't`, `always`,
+`use`, `run`, `after`, `must`, or `avoid`) but matches no form is reported as
+unrecognised and produces no proposal. Prose never compiles into a `block`.
+
+## Automation output
+
+`kind` is `policy.compile`. The `data` payload contains:
+
+| Field | Description |
+| --- | --- |
+| `candidates` | Absolute path of the candidates file that was written. |
+| `sources` | Instruction files that were read. |
+| `candidates_found` | Proposals, each with `id`, `rule`, and `quote` (the instruction as written). |
+| `unrecognized` | Lines that read like rules but matched no form: `file`, `line`, and `text`. |
+
+## Exit behavior
+
+| Exit | Meaning | What to do |
+| --- | --- | --- |
+| `0` | Proposals were written, including when no sentence matched a form. | Review the proposals, then adopt the ones you want. |
+| `1` | An instruction file or the candidates file could not be read or written. | Check the source paths and file permissions. |
+| `2` | Arguments were invalid. | Correct the invocation. |
+
+## Related commands
+
+- [`ak policy`](./policy)
+- [`ak policy adopt`](./policy-adopt)
+- [`ak policy status`](./policy-status)
