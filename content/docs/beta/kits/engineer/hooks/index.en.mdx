@@ -29,7 +29,7 @@ The active graph is organized around outcomes rather than package file count:
 
 | Event | What you can observe |
 | --- | --- |
-| `PreToolUse` | Provides naming guidance for new files, checks sensitive-file access, stops overly broad or ignored-path scouting when the request falls outside the supported boundary, and checks how much content a read, search, or shell command can return. A check may allow the request, return guidance, or ask for approval. |
+| `PreToolUse` | Provides naming guidance for new files, checks sensitive-file access, stops overly broad or ignored-path scouting when the request falls outside the supported boundary, checks how much content a read, search, or shell command can return, and substitutes `${secret:NAME}` references in shell commands and fetch URLs. A check may allow the request, return guidance, or ask for approval. |
 | `PostToolUse` | Keeps plan formatting coherent after edits and writes, refreshes task/session state after supported task operations, updates usage state after tool activity, and records bounded tool-activity totals for the agent behavior linter. |
 | `PreCompact` | Captures enough workflow orientation to continue after context compaction and notes the compaction for the agent behavior linter. |
 | `SessionStart` | Initializes project and session context for the new session. |
@@ -73,6 +73,27 @@ Both Hooks are on by default. To turn one off, set `hooks.context-firewall` or
 `hooks.agent-behavior-linter` to `false`; see [Managing Hook
 preferences](../../../guides/managing-hook-preferences).
 
+## Secret references in tool calls
+
+The `secrets-inject` Hook runs before `Bash` and `WebFetch` calls. When a shell
+command or fetch URL contains a `${secret:NAME}` reference, the Hook asks
+`ak secrets resolve` for the stored value and substitutes it in memory, so the
+model can compose the call without seeing the credential. Only `Bash.command`
+and `WebFetch.url` are scanned; file contents and prompts are left untouched.
+An [`ak secrets`](../../../reference/cli/secrets) grant for the calling agent binary decides whether a
+value is released, and a grant restricted with `--allow-host` also checks the
+fetch destination.
+
+Every failure blocks the tool call rather than passing the literal reference
+through, including a missing grant, an invalid name, or a value with
+shell-special characters bound for a `Bash` command. The Hook writes no copy of
+the value, but the substituted input still reaches the tool process and
+whatever the runtime records for an executed call, such as its transcript.
+Treat a released value as present on the host and rotate it when needed.
+
+Claude Code and Grok register the Hook for `Bash|WebFetch`, and Codex narrows it
+to `Bash`. Cursor support for this Hook is not established in this release.
+
 ## Configured paths at session start
 
 The `SessionStart` handler resolves project path preferences before exporting
@@ -110,7 +131,7 @@ statusline merely because the package contains statusline support files.
 ## Codex partial support
 
 Codex has a smaller event and matcher model than Claude Code. Engineer projects
-one fully dropped group and three narrowed matchers:
+one fully dropped group and four narrowed matchers:
 
 - `PostToolUse` matcher `Agent|Task|TodoWrite|TodoRead`, handler
   `session-state.cjs`, is fully dropped. Separate `Stop` and `SubagentStop`
@@ -121,6 +142,8 @@ one fully dropped group and three narrowed matchers:
   active for Bash.
 - `Bash|Read|Grep|Glob` becomes `Bash`, dropping `Read`, `Grep`, and `Glob`
   while keeping `context-firewall.cjs` active for Bash.
+- `Bash|WebFetch` becomes `Bash`, dropping `WebFetch` while keeping
+  `secrets-inject.cjs` active for Bash.
 
 The `agent-behavior-linter.cjs` registrations on `PostToolUse`, `PreCompact`,
 and `Stop` are projected without narrowing.

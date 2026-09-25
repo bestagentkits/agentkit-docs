@@ -12,7 +12,7 @@ additional automatic behaviors.
 
 | Moment | What the active Hook graph does |
 | --- | --- |
-| Before tool use | Checks descriptive naming before writes, checks file and shell operations for privacy-sensitive access, catches broad read or shell exploration that should be narrowed, and checks how much content a read, search, or shell command can return. |
+| Before tool use | Checks descriptive naming before writes, checks file and shell operations for privacy-sensitive access, catches broad read or shell exploration that should be narrowed, checks how much content a read, search, or shell command can return, and substitutes `${secret:NAME}` references in shell commands and fetch URLs. |
 | After edits | Tracks supported edit activity and can remind the workflow to simplify and review substantial changes. Claude Code includes `MultiEdit`; Codex narrows this matcher to `Edit|Write`. |
 | When you submit a prompt | Checks for requests that could expose secrets and surfaces applicable development-rule guidance. |
 
@@ -30,6 +30,27 @@ in one session becomes a block. The Hook is on by default and fails open; set
 `hooks.context-firewall` to `false` to turn it off, as described in [Managing
 Hook preferences](../../../guides/managing-hook-preferences).
 
+## Secret references in tool calls
+
+The `secrets-inject` Hook runs before `Bash` and `WebFetch` calls. When a shell
+command or fetch URL contains a `${secret:NAME}` reference, the Hook asks
+`ak secrets resolve` for the stored value and substitutes it in memory, so the
+model can compose the call without seeing the credential. Only `Bash.command`
+and `WebFetch.url` are scanned; file contents and prompts are left untouched.
+An [`ak secrets`](../../../reference/cli/secrets) grant for the calling agent binary decides whether a
+value is released, and a grant restricted with `--allow-host` also checks the
+fetch destination.
+
+Every failure blocks the tool call rather than passing the literal reference
+through, including a missing grant, an invalid name, or a value with
+shell-special characters bound for a `Bash` command. The Hook writes no copy of
+the value, but the substituted input still reaches the tool process and
+whatever the runtime records for an executed call, such as its transcript.
+Treat a released value as present on the host and rotate it when needed.
+
+Claude Code and Grok register the Hook for `Bash|WebFetch`, and Codex narrows it
+to `Bash`. Cursor support for this Hook is not established in this release.
+
 ## Artifact entries are not behavior counts
 
 The Marketing manifest declares eight Hook file exports:
@@ -39,7 +60,7 @@ The Marketing manifest declares eight Hook file exports:
 - Six libraries support configuration and bounded runtime state.
 
 The separate `hooks.json` manifest wires the Marketing entrypoint together with
-seven reused core entrypoints, including `context-firewall`. Support libraries do not run independently, and
+eight reused core entrypoints, including `context-firewall` and `secrets-inject`. Support libraries do not run independently, and
 none of these entries is a Marketing command.
 
 `notifications/send-discord` is not referenced by `hooks.json`. It runs only
@@ -56,7 +77,7 @@ Discord notifications automatically. Its failure paths are non-blocking.
 
 ## Codex behavior in this release
 
-- Marketing projects no fully dropped Codex group and four narrowed matchers. Shared `Read|Write|Edit|Bash` becomes `Write|Edit|Bash`; shared `Bash|Read` becomes `Bash`; shared `Bash|Read|Grep|Glob` becomes `Bash`; Marketing's `Edit|Write|MultiEdit` becomes `Edit|Write`. The original handlers remain active for the supported atoms.
+- Marketing projects no fully dropped Codex group and five narrowed matchers. Shared `Read|Write|Edit|Bash` becomes `Write|Edit|Bash`; shared `Bash|Read` becomes `Bash`; shared `Bash|Read|Grep|Glob` becomes `Bash`; shared `Bash|WebFetch` becomes `Bash`; Marketing's `Edit|Write|MultiEdit` becomes `Edit|Write`. The original handlers remain active for the supported atoms.
 - Human output reports narrowing under **Hook matchers narrowed (some tool matches unsupported on this target)**. Machine-readable output uses optional `hookMatchersNarrowed` and `narrowedHookSummaries`; full-drop fields remain absent for this projection.
 - On Windows, an eligible `.cjs` Hook under the Codex home can use a managed `.cmd` shim when an ordinary path contains spaces. A spaced `.cjs` path outside that home remains unshimmed. Paths with `cmd.exe` metacharacters, non-ASCII shim basenames, and unsafe or non-ASCII baked arguments also remain refused, so this is not a blanket compatibility guarantee.
 - A wrapper-managed Codex home may alias only its final `hooks` leaf to canonical `~/.codex/hooks`, using a POSIX symlink or a Windows directory junction; writes, translated commands, rollback, and ownership use that canonical identity. Linked parents and other targets are refused.

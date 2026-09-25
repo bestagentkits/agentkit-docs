@@ -30,7 +30,7 @@ package:
 
 | Event | Điều bạn có thể quan sát |
 | --- | --- |
-| `PreToolUse` | Cung cấp hướng dẫn đặt tên cho tệp mới, kiểm tra truy cập tệp nhạy cảm, dừng hoạt động scout quá rộng hoặc đi vào path bị bỏ qua khi request vượt ngoài ranh giới được hỗ trợ, và kiểm tra lượng nội dung mà một lệnh read, search hoặc shell có thể trả về. Check có thể cho phép request, trả về hướng dẫn hoặc yêu cầu phê duyệt. |
+| `PreToolUse` | Cung cấp hướng dẫn đặt tên cho tệp mới, kiểm tra truy cập tệp nhạy cảm, dừng hoạt động scout quá rộng hoặc đi vào path bị bỏ qua khi request vượt ngoài ranh giới được hỗ trợ, kiểm tra lượng nội dung mà một lệnh read, search hoặc shell có thể trả về, và thay thế tham chiếu `${secret:NAME}` trong lệnh shell và URL fetch. Check có thể cho phép request, trả về hướng dẫn hoặc yêu cầu phê duyệt. |
 | `PostToolUse` | Giữ định dạng plan nhất quán sau khi edit và write, làm mới trạng thái task/session sau thao tác task được hỗ trợ, cập nhật trạng thái sử dụng sau hoạt động của tool và ghi lại số liệu tổng hợp có giới hạn về hoạt động tool cho agent behavior linter. |
 | `PreCompact` | Ghi lại đủ định hướng workflow để tiếp tục sau khi compact context và đánh dấu lần compact đó cho agent behavior linter. |
 | `SessionStart` | Khởi tạo context của project và session cho phiên mới. |
@@ -75,6 +75,27 @@ Cả hai Hook đều bật theo mặc định. Để tắt một Hook, đặt `h
 hoặc `hooks.agent-behavior-linter` thành `false`; xem [Quản lý preference của
 Hook](../../../guides/managing-hook-preferences).
 
+## Tham chiếu secret trong lệnh gọi công cụ
+
+Hook `secrets-inject` chạy trước các lệnh gọi `Bash` và `WebFetch`. Khi một
+lệnh shell hoặc URL fetch chứa tham chiếu `${secret:NAME}`, Hook hỏi
+`ak secrets resolve` để lấy giá trị đã lưu và thay thế trong bộ nhớ, nhờ đó
+model có thể soạn lệnh gọi mà không nhìn thấy credential. Chỉ `Bash.command` và
+`WebFetch.url` được quét; nội dung tệp và prompt được giữ nguyên. Grant
+[`ak secrets`](../../../reference/cli/secrets) cho binary agent đang gọi quyết định giá trị có được
+giải phóng hay không, và grant bị giới hạn bằng `--allow-host` còn kiểm tra đích
+fetch.
+
+Mọi lỗi đều chặn lệnh gọi công cụ thay vì chuyển nguyên văn tham chiếu đi,
+bao gồm thiếu grant, tên không hợp lệ hoặc giá trị có ký tự đặc biệt của shell
+khi đi vào một lệnh `Bash`. Hook không ghi bản sao nào của giá trị, nhưng input
+đã thay thế vẫn tới process của công cụ và mọi thứ runtime ghi lại cho một lệnh
+gọi đã thực thi, chẳng hạn transcript. Hãy coi giá trị đã giải phóng là có mặt
+trên host và rotate khi cần.
+
+Claude Code và Grok đăng ký Hook cho `Bash|WebFetch`, còn Codex thu hẹp thành
+`Bash`. Hỗ trợ Cursor cho Hook này chưa được xác lập trong bản phát hành này.
+
 ## Path đã cấu hình khi bắt đầu session
 
 Handler `SessionStart` resolve tùy chọn path của project trước khi export môi
@@ -112,7 +133,7 @@ statusline chỉ vì package chứa tệp hỗ trợ statusline.
 ## Hỗ trợ một phần trên Codex
 
 Codex có event model và matcher model nhỏ hơn Claude Code. Engineer projection
-một group bị drop hoàn toàn và ba matcher bị thu hẹp:
+một group bị drop hoàn toàn và bốn matcher bị thu hẹp:
 
 - Matcher `PostToolUse` `Agent|Task|TodoWrite|TodoRead` với handler
   `session-state.cjs` bị drop hoàn toàn. Các đăng ký `Stop` và `SubagentStop`
@@ -123,6 +144,8 @@ một group bị drop hoàn toàn và ba matcher bị thu hẹp:
   cho Bash.
 - `Bash|Read|Grep|Glob` trở thành `Bash`, bỏ `Read`, `Grep` và `Glob` nhưng giữ
   `context-firewall.cjs` hoạt động cho Bash.
+- `Bash|WebFetch` trở thành `Bash`, bỏ `WebFetch` nhưng giữ `secrets-inject.cjs`
+  hoạt động cho Bash.
 
 Các đăng ký `agent-behavior-linter.cjs` trên `PostToolUse`, `PreCompact` và
 `Stop` được projection mà không bị thu hẹp.
