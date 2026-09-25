@@ -27,14 +27,17 @@ command does not persist the request.
 ak eval decision <request.json|-> [flags]
 ```
 
-Pass a request file path, or `-` to read the request from stdin. The command has
-no command-specific flags; shared flags are described in
-[CLI conventions](../cli-conventions).
+Pass a request file path, or `-` to read the request from stdin. Shared flags
+are described in [CLI conventions](../cli-conventions).
 
 ```bash
 ak eval decision request.json --json
 ak eval decision - --json
+ak eval decision request.json --validate-only --json
 ```
+
+`--validate-only` checks that every request encoding fits the provider contract
+locally. It reads no preferences or credential and never contacts the provider.
 
 ## Opt in
 
@@ -56,13 +59,15 @@ provider.
 | `semantic_decision.provider` | `typesafe`; required when enabled | unset |
 | `semantic_decision.model` | Model ID matching `^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$` | unset |
 | `semantic_decision.timeout_ms` | Integer from `100` to `30000` | `5000` |
-| `semantic_decision.consumers.<consumer>` | `true` or `false` for `domain-routing`, `fix-complexity`, or `orchestration-risk` | unset |
+| `semantic_decision.consumers.<consumer>` | `true` or `false` for `domain-routing`, `fix-complexity`, `orchestration-risk`, or `skill-routing-eval` | unset |
 
 If you omit `semantic_decision.model`, the command uses the provider's model
 only when the provider lists exactly one; otherwise the result is `unavailable`
-with `model_required`. With no user `consumers` map, all three consumers are
-permitted; an empty map permits none; a non-empty map permits only entries set
-to `true`.
+with `model_required`. With no user `consumers` map, `domain-routing`,
+`fix-complexity`, and `orchestration-risk` are permitted, but
+`skill-routing-eval` is not: it needs an explicit
+`semantic_decision.consumers.skill-routing-eval` entry set to `true`. An empty
+map permits none; a non-empty map permits only entries set to `true`.
 
 Project config can only restrict the user grant. A project
 `.agentkit/config.yaml` may set `semantic_decision.enabled` to `false` or a
@@ -84,7 +89,7 @@ trailing data are rejected.
 
 | Field | Meaning |
 | --- | --- |
-| `consumer` | The profile to run: `fix-complexity`, `orchestration-risk`, or `domain-routing`. |
+| `consumer` | The profile to run: `fix-complexity`, `orchestration-risk`, `domain-routing`, or `skill-routing-eval`. |
 | `state` | Compact facts for that profile. |
 | `legacy` | Your existing decision: exactly one valid answer for each profile question. |
 
@@ -93,6 +98,10 @@ trailing data are rejected.
 | `fix-complexity` | `summary` (non-empty, up to 2000 bytes), `changed_files` (`0` to `100000`), `root_cause_confirmed`, `architecture_decision`, `security_sensitive` (booleans) | `complexity`: `simple`, `moderate`, or `complex` |
 | `orchestration-risk` | `task` (`scout`, `architecture`, `implement`, `review`, `audit`, `security`, `test`, `docs`, `mechanical`, or `arbiter`), `effect` (`read-only`, `scoped-write`, `high-impact-write`, `external`, or `destructive`), `importance` (`normal` or `high`), `parallel` (boolean) | `risk`: `R0` to `R3`; `capability`: `C1` to `C3` |
 | `domain-routing` | `summary` (non-empty, up to 2000 bytes), `catalog`: 1 to 15 entries, each with a unique `id` matching `^[a-z][a-z0-9-]{0,63}$` and a `description` of up to 500 bytes | `domain`: a catalog `id` or `none` |
+| `skill-routing-eval` | `catalog`: 2 to 127 entries, each with a unique `id` matching `^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$` (not `none`), a non-empty `name` of up to 256 bytes, a non-empty `description` of up to 2048 bytes, and optional `when_to_use` (up to 2048 bytes) and `keywords` (up to 32, each up to 128 bytes); `cases`: 1 to 8 entries, each with a unique `id` and a non-empty `prompt` of up to 1500 bytes | For each case `id`: a catalog `id` or `none` |
+
+A `skill-routing-eval` case prompt must not name a catalog skill directly, for
+example as `/<id>` or `$<id>`; such a request is rejected.
 
 ```json
 {"consumer":"fix-complexity","state":{"summary":"A local type mismatch","changed_files":1,"root_cause_confirmed":true},"legacy":{"complexity":"simple"}}
@@ -120,15 +129,16 @@ Without `--json`, the command prints the result as one JSON object. With
 
 | Field | Meaning |
 | --- | --- |
-| `status` | `completed`, `disabled`, or `unavailable`. |
+| `status` | `completed`, `disabled`, or `unavailable`; with `--validate-only`, `validated` or `unavailable`. |
 | `fallback_reason` | Why the evaluation did not complete. `disabled` reports `not_enabled` or `consumer_disabled`. `unavailable` reports a fixed category such as `credential_missing`, `model_required`, `model_unavailable`, `timeout`, `rate_limited`, `authentication_failed`, `invalid_response`, or `provider_unavailable`. |
 | `answers` | Present only when `completed`: the provider's answer per question ID, with `kind`, `choice`, and, when returned, `confidence` and `probabilities`. |
 | `provenance` | `question_count`, `provider_attempted`, `provider`, `requested_model`, `resolved_model`, `latency_ms`, and, when reported, `usage` with `input_tokens` and `output_tokens`. It never contains request state. |
 | `consumer` | The profile that ran. |
+| `profile_version` | Present only for `skill-routing-eval`: the routing profile version, currently `skill-routing-v1`. |
 | `legacy_decision` | The `legacy` answers you supplied. |
 | `effective_decision` | Always equal to `legacy_decision`. |
 | `agreement` | Present only when `completed`: `true` per question when the provider chose your legacy answer. |
-| `policy_reason` | `user_disabled`, `user_granted`, or `project_disabled`. |
+| `policy_reason` | `user_disabled`, `user_granted`, or `project_disabled`; `offline_validation` with `--validate-only`. |
 | `consent_scope` | `user` when the grant is enabled. |
 | `project_restriction_applied` | `true` when project config narrowed or disabled the grant. |
 
@@ -140,7 +150,7 @@ completed comparison.
 
 | Exit | Meaning |
 | --- | --- |
-| `0` | `status` is `completed` or `disabled`; inspect `status`. |
+| `0` | `status` is `completed`, `disabled`, or `validated`; inspect `status`. |
 | `1` | The request or `semantic_decision` policy is invalid, or `status` is `unavailable`. For `unavailable`, the result is still printed and the legacy decision is retained. |
 
 ## Related commands
