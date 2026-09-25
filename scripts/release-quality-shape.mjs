@@ -17,8 +17,8 @@ export const RELEASE_SHAPE_BASELINE = Object.freeze({
   // catalog guard separately enforces each channel's exact inventory snapshot.
   // The approved Stable docs exception adds guides/pi-extensions in both locales.
   // Beta adds the ak policy group and ak eval decision pages (7 routes) ahead of promotion.
-  sourceRoutesPerLocaleChannel: { stable: 458, beta: 483 },
-  routesPerLocaleChannel: { stable: 457, beta: 482 },
+  sourceRoutesPerLocaleChannel: { stable: 458, beta: 484 },
+  routesPerLocaleChannel: { stable: 457, beta: 483 },
   reviewedSourceOnlyRoutes: [
     {
       route: 'changelog',
