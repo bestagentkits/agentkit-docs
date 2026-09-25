@@ -1,0 +1,75 @@
+---
+title: ak policy validate
+description: Check that the project policy loads without conflicts and report drift in compiled rules.
+---
+
+Use `ak policy validate` to confirm the policy document is coherent. It reports
+every pair of rules that disagree about an input both describe, and every
+compiled rule whose source instruction has changed. A document with any conflict
+enforces nothing, so run this command in CI to turn a typo into a failed build
+instead of a silent enforcement gap.
+
+## Usage
+
+```bash
+ak policy validate [flags]
+```
+
+The command accepts no positional arguments and changes nothing. It reads
+`.agentkit/policy.yaml` and the instruction files it names.
+
+## Command flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--dir <path>` | `.` | Project directory holding `.agentkit/policy.yaml`. |
+| `--fail-on-stale` | `false` | Also exit `1` when a compiled rule's source instruction has changed or is missing. |
+
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+## Common examples
+
+```bash
+ak policy validate
+ak policy validate --fail-on-stale --json
+```
+
+## Conflicts and drift
+
+Two rules conflict when they can describe the same input and answer it
+differently, for example a `block` and a `warn` on overlapping path patterns, or
+a check one rule requires for a diff that another rule lets it skip. The engine
+applies no precedence between them; it refuses the whole document.
+
+Drift findings use these `state` values:
+
+| State | Meaning | Fails `--fail-on-stale` |
+| --- | --- | --- |
+| `source_changed` | The source file no longer contains the instruction the rule was compiled from. | Yes |
+| `source_missing` | The source file is gone, unreadable, or outside the project. | Yes |
+| `target_absent` | Nothing exists yet at the fixed part of a protected path pattern. Informational. | No |
+
+Reflowing, renumbering, or moving the instruction within its file is not drift;
+only changing its words is. A stale rule keeps enforcing until you
+re-adopt or remove it.
+
+## Automation output
+
+`kind` is `policy.validate`. The `data` payload contains `document`, `rules`
+(rule count), `loadable`, `conflicts` (each with `rules`, `kinds`, and
+`detail`), and `stale` (each with `rule`, `state`, and `detail`).
+
+## Exit behavior
+
+| Exit | Meaning | What to do |
+| --- | --- | --- |
+| `0` | The document loads. Drift may still be reported. | Review any drift findings. |
+| `1` | The document is missing or unreadable, or `--fail-on-stale` found drift. | Fix the file, or re-adopt or remove the drifted rule. |
+| `2` | Arguments were invalid. | Correct the invocation. |
+| `4` | Rules conflict, so nothing in the document is enforced. | Edit the conflicting rules so they agree. |
+
+## Related commands
+
+- [`ak policy`](./policy)
+- [`ak policy status`](./policy-status)
+- [`ak policy adopt`](./policy-adopt)
