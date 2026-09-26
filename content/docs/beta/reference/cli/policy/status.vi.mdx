@@ -1,0 +1,64 @@
+---
+title: ak policy status
+description: Liệt kê mọi quy tắc mà policy của project đang thực thi, kèm action và nguồn gốc của từng quy tắc.
+---
+
+Dùng `ak policy status` để xem policy của project hiện đang thực thi những gì.
+Mỗi quy tắc hiển thị kind, action, lý do và nguồn gốc. Quy tắc viết tay báo
+`declared`; quy tắc biên dịch từ văn bản nêu tệp và dòng mà nó đến từ đó, nhờ vậy
+bạn có thể lần ngược mọi hành vi thực thi về đúng câu hướng dẫn đã yêu cầu nó.
+
+## Cách dùng
+
+```bash
+ak policy status [flags]
+```
+
+Lệnh không nhận argument theo vị trí và không thay đổi gì. Lệnh đọc
+`.agentkit/policy.yaml` và các tệp hướng dẫn mà tài liệu này nêu tên.
+
+## Tuỳ chọn của lệnh
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--dir <path>` | `.` | Thư mục project chứa `.agentkit/policy.yaml`. |
+
+Các cờ dùng chung được mô tả trong [quy ước CLI](../cli-conventions).
+
+## Ví dụ thường dùng
+
+```bash
+ak policy status
+ak policy status --json
+```
+
+Nếu các quy tắc trong tài liệu xung đột, đầu ra ghi `NOT LOADED` và không quy tắc
+nào được liệt kê có hiệu lực. Quy tắc compiled có câu hướng dẫn nguồn đã thay
+đổi được đánh dấu `source changed`; quy tắc đó vẫn tiếp tục thực thi cho đến khi
+bạn chấp nhận lại hoặc xoá nó.
+
+## Đầu ra cho tự động hoá
+
+`kind` là `policy.status`. Payload `data` gồm:
+
+| Trường | Mô tả |
+| --- | --- |
+| `document` | Đường dẫn tuyệt đối của tài liệu policy. |
+| `loadable` | `false` khi các quy tắc xung đột khiến tài liệu không được nạp. |
+| `sources` | Các tệp hướng dẫn mà tài liệu biên dịch từ đó. Mặc định là `AGENTS.md` và `CLAUDE.md`. |
+| `rules` | Mỗi quy tắc một mục: `id`, `kind`, `action`, `reason`, `origin`, `source` (chỉ với quy tắc compiled, dạng `file:line`) và `stale`. |
+| `conflicts` | Chỉ có khi các quy tắc xung đột: `rules`, `kinds` và `detail` cho mỗi cặp. |
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bạn nên làm gì |
+| --- | --- | --- |
+| `0` | Trạng thái đã được báo cáo, kể cả khi tài liệu không nạp được. | Đọc `loadable` hoặc dòng `NOT LOADED`. |
+| `1` | Tài liệu policy không tồn tại hoặc không đọc được. | Chạy [`ak policy compile`](./policy-compile) và [`ak policy adopt`](./policy-adopt), hoặc sửa tệp. |
+| `2` | Argument không hợp lệ. | Sửa cách gọi. |
+
+## Lệnh liên quan
+
+- [`ak policy`](./policy)
+- [`ak policy validate`](./policy-validate)
+- [`ak policy check`](./policy-check)

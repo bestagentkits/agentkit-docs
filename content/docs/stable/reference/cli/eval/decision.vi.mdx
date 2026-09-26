@@ -1,0 +1,147 @@
+---
+title: ak eval decision
+description: "So sánh một phán đoán ngữ nghĩa đã được bật tường minh với một quyết định legacy"
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak eval decision` để chạy một lần so sánh shadow. Bạn cung cấp một
+request gọn và quyết định mà logic hiện có của bạn đã đưa ra (quyết định
+legacy). Khi bạn đã opt in, một provider ngữ nghĩa bên ngoài sẽ phán đoán trên
+cùng các dữ kiện đó và lệnh báo cáo hai kết quả cạnh nhau.
+
+Phép so sánh chỉ mang tính tham khảo. `effective_decision` trong đầu ra luôn là
+quyết định legacy bạn đã cung cấp; câu trả lời của provider không bao giờ thay
+thế nó. Lệnh không lưu lại request.
+
+<Callout type="warning">
+  Khi được bật, mỗi lần gọi sẽ gửi các dữ kiện request đã chuẩn hoá tới provider
+  TypeSafe qua mạng và có thể phát sinh phí provider, dù quyết định legacy vẫn
+  giữ hiệu lực. Tính năng mặc định tắt; việc chạy lệnh này hay đặt credential
+  không bật tính năng.
+</Callout>
+
+## Cách dùng
+
+```bash
+ak eval decision <request.json|-> [flags]
+```
+
+Truyền đường dẫn tệp request, hoặc `-` để đọc request từ stdin. Lệnh không có cờ
+riêng; các cờ dùng chung được mô tả trong [quy ước CLI](../cli-conventions).
+
+```bash
+ak eval decision request.json --json
+ak eval decision - --json
+```
+
+## Opt in
+
+Sự đồng ý chỉ đến từ user scope. Đặt provider trước, rồi bật tính năng:
+
+```bash
+ak config prefs set semantic_decision.provider typesafe --scope user
+ak config prefs set semantic_decision.enabled true --scope user
+```
+
+Cung cấp credential qua biến môi trường `TYPESAFE_API_KEY` của process chạy
+lệnh. Không bao giờ lưu credential trong config hoặc trong request. Khi tính
+năng đang tắt, lệnh không đọc credential và không liên hệ provider.
+
+| Key | Giá trị | Mặc định |
+| --- | --- | --- |
+| `semantic_decision.enabled` | `true` hoặc `false` | `false` |
+| `semantic_decision.provider` | `typesafe`; bắt buộc khi bật | chưa đặt |
+| `semantic_decision.model` | Model ID khớp `^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$` | chưa đặt |
+| `semantic_decision.timeout_ms` | Số nguyên từ `100` đến `30000` | `5000` |
+| `semantic_decision.consumers.<consumer>` | `true` hoặc `false` cho `domain-routing`, `fix-complexity` hoặc `orchestration-risk` | chưa đặt |
+
+Nếu bạn bỏ qua `semantic_decision.model`, lệnh chỉ dùng model của provider khi
+provider liệt kê đúng một model; nếu không, kết quả là `unavailable` với
+`model_required`. Khi config user không có map `consumers`, cả ba consumer đều
+được phép; map rỗng không cho phép consumer nào; map không rỗng chỉ cho phép
+các mục đặt là `true`.
+
+Config project chỉ có thể thu hẹp quyền đã cấp ở user scope. Tệp
+`.agentkit/config.yaml` của project có thể đặt `semantic_decision.enabled` thành
+`false` hoặc một mục `semantic_decision.consumers.<consumer>` thành `false`. Nó
+không thể bật tính năng, cho phép lại một consumer, hay đặt provider, model
+hoặc timeout. Tệp `.agentkit/config.yaml` ở thư mục tổ tiên gần nhất được áp
+dụng, nên giới hạn vẫn có hiệu lực trong các thư mục con. Section phải dùng
+cách viết chuẩn `semantic_decision`; policy user hoặc project không hợp lệ hay
+mơ hồ khiến lệnh thoát `1` mà không liên hệ provider.
+
+Để ngừng dùng provider, đặt `semantic_decision.enabled` thành `false` ở user
+scope hoặc unset key đó. Xoá preference không thu hồi credential; hãy gỡ
+`TYPESAFE_API_KEY` khỏi môi trường khi bạn ngừng cấp quyền truy cập.
+
+## Request
+
+Request là một object JSON tối đa 32768 byte. Field không xác định và dữ liệu
+thừa phía sau bị từ chối.
+
+| Field | Ý nghĩa |
+| --- | --- |
+| `consumer` | Profile cần chạy: `fix-complexity`, `orchestration-risk` hoặc `domain-routing`. |
+| `state` | Các dữ kiện gọn cho profile đó. |
+| `legacy` | Quyết định hiện có của bạn: đúng một câu trả lời hợp lệ cho mỗi câu hỏi của profile. |
+
+| Profile | Field của `state` | Câu trả lời `legacy` |
+| --- | --- | --- |
+| `fix-complexity` | `summary` (không rỗng, tối đa 2000 byte), `changed_files` (`0` đến `100000`), `root_cause_confirmed`, `architecture_decision`, `security_sensitive` (boolean) | `complexity`: `simple`, `moderate` hoặc `complex` |
+| `orchestration-risk` | `task` (`scout`, `architecture`, `implement`, `review`, `audit`, `security`, `test`, `docs`, `mechanical` hoặc `arbiter`), `effect` (`read-only`, `scoped-write`, `high-impact-write`, `external` hoặc `destructive`), `importance` (`normal` hoặc `high`), `parallel` (boolean) | `risk`: `R0` đến `R3`; `capability`: `C1` đến `C3` |
+| `domain-routing` | `summary` (không rỗng, tối đa 2000 byte), `catalog`: 1 đến 15 mục, mỗi mục có `id` duy nhất khớp `^[a-z][a-z0-9-]{0,63}$` và `description` tối đa 500 byte | `domain`: một `id` trong catalog hoặc `none` |
+
+```json
+{"consumer":"fix-complexity","state":{"summary":"A local type mismatch","changed_files":1,"root_cause_confirmed":true},"legacy":{"complexity":"simple"}}
+```
+
+## Dữ liệu nào rời khỏi máy của bạn
+
+Lệnh chỉ gọi provider khi quyền ở user scope đã bật, consumer được phép và có
+credential. Lần gọi gửi model ID, `state` đã chuẩn hoá, cùng các câu hỏi và mô
+tả lựa chọn cố định của profile. ID lựa chọn cục bộ được thay bằng ID không
+mang nghĩa, và các câu trả lời `legacy` của bạn không được gửi đi.
+
+Trước khi gửi, AgentKit che các giá trị trông giống secret, địa chỉ email và
+đường dẫn tệp trong các chuỗi của `state`, bỏ các key object trông giống tên
+credential, và xoá chính giá trị credential. Việc che dữ liệu là lớp phòng vệ
+bổ sung, không phải bảo đảm. Đừng đưa tệp mã nguồn, transcript, credential, dữ
+liệu cá nhân hay chi tiết mật của project vào summary và mô tả catalog.
+
+## Đầu ra
+
+Khi không có `--json`, lệnh in kết quả dưới dạng một object JSON. Với `--json`,
+cùng object đó nằm trong `data` của envelope dùng chung với `kind`
+`eval.decision`.
+
+| Field | Ý nghĩa |
+| --- | --- |
+| `status` | `completed`, `disabled` hoặc `unavailable`. |
+| `fallback_reason` | Lý do đánh giá không hoàn tất. `disabled` báo `not_enabled` hoặc `consumer_disabled`. `unavailable` báo một nhóm cố định như `credential_missing`, `model_required`, `model_unavailable`, `timeout`, `rate_limited`, `authentication_failed`, `invalid_response` hoặc `provider_unavailable`. |
+| `answers` | Chỉ có khi `completed`: câu trả lời của provider theo từng question ID, gồm `kind`, `choice` và, khi được trả về, `confidence` và `probabilities`. |
+| `provenance` | `question_count`, `provider_attempted`, `provider`, `requested_model`, `resolved_model`, `latency_ms` và, khi được báo, `usage` với `input_tokens` và `output_tokens`. Field này không bao giờ chứa state của request. |
+| `consumer` | Profile đã chạy. |
+| `legacy_decision` | Các câu trả lời `legacy` bạn đã cung cấp. |
+| `effective_decision` | Luôn bằng `legacy_decision`. |
+| `agreement` | Chỉ có khi `completed`: `true` cho từng câu hỏi khi provider chọn đúng câu trả lời legacy của bạn. |
+| `policy_reason` | `user_disabled`, `user_granted` hoặc `project_disabled`. |
+| `consent_scope` | `user` khi quyền đã được bật. |
+| `project_restriction_applied` | `true` khi config project đã thu hẹp hoặc tắt quyền. |
+
+Kiểm tra `status` và `fallback_reason` trước `agreement`. Sự trùng khớp không
+chứng minh câu trả lời nào đúng, và kết quả `unavailable` không phải một lần so
+sánh đã hoàn tất.
+
+## Mã thoát
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | `status` là `completed` hoặc `disabled`; hãy kiểm tra `status`. |
+| `1` | Request hoặc policy `semantic_decision` không hợp lệ, hoặc `status` là `unavailable`. Với `unavailable`, kết quả vẫn được in và quyết định legacy được giữ nguyên. |
+
+## Lệnh liên quan
+
+- [ak eval](./index)
+- [ak config prefs set](../cli/ak_config_prefs_set)
+- [ak config prefs unset](../cli/ak_config_prefs_unset)

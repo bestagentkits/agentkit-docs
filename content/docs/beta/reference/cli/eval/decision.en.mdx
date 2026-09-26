@@ -1,0 +1,160 @@
+---
+title: ak eval decision
+description: "Compare an explicitly enabled semantic judgment with a legacy decision"
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak eval decision` to run one shadow comparison. You supply a compact
+request and the decision your existing logic already made (the legacy
+decision). When you have opted in, an external semantic provider judges the
+same facts and the command reports both side by side.
+
+The comparison is advisory only. `effective_decision` in the output is always
+the legacy decision you supplied; the provider's answer never replaces it. The
+command does not persist the request.
+
+<Callout type="warning">
+  When enabled, each call sends normalized request facts to the TypeSafe
+  provider over the network and may incur provider charges, even though the
+  legacy decision stays in effect. The feature is off by default, and running
+  this command or setting a credential does not enable it.
+</Callout>
+
+## Usage
+
+```bash
+ak eval decision <request.json|-> [flags]
+```
+
+Pass a request file path, or `-` to read the request from stdin. Shared flags
+are described in [CLI conventions](../cli-conventions).
+
+```bash
+ak eval decision request.json --json
+ak eval decision - --json
+ak eval decision request.json --validate-only --json
+```
+
+`--validate-only` checks that every request encoding fits the provider contract
+locally. It reads no preferences or credential and never contacts the provider.
+
+## Opt in
+
+Consent comes only from user scope. Set the provider first, then enable it:
+
+```bash
+ak config prefs set semantic_decision.provider typesafe --scope user
+ak config prefs set semantic_decision.enabled true --scope user
+```
+
+Supply the credential in the `TYPESAFE_API_KEY` environment variable of the
+process that runs the command. Never store it in config or in a request. With
+the feature disabled, the command does not read the credential or contact the
+provider.
+
+| Key | Values | Default |
+| --- | --- | --- |
+| `semantic_decision.enabled` | `true` or `false` | `false` |
+| `semantic_decision.provider` | `typesafe`; required when enabled | unset |
+| `semantic_decision.model` | Model ID matching `^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$` | unset |
+| `semantic_decision.timeout_ms` | Integer from `100` to `30000` | `5000` |
+| `semantic_decision.consumers.<consumer>` | `true` or `false` for `domain-routing`, `fix-complexity`, `orchestration-risk`, or `skill-routing-eval` | unset |
+
+If you omit `semantic_decision.model`, the command uses the provider's model
+only when the provider lists exactly one; otherwise the result is `unavailable`
+with `model_required`. With no user `consumers` map, `domain-routing`,
+`fix-complexity`, and `orchestration-risk` are permitted, but
+`skill-routing-eval` is not: it needs an explicit
+`semantic_decision.consumers.skill-routing-eval` entry set to `true`. An empty
+map permits none; a non-empty map permits only entries set to `true`.
+
+Project config can only restrict the user grant. A project
+`.agentkit/config.yaml` may set `semantic_decision.enabled` to `false` or a
+`semantic_decision.consumers.<consumer>` entry to `false`. It cannot enable the
+feature, re-permit a consumer, or set the provider, model, or timeout. The
+nearest ancestor `.agentkit/config.yaml` applies, so a restriction also holds
+in subdirectories. The section must use the canonical `semantic_decision`
+spelling; an invalid or ambiguous user or project policy makes the command exit
+`1` without contacting the provider.
+
+To stop provider use, set `semantic_decision.enabled` to `false` at user scope
+or unset it. Removing a preference does not revoke the credential; remove
+`TYPESAFE_API_KEY` from the environment when you retire access.
+
+## Request
+
+The request is one JSON object of at most 32768 bytes. Unknown fields and
+trailing data are rejected.
+
+| Field | Meaning |
+| --- | --- |
+| `consumer` | The profile to run: `fix-complexity`, `orchestration-risk`, `domain-routing`, or `skill-routing-eval`. |
+| `state` | Compact facts for that profile. |
+| `legacy` | Your existing decision: exactly one valid answer for each profile question. |
+
+| Profile | `state` fields | `legacy` answers |
+| --- | --- | --- |
+| `fix-complexity` | `summary` (non-empty, up to 2000 bytes), `changed_files` (`0` to `100000`), `root_cause_confirmed`, `architecture_decision`, `security_sensitive` (booleans) | `complexity`: `simple`, `moderate`, or `complex` |
+| `orchestration-risk` | `task` (`scout`, `architecture`, `implement`, `review`, `audit`, `security`, `test`, `docs`, `mechanical`, or `arbiter`), `effect` (`read-only`, `scoped-write`, `high-impact-write`, `external`, or `destructive`), `importance` (`normal` or `high`), `parallel` (boolean) | `risk`: `R0` to `R3`; `capability`: `C1` to `C3` |
+| `domain-routing` | `summary` (non-empty, up to 2000 bytes), `catalog`: 1 to 15 entries, each with a unique `id` matching `^[a-z][a-z0-9-]{0,63}$` and a `description` of up to 500 bytes | `domain`: a catalog `id` or `none` |
+| `skill-routing-eval` | `catalog`: 2 to 127 entries, each with a unique `id` matching `^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$` (not `none`), a non-empty `name` of up to 256 bytes, a non-empty `description` of up to 2048 bytes, and optional `when_to_use` (up to 2048 bytes) and `keywords` (up to 32, each up to 128 bytes); `cases`: 1 to 8 entries, each with a unique `id` and a non-empty `prompt` of up to 1500 bytes | For each case `id`: a catalog `id` or `none` |
+
+A `skill-routing-eval` case prompt must not name a catalog skill directly, for
+example as `/<id>` or `$<id>`; such a request is rejected.
+
+```json
+{"consumer":"fix-complexity","state":{"summary":"A local type mismatch","changed_files":1,"root_cause_confirmed":true},"legacy":{"complexity":"simple"}}
+```
+
+## What leaves your machine
+
+A provider call happens only when the user grant is enabled, the consumer is
+permitted, and a credential is present. The call sends the model ID, the
+normalized `state`, and the profile's fixed questions and option descriptions.
+Local option IDs are replaced with opaque ones, and your `legacy` answers are
+not sent.
+
+Before sending, AgentKit redacts secret-like values, email addresses, and file
+paths in `state` strings, drops object keys that look like credential names,
+and removes the credential value itself. Redaction is defense in depth, not a
+guarantee. Keep source files, transcripts, credentials, personal data, and
+confidential project detail out of summaries and catalog descriptions.
+
+## Output
+
+Without `--json`, the command prints the result as one JSON object. With
+`--json`, the same object is the `data` of the shared envelope with `kind`
+`eval.decision`.
+
+| Field | Meaning |
+| --- | --- |
+| `status` | `completed`, `disabled`, or `unavailable`; with `--validate-only`, `validated` or `unavailable`. |
+| `fallback_reason` | Why the evaluation did not complete. `disabled` reports `not_enabled` or `consumer_disabled`. `unavailable` reports a fixed category such as `credential_missing`, `model_required`, `model_unavailable`, `timeout`, `rate_limited`, `authentication_failed`, `invalid_response`, or `provider_unavailable`. |
+| `answers` | Present only when `completed`: the provider's answer per question ID, with `kind`, `choice`, and, when returned, `confidence` and `probabilities`. |
+| `provenance` | `question_count`, `provider_attempted`, `provider`, `requested_model`, `resolved_model`, `latency_ms`, and, when reported, `usage` with `input_tokens` and `output_tokens`. It never contains request state. |
+| `consumer` | The profile that ran. |
+| `profile_version` | Present only for `skill-routing-eval`: the routing profile version, currently `skill-routing-v1`. |
+| `legacy_decision` | The `legacy` answers you supplied. |
+| `effective_decision` | Always equal to `legacy_decision`. |
+| `agreement` | Present only when `completed`: `true` per question when the provider chose your legacy answer. |
+| `policy_reason` | `user_disabled`, `user_granted`, or `project_disabled`; `offline_validation` with `--validate-only`. |
+| `consent_scope` | `user` when the grant is enabled. |
+| `project_restriction_applied` | `true` when project config narrowed or disabled the grant. |
+
+Inspect `status` and `fallback_reason` before `agreement`. Agreement does not
+establish that either answer is correct, and an `unavailable` result is not a
+completed comparison.
+
+## Exit status
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | `status` is `completed`, `disabled`, or `validated`; inspect `status`. |
+| `1` | The request or `semantic_decision` policy is invalid, or `status` is `unavailable`. For `unavailable`, the result is still printed and the legacy decision is retained. |
+
+## Related commands
+
+- [ak eval](./index)
+- [ak config prefs set](../cli/ak_config_prefs_set)
+- [ak config prefs unset](../cli/ak_config_prefs_unset)

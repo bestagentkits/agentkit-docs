@@ -552,6 +552,45 @@ test('action-scoped owner paths permit paired add and retire while legacy paths 
   );
 });
 
+test('add may introduce a new Beta directory only with its paired nav metadata and index', async () => {
+  const group = 'content/docs/beta/guides/action-scoped-group';
+  const members = [
+    `${group}/index.en.mdx`,
+    `${group}/index.vi.mdx`,
+    `${group}/meta.json`,
+    `${group}/meta.vi.json`,
+    `${group}/child.en.mdx`,
+    `${group}/child.vi.mdx`,
+  ];
+  const normalized = validateOwnerDirectedActions([{ action: 'add', paths: members }], repoRoot);
+  assert.deepEqual(normalized.map(({ path }) => path), [...members].sort());
+  const { ledger, impactMap } = await changedEvidence();
+  const request = createApprovalRequest({ ledger, impactMap, target: ledger.to.version, ownerActions: [{ action: 'add', paths: members }] });
+  assert.deepEqual(v1WriteViolations(members.map((path) => ({ status: 'A', path })), request.paths, request.pathActions), []);
+
+  const withoutMeta = members.filter((path) => !path.includes('/meta'));
+  assert.throws(
+    () => validateOwnerDirectedActions([{ action: 'add', paths: withoutMeta }], repoRoot),
+    new RegExp(`new directory ${group} requires add path ${group}/meta.json`),
+  );
+  const withoutIndex = members.filter((path) => !path.includes('/index.'));
+  assert.throws(
+    () => validateOwnerDirectedActions([{ action: 'add', paths: withoutIndex }], repoRoot),
+    new RegExp(`new directory ${group} requires add path ${group}/index.en.mdx`),
+  );
+  assert.throws(
+    () => validateOwnerDirectedActions([{ action: 'add', paths: [
+      'content/docs/beta/guides/meta.json',
+      'content/docs/beta/guides/meta.vi.json',
+    ] }], repoRoot),
+    /add path already exists|add is limited/,
+  );
+  assert.throws(
+    () => validateOwnerDirectedActions([{ action: 'modify', paths: [`${group}/index.en.mdx`, `${group}/index.vi.mdx`] }], repoRoot),
+    /modify path does not exist/,
+  );
+});
+
 test('V0 CLI binds owner-directed paths and remains byte-equivalent on rerun', async () => {
   const ownerPathsPath = join(temporary, 'owner-paths.json');
   await writeFile(ownerPathsPath, stableJson([

@@ -12,7 +12,7 @@ manifest, thư viện và utility đi kèm là artifact, không phải những h
 
 | Thời điểm | Hook graph đang hoạt động làm gì |
 | --- | --- |
-| Trước khi dùng công cụ | Kiểm tra cách đặt tên mô tả trước khi ghi, kiểm tra thao tác tệp và shell có truy cập dữ liệu nhạy cảm về quyền riêng tư, đồng thời phát hiện việc đọc hoặc khám phá bằng shell quá rộng cần thu hẹp. |
+| Trước khi dùng công cụ | Kiểm tra cách đặt tên mô tả trước khi ghi, kiểm tra thao tác tệp và shell có truy cập dữ liệu nhạy cảm về quyền riêng tư, phát hiện việc đọc hoặc khám phá bằng shell quá rộng cần thu hẹp, kiểm tra lượng nội dung mà một lệnh read, search hoặc shell có thể trả về, đồng thời thay thế tham chiếu `${secret:NAME}` trong lệnh shell và URL fetch. |
 | Sau khi chỉnh sửa | Theo dõi hoạt động edit được hỗ trợ rồi có thể nhắc workflow đơn giản hóa và review thay đổi đáng kể. Claude Code gồm `MultiEdit`; Codex thu hẹp matcher này còn `Edit|Write`. |
 | Khi bạn gửi prompt | Kiểm tra yêu cầu có thể làm lộ secret và hiển thị hướng dẫn development rule phù hợp. |
 
@@ -20,16 +20,49 @@ Tùy event và runtime, những hành vi này có thể thêm hướng dẫn ho�
 để review. Đây là guardrail cho workflow, không phải ranh giới bảo mật tổng quát
 hay cơ chế thay thế permission control của runtime.
 
+Hook `context-firewall` được dùng lại chạy trước các lệnh `Bash`, `Read`, `Grep`
+và `Glob`. Hook cảnh báo khi đọc toàn bộ một tệp từ 256 KB trở lên, khi lệnh
+shell in toàn bộ tệp từ 128 KB trở lên, khi search ở mode `content` không có giới
+hạn kết quả, và khi output log, lịch sử hoặc shell đệ quy không có giới hạn.
+Hook chặn khi đọc toàn bộ một tệp từ 2 MB trở lên, khi lệnh shell in toàn bộ tệp
+từ 512 KB trở lên, và khi search ở mode `content` không giới hạn với pattern quá
+rộng, đồng thời nêu một cách thay thế có giới hạn. Lần can thiệp thứ ba trên cùng
+một thao tác trong một session sẽ trở thành chặn. Hook bật theo mặc định và luôn
+fail-open; đặt `hooks.context-firewall` thành `false` để tắt, như mô tả trong
+[Quản lý preference của Hook](../../../guides/managing-hook-preferences).
+
+## Tham chiếu secret trong lệnh gọi công cụ
+
+Hook `secrets-inject` chạy trước các lệnh gọi `Bash` và `WebFetch`. Khi một
+lệnh shell hoặc URL fetch chứa tham chiếu `${secret:NAME}`, Hook hỏi
+`ak secrets resolve` để lấy giá trị đã lưu và thay thế trong bộ nhớ, nhờ đó
+model có thể soạn lệnh gọi mà không nhìn thấy credential. Chỉ `Bash.command` và
+`WebFetch.url` được quét; nội dung tệp và prompt được giữ nguyên. Grant
+[`ak secrets`](../../../reference/cli/secrets) cho binary agent đang gọi quyết định giá trị có được
+giải phóng hay không, và grant bị giới hạn bằng `--allow-host` còn kiểm tra đích
+fetch.
+
+Mọi lỗi đều chặn lệnh gọi công cụ thay vì chuyển nguyên văn tham chiếu đi,
+bao gồm thiếu grant, tên không hợp lệ hoặc giá trị có ký tự đặc biệt của shell
+khi đi vào một lệnh `Bash`. Hook không ghi bản sao nào của giá trị, nhưng input
+đã thay thế vẫn tới process của công cụ và mọi thứ runtime ghi lại cho một lệnh
+gọi đã thực thi, chẳng hạn transcript. Hãy coi giá trị đã giải phóng là có mặt
+trên host và rotate khi cần.
+
+Claude Code và Grok đăng ký Hook cho `Bash|WebFetch`, còn Codex thu hẹp thành
+`Bash`. Hỗ trợ Cursor cho Hook này chưa được xác lập trong bản phát hành này.
+
 ## Artifact entry không phải số lượng hành vi
 
-Manifest Marketing khai báo tám Hook file export:
+Manifest Marketing khai báo chín Hook file export:
 
+- Chính manifest `hooks.json`.
 - Một entrypoint tự động riêng của Marketing cung cấp lời nhắc sau chỉnh sửa.
 - Một Discord sender thủ công được đóng gói như utility.
 - Sáu thư viện hỗ trợ cấu hình và trạng thái runtime có giới hạn.
 
-Manifest `hooks.json` riêng nối entrypoint Marketing với năm entrypoint core được
-dùng lại. Thư viện hỗ trợ không tự chạy độc lập và không entry nào trong số này
+Manifest `hooks.json` riêng nối entrypoint Marketing với tám entrypoint core được
+dùng lại, trong đó có `context-firewall` và `secrets-inject`. Thư viện hỗ trợ không tự chạy độc lập và không entry nào trong số này
 là command của Marketing.
 
 `notifications/send-discord` không được tham chiếu trong `hooks.json`. Utility
@@ -46,7 +79,7 @@ Discord. Các nhánh lỗi của utility không chặn workflow.
 
 ## Hành vi Codex trong bản phát hành này
 
-- Marketing không projection Codex group nào bị drop hoàn toàn và có ba matcher bị thu hẹp. Shared `Read|Write|Edit|Bash` trở thành `Write|Edit|Bash`; shared `Bash|Read` trở thành `Bash`; matcher Marketing `Edit|Write|MultiEdit` trở thành `Edit|Write`. Handler ban đầu vẫn hoạt động cho các atom được hỗ trợ.
+- Marketing không projection Codex group nào bị drop hoàn toàn và có năm matcher bị thu hẹp. Shared `Read|Write|Edit|Bash` trở thành `Write|Edit|Bash`; shared `Bash|Read` trở thành `Bash`; shared `Bash|Read|Grep|Glob` trở thành `Bash`; shared `Bash|WebFetch` trở thành `Bash`; matcher Marketing `Edit|Write|MultiEdit` trở thành `Edit|Write`. Handler ban đầu vẫn hoạt động cho các atom được hỗ trợ.
 - Output cho người dùng báo narrowing dưới **Hook matchers narrowed (some tool matches unsupported on this target)**. Output máy có thể đọc dùng `hookMatchersNarrowed` và `narrowedHookSummaries` tùy chọn; các field full drop không xuất hiện cho projection này.
 - Trên Windows, Hook `.cjs` đủ điều kiện bên dưới Codex home có thể dùng shim `.cmd` do AgentKit quản lý khi đường dẫn thông thường chứa khoảng trắng. Đường dẫn `.cjs` có khoảng trắng bên ngoài home đó vẫn không có shim. Đường dẫn chứa metacharacter của `cmd.exe`, basename shim không phải ASCII và baked argument không an toàn hoặc không phải ASCII cũng bị từ chối, vì vậy đây không phải bảo đảm tương thích bao quát.
 - Codex home do wrapper quản lý chỉ được alias leaf `hooks` cuối cùng tới `~/.codex/hooks` canonical, bằng symlink POSIX hoặc directory junction trên Windows; thao tác ghi, command đã translate, rollback và ownership dùng identity canonical đó. Parent có link và target khác đều bị từ chối.
