@@ -28,7 +28,11 @@ source.config.ts  fumadocs-mdx collections + frontmatter schema
 ```
 
 The build is 100% static: `pnpm build` emits `out/` with no `.next/server` runtime.
-Client-side search uses a build-time Orama index (`/api/search` prerenders to a static asset).
+Client-side search uses **four build-time Orama shards** — one per locale × release
+channel — prerendered to static assets at `/api/search/{locale}/{channel}`
+(`en|vi` × `stable|beta`). The dialog loads only the shard for the page being
+read, so a query never downloads another locale's or channel's corpus and can
+never render a foreign-scope result.
 
 ## Deployment — Cloudflare Workers
 
@@ -63,7 +67,7 @@ Locale root redirects live in `public/_redirects` (copied into `out/`; Workers s
 
 ## CI
 
-`.github/workflows/ci.yml` runs on every PR and push to `main` / `dev`: install (frozen lockfile) → typecheck → lint (MDX) → unit tests → reference hygiene → generated-dir guard → reference-regeneration check (regenerate from `reference-raw/` + `reference-prose/`, assert no drift) → build → static-asset limits → internal link check → static-output assertion. The asset guard keeps every file within Cloudflare's 25 MiB limit, gives the search index a 22 MiB budget, and enforces the Paid Workers 100,000-file cap. Keep it green; all steps are deterministic and offline (the link check validates internal links only).
+`.github/workflows/ci.yml` runs on every PR and push to `main` / `dev`: install (frozen lockfile) → typecheck → lint (MDX) → unit tests → reference hygiene → generated-dir guard → reference-regeneration check (regenerate from `reference-raw/` + `reference-prose/`, assert no drift) → build → static-asset limits → internal link check → static-output assertion. The asset guard keeps every file within Cloudflare's 25 MiB limit, gives the four search shards a **shared 22 MiB aggregate budget** (a fifth, unexpected shard is rejected and still counted), and enforces the Paid Workers 100,000-file cap. Keep it green; all steps are deterministic and offline (the link check validates internal links only).
 
 Deploy workflows run their own typecheck + build, then `wrangler deploy` — they do not wait on the CI workflow.
 

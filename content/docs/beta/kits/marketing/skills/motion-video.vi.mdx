@@ -1,0 +1,195 @@
+---
+title: Sản xuất video motion graphic khớp beat với ak:motion-video
+description: Dựng motion graphic HyperFrames 1080p có voice-over AI, caption, SFX và nhạc cắt theo beat, theo một style profile có tên hoặc phối theo từng scene, trong khi vẫn phê duyệt riêng chi phí provider và publication.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:motion-video` để làm video motion graphic 1920×1080, 30 fps, trong đó
+điểm cắt scene rơi đúng beat của nhạc, phần reveal rơi đúng lời nói và audio mix
+được đo thay vì ước lượng. Workflow được script hóa từ đầu đến cuối: fact,
+script, audio được tạo, forced alignment, beat grid, nhạc splice theo bar,
+timeline và mix, HTML composition, lint và check, render, remux và social
+encode. Skill render qua HyperFrames (HTML + GSAP) và không publish kết quả.
+
+## Chọn workflow motion-video
+
+### Dùng ak:motion-video khi
+
+- Bạn cần video launch, release, changelog, feature hoặc explainer có
+  voice-over, caption, SFX và nhạc khớp beat.
+- Bạn muốn restyle một video hiện có thành project riêng, hoặc làm lại một phần
+  như nhạc mới, căn lại drop, re-mix, re-render hay social encode.
+- Bạn muốn một style profile có tên, hoặc một style nền mượn từng dimension
+  của style khác cho những scene cụ thể.
+- Mọi fact trên màn hình có thể truy về nguồn gốc như release note, docs của
+  repository hoặc code.
+
+### Chọn workflow khác khi
+
+- Bạn cần footage text-to-video được tạo sinh. Dùng [`ak:video`](./video).
+- Composition là project React hoặc Remotion. Dùng
+  [`ak:remotion`](./remotion).
+- Bạn có câu hỏi HyperFrames chung hoặc muốn HTML composition thuần mà không
+  cần pipeline beat-sync. Dùng [`ak:hyperframes`](./hyperframes).
+- Bạn cần chỉnh sửa video talking-head. Skill này không bao gồm việc đó.
+- Bạn muốn router qua mọi Skill motion hoặc video đã cài. Dùng
+  [`ak:motion-graphics`](./motion-graphics).
+
+## Chuẩn bị tuyến production
+
+Pin outcome trước khi chạm vào bất kỳ file nào: chủ đề và nguồn, style,
+duration, ngôn ngữ voice, phần kết và chữ ký. Mặc định là voice-over tiếng Anh
+với caption tiếng Việt. Skill chỉ hỏi khi chưa rõ style hoặc nguồn fact.
+
+Tuyến đầy đủ còn cần:
+
+- CLI `multix` trên `PATH`, được cấu hình bằng credential riêng của nó cho
+  voice Gemini TTS, ElevenLabs SFX, composition plan ElevenLabs Music và
+  ElevenLabs forced alignment. Credential nằm trong config của multix; Skill
+  không bao giờ in hay chép chúng vào file project, plan hoặc report.
+- Node.js để chạy script của project và các lệnh đã pin
+  `npx --yes hyperframes@0.8.77`.
+- `ffmpeg` và `ffprobe` cho audio mix, remux, kiểm tra loudness và black
+  frame, cùng social encode.
+- Python với NumPy và SciPy cho beat grid và kiểm tra audio, cùng PyYAML cho
+  `scripts/resolve-style.py`.
+- Project có quyền ghi và đủ storage cho audio WAV và MP3 được tạo, snapshot
+  và bản render MP4 1080p.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:motion-video ...` | Phân phối native là mặc định; phân phối plugin rõ ràng cũng được hỗ trợ. Production đầy đủ vẫn phụ thuộc multix, quyền truy cập provider, Node, Python và FFmpeg trong môi trường session. |
+| Cursor | `/ak:motion-video ...` | Cách gọi bằng slash đã được người dùng xác minh. Hành vi browser, preview và tool hỗ trợ có thể khác theo thiết lập. |
+| Codex | `$ak:motion-video ...` | Skill dùng native discovery của Codex. Hook projection chỉ một phần; yêu cầu về provider, render và FFmpeg không đổi. |
+
+Đọc [Runtime adapter](../../../concepts/runtime-adapters) trước khi giả định
+mọi nơi có cùng bề mặt production.
+
+## Chạy Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:motion-video "Make a 60-second release video for our v3.4 notes in the glass-keynote style. Use only facts from CHANGELOG.md, English voice-over with Vietnamese captions, and stop after the master render; do not publish"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:motion-video "Make a 60-second release video for our v3.4 notes in the glass-keynote style. Use only facts from CHANGELOG.md, English voice-over with Vietnamese captions, and stop after the master render; do not publish"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:motion-video "Make a 60-second release video for our v3.4 notes in the glass-keynote style. Use only facts from CHANGELOG.md, English voice-over with Vietnamese captions, and stop after the master render; do not publish"
+```
+
+  </Tab>
+</Tabs>
+
+### Chọn hoặc phối style
+
+Mỗi look là một style profile: ngữ pháp motion design gọn cho palette,
+typography, layout, material, texture, camera, transition, nhịp độ, phản ứng
+với beat, UI choreography, diagram, chuyển động nhân vật, caption và âm thanh.
+`references/styles/index.yaml` liệt kê khoảng 60 profile. Tên thương hiệu như
+Apple, Nike, Linear hay NVIDIA là alias dẫn tới một ngôn ngữ motion chuẩn (ví
+dụ Apple-like dẫn tới `cinematic-product-launch`); output không bao giờ dùng
+logo, font hay asset của thương hiệu.
+
+- **Một style:** gọi tên, ví dụ "comic style" cho `comic-multiverse`.
+- **Phối:** giữ một style nền và mượn từng dimension cho những scene cụ thể.
+  `python scripts/resolve-style.py resolve data/style.json --script data/script.json`
+  resolve bản phối thành bảng theo từng scene để đưa vào plan.
+
+Ba style có thêm reference chi tiết: `comic-multiverse`, `glass-keynote` và
+`cinematic-product-launch`. Project làm việc đằng sau các demo đó không được
+đóng gói; mọi video mới bắt đầu từ composition skeleton của Skill cùng style
+đã resolve.
+
+## Theo dõi các stage production
+
+1. **Pin outcome.** Chủ đề, nguồn, style nền cùng layer nếu có, duration, ngôn
+   ngữ voice, phần kết và chữ ký được ghi lại.
+2. **Scaffold project.** Skill tạo `assets/videos/<slug>/` và một plan dưới
+   `plans/`, rồi chép script template, file data mẫu, `hyperframes.json` và
+   composition skeleton. Bản đã hoàn tất không bao giờ bị ghi đè; restyle là
+   một thư mục project mới.
+3. **Viết fact và script.** Fact chỉ lấy từ nguồn gốc, kèm report bằng chứng
+   ngắn trước khi viết script. `data/script.json` chứa các scene và line.
+4. **Tạo và căn audio.** multix tạo voice-over, SFX và nhạc; ElevenLabs forced
+   alignment ánh xạ lời nói sang timing.
+5. **Fit beat và sắp xếp nhạc.** `fit-beat-grid.py` báo BPM và bảng theo từng
+   bar; bar được splice để drop rơi đúng chỗ script cần, và
+   `verify-arrangement.py` kiểm tra mối splice.
+6. **Dựng timeline và mix.** `build-timeline` render bản mix đã duck và chuẩn
+   hóa loudness; `measure-mix-balance.py` báo mức nhạc dưới giọng nói.
+7. **Dựng và kiểm tra composition.** `index.html` theo composition contract và
+   style đã resolve, rồi pass `hyperframes lint`, `check` và review
+   `snapshot` từng scene.
+8. **Render, remux và encode.** HyperFrames render video, bản mix đã đo được
+   remux trở lại, và social encode tùy chọn tạo file nhỏ hơn.
+
+## Giữ generation, chi phí và publishing có gate
+
+<Callout type="warn" title="Brief video không cho phép chi phí provider">
+  Request voice, SFX, nhạc và alignment đi qua multix tới Gemini và ElevenLabs.
+  Tạo lại scene hoặc nhạc sinh thêm request provider. Phê duyệt từng stage
+  generation theo policy provider, quota và billing của bạn.
+</Callout>
+
+| Loại công việc | Ranh giới thông thường |
+| --- | --- |
+| Thay đổi cục bộ | Workflow tạo thư mục project, plan, file data, audio được tạo, snapshot và bản render. Nó không ghi đè bản đã hoàn tất. |
+| Tác động provider và network | multix gửi text script và audio tới Gemini và ElevenLabs; `npx --yes hyperframes@0.8.77` có thể tải package đã pin. |
+| Process | `hyperframes preview` chạy như background process được theo dõi, được tái sử dụng cho project này và dừng khi session kết thúc. |
+| Tác động publishing và account | Skill tạo file và để việc đăng cho bạn. Nó không upload, lên lịch hay đăng lên tài khoản social. |
+
+Alias thương hiệu chỉ chọn ngôn ngữ motion. Xác nhận quyền cho font, ảnh, nhạc,
+giọng nói và mọi visual sản phẩm, đồng thời xác minh mọi claim trên màn hình với
+nguồn đã thu thập.
+
+## Review output và bằng chứng
+
+Một project thường chứa:
+
+```text
+assets/videos/<slug>/index.html
+assets/videos/<slug>/hyperframes.json
+assets/videos/<slug>/data/script.json
+assets/videos/<slug>/assets/audio/{vo,sfx,music}/
+assets/videos/<slug>/renders/<slug>.mp4
+assets/videos/<slug>/renders/<slug>-social.mp4
+```
+
+Skill báo số liệu đã đo, không phải cảm nhận. Nó chỉ xong khi:
+
+- `hyperframes lint` và `check` pass và snapshot của mọi scene đã được review.
+- `verify-arrangement.py` báo mọi segment trong ±2 ms, và
+  `measure-mix-balance.py` cho thấy nhạc thấp hơn giọng nói khoảng 4–6 dB.
+- `ffprobe` báo 1920×1080, 30 fps, duration như dự kiến và AAC 48 kHz stereo;
+  loudness khoảng −14 LUFS với peak không vượt −1 dBFS, và blackdetect không
+  thấy gì ngoài các đoạn fade.
+- `build-timeline` không in cảnh báo clip, overlap hay thiếu từ.
+- Fact trên màn hình truy được về nguồn đã thu thập lúc bắt đầu.
+
+## Troubleshoot an toàn
+
+| Triệu chứng | Bước an toàn tiếp theo |
+| --- | --- |
+| Runtime không tìm thấy `ak:motion-video` | Xác nhận target và scope, bắt đầu session mới, rồi theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+| Thiếu `multix` hoặc request provider thất bại | Dừng trước generation, giữ script và file data, rồi sửa multix hoặc config credential của nó. Không chép key vào project. |
+| Alignment cảnh báo số từ đã căn khác số token của script | Sửa text `en` hoặc `say` của scene, hoặc tạo lại voice-over của scene đó, rồi căn lại. |
+| `verify-arrangement.py` báo lệch | Fit lại beat grid, chỉnh arrangement và chạy lại các bước arrangement và timeline. |
+| `lint` hoặc `check` thất bại | Sửa composition theo composition contract trước khi render. |
+| Chỉ visual thay đổi | Chạy lại `lint`, `check`, `render` và remux; không cần tạo lại audio. |
+
+Tiếp tục với [tổng quan Marketing Kit](../../marketing),
+[Project, artifact và checkpoint](../../../concepts/projects-artifacts-checkpoints)
+hoặc [Cài đặt Kit](../../../guides/installing-kits).
