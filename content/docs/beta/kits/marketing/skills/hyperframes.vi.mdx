@@ -1,0 +1,199 @@
+---
+title: Render video HeyGen HyperFrames với ak:hyperframes
+description: Bọc CLI HeyGen HyperFrames để render video HTML-first bằng npx pin, preview local, gate lint và check, cùng tùy chọn cloud render.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:hyperframes` để biến HTML composition đã đánh dấu bằng thuộc tính
+timing `data-*` của HyperFrames thành MP4 local qua CLI
+[`hyperframes`](https://github.com/heygen-com/hyperframes) đã publish. Skill
+phù hợp với clip dọc/social ngắn, loop product-launch và motion graphics mà
+source of truth là HTML markup, không phải React component tree hay timeline
+editor.
+
+## Chọn rendering HeyGen HyperFrames
+
+### Dùng ak:hyperframes khi
+
+- Composition được viết bằng HTML với thuộc tính timing của HyperFrames.
+- Bạn muốn scaffold project, browser preview, gate lint và check cùng MP4
+  render trong một CLI, không cần vendor source HeyGen vào project.
+- Mục tiêu là clip dọc/social ngắn, clip product-launch hay promo loop đọc
+  tự nhiên bằng HTML.
+- Bạn cần đường cloud render tùy chọn qua credential HeyGen trong khi local
+  render vẫn hoạt động mà không cần credential.
+
+### Chọn workflow khác khi
+
+- Composition tự nhiên là React component tree với frame math hoặc caption.
+  Dùng [`ak:remotion`](./remotion).
+- Bạn muốn engine HTML-to-MP4 template-driven với Studio editing thay vì
+  contract composition của HyperFrames. Reference `nexu-io/html-video` đi
+  kèm Skill mô tả lựa chọn đó; chỉ dùng khi catalog template hoặc bản cài
+  sẵn có của nó phù hợp yêu cầu hơn.
+- Bạn muốn motion graphic launch hoặc explainer khớp beat, có voice-over,
+  caption, SFX và nhạc, dựng trên HyperFrames. Dùng
+  [`ak:motion-video`](./motion-video).
+- Bạn chỉ cần transcode, trim, thumbnail, HLS hay DASH hoặc batch FFmpeg.
+  Dùng `ak:media-processing` từ Engineer Kit.
+- Nhiệm vụ là route qua mọi Skill video hoặc motion đã cài. Dùng
+  [`ak:motion-graphics`](./motion-graphics).
+
+## Chuẩn bị engine và composition brief
+
+Trước khi bắt đầu:
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận
+  Marketing Kit đã được cài cho runtime cùng scope hiện tại.
+- Xác định aspect ratio, duration, source asset, resolution mục tiêu,
+  output path, có cần local hay cloud render và clip là draft hay polished
+  export.
+- Bảo đảm Node.js 22 trở lên, đặt FFmpeg và FFprobe trên `PATH`, và có sẵn
+  headless Chrome (`hyperframes browser ensure` tìm hoặc tải về). Chỉ cấu
+  hình credential HeyGen (`HEYGEN_API_KEY` hoặc `hyperframes auth login`)
+  khi dự định dùng đường cloud render.
+- Chạy verifier prerequisite đi kèm
+  (`node scripts/verify-prereqs.mjs`) trước khi scaffold composition.
+  Verifier kiểm Node, FFmpeg và FFprobe; ưu tiên output `--json` khi
+  runtime tiêu thụ kết quả.
+- Pin phiên bản CLI. Mọi lệnh gọi trong Skill này dùng
+  `hyperframes@0.8.77`; khi nâng cấp thì bump pin ở một chỗ và không bao
+  giờ fallback sang `npx -y hyperframes ...` không pin trong script hay
+  docs.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:hyperframes ...` | Skill có thể điều phối `npx`, file, preview server local, Chrome, FFmpeg và (tùy chọn) endpoint cloud HeyGen khi session cho phép các process đó và credential HeyGen đã được cấu hình. |
+| Cursor | `/ak:hyperframes ...` | Cách gọi bằng slash đã được người dùng xác minh; Node, browser, shell và network behavior tương đương phụ thuộc Cursor. |
+| Codex | `$ak:hyperframes ...` | Native discovery được hỗ trợ; Node, FFmpeg, Chrome, port, quyền truy cập network và credential HeyGen không phải runtime guarantee đi kèm. |
+
+## Tạo project HyperFrames có giới hạn
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:hyperframes "Scaffold a 6-second 1080x1920 draft product-launch loop under ./assets/videos/launch/, preview locally, pass check before rendering, and render an MP4 to ./assets/videos/launch/launch.mp4 without contacting the HeyGen cloud endpoint"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:hyperframes "Scaffold a 6-second 1080x1920 draft product-launch loop under ./assets/videos/launch/, preview locally, pass check before rendering, and render an MP4 to ./assets/videos/launch/launch.mp4 without contacting the HeyGen cloud endpoint"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:hyperframes "Scaffold a 6-second 1080x1920 draft product-launch loop under ./assets/videos/launch/, preview locally, pass check before rendering, and render an MP4 to ./assets/videos/launch/launch.mp4 without contacting the HeyGen cloud endpoint"
+```
+
+  </Tab>
+</Tabs>
+
+### Dùng live CLI workflow
+
+| Giai đoạn | Command family | Bằng chứng |
+| --- | --- | --- |
+| Diagnose | `node scripts/verify-prereqs.mjs [--json]` | Trạng thái sẵn sàng của Node, FFmpeg và FFprobe trước khi scaffold |
+| Scaffold | `npx -y hyperframes@0.8.77 init <name> --resolution portrait --non-interactive` | Thư mục composition project mới với HTML skeleton; `-e/--example` chọn starter |
+| Preview | `npx -y hyperframes@0.8.77 preview <name>` | URL Studio với timeline có thể scrub; trong shell non-interactive nó chạy nền (`--status`, `--stop`) |
+| Lint | `npx -y hyperframes@0.8.77 lint <name>` | Phản hồi nhanh về thuộc tính timing khi đang edit |
+| Check | `npx -y hyperframes@0.8.77 check <name>` | Gate cuối: chạy lại lint, rồi audit lỗi runtime, request thất bại, layout chồng lấn và contrast trong browser |
+| Snapshot | `npx -y hyperframes@0.8.77 snapshot <name> --at 1,3.5,6` | Ảnh tĩnh key frame để review mà không cần render đầy đủ |
+| Render (local) | `npx -y hyperframes@0.8.77 render <name> --strict --output <path>` | MP4 được ghi tại output path yêu cầu; `--strict` fail khi có lỗi lint |
+| Render (cloud) | `npx -y hyperframes@0.8.77 cloud render <name>` với credential HeyGen | Cloud job và artifact render remote; `--dry-run` kiểm tra gói upload mà không cần xác thực |
+| Verify | `ffprobe -v error -show_streams -show_format -of json <path>` | Duration khác zero, dimension, stream và format đúng |
+
+Luôn pass `check` trước `render`; `check` chạy lại lint. Phần lớn thất bại
+render đến từ thuộc tính `data-start`, `data-duration` hoặc
+`data-composition-id` lỗi, hay thiếu đăng ký timeline, mà lint và check bắt
+được trước khi Chrome và FFmpeg trả chi phí render. `validate`, `inspect` và
+`layout` là alias đã deprecated của `check`.
+
+## Quan sát các stage render
+
+1. **Skill pin video brief.** Aspect, duration, source asset, output path,
+   local hay cloud render và ranh giới publication được ghi lại.
+2. **Nó verify engine.** Node, FFmpeg, FFprobe, headless Chrome, CLI
+   `hyperframes` đã pin và (khi cloud render) credential HeyGen được kiểm
+   tra.
+3. **Nó scaffold composition.** `init` tạo thư mục project với HTML
+   skeleton và contract thuộc tính timing của HyperFrames.
+4. **Bạn edit composition HTML.** Root mang `data-composition-id`,
+   `data-start="0"`, `data-width`, `data-height` và thường có
+   `data-duration`; mỗi clip có timing mang `id`, `data-start` và
+   `data-duration`.
+5. **Nó preview trong Studio.** URL trả về được kiểm layout, typography,
+   asset thiếu, motion, timing, lỗi console và use network. Chỉ dừng các
+   preview đã khởi động cho task này.
+6. **Nó lint và check composition.** Vấn đề timing, composition-id,
+   runtime, layout và contrast lộ ra trước khi render.
+7. **Nó render qua Chrome và FFmpeg.** Local render encode MP4 tại output
+   path rõ ràng; cloud render bàn giao composition cho HeyGen và trả về
+   tham chiếu artifact remote.
+8. **Nó probe artifact.** `ffprobe` phải báo duration khác zero cùng
+   dimension đúng trước khi export được coi là hoàn tất.
+
+## Kiểm soát code, network, process và storage
+
+<Callout type="warn" title="HyperFrames chạy HTML, CSS, JavaScript trong Chrome">
+  Coi composition và asset remote là code và input có thể truy cập network.
+  Review nguồn cùng hành vi trước khi render; đừng expose secret local,
+  page đã đăng nhập, file riêng tư hoặc quyền network không giới hạn.
+</Callout>
+
+- `npx -y hyperframes@0.8.77` resolve package đã pin từ registry công cộng.
+  Xác nhận pin, review upstream trước khi bump và đừng fallback sang lệnh
+  gọi không pin trong script hay docs.
+- Preview server bind một port local trong `preview`. Bind và expose chỉ
+  theo dự định, dừng sau khi dùng (`--stop`) và đừng coi page là an toàn
+  trên mạng chung.
+- Local render khởi Chrome và FFmpeg, có thể tốn nhiều CPU, memory, disk,
+  file tạm và thời gian. Test draft ngắn trước.
+- Cloud render gửi composition đến HeyGen. Chỉ dùng khi bạn có phép nộp
+  source asset và credential HeyGen được lưu theo policy secret của
+  project.
+- HTML composition, font, image và script có thể gọi request bên ngoài.
+  Ghi lại hoặc chặn network effect khi privacy hay reproducibility quan
+  trọng.
+- Xác nhận quyền cho image, logo, copy, font, audio và template. Skill
+  không cấp quyền publish hay redistribute.
+- Workflow ghi project state, file preview, báo cáo lint và check cùng MP4
+  output. Nó không commit, upload, publish hay deploy nếu không có quyền
+  riêng.
+
+## Xác minh video cùng bằng chứng
+
+Kết quả hoàn chỉnh nên gồm:
+
+- Verify Node, FFmpeg, FFprobe và (khi cloud render) credential HeyGen.
+- Phiên bản CLI đã pin (`hyperframes@0.8.77`) và mọi sai lệch có ghi chú.
+- Tên composition đã scaffold, source HTML và các thuộc tính timing dùng.
+- URL preview, ghi chú review trực quan, báo cáo lint và check, lệnh
+  render và đường dẫn MP4 (hoặc tham chiếu cloud job).
+- Bằng chứng `ffprobe` về duration, dimension, stream, format và file
+  size.
+- Port local, quyền truy cập network, storage, quyền publish, privacy
+  hoặc giới hạn publication còn lại.
+
+Release không pin
+revision source HeyGen upstream, không chứng minh build HeyGen đã publish
+và không đảm bảo cloud-render parity giữa các runtime.
+
+## Troubleshoot và diễn giải giới hạn
+
+| Triệu chứng | Bước an toàn tiếp theo |
+| --- | --- |
+| `hyperframes` báo flag không rõ | Phiên bản pin có thể chậm hơn upstream; chạy `npx -y hyperframes@0.8.77 --help` để xác nhận flag hiện tại trước khi cập nhật pin. |
+| `render` fail với MP4 trống hay ngắn | Chạy `check` trước; thuộc tính `data-start`, `data-duration` hoặc `data-composition-id` lỗi, hay thiếu đăng ký timeline, là nguyên nhân phổ biến nhất. |
+| `command not found: ffmpeg` hoặc `ffprobe` | Chạy `node scripts/verify-prereqs.mjs` để lấy remediation cụ thể cho platform, cài FFmpeg (thường kèm FFprobe) qua package manager đã duyệt và re-verify. |
+| Preview thiếu asset hoặc layout trống | Inspect URL preview trả về, kiểm console, xác nhận tham chiếu file và review policy network của composition trước khi render. |
+| Cloud render bị từ chối | Xác nhận credential HeyGen resolve được cho process hiện tại (`HEYGEN_API_KEY` hoặc `hyperframes auth login`), xác nhận account có quyền dùng composition yêu cầu và retry subcommand `cloud render`. |
+| Dimension MP4 không khớp composition | Chạy lại `check`, xác nhận thuộc tính `data-width` và `data-height` gốc, rồi render lại tới `--output` rõ ràng. |
+| Render vắt kiệt resource local | Giảm duration, resolution, kích thước asset hoặc concurrency và render draft nhỏ hơn trước khi retry. |
+| Runtime không nhận ra Skill | Xác nhận target và scope, restart session runtime, rồi theo dõi [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |

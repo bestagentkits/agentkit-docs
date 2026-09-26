@@ -26,8 +26,8 @@ export const RELEASE_QUALITY_BASELINE = Object.freeze({
   locales: ['en', 'vi'],
   deterministic: {
     outputBytes: 3_047_146_912,
-    // Preserve the previous per-route allowance as coverage grows 411 -> 449 -> 456 -> 481 -> 482.
-    outputBudgetBytes: 3_366_071_612,
+    // Preserve the previous per-route allowance as coverage grows 411 -> 449 -> 456 -> 481 -> 482 -> 485.
+    outputBudgetBytes: 3_387_022_265,
     fileCount: 23_584,
     fileCountBudget: 25_687,
     searchBytes: 20_067_964,
@@ -35,7 +35,7 @@ export const RELEASE_QUALITY_BASELINE = Object.freeze({
     // Counts follow each channel's reviewed route inventory. Equal Kit artifact
     // snapshots require equal Kit route coverage across Stable and Beta.
     // Beta includes the bilingual guides/pi-extensions page ahead of promotion.
-    searchPagesPerLocaleChannel: { stable: 456, beta: 482 },
+    searchPagesPerLocaleChannel: { stable: 456, beta: 485 },
     reviewedSearchOutsideChannelRoutes: ['_showcase'],
     reviewedSearchExcludedPublishedRoutes: ['reference/cli/ak'],
     maxAssetBytesExclusive: MAX_ASSET_BYTES,
