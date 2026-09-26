@@ -488,3 +488,28 @@ test('evictSearchShard drops the cached shard so a retry refetches it', async ()
   assert.equal(evictSearchShard({ locale: 'en', channel: 'stable' }), true);
   assert.equal(evictSearchShard({ locale: 'en', channel: 'stable' }), false);
 });
+
+test('Kit pages rank before the CLI reference for the same terms, but an explicit command still wins', async () => {
+  const database = initSearchShard(
+    await shardExport([
+      index('/en/beta/reference/cli/secrets/index', { title: 'Manage secrets vault values' }),
+      index('/en/beta/guides/secrets-vault', { title: 'Use the secrets vault' }),
+      index('/en/beta/kits/engineer/skills/security', { title: 'Review secrets vault safety' }),
+    ]),
+  );
+
+  const topic = await querySearchShard(database, { query: 'secrets vault' });
+  const order = pageUrls(topic);
+  assert.equal(order[0], '/en/beta/kits/engineer/skills/security');
+  assert.ok(
+    order.indexOf('/en/beta/guides/secrets-vault') < order.indexOf('/en/beta/reference/cli/secrets/index'),
+  );
+
+  const command = initSearchShard(
+    await shardExport([
+      index('/en/beta/reference/cli/secrets/index', { title: 'ak secrets' }),
+      index('/en/beta/kits/engineer/skills/security', { title: 'Review ak secrets usage' }),
+    ]),
+  );
+  assert.equal(pageUrls(await querySearchShard(command, { query: 'ak secrets' }))[0], '/en/beta/reference/cli/secrets/index');
+});
