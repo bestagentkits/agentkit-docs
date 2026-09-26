@@ -205,6 +205,27 @@ test('reconciliation route rejects a simultaneous promotion receipt', () => {
   ]), /reconciliation and another Stable transaction cannot share/);
 });
 
+test('complete promotion carries exception receipts into carried validation', async () => {
+  assert.deepEqual(selectKitDocsCiMode([
+    { status: 'M', path: 'content/docs/stable/guides/example.mdx' },
+    { status: 'A', path: EXCEPTION },
+    { status: 'A', path: RECEIPT },
+    { status: 'A', path: EVIDENCE_MANIFEST },
+    { status: 'A', path: EVIDENCE_NOTES },
+  ]).carriedExceptionPaths, [EXCEPTION]);
+  const fixture = await makeFixture();
+  await write(fixture.root, 'content/docs/stable/guides/example.mdx', '# Promoted\n');
+  await write(fixture.root, EXCEPTION, '{"exception":true}\n');
+  await write(fixture.root, RECEIPT, '{"promotion":true}\n');
+  await write(fixture.root, EVIDENCE_MANIFEST, '{"stableEvidence":true}\n');
+  await write(fixture.root, EVIDENCE_NOTES, '# Reviewed stable source\n');
+  commitChanges(fixture.root, 'promotion carrying an exception');
+  const { result, call } = await route(fixture);
+  assert.equal(result.mode, 'promotion');
+  assert.equal(call.receiptPath, RECEIPT);
+  assert.deepEqual(call.carriedExceptionPaths, [EXCEPTION]);
+});
+
 test('Stable docs exception rejects promotion and reconciliation transactions', () => {
   assert.throws(() => selectKitDocsCiMode([
     { status: 'M', path: 'content/docs/stable/guides/example.mdx' },

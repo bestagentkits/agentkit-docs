@@ -1,19 +1,19 @@
 ---
 title: "ak usage limits"
-description: "Show trailing 5h and week token usage per provider"
+description: "Show usage-limit windows per provider"
 generated: true
 ---
 
 ## ak usage limits
 
-Show trailing 5h and week token usage per provider
+Show usage-limit windows per provider
 
 ### Synopsis
 
-Sums local session-token facts inside the trailing 5-hour and 7-day rolling windows per provider and reports both windows with a raw_only provenance. Every fact is counted under the window that contains the session's start (session-start attribution). Use it before starting a long session, when tuning agent runs, or when a downstream dashboard needs the same numbers the desktop popover shows.
+Sums local session-token facts inside the trailing 5-hour and 7-day rolling windows for Claude and Codex and reports both windows with a raw_only provenance. Every fact is counted under the window that contains the session's start (session-start attribution). When advanced polling is switched on in settings, rows the provider reported carry provider_reported provenance, the provider's used percent, and the source endpoint; a failed poll keeps the local counts and records a degrade_reason. Cursor (monthly billing cycle) and Grok (weekly billing cycle) keep no local data: their rows stay empty with degrade_reason advanced_required until advanced polling and their own provider switch are on. Claude and Codex rows also carry cost_usd, the equivalent API cost of their local tokens at the public rates embedded in this build (cost_as_of names the rate date); it is an estimate for comparison, not a bill. With advanced polling on, a provider that names its plan labels its rows with plan_preset and plan_preset_auto_detected unless plan detection is switched off in settings. Use it before starting a long session, when tuning agent runs, or when a downstream dashboard needs the same numbers the desktop popover shows.
 
 Effects:
-  Read-only. Opens the local analytics SQLite index under ~/.agentkit/analytics/ in read-only mode; AGENTKIT_HOME overrides the base dir. A cold or absent index yields zeroed windows, not an error. Never opens a network socket.
+  Read-only. Opens the local analytics SQLite index under ~/.agentkit/analytics/ in read-only mode; AGENTKIT_HOME overrides the base dir. A cold or absent index yields zeroed windows, not an error. Never opens a network socket unless advanced polling is enabled in settings behind an explicit risk acknowledgement; then each enabled provider gets one usage request per poll (plus one plan lookup for Cursor and Grok) sent to that provider's usage endpoint with the access token its official app or CLI already stored, rate-limited to a burst of three polls per minute, and it never refreshes or writes a token. Reading the Cursor token copies Cursor's state database into a private temporary directory that is removed afterwards.
 
 Exit status:
   0 success, 1 command failure, 2 invalid flags or arguments
@@ -28,7 +28,7 @@ ak usage limits [flags]
   ak usage limits
   ak usage limits --json
   ak usage limits --provider claude --window 5h
-  ak usage limits --provider all --json
+  ak usage limits --provider cursor --window monthly
 ```
 
 ### Options
@@ -37,10 +37,10 @@ ak usage limits [flags]
   -h, --help              help for limits
       --json              Emit machine-readable JSON (implies --no-interactive)
       --no-interactive    Disable interactive prompts (CI-safe)
-      --provider string   Provider to query: claude, codex, or all (default "all")
+      --provider string   Provider to query: claude, codex, cursor, grok, or all (default "all")
   -q, --quiet             Suppress non-error output on stderr
   -V, --verbose           Extra diagnostic output on stderr (loses to --quiet)
-      --window string     Rolling window: 5h, week, or all (default "all")
+      --window string     Window: 5h, week, monthly, or all (default "all")
   -y, --yes               Assume yes for all prompts
 ```
 

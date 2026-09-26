@@ -11,8 +11,8 @@ unsafe or overly broad operation, or update bounded workflow state. You do not
 invoke them as Skills or commands; the selected runtime calls the supported
 handlers when their events occur.
 
-The resolved Engineer package contains **44 Hook package entries**. That number
-is an artifact inventory, not 44 independent behaviors. It includes the Hook
+The resolved Engineer package contains **54 Hook package entries**. That number
+is an artifact inventory, not 54 independent behaviors. It includes the Hook
 manifest, event handlers, shared support libraries, and Engineer-specific state
 and statusline helpers. One handler can participate in several events, while a
 support file may never run on its own.
@@ -29,17 +29,49 @@ The active graph is organized around outcomes rather than package file count:
 
 | Event | What you can observe |
 | --- | --- |
-| `PreToolUse` | Provides naming guidance for new files, checks sensitive-file access, and stops overly broad or ignored-path scouting when the request falls outside the supported boundary. A check may allow the request, return guidance, or ask for approval. |
-| `PostToolUse` | Keeps plan formatting coherent after edits and writes, refreshes task/session state after supported task operations, and updates usage state after tool activity. |
-| `PreCompact` | Captures enough workflow orientation to continue after context compaction. |
+| `PreToolUse` | Provides naming guidance for new files, checks sensitive-file access, stops overly broad or ignored-path scouting when the request falls outside the supported boundary, and checks how much content a read, search, or shell command can return. A check may allow the request, return guidance, or ask for approval. |
+| `PostToolUse` | Keeps plan formatting coherent after edits and writes, refreshes task/session state after supported task operations, updates usage state after tool activity, and records bounded tool-activity totals for the agent behavior linter. |
+| `PreCompact` | Captures enough workflow orientation to continue after context compaction and notes the compaction for the agent behavior linter. |
 | `SessionStart` | Initializes project and session context for the new session. |
 | `SubagentStart` | Initializes subagent state and supplies the relevant team context. |
-| `Stop` | Refreshes session and usage state. When an active plan is bound, the plan reminder can return valid nonblocking JSON with `continue` and `systemMessage`; otherwise it exits silently. |
+| `Stop` | Refreshes session and usage state. When an active plan is bound, the plan reminder can return valid nonblocking JSON with `continue` and `systemMessage`; otherwise it exits silently. The agent behavior linter can add an advisory session report. |
 | `SubagentStop` | Refreshes shared session state at the subagent boundary. |
 | `UserPromptSubmit` | Supplies project-development guidance, checks for secret-like output risk, applies the simplify-before-shipping gate when relevant, and refreshes usage state. |
 
 These outcomes support the Engineer workflow; they do not approve a plan,
 commit, merge, deploy, or release work for you.
+
+## Context firewall and agent behavior linter
+
+The `context-firewall` Hook runs before `Bash`, `Read`, `Grep`, and `Glob`
+calls and estimates how much content the call can return. It allows ordinary
+calls, warns without blocking, or blocks the call and names a bounded
+alternative:
+
+| Call | Warns | Blocks |
+| --- | --- | --- |
+| Whole-file read with no `offset`, `limit`, or page range | File of 256 KB or more | File of 2 MB or more |
+| Search in `content` output mode with no `head_limit` of 100 or fewer | Any other pattern | A pattern the scout check already treats as broad |
+| Shell command that prints a whole file, such as `cat` | File of 128 KB or more | File of 512 KB or more |
+| Unbounded log stream, recursive search or tree walk, or full Git history or diff | Always | — |
+
+When the same warned operation reaches its third intervention in one session,
+the warning becomes a block. Each intervention is recorded in a bounded,
+per-session record with credential values redacted. The firewall fails open:
+an unexpected Hook error lets the call proceed.
+
+The `agent-behavior-linter` Hook observes tool activity during a session and,
+at `Stop`, can report patterns it proved from that activity: re-reading an
+unchanged file, re-running a command that fails with the same error, repeated
+broad searches, large tool output with no file changed, and a full test suite
+run after a documentation-only change. Each finding names what was observed,
+what to do instead, and the guiding principle in `ak:context-engineering`. The
+linter keeps only bounded aggregates in private per-session state, never
+blocks a tool call, and prints no report when it has no findings.
+
+Both Hooks are on by default. To turn one off, set `hooks.context-firewall` or
+`hooks.agent-behavior-linter` to `false`; see [Managing Hook
+preferences](../../../guides/managing-hook-preferences).
 
 ## Configured paths at session start
 
@@ -78,7 +110,7 @@ statusline merely because the package contains statusline support files.
 ## Codex partial support
 
 Codex has a smaller event and matcher model than Claude Code. Engineer projects
-one fully dropped group and two narrowed matchers:
+one fully dropped group and three narrowed matchers:
 
 - `PostToolUse` matcher `Agent|Task|TodoWrite|TodoRead`, handler
   `session-state.cjs`, is fully dropped. Separate `Stop` and `SubagentStop`
@@ -87,6 +119,11 @@ one fully dropped group and two narrowed matchers:
   `privacy-block.cjs` active for the supported atoms.
 - `Bash|Read` becomes `Bash`, dropping `Read` while keeping `scout-block.cjs`
   active for Bash.
+- `Bash|Read|Grep|Glob` becomes `Bash`, dropping `Read`, `Grep`, and `Glob`
+  while keeping `context-firewall.cjs` active for Bash.
+
+The `agent-behavior-linter.cjs` registrations on `PostToolUse`, `PreCompact`,
+and `Stop` are projected without narrowing.
 
 A drop or narrow does not make installation fail. Human output lists them under
 **Hook groups not projected** and **Hook matchers narrowed

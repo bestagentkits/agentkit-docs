@@ -52,8 +52,8 @@ test('publishes unique nested authored routes with EN+VI parity per channel and 
   // strictly contain every stable route so promotion is a safe whole-copy;
   // beta-only routes are the delta the next promote will publish.
   const expected = {
-    stable: 203,
-    beta: 203,
+    stable: 210,
+    beta: 233,
   };
   const shapes = new Map();
   for (const channel of channels) {

@@ -1,13 +1,14 @@
 ---
 title: ak config prefs set
-description: Đặt một boolean Hook có giới hạn, preference journal.auto, hoặc mặc định worktree.root với hành vi chính xác về scope, schema, backup, atomic write, đầu ra và khôi phục thủ công.
+description: Đặt một boolean Hook có giới hạn, preference journal.auto, mặc định worktree.root, một agent model theo capability tier của runtime, hoặc một thiết lập semantic_decision với hành vi chính xác về scope, schema, backup, atomic write, đầu ra và khôi phục thủ công.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
 Dùng `ak config prefs set` để ghim một soft-preference của Hook, preference
-`journal.auto`, hoặc mặc định `worktree.root` trong config user hay config
-của project hiện tại. Lệnh thay đổi tệp đã chọn ngay; lệnh không unregister
+`journal.auto`, mặc định `worktree.root`, một agent model theo capability
+tier của runtime, hoặc một thiết lập `semantic_decision` trong config user hay
+config của project hiện tại. Lệnh thay đổi tệp đã chọn ngay; lệnh không unregister
 hay cài Hook và không chặn `/ak:journal` gọi tường minh.
 
 ## Cách dùng
@@ -30,17 +31,26 @@ không có `--dry-run`, `--force` hay preview mode.
 
 ## Validate key và value
 
-Ba dạng key được chấp nhận:
+Năm dạng key được chấp nhận:
 
 - `hooks.<name>` — `<name>` phải là basename Hook script dạng kebab-case chữ
   thường, khớp `^[a-z0-9]+(?:-[a-z0-9]+)*$` và không được chứa thêm dấu chấm.
 - `journal.auto` — literal chính xác, không có key con nào dưới `journal`.
 - `worktree.root` — literal chính xác, không có key con nào dưới `worktree`.
+- `agent_models.<runtime>.<tier>` — `<runtime>` là tập đóng `cursor`, và
+  `<tier>` là một trong `inherit`, `sonnet`, `opus`, `fable`, hoặc `haiku`.
+- `semantic_decision.<leaf>` — `<leaf>` là `enabled`, `provider`, `model`,
+  `timeout_ms`, hoặc `consumers.<consumer>`, trong đó `<consumer>` là
+  `domain-routing`, `fix-complexity`, hoặc `orchestration-risk`.
+
 Với `hooks.<name>` và `journal.auto`, value phải là literal chữ thường chính
 xác `true` hoặc `false`. Với `worktree.root`, value là một filesystem path;
 project scope chỉ chấp nhận relative path (resolve theo project root), còn
 user scope chấp nhận cả relative path (cũng resolve theo project root) lẫn
-absolute path.
+absolute path. Với `agent_models.<runtime>.<tier>`, value là model ID sẽ được
+emit cho tier đó: một token không rỗng, chỉ kiểm tra hình dạng chứ không kiểm
+tra catalog có entry với ID đó hay không. Runtime hoặc tier bạn không ghi sẽ
+giữ default catalog tích hợp của adapter tương ứng.
 
 ```bash
 ak config prefs set hooks.simplify-gate false
@@ -48,10 +58,17 @@ ak config prefs set hooks.simplify-gate true --scope project
 ak config prefs set journal.auto false
 ak config prefs set worktree.root /Volumes/Portable/agentkit-worktrees
 ak config prefs set worktree.root ../my-app-worktrees --scope project
+ak config prefs set agent_models.cursor.sonnet claude-sonnet-4-6
+ak config prefs set semantic_decision.provider typesafe --scope user
+ak config prefs set semantic_decision.enabled true --scope user
 ```
 
 Key như `keys.anthropic`, `api.token`, `telemetry.enabled`, `hooks.Bad-Name`,
-`hooks.a.b`, mọi `journal.<other>`, và mọi `worktree.<other>` bị từ chối
+`hooks.a.b`, mọi `journal.<other>`, mọi `worktree.<other>`, mọi
+`agent_models.<runtime>` khác `cursor`, mọi
+`agent_models.<runtime>.<tier>` không nằm trong tập tier ở trên, và mọi leaf
+`semantic_decision` không có trong danh sách trên (như
+`semantic_decision.api_key`) bị từ chối
 trước khi ghi preference. Allowlist này ngăn lệnh trở thành editor config
 hoặc secret tổng quát.
 
@@ -65,10 +82,37 @@ chặn `/ak:journal` gọi tường minh. `true` ghi preference ngược lại. 
 tích hợp là `true`.
 
 Với `worktree.root`, value chọn vị trí mặc định mà `ak:worktree` dùng khi
-không truyền `--worktree-root`. Ghi absolute path ở project scope trả exit `1` và không ghi file. Khi đọc project config đã tồn tại, resolver có thể cảnh báo và xét scope kế tiếp; config đã commit có thể đến từ clone không đáng tin. User scope chấp nhận absolute
+không truyền `--worktree-root`. Ghi absolute path ở project scope trả exit `1` và không ghi file. Khi đọc project config đã tồn tại, resolver mới cảnh báo và xét scope kế tiếp; config đã commit có thể đến từ clone không đáng tin. User scope chấp nhận absolute
 path, phù hợp cho layout worktree trên ổ portable hoặc volume ngoài. Default
 tích hợp là unset, nên `ak:worktree` tiếp tục fallback về biến môi trường
 `WORKTREE_ROOT` và chuỗi vị trí tích hợp sẵn.
+
+### Thiết lập semantic decision
+
+Các key này điều khiển đánh giá shadow cần opt in do
+[ak eval decision](../cli/ak_eval_decision) thực hiện.
+
+| Key | Giá trị được chấp nhận | Mặc định |
+| --- | --- | --- |
+| `semantic_decision.enabled` | `true` hoặc `false` | `false` |
+| `semantic_decision.provider` | `typesafe` | chưa đặt |
+| `semantic_decision.model` | Model ID khớp `^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$` | chưa đặt |
+| `semantic_decision.timeout_ms` | Số nguyên từ `100` đến `30000` | `5000` |
+| `semantic_decision.consumers.<consumer>` | `true` hoặc `false` | chưa đặt |
+
+Sự đồng ý dùng provider thuộc user scope. Với `--scope project`, lệnh chỉ chấp
+nhận `semantic_decision.enabled false` và `semantic_decision.consumers.<consumer>
+false`; chúng thu hẹp quyền đã cấp ở user scope cho project đó. Mọi key hoặc
+value semantic khác ở project scope thoát `1` trước khi scaffold hay ghi config
+project. Hãy đặt `semantic_decision.provider` trước khi bật, vì policy user đã
+bật nhưng thiếu provider sẽ không hợp lệ khi được đánh giá.
+
+<Callout type="warning">
+  Đặt `semantic_decision.enabled true` ở user scope đồng nghĩa với đồng ý gửi các
+  dữ kiện request đã chuẩn hoá tới một provider bên ngoài, và mỗi lần đánh giá
+  có thể phát sinh phí provider. Credential của provider không bao giờ thuộc về
+  config; hãy cung cấp `TYPESAFE_API_KEY` qua biến môi trường.
+</Callout>
 
 ## Scope và tác động filesystem
 
@@ -77,8 +121,8 @@ tích hợp là unset, nên `ak:worktree` tiếp tục fallback về biến môi
 | `user` | `$AGENTKIT_HOME/config.yaml`, thường là `~/.agentkit/config.yaml` | Tệp thiếu sẽ được tạo. |
 | `project` | `<cwd>/.agentkit/config.yaml` | Nếu thiếu, AgentKit scaffold project template và `.agentkit/.gitignore` trước. Project config được thiết kế để commit, vì vậy không đặt credential vào đó. |
 
-Writer chỉ thay leaf `hooks.<name>`, `journal.auto`, hoặc `worktree.root` đã
-chọn. Các section khác, YAML chưa được model, comment, thứ tự key và schema
+Writer chỉ thay leaf `hooks.<name>`, `journal.auto`, `worktree.root`,
+`agent_models.<runtime>.<tier>`, hoặc `semantic_decision.*` đã chọn. Các section khác, YAML chưa được model, comment, thứ tự key và schema
 editor directive được giữ lại. Nếu `hooks`, `journal`, hoặc `worktree` đã
 tồn tại nhưng không phải mapping, lệnh từ chối ghi.
 
@@ -131,6 +175,11 @@ backed up prior config to /home/user/.agentkit/backups/config/config-<timestamp>
 }
 ```
 
+Giá trị boolean được báo trong `value`. Giá trị chuỗi, như `worktree.root`,
+model ID của agent, `semantic_decision.provider` hoặc `semantic_decision.model`,
+được báo trong `value_string`, còn `semantic_decision.timeout_ms` được báo
+trong `value_int`.
+
 `backup_path` bị lược bỏ khi không tạo backup. `found` luôn là `true` với lần
 set thành công. `--quiet` không chặn stdout riêng của lệnh này.
 
@@ -144,7 +193,7 @@ theo đường lỗi runtime chung.
 | Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
 | --- | --- | --- |
 | `0` | Leaf đã chọn được ghi và backup được báo đã hoàn tất trước. | Chạy resolve và validate. |
-| `1` | Số positional argument, key, value, scope, path, cấu trúc YAML, schema, backup hoặc thao tác ghi không hợp lệ hay thất bại. | Sửa cách gọi hoặc đọc lỗi dành cho người dùng mà không làm lộ secret config; không force thao tác ghi. |
+| `1` | Số positional argument, key, value, scope (kể cả thao tác ghi `semantic_decision` không được phép ở project scope), path, cấu trúc YAML, schema, backup hoặc thao tác ghi không hợp lệ hay thất bại. | Sửa cách gọi hoặc đọc lỗi dành cho người dùng mà không làm lộ secret config; không force thao tác ghi. |
 | `2` | Parse cờ thất bại. | Sửa các cờ. |
 
 ## Xác minh kết quả

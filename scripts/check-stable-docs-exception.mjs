@@ -1,11 +1,19 @@
 #!/usr/bin/env node
 import { fileURLToPath } from 'node:url';
 import { repoRoot } from './lib/paths.mjs';
-import { checkStableDocsException } from './lib/stable-docs-exception.mjs';
+import { checkCarriedStableDocsException, checkStableDocsException } from './lib/stable-docs-exception.mjs';
 
 export async function run(argv = process.argv.slice(2), root = repoRoot) {
+  if (argv.length === 2 && argv[0] === '--carried' && argv[1]) {
+    const carried = await checkCarriedStableDocsException({ root, receiptPath: argv[1] });
+    console.log(
+      `checked carried ${carried.receiptPath}: base=${carried.base}, introduced=${carried.introducedAt}, ` +
+        `changed-stable-paths=${carried.changedStablePaths.length}, digest=${carried.receipt.receiptDigest}`,
+    );
+    return carried;
+  }
   if (argv.length !== 2 || !argv[0] || !argv[1]) {
-    throw new Error('usage: node scripts/check-stable-docs-exception.mjs <base> <stable-docs-exceptions/<id>.json>');
+    throw new Error('usage: node scripts/check-stable-docs-exception.mjs <base> <stable-docs-exceptions/<id>.json> | --carried <stable-docs-exceptions/<id>.json>');
   }
   const result = await checkStableDocsException({ root, base: argv[0], receiptPath: argv[1] });
   console.log(

@@ -227,15 +227,19 @@ export function createStableDocsExceptionReceipt({ root, base, routes, stableNav
   return receipt;
 }
 
-export async function checkStableDocsException({ root, base, receiptPath }) {
+export async function checkStableDocsException({ root, base, receiptPath, head = 'HEAD' }) {
   if (typeof receiptPath !== 'string' || !/^stable-docs-exceptions\/[a-z0-9][a-z0-9-]*\.json$/.test(receiptPath)) {
     fail(`invalid receipt path ${JSON.stringify(receiptPath)}`);
   }
   const baseCommit = resolveCommit(root, base);
-  const headCommit = resolveCommit(root, 'HEAD');
+  const headCommit = resolveCommit(root, head);
   let receipt;
   try {
-    receipt = JSON.parse(await readFile(join(root, receiptPath), 'utf8'));
+    // A historical head is read from Git so the check replays that exact transaction.
+    const text = head === 'HEAD'
+      ? await readFile(join(root, receiptPath), 'utf8')
+      : gitPath(root, headCommit, receiptPath).bytes.toString('utf8');
+    receipt = JSON.parse(text);
   } catch (error) {
     fail(`cannot read receipt ${receiptPath}: ${error.message}`);
   }
@@ -266,4 +270,30 @@ export async function checkStableDocsException({ root, base, receiptPath }) {
     fail(`Stable diff does not match receipt allowlist: expected ${expectedStableChanges.join(', ')}, observed ${actualStableChanges.join(', ')}`);
   }
   return { receipt, receiptPath, base: baseCommit, head: headCommit, changedStablePaths: actualStableChanges };
+}
+
+// A Stable promotion from dev to production can carry an exception receipt that
+// was already validated when it landed on dev. Replay that original transaction:
+// the receipt bytes must be unchanged since the commit that added it, and the
+// receipt must still validate against its own recorded base at that commit.
+export async function checkCarriedStableDocsException({ root, receiptPath }) {
+  if (typeof receiptPath !== 'string' || !/^stable-docs-exceptions\/[a-z0-9][a-z0-9-]*\.json$/.test(receiptPath)) {
+    fail(`invalid receipt path ${JSON.stringify(receiptPath)}`);
+  }
+  const headCommit = resolveCommit(root, 'HEAD');
+  const current = gitPath(root, headCommit, receiptPath);
+  const added = splitNul(git(root, ['log', '-z', '--diff-filter=A', '--format=%H', headCommit, '--', receiptPath]))
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (added.length !== 1) fail(`carried receipt must be added exactly once in HEAD history: ${receiptPath}`);
+  const introducedAt = resolveCommit(root, added[0]);
+  if (!gitPath(root, introducedAt, receiptPath).bytes.equals(current.bytes)) {
+    fail(`carried receipt changed after it was added: ${receiptPath}`);
+  }
+  const receipt = JSON.parse(current.bytes.toString('utf8'));
+  validateStableDocsExceptionReceiptShape(receipt);
+  const ancestor = spawnSync('git', ['-C', root, 'merge-base', '--is-ancestor', receipt.baseDocsCommit, introducedAt]);
+  if (ancestor.status !== 0) fail(`carried receipt base ${receipt.baseDocsCommit} is not an ancestor of ${introducedAt}`);
+  const result = await checkStableDocsException({ root, base: receipt.baseDocsCommit, receiptPath, head: introducedAt });
+  return { ...result, introducedAt };
 }

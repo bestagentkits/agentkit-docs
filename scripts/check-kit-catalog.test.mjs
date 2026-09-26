@@ -835,8 +835,15 @@ test('real registry validates every release-bound evidence triad', async () => {
       assert.ok(registry.inventorySnapshots[digest].identities.length > 0);
     }
   }
-  assert.notEqual(registry.channels.stable.kits.engineer.snapshotDigest, registry.channels.beta.kits.engineer.snapshotDigest);
-  assert.notEqual(registry.channels.stable.kits.marketing.snapshotDigest, registry.channels.beta.kits.marketing.snapshotDigest);
+  // Snapshots cite archive hashes, so channels share a snapshot exactly when
+  // their Kit archives are hash-identical (an equal-artifact promotion).
+  for (const kitId of ['engineer', 'marketing']) {
+    const archiveHashes = (channel) => JSON.stringify(Object.entries(registry.channels[channel].kits[kitId].artifacts)
+      .map(([runtime, artifact]) => [runtime, artifact.archive.sha256]).sort());
+    const sameArtifacts = archiveHashes('stable') === archiveHashes('beta');
+    const sameSnapshot = registry.channels.stable.kits[kitId].snapshotDigest === registry.channels.beta.kits[kitId].snapshotDigest;
+    assert.equal(sameSnapshot, sameArtifacts, `${kitId}: snapshot sharing must follow archive equality`);
+  }
 });
 
 test('schema 3 binds different historical/current cohorts and detects omitted package evidence', async () => {

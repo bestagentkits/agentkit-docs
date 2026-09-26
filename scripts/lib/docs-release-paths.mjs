@@ -184,8 +184,14 @@ export function normalizeOwnerDirectedActions(actions) {
   return entries;
 }
 
+// A new Beta directory is a new nav group: it may be added only together with
+// its own paired nav metadata and paired index page, all under `add`.
+const NEW_DIRECTORY_MEMBERS = ['meta.json', 'meta.vi.json', 'index.en.mdx', 'index.vi.mdx'];
+
 export function validateOwnerDirectedActions(actions, repoRoot) {
   const entries = normalizeOwnerDirectedActions(actions);
+  const added = new Set(entries.filter(({ action }) => action === 'add').map(({ path }) => path));
+  const newDirectories = new Set();
   for (const { action, path } of entries) {
     const destination = resolveWithin(repoRoot, path);
     let cursor = resolve(repoRoot);
@@ -202,16 +208,26 @@ export function validateOwnerDirectedActions(actions, repoRoot) {
         }
       } catch (error) {
         if (error.code === 'ENOENT') {
-          if (action !== 'add' || index !== parts.length - 1) throw new ReleasePathError(`${path}: ${action} path does not exist`);
+          if (action !== 'add') throw new ReleasePathError(`${path}: ${action} path does not exist`);
+          if (index < parts.length - 1) newDirectories.add(parts.slice(0, index + 1).join('/'));
           continue;
         }
         throw error;
       }
     }
-    if (action === 'add' && !path.endsWith('.en.mdx') && !path.endsWith('.vi.mdx')) {
-      throw new ReleasePathError(`${path}: add is limited to paired MDX prose files`);
+    const isMdx = path.endsWith('.en.mdx') || path.endsWith('.vi.mdx');
+    const isNewDirectoryMeta = /\/meta(?:\.vi)?\.json$/.test(path) && newDirectories.has(dirname(path));
+    if (action === 'add' && !isMdx && !isNewDirectoryMeta) {
+      throw new ReleasePathError(`${path}: add is limited to paired MDX prose files and a new directory's paired nav metadata`);
     }
     void destination;
+  }
+  for (const directory of [...newDirectories].sort()) {
+    for (const member of NEW_DIRECTORY_MEMBERS) {
+      if (!added.has(`${directory}/${member}`)) {
+        throw new ReleasePathError(`new directory ${directory} requires add path ${directory}/${member}`);
+      }
+    }
   }
   return entries;
 }

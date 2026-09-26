@@ -1,0 +1,81 @@
+---
+title: ak policy adopt
+description: Đưa các đề xuất quy tắc được chỉ định vào policy đang hoạt động của project.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak policy adopt` để sao chép các đề xuất từ
+`.agentkit/policy-candidates.yaml` vào `.agentkit/policy.yaml`, nơi engine đọc
+chúng. Việc chấp nhận chính là bước xác nhận rõ ràng mà một quy tắc được tạo tự
+động cần có, vì vậy bạn phải nêu tên từng đề xuất hoặc truyền `--all`. Quy tắc
+được chấp nhận ghi lại id của đề xuất trong `source.adopted_from`, cùng với câu
+hướng dẫn mà nó đến từ đó.
+
+## Cách dùng
+
+```bash
+ak policy adopt <candidate-id>... [flags]
+ak policy adopt --all [flags]
+```
+
+Hãy chạy [`ak policy compile`](./policy-compile) trước để tạo đề xuất. Nếu
+`.agentkit/policy.yaml` chưa tồn tại, lần adopt đầu tiên sẽ tạo tệp này.
+
+## Tuỳ chọn của lệnh
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--dir <path>` | `.` | Thư mục project chứa `.agentkit/policy.yaml`. |
+| `--all` | `false` | Chấp nhận mọi đề xuất thay vì nêu tên từng đề xuất. |
+
+Các cờ dùng chung được mô tả trong [quy ước CLI](../cli-conventions).
+
+## Ví dụ thường dùng
+
+```bash
+ak policy adopt no-curl
+ak policy adopt --all --json
+```
+
+## Những trường hợp adopt từ chối
+
+Adopt không ghi gì khi gặp bất kỳ trường hợp nào sau đây:
+
+- Bạn không nêu tên đề xuất nào và không truyền `--all`.
+- Không có đề xuất nào, hoặc một id được nêu không nằm trong danh sách đề xuất.
+- Một id được nêu đã thuộc về một quy tắc đang hoạt động. Hãy đổi tên hoặc xoá quy tắc đó trước.
+- Một đề xuất yêu cầu `block`, hoặc khai báo origin khác `compiled`.
+- Kết quả sẽ không nạp được, hoặc các quy tắc trong đó sẽ xung đột với nhau.
+
+<Callout type="warning">
+  Adopt ghi lại `.agentkit/policy.yaml` ở dạng chuẩn tắc. Không quy tắc hiện có
+  nào bị thay đổi hay xoá, nhưng các quy tắc được sắp xếp lại theo id và comment
+  YAML không được giữ lại. Hãy ghi chú về một quy tắc trong trường `reason` của
+  nó.
+</Callout>
+
+## Đầu ra cho tự động hoá
+
+`kind` là `policy.adopt`. Khi thành công, payload `data` gồm `document` (đường
+dẫn của policy đang hoạt động), `adopted` (các id đã được chấp nhận) và `rules`
+(số quy tắc hiện có hiệu lực).
+
+Khi việc chấp nhận sẽ khiến các quy tắc xung đột, lệnh thoát với mã `4` và
+payload có cùng cấu trúc với [`ak policy validate`](./policy-validate):
+`document`, `rules`, `loadable` (`false`) và `conflicts`.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bạn nên làm gì |
+| --- | --- | --- |
+| `0` | Các đề xuất được nêu tên đã có hiệu lực. | Chạy [`ak policy status`](./policy-status) để xem lại. |
+| `1` | Không có đề xuất, id không xác định, đề xuất sẽ ghi đè một quy tắc đang hoạt động, hoặc một trường hợp từ chối khác ở trên. | Đọc thông báo; chạy `ak policy compile` nếu chưa có đề xuất. |
+| `2` | Argument không hợp lệ. | Sửa cách gọi. |
+| `4` | Tài liệu kết quả sẽ tự xung đột, nên không có gì được ghi. | Giải quyết xung đột với quy tắc hiện có, rồi chấp nhận lại. |
+
+## Lệnh liên quan
+
+- [`ak policy`](./policy)
+- [`ak policy compile`](./policy-compile)
+- [`ak policy validate`](./policy-validate)
