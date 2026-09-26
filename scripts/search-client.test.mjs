@@ -513,3 +513,25 @@ test('Kit pages rank before the CLI reference for the same terms, but an explici
   );
   assert.equal(pageUrls(await querySearchShard(command, { query: 'ak secrets' }))[0], '/en/beta/reference/cli/secrets/index');
 });
+
+test('section preference never lifts a page that covers less of the query', async () => {
+  const database = initSearchShard(
+    await shardExport([
+      index('/en/beta/kits/engineer/skills/devops', { title: 'Install and deploy' }),
+      index('/en/beta/reference/cli/kit/install', { title: 'Install Kubernetes charts' }),
+    ]),
+  );
+  const order = pageUrls(await querySearchShard(database, { query: 'install kubernetes' }));
+  assert.equal(order[0], '/en/beta/reference/cli/kit/install');
+});
+
+test('Kit hub landings get no section preference over other weak matches', async () => {
+  const database = initSearchShard(
+    await shardExport([
+      index('/en/beta/kits', { title: 'Choose a Kit', headings: [{ id: 'install', content: 'Install a Kit' }] }),
+      index('/en/beta/guides/updating', { title: 'Update', headings: [{ id: 'install', content: 'Install updates' }] }),
+    ]),
+  );
+  const order = pageUrls(await querySearchShard(database, { query: 'install kubernetes' }));
+  assert.notEqual(order[0], '/en/beta/kits');
+});
