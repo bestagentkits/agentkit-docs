@@ -24,6 +24,60 @@ const skillCatalogLabels: Record<'en' | 'vi', string> = {
   vi: 'Danh mục Skill',
 };
 
+// The Engineer entry keeps its product name in both locales: `Engineer` is the
+// Kit's name, not a translatable noun.
+const engineerEntryLabels: Record<'en' | 'vi', string> = {
+  en: 'Engineer',
+  vi: 'Engineer',
+};
+
+// Channel-relative Engineer landing route. The sidebar entry, the start links
+// below and the search acceptance matrix all name this same route, so
+// navigation and search cannot drift to different destinations.
+export const ENGINEER_OVERVIEW_ROUTE = 'kits/engineer';
+
+// One localized set of Engineer start-link descriptors, shared by the channel
+// home and the Engineer landing. `route` is channel-relative and always
+// resolved against the reader's own locale and channel — a link is never
+// rewritten to another scope.
+export const ENGINEER_START_LINKS = Object.freeze([
+  Object.freeze({
+    id: 'installation',
+    route: 'getting-started/installation',
+    labels: Object.freeze({ en: 'Installation', vi: 'Cài đặt' }),
+  }),
+  Object.freeze({
+    id: 'engineer',
+    route: ENGINEER_OVERVIEW_ROUTE,
+    labels: Object.freeze({ en: 'Engineer overview', vi: 'Tổng quan Engineer' }),
+  }),
+  Object.freeze({
+    id: 'engineer-skills',
+    route: 'kits/engineer/skills',
+    labels: Object.freeze({ en: 'Engineer Skills', vi: 'Skill Engineer' }),
+  }),
+  Object.freeze({
+    id: 'workflows',
+    route: 'kits/workflows',
+    labels: Object.freeze({ en: 'Workflows', vi: 'Workflow' }),
+  }),
+  Object.freeze({
+    id: 'migration',
+    route: 'guides/migrating-from-claudekit',
+    labels: Object.freeze({ en: 'Migration', vi: 'Chuyển từ ClaudeKit' }),
+  }),
+]);
+
+const engineerStartLinkTitles: Record<'en' | 'vi', string> = {
+  en: 'Start here',
+  vi: 'Bắt đầu',
+};
+
+const engineerStartLinkAriaLabels: Record<'en' | 'vi', string> = {
+  en: 'Engineer start links',
+  vi: 'Liên kết bắt đầu Engineer',
+};
+
 function resolveLocaleAndChannel(node: PageTree.Node): {
   locale: 'en' | 'vi';
   channel: string;
@@ -72,6 +126,42 @@ function collectPageUrls(node: PageTree.Node, urls: Set<string>) {
   for (const child of node.children) collectPageUrls(child, urls);
 }
 
+// Every projected sidebar exposes exactly one immediately visible Engineer
+// destination — one activation away in a freshly opened sidebar. The `kits`
+// projection already renders the Engineer folder as a child of its
+// `defaultOpen: true` catalog group, which is that visible destination and the
+// natural folder/index representation; injecting a page node as well would
+// duplicate the URL node, and Fumadocs renders a tree by node identity, so a
+// duplicate is a real defect rather than a cosmetic one. The entry is therefore
+// injected directly under the channel root only when the projection does not
+// already expose that URL.
+function withEngineerEntry(
+  children: PageTree.Node[],
+  { url, name, afterUrl }: { url: string; name: string; afterUrl: string },
+): PageTree.Node[] {
+  const exposed = new Set<string>();
+  for (const child of children) collectPageUrls(child, exposed);
+  if (exposed.has(url)) return children;
+
+  const entry: PageTree.Item = { type: 'page', name, url };
+  // Insert after the node that renders the catalog destination: the injected
+  // Skill Catalog page on `docs`/`cli`/`desktop`, or the renamed Kits folder
+  // (which owns the catalog URL as its index) on `kits`. Otherwise the entry
+  // leads the projection and can push a group out of its reviewed position.
+  const afterIndex = children.findIndex((child) =>
+    child.type === 'page'
+      ? child.url === afterUrl
+      : child.type === 'folder' && child.index?.url === afterUrl,
+  );
+  if (afterIndex === -1) return [entry, ...children];
+
+  return [
+    ...children.slice(0, afterIndex + 1),
+    entry,
+    ...children.slice(afterIndex + 1),
+  ];
+}
+
 function filterChannelRoot(
   node: PageTree.Node,
   product: ProductKey,
@@ -81,6 +171,11 @@ function filterChannelRoot(
   const { locale, channel } = resolveLocaleAndChannel(node);
   const catalogUrl = `/${locale}/${channel}/kits`;
   const catalogTitle = skillCatalogLabels[locale];
+  const engineerEntry = {
+    url: `/${locale}/${channel}/${ENGINEER_OVERVIEW_ROUTE}`,
+    name: engineerEntryLabels[locale],
+    afterUrl: catalogUrl,
+  };
 
   const skillCatalogPageNode: PageTree.Item = {
     type: 'page',
@@ -106,7 +201,7 @@ function filterChannelRoot(
 
     return {
       ...node,
-      children: newChildren,
+      children: withEngineerEntry(newChildren, engineerEntry),
     };
   }
 
@@ -128,21 +223,98 @@ function filterChannelRoot(
 
     return {
       ...node,
-      children: newChildren,
+      children: withEngineerEntry(newChildren, engineerEntry),
     };
   }
 
   if (product === 'cli' || product === 'desktop') {
     return {
       ...node,
-      children: [skillCatalogPageNode, ...children],
+      children: withEngineerEntry([skillCatalogPageNode, ...children], engineerEntry),
     };
   }
 
   return {
     ...node,
-    children,
+    children: withEngineerEntry(children, engineerEntry),
   };
+}
+
+export type EngineerStartLink = {
+  id: string;
+  label: string;
+  href: string;
+};
+
+export type EngineerStartLinks = {
+  title: string;
+  ariaLabel: string;
+  items: EngineerStartLink[];
+  missing: string[];
+};
+
+// A link set is always built for one real channel. An unknown channel is a
+// programming error: silently defaulting would point a Beta reader at Stable
+// content (or the reverse) without any visible signal.
+function resolveChannel(channel: string): 'stable' | 'beta' {
+  if (channel !== 'stable' && channel !== 'beta') {
+    throw new Error(
+      `unsupported docs channel "${channel}"; expected "stable" or "beta"`,
+    );
+  }
+  return channel;
+}
+
+// Resolve the Engineer start links for one locale and channel. `currentRoute`
+// (channel-relative, `''` for the channel home) drops the self-link, and
+// `exists` lets the caller resolve destinations against its own source tree:
+// a route that does not exist in this scope is reported in `missing` and never
+// rendered, so a missing Beta or VI page can never be answered by another
+// channel's or locale's page.
+export function engineerStartLinks({
+  locale,
+  channel,
+  currentRoute = '',
+  exists,
+}: {
+  locale: string;
+  channel: string;
+  currentRoute?: string;
+  exists?: (route: string) => boolean;
+}): EngineerStartLinks {
+  const resolvedLocale: 'en' | 'vi' = locale === 'vi' ? 'vi' : 'en';
+  const resolvedChannel = resolveChannel(channel);
+
+  const items: EngineerStartLink[] = [];
+  const missing: string[] = [];
+
+  for (const link of ENGINEER_START_LINKS) {
+    if (link.route === currentRoute) continue;
+    if (exists && !exists(link.route)) {
+      missing.push(link.route);
+      continue;
+    }
+
+    items.push({
+      id: link.id,
+      label: link.labels[resolvedLocale],
+      href: `/${resolvedLocale}/${resolvedChannel}/${link.route}`,
+    });
+  }
+
+  return {
+    title: engineerStartLinkTitles[resolvedLocale],
+    ariaLabel: engineerStartLinkAriaLabels[resolvedLocale],
+    items,
+    missing,
+  };
+}
+
+// The two surfaces that render the start-link block: the channel home (where
+// the reader has no product context yet) and the Engineer landing (where the
+// stated reach is one activation to each destination).
+export function showsEngineerStartLinks(route: string): boolean {
+  return route === '' || route === ENGINEER_OVERVIEW_ROUTE;
 }
 
 export function activeProduct(pathname: string): ProductKey {
