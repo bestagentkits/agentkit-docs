@@ -1,32 +1,36 @@
 ---
 title: Xây MCP server với ak:mcp-builder
-description: Nghiên cứu API ngoài, thiết kế tool cho Agent, triển khai server và xác minh bằng ak:mcp-builder.
+description: Xây, nâng cấp, kiểm thử và publish MCP server trên protocol 2026-07-28 với SDK TypeScript và Python v2, bằng ak:mcp-builder.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
 Dùng `ak:mcp-builder` để biến dịch vụ hoặc API bên ngoài thành MCP server có
-tool hỗ trợ workflow hoàn chỉnh của Agent. Skill hướng dẫn research, thiết kế
-tool cùng schema, triển khai Python hoặc TypeScript, build check và evaluation
-suite read-only.
+tool hỗ trợ workflow hoàn chỉnh của Agent. Skill nhắm tới MCP spec revision
+`2026-07-28` với SDK v2, gồm TypeScript `@modelcontextprotocol/server` và Python
+`mcp` (`MCPServer`), và hướng dẫn thiết kế tool, triển khai từng tool hoàn chỉnh,
+authorization, kiểm tra qua client, evaluation suite read-only cùng việc publish
+lên MCP Registry khi cần.
 
-## Chọn ak:mcp-builder cho tool surface mới
+## Chọn ak:mcp-builder cho server và tool surface
 
 ### Dùng ak:mcp-builder khi
 
 - Bạn đang tạo MCP server mới hoặc mở rộng bề mặt tool hay resource.
+- Bạn đang migrate server dùng SDK v1 lên v2 hoặc review tool surface của server.
 - API cần workflow thân thiện với Agent thay vì một wrapper cho mỗi endpoint.
-- Bạn cần response có giới hạn, pagination, lỗi actionable và annotation effect
-  chính xác cho tool.
+- Bạn cần response có giới hạn, pagination, lỗi actionable, structured output và
+  annotation effect chính xác cho tool.
 - Bạn muốn evaluation thực tế kiểm tra LLM có dùng được server hay không.
+- Bạn muốn đóng gói server và publish lên MCP Registry.
 
 ### Chọn workflow khác khi
 
-- Server đã tồn tại và bạn chỉ cần discovery hoặc execution.
-  [`ak:use-mcp`](./use-mcp) không còn được đóng gói. Dùng MCP tool đã hiện trong
-  session hiện tại, hoặc [`ak:agent-browser`](./agent-browser) cho browser
-  automation.
+- Server đã tồn tại và bạn chỉ cần cấu hình client hoặc gọi server. Skill này
+  không bao gồm MCP client. [`ak:use-mcp`](./use-mcp) không còn được đóng gói;
+  dùng MCP tool đã hiện trong session hiện tại, hoặc
+  [`ak:agent-browser`](./agent-browser) cho browser automation.
 - Bạn cần expose codebase hiện có qua CLI hoặc MCP surface. Cân nhắc
   `ak:agentize` trước khi tạo integration mới.
 - Bạn thiếu official API docs, test access hoặc cách an toàn để xác minh auth và
@@ -34,10 +38,18 @@ suite read-only.
 
 ## Chuẩn bị integration
 
-Cung cấp dịch vụ hoặc API, user workflow dự kiến, ngôn ngữ triển khai, transport,
-auth model, permission, rate limit, data volume dự kiến và external effect được
-phép. Dự kiến có network research đối với MCP specification, SDK docs hiện hành
-và toàn bộ API docs của dịch vụ.
+Cung cấp dịch vụ hoặc API, user task, input, output shape, side effect và auth
+của tool đầu tiên, cùng ngôn ngữ ưu tiên, transport, permission, rate limit,
+data volume dự kiến và external effect được phép. Lần chạy kiểm tra ngôn ngữ,
+SDK version và transport của project trước, và chỉ đọc phần upstream API mà tool
+đầu tiên cần.
+
+- Server TypeScript v2 cần Node 20 trở lên, ESM và `zod` ^4.2.
+- Server Python v2 dùng `mcp>=2.2,<3`. Nếu project chưa thể migrate, hướng dẫn
+  migration pin `mcp>=1.28,<2`.
+- MCP Inspector 2.x cần Node 22.19 trở lên.
+- Evaluation harness cài `anthropic>=0.69.0` và `mcp>=2.2,<3` từ requirements đi
+  kèm và cần `ANTHROPIC_API_KEY`.
 
 | Runtime | Cách gọi | Ranh giới khả dụng |
 | --- | --- | --- |
@@ -73,55 +85,107 @@ $ak:mcp-builder "Build a TypeScript MCP server for the Acme tickets API with rea
   </Tab>
 </Tabs>
 
-Implementation Python dùng FastMCP, Pydantic validation, type hint và async I/O.
-Implementation TypeScript dùng MCP SDK, strict TypeScript, Zod schema, description
-rõ và build tạo JavaScript có thể chạy. Stdio phù hợp subprocess local; HTTP hoặc
-SSE remote cần quyết định riêng về server lifecycle, network security và deploy.
+Server TypeScript dùng `@modelcontextprotocol/server` v2 với Zod v4 schema
+import từ `zod/v4`. Server Python dùng `MCPServer` từ package `mcp` v2 chính
+thức, với type hint và constraint Pydantic `Field`; framework `fastmcp` 4.x độc
+lập là dự án riêng, và một server không nên trộn hai kiểu import. Transport mặc
+định là stdio cho server local một người dùng và Streamable HTTP cho server
+remote hoặc nhiều người dùng. Server mới không bao giờ khởi đầu trên transport
+HTTP+SSE đã deprecated.
+
+### Hiểu baseline protocol 2026-07-28
+
+Skill nhắm tới `2026-07-28` trừ khi project pin client base cũ hơn. SDK v2 phục
+vụ cả hai thế hệ protocol từ một server, nên client thời 2025 vẫn hoạt động. Các
+thay đổi ảnh hưởng tới server gồm:
+
+- Core stateless: không còn handshake `initialize` hay `Mcp-Session-Id`, bắt
+  buộc có `server/discover`, và tool list chỉ thay đổi theo principal đã xác
+  thực, không bao giờ theo session state ẩn.
+- Multi round-trip request thay cho elicitation, sampling và roots do server
+  khởi tạo: server trả kết quả `input_required` và client gửi lại đúng lệnh gọi
+  đó kèm câu trả lời.
+- Deprecated cho thiết kế mới: sampling, roots, logging capability, Dynamic
+  Client Registration và transport HTTP+SSE.
+
+Để migrate server v1, TypeScript dùng
+`npx @modelcontextprotocol/codemod@latest v1-to-v2 .` rồi sửa từng marker
+`@mcp-codemod-error`. Python chuyển từ
+`from mcp.server.fastmcp import FastMCP` sang `from mcp.server import MCPServer`.
+Lệnh gọi push elicitation thất bại trên kết nối thời 2026 và phải chuyển sang
+multi round-trip helper. Skill chỉ nâng cấp SDK v1 khi bạn yêu cầu hoặc khi một
+tính năng bắt buộc cần tới.
 
 ## Hiểu các giai đoạn build
 
-1. **Nghiên cứu protocol và service.** Đọc guidance MCP cùng SDK chính thức hiện
-   hành và auth, endpoint, schema, pagination, lỗi, rate limit của API đích.
-2. **Lập kế hoạch workflow Agent.** Chọn task giá trị cao, API utility dùng chung,
-   response format, truncation behavior và failure handling.
-3. **Triển khai infrastructure và tool.** Tập trung auth, request, pagination,
-   formatting, cleanup và input validation trước khi thêm tool.
-4. **Annotate effect chính xác.** Đặt hint read-only, destructive, idempotent và
-   open-world theo behavior; coi chúng là UX hint chứ không phải security enforcement.
-5. **Build và test.** Compile hoặc type-check, xác minh import, chạy sample call
-   qua client và tránh mở stdio server dài hạn bằng foreground command bị block.
-6. **Tạo evaluation.** Tạo mười câu hỏi độc lập, ổn định, phức tạp chỉ cần
-   operation read-only, non-destructive; xác minh answer và chạy harness khi được phép.
+1. **Xác định task và contract của tool đầu tiên.** Lần chạy ghi input, output
+   shape, side effect và auth trước khi chọn infrastructure.
+2. **Triển khai một tool hoàn chỉnh.** Lần chạy xây một đường đi từ input đã
+   validate qua upstream call được cấp quyền tới output có cấu trúc và có giới
+   hạn: input schema có constraint, `outputSchema` với `structuredContent`,
+   annotation chính xác, kết quả `isError` actionable, timeout và pagination.
+3. **Cấp quyền và xác nhận effect.** Annotation là hint, không phải enforcement;
+   mọi operation được authorize ở server. Hành động destructive được xác nhận
+   qua elicitation. Client không thể hỏi người dùng sẽ bị từ chối cho tới khi có
+   argument xác nhận tường minh, và argument đó chỉ được coi là khẳng định của
+   model, không phải bằng chứng người dùng đồng ý.
+4. **Xác minh bằng client thật.** Lần chạy type-check hoặc import-check server,
+   rồi điều khiển server bằng MCP Inspector CLI hoặc SDK client trong test: lệnh
+   gọi hợp lệ, input sai, lỗi upstream, pagination và, với HTTP, response `401`,
+   `403` cùng `Origin` lạ.
+5. **Tạo evaluation.** Lần chạy viết mười câu hỏi độc lập, ổn định, read-only
+   với một đáp án kiểm chứng được, tự giải từng câu qua server và chạy
+   `scripts/evaluation.py` khi được phép.
+6. **Chỉ mở rộng và publish khi được yêu cầu.** Lần chạy chỉ thêm tool khi
+   workflow được yêu cầu cần tới, chạy lại kiểm tra sau mỗi thay đổi và chỉ
+   publish lên registry khi bạn yêu cầu.
 
 ## Kiểm soát credential, chi phí và write
 
-<Callout type="warn" title="Research và evaluation có thể chạm hệ thống ngoài">
+<Callout type="warn" title="Research, evaluation và publish chạm tới hệ thống ngoài">
   Nhận approval trước khi dùng credential, gọi API live hoặc trả phí, tạo remote
-  resource, chạy mutating tool, deploy remote server hoặc gửi project data tới
-  evaluation model. Tool annotation không thay authorization check.
+  resource, chạy mutating tool, deploy remote server, gửi project data tới
+  evaluation model hoặc publish lên registry. Tool annotation không thay
+  authorization check.
 </Callout>
 
-Package installation ghi dependency xuống disk và có thể tải từ package registry.
-API research cùng integration test dùng network. Evaluation harness đi kèm cần
-`ANTHROPIC_API_KEY`, gọi Claude model đã chọn cho mỗi question và tool turn, kết
-nối tới MCP server đích, vì vậy có thể tiêu model token, API quota, thời gian và
-chi phí provider. Giữ evaluation task read-only và ưu tiên fixture an toàn.
+Credential nằm trong environment variable hoặc OAuth token đã được validate cho
+server này. Skill không bao giờ chuyển client token lên upstream hay đặt secret
+vào tool output. Package installation ghi dependency xuống disk và có thể tải từ
+package registry. API research cùng integration test dùng network.
+
+Evaluation harness đi kèm gọi Claude model cho mỗi question và tool turn, kết nối
+tới MCP server đích, vì vậy có thể tiêu model token, API quota, thời gian và chi
+phí provider. Model mặc định là `claude-opus-5-5`; truyền `-m <model>` để chọn
+model khác. Harness hỗ trợ transport `stdio` và `http`, chỉ giữ `sse` cho server
+legacy, tự khởi động và dừng stdio server, và không khởi động HTTP server. Hãy
+dừng mọi HTTP server bạn đã khởi động cho lần chạy. Giữ evaluation task
+read-only và ưu tiên fixture an toàn.
+
+MCP Registry vẫn đang ở giai đoạn preview. Publish là hành động công khai và tên
+khó lấy lại: package được publish trước, sau đó metadata `server.json` qua
+`mcp-publisher`, kèm ownership proof cho từng loại package.
 
 ## Xác minh output và bằng chứng
 
 Implementation hoàn tất nên cung cấp:
 
 - Server code, dependency cùng compiler config và startup path đã document.
-- Workflow tool tập trung với schema strict, description, ví dụ và effect annotation chính xác.
+- Workflow tool tập trung với schema strict, description, structured output và
+  effect annotation chính xác.
 - Request, pagination, formatting, timeout, error và cleanup utility dùng chung.
-- Kết quả build hoặc syntax check cùng sample call được quan sát từ client.
+- Kết quả type-check hoặc import-check cùng lệnh gọi được quan sát từ MCP
+  Inspector hoặc SDK client test.
 - Mười evaluation pair đã xác minh trong XML khi scope yêu cầu evaluation.
 - Markdown evaluation report tùy chọn với accuracy, duration, tool-call count,
   answer theo task, summary và feedback về tool.
-- Rủi ro auth, rate limit, deploy hoặc permission còn lại.
+- `server.json` và package đã publish chỉ khi có yêu cầu publish.
+- Tool hoạt động, kết quả client quan sát được và capability còn thiếu hoặc chưa
+  xác minh, cùng rủi ro auth, rate limit, deploy hoặc permission còn lại.
 
-Không coi server process chỉ đang chờ stdio là test thành công. Xác minh qua
-managed client hoặc evaluation harness và xác nhận cleanup.
+Chỉ đăng ký thôi chưa phải là hoàn tất. Không coi server process chỉ đang chờ
+stdio là test thành công. Xác minh qua managed client hoặc evaluation harness và
+xác nhận cleanup.
 
 ## Xử lý sự cố và giới hạn
 
@@ -130,10 +194,11 @@ managed client hoặc evaluation harness và xác nhận cleanup.
 | Server có vẻ treo | Server có thể đang chờ protocol input đúng cách; dừng foreground run và test qua managed client hoặc bounded timeout. |
 | Response làm tràn context | Thêm filter, pagination, default hợp lý, character limit và hướng dẫn truncation rõ. |
 | Tool lỗi auth | Xác minh presence và audience của credential mà không in secret; không bypass authorization. |
+| Push elicitation lỗi sau khi nâng cấp | Thay `ctx.elicit` hoặc `elicitInput` bằng multi round-trip helper của SDK; lệnh gọi push thất bại trên kết nối thời 2026. |
 | Evaluation accuracy thấp | Kiểm tra tên tool, schema, description, lỗi, pagination và feedback theo task trước khi thêm tool. |
-| Remote transport lỗi | Xác nhận server chạy riêng, URL, header, certificate và network access. |
+| Remote transport lỗi | Xác nhận server chạy riêng, URL, header, certificate, network access và việc validate `Origin` cùng `Host`. |
 
 Skill là guidance, không phải generator cố định: project file chính xác phụ thuộc
-ngôn ngữ, API và repository hiện có. Live docs có thể thay đổi, nên chi tiết
-implementation phải được xác minh trong lần chạy. Hai release snapshot dùng cho
-trang này chứa cùng builder workflow và harness.
+ngôn ngữ, API và repository hiện có. Protocol revision, SDK version và registry
+schema có thể thay đổi, nên hãy xác minh chúng với specification live và package
+đã cài trong lần chạy.

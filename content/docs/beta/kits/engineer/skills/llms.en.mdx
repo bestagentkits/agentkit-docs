@@ -1,6 +1,6 @@
 ---
 title: Curate LLM-friendly documentation indexes with ak:llms
-description: Scan local Markdown documentation, generate llms.txt and optional llms-full.txt artifacts, then review titles, descriptions, URLs, curation, and publication safety.
+description: Scan local Markdown documentation, generate llms.txt and optional llms-full.txt artifacts, link per-page .md variants when the site serves them, then review titles, descriptions, URLs, curation, and publication safety.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
@@ -10,7 +10,8 @@ Use `ak:llms` to create a Markdown index for documentation consumers that follow
 the llms.txt convention. The bundled generator scans local `.md` and `.mdx`
 files, extracts titles and short descriptions, groups pages heuristically, and
 writes `llms.txt`. It can also write an expanded `llms-full.txt` containing
-inlined document content.
+inlined document content, and it defines the per-page `.md` variant contract that
+`llms.txt` can link to when the site serves Markdown twins of its pages.
 
 ## Choose ak:llms for a curated documentation index
 
@@ -27,8 +28,10 @@ inlined document content.
 
 ### Choose another workflow when
 
-- You need SEO metadata, `robots.txt`, a sitemap, hosting, or deployment. Those
-  are outside this Skill's declared scope.
+- You need framework routing that serves these files, SEO metadata,
+  `robots.txt`, a sitemap, social metadata, page actions, hosting, or
+  deployment. Those belong to the site's framework Skill; for Next.js, use the
+  SEO/GEO reference in [Web frameworks](./web-frameworks).
 - You need a general documentation audit or rewrite. Use `ak:docs`.
 - Your source is only a live website or a single file. The bundled script accepts
   a local directory; inspect or stage approved sources first, or build a separate
@@ -45,6 +48,8 @@ Before you start:
 - Identify the local documentation directory, public base URL, canonical route
   mapping, project name and description, output directory, and whether the full
   artifact is required.
+- Check whether the site serves a Markdown variant of each page (`.md`
+  appended to the page URL) and whether directory pages use a trailing slash.
 - Exclude private, generated, duplicate, draft, translated fallback, internal,
   or machine-owned material that should not be published.
 - Decide which topics are primary and which belong in the final `## Optional`
@@ -89,27 +94,39 @@ $ak:llms "Scan ./content/docs/public for published Markdown only. Generate llms.
   </Tab>
 </Tabs>
 
-The Skill frontmatter hints at a `--url` input, but the bundled Python script's
-exact flag is `--base-url`. For direct script execution, its interface is:
+The Skill arguments and the bundled Python script both use `--base-url` for the
+public URL prefix. For direct script execution, its interface is:
 
 ```text
-generate-llms-txt.py --source <directory> [--output <directory>] [--base-url <url>] [--full] [--project-name <name>] [--project-description <description>]
+generate-llms-txt.py --source <directory> [--output <directory>] [--base-url <url>] [--md-links] [--trailing-slash] [--full] [--project-name <name>] [--project-description <description>]
 ```
 
 `--source` must resolve to a directory. Without `--base-url`, generated links
 remain relative filesystem-style paths; that may be unsuitable for a file
-published at a website root.
+published at a website root. With a base URL, the script strips `.md`/`.mdx`
+and maps `guide/index.md` to `guide`, or to `guide/` with `--trailing-slash`.
+`--md-links` links each page's Markdown variant instead of its HTML URL: the
+page URL plus `.md`, or `index.html.md` for a URL that ends in `/`. Use it only
+when the site actually serves those variants.
 
 ## Understand the output contract
 
 | Artifact | Contents | Review focus |
 | --- | --- | --- |
 | `llms.txt` | One H1, optional blockquote summary, categorized H2 sections, and Markdown links with descriptions | Curation, canonical URLs, section meaning, concise descriptions |
-| `llms-full.txt` | Project heading plus source document bodies inlined under categorized headings | Size, duplication, private content, frontmatter leakage, context usefulness |
+| `llms-full.txt` | Project heading plus source document bodies inlined under categorized headings; each page carries a `Source:` line with its canonical URL when a base URL is set | Size, duplication, private content, frontmatter leakage, context usefulness |
+| `<page>.md` | Per-page Markdown variant served by the site, not written by the bundled script | `text/markdown; charset=utf-8`, `X-Robots-Tag: noindex`, `# Title` plus a `Source:` line, no drift from the HTML page |
 
 The tagged convention requires an H1. It recommends a short blockquote summary,
 grouped link lists, and a final `## Optional` section for lower-priority material.
 These structural checks do not prove that a model or crawler will use the file.
+
+For Markdown variants, the Skill asks that the HTML page keep `rel=canonical`
+and add `<link rel="alternate" type="text/markdown">` pointing to its `.md`
+twin, that the variant contain only the page body with frontmatter, navigation,
+and components resolved to plain Markdown, and that variants, `llms.txt`, and
+`llms-full.txt` come from the same source at build or request time. If the site
+cannot serve `.md` URLs, the run links HTML URLs and reports the gap.
 
 ## Observe the generation workflow
 
@@ -124,10 +141,12 @@ These structural checks do not prove that a model or crawler will use the file.
    getting started, guides, API reference, configuration, deployment,
    architecture, documentation, or optional groups.
 5. **The run generates artifacts.** It writes `llms.txt` and, when approved,
-   `llms-full.txt` to the chosen directory.
+   `llms-full.txt` to the chosen directory, linking `.md` variants when the
+   site serves them.
 6. **The run curates and verifies.** It checks headings, descriptions, category
    order, duplicates, URL mapping, public-content boundaries, artifact size, and
-   links using the project's actual routes.
+   links using the project's actual routes. With a live site, every linked URL
+   should return 200 and sampled `.md` URLs should return `text/markdown`.
 
 ## Keep source content and publication safe
 
@@ -174,7 +193,8 @@ they actually ran.
 | --- | --- |
 | The script rejects a file path | Pass a directory to `--source`, or stage the approved file in a bounded source directory. |
 | A live URL was supplied as the source | Fetch or map it only with approved network access; the bundled script does not crawl URLs. |
-| Generated links end in `.md` or `.mdx` | Provide the correct `--base-url` and verify how source paths map to published routes; do not assume extension stripping is sufficient. |
+| Generated links end in `.md` or `.mdx` unexpectedly | Provide the correct `--base-url` and verify how source paths map to published routes; `.md` links are expected only with `--md-links`. |
+| Linked URLs redirect or return 404 | Match `--trailing-slash` to the site's setting, and drop `--md-links` if the site does not serve `.md` variants. |
 | Titles or descriptions are poor | Add or correct public H1 and introductory prose, or curate the generated entry manually. |
 | Pages land in the wrong section | Reclassify the output based on user intent; the generator uses path and filename heuristics only. |
 | `llms-full.txt` is too large or noisy | Narrow the source corpus, omit `--full`, or create a reviewed subset instead of publishing everything. |
@@ -187,8 +207,8 @@ before replacing published files.
 ## Know the current limits
 
 - The bundled generator scans local directories only. It does not crawl sites,
-  validate HTTP status, understand framework routing, deploy files, or measure
-  model adoption.
+  validate HTTP status, understand framework routing, serve or write `.md` page
+  variants, deploy files, or measure model adoption.
 - Metadata extraction and categorization are heuristic; MDX, localized trees,
   generated pages, index routes, and custom frontmatter need human review.
 - The llms.txt convention itself can evolve, and consumer support varies. Check
