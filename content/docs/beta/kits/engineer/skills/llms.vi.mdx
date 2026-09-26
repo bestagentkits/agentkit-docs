@@ -1,6 +1,6 @@
 ---
 title: Biên tập documentation index thân thiện với LLM bằng ak:llms
-description: Scan tài liệu Markdown local, tạo artifact llms.txt cùng llms-full.txt tùy chọn, rồi review title, description, URL, mức độ chọn lọc và an toàn publication.
+description: Scan tài liệu Markdown local, tạo artifact llms.txt cùng llms-full.txt tùy chọn, link biến thể .md của từng page khi site phục vụ chúng, rồi review title, description, URL, mức độ chọn lọc và an toàn publication.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
@@ -9,7 +9,9 @@ import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 Dùng `ak:llms` để tạo Markdown index cho consumer tài liệu theo convention
 llms.txt. Generator được bundle scan tệp `.md` cùng `.mdx` local, trích title và
 description ngắn, nhóm page bằng heuristic rồi ghi `llms.txt`. Generator còn có
-thể ghi `llms-full.txt` mở rộng chứa nội dung document được inline.
+thể ghi `llms-full.txt` mở rộng chứa nội dung document được inline, đồng thời
+định nghĩa contract cho biến thể `.md` của từng page mà `llms.txt` có thể link
+tới khi site phục vụ bản Markdown song song của page.
 
 ## Chọn ak:llms cho documentation index có chọn lọc
 
@@ -25,8 +27,10 @@ thể ghi `llms-full.txt` mở rộng chứa nội dung document được inline
 
 ### Chọn workflow khác khi
 
-- Bạn cần SEO metadata, `robots.txt`, sitemap, hosting hay deployment. Chúng nằm
-  ngoài scope được khai báo của Skill.
+- Bạn cần framework routing phục vụ các tệp này, SEO metadata, `robots.txt`,
+  sitemap, social metadata, page action, hosting hay deployment. Chúng thuộc
+  framework Skill của site; với Next.js, dùng reference SEO/GEO trong
+  [Web frameworks](./web-frameworks).
 - Bạn cần audit hoặc viết lại tài liệu nói chung. Dùng `ak:docs`.
 - Source chỉ là live website hoặc một tệp. Script được bundle nhận directory
   local; hãy kiểm tra hoặc stage source đã duyệt trước, hoặc xây workflow được
@@ -43,6 +47,8 @@ Trước khi bắt đầu:
 - Xác định documentation directory local, public base URL, canonical route
   mapping, project name cùng description, output directory và có cần full
   artifact hay không.
+- Kiểm tra site có phục vụ biến thể Markdown của từng page (thêm `.md` vào URL
+  của page) hay không và directory page có dùng trailing slash hay không.
 - Loại nội dung private, generated, duplicate, draft, translated fallback,
   internal hoặc machine-owned không nên được publish.
 - Quyết định topic nào là primary và topic nào thuộc section `## Optional` cuối
@@ -87,27 +93,39 @@ $ak:llms "Scan ./content/docs/public for published Markdown only. Generate llms.
   </Tab>
 </Tabs>
 
-Frontmatter của Skill gợi ý input `--url`, nhưng flag chính xác của Python script
-được bundle là `--base-url`. Khi chạy script trực tiếp, interface là:
+Argument của Skill và Python script được bundle đều dùng `--base-url` cho tiền
+tố public URL. Khi chạy script trực tiếp, interface là:
 
 ```text
-generate-llms-txt.py --source <directory> [--output <directory>] [--base-url <url>] [--full] [--project-name <name>] [--project-description <description>]
+generate-llms-txt.py --source <directory> [--output <directory>] [--base-url <url>] [--md-links] [--trailing-slash] [--full] [--project-name <name>] [--project-description <description>]
 ```
 
 `--source` phải resolve tới directory. Không có `--base-url`, link được tạo vẫn
 là path tương đối kiểu filesystem; chúng có thể không phù hợp cho tệp được
-publish ở website root.
+publish ở website root. Khi có base URL, script bỏ `.md`/`.mdx` và map
+`guide/index.md` thành `guide`, hoặc `guide/` khi có `--trailing-slash`.
+`--md-links` link tới biến thể Markdown của từng page thay vì HTML URL: URL của
+page cộng `.md`, hoặc `index.html.md` với URL kết thúc bằng `/`. Chỉ dùng khi
+site thực sự phục vụ các biến thể đó.
 
 ## Hiểu output contract
 
 | Artifact | Nội dung | Trọng tâm review |
 | --- | --- | --- |
 | `llms.txt` | Một H1, blockquote summary tùy chọn, H2 section theo category cùng Markdown link có description | Curation, canonical URL, ý nghĩa section, description ngắn gọn |
-| `llms-full.txt` | Project heading cùng source document body được inline dưới heading theo category | Kích thước, duplication, private content, frontmatter leakage, giá trị context |
+| `llms-full.txt` | Project heading cùng source document body được inline dưới heading theo category; mỗi page có dòng `Source:` với canonical URL khi có base URL | Kích thước, duplication, private content, frontmatter leakage, giá trị context |
+| `<page>.md` | Biến thể Markdown của từng page do site phục vụ, không do script được bundle ghi ra | `text/markdown; charset=utf-8`, `X-Robots-Tag: noindex`, `# Title` cùng dòng `Source:`, không lệch khỏi HTML page |
 
 Convention tại tag yêu cầu H1. Convention khuyên dùng blockquote summary ngắn,
 link list được nhóm và section `## Optional` ở cuối cho material ưu tiên thấp.
 Các structural check này không chứng minh model hay crawler sẽ dùng tệp.
+
+Với biến thể Markdown, Skill yêu cầu HTML page giữ `rel=canonical` và thêm
+`<link rel="alternate" type="text/markdown">` trỏ tới bản `.md`, biến thể chỉ
+chứa page body với frontmatter, navigation cùng component được chuyển thành
+Markdown thuần, và biến thể, `llms.txt` cùng `llms-full.txt` được tạo từ cùng
+source lúc build hoặc lúc request. Nếu site không phục vụ được URL `.md`, lần
+chạy link HTML URL và báo cáo khoảng trống đó.
 
 ## Quan sát generation workflow
 
@@ -122,10 +140,12 @@ Các structural check này không chứng minh model hay crawler sẽ dùng tệ
    getting started, guides, API reference, configuration, deployment,
    architecture, documentation hoặc optional.
 5. **Lần chạy tạo artifact.** Script ghi `llms.txt` và, khi được duyệt,
-   `llms-full.txt` vào directory đã chọn.
+   `llms-full.txt` vào directory đã chọn, link biến thể `.md` khi site phục vụ
+   chúng.
 6. **Lần chạy biên tập và xác minh.** Skill kiểm tra heading, description,
    category order, duplicate, URL mapping, public-content boundary, artifact
-   size cùng link bằng route thật của project.
+   size cùng link bằng route thật của project. Với live site, mọi URL được link
+   nên trả về 200 và URL `.md` được lấy mẫu nên trả về `text/markdown`.
 
 ## Giữ source content và publication an toàn
 
@@ -171,7 +191,8 @@ validation step riêng và không được báo cáo hoàn tất nếu chưa th�
 | --- | --- |
 | Script từ chối file path | Truyền directory cho `--source`, hoặc stage tệp đã duyệt trong source directory có giới hạn. |
 | Live URL được đưa làm source | Chỉ fetch hoặc map với network access đã duyệt; script được bundle không crawl URL. |
-| Link được tạo kết thúc bằng `.md` hoặc `.mdx` | Cung cấp `--base-url` đúng và xác minh source path map tới published route ra sao; đừng giả định chỉ bỏ extension là đủ. |
+| Link được tạo kết thúc bằng `.md` hoặc `.mdx` ngoài dự kiến | Cung cấp `--base-url` đúng và xác minh source path map tới published route ra sao; link `.md` chỉ là dự kiến khi dùng `--md-links`. |
+| URL được link bị redirect hoặc trả về 404 | Đặt `--trailing-slash` khớp với thiết lập của site, và bỏ `--md-links` nếu site không phục vụ biến thể `.md`. |
 | Title hoặc description kém | Thêm hoặc sửa public H1 cùng introductory prose, hoặc biên tập generated entry thủ công. |
 | Page vào sai section | Phân loại lại output theo user intent; generator chỉ dùng path cùng filename heuristic. |
 | `llms-full.txt` quá lớn hoặc nhiều nhiễu | Thu hẹp source corpus, bỏ `--full` hoặc tạo subset được review thay vì publish mọi thứ. |
@@ -184,7 +205,8 @@ trước khi thay published file.
 ## Biết các giới hạn hiện tại
 
 - Generator được bundle chỉ scan directory local. Generator không crawl site,
-  validate HTTP status, hiểu framework routing, deploy tệp hay đo model adoption.
+  validate HTTP status, hiểu framework routing, phục vụ hay ghi biến thể `.md`
+  của page, deploy tệp hay đo model adoption.
 - Metadata extraction cùng categorization dựa trên heuristic; MDX, localized
   tree, generated page, index route và custom frontmatter cần con người review.
 - Convention llms.txt có thể phát triển và consumer support khác nhau. Kiểm tra
