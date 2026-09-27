@@ -40,7 +40,7 @@ CLI dùng chung cho `omp` hay `ak`.
 
 | Runtime | Cách xuất Agent và chọn model | Nơi kiểm tra hoặc cấu hình |
 | --- | --- | --- |
-| Claude Code | Định nghĩa Agent native giữ selector `sonnet`, `opus`, `haiku`, `fable` hoặc `inherit` của Kit | Định nghĩa đang dùng trong `.claude/agents` hoặc Agent của plugin đã cài; Claude Code quản lý quyền truy cập model |
+| Claude Code | Định nghĩa Agent native giữ selector `opus`, `haiku` hoặc `fable` của Kit | Định nghĩa đang dùng trong `.claude/agents` hoặc Agent của plugin đã cài; Claude Code quản lý quyền truy cập model |
 | Codex | TOML riêng cho từng Agent pin model và reasoning effort; pin này có thể ghi đè tier chung của Kit | `.codex/agents/*.toml` đang dùng và Agent runtime do AgentKit đăng ký |
 | Cursor | Tier của Kit được chuyển thành model ID cụ thể khi xuất cấu hình | `.cursor/agents/*.md` đang dùng; cấu hình `agent_models.cursor` của AgentKit |
 | Oh My Pi (OMP) | Tier của Kit trở thành alias role, được resolve khi Agent khởi chạy | Định nghĩa Agent trong `.omp`, `modelRoles` và `task.agentModelOverrides` |
@@ -62,11 +62,12 @@ buộc bạn dùng model của một vendor cụ thể.
 
 | Agent | Selector Kit / Claude Code | Selector OMP |
 | --- | --- | --- |
-| `fullstack-developer`, `researcher`, `debugger`, `docs-manager`, `project-manager`, `journal-writer` | `sonnet` | `@task` |
-| `planner`, `brainstormer`, `code-reviewer`, `code-simplifier` | `opus` | `@plan` |
+| `fullstack-developer`, `ui-ux-designer`, `researcher`, `debugger`, `docs-manager`, `project-manager`, `journal-writer`, `planner`, `brainstormer`, `code-reviewer`, `code-simplifier` | `opus` | `@plan` |
 | `Explore`, `tester`, `git-manager` | `haiku` | `@smol` |
 | `kongming`, `advisor` | `fable` | `@advisor` |
-| `ui-ux-designer` | `inherit` | Không ghi model: kế thừa model đang chạy của phiên cha/session |
+
+Trong bản phát hành này, không Agent Engineer nào dùng tier `sonnet` hoặc
+`inherit`, nên không Agent nào chọn role `@task` của OMP.
 
 Selector có trong file không chứng minh tài khoản của bạn dùng được nó. Đặc
 biệt, hãy kiểm tra quyền truy cập trước khi dựa vào tư vấn bằng `fable`. Role
@@ -85,7 +86,8 @@ Codex dùng pin theo từng Agent thay vì bốn role OMP:
 | `kongming`, `advisor` | `gpt-6-astra` | `low` |
 
 Ví dụ, `tester` của Engineer dùng tier Kit `haiku` nhưng được pin Sol / medium
-trên Codex. `ui-ux-designer` được pin Luna / max dù selector chung là `inherit`.
+trên Codex. `fullstack-developer` và `planner` cùng tier `opus`, nhưng Codex pin
+lần lượt Luna / max và Sol / medium.
 Đọc các field TOML cấp cao nhất, không lấy dòng `model:` được trích trong
 `developer_instructions` làm cấu hình runtime.
 
@@ -103,7 +105,9 @@ gọi được. Nếu không tìm thấy Agent, làm theo [Hướng dẫn xử l
 | `fable` | `claude-fable-5-high` |
 | `inherit` | `inherit` |
 
-Đây là giá trị mặc định được xuất, không bảo đảm mọi tài khoản Cursor hiện tại
+Các Agent Engineer và Marketing hiện tại chỉ dùng các dòng `opus`, `haiku` và
+`fable`; các dòng còn lại áp dụng cho Agent được viết với các tier đó. Đây là
+giá trị mặc định được xuất, không bảo đảm mọi tài khoản Cursor hiện tại
 đều có các model đó. AgentKit nhận override `agent_models.cursor.<tier>` trong
 cấu hình riêng. Cấu hình user thường ở `~/.agentkit/config.yaml`; cấu hình
 project ở `.agentkit/config.yaml`. Ví dụ, thay placeholder bên dưới bằng model
@@ -112,8 +116,12 @@ ID đang khả dụng trong Cursor:
 ```yaml
 agent_models:
   cursor:
-    sonnet: YOUR_CURSOR_MODEL_ID
+    opus: YOUR_CURSOR_MODEL_ID
 ```
+
+`ak config prefs set agent_models.cursor.opus YOUR_CURSOR_MODEL_ID` ghi cùng
+key này; thêm `--scope project` để ghi vào file project. Xem
+[`ak config prefs set`](../reference/cli/config/prefs/set).
 
 Giá trị project áp dụng cho bản cài project; bản cài global dùng cấu hình user.
 Đây là thiết lập lúc xuất cấu hình, không phải role được resolve khi chạy như
@@ -129,10 +137,12 @@ Marketing Codex đã phát hành, cả 32 Agent được xuất đều dùng `gp
 Engineer Kit. Đây là mặc định package, không có nghĩa một lượt gọi tư vấn
 không thể yêu cầu model khác một cách tường minh.
 
-Với runtime ánh xạ theo tier, hãy đọc frontmatter của chính Agent Marketing:
-tên giống Engineer không bảo đảm tier giống nhau. Ví dụ, `code-reviewer` của
-Marketing dùng `sonnet`, tương ứng OMP `@task`; `code-reviewer` của Engineer dùng
-`opus`, tương ứng `@plan`. Bảng tier-to-role và tier-to-Cursor vẫn áp dụng. Xem
+Với runtime ánh xạ theo tier, hãy đọc frontmatter của chính Agent Marketing.
+Trong bản phát hành này, `analytics-analyst`, `Explore`, `git-manager`,
+`lead-qualifier`, `scout`, `scout-external` và `tester` của Marketing dùng
+`haiku` (OMP `@smol`), `kongming` dùng `fable` (`@advisor`), các Agent còn lại
+dùng `opus` (`@plan`). Tên giống Engineer không bảo đảm giữ cùng tier qua các
+bản phát hành. Bảng tier-to-role và tier-to-Cursor vẫn áp dụng. Xem
 [danh sách Agent Marketing](../kits/marketing/agents) và kiểm tra định nghĩa
 thực sự được nạp khi hai Kit cùng cung cấp một tên.
 
@@ -156,7 +166,9 @@ modelRoles:
   advisor: YOUR_PROVIDER/YOUR_COUNSEL_MODEL:high
 ```
 
-Suffix effort là tùy chọn và phải được model hỗ trợ. AgentKit xuất alias;
+Suffix effort là tùy chọn và phải được model hỗ trợ. Các Agent Kit hiện tại
+chọn `plan`, `smol` và `advisor`; `task` vẫn có ý nghĩa với Agent riêng của OMP
+và Agent nào bạn trỏ tới `@task`. AgentKit xuất alias;
 nó không tự điền các lựa chọn model cá nhân này. Chỉ đổi model phiên chính
 không đổi mapping của Agent có role tường minh. `slow` và `plan` là hai role
 riêng dù bạn gán cùng một model.
@@ -243,7 +255,8 @@ khi Agent không có model pin được hỗ trợ. Một extension subagent ri�
 có thể cung cấp `subagents.agentOverrides.<name>.model` hoặc
 `subagents.defaultModel`; chúng thuộc extension đó, không thuộc OMP và không
 phải cấu hình bridge AgentKit tự đọc. Xác định tool nào xử lý lượt gọi trước
-khi áp dụng thứ tự ưu tiên của extension.
+khi áp dụng thứ tự ưu tiên của extension. Xem
+[Các extension Pi được đề xuất](./pi-extensions) cho các phần bổ sung tùy chọn.
 
 Projection Agent cho Grok bỏ frontmatter model không tương thích mà không thêm
 pin thay thế theo vendor. Dùng điều khiển model mà Grok runtime cung cấp;

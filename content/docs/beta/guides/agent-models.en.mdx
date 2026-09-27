@@ -38,7 +38,7 @@ your runtime; Skill flags are not universal `omp` or `ak` CLI flags.
 
 | Runtime | Agent projection and model selection | Where to inspect or configure |
 | --- | --- | --- |
-| Claude Code | Native Agent definitions retain the Kit's `sonnet`, `opus`, `haiku`, `fable`, or `inherit` selector | Active `.claude/agents` definitions or the installed plugin's Agents; model access belongs to Claude Code |
+| Claude Code | Native Agent definitions retain the Kit's `opus`, `haiku`, or `fable` selector | Active `.claude/agents` definitions or the installed plugin's Agents; model access belongs to Claude Code |
 | Codex | Per-Agent TOML pins model and reasoning effort; these can override the shared Kit tier | Active `.codex/agents/*.toml` and AgentKit's registered Agent runtime |
 | Cursor | Kit tiers become concrete Cursor model IDs at projection time | Active `.cursor/agents/*.md`; AgentKit's `agent_models.cursor` configuration |
 | Oh My Pi (OMP) | Kit tiers become role aliases resolved when an Agent is launched | Active `.omp` Agent definitions, `modelRoles`, and `task.agentModelOverrides` |
@@ -60,11 +60,12 @@ it does not require the model vendor suggested by the original tier name.
 
 | Agents | Kit / Claude Code selector | OMP selector |
 | --- | --- | --- |
-| `fullstack-developer`, `researcher`, `debugger`, `docs-manager`, `project-manager`, `journal-writer` | `sonnet` | `@task` |
-| `planner`, `brainstormer`, `code-reviewer`, `code-simplifier` | `opus` | `@plan` |
+| `fullstack-developer`, `ui-ux-designer`, `researcher`, `debugger`, `docs-manager`, `project-manager`, `journal-writer`, `planner`, `brainstormer`, `code-reviewer`, `code-simplifier` | `opus` | `@plan` |
 | `Explore`, `tester`, `git-manager` | `haiku` | `@smol` |
 | `kongming`, `advisor` | `fable` | `@advisor` |
-| `ui-ux-designer` | `inherit` | No model field: inherit the active parent/session model |
+
+No Engineer Agent uses the `sonnet` or `inherit` tier in this release, so none
+selects OMP's `@task` role.
 
 A selector retained in a file is not proof your account can use it. In
 particular, verify access before relying on `fable` counsel. The `@plan` role
@@ -83,8 +84,8 @@ Codex uses per-Agent pins rather than the four OMP roles:
 | `kongming`, `advisor` | `gpt-6-astra` | `low` |
 
 For example, Engineer's `tester` uses the `haiku` Kit tier but is pinned to
-Sol / medium on Codex. Its `ui-ux-designer` is pinned to Luna / max despite the
-shared `inherit` selector. Read the top-level TOML fields, not a `model:` line
+Sol / medium on Codex. Its `fullstack-developer` and `planner` share the `opus`
+tier, but Codex pins them to Luna / max and Sol / medium respectively. Read the top-level TOML fields, not a `model:` line
 quoted inside `developer_instructions`.
 
 AgentKit's Codex integration can expose Agents through the registered local
@@ -102,8 +103,10 @@ if the Agent is unavailable.
 | `fable` | `claude-fable-5-high` |
 | `inherit` | `inherit` |
 
-These are emitted defaults, not a guarantee that every current Cursor account
-has each model. AgentKit accepts `agent_models.cursor.<tier>` overrides in its
+The current Engineer and Marketing Agents use only the `opus`, `haiku`, and
+`fable` rows; the other rows apply to Agents authored with those tiers. These
+are emitted defaults, not a guarantee that every current Cursor account has
+each model. AgentKit accepts `agent_models.cursor.<tier>` overrides in its
 own configuration. User configuration normally lives in
 `~/.agentkit/config.yaml`; project configuration lives in `.agentkit/config.yaml`.
 For example, replace the placeholder below with a model ID available in Cursor:
@@ -111,8 +114,12 @@ For example, replace the placeholder below with a model ID available in Cursor:
 ```yaml
 agent_models:
   cursor:
-    sonnet: YOUR_CURSOR_MODEL_ID
+    opus: YOUR_CURSOR_MODEL_ID
 ```
+
+`ak config prefs set agent_models.cursor.opus YOUR_CURSOR_MODEL_ID` writes the
+same key; add `--scope project` for the project file. See
+[`ak config prefs set`](../reference/cli/config/prefs/set).
 
 The project value applies to a project install; a global install uses user
 configuration. This is a projection-time setting, not a live OMP-style role.
@@ -128,11 +135,12 @@ Marketing Codex package, all 32 emitted Agent roles use `gpt-5.6-luna` with
 in Engineer Kit. This is the package default, not a claim that an advice
 invocation cannot explicitly request a different model.
 
-For tier-based runtimes, use the Marketing Agent's own frontmatter: a name
-shared with Engineer need not have the same tier. For example, Marketing's
-`code-reviewer` uses `sonnet`, which maps to OMP `@task`; Engineer's
-`code-reviewer` uses `opus`, which maps to `@plan`. The same tier-to-role and
-tier-to-Cursor tables apply. See the [Marketing Agent roster](../kits/marketing/agents)
+For tier-based runtimes, use the Marketing Agent's own frontmatter. In this
+release, Marketing's `analytics-analyst`, `Explore`, `git-manager`,
+`lead-qualifier`, `scout`, `scout-external`, and `tester` use `haiku` (OMP
+`@smol`), `kongming` uses `fable` (`@advisor`), and the other Agents use `opus`
+(`@plan`). A name shared with Engineer is not guaranteed to keep the same tier
+across releases. The same tier-to-role and tier-to-Cursor tables apply. See the [Marketing Agent roster](../kits/marketing/agents)
 and inspect the active installed definition when both Kits provide a name.
 
 ## Configure OMP roles
@@ -156,7 +164,9 @@ modelRoles:
 ```
 
 The effort suffix is optional and must be supported by the selected model.
-AgentKit emits the aliases; it does not populate these user model choices.
+The current Kit Agents select `plan`, `smol`, and `advisor`; `task` still
+matters for OMP's own Agents and any Agent you point at `@task`. AgentKit emits
+the aliases; it does not populate these user model choices.
 Changing only the main session's model does not remap Agents using explicit
 roles. `slow` and `plan` are separate roles even when you assign the same model.
 
@@ -244,6 +254,7 @@ Agent has no supported model pin. A separate Pi subagent extension may expose
 `subagents.agentOverrides.<name>.model` or `subagents.defaultModel`; those belong
 to that extension, not OMP and not the AgentKit bridge's automatic config reader.
 Confirm which tool handled the call before applying an extension's precedence.
+See [Recommended Pi extensions](./pi-extensions) for optional Pi additions.
 
 Grok's Agent projection removes incompatible model frontmatter without replacing
 it with a vendor-specific pin. Use the model controls your Grok runtime exposes;
