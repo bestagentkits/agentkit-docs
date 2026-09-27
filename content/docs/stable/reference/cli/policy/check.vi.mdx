@@ -1,0 +1,122 @@
+---
+title: ak policy check
+description: Hỏi policy của project nói gì về việc ghi một đường dẫn, chạy một lệnh hoặc đưa vào một diff.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak policy check` để hỏi policy của project về một thao tác trước khi agent
+hoặc script thực hiện nó. Câu trả lời gồm một outcome, một câu giải thích và mọi
+quy tắc đã khớp, kèm nguồn gốc của từng quy tắc. Hook hoặc job CI có thể xử lý
+chỉ dựa trên mã thoát.
+
+## Cách dùng
+
+```bash
+ak policy check [flags] [-- command args...]
+```
+
+Mô tả thao tác bằng các cờ, và đặt argv của lệnh sau `--`. Argv được dùng
+nguyên văn; quy tắc `command` so khớp theo tên cơ sở (base name) của phần tử đầu
+tiên.
+
+## Tuỳ chọn của lệnh
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--dir <path>` | `.` | Thư mục project chứa `.agentkit/policy.yaml`. |
+| `--path <path>` | Trống | Đường dẫn tệp mà một thao tác sửa sẽ chạm tới. Được đối chiếu với các quy tắc `protected_path`. |
+| `--changed <path>` | Không có | Đường dẫn đã thay đổi trong diff sắp đưa vào. Có thể lặp lại. Được đối chiếu với các quy tắc `required_check` và `diff_class`. |
+| `--ran <check>` | Không có | Một check bạn đã chạy, để check bắt buộc tương ứng được tính là đã đáp ứng. Có thể lặp lại. |
+| `--no-bypass` | `false` | Bỏ qua `AGENTKIT_POLICY_BYPASS`, để quy tắc lẽ ra được kích hoạt vẫn được báo cáo là đã kích hoạt. |
+
+Các cờ dùng chung được mô tả trong [quy ước CLI](../cli-conventions).
+
+Hãy hỏi một câu cho mỗi lần gọi. Nếu các quy tắc về những thao tác khác nhau cùng
+khớp một yêu cầu và bất đồng, engine từ chối trả lời thay vì xếp hạng chúng.
+
+## Ví dụ thường dùng
+
+### Kiểm tra một thao tác ghi tệp
+
+```bash
+ak policy check --path internal/gen/api.pb.go
+```
+
+### Kiểm tra một lệnh
+
+```bash
+ak policy check -- npm install
+```
+
+Nếu một quy tắc `rewrite` khớp, đầu ra trích dẫn lệnh mà quy tắc yêu cầu dùng
+thay thế, chẳng hạn `pnpm install`. Lệnh đó không được chạy thay bạn.
+
+### Kiểm tra một diff trước khi đưa vào
+
+```bash
+ak policy check --changed docs/a.md --changed README.md --ran lint --json
+```
+
+Kết quả liệt kê các check mà diff yêu cầu, từng check đã được báo cáo bằng
+`--ran` hay chưa, và các check mà loại diff đó được phép bỏ qua. Một check bắt
+buộc bạn chưa báo cáo sẽ chuyển outcome thành `warn`, hoặc `block` khi action của
+quy tắc đó là `block`.
+
+## Outcome
+
+| Outcome | Ý nghĩa | Mã thoát |
+| --- | --- | --- |
+| `allow` | Không quy tắc nào phản đối, hoặc bypass đã bỏ qua các quy tắc phản đối. | `0` |
+| `warn` | Một quy tắc phản đối nhưng không dừng thao tác. | `0` |
+| `rewrite` | Một quy tắc chỉ định chương trình khác để chạy. | `0` |
+| `block` | Một quy tắc nói thao tác này không được xảy ra. | `3` |
+| `error` | Engine từ chối trả lời: tài liệu xung đột, hoặc các quy tắc khớp bất đồng. | `4` |
+
+Quy tắc compiled có câu hướng dẫn nguồn đã thay đổi vẫn thực thi; kết quả khớp
+của nó báo cáo độ lệch.
+
+<Callout type="info">
+  Đặt `AGENTKIT_POLICY_BYPASS` thành `1` hoặc `true` sẽ chuyển `block`, `warn` và
+  `rewrite` thành `allow`, đặt `bypassed` thành `true` và liệt kê các quy tắc bị
+  bỏ qua trong `suppressed`. Bypass không bao giờ thay đổi `error`. Hãy dùng
+  `--no-bypass` trong CI để chứng minh một quy tắc lẽ ra đã được kích hoạt.
+</Callout>
+
+## Đầu ra cho tự động hoá
+
+`kind` là `policy.check`. Payload `data` gồm `document` và một `decision` với các
+trường sau:
+
+| Trường | Mô tả |
+| --- | --- |
+| `outcome` | `allow`, `warn`, `rewrite`, `block` hoặc `error`. |
+| `reason` | `no_matching_rule`, `matched_rule`, `document_conflict`, `ambiguous_match` hoặc `bypassed`. |
+| `explanation` | Một câu nêu nguyên nhân. |
+| `matches` | Các quy tắc đã khớp: `rule`, `kind`, `action`, `reason`, `matched`, `origin`, `source`, `stale` và `stale_reason`. |
+| `rewrite` | Lệnh thay thế, khi outcome là `rewrite`. |
+| `required_checks` | Các check mà diff yêu cầu: `check`, `rule`, `action` và `satisfied`. |
+| `skippable_checks` | Các check mà diff được phép bỏ qua: `check` và `rule`. |
+| `conflicts` | Các cặp quy tắc xung đột, khi tài liệu không nạp được. |
+| `bypassed` | `true` khi `AGENTKIT_POLICY_BYPASS` đã bỏ qua quyết định. |
+| `suppressed` | Các quy tắc mà bypass đã bỏ qua. |
+
+Payload vẫn được ghi ngay cả khi lệnh thoát với mã `3` hoặc `4`.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bạn nên làm gì |
+| --- | --- | --- |
+| `0` | Outcome là `allow`, `warn` hoặc `rewrite`. | Hiển thị mọi cảnh báo hoặc đề xuất rewrite cho người dùng. |
+| `1` | Tài liệu policy không tồn tại hoặc không đọc được. | Chạy [`ak policy compile`](./policy-compile) và [`ak policy adopt`](./policy-adopt), hoặc sửa tệp. |
+| `2` | Argument không hợp lệ. | Sửa cách gọi. |
+| `3` | Một quy tắc chặn thao tác này. | Không thực hiện thao tác; đọc lời giải thích. |
+| `4` | Engine từ chối trả lời. | Chạy [`ak policy validate`](./policy-validate) và giải quyết xung đột. |
+
+Hãy hiểu `4` là "policy không thể trả lời", không phải là chặn hay cho phép.
+
+## Lệnh liên quan
+
+- [`ak policy`](./policy)
+- [`ak policy status`](./policy-status)
+- [`ak policy validate`](./policy-validate)

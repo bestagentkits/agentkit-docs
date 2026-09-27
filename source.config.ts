@@ -1,3 +1,4 @@
+import { remarkDesktopRelease } from './scripts/lib/desktop-release.mjs';
 import { defineConfig, defineDocs } from 'fumadocs-mdx/config';
 import { metaSchema, pageSchema } from 'fumadocs-core/source/schema';
 import { remarkMdxMermaid } from 'fumadocs-core/mdx-plugins';
@@ -19,7 +20,7 @@ export const docs = defineDocs({
 
 export default defineConfig({
   mdxOptions: {
-    remarkPlugins: [remarkMdxMermaid],
+    remarkPlugins: [remarkDesktopRelease, remarkMdxMermaid],
     // Code blocks stay dark in both light and dark mode (developer expectation;
     // matches the agentkit.best brand guideline §3.3). Using one dark Shiki
     // theme for both keeps syntax colors AA-legible on the dark code surface.

@@ -14,6 +14,12 @@ export const CLASSIFICATIONS = Object.freeze([
   'collision-blocked',
 ]);
 export const RUNTIMES = Object.freeze(['claude-code', 'codex', 'cursor', 'grok', 'omp', 'pi']);
+// Schema 2 remains readable for historical receipts; schema 3 binds each cohort to source evidence.
+export function channelRuntimes(registry, channel) {
+  if (registry.schemaVersion !== 3) return RUNTIMES;
+  const runtimes = registry.channels?.[channel]?.runtimes;
+  return Array.isArray(runtimes) ? runtimes : [];
+}
 export const CHANNELS = Object.freeze(['stable', 'beta']);
 
 const ROUTED = new Set(['public', 'intentionally-unlisted', 'collision-blocked']);
@@ -329,7 +335,7 @@ function validateKitBindingExtras(binding, snapshot, channel, kitId, version, er
   const record = binding.skillMembers;
   const recordLabel = `${bindingLabel}.skillMembers`;
   if (!exactFields(record, ['path', 'name', 'sha256', 'size', 'runtime', 'archiveSha256'], recordLabel, errors)) return;
-  if (!RUNTIMES.includes(record.runtime)) errors.push(`${recordLabel}.runtime: unsupported runtime`);
+  if (!Object.hasOwn(binding.artifacts ?? {}, record.runtime)) errors.push(`${recordLabel}.runtime: unsupported runtime`);
   const expected = skillMembersNames(channel, version, kitId, record.runtime);
   if (record.name !== expected.name || basename(record.name) !== record.name) errors.push(`${recordLabel}.name: expected ${expected.name}`);
   if (record.path !== expected.path) errors.push(`${recordLabel}.path: expected ${expected.path}`);
@@ -341,13 +347,17 @@ function validateKitBindingExtras(binding, snapshot, channel, kitId, version, er
 export function validateRegistry(registry, channelsIdentity) {
   const errors = [];
   if (!exactFields(registry, ROOT_FIELDS, 'registry', errors)) return errors;
-  if (registry.schemaVersion !== 2) errors.push(`unsupported registry schemaVersion ${registry.schemaVersion}; expected 2`);
+  if (![2, 3].includes(registry.schemaVersion)) errors.push(`unsupported registry schemaVersion ${registry.schemaVersion}; expected 2 or 3`);
   if (!sameArray(registry.classifications, CLASSIFICATIONS)) errors.push('registry classifications must match the exact supported classifications');
-  if (!sameArray(registry.runtimes, RUNTIMES)) errors.push(`registry runtimes must be exactly [${RUNTIMES.join(', ')}]`);
+  if (registry.schemaVersion === 2 && !sameArray(registry.runtimes, RUNTIMES)) errors.push(`registry runtimes must be exactly [${RUNTIMES.join(', ')}]`);
   if (!isObject(registry.inventorySnapshots)) errors.push('registry.inventorySnapshots: must be an object');
   if (!isObject(registry.channels)) errors.push('registry.channels: must be an object');
   if (errors.length && (!isObject(registry.inventorySnapshots) || !isObject(registry.channels))) return errors;
 
+  if (registry.schemaVersion === 3) {
+    const union = sorted(new Set(CHANNELS.flatMap(c => channelRuntimes(registry, c))));
+    if (!sameArray(sorted(Array.isArray(registry.runtimes) ? registry.runtimes : []), union)) errors.push('registry runtimes must equal the union of release-bound cohorts');
+  }
   const referenced = new Set();
   for (const [digest, snapshot] of Object.entries(registry.inventorySnapshots)) {
     if (!HEX_64.test(digest)) errors.push(`inventorySnapshots.${digest}: key must be a canonical SHA-256 digest`);
@@ -362,7 +372,15 @@ export function validateRegistry(registry, channelsIdentity) {
   for (const channel of CHANNELS) {
     const value = registry.channels[channel];
     const label = `channels.${channel}`;
-    if (!exactFields(value, CHANNEL_FIELDS, label, errors)) continue;
+    if (!exactFields(value, registry.schemaVersion === 3 ? [...CHANNEL_FIELDS, 'runtimes', 'runtimeContract'] : CHANNEL_FIELDS, label, errors)) continue;
+    if (registry.schemaVersion === 3) {
+      if (!Array.isArray(value.runtimes) || !value.runtimes.length || value.runtimes.some(r => typeof r !== 'string' || !/^[a-z][a-z0-9-]*$/.test(r)) || new Set(value.runtimes).size !== value.runtimes.length) errors.push(`${label}.runtimes: expected unique runtime IDs from release contract`);
+      if (exactFields(value.runtimeContract, ['path', 'name', 'size', 'sha256'], `${label}.runtimeContract`, errors)) {
+        validateDigestSize(value.runtimeContract, `${label}.runtimeContract`, errors);
+        if (value.runtimeContract.name !== `${value.sourceCommit}.json`) errors.push(`${label}.runtimeContract: name must bind exact source commit`);
+        if (value.runtimeContract.path !== `release-evidence/runtime-contracts/${value.sourceCommit}.json`) errors.push(`${label}.runtimeContract: path must bind exact source commit`);
+      }
+    }
     const expectedIdentity = channelsIdentity?.[channel];
     if (!expectedIdentity) errors.push(`${label}: missing identity in channels.json`);
     else {
@@ -388,10 +406,10 @@ export function validateRegistry(registry, channelsIdentity) {
         errors.push(`${bindingLabel}.artifacts: must be an object`);
         continue;
       }
-      addDifference(errors, `${bindingLabel}.artifacts`, new Set(RUNTIMES), new Set(Object.keys(binding.artifacts)));
+      addDifference(errors, `${bindingLabel}.artifacts`, new Set(channelRuntimes(registry, channel)), new Set(Object.keys(binding.artifacts)));
       const evidenceHashes = new Set();
       const evidencePaths = new Set();
-      for (const runtime of RUNTIMES) {
+      for (const runtime of channelRuntimes(registry, channel)) {
         const artifact = binding.artifacts[runtime];
         const artifactLabel = `${bindingLabel}.artifacts.${runtime}`;
         if (!exactFields(artifact, ARTIFACT_FIELDS, artifactLabel, errors)) continue;
@@ -612,8 +630,19 @@ export async function validateCatalogEvidence({ registry, channelsIdentity, root
     const channelValue = registry.channels?.[channel];
     const channelIdentity = channelsIdentity?.[channel];
     if (!isObject(channelValue) || !isObject(channelIdentity)) continue;
+    if (registry.schemaVersion === 3) {
+      const record = channelValue.runtimeContract;
+      const bytes = await readEvidenceBytes({ root, rootReal, record, expectedPath: `release-evidence/runtime-contracts/${channelValue.sourceCommit}.json`, label: `${channel}.runtimeContract`, errors });
+      if (bytes) {
+        try {
+          const contract = parseJsonStrict(bytes.toString('utf8'));
+          if (!sameArray(contract.kit_packages?.runtimes, channelValue.runtimes)) errors.push(`${channel}: runtime cohort does not match source release contract`);
+          if (!sameArray(sorted(contract.kit_packages?.registrable_kits ?? []), sorted(Object.keys(channelValue.kits ?? {})))) errors.push(`${channel}: Kit cohort does not match source release contract`);
+        } catch (error) { errors.push(`${channel}.runtimeContract: ${error.message}`); }
+      }
+    }
     for (const [kitId, binding] of Object.entries(channelValue.kits ?? {})) {
-      for (const runtime of RUNTIMES) {
+      for (const runtime of channelRuntimes(registry, channel)) {
         const triad = binding.artifacts?.[runtime];
         if (!isObject(triad) || !isObject(triad.archive) || !isObject(triad.manifest) || !isObject(triad.sidecar)) continue;
         const label = `channels.${channel}.kits.${kitId}.artifacts.${runtime}`;
@@ -887,7 +916,7 @@ export async function validateMirrorClosure(registry, root, docsRoot, errors) {
   const mirrorRequired = kitIds.every((kitId) => {
     const stable = registry.channels.stable.kits[kitId];
     const beta = registry.channels.beta.kits[kitId];
-    return beta && RUNTIMES.every((runtime) =>
+    return beta && sameArray(channelRuntimes(registry, 'stable'), channelRuntimes(registry, 'beta')) && channelRuntimes(registry, 'stable').every((runtime) =>
       stable.artifacts[runtime]?.archive?.sha256 === beta.artifacts[runtime]?.archive?.sha256);
   });
   if (!mirrorRequired) return;

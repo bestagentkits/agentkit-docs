@@ -102,15 +102,25 @@ export function promotionBetaRef(promotedFrom) {
   return `refs/tags/docs/${promotedFrom}`;
 }
 
+function isPromotionBetaRef(promotedFrom, ref) {
+  const canonical = promotionBetaRef(promotedFrom);
+  return ref === canonical || (typeof ref === 'string' && ref.startsWith(`${canonical}-correction.`) && /^[1-9][0-9]*$/.test(ref.slice(`${canonical}-correction.`.length)));
+}
+
 export function resolvePromotionBetaCommit(root, promotedFrom, suppliedRef = promotionBetaRef(promotedFrom)) {
   const expected = promotionBetaRef(promotedFrom);
-  if (suppliedRef !== expected) {
-    fail(`Beta source ref must be exactly ${expected}, got ${JSON.stringify(suppliedRef)}`);
-  }
-  const result = git(root, ['rev-parse', '--verify', '--end-of-options', `${expected}^{commit}`], { allowFailure: true });
-  if (result.status !== 0) fail(`cannot resolve exact promotion tag ${JSON.stringify(expected)}`);
+  if (!isPromotionBetaRef(promotedFrom, suppliedRef)) fail(`Beta source ref must be exactly ${expected} or an immutable -correction.N tag`);
+  const result = git(root, ['rev-parse', '--verify', '--end-of-options', `${suppliedRef}^{commit}`], { allowFailure: true });
+  if (result.status !== 0) fail(`cannot resolve exact promotion tag ${JSON.stringify(suppliedRef)}`);
   const commit = result.stdout.toString('utf8').trim();
-  if (!HEX_40.test(commit)) fail(`invalid peeled commit for promotion tag ${JSON.stringify(expected)}`);
+  if (!HEX_40.test(commit)) fail(`invalid peeled commit for promotion tag ${JSON.stringify(suppliedRef)}`);
+  if (suppliedRef !== expected) {
+    const original = resolvePromotionBetaCommit(root, promotedFrom, expected);
+    if (git(root, ['merge-base', '--is-ancestor', original, commit], { allowFailure: true }).status !== 0) fail('corrected Beta snapshot must descend from the original docs tag');
+    const before = JSON.parse(gitPathBytes(root, original, 'channels.json')).beta;
+    const after = JSON.parse(gitPathBytes(root, commit, 'channels.json')).beta;
+    if (JSON.stringify(before) !== JSON.stringify(after)) fail('corrected Beta snapshot must preserve the original channel identity');
+  }
   return commit;
 }
 
@@ -312,7 +322,7 @@ export function validateReceiptShape(receipt, { requireVerified = false } = {}) 
   }
   if (!['git-ref', 'unverified-fixture'].includes(receipt.sourceVerification)) fail('receipt sourceVerification is invalid');
   if (receipt.sourceVerification === 'git-ref') {
-    if (receipt.betaRef !== promotionBetaRef(receipt.promotedFrom) ||
+    if (!isPromotionBetaRef(receipt.promotedFrom, receipt.betaRef) ||
         !HEX_40.test(receipt.betaCommit ?? '') || receipt.betaChannelsTagProof !== receipt.promotedFrom) {
       fail('receipt verified Beta binding is invalid');
     }

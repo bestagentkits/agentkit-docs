@@ -65,8 +65,7 @@ route, or opening `dev` → `main`.
 
 For the exact releases bound to the resulting `channels.stable` and
 `channels.beta` states, enumerate the complete Kit release-asset inventory keyed
-by `(kitId, runtime)` for `claude-code`, `codex`, `cursor`,
-`grok`, `omp`, and `pi`. Each key needs exactly one manifest, archive, and
+by `(kitId, runtime)` from the exact source release contract. Do not infer the expected set from the artifacts that happened to download. Each key needs exactly one manifest, archive, and
 `.sha256` sidecar. Record the exact expected and observed sorted inventories.
 Validate manifest channel, tag, runtime, Kit ID, and archive metadata, then
 verify the archive SHA-256 against all four sources: downloaded bytes, manifest,
@@ -190,7 +189,7 @@ Beta PR (or an immediate follow-up):
    regenerate it from the final diff afterward.
 
 2. **Kit catalog + public skill pages.** The docs-bundle contract v1 does
-   **not** carry Kit inventory. Start with the six-runtime evidence gate above,
+   **not** carry Kit inventory. Start with the release-bound runtime evidence gate above,
    not tag comparison. If verified key inventory or archive hashes differ,
    expand every changed archive and compare public identity, complete
    `SKILL.md` bodies, and all support files, including `skill.yaml`,
@@ -215,13 +214,15 @@ Beta PR (or an immediate follow-up):
    v1 does not carry Desktop provenance, so V0 never flags this section.
    Refresh has three layers:
 
-   - **A. Version and artifact bump.** Update package tables (filenames,
-     bytes, SHA-256) from the target release's `ak-gui_*` assets, and bump
-     `releases/tag/vX.Y.Z` links. Verify hashes against the release page.
+   - **A. Version and artifact bump.** Verify the target `ak-gui_*` binaries
+     against their sidecars and release digests, then persist the exact asset
+     metadata under `release-evidence/desktop/<tag>.json`. Marker-based pages
+     expand from that evidence and `channels.json` at build time; a release-only
+     bump changes no Desktop MDX. Historical snapshots retain legacy replay.
    - **B. Feature and behavior authoring.** New sections (in-app updater,
      native Wails MCP bridge, trust center, in-app announcements, `ak
      config` native window, Windows startup diagnostics, etc.) require
-     human/LLM authoring against release-note evidence, subject to owner
+     human/LLM authoring against implementing source/tests and release artifacts, subject to owner
      approval.
    - **C. Screenshots.** Capture per `public/gui/README.md` from the
      target Desktop build (viewport, theme, state, redaction rules). Not
@@ -313,7 +314,7 @@ flowchart LR
 | `main` | `deploy-production.yml` | docs.agentkit.best |
 
 Production changes only via reviewed `dev` → `main` merge. That PR is blocked
-until both six-runtime Kit matrices are complete and valid and any equal-artifact
+until both release-bound runtime Kit matrices are complete and valid and any equal-artifact
 pair has exact Kit-doc closure equality.
 
 Every release handoff reports Beta and Stable separately: bound tag/SHA,
@@ -387,3 +388,51 @@ must resolve `docs/{promotedFrom}` (or an explicit `--beta-ref` to that exact
 snapshot). After any dry-run that writes Stable, inspect
 `content/docs/stable/reference/release-notes.mdx` (stable channel + stable tag)
 and reset the worktree if the run was only for validation.
+
+
+## Release-bound runtime cohorts
+
+Catalog schema 3 binds each channel to its source commit's `release-contract.json`
+under `release-evidence/runtime-contracts/`. Its `kit_packages.runtimes` defines
+expected packages independently of observed manifests. Schema 2 remains readable
+for historical receipts. AGY/export-only and external orchestration capabilities
+are audited separately; they are not invented registry entries.
+
+## Desktop release data
+
+`source.config.ts` runs `remarkDesktopRelease` before rendering. Desktop pages
+use `AK_DESKTOP_VERSION`, `AK_DESKTOP_FILE_<platform>`, and `<DesktopDownloads />`.
+The transform emits ordinary Markdown nodes, so HTML and processed Markdown use
+the same tag, asset names, sizes and digests. Markdown siblings copy processed
+Markdown unchanged. Search retains the existing title/description/headings-only
+policy; the download table is not a new full-text search surface.
+
+Acquire and verify exact release assets before build. Commit
+`release-evidence/desktop/<tag>.json` and the channel binding. Do not fetch
+`latest` from a browser or during build. A release-only bump must not change
+migrated Desktop MDX. Historical references and screenshot verified-on versions
+remain literal evidence and must not advance automatically.
+
+`promote-docs.mjs` applies Desktop evidence before creating its final receipt.
+Do not perform an unrecorded Layer A edit afterward. Legacy Layer A remains
+available to verify old receipts; migrated pages resolve the destination
+channel's release data without rewriting prose.
+
+## Correct a historical docs snapshot
+
+Do not move the original `docs/<promotedFrom>` tag. An explicit
+`--beta-ref refs/tags/docs/<promotedFrom>-correction.N` may select a reviewed,
+immutable correction commit descended from that original snapshot. The resolver
+requires its Beta channel identity to remain byte-equivalent as parsed JSON.
+Audit every correction against that release's product source and artifacts;
+ancestry alone does not establish feature availability. The promotion receipt
+binds the correction tag and exact commit. Publish the new tag with the
+corresponding reviewed change when publication is authorized.
+
+## Add and retire authoring paths
+
+Legacy `--owner-paths` requests remain modify-only. An explicit `--owner-actions`
+JSON array binds each `modify`, `add`, or `retire` action to exact EN/VI paths.
+Approval and V1 validate the action as well as the path; unrelated new routes,
+Stable/generated files, symlinks and locale mismatches remain rejected. Do not
+invent an `approve REQ` statement from an ordinary implementation instruction.

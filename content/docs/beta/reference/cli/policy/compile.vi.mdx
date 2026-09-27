@@ -1,0 +1,88 @@
+---
+title: ak policy compile
+description: Đề xuất quy tắc policy từ các tệp hướng dẫn của project mà không thay đổi những gì đang được thực thi.
+---
+
+Dùng `ak policy compile` để đọc các tệp hướng dẫn của project và đề xuất một quy
+tắc cho mỗi câu khớp với một dạng đã biết. Các đề xuất được ghi vào
+`.agentkit/policy-candidates.yaml`, tệp mà engine không bao giờ đánh giá. Không
+đề xuất nào có hiệu lực cho đến khi bạn đưa nó vào bằng
+[`ak policy adopt`](./policy-adopt).
+
+## Cách dùng
+
+```bash
+ak policy compile [flags]
+```
+
+Lệnh không nhận argument theo vị trí. Lệnh thay thế mọi đề xuất trước đó và
+không bao giờ ghi `.agentkit/policy.yaml`.
+
+## Tuỳ chọn của lệnh
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--dir <path>` | `.` | Thư mục project chứa `.agentkit/policy.yaml`. |
+| `--source <file>` | `sources` của tài liệu | Tệp hướng dẫn cần đọc, tương đối với thư mục project. Có thể lặp lại. |
+
+Khi không có `--source`, lệnh đọc các `sources` được liệt kê trong tài liệu
+policy đang hoạt động, hoặc `AGENTS.md` và `CLAUDE.md` khi chưa có tài liệu. Tệp
+nguồn không tồn tại sẽ được bỏ qua. Nguồn trỏ ra ngoài project sẽ bị từ chối.
+
+Các cờ dùng chung được mô tả trong [quy ước CLI](../cli-conventions).
+
+## Ví dụ thường dùng
+
+```bash
+ak policy compile
+ak policy compile --source CLAUDE.md --json
+```
+
+## Các dạng câu được nhận diện
+
+Trình biên dịch chỉ hiểu một tập dạng câu khép kín. Ký hiệu danh sách ở đầu dòng
+được bỏ qua, và đường dẫn có thể nằm trong backtick hoặc dấu nháy.
+
+| Dạng hướng dẫn | Quy tắc được đề xuất | Action |
+| --- | --- | --- |
+| `Never edit <path>` (cả `do not`/`don't`, và `modify`, `change`, `write to`) | `protected_path` | `warn` |
+| `<path> is read-only` | `protected_path` | `warn` |
+| `Use <program>, never <other>` (cả `not`, `instead of`) | `command` rewrite `<other>` thành `<program>` | `rewrite` |
+| `Never run <program>` (cả `do not`/`don't`) | `command` | `warn` |
+| `Run <check> after changing <path>` (cả `editing`, `touching`) | `required_check` | `warn` |
+| `After changing <path>, run <check>` | `required_check` | `warn` |
+| `Do not run <check> for docs changes` | `diff_class` | `warn` |
+
+Đường dẫn phải trông giống một đường dẫn, tức là cần có `/`, `.`, `*` hoặc `?`.
+Dạng diff-class chấp nhận `docs`, `documentation`, `markdown`, `test` và `tests`
+(có thể thêm hậu tố `-only`), theo sau là `changes` hoặc `diffs`.
+
+Dòng bắt đầu giống một hướng dẫn (`never`, `do not`, `don't`, `always`, `use`,
+`run`, `after`, `must` hoặc `avoid`) nhưng không khớp dạng nào sẽ được báo cáo là
+không nhận diện được và không tạo đề xuất. Văn bản không bao giờ được biên dịch
+thành `block`.
+
+## Đầu ra cho tự động hoá
+
+`kind` là `policy.compile`. Payload `data` gồm:
+
+| Trường | Mô tả |
+| --- | --- |
+| `candidates` | Đường dẫn tuyệt đối của tệp đề xuất đã được ghi. |
+| `sources` | Các tệp hướng dẫn đã được đọc. |
+| `candidates_found` | Các đề xuất, mỗi mục có `id`, `rule` và `quote` (câu hướng dẫn như đã viết). |
+| `unrecognized` | Các dòng giống quy tắc nhưng không khớp dạng nào: `file`, `line` và `text`. |
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bạn nên làm gì |
+| --- | --- | --- |
+| `0` | Đề xuất đã được ghi, kể cả khi không câu nào khớp dạng. | Xem lại các đề xuất, rồi chấp nhận những đề xuất bạn muốn. |
+| `1` | Không đọc hoặc ghi được một tệp hướng dẫn hay tệp đề xuất. | Kiểm tra đường dẫn nguồn và quyền truy cập tệp. |
+| `2` | Argument không hợp lệ. | Sửa cách gọi. |
+
+## Lệnh liên quan
+
+- [`ak policy`](./policy)
+- [`ak policy adopt`](./policy-adopt)
+- [`ak policy status`](./policy-status)

@@ -1,0 +1,198 @@
+---
+title: Produce beat-synced motion-graphic videos with ak:motion-video
+description: Build a 1080p HyperFrames motion graphic with AI voice-over, captions, SFX, and music cut to the beat, in a named style profile or a per-scene mix, while keeping provider spend and publication separately approved.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:motion-video` to make a 1920×1080, 30 fps motion-graphic video where
+scene cuts land on the music's beats, reveals land on spoken words, and the
+audio mix is measured rather than guessed. The workflow is scripted end to end:
+facts, script, generated audio, forced alignment, beat grid, bar-spliced music,
+timeline and mix, HTML composition, lint and check, render, remux, and social
+encode. It renders through HyperFrames (HTML + GSAP) and does not publish the
+result.
+
+## Choose the motion-video workflow
+
+### Use ak:motion-video when
+
+- You need a launch, release, changelog, feature, or explainer video with
+  voice-over, captions, SFX, and music synced to the beat.
+- You want a restyle of an existing video as a separate project, or a partial
+  rework such as new music, re-timed drops, a re-mix, a re-render, or a social
+  encode.
+- You want one named style profile, or one base style with individual
+  dimensions borrowed from other styles for particular scenes.
+- Every on-screen fact can be traced to a primary source such as release notes,
+  repository docs, or code.
+
+### Choose another workflow when
+
+- You need generative text-to-video footage. Use [`ak:video`](./video).
+- The composition is a React or Remotion project. Use
+  [`ak:remotion`](./remotion).
+- You have a general HyperFrames question or want a plain HTML composition
+  without the beat-sync pipeline. Use [`ak:hyperframes`](./hyperframes).
+- You need talking-head editing. This Skill does not cover it.
+- You want a router across every installed motion or video Skill. Use
+  [`ak:motion-graphics`](./motion-graphics).
+
+## Prepare the production route
+
+Pin the outcome before any file is touched: topic and sources, style, duration,
+voice language, ending, and signature. English voice-over with Vietnamese
+captions is the default. The Skill asks only when the style or the facts source
+is unknown.
+
+The full route also needs:
+
+- The `multix` CLI on `PATH`, configured with its own credentials for Gemini
+  TTS voice, ElevenLabs SFX, ElevenLabs Music composition plans, and ElevenLabs
+  forced alignment. Credentials stay in multix's config; the Skill never prints
+  or copies them into project files, plans, or reports.
+- Node.js to run the project scripts and the pinned
+  `npx --yes hyperframes@0.8.77` commands.
+- `ffmpeg` and `ffprobe` for the audio mix, remux, loudness and black-frame
+  checks, and social encode.
+- Python with NumPy and SciPy for the beat-grid and audio checks, and PyYAML
+  for `scripts/resolve-style.py`.
+- A writable project and enough storage for generated WAV and MP3 audio,
+  snapshots, and 1080p MP4 renders.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:motion-video ...` | Native delivery is the default; explicit plugin delivery is also supported. Full production still depends on multix, provider access, Node, Python, and FFmpeg in the session environment. |
+| Cursor | `/ak:motion-video ...` | Slash invocation is user-verified. Browser, preview, and supporting tool behavior can vary by setup. |
+| Codex | `$ak:motion-video ...` | The Skill uses native Codex discovery. Hook projection is partial; provider, render, and FFmpeg requirements are unchanged. |
+
+Read [Runtime adapters](../../../concepts/runtime-adapters) before assuming the
+same production surface everywhere.
+
+## Run the Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:motion-video "Make a 60-second release video for our v3.4 notes in the glass-keynote style. Use only facts from CHANGELOG.md, English voice-over with Vietnamese captions, and stop after the master render; do not publish"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:motion-video "Make a 60-second release video for our v3.4 notes in the glass-keynote style. Use only facts from CHANGELOG.md, English voice-over with Vietnamese captions, and stop after the master render; do not publish"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:motion-video "Make a 60-second release video for our v3.4 notes in the glass-keynote style. Use only facts from CHANGELOG.md, English voice-over with Vietnamese captions, and stop after the master render; do not publish"
+```
+
+  </Tab>
+</Tabs>
+
+### Pick or mix a style
+
+Every look is a style profile: a compact motion-design grammar for palette,
+typography, layout, material, texture, camera, transitions, pacing, beat
+response, UI choreography, diagrams, character motion, captions, and sound.
+`references/styles/index.yaml` lists about 60 of them. Brand names such as
+Apple, Nike, Linear, or NVIDIA are aliases that lead to a canonical motion
+language (for example, Apple-like leads to `cinematic-product-launch`); the
+output never uses a brand's logos, fonts, or assets.
+
+- **One style:** name it, for example "comic style" for `comic-multiverse`.
+- **Mixed:** keep one base and borrow individual dimensions for particular
+  scenes. `python scripts/resolve-style.py resolve data/style.json --script data/script.json`
+  resolves the mix into a per-scene table that goes into the plan.
+
+Three styles also ship a detailed reference: `comic-multiverse`,
+`glass-keynote`, and `cinematic-product-launch`. The working projects behind
+their demos are not bundled; every new video starts from the Skill's
+composition skeleton plus the resolved style.
+
+## Follow the production stages
+
+1. **Pin the outcome.** Topic, sources, base style and any layers, duration,
+   voice language, ending, and signature are recorded.
+2. **Scaffold the project.** The Skill creates `assets/videos/<slug>/` and a
+   plan under `plans/`, then copies the template scripts, example data files,
+   `hyperframes.json`, and the composition skeleton. A finished edition is never
+   overwritten; a restyle is a new project directory.
+3. **Write facts and script.** Facts come only from primary sources, with a short
+   evidence report before scripting. `data/script.json` holds the scenes and lines.
+4. **Generate and align audio.** multix produces the voice-over, SFX, and music;
+   ElevenLabs forced alignment maps spoken words to timing.
+5. **Fit the beat and arrange music.** `fit-beat-grid.py` reports BPM and a
+   per-bar table; bars are spliced so drops land where the script needs them,
+   and `verify-arrangement.py` checks the splice.
+6. **Build the timeline and mix.** `build-timeline` renders the ducked,
+   loudness-normalized mix; `measure-mix-balance.py` reports music under speech.
+7. **Build and validate the composition.** `index.html` follows the composition
+   contract and the resolved style, then passes `hyperframes lint`, `check`, and
+   scene `snapshot` review.
+8. **Render, remux, and encode.** HyperFrames renders the video, the measured mix
+   is remuxed back in, and an optional social encode produces a smaller file.
+
+## Keep generation, spend, and publishing gated
+
+<Callout type="warn" title="A video brief does not authorize provider spend">
+  Voice, SFX, music, and alignment requests go through multix to Gemini and
+  ElevenLabs. Regenerating scenes or music creates more provider requests. Approve
+  each generation stage under your provider, quota, and billing policy.
+</Callout>
+
+| Work category | Normal boundary |
+| --- | --- |
+| Local mutations | The workflow creates a project directory, plan, data files, generated audio, snapshots, and renders. It does not overwrite a finished edition. |
+| Provider and network effects | multix sends script text and audio to Gemini and ElevenLabs; `npx --yes hyperframes@0.8.77` can fetch the pinned package. |
+| Processes | `hyperframes preview` runs as a tracked background process that is reused for this project and stopped when the session ends. |
+| Publishing and account effects | The Skill produces the file and leaves posting to you. It does not upload, schedule, or post to social accounts. |
+
+Brand aliases select a motion language only. Confirm rights for fonts, images,
+music, voices, and any product visuals, and verify every on-screen claim against
+the collected sources.
+
+## Review outputs and evidence
+
+A project typically contains:
+
+```text
+assets/videos/<slug>/index.html
+assets/videos/<slug>/hyperframes.json
+assets/videos/<slug>/data/script.json
+assets/videos/<slug>/assets/audio/{vo,sfx,music}/
+assets/videos/<slug>/renders/<slug>.mp4
+assets/videos/<slug>/renders/<slug>-social.mp4
+```
+
+The Skill reports measured numbers, not impressions. It is done only when:
+
+- `hyperframes lint` and `check` pass and snapshots of every scene were reviewed.
+- `verify-arrangement.py` reports every segment within ±2 ms, and
+  `measure-mix-balance.py` shows the music about 4–6 dB under speech.
+- `ffprobe` reports 1920×1080, 30 fps, the expected duration, and AAC 48 kHz
+  stereo; loudness is about −14 LUFS with peak at or below −1 dBFS, and
+  blackdetect finds nothing outside fades.
+- `build-timeline` printed no clip, overlap, or missing-word warnings.
+- On-screen facts trace to the sources collected at the start.
+
+## Troubleshoot safely
+
+| Symptom | Safe next step |
+| --- | --- |
+| Runtime cannot find `ak:motion-video` | Confirm target and scope, start a fresh session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+| `multix` is missing or a provider call fails | Stop before generation, keep the script and data files, and fix multix or its own credential config. Do not copy keys into the project. |
+| Alignment warns that aligned words and script tokens differ | Fix the scene's `en` or `say` text, or regenerate that scene's voice-over, then realign. |
+| `verify-arrangement.py` reports drift | Re-fit the beat grid, adjust the arrangement, and re-run the arrangement and timeline steps. |
+| `lint` or `check` fails | Fix the composition against the composition contract before rendering. |
+| Only visuals changed | Re-run `lint`, `check`, `render`, and the remux; audio does not need regeneration. |
+
+Continue with the [Marketing Kit overview](../../marketing),
+[Projects, artifacts, and checkpoints](../../../concepts/projects-artifacts-checkpoints),
+or [Installing kits](../../../guides/installing-kits).

@@ -1,0 +1,119 @@
+---
+title: ak policy
+description: Inspect, compile, adopt, and check a project's executable agent policy.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak policy` to turn the deterministic part of your project's agent
+instructions into rules a machine can answer the same way every time: which
+paths must not be written, which program a command should use, which checks a
+diff requires, and which checks a diff class may skip. Every answer names the
+rules that produced it and where each rule came from.
+
+## Usage
+
+```bash
+ak policy <subcommand> [flags]
+```
+
+| Subcommand | Purpose | Changes files |
+| --- | --- | --- |
+| [`ak policy status`](./policy-status) | List the rules in force and their provenance. | No |
+| [`ak policy check`](./policy-check) | Ask what the policy says about one path, command, or diff. | No |
+| [`ak policy validate`](./policy-validate) | Report conflicting rules and drifted sources, for CI. | No |
+| [`ak policy compile`](./policy-compile) | Propose rules from instruction files. | Writes proposals only |
+| [`ak policy adopt`](./policy-adopt) | Promote named proposals into the active policy. | Writes the active policy |
+
+Every subcommand accepts `--dir <path>` (default `.`) to choose the project
+directory. Shared flags such as `--json`, `--no-interactive`, `--quiet`,
+`--verbose`, and `--yes` are described in [CLI conventions](../cli-conventions).
+
+## Policy files
+
+A project holds two files:
+
+| Path | Evaluated | Holds |
+| --- | --- | --- |
+| `.agentkit/policy.yaml` | Yes | The rules in force. |
+| `.agentkit/policy-candidates.yaml` | Never | Proposals waiting for you to adopt them. |
+
+`ak policy compile` writes only the candidates file. `ak policy adopt` is the one
+command that moves a rule into `.agentkit/policy.yaml`. Both files are written
+with owner-only permissions (`0600`).
+
+## Rule kinds
+
+The document declares `schema_version: 1` and a list of `rules`. Each rule has an
+`id`, a `kind`, a `reason`, a `source`, and an optional `action` (default
+`warn`):
+
+| Kind | Matches on | Allowed actions |
+| --- | --- | --- |
+| `protected_path` | `paths`: file path patterns | `block`, `warn` |
+| `command` | `executables`: program names | `block`, `warn`, `rewrite` (with `rewrite_to`) |
+| `required_check` | `when_changed`: changed-path patterns; lists `checks` | `block`, `warn` |
+| `diff_class` | `when_all_changed`: every changed path; lists `skip_checks` | `warn` |
+
+A rule may only use its own kind's matcher fields. Path patterns use `*` and `?`
+within one segment and `**` across segments, with `/` as the separator. Windows
+separators are normalised and matching is case-sensitive.
+
+A hand-written rule uses `source.origin: declared`. A rule compiled from prose
+uses `source.origin: compiled` and records the file, line, text, and digest it
+came from. A compiled rule can only `warn` or `rewrite`; to make it `block`, edit
+the document yourself and mark it `declared`.
+
+## Typical workflow
+
+```bash
+# Propose rules from AGENTS.md and CLAUDE.md.
+ak policy compile
+
+# Review the proposals, then adopt the ones you want by id.
+ak policy adopt no-curl
+
+# Confirm what is in force and that the document is coherent.
+ak policy status
+ak policy validate --fail-on-stale
+
+# Ask about one operation.
+ak policy check --path internal/gen/api.pb.go
+```
+
+Run `ak policy validate` in CI. A document with any conflicting rules is not
+loaded, so nothing in it is enforced until you fix the conflict.
+
+## Bypass
+
+Setting `AGENTKIT_POLICY_BYPASS` to exactly `1` or `true` suppresses the effect
+of a `block`, `warn`, or `rewrite` decision. The decision is still reported: the
+outcome becomes `allow`, `bypassed` is `true`, and the waived rules are listed.
+The bypass does not apply to a document that failed to load. Pass
+`ak policy check --no-bypass` to ignore the variable and see whether a rule
+would have fired.
+
+<Callout type="warning">
+  A policy prevents mistakes by a cooperating agent. It is not a security
+  boundary: the files live in your working tree, and any process that can set
+  its environment can bypass it. Keep relying on your runtime's sandbox and
+  permission settings for security.
+</Callout>
+
+## Automation output
+
+With `--json`, each subcommand writes a versioned envelope to stdout:
+
+```text
+schema_version: 1
+kind: policy.<subcommand>   (for example, policy.check)
+data: the subcommand's payload
+```
+
+Each subcommand page lists its `data` fields. `check`, `validate`, and `adopt`
+still write their payload when they exit with a non-zero policy code, so you can
+read the explanation.
+
+## Related commands
+
+- [CLI conventions](../cli-conventions)

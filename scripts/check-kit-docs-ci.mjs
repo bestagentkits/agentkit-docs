@@ -127,7 +127,10 @@ export function selectKitDocsCiMode(rows, { manifestPath = DEFAULT_MANIFEST_PATH
     return { mode: 'diff', reason: 'Stable diff with reconciliation manifest change' };
   }
 
-  if (exceptionRows.length) {
+  // A complete promotion transaction may carry exception receipts that already
+  // landed on dev; each one is replayed against its own recorded transaction.
+  const completePromotion = receiptRows.length === 1 && evidenceRows.length === 2;
+  if (exceptionRows.length && !completePromotion) {
     if (exceptionRows.length !== 1) fail('Stable docs exception requires exactly one add-only receipt');
     if (receiptRows.length || evidenceRows.length) fail('Stable docs exception and promotion transaction changes cannot share a Stable diff');
     return {
@@ -147,12 +150,22 @@ export function selectKitDocsCiMode(rows, { manifestPath = DEFAULT_MANIFEST_PATH
   }
   return {
     mode: 'promotion',
-    reason: 'Stable diff with deterministic promotion receipt and source evidence',
+    reason: exceptionRows.length
+      ? 'Stable diff with deterministic promotion receipt, source evidence, and carried exception receipts'
+      : 'Stable diff with deterministic promotion receipt and source evidence',
     receiptPath: receiptRows[0].path,
+    carriedExceptionPaths: exceptionRows.map((row) => row.path).sort(),
   };
 }
 
-function defaultRunValidation({ root, mode, base, receiptPath }) {
+function runValidator(root, args, label) {
+  const result = spawnSync(process.execPath, args, { cwd: root, stdio: 'inherit' });
+  if (result.error) fail(`cannot run ${label} validator: ${result.error.message}`);
+  if (result.signal) fail(`${label} validator terminated by ${result.signal}`);
+  if (result.status !== 0) fail(`${label} validator failed with exit ${result.status}`);
+}
+
+function defaultRunValidation({ root, mode, base, receiptPath, carriedExceptionPaths = [] }) {
   const promotion = mode === 'promotion';
   const exception = mode === 'exception';
   const script = fileURLToPath(new URL(
@@ -166,11 +179,11 @@ function defaultRunValidation({ root, mode, base, receiptPath }) {
     : mode === 'diff'
       ? [script, '--check-diff', base]
       : [script, '--check-history'];
-  const result = spawnSync(process.execPath, args, { cwd: root, stdio: 'inherit' });
-  const label = promotion ? 'promotion' : exception ? 'Stable docs exception' : 'reconciliation';
-  if (result.error) fail(`cannot run ${label} validator: ${result.error.message}`);
-  if (result.signal) fail(`${label} validator terminated by ${result.signal}`);
-  if (result.status !== 0) fail(`${label} validator failed with exit ${result.status}`);
+  runValidator(root, args, promotion ? 'promotion' : exception ? 'Stable docs exception' : 'reconciliation');
+  const exceptionScript = fileURLToPath(new URL('./check-stable-docs-exception.mjs', import.meta.url));
+  for (const carried of carriedExceptionPaths) {
+    runValidator(root, [exceptionScript, '--carried', carried], 'carried Stable docs exception');
+  }
 }
 
 export async function checkKitDocsCi({
@@ -185,7 +198,14 @@ export async function checkKitDocsCi({
   const rows = parseNameStatus(git(root, ['diff', '--name-status', '-z', '--find-renames', resolvedBase, 'HEAD', '--']));
   const route = selectKitDocsCiMode(rows, { manifestPath });
   console.log(`Kit docs CI route: ${route.mode} (${route.reason}); base=${resolvedBase}`);
-  await runValidation({ root: resolve(root), mode: route.mode, base: resolvedBase, rows, receiptPath: route.receiptPath });
+  await runValidation({
+    root: resolve(root),
+    mode: route.mode,
+    base: resolvedBase,
+    rows,
+    receiptPath: route.receiptPath,
+    carriedExceptionPaths: route.carriedExceptionPaths ?? [],
+  });
   return { ...route, base: resolvedBase, rows };
 }
 

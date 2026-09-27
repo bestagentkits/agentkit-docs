@@ -15,6 +15,7 @@ import { digest, sortedUnique, stableJson, withoutKey } from './docs-release-nor
 import {
   isHumanOwnedBetaFile,
   localizedBetaPairViolations,
+  normalizeOwnerDirectedActions,
   normalizeRepoPath,
   validateTargetName,
 } from './docs-release-paths.mjs';
@@ -101,17 +102,18 @@ function validateSuppliedArtifact(expected, supplied, expectedDigest, label) {
   if (expected.sha256 !== expectedDigest) fail(`${label} digest does not match the V0 request`);
 }
 
-function releaseRequestId({ target, ledgerDigest, impactMapDigest, paths = [], ownerDirectedPaths = [] }) {
+function releaseRequestId({ target, ledgerDigest, impactMapDigest, paths = [], ownerDirectedPaths = [], pathActions = [] }) {
   const identity = {
     target,
     ledger: ledgerDigest,
     impactMap: impactMapDigest,
     ...(ownerDirectedPaths.length ? { paths, ownerDirectedPaths } : {}),
+    ...(pathActions.length ? { paths, pathActions } : {}),
   };
   return `REQ-${digest(identity).slice(7, 23).toUpperCase()}`;
 }
 
-export function createApprovalRequest({ ledger, impactMap, target, ownerPaths = [] }) {
+export function createApprovalRequest({ ledger, impactMap, target, ownerPaths = [], ownerActions = [] }) {
   validateLedger(ledger);
   validateImpactMap(impactMap);
   const ledgerDigest = digest(ledger);
@@ -119,6 +121,7 @@ export function createApprovalRequest({ ledger, impactMap, target, ownerPaths = 
   if (impactMap.ledgerDigest !== ledgerDigest || impactMap.channel !== ledger.channel) {
     fail('impact map is not bound to this ledger');
   }
+  if (ownerPaths.length && ownerActions.length) fail('owner paths and owner actions are mutually exclusive');
   const ownerDirectedPaths = sortedUnique(ownerPaths.map((path) => {
     const normalized = normalizeRepoPath(path);
     if (!isHumanOwnedBetaFile(normalized)) fail('owner-directed request paths must be human-owned Beta prose/metadata');
@@ -133,6 +136,10 @@ export function createApprovalRequest({ ledger, impactMap, target, ownerPaths = 
   if (ownerDirectedPaths.length && actionableClaims.length === 0) {
     fail('owner-directed request paths require an actionable release claim');
   }
+  const pathActions = ownerActions.length ? normalizeOwnerDirectedActions(ownerActions) : [];
+  if (pathActions.length && (ledger.channel !== 'beta' || actionableClaims.length === 0)) {
+    fail('owner actions require an actionable Beta request');
+  }
   const blockedClaimIds = ledger.claims.filter((claim) => claim.classification === 'blocked').map((claim) => claim.id);
   const impactPaths = impactMap.pages
     .filter((page) => !['no-change', 'blocked'].includes(page.classification) && page.path)
@@ -140,10 +147,10 @@ export function createApprovalRequest({ ledger, impactMap, target, ownerPaths = 
   const status = actionableClaims.length === 0
     ? (blockedClaimIds.length ? 'blocked' : 'no-op')
     : 'approval-required';
-  const paths = sortedUnique([...impactPaths, ...ownerDirectedPaths]);
+  const paths = sortedUnique([...impactPaths, ...ownerDirectedPaths, ...pathActions.map(({ path }) => path)]);
   const base = {
     schemaVersion: APPROVAL_REQUEST_SCHEMA,
-    requestId: releaseRequestId({ target, ledgerDigest, impactMapDigest, paths, ownerDirectedPaths }),
+    requestId: releaseRequestId({ target, ledgerDigest, impactMapDigest, paths, ownerDirectedPaths, pathActions }),
     status,
     channel: ledger.channel,
     target,
@@ -154,13 +161,14 @@ export function createApprovalRequest({ ledger, impactMap, target, ownerPaths = 
     blockedClaimIds: blockedClaimIds.sort(),
     paths,
     ...(ownerDirectedPaths.length ? { ownerDirectedPaths } : {}),
+    ...(pathActions.length ? { pathActions } : {}),
   };
   return { ...base, requestDigest: digest(base) };
 }
 
 function validateReleaseApprovalRequest(request) {
   if (!request || request.schemaVersion !== APPROVAL_REQUEST_SCHEMA) fail('unsupported approval-request schema');
-  const allowed = ['schemaVersion', 'requestId', 'status', 'channel', 'target', 'source', 'ledgerDigest', 'impactMapDigest', 'claimIds', 'blockedClaimIds', 'paths', 'ownerDirectedPaths', 'requestDigest'];
+  const allowed = ['schemaVersion', 'requestId', 'status', 'channel', 'target', 'source', 'ledgerDigest', 'impactMapDigest', 'claimIds', 'blockedClaimIds', 'paths', 'ownerDirectedPaths', 'pathActions', 'requestDigest'];
   exactKeys(request, allowed, 'approval request');
   if (!['approval-required', 'no-op', 'blocked'].includes(request.status)) fail('approval request status is invalid');
   if (!['beta', 'stable'].includes(request.channel)) fail('approval request channel is invalid');
@@ -179,6 +187,19 @@ function validateReleaseApprovalRequest(request) {
   }
   if (request.ownerDirectedPaths !== undefined && ownerDirectedPaths.length === 0) {
     fail('approval request ownerDirectedPaths must be omitted when empty');
+  }
+  const pathActions = request.pathActions ?? [];
+  if (!Array.isArray(pathActions) || (request.pathActions !== undefined && pathActions.length === 0)) fail('approval request pathActions is invalid');
+  if (pathActions.length && ownerDirectedPaths.length) fail('approval request cannot mix legacy ownerDirectedPaths and pathActions');
+  if (pathActions.length) {
+    const normalizedActions = normalizeOwnerDirectedActions(pathActions.reduce((groups, { action, path }) => {
+      const group = groups.find((value) => value.action === action) ?? (groups.push({ action, paths: [] }), groups.at(-1));
+      group.paths.push(path);
+      return groups;
+    }, []));
+    if (!equal(pathActions, normalizedActions)) fail('approval request pathActions must be sorted, unique, and locale-paired');
+    if (request.channel !== 'beta' || request.status !== 'approval-required') fail('approval request pathActions require an actionable Beta request');
+    for (const { path } of pathActions) if (!request.paths.includes(path)) fail('approval request pathActions must be included in paths');
   }
   if (![...request.claimIds, ...request.blockedClaimIds].every((id) => CLAIM_ID.test(id))) fail('approval request claim ID is invalid');
   if (request.claimIds.some((id) => request.blockedClaimIds.includes(id))) fail('approval request claim sets overlap');
@@ -204,6 +225,7 @@ function validateReleaseApprovalRequest(request) {
     impactMapDigest: request.impactMapDigest,
     paths: request.paths,
     ownerDirectedPaths,
+    pathActions,
   });
   if (request.requestId !== expectedRequestId) fail('approval request ID is forged or stale');
   if (request.requestDigest !== digest(withoutKey(request, 'requestDigest'))) fail('approval request digest is forged or stale');
@@ -253,7 +275,10 @@ export function validateDurableApprovalRecord(approval, options = {}) {
   exactKeys(scope, ['paths', 'actions'], 'scope');
   if (!Array.isArray(scope.paths) || !scope.paths.length || !equal(scope.paths, sortedUnique(scope.paths))) fail('scope.paths must be non-empty, sorted, and unique');
   for (const path of scope.paths) validateEvidencePath(path, 'scope path');
-  if (!equal(scope.actions, ['modify'])) fail('scope.actions must be exactly ["modify"]');
+  if (!Array.isArray(scope.actions) || !equal(scope.actions, sortedUnique(scope.actions)) || !scope.actions.length
+    || !scope.actions.every((action) => ['modify', 'add', 'retire'].includes(action))) {
+    fail('scope.actions must be sorted non-empty actions from modify, add, retire');
+  }
 
   const approver = object(approval.approver, 'approver');
   exactKeys(approver, ['login', 'kind'], 'approver');
@@ -312,6 +337,8 @@ export function validateApprovalBinding(request, approval, options = {}) {
   if (approval.evidence.request.requestId !== request.requestId) fail('approval request ID does not match request');
   if (!equal(approval.claimIds, request.claimIds)) fail('approval claim IDs do not match request');
   if (!equal(approval.scope.paths, request.paths)) fail('approval paths do not match request');
+  const requestActions = sortedUnique(['modify', ...(request.pathActions ?? []).map(({ action }) => action)]);
+  if (!equal(approval.scope.actions, requestActions)) fail('approval actions do not match request');
   if (!request.paths.every(isHumanOwnedBetaFile)) fail('V1 request contains a non-prose Beta path');
 
   const expectedPrefix = `plans/releases/${request.target}/`;
@@ -347,6 +374,7 @@ export function validateApprovalBinding(request, approval, options = {}) {
       impactMap: artifacts.impactMap.value,
       target: request.target,
       ownerPaths: request.ownerDirectedPaths ?? [],
+      ownerActions: request.pathActions ?? [],
     });
     if (!equal(expectedRequest, request)) fail('approval request scope is not derived from the bound impact map and owner-directed paths');
   }

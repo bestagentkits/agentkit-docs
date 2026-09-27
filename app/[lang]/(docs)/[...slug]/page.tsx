@@ -11,10 +11,15 @@ import { getBreadcrumbItems } from 'fumadocs-core/breadcrumb';
 import { notFound, redirect } from 'next/navigation';
 import { getMDXComponents } from '@/components/mdx';
 import { BetaBanner } from '@/components/beta-banner';
+import {
+  engineerStartLinks,
+  showsEngineerStartLinks,
+} from '@/lib/product-navigation';
 import { channelFromSlug } from '@/lib/channels';
 import { i18n } from '@/lib/i18n';
 import { localePath } from '@/lib/locale-path';
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { createDocsRelativeLink } from '@/lib/docs-relative-link';
 import { docsPageMetadata } from '@/lib/metadata';
 import { gitConfig } from '@/lib/shared';
@@ -58,6 +63,26 @@ export default async function Page(props: PageProps<'/[lang]/[...slug]'>) {
     ? source.getPage(['stable', ...params.slug.slice(1)], params.lang) !== undefined
     : false;
 
+  // Scoped start links. Rendered only on the channel home and the Engineer
+  // landing, from the descriptors in `lib/product-navigation.ts`, and resolved
+  // against this locale's and channel's own source tree: a destination that
+  // does not exist in the reader's scope is dropped (and reported through the
+  // navigation contract test), never answered by another locale's or channel's
+  // page. The block is navigation chrome, so it is intentionally not part of
+  // the page's exported Markdown.
+  const route = (params.slug ?? []).slice(1).join('/');
+  const startLinks =
+    channel !== null && showsEngineerStartLinks(route)
+      ? engineerStartLinks({
+          locale: params.lang,
+          channel,
+          currentRoute: route,
+          exists: (candidate) =>
+            source.getPage([channel, ...candidate.split('/')], params.lang) !==
+            undefined,
+        })
+      : null;
+
   return (
     <main className="contents">
       <DocsPage
@@ -88,6 +113,25 @@ export default async function Page(props: PageProps<'/[lang]/[...slug]'>) {
             githubUrl={`https://github.com/${gitConfig.user}/${gitConfig.repo}/blob/${gitConfig.branch}/content/docs/${page.path}`}
           />
         </div>
+        {startLinks && startLinks.items.length > 0 && (
+          <nav aria-label={startLinks.ariaLabel} className="my-6">
+            <p className="mb-2 font-mono text-xs font-medium uppercase tracking-[0.09em] text-fd-muted-foreground">
+              {startLinks.title}
+            </p>
+            <ul className="flex flex-wrap gap-2">
+              {startLinks.items.map((item) => (
+                <li key={item.id}>
+                  <Link
+                    href={item.href}
+                    className="inline-flex rounded-md border px-2.5 py-1 text-sm font-medium text-fd-primary transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
+                  >
+                    {item.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        )}
         <DocsBody>
           <MDX
             components={getMDXComponents({

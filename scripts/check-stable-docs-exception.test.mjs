@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import {
+  checkCarriedStableDocsException,
   checkStableDocsException,
   createStableDocsExceptionReceipt,
   stableDocsExceptionReceiptDigest,
@@ -132,5 +133,28 @@ test('canonical digest and base binding are fail closed', async () => {
   await assert.rejects(
     () => checkStableDocsException({ root: fixture.root, base: wrongBase, receiptPath: RECEIPT }),
     /receipt base .* does not match/,
+  );
+});
+
+test('carried receipt replays its original transaction after later Stable changes', async () => {
+  const fixture = await makeFixture();
+  await writeException(fixture);
+  // A later promotion rewrites Stable; the carried receipt still checks against its own base.
+  await write(fixture.root, 'channels.json', '{"stable":{"tag":"v1.1.0"},"beta":{"tag":"v1.1.0-beta.1"}}\n');
+  await write(fixture.root, `content/docs/stable/${ROUTE}.en.mdx`, '# Promoted\n');
+  commit(fixture.root, 'later promotion');
+  const result = await checkCarriedStableDocsException({ root: fixture.root, receiptPath: RECEIPT });
+  assert.equal(result.base, fixture.base);
+  assert.deepEqual(result.receipt.routes, [ROUTE]);
+});
+
+test('carried receipt rejects bytes changed after the commit that added it', async () => {
+  const fixture = await makeFixture();
+  const receipt = await writeException(fixture);
+  await write(fixture.root, RECEIPT, `${JSON.stringify({ ...receipt, routes: ['guides/other'] }, null, 2)}\n`);
+  commit(fixture.root, 'mutate receipt');
+  await assert.rejects(
+    checkCarriedStableDocsException({ root: fixture.root, receiptPath: RECEIPT }),
+    /carried receipt changed after it was added/,
   );
 });

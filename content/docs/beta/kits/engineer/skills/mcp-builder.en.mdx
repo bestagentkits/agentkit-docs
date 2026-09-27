@@ -1,32 +1,36 @@
 ---
 title: Build an MCP server with ak:mcp-builder
-description: Research an external API, design agent-centered tools, implement a server, and verify it with ak:mcp-builder.
+description: Build, upgrade, test, and publish MCP servers on the 2026-07-28 protocol with the v2 TypeScript and Python SDKs, using ak:mcp-builder.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
 Use `ak:mcp-builder` to turn an external service or API into an MCP server whose
-tools support complete agent workflows. The Skill guides research, tool and
-schema design, Python or TypeScript implementation, build checks, and a
-read-only evaluation suite.
+tools support complete agent workflows. The Skill targets MCP spec revision
+`2026-07-28` with the v2 SDKs, TypeScript `@modelcontextprotocol/server` and
+Python `mcp` (`MCPServer`), and guides tool design, one complete tool at a time,
+authorization, client-driven checks, a read-only evaluation suite, and optional
+MCP Registry publishing.
 
-## Choose ak:mcp-builder for a new tool surface
+## Choose ak:mcp-builder for a server and its tool surface
 
 ### Use ak:mcp-builder when
 
 - You are creating a new MCP server or extending its tool or resource surface.
+- You are migrating a v1 SDK server to v2 or reviewing a server's tool surface.
 - An API needs agent-friendly workflows rather than one wrapper per endpoint.
-- You need bounded responses, pagination, actionable errors, and accurate tool
-  effect annotations.
+- You need bounded responses, pagination, actionable errors, structured output,
+  and accurate tool effect annotations.
 - You want realistic evaluations that test whether an LLM can use the server.
+- You want to package the server and publish it to the MCP Registry.
 
 ### Choose another workflow when
 
-- The server already exists and you only need discovery or execution.
-  [`ak:use-mcp`](./use-mcp) is no longer packaged. Use MCP tools already visible
-  in the current session, or [`ak:agent-browser`](./agent-browser) for browser
-  automation.
+- The server already exists and you only need to configure a client or call it.
+  This Skill does not cover MCP clients. [`ak:use-mcp`](./use-mcp) is no longer
+  packaged; use MCP tools already visible in the current session, or
+  [`ak:agent-browser`](./agent-browser) for browser automation.
 - You need to expose an existing codebase through a CLI or MCP surface. Consider
   `ak:agentize` before starting a new integration.
 - You lack official API documentation, test access, or a safe way to verify
@@ -34,11 +38,18 @@ read-only evaluation suite.
 
 ## Prepare the integration
 
-Provide the service or API, intended user workflows, preferred implementation
-language, transport, authentication model, permissions, rate limits, expected
-data volume, and allowed external effects. Expect network research against the
-current MCP specification, SDK documentation, and the service's complete API
-documentation.
+Provide the service or API, the user task, the first tool's inputs, output
+shape, side effects, and authentication, plus the preferred language, transport,
+permissions, rate limits, expected data volume, and allowed external effects.
+The run inspects the project's language, SDK version, and transport first, and
+reads only the upstream API sections that the first tool needs.
+
+- TypeScript v2 servers need Node 20 or later, ESM, and `zod` ^4.2.
+- Python v2 servers use `mcp>=2.2,<3`. If a project cannot migrate yet, the
+  migration guidance pins `mcp>=1.28,<2`.
+- MCP Inspector 2.x needs Node 22.19 or later.
+- The evaluation harness installs `anthropic>=0.69.0` and `mcp>=2.2,<3` from
+  its bundled requirements and needs `ANTHROPIC_API_KEY`.
 
 | Runtime | Invocation | Availability boundary |
 | --- | --- | --- |
@@ -74,63 +85,108 @@ $ak:mcp-builder "Build a TypeScript MCP server for the Acme tickets API with rea
   </Tab>
 </Tabs>
 
-Python implementations use FastMCP, Pydantic validation, type hints, and async
-I/O. TypeScript implementations use the MCP SDK, strict TypeScript, Zod schemas,
-explicit descriptions, and a build that emits runnable JavaScript. Stdio fits
-local subprocess use; remote HTTP or SSE needs separate server lifecycle,
-network security, and deployment decisions.
+TypeScript servers use `@modelcontextprotocol/server` v2 with Zod v4 schemas
+imported from `zod/v4`. Python servers use `MCPServer` from the official `mcp` v2
+package, with type hints and Pydantic `Field` constraints; the standalone
+`fastmcp` 4.x framework is separate, and one server should not mix the two
+import styles. The default transport is stdio for local single-user servers and
+Streamable HTTP for remote or multi-user servers. New servers never start on the
+deprecated HTTP+SSE transport.
+
+### Understand the 2026-07-28 protocol baseline
+
+The Skill targets `2026-07-28` unless the project pins an older client base. The
+v2 SDKs serve both protocol eras from one server, so 2025-era clients still
+work. Server-relevant changes include:
+
+- A stateless core: no `initialize` handshake or `Mcp-Session-Id`, a required
+  `server/discover`, and tool lists that vary only by the authenticated
+  principal, never by hidden session state.
+- Multi round-trip requests replace server-initiated elicitation, sampling, and
+  roots: the server returns an `input_required` result and the client retries
+  the same call with the answers.
+- Deprecated for new designs: sampling, roots, the logging capability, Dynamic
+  Client Registration, and the HTTP+SSE transport.
+
+To migrate a v1 server, TypeScript uses
+`npx @modelcontextprotocol/codemod@latest v1-to-v2 .` and then fixes each
+`@mcp-codemod-error` marker. Python moves from
+`from mcp.server.fastmcp import FastMCP` to `from mcp.server import MCPServer`.
+Push elicitation calls fail on 2026-era connections and must move to the
+multi round-trip helpers. The Skill upgrades a v1 SDK only when you ask or a
+required feature needs it.
 
 ## Understand the build stages
 
-1. **Research the protocol and service.** Read current official MCP and SDK
-   guidance plus authentication, endpoints, schemas, pagination, errors, and
-   rate limits for the target API.
-2. **Plan agent workflows.** Select high-value tasks, shared API utilities,
-   response formats, truncation behavior, and failure handling.
-3. **Implement infrastructure and tools.** Centralize authentication, requests,
-   pagination, formatting, cleanup, and input validation before adding tools.
-4. **Annotate effects accurately.** Set read-only, destructive, idempotent, and
-   open-world hints from behavior, while treating them as UX hints rather than
-   security enforcement.
-5. **Build and test.** Compile or type-check, verify imports, exercise sample
-   calls through a client, and avoid launching a long-running stdio server as a
-   blocking foreground command.
-6. **Create evaluations.** Produce ten independent, stable, complex questions
-   solvable with read-only, non-destructive operations, verify their answers,
-   and run the harness when authorized.
+1. **Define the task and first tool contract.** The run records inputs, output
+   shape, side effects, and authentication before it chooses infrastructure.
+2. **Implement one complete tool.** It builds one path from validated input
+   through authorized upstream calls to bounded, structured output: a
+   constrained input schema, `outputSchema` with `structuredContent`, accurate
+   annotations, actionable `isError` results, timeouts, and pagination.
+3. **Authorize and confirm effects.** Annotations are hints, not enforcement;
+   every operation is authorized server-side. Destructive actions are confirmed
+   through elicitation. A client that cannot prompt gets a refusal until an
+   explicit confirmation argument arrives, which counts only as the model's
+   claim, not proof of user consent.
+4. **Verify with a real client.** It type-checks or import-checks the server,
+   then drives it with the MCP Inspector CLI or an SDK client in tests: valid
+   calls, invalid input, upstream failures, pagination, and, over HTTP, `401`,
+   `403`, and foreign `Origin` responses.
+5. **Create evaluations.** It writes ten independent, stable, read-only
+   questions with single verifiable answers, solves each through the server,
+   and runs `scripts/evaluation.py` when authorized.
+6. **Expand and publish only on request.** It adds tools only as the requested
+   workflow needs them, re-runs checks after each change, and publishes to a
+   registry only when you ask.
 
 ## Keep credentials, costs, and writes controlled
 
-<Callout type="warn" title="Research and evaluation can reach external systems">
+<Callout type="warn" title="Research, evaluation, and publishing reach external systems">
   Obtain approval before using credentials, calling live or chargeable APIs,
   creating remote resources, running mutating tools, deploying a remote server,
-  or sending project data to an evaluation model. Tool annotations never replace
-  authorization checks.
+  sending project data to an evaluation model, or publishing to a registry.
+  Tool annotations never replace authorization checks.
 </Callout>
 
-Package installation writes dependencies to disk and can download from package
-registries. API research and integration tests use network access. The bundled
-evaluation harness requires `ANTHROPIC_API_KEY`, calls a selected Claude model
-for every question and tool turn, connects to the target MCP server, and can
-therefore consume model tokens, API quotas, time, and provider charges. Keep
+Credentials stay in environment variables or OAuth tokens validated for this
+server. The Skill never passes client tokens upstream or places secrets in tool
+output. Package installation writes dependencies to disk and can download from
+package registries. API research and integration tests use network access.
+
+The bundled evaluation harness calls a Claude model for every question and tool
+turn and connects to the target MCP server, so it can consume model tokens, API
+quotas, time, and provider charges. Its default model is `claude-opus-5-5`; pass
+`-m <model>` to choose another. It supports `stdio` and `http` transports, keeps
+`sse` only for legacy servers, starts and stops stdio servers itself, and does
+not start an HTTP server. Stop any HTTP server you started for the run. Keep
 evaluation tasks read-only and use safe fixtures where possible.
+
+The MCP Registry is still in preview. Publishing is outward-facing and names are
+hard to reclaim: the package itself is published first, then `server.json`
+metadata through `mcp-publisher`, with an ownership proof for each package type.
 
 ## Verify outputs and evidence
 
 A complete implementation should provide:
 
 - Server code, dependency and compiler configuration, and a documented startup path.
-- Focused workflow tools with strict schemas, descriptions, examples, and
-  accurate effect annotations.
+- Focused workflow tools with strict schemas, descriptions, structured output,
+  and accurate effect annotations.
 - Shared request, pagination, formatting, timeout, error, and cleanup utilities.
-- Build or syntax-check results plus client-observed sample calls.
+- Type-check or import-check results plus client-observed calls from the MCP
+  Inspector or SDK client tests.
 - Ten verified evaluation pairs in XML when evaluation scope is requested.
 - An optional Markdown evaluation report with accuracy, duration, tool-call
   counts, per-task answers, summaries, and tool feedback.
-- Remaining authentication, rate-limit, deployment, or permission risks.
+- A `server.json` and published package only when publishing was requested.
+- Working tools, observed client results, and missing or unverified
+  capabilities, plus remaining authentication, rate-limit, deployment, or
+  permission risks.
 
-Do not treat a server process merely waiting on stdio as a successful test.
-Verify it through a managed client or evaluation harness and confirm cleanup.
+Registration alone is not completion. Do not treat a server process merely
+waiting on stdio as a successful test. Verify it through a managed client or
+evaluation harness and confirm cleanup.
 
 ## Troubleshoot and limits
 
@@ -139,10 +195,11 @@ Verify it through a managed client or evaluation harness and confirm cleanup.
 | The server appears to hang | It may be correctly waiting for protocol input; stop the foreground run and test through a managed client or bounded timeout. |
 | Responses overwhelm context | Add filtering, pagination, reasonable defaults, a character limit, and explicit truncation guidance. |
 | A tool fails authentication | Verify credential presence and audience without printing secrets; do not bypass authorization. |
+| Push elicitation fails after an upgrade | Replace `ctx.elicit` or `elicitInput` with the SDK's multi round-trip helpers; push calls fail on 2026-era connections. |
 | Evaluation accuracy is low | Inspect tool names, schemas, descriptions, errors, pagination, and the per-task feedback before adding more tools. |
-| Remote transport fails | Confirm the separately running server, URL, headers, certificates, and network access. |
+| Remote transport fails | Confirm the separately running server, URL, headers, certificates, network access, and `Origin` and `Host` validation. |
 
 The Skill is guidance, not a fixed generator: exact project files depend on the
-chosen language, API, and existing repository. Live documentation can evolve,
-so implementation details must be verified during the run. The two release
-snapshots used for this page contain the same builder workflow and harness.
+chosen language, API, and existing repository. The protocol revision, SDK
+versions, and registry schema can change, so verify them against the live
+specification and installed packages during the run.

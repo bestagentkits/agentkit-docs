@@ -1,9 +1,33 @@
 import { docs } from 'collections/server';
 import { loader, type LoaderPlugin } from 'fumadocs-core/source';
+import { normalizeChannelRootMeta } from './channel-metadata.mjs';
 import { rewriteCliReferenceLinks } from './cli-reference-links';
 import { resolveDocsRelativeHref } from './relative-href';
 import { i18n } from './i18n';
 import { docsContentRoute, docsImageRoute, docsRoute } from './shared';
+
+// The channel root meta files are copied verbatim by the whole-copy promotion
+// pipeline, so a promoted Stable root still carries the Beta label it was
+// copied from. Derive the label from the real source path instead: navigation
+// breadcrumbs and search-result breadcrumbs read this metadata, and Stable
+// content must not be hand-edited. See `lib/channel-metadata.mjs`.
+function normalizeChannelRootMetadata(): LoaderPlugin {
+  return {
+    name: 'agentkit:normalize-channel-root-metadata',
+    enforce: 'post',
+    transformStorage({ storage }) {
+      for (const path of storage.getFiles()) {
+        const file = storage.read(path);
+        if (file?.format !== 'meta') continue;
+
+        const normalized = normalizeChannelRootMeta(path, file.data);
+        if (!normalized) continue;
+
+        storage.write(path, { ...file, data: normalized });
+      }
+    },
+  };
+}
 
 function hideUnapprovedGeneratedContent(): LoaderPlugin {
   return {
@@ -25,7 +49,7 @@ export const source = loader({
   baseUrl: docsRoute,
   i18n,
   source: docs.toFumadocsSource(),
-  plugins: [hideUnapprovedGeneratedContent()],
+  plugins: [normalizeChannelRootMetadata(), hideUnapprovedGeneratedContent()],
 });
 
 // The OG-image and raw-markdown route handlers live under the `[lang]` segment,

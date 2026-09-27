@@ -19,15 +19,18 @@ async function main() {
   }
 
   const result = await inspectStaticAssets(outDir);
-  if (!result.searchAsset) {
-    throw new Error('static search asset not found at out/api/search');
-  }
-
   const largest = [...result.files].sort((a, b) => b.size - a.size).slice(0, 10);
   console.error(`check-static-assets: ${result.files.length} files`);
+  console.error('check-static-assets: search shards:');
+  for (const shard of result.searchShards) {
+    console.error(
+      `  ${formatMebibytes(shard.size).padStart(10)}  ${shard.path}${shard.missing ? ' (missing)' : ''}`,
+    );
+  }
   console.error(
-    `check-static-assets: search ${formatMebibytes(result.searchAsset.size)} / ` +
-      `${formatMebibytes(result.searchAssetBudgetBytes)} budget`,
+    `check-static-assets: search total ${formatMebibytes(result.searchBytes)} / ` +
+      `${formatMebibytes(result.searchAssetBudgetBytes)} budget ` +
+      `(largest shard ${formatMebibytes(result.maxSearchShardBytes)})`,
   );
   console.error('check-static-assets: largest assets:');
   for (const file of largest) {
@@ -38,9 +41,24 @@ async function main() {
   if (result.tooManyFiles) {
     failures.push(`${result.files.length} files exceed the Paid Workers limit of ${result.maxFiles}`);
   }
+  for (const shard of result.missingSearchShards) {
+    failures.push(`${shard.path} is missing; every locale/channel scope must export its own shard`);
+  }
+  if (result.legacySearchAsset) {
+    failures.push(
+      `api/search is still emitted as a single combined asset ` +
+        `(${formatMebibytes(result.legacySearchAsset.size)}); the scoped shards replace it`,
+    );
+  }
+  for (const file of result.unexpectedSearchAssets) {
+    failures.push(
+      `${file.path} is not one of the four scoped search shards ` +
+        `(${formatMebibytes(file.size)}); only /api/search/{en|vi}/{stable|beta} may ship`,
+    );
+  }
   if (result.searchOverBudget) {
     failures.push(
-      `api/search is ${formatMebibytes(result.searchAsset.size)}; ` +
+      `search shards total ${formatMebibytes(result.searchBytes)}; ` +
         `budget is ${formatMebibytes(result.searchAssetBudgetBytes)}`,
     );
   }

@@ -1,18 +1,24 @@
 ---
 title: ak config prefs unset
-description: Remove one scoped hook, journal.auto, worktree.root, or agent model preference, understand fallback behavior, and recover from the reported config backup.
+description: Remove one scoped hook, journal.auto, worktree.root, agent model, or semantic_decision preference, understand fallback behavior, and recover from the reported config backup.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
 Use `ak config prefs unset` to remove an explicit `hooks.<name>` toggle, the
-`journal.auto` leaf, the `worktree.root` leaf, or one
-`agent_models.<runtime>.<tier>` override from one config scope. The
+`journal.auto` leaf, the `worktree.root` leaf, one
+`agent_models.<runtime>.<tier>` override, or one `semantic_decision` leaf from
+one config scope. The
 preference then inherits the value from the other scope when one exists, or
 uses its built-in default (`journal.auto` defaults to `true`; `worktree.root`
 defaults to unset, so `ak:worktree` falls back to `WORKTREE_ROOT` and the
 built-in location chain; an agent model override falls back to that adapter's
 built-in catalog default).
+
+`semantic_decision` does not follow that precedence. Removing the user
+`semantic_decision.enabled` returns it to the default `false`, which disables the
+provider. Removing a project `semantic_decision` restriction restores the user
+policy for that project; it never grants consent.
 
 ## Usage
 
@@ -24,8 +30,11 @@ The command requires exactly one positional argument. The key must be one of
 `hooks.<name>` (where `<name>` is a lowercase kebab-case hook script name),
 the exact literal `journal.auto`, the exact literal `worktree.root`, or
 `agent_models.<runtime>.<tier>` where `<runtime>` is the closed set `cursor`
-and `<tier>` is one of `inherit`, `sonnet`, `opus`, `fable`, or `haiku`. It
-cannot remove credentials or values from other config sections.
+and `<tier>` is one of `inherit`, `sonnet`, `opus`, `fable`, or `haiku`, or
+`semantic_decision.<leaf>` where `<leaf>` is `enabled`, `provider`, `model`,
+`timeout_ms`, or `consumers.<consumer>` for `domain-routing`,
+`fix-complexity`, or `orchestration-risk`. It cannot remove credentials or
+values from other config sections.
 
 ## Command flag
 
@@ -50,6 +59,7 @@ ak config prefs unset hooks.simplify-gate
 ak config prefs unset journal.auto
 ak config prefs unset worktree.root
 ak config prefs unset agent_models.cursor.sonnet
+ak config prefs unset semantic_decision.enabled --scope user
 ```
 
 Unset only the current project's preference:
@@ -59,6 +69,7 @@ ak config prefs unset hooks.simplify-gate --scope project
 ak config prefs unset journal.auto --scope project
 ak config prefs unset worktree.root --scope project
 ak config prefs unset agent_models.cursor.sonnet --scope project
+ak config prefs unset semantic_decision.enabled --scope project
 ```
 
 The command does not search parent directories for a project config. Run it
@@ -67,8 +78,9 @@ from the project directory whose `.agentkit/config.yaml` you intend to edit.
 ## Files, backups, and schema boundary
 
 When the selected key exists, AgentKit backs up the previous config under the
-AgentKit home, removes only that leaf, prunes an empty `hooks`, `journal`, or
-`worktree` section, and atomically rewrites the config. The success output
+AgentKit home, removes only that leaf, prunes a parent section such as `hooks`, `journal`,
+`worktree`, or `semantic_decision` that the removal leaves empty, and
+atomically rewrites the config. The success output
 reports the backup path. Other keys, comments, ordering, and the editor
 directive are preserved.
 

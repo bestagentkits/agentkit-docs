@@ -1,13 +1,14 @@
 ---
 title: ak config prefs set
-description: Set one bounded Hook boolean, the journal.auto preference, the worktree.root default, or one runtime capability-tier agent model with exact scope, schema, backup, atomic-write, output, and manual-recovery behavior.
+description: Set one bounded Hook boolean, the journal.auto preference, the worktree.root default, one runtime capability-tier agent model, or one semantic_decision setting with exact scope, schema, backup, atomic-write, output, and manual-recovery behavior.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
 Use `ak config prefs set` to pin one Hook soft-preference, the `journal.auto`
-preference, the `worktree.root` default location, or one runtime
-capability-tier agent model in the user config or the current project's config.
+preference, the `worktree.root` default location, one runtime
+capability-tier agent model, or one `semantic_decision` setting in the user
+config or the current project's config.
 The command changes the selected file immediately;
 it does not unregister or install a Hook and does not stop explicit
 `/ak:journal`.
@@ -32,7 +33,7 @@ does not prompt, so `--yes` and `--no-interactive` do not change it. There is no
 
 ## Key and value validation
 
-Four key shapes are accepted:
+Five key shapes are accepted:
 
 - `hooks.<name>` — `<name>` must be a lowercase kebab-case Hook script basename
   matching `^[a-z0-9]+(?:-[a-z0-9]+)*$` and cannot contain another dot.
@@ -40,6 +41,11 @@ Four key shapes are accepted:
 - `worktree.root` — the exact literal, no nested keys under `worktree`.
 - `agent_models.<runtime>.<tier>` — `<runtime>` is the closed set `cursor`, and
   `<tier>` is one of `inherit`, `sonnet`, `opus`, `fable`, or `haiku`.
+- `semantic_decision.<leaf>` — `<leaf>` is `enabled`, `provider`, `model`,
+  `timeout_ms`, or `consumers.<consumer>`, where `<consumer>` is
+  `domain-routing`, `fix-complexity`, `orchestration-risk`,
+  `skill-routing-eval`, `review-triage`, `workflow-controller`,
+  `ui-regression`, `test-impact`, or `e2e-classification`.
 
 For `hooks.<name>` and `journal.auto` the value must be the exact lowercase
 literal `true` or `false`. For `worktree.root` the value is a filesystem path;
@@ -57,12 +63,15 @@ ak config prefs set journal.auto false
 ak config prefs set worktree.root /Volumes/Portable/agentkit-worktrees
 ak config prefs set worktree.root ../my-app-worktrees --scope project
 ak config prefs set agent_models.cursor.sonnet claude-sonnet-4-6
+ak config prefs set semantic_decision.provider typesafe --scope user
+ak config prefs set semantic_decision.enabled true --scope user
 ```
 
 Keys such as `keys.anthropic`, `api.token`, `telemetry.enabled`,
 `hooks.Bad-Name`, `hooks.a.b`, any `journal.<other>`, any `worktree.<other>`,
-any `agent_models.<runtime>` other than `cursor`, and any unrecognized
-`agent_models.<runtime>.<tier>` are rejected before a preference write. This
+any `agent_models.<runtime>` other than `cursor`, any unrecognized
+`agent_models.<runtime>.<tier>`, and any `semantic_decision` leaf not listed
+above (such as `semantic_decision.api_key`) are rejected before a preference write. This
 allowlist prevents the command from being used as a general secret or config
 editor.
 
@@ -84,6 +93,44 @@ external-volume worktree layout. The built-in default is unset, so
 `ak:worktree` continues to fall back to the `WORKTREE_ROOT` environment
 variable and its built-in location chain.
 
+### Semantic decision settings
+
+These keys control opt-in semantic evaluation by
+[ak eval decision](../cli/ak_eval_decision), `ak eval triage`, `ak eval ui`,
+`ak eval workflow`, `ak test optimize`, and `ak test classify-e2e`.
+
+| Key | Accepted value | Default |
+| --- | --- | --- |
+| `semantic_decision.enabled` | `true` or `false` | `false` |
+| `semantic_decision.provider` | `typesafe` | unset |
+| `semantic_decision.model` | Model ID matching `^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$` | unset |
+| `semantic_decision.timeout_ms` | Integer from `100` to `30000` | `5000` |
+| `semantic_decision.consumers.<consumer>` | `true` or `false` | unset |
+
+Provider consent is user-scoped. At `--scope project`, only
+`semantic_decision.enabled false` and `semantic_decision.consumers.<consumer>
+false` are accepted; they restrict the user grant for that project. Any other
+semantic key or value at project scope exits `1` before a project config is
+scaffolded or written. Set `semantic_decision.provider` before enabling, because
+an enabled user policy without a provider is invalid when evaluated.
+
+Without a user `consumers` map, only `domain-routing`, `fix-complexity`, and
+`orchestration-risk` are permitted. The other six consumers
+(`skill-routing-eval`, `review-triage`, `workflow-controller`, `ui-regression`,
+`test-impact`, and `e2e-classification`) each need an explicit
+`semantic_decision.consumers.<consumer> true` at user scope:
+
+```bash
+ak config prefs set semantic_decision.consumers.test-impact true --scope user
+```
+
+<Callout type="warning">
+  Setting `semantic_decision.enabled true` at user scope is consent to send
+  normalized request facts to an external provider, and each evaluation may
+  incur provider charges. Provider credentials never belong in config; supply
+  `TYPESAFE_API_KEY` through the environment.
+</Callout>
+
 ## Scope and filesystem effects
 
 | Scope | Target | Additional effect |
@@ -92,7 +139,8 @@ variable and its built-in location chain.
 | `project` | `<cwd>/.agentkit/config.yaml` | If absent, AgentKit scaffolds the project template and `.agentkit/.gitignore` first. The project config is intended to be committed, so do not place credentials in it. |
 
 The writer changes only the selected `hooks.<name>`, `journal.auto`,
-`worktree.root`, or `agent_models.<runtime>.<tier>` leaf. It preserves other
+`worktree.root`, `agent_models.<runtime>.<tier>`, or `semantic_decision.*`
+leaf. It preserves other
 sections, unmodelled YAML, comments,
 key order, and the schema editor directive. If `hooks`, `journal`, or
 `worktree` already exists but is not a mapping, the write is refused.
@@ -150,6 +198,11 @@ backed up prior config to /home/user/.agentkit/backups/config/config-<timestamp>
 }
 ```
 
+A boolean is reported in `value`. A string value, such as `worktree.root`,
+an agent model ID, `semantic_decision.provider`, or `semantic_decision.model`,
+is reported in `value_string` instead, and `semantic_decision.timeout_ms` in
+`value_int`.
+
 `backup_path` is omitted when no backup was created. `found` is always `true`
 for a successful set. `--quiet` does not suppress this command-specific stdout.
 
@@ -163,7 +216,7 @@ the generic runtime error path instead.
 | Exit | Meaning | Safe next step |
 | --- | --- | --- |
 | `0` | The selected leaf was written and any reported backup completed first. | Run resolve and validate. |
-| `1` | The positional-argument count, key, value, scope, path, YAML shape, schema, backup, or write failed. | Correct the invocation or read the human error without exposing config secrets; do not force the write. |
+| `1` | The positional-argument count, key, value, scope (including a disallowed project-scope `semantic_decision` write), path, YAML shape, schema, backup, or write failed. | Correct the invocation or read the human error without exposing config secrets; do not force the write. |
 | `2` | Flag parsing failed. | Correct the flags. |
 
 ## Verify the result
