@@ -111,25 +111,59 @@ hoạch đã review bằng:
 ak update . --kits engineer --channel stable --yes
 ```
 
-Khi áp dụng, cập nhật project tạo snapshot trước thay đổi trừ khi bạn truyền
-`--no-backup`. Theo mặc định, file do người dùng sửa được giữ lại. Chỉ dùng
-`--force` sau khi review chính xác diff và quyết định snapshot là đủ để khôi
-phục; đây không phải flag làm mới thông thường.
+Theo mặc định, cập nhật project áp dụng chỉ snapshot đúng những tệp nó ghi
+hoặc prune — một bundle có thể restore, và kết quả gồm cả lệnh restore.
+`--force`, `--backup`, hoặc `backups.enabled: true` trong
+`~/.agentkit/config.yaml` capture toàn bộ project thay vào đó; `--no-backup`
+bỏ qua hoàn toàn snapshot, kể cả snapshot mà `--force` tạo. Theo mặc định,
+file do người dùng sửa được giữ lại. Chỉ dùng `--force` sau khi review chính
+xác diff và quyết định snapshot là đủ để khôi phục; đây không phải flag làm
+mới thông thường.
 
 <Callout type="warn" title="--no-backup bỏ qua recovery snapshot">
-  Bản xem trước và `--dry-run` vẫn không ghi gì. Các đường `ak update` đã apply
-  ở project, global và wizard hợp nhất mặc định tạo snapshot trước (`--no-backup`
-  mặc định là `false`). Truyền flag này là opt-out tường minh: lệnh cảnh báo
-  trên stderr, và `--force --no-backup` thêm cảnh báo nghiêm trọng hơn. Kết quả
-  có cấu trúc báo `backup_skipped` nên `snapshot_id` trống chưa đủ để phân biệt
-  skip chủ ý với lần chạy không có gì để capture. Apply trên Desktop vẫn luôn
-  tạo snapshot và không nhận `--no-backup`. Flag này cũng có trên
-  [`ak init`](../reference/cli/init),
+  Bản xem trước và `--dry-run` vẫn không ghi gì. `ak update` khi apply mặc
+  định snapshot: đúng những tệp đã đổi trừ khi có `--force`, `--backup` hoặc
+  `backups.enabled: true`, khi đó nó capture toàn bộ project. Truyền
+  `--no-backup` là opt-out tường minh: lệnh cảnh báo trên stderr, và
+  `--force --no-backup` thêm cảnh báo nghiêm trọng hơn. Kết quả có cấu trúc
+  báo `backup_skipped` nên `snapshot_id` trống chưa đủ để phân biệt skip chủ ý
+  với lần chạy không có gì để capture. Desktop plan apply giữ nội dung người
+  dùng dùng cùng cơ chế exact-file capture, chỉ mở rộng thành toàn bộ project
+  khi nội dung người dùng bị ghi đè hoặc có `backups.enabled`; nó không nhận
+  `--no-backup`. `--backup` và `--no-backup` loại trừ lẫn nhau, và `--backup`
+  không mở rộng snapshot của global kit refresh. Flag `--no-backup` này cũng
+  có trên [`ak init`](../reference/cli/init) (opt-in qua `--backup` hoặc
+  `backups.enabled`, mặc định tắt),
   [`ak kit init`](../reference/cli/kit/init),
   [`ak kit install`](../reference/cli/kit/install) và
   [`ak kit refresh`](../reference/cli/kit/refresh) — hãy xem cảnh báo mất dữ
   liệu trước khi dùng.
 </Callout>
+
+## Cập nhật nền tự động (opt-in)
+
+`ak update --schedule daily|weekly` bật cập nhật nền tách rời, khởi động ở
+lệnh `ak` thông thường đầu tiên sau khoảng thời gian đã chọn, refresh CLI và
+kit global cộng thêm mọi project đã opt-in bằng `--project <dir>` (đã đăng ký
+qua `ak projects add`) có git tree sạch và không có agent session đang chạy:
+
+```bash
+ak update --schedule daily --project .
+ak update --status --json
+ak update --schedule off
+```
+
+Các cờ settings (`--schedule`, `--project`, `--no-project`, `--status`,
+`--ack`) chỉ đổi `auto_update:` trong `~/.agentkit/config.yaml` hoặc đọc
+state; chúng không bao giờ tự áp dụng cập nhật và không thể kết hợp với cờ
+cập nhật hay đối số project-dir. Cập nhật nền không bao giờ khởi động khi có
+`AK_NO_AUTO_UPDATE=1` hoặc `CI`, với lệnh gọi `--json`, hoặc với lệnh thuộc
+lifecycle/interactive như `update`, `init` hay `kit`. Một Kit hook
+(`session-heartbeat.cjs`) đánh dấu project đang có session sống để updater bỏ
+qua; kết quả chưa xem in một lần ở `SessionStart` tiếp theo và có thể xác nhận
+bằng `ak update --status --ack --json`. Xem
+[tham chiếu `ak update`](../reference/cli/update) và check `auto_update` của
+[`ak doctor`](../reference/cli/doctor) để biết chi tiết.
 
 ## Xem trước cập nhật Kit global
 

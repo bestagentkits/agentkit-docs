@@ -79,6 +79,15 @@ Recommended flow for an existing Skill: `audit`, review the report, then
 `optimize --apply --from-audit <report>`. `create` refuses to write over an
 existing directory.
 
+`semantic-eval` is an explicit, optional catalog-routing diagnostic; normal
+authoring never runs it. It starts from an export of the runtime-visible catalog.
+Offline replay and before/after comparison need no key or network. A live batch
+delegates to [`ak eval decision`](../../../reference/cli/eval/decision), requires explicit
+`consumers.skill-routing-eval=true` consent, and can incur paid calls. Tune on
+the training split, freeze the candidate before the holdout run, and do not
+retune on the holdout. A diagnostic model choice is not evidence that a runtime
+activates the Skill.
+
 ## Understand the observable stages
 
 1. **Choose the subcommand.** `create` and `update` write files. `audit` writes
@@ -90,8 +99,12 @@ existing directory.
    High finding.
 4. **`update` scouts the existing Skill and its users, applies the requested
    change only, lints every changed line, and bumps `metadata.version`.**
-5. **`audit` inventories provenance and dated patterns.** It can target one
-   Skill, a kit, or `--all`. It does not fail an existing Skill for findings.
+5. **`audit` inventories provenance and dated patterns, and measures actual
+   local-session usage.** `scripts/session_usage.py` reads local Claude Code
+   and Codex transcripts (never their prompt or output text) for turns,
+   tokens, tool calls, errors, and delegation before the report judges the
+   Skill's text. It can target one Skill, a kit, or `--all`. It does not fail
+   an existing Skill for findings.
 6. **`optimize` rewrites High and Medium findings from an audit report or
    path.** Confirm the diff, then pass `--apply --from-audit <report>` to write.
 7. **Validate.** Run the bundled quick validator and prompt-cruft linter before
@@ -127,7 +140,9 @@ A complete result depends on the subcommand:
 * `create` / `update`: a Skill directory with a valid `SKILL.md`, only the
   needed references and scripts, a clean prompt-cruft lint for High findings,
   and a consumer comparison that is not blocked or ungraded.
-* `audit`: a report with findings and a proposed diff. Skill files are unchanged.
+* `audit`: a report with findings, session-usage evidence from local
+  transcripts (or a stated gap when none exist), and a proposed diff. Skill
+  files are unchanged.
 * `optimize --apply`: rewritten High and Medium findings, linter and kit
   validation evidence, and no writes if `--apply` was omitted.
 * `--long-horizon`: the extra observations, experiments, evals, benchmarks, and

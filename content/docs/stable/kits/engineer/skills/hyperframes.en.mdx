@@ -1,14 +1,13 @@
 ---
 title: Render HeyGen HyperFrames videos with ak:hyperframes
-description: Wrap the HeyGen HyperFrames CLI to render HTML-first programmatic videos through a pinned npx invocation, local preview, lint gate, and optional cloud render.
+description: Wrap the HeyGen HyperFrames CLI to render HTML-first programmatic videos through a pinned npx invocation, local preview, lint and check gates, and optional cloud render.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
-Use `ak:hyperframes` to turn an HTML composition annotated with
-`data-composition-id`, `data-start`, `data-width`, and `data-height`
-attributes into a local MP4 through the published
+Use `ak:hyperframes` to turn an HTML composition annotated with HyperFrames
+`data-*` timing attributes into a local MP4 through the published
 [`hyperframes`](https://github.com/heygen-com/hyperframes) CLI. It fits
 short vertical or social clips, product-launch loops, and motion graphics
 whose source of truth is HTML markup instead of a React component tree or
@@ -19,20 +18,21 @@ a timeline editor.
 ### Use ak:hyperframes when
 
 - The composition is authored as HTML with HyperFrames timing attributes.
-- You want a scaffolded project, browser preview, lint gate, and MP4 render
-  from one CLI, without wiring the HeyGen source into your project.
+- You want a scaffolded project, browser preview, lint and check gates, and
+  MP4 render from one CLI, without wiring the HeyGen source into your project.
 - The target is a short vertical or social video, product-launch clip, or
   promo loop that reads naturally as HTML.
-- You need an optional cloud render path through a HeyGen API key while the
-  local render still works without one.
+- You need an optional cloud render path through HeyGen credentials while
+  the local render still works without them.
 
 ### Choose another workflow when
 
 - The composition is naturally a React component tree with frame math or
-  captions. Use `ak:remotion`.
-- You want a template-driven HTML wrapper with Studio editing rather than
-  the HyperFrames composition contract. Use
-  [`ak:hyperframes`](./hyperframes).
+  captions. Use [`ak:remotion`](./remotion).
+- You want a template-driven HTML-to-MP4 engine with Studio editing rather
+  than the HyperFrames composition contract. The Skill's bundled
+  `nexu-io/html-video` reference covers that alternative; use it only when
+  its template catalog or an existing install fits the request better.
 - You only need transcode, trim, thumbnail, HLS or DASH, or batch FFmpeg
   work. Use [`ak:media-processing`](./media-processing).
 - The task is to route across every installed video or motion Skill. Use
@@ -47,20 +47,23 @@ Before you start:
 - Define aspect ratio, duration, source assets, target resolution, output
   path, whether local or cloud rendering is required, and whether the clip
   is a draft or a polished export.
-- Make Node.js 22 or newer available, put FFmpeg on `PATH`, and set
-  `HEYGEN_API_KEY` only when you plan to use the cloud render path.
+- Make Node.js 22 or newer available, put FFmpeg and FFprobe on `PATH`, and
+  make a headless Chrome available (`hyperframes browser ensure` finds or
+  downloads one). Configure HeyGen credentials (`HEYGEN_API_KEY` or
+  `hyperframes auth login`) only when you plan to use the cloud render path.
 - Run the bundled prerequisite verifier
-  (`node scripts/verify-prereqs.mjs`) before scaffolding a composition;
-  prefer the JSON output when a runtime consumes the result.
+  (`node scripts/verify-prereqs.mjs`) before scaffolding a composition. It
+  checks Node, FFmpeg, and FFprobe; prefer the `--json` output when a runtime
+  consumes the result.
 - Pin the CLI version. Every invocation in this Skill uses
-  `hyperframes@0.7.99`; bump the pin in one place when upgrading and never
+  `hyperframes@0.8.77`; bump the pin in one place when upgrading and never
   fall back to an unpinned `npx -y hyperframes ...` in scripts or docs.
 
 | Runtime | Invocation | Availability boundary |
 | --- | --- | --- |
-| Claude Code | `/ak:hyperframes ...` | The Skill can orchestrate `npx`, files, a local dev server, FFmpeg, and (optionally) the HeyGen cloud endpoint when the session permits those processes and the API key is present. |
+| Claude Code | `/ak:hyperframes ...` | The Skill can orchestrate `npx`, files, a local preview server, Chrome, FFmpeg, and (optionally) the HeyGen cloud endpoint when the session permits those processes and HeyGen credentials are configured. |
 | Cursor | `/ak:hyperframes ...` | Slash invocation is user-verified; equivalent Node, browser, shell, and network behavior depend on Cursor. |
-| Codex | `$ak:hyperframes ...` | Native discovery is supported; Node, FFmpeg, ports, network access, and the HeyGen API key are not bundled runtime guarantees. |
+| Codex | `$ak:hyperframes ...` | Native discovery is supported; Node, FFmpeg, Chrome, ports, network access, and HeyGen credentials are not bundled runtime guarantees. |
 
 ## Create a bounded HyperFrames project
 
@@ -68,21 +71,21 @@ Before you start:
   <Tab value="Claude Code">
 
 ```text
-/ak:hyperframes "Scaffold a 6-second 1080x1920 draft product-launch loop under ./assets/videos/launch/, preview locally, lint before rendering, and render an MP4 to ./assets/videos/launch/launch.mp4 without contacting the HeyGen cloud endpoint"
+/ak:hyperframes "Scaffold a 6-second 1080x1920 draft product-launch loop under ./assets/videos/launch/, preview locally, pass check before rendering, and render an MP4 to ./assets/videos/launch/launch.mp4 without contacting the HeyGen cloud endpoint"
 ```
 
   </Tab>
   <Tab value="Cursor">
 
 ```text
-/ak:hyperframes "Scaffold a 6-second 1080x1920 draft product-launch loop under ./assets/videos/launch/, preview locally, lint before rendering, and render an MP4 to ./assets/videos/launch/launch.mp4 without contacting the HeyGen cloud endpoint"
+/ak:hyperframes "Scaffold a 6-second 1080x1920 draft product-launch loop under ./assets/videos/launch/, preview locally, pass check before rendering, and render an MP4 to ./assets/videos/launch/launch.mp4 without contacting the HeyGen cloud endpoint"
 ```
 
   </Tab>
   <Tab value="Codex">
 
 ```text
-$ak:hyperframes "Scaffold a 6-second 1080x1920 draft product-launch loop under ./assets/videos/launch/, preview locally, lint before rendering, and render an MP4 to ./assets/videos/launch/launch.mp4 without contacting the HeyGen cloud endpoint"
+$ak:hyperframes "Scaffold a 6-second 1080x1920 draft product-launch loop under ./assets/videos/launch/, preview locally, pass check before rendering, and render an MP4 to ./assets/videos/launch/launch.mp4 without contacting the HeyGen cloud endpoint"
 ```
 
   </Tab>
@@ -92,36 +95,42 @@ $ak:hyperframes "Scaffold a 6-second 1080x1920 draft product-launch loop under .
 
 | Stage | Command family | Evidence |
 | --- | --- | --- |
-| Diagnose | `node scripts/verify-prereqs.mjs [--json]` | Node, FFmpeg, and API-key readiness before scaffolding |
-| Scaffold | `npx -y hyperframes@0.7.99 init <name> --resolution portrait` | New composition project directory with HTML skeleton |
-| Preview | `npx -y hyperframes@0.7.99 preview <name>` | Local dev-server URL for visual inspection |
-| Lint | `npx -y hyperframes@0.7.99 lint <name>` | Timing-attribute report before rendering |
-| Render (local) | `npx -y hyperframes@0.7.99 render <name> --output <path>` | MP4 written to the requested output path |
-| Render (cloud) | `npx -y hyperframes@0.7.99 cloud render <name>` with `HEYGEN_API_KEY` set | Cloud job ID and remote-render artifact reference |
+| Diagnose | `node scripts/verify-prereqs.mjs [--json]` | Node, FFmpeg, and FFprobe readiness before scaffolding |
+| Scaffold | `npx -y hyperframes@0.8.77 init <name> --resolution portrait --non-interactive` | New composition project directory with HTML skeleton; `-e/--example` picks a starter |
+| Preview | `npx -y hyperframes@0.8.77 preview <name>` | Studio URL with a scrubbable timeline; in a non-interactive shell it runs in the background (`--status`, `--stop`) |
+| Lint | `npx -y hyperframes@0.8.77 lint <name>` | Fast timing-attribute feedback while editing |
+| Check | `npx -y hyperframes@0.8.77 check <name>` | Final gate: reruns lint, then audits runtime errors, failed requests, layout overlap, and contrast in a browser |
+| Snapshot | `npx -y hyperframes@0.8.77 snapshot <name> --at 1,3.5,6` | Key-frame stills for review without a full render |
+| Render (local) | `npx -y hyperframes@0.8.77 render <name> --strict --output <path>` | MP4 written to the requested output path; `--strict` fails on lint errors |
+| Render (cloud) | `npx -y hyperframes@0.8.77 cloud render <name>` with HeyGen credentials | Cloud job and remote-render artifact; `--dry-run` inspects the upload without authenticating |
 | Verify | `ffprobe -v error -show_streams -show_format -of json <path>` | Nonzero duration, expected dimensions, streams, and format |
 
-Always run `lint` before `render`. Most render failures come from malformed
-`data-start` or `data-composition-id` attributes that the lint stage catches
-before Chromium and FFmpeg pay the full render cost.
+Always pass `check` before `render`; `check` reruns lint. Most render failures
+come from malformed `data-start`, `data-duration`, or `data-composition-id`
+attributes, or a missing timeline registration, that lint and check catch
+before Chrome and FFmpeg pay the full render cost. `validate`, `inspect`, and
+`layout` are deprecated aliases of `check`.
 
 ## Observe the render stages
 
 1. **The Skill pins the video brief.** Aspect, duration, source assets,
    output path, local versus cloud render, and publication boundary are
    captured.
-2. **It verifies the engine.** Node, FFmpeg, the pinned `hyperframes` CLI,
-   and (when cloud rendering) the HeyGen API key are checked.
+2. **It verifies the engine.** Node, FFmpeg, FFprobe, headless Chrome, the
+   pinned `hyperframes` CLI, and (when cloud rendering) HeyGen credentials
+   are checked.
 3. **It scaffolds a composition.** `init` creates a project directory with
    an HTML skeleton and the HyperFrames timing-attribute contract.
-4. **You edit the HTML composition.** Root elements carry
-   `data-composition-id`, `data-start`, `data-width`, and `data-height`
-   attributes that describe layout and timing.
-5. **It previews in a browser.** The returned dev-server URL is checked for
-   layout, typography, missing assets, motion, timing, console failures,
-   and network use.
-6. **It lints the composition.** Timing and composition-id issues surface
-   before rendering.
-7. **It renders through Chromium and FFmpeg.** Local rendering encodes the
+4. **You edit the HTML composition.** The root carries
+   `data-composition-id`, `data-start="0"`, `data-width`, `data-height`, and
+   usually `data-duration`; each timed clip carries `id`, `data-start`, and
+   `data-duration`.
+5. **It previews in Studio.** The returned URL is checked for layout,
+   typography, missing assets, motion, timing, console failures, and
+   network use. Only previews started for this task are stopped.
+6. **It lints and checks the composition.** Timing, composition-id, runtime,
+   layout, and contrast issues surface before rendering.
+7. **It renders through Chrome and FFmpeg.** Local rendering encodes the
    MP4 at the explicit output path; cloud rendering hands the composition
    to HeyGen and returns a remote artifact reference.
 8. **It probes the artifact.** `ffprobe` must report nonzero duration and
@@ -129,41 +138,42 @@ before Chromium and FFmpeg pay the full render cost.
 
 ## Control code, network, process, and storage effects
 
-<Callout type="warn" title="HyperFrames executes HTML, CSS, and JavaScript in Chromium">
+<Callout type="warn" title="HyperFrames executes HTML, CSS, and JavaScript in Chrome">
   Treat compositions and any remote assets as code and network-capable
   input. Review their origin and behavior before rendering, and do not
   expose local secrets, authenticated pages, private files, or
   unrestricted network access.
 </Callout>
 
-- `npx -y hyperframes@0.7.99` resolves the pinned package from the public
+- `npx -y hyperframes@0.8.77` resolves the pinned package from the public
   registry. Confirm the pin, review upstream changes before bumping it, and
   do not fall back to an unpinned invocation in scripts or docs.
-- The scaffolded dev server binds a local port during `preview`. Bind and
-  expose it only as intended, stop it after use, and do not treat the page
-  as safe on a shared network.
-- Local rendering starts Chromium and FFmpeg and can consume heavy CPU,
+- The preview server binds a local port during `preview`. Bind and expose
+  it only as intended, stop it after use (`--stop`), and do not treat the
+  page as safe on a shared network.
+- Local rendering starts Chrome and FFmpeg and can consume heavy CPU,
   memory, disk, temporary files, and time. Test a short draft first.
 - Cloud rendering sends the composition to HeyGen. Only use it when you
-  have permission to submit the source assets, and when the `HEYGEN_API_KEY`
-  is stored per your project's secret policy.
+  have permission to submit the source assets, and store HeyGen credentials
+  per your project's secret policy.
 - HTML compositions, fonts, images, and scripts can make external requests.
   Record or block network effects when privacy or reproducibility matters.
 - Confirm rights for images, logos, copy, fonts, audio, and templates. The
   Skill does not grant publication or redistribution rights.
-- The workflow writes project state, preview files, lint reports, and MP4
-  output. It does not commit, upload, publish, or deploy them without
-  separate authority.
+- The workflow writes project state, preview files, lint and check reports,
+  and MP4 output. It does not commit, upload, publish, or deploy them
+  without separate authority.
 
 ## Verify the video and evidence
 
 A complete result should include:
 
-- Node, FFmpeg, and (when cloud rendering) HeyGen API-key verification.
-- Pinned CLI version (`hyperframes@0.7.99`) and any documented deviation.
+- Node, FFmpeg, FFprobe, and (when cloud rendering) HeyGen credential
+  verification.
+- Pinned CLI version (`hyperframes@0.8.77`) and any documented deviation.
 - Scaffolded composition name, HTML source, and used timing attributes.
-- Preview URL, visual review notes, lint report, render command, and MP4
-  path (or cloud job reference).
+- Preview URL, visual review notes, lint and check reports, render command,
+  and MP4 path (or cloud job reference).
 - `ffprobe` evidence for duration, dimensions, streams, format, and file
   size.
 - Local port, network access, storage, rights, privacy, or publication
@@ -177,11 +187,11 @@ or guarantee cross-runtime cloud-render parity.
 
 | Symptom | Safe next step |
 | --- | --- |
-| `hyperframes` reports an unknown flag | The pinned version may be behind upstream; run `npx -y hyperframes@0.7.99 --help` to confirm current flags before updating the pin. |
-| `render` fails with a blank or short MP4 | Run `lint` first; malformed `data-start` or `data-composition-id` attributes are the most common cause. |
-| `command not found: ffmpeg` | Run `node scripts/verify-prereqs.mjs` for the exact platform remediation, install FFmpeg through the approved platform package manager, and re-verify. |
-| Preview shows missing assets or blank layout | Inspect the returned dev-server URL, check the console, verify file references, and review the composition's network policy before rendering. |
-| Cloud render is refused | Confirm `HEYGEN_API_KEY` is set for the current process, confirm the account is entitled to the requested composition, and retry the `cloud render` subcommand. |
-| The MP4 dimensions do not match the composition | Re-run `lint`, confirm the root `data-width` and `data-height` attributes, then render again to the explicit `--output` path. |
+| `hyperframes` reports an unknown flag | The pinned version may be behind upstream; run `npx -y hyperframes@0.8.77 --help` to confirm current flags before updating the pin. |
+| `render` fails with a blank or short MP4 | Run `check` first; malformed `data-start`, `data-duration`, or `data-composition-id` attributes, or a missing timeline registration, are the most common causes. |
+| `command not found: ffmpeg` or `ffprobe` | Run `node scripts/verify-prereqs.mjs` for the exact platform remediation, install FFmpeg (which usually ships FFprobe) through the approved platform package manager, and re-verify. |
+| Preview shows missing assets or blank layout | Inspect the returned preview URL, check the console, verify file references, and review the composition's network policy before rendering. |
+| Cloud render is refused | Confirm HeyGen credentials resolve for the current process (`HEYGEN_API_KEY` or `hyperframes auth login`), confirm the account is entitled to the requested composition, and retry the `cloud render` subcommand. |
+| The MP4 dimensions do not match the composition | Re-run `check`, confirm the root `data-width` and `data-height` attributes, then render again to the explicit `--output` path. |
 | Rendering exhausts local resources | Reduce duration, resolution, asset size, or concurrency and render a smaller draft before retrying. |
 | The runtime does not recognize the Skill | Confirm target and scope, restart the runtime session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |

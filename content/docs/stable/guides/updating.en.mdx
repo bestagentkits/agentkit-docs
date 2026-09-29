@@ -111,25 +111,59 @@ reviewed plan with:
 ak update . --kits engineer --channel stable --yes
 ```
 
-An applied project update creates a pre-update snapshot before mutation unless
-you pass `--no-backup`. By default, user-modified files are preserved. Use
-`--force` only after reviewing the exact diff and deciding that the snapshot is
-sufficient recovery; it is not a routine refresh flag.
+By default, an applied project update snapshots only the exact files it writes
+or prunes — a restorable bundle, whose result includes the restore command.
+`--force`, `--backup`, or `backups.enabled: true` in `~/.agentkit/config.yaml`
+captures the whole project instead; `--no-backup` skips the snapshot
+entirely, including the one `--force` takes. By default, user-modified files
+are preserved. Use `--force` only after reviewing the exact diff and deciding
+that the snapshot is sufficient recovery; it is not a routine refresh flag.
 
 <Callout type="warn" title="--no-backup skips recovery snapshots">
-  Preview and `--dry-run` still write nothing. Applied project, global, and
-  unified-wizard `ak update` paths snapshot first by default (`--no-backup`
-  defaults to `false`). Passing the flag is an explicit opt-out: the command
-  warns on stderr, and `--force --no-backup` adds an escalated warning.
-  Structured results report `backup_skipped` so a missing `snapshot_id` is not
-  enough to tell an intentional skip from a no-op. Desktop apply still always
-  snapshots and does not accept `--no-backup`. The same flag also exists on
-  [`ak init`](../reference/cli/init),
+  Preview and `--dry-run` still write nothing. Applied `ak update` snapshots
+  by default: the exact changed files unless `--force`, `--backup`, or
+  `backups.enabled: true` is set, in which case it captures the whole
+  project. Passing `--no-backup` is an explicit opt-out: the command warns on
+  stderr, and `--force --no-backup` adds an escalated warning. Structured
+  results report `backup_skipped` so a missing `snapshot_id` is not enough to
+  tell an intentional skip from a no-op. A Desktop plan apply that keeps user
+  content takes the same exact-file capture, widening to the whole project
+  only when user content is overwritten or `backups.enabled` is set; it does
+  not accept `--no-backup`. `--backup` and `--no-backup` are mutually
+  exclusive, and `--backup` does not widen global kit refresh snapshots. The
+  same `--no-backup` flag also exists on [`ak init`](../reference/cli/init)
+  (opt-in via `--backup` or `backups.enabled`, off by default),
   [`ak kit init`](../reference/cli/kit/init),
   [`ak kit install`](../reference/cli/kit/install), and
   [`ak kit refresh`](../reference/cli/kit/refresh) — review the data-loss
   warning before using it.
 </Callout>
+
+## Background auto-update (opt-in)
+
+`ak update --schedule daily|weekly` enables a detached background update that
+starts on the first ordinary `ak` command after the interval, refreshing the
+CLI and global kits plus any project opted in with `--project <dir>`
+(registered via `ak projects add`) whose git tree is clean and has no live
+agent session:
+
+```bash
+ak update --schedule daily --project .
+ak update --status --json
+ak update --schedule off
+```
+
+The settings flags (`--schedule`, `--project`, `--no-project`, `--status`,
+`--ack`) only change `auto_update:` in `~/.agentkit/config.yaml` or read state;
+they never apply an update themselves and cannot combine with an update flag
+or a project-dir argument. Background updates never start with
+`AK_NO_AUTO_UPDATE=1` or `CI` set, for `--json` invocations, or for
+lifecycle/interactive commands such as `update`, `init`, or `kit`. A Kit hook
+(`session-heartbeat.cjs`) marks a project as having a live session so the
+updater skips it; an unacknowledged result prints once at the next
+`SessionStart` and can be acknowledged with `ak update --status --ack --json`.
+See the [`ak update` reference](../reference/cli/update) and the
+`auto_update` [`ak doctor`](../reference/cli/doctor) check for details.
 
 ## Preview global kit updates
 
