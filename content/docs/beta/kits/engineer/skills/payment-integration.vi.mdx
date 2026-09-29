@@ -1,24 +1,29 @@
 ---
 title: Tích hợp thanh toán an toàn với ak:payment-integration
-description: Triển khai checkout và webhook SePay, Polar hoặc Stripe với credential, idempotency, financial side effect cùng bằng chứng go-live rõ ràng.
+description: Triển khai checkout và webhook SePay, PayFS, Polar, Stripe, Creem, Dodo Payments, Lemon Squeezy, Paddle hoặc PayPal với credential, idempotency, financial side effect cùng bằng chứng go-live rõ ràng.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
 Dùng `ak:payment-integration` để thiết kế hoặc triển khai payment flow với
-SePay, Polar hay Stripe. Skill bao quát checkout, subscription, VietQR và bank
-transfer, signed webhook, order nhận biết provider, refund cùng xử lý event bền
-vững. Skill hữu ích nhất khi provider và business outcome đã rõ.
+SePay, PayFS, Polar, Stripe, Creem, Dodo Payments, Lemon Squeezy, Paddle hoặc
+PayPal. Skill bao quát checkout, subscription, usage/credit billing, license
+key, VietQR và bank transfer, signed webhook, order nhận biết provider, refund
+cùng xử lý event bền vững. Skill hữu ích nhất khi provider và business outcome
+đã rõ.
 
 ## Chọn ak:payment-integration cho công việc provider
 
 ### Dùng ak:payment-integration khi
 
-- Bạn cần SePay cho VND, bank transfer hoặc VietQR.
-- Bạn cần Polar cho software checkout, subscription, usage billing hoặc benefit
-  delivery.
+- Bạn cần SePay hoặc PayFS cho VND, bank transfer hoặc VietQR.
+- Bạn cần Polar, Creem, Dodo Payments, Lemon Squeezy hoặc Paddle cho checkout
+  merchant-of-record của SaaS/digital product, subscription, usage billing
+  hoặc license key.
 - Bạn cần guidance Stripe Checkout, Billing, Payment Element hoặc Connect.
+- Bạn cần checkout ví/thẻ PayPal hoặc subscription, nơi bạn vẫn là merchant of
+  record.
 - Bạn cần order model hợp nhất hoặc webhook processing idempotent giữa nhiều
   provider.
 
@@ -44,10 +49,16 @@ Trước khi bắt đầu:
 - Xác định currency, cách lưu smallest unit, product/price, tax, discount,
   trial, fulfillment, cancellation, refund, dispute cùng reconciliation rule.
 - Dùng sandbox account, test product, test payment method, webhook endpoint cô
-  lập cùng customer data giả lập.
-- Giữ `SEPAY_SECRET_KEY`, webhook key, `POLAR_ACCESS_TOKEN`,
-  `POLAR_WEBHOOK_SECRET`, Stripe secret key, signing secret và customer data
-  ngoài prompt, log, client bundle, command history cùng Git.
+  lập cùng customer data giả lập. PayFS không có sandbox; coi mọi call PayFS là
+  live và gate tương ứng.
+- Giữ provider secret key cùng webhook signing secret (ví dụ `SEPAY_SECRET_KEY`,
+  `PAYFS_WEBHOOK_SECRET`, `POLAR_ACCESS_TOKEN` và `POLAR_WEBHOOK_SECRET`,
+  Stripe secret/signing key, `CREEM_API_KEY` và `CREEM_WEBHOOK_SECRET`,
+  `DODO_PAYMENTS_API_KEY` và `DODO_PAYMENTS_WEBHOOK_KEY`,
+  `LEMONSQUEEZY_API_KEY` và `LEMONSQUEEZY_WEBHOOK_SECRET`,
+  `PADDLE_WEBHOOK_SECRET`, cùng `PAYPAL_CLIENT_ID`/`PAYPAL_CLIENT_SECRET` với
+  `PAYPAL_WEBHOOK_ID` riêng) và customer data ngoài prompt, log, client bundle,
+  command history cùng Git.
 - Nêu rõ có cho phép cài package, gọi provider API, đổi dashboard, mở public
   tunnel, ghi database, gửi email, refund hay deploy không.
 
@@ -63,6 +74,20 @@ trước quyết định tài chính hoặc production.
 
 Xem [Runtime adapter](../../../concepts/runtime-adapters) để hiểu khác biệt theo
 từng component.
+
+## Chọn provider
+
+| Provider | Phù hợp nhất cho |
+| --- | --- |
+| SePay | Thị trường Việt Nam, VND, bank transfer, VietQR/NAPAS |
+| PayFS | Webhook xác nhận bank transfer Việt Nam (MB/ACB/OCB trực tiếp; ngân hàng khác qua NAPAS cho doanh nghiệp), gói tháng cố định, không qua gateway, không có sandbox |
+| Polar | SaaS toàn cầu, subscription, benefit tự động (giao GitHub/Discord) |
+| Stripe | Thanh toán enterprise, nền tảng Connect, checkout tùy biến |
+| Creem | Merchant of record cho SaaS/software, license key, chỉ USD/EUR, API đơn giản |
+| Dodo Payments | Merchant of record cho SaaS/AI/digital product, usage/credit billing, license key, Standard Webhooks |
+| Lemon Squeezy | Store Lemon Squeezy hiện có; merchant of record cho digital product/SaaS. Thuộc sở hữu Stripe và ở chế độ bảo trì; cân nhắc Stripe Managed Payments cho build mới |
+| Paddle | Merchant of record cho SaaS/AI/digital product, hơn 30 currency, checkout Paddle.js, subscription nhiều item |
+| PayPal | Checkout ví/thẻ toàn cầu, subscription; không phải merchant of record (bạn tự chịu thuế), không có VND |
 
 ## Chạy Skill
 
@@ -108,16 +133,19 @@ $ak:payment-integration "stripe Add a sandbox subscription checkout to the exist
    environment, checkout product, currency, legal ownership cùng integration
    point thực tế của project.
 2. **Lần chạy lập bản đồ order state machine.** Internal/provider identifier,
-   amount, currency, subscription, refund, entitlement cùng terminal state luôn
-   rõ ràng.
+   amount, currency, subscription, refund, entitlement, license key cùng
+   terminal state luôn rõ ràng.
 3. **Lần chạy tạo checkout ở server.** Thao tác dùng secret key nằm sau server
    endpoint đã xác thực; client chỉ nhận value an toàn.
 4. **Lần chạy xử lý webhook trước fulfillment.** Skill xác minh raw request
-   thật, từ chối delivery không hợp lệ, ghi unique event và bảo đảm processing
-   idempotent trước khi đổi access hay money state.
+   thật bằng scheme signature riêng của provider (HMAC cho SePay, PayFS,
+   Polar, Creem, Lemon Squeezy và Paddle; Standard Webhooks cho Dodo Payments;
+   CRC32 kết hợp xác minh chứng chỉ RSA cho PayPal), từ chối delivery không
+   hợp lệ, ghi unique event và bảo đảm processing idempotent trước khi đổi
+   access hay money state.
 5. **Lần chạy xác minh retry và reconciliation.** Event trùng, trễ, sai thứ
    tự, lỗi, refunded, renewed, canceled cùng unknown được kiểm tra trên sandbox
-   contract.
+   contract, hoặc trên ranh giới live của PayFS khi đó là provider.
 6. **Lần chạy báo cáo gap go-live.** Tệp đổi, credential cần có, provider
    object, test, monitoring, dashboard step thủ công cùng financial hoặc
    deployment action chưa duyệt được liệt kê.
@@ -127,23 +155,28 @@ $ak:payment-integration "stripe Add a sandbox subscription checkout to the exist
 <Callout type="warn" title="Một API call thành công có thể đổi tiền hoặc access">
   Live checkout, subscription change, refund, benefit grant, bank event,
   product edit cùng webhook replay có thể ảnh hưởng customer và financial
-  record. Quyền sandbox không bao hàm quyền production.
+  record. Quyền sandbox không bao hàm quyền production, và PayFS hoàn toàn
+  không có sandbox.
 </Callout>
 
 - Dùng secret ở server và cơ chế constant-time hoặc SDK signature verification
   do provider khuyến nghị. Không coi redirect hay client success page là xác
   nhận thanh toán.
 - Giữ fulfillment cùng entitlement change idempotent. Lưu provider event ID và
-  đủ bằng chứng cho replay cùng reconciliation.
+  đủ bằng chứng cho replay cùng reconciliation. Webhook ID của PayPal không
+  được gửi kèm payload; lưu nó tách biệt với các webhook secret ở trên và cấp
+  cho verifier.
 - Public tunnel tool đưa local endpoint ra internet. Xác nhận endpoint,
   authentication, payload logging cùng kế hoạch shutdown trước.
 - Checkout helper đi kèm tạo configuration; nó không hoàn tất provider
   checkout. Output Polar nhúng access token vào lệnh cURL được hiển thị, vì vậy
   đừng dùng live token trong interactive output hoặc shell history.
-- Polar CLI verifier đi kèm tự tạo mock header cho payload của nó; nó không
-  chứng minh real incoming delivery. OAuth mode của helper SePay chỉ kiểm tra có
-  Bearer token, không kiểm tra token hợp lệ. Dùng provider SDK hoặc verifier đạt
-  chuẩn production cho endpoint thật.
+- Các webhook verifier theo provider đi kèm (SePay, PayFS, Polar, Creem, Dodo
+  Payments, Lemon Squeezy, Paddle, PayPal) tự tạo hoặc kiểm tra signature cho
+  payload test cục bộ; chúng không chứng minh real incoming delivery. OAuth
+  mode của helper SePay chỉ kiểm tra có Bearer token, không kiểm tra token hợp
+  lệ, còn PayFS còn yêu cầu khớp header `X-Client-API-Key`. Dùng provider SDK
+  hoặc verifier đạt chuẩn production cho endpoint thật.
 - Commit, product publication, live webhook registration, refund execution,
   rollout cùng deployment cần phê duyệt riêng.
 
@@ -152,7 +185,8 @@ $ak:payment-integration "stripe Add a sandbox subscription checkout to the exist
 Kết quả hoàn tất nên cung cấp:
 
 - Checkout cùng order-state contract, gồm amount unit, currency, provider ID,
-  customer mapping cùng fulfillment boundary.
+  customer mapping, license key nếu provider phát hành, cùng fulfillment
+  boundary.
 - Chính xác tệp đổi, package, tên environment variable, schema hay migration
   artifact, queue cùng provider object mà không có secret value.
 - Bằng chứng test cho checkout creation, invalid input, signature failure,
@@ -170,7 +204,7 @@ Kết quả hoàn tất nên cung cấp:
 | Webhook signature thất bại | Giữ exact raw byte cùng header an toàn, xác nhận thứ tự parser và environment secret, rồi replay provider-generated test event. |
 | Provider retry event đã thành công | Kiểm tra response timing/status cùng durable idempotency record; đừng chặn retry bằng cách acknowledge payload chưa xác minh. |
 | Order và provider state không khớp | Dừng automated fulfillment, so provider ID cùng event history, reconcile trong report có giới hạn rồi duyệt corrective mutation riêng. |
-| Test chạm live account | Dừng, revoke hoặc rotate credential bị lộ, kiểm tra object và charge đã tạo, chỉ tiếp tục với sandbox identity đã xác minh. |
+| Test chạm live account | Dừng, revoke hoặc rotate credential bị lộ, kiểm tra object và charge đã tạo, chỉ tiếp tục với sandbox identity đã xác minh, hoặc với phê duyệt ranh giới live rõ ràng cho PayFS. |
 | Helper đi kèm báo success | Chỉ coi đó là local format validation; xác minh handler thật bằng provider test event cùng application persistence. |
 | Runtime không nhận diện Skill | Xác nhận target cùng scope, mở session mới, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
 
@@ -187,5 +221,8 @@ hoặc [Tổng quan Engineer Kit](../../engineer) cho delivery được điều 
 - Helper test đi kèm kiểm tra JavaScript utility cục bộ, không kiểm tra provider
   network behavior, real webhook delivery, database transaction, financial
   accuracy, dispute hay production failover.
+- Lemon Squeezy thuộc sở hữu Stripe và ở chế độ bảo trì; reference JS SDK của
+  nó đã cũ, và build mới nên so sánh với Stripe Managed Payments trước khi
+  chọn.
 - Ví dụ multi-provider là pattern; currency conversion, refund, discount,
   commission cùng entitlement rule phải khớp business ledger hiện tại.

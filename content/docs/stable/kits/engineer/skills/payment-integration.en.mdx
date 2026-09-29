@@ -1,25 +1,29 @@
 ---
 title: Integrate payments safely with ak:payment-integration
-description: Implement SePay, Polar, or Stripe checkout and webhooks with explicit credentials, idempotency, financial side effects, and go-live evidence.
+description: Implement SePay, PayFS, Polar, Stripe, Creem, Dodo Payments, Lemon Squeezy, Paddle, or PayPal checkout and webhooks with explicit credentials, idempotency, financial side effects, and go-live evidence.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
 Use `ak:payment-integration` to design or implement a payment flow with SePay,
-Polar, or Stripe. The Skill covers checkout, subscriptions, VietQR and bank
-transfer flows, signed webhooks, provider-aware orders, refunds, and durable
-event handling. It is most useful when the provider and business outcome are
-already known.
+PayFS, Polar, Stripe, Creem, Dodo Payments, Lemon Squeezy, Paddle, or PayPal.
+The Skill covers checkout, subscriptions, usage/credit billing, license keys,
+VietQR and bank transfer flows, signed webhooks, provider-aware orders,
+refunds, and durable event handling. It is most useful when the provider and
+business outcome are already known.
 
 ## Choose ak:payment-integration for provider work
 
 ### Use ak:payment-integration when
 
-- You need SePay for VND, bank-transfer, or VietQR flows.
-- You need Polar for software checkout, subscriptions, usage billing, or
-  benefit delivery.
+- You need SePay or PayFS for VND, bank-transfer, or VietQR flows.
+- You need Polar, Creem, Dodo Payments, Lemon Squeezy, or Paddle for a
+  merchant-of-record SaaS or digital-product checkout, subscriptions, usage
+  billing, or license keys.
 - You need Stripe Checkout, Billing, Payment Element, or Connect guidance.
+- You need PayPal wallet and card checkout or subscriptions, where you remain
+  the merchant of record.
 - You need a unified order model or idempotent webhook processing across
   providers.
 
@@ -45,10 +49,17 @@ Before you start:
 - Define currencies, smallest-unit storage, products/prices, taxes, discounts,
   trials, fulfillment, cancellation, refund, dispute, and reconciliation rules.
 - Use sandbox accounts, test products, test payment methods, isolated webhook
-  endpoints, and synthetic customer data.
-- Keep `SEPAY_SECRET_KEY`, webhook keys, `POLAR_ACCESS_TOKEN`,
-  `POLAR_WEBHOOK_SECRET`, Stripe secret keys, signing secrets, and customer data
-  out of prompts, logs, client bundles, command history, and Git.
+  endpoints, and synthetic customer data. PayFS has no sandbox; treat every
+  PayFS call as live and gate it accordingly.
+- Keep provider secret keys and webhook signing secrets (for example
+  `SEPAY_SECRET_KEY`, `PAYFS_WEBHOOK_SECRET`, `POLAR_ACCESS_TOKEN` and
+  `POLAR_WEBHOOK_SECRET`, Stripe secret and signing keys, `CREEM_API_KEY` and
+  `CREEM_WEBHOOK_SECRET`, `DODO_PAYMENTS_API_KEY` and
+  `DODO_PAYMENTS_WEBHOOK_KEY`, `LEMONSQUEEZY_API_KEY` and
+  `LEMONSQUEEZY_WEBHOOK_SECRET`, `PADDLE_WEBHOOK_SECRET`, and
+  `PAYPAL_CLIENT_ID`/`PAYPAL_CLIENT_SECRET` with the separate `PAYPAL_WEBHOOK_ID`)
+  and customer data out of prompts, logs, client bundles, command history, and
+  Git.
 - State whether package installation, provider API calls, dashboard changes,
   public tunnels, database writes, emails, refunds, or deployment are allowed.
 
@@ -64,6 +75,20 @@ making a financial or production decision.
 
 See [Runtime adapters](../../../concepts/runtime-adapters) for component-level
 differences.
+
+## Choose a provider
+
+| Provider | Best for |
+| --- | --- |
+| SePay | Vietnamese market, VND, bank transfers, VietQR/NAPAS |
+| PayFS | Vietnamese bank-transfer confirmation webhooks (MB/ACB/OCB directly; other banks via NAPAS for enterprises), flat monthly plans, no gateway, no sandbox |
+| Polar | Global SaaS, subscriptions, automated benefits (GitHub/Discord delivery) |
+| Stripe | Enterprise payments, Connect platforms, custom checkout |
+| Creem | Merchant of record for SaaS/software, license keys, USD/EUR only, simple API |
+| Dodo Payments | Merchant of record for SaaS/AI/digital products, usage/credit billing, license keys, Standard Webhooks |
+| Lemon Squeezy | Existing Lemon Squeezy stores; merchant of record for digital products/SaaS. Stripe-owned and in maintenance mode; evaluate Stripe Managed Payments for a new build |
+| Paddle | Merchant of record for SaaS/AI/digital products, 30+ currencies, Paddle.js checkout, multi-item subscriptions |
+| PayPal | Global wallet and card checkout, subscriptions; not merchant of record (you own tax), no VND |
 
 ## Run the Skill
 
@@ -109,16 +134,20 @@ $ak:payment-integration "stripe Add a sandbox subscription checkout to the exist
    version, environment, checkout product, currency, legal ownership, and
    project integration points.
 2. **The run maps the order state machine.** Internal and provider identifiers,
-   amounts, currencies, subscriptions, refunds, entitlements, and terminal
-   states remain explicit.
+   amounts, currencies, subscriptions, refunds, entitlements, license keys, and
+   terminal states remain explicit.
 3. **The run creates checkout server-side.** Secret-key operations stay behind
    authenticated server endpoints; only safe client values are returned.
 4. **The run handles webhooks before fulfillment.** It validates the authentic
-   raw request, rejects invalid deliveries, records a unique event, and makes
-   processing idempotent before changing access or money state.
+   raw request with the provider's own signature scheme (HMAC for SePay,
+   PayFS, Polar, Creem, Lemon Squeezy, and Paddle; Standard Webhooks for Dodo
+   Payments; CRC32 plus RSA certificate verification for PayPal), rejects
+   invalid deliveries, records a unique event, and makes processing idempotent
+   before changing access or money state.
 5. **The run verifies retries and reconciliation.** Duplicate, delayed,
    out-of-order, failed, refunded, renewed, canceled, and unknown events are
-   exercised against the sandbox contract.
+   exercised against the sandbox contract, or against the live PayFS boundary
+   when that is the provider.
 6. **The run reports the go-live gap.** Changed files, credentials required,
    provider objects, tests, monitoring, manual dashboard steps, and unapproved
    financial or deployment actions are listed.
@@ -128,24 +157,30 @@ $ak:payment-integration "stripe Add a sandbox subscription checkout to the exist
 <Callout type="warn" title="A successful API call can move money or access">
   Live checkout, subscription changes, refunds, benefit grants, bank events,
   product edits, and webhook replays can affect customers and financial
-  records. Sandbox authority never implies production authority.
+  records. Sandbox authority never implies production authority, and PayFS has
+  no sandbox at all.
 </Callout>
 
 - Use server-side secrets and provider-recommended constant-time or SDK
   signature verification. Do not trust a redirect or client success page as
   payment confirmation.
 - Make fulfillment and entitlement changes idempotent. Persist provider event
-  IDs and preserve enough evidence for replay and reconciliation.
+  IDs and preserve enough evidence for replay and reconciliation. PayPal's
+  webhook ID is not delivered in the payload; store it separately from the
+  webhook secrets above and provide it to the verifier.
 - Public tunnel tools expose a local endpoint to the internet. Confirm the
   endpoint, authentication, payload logging, and shutdown plan first.
 - The bundled checkout helper generates configuration; it does not complete a
   provider checkout. Its Polar output embeds the access token in a displayed
   cURL command, so do not use a live token in interactive output or shell
   history.
-- The bundled Polar CLI verifier creates mock headers for its own payload; it
-  does not prove a real incoming delivery. The SePay helper’s OAuth mode only
-  checks that a Bearer token is present, not that it is valid. Use the provider
-  SDK or a production-grade verifier for the real endpoint.
+- The bundled per-provider webhook verifiers (SePay, PayFS, Polar, Creem, Dodo
+  Payments, Lemon Squeezy, Paddle, PayPal) create or check signatures for a
+  local test payload; they do not prove a real incoming delivery. The SePay
+  helper's OAuth mode only checks that a Bearer token is present, not that it
+  is valid, and PayFS additionally requires matching the `X-Client-API-Key`
+  header. Use the provider SDK or a production-grade verifier for the real
+  endpoint.
 - Commit, product publication, live webhook registration, refund execution,
   rollout, and deployment require separate approval.
 
@@ -154,7 +189,8 @@ $ak:payment-integration "stripe Add a sandbox subscription checkout to the exist
 A complete result should provide:
 
 - The checkout and order-state contract, including amount units, currency,
-  provider IDs, customer mapping, and fulfillment boundary.
+  provider IDs, customer mapping, license keys where the provider issues them,
+  and fulfillment boundary.
 - Exact changed files, packages, environment-variable names, schema or
   migration artifacts, queues, and provider objects without secret values.
 - Test evidence for checkout creation, invalid input, signature failure,
@@ -172,7 +208,7 @@ A complete result should provide:
 | A webhook signature fails | Preserve the exact raw bytes and headers safely, confirm parser ordering and environment secret, then replay a provider-generated test event. |
 | The provider retries a successful event | Check response timing/status and the durable idempotency record; do not suppress retries by acknowledging an unverified payload. |
 | Orders and provider state disagree | Stop automated fulfillment, compare provider IDs and event history, reconcile in a bounded report, then approve any corrective mutation separately. |
-| A test reaches a live account | Stop, revoke or rotate exposed credentials, inspect created objects and charges, and resume only with a verified sandbox identity. |
+| A test reaches a live account | Stop, revoke or rotate exposed credentials, inspect created objects and charges, and resume only with a verified sandbox identity, or with explicit live-boundary approval for PayFS. |
 | The bundled helper reports success | Treat it as local format validation only; verify the real handler with provider test events and application persistence. |
 | The runtime does not recognize the Skill | Confirm target and scope, restart the session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
 
@@ -191,5 +227,8 @@ delivery.
 - Bundled helper tests cover local JavaScript utilities, not provider network
   behavior, real webhook delivery, database transactions, financial accuracy,
   disputes, or production failover.
+- Lemon Squeezy is Stripe-owned and in maintenance mode; its JS SDK reference
+  is stale, and a new build should compare it against Stripe Managed Payments
+  before committing to it.
 - Multi-provider examples are patterns; currency conversion, refund, discount,
   commission, and entitlement rules must match the current business ledger.

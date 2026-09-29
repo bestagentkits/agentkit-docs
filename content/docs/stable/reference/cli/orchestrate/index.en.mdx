@@ -40,7 +40,7 @@ run.
 | Report a run's current lifecycle state | `ak orchestrate status <run-id>` | Reaches the run's live worker through its verified control socket when reachable, otherwise reconciles persisted state against a fresh identity probe. Reports PID/PGID, heartbeat, last-output time, and per-job current-command labels. |
 | Cancel a run's live jobs | `ak orchestrate stop <run-id>` | Sends SIGTERM to every signal-authorized job in the verified process group, waits a bounded grace period, then SIGKILLs only a job whose group is still alive under the same verified identity. Never guesses a kill target from persisted state. Darwin only. |
 | Page durable run events | `ak orchestrate events <run-id>` | Read-only replay of persisted observations. `--after` is the sequence cursor (default `0`); `--limit` is `1`–`1000` (default `100`). Missing or truncated observations are not proof of progress. |
-| Page redacted job output | `ak orchestrate output <run-id> <job-id>` | Read-only bounded capture by `--offset` (default `0`) and `--limit` (`1`–`65536`, default `16384`). Does not open private invocation files. |
+| Page redacted job output | `ak orchestrate output <run-id> <job-id>` | Read-only bounded capture by `--offset` (default `0`) and a `--limit` byte target (`1`–`65536`, default `16384`). A page can end early or run over to keep a released secret value whole; follow `next_offset`. Does not open private invocation files. |
 | Export a diagnosis bundle | `ak orchestrate diagnose <run-id>` | Read-only redacted snapshot plus a bounded event/output budget. Redirect `--json` to save it. Never a substitute for private graph or job-spec files. |
 | Discover installed coding runtimes | `ak orchestrate probe` | Runs version/help only, optional `--path runtime=executable`, `--runtime` filter, `--refresh`, `--timeout` (default `10s`, max `30s`). Writes an owned metadata cache. Does not install runtimes, read credentials, prove authentication, or invoke inference. |
 | Persist a resolved plan | `ak orchestrate prepare <jobs.yaml> <run-dir>` | Validates and writes private plan state. CLI dispatch that follows requires Darwin; internal harness dispatch does not. |
@@ -55,7 +55,8 @@ graph under `AGENTKIT_HOME/orchestrate/runs/<run-id>/`. The launch graph
 retains argv and environment for recovery. Keep credentials out of job specs.
 Do not export invocation files or `graph.json` in diagnostic bundles; use
 `ak orchestrate diagnose <run-id> --json` instead. Bounded stdout/stderr capture is
-redacted and reports truncation.
+redacted and reports truncation. Values that the secrets vault released are
+replaced with `[redacted:secret:<NAME>]` markers.
 
 The launch graph digest is bound to the run ID at `start`. `resume` verifies
 this digest against the graph file supplied to it; a mismatch is refused

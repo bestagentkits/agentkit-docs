@@ -1,0 +1,100 @@
+---
+title: Assistant
+description: Chat about your local AgentKit usage in AgentKit Desktop with your own Anthropic, OpenAI, or OpenRouter API key, and see exactly what leaves your machine.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The Assistant is a bring-your-own-key chat rail on the right side of the
+Desktop window. It answers questions about your local AgentKit usage from a
+short aggregate summary, using an API key you store for Anthropic, OpenAI, or
+OpenRouter. After this page you will know how to set a provider and key, what a
+message sends, and what the errors and limits mean.
+
+<Callout type="info">
+  The Assistant runs only in the Desktop app. The browser dashboard started by
+  `ak config start` shows **Desktop app only** in the rail and has no way to
+  store a key or send a message, because both need the key read from the vault
+  on your own machine.
+</Callout>
+
+## Open the rail
+
+Select **Open AI Assistant** at the right edge of the window to expand the
+rail, and **Collapse AI Assistant** to close it. The rail appears only when the
+window is wide enough, and Desktop remembers whether you left it open.
+
+## Choose a provider and model
+
+| Provider | Default model |
+| --- | --- |
+| Anthropic | `claude-sonnet-5` |
+| OpenAI | `gpt-5.1` |
+| OpenRouter | `openrouter/auto` |
+
+**Provider** starts on Anthropic. **Model** is a free-text field for every
+provider: for Anthropic it suggests `claude-sonnet-5` and `claude-opus-5-5`,
+and for OpenAI and OpenRouter you type the model id yourself. A model change is
+saved when you leave the field. Switching providers resets **Model** to that
+provider's default.
+
+Desktop saves the provider and model, never the key, in
+`assistant/settings.json` under your AgentKit home.
+
+## Store your API key
+
+Paste the key into **API key** and select **Save** (or press `Enter`). The field
+is write-only: it clears as soon as you save, and the key is never shown again.
+The rail only tells you **A key is stored for this provider.** or **No key
+stored yet.** Each provider keeps its own key. Pasting into **Replace stored
+key** overwrites it, and **Remove key** deletes it.
+
+The key goes into the local secrets vault as `assistant-<provider>-api-key`
+(for example `assistant-anthropic-api-key`), so it is listed on the
+[Secrets](./secrets) page like any other stored name.
+
+## Check what leaves your machine
+
+Select **What leaves your machine** to see the exact summary the next message
+sends as context, plus the text you type, to the selected provider. The summary
+holds only:
+
+- the number of sessions in the last 7 days;
+- up to five most-used skills in the last 7 days, by name;
+- the kinds of recent activity events, such as `run.started`; and
+- whether the local analytics index is enabled, and its health.
+
+No file paths, transcripts, or secret values are included. Nothing is sent
+until a key is stored and you press **Send**.
+
+## Chat
+
+Type in the message box and select **Send**, or press `Enter` (`Shift+Enter`
+adds a new line). The reply streams into the rail as it arrives; **Stop** ends a
+reply in progress without showing an error. Each message sends the whole
+conversation so far, which Desktop keeps only in the open rail. **New chat**
+clears it, and collapsing the rail also ends it.
+
+To send a message, Desktop reads the key from the vault. That read is recorded
+in the secrets audit log with the reason `assistant: send chat message`, and
+Desktop reuses the key in memory for up to 15 minutes instead of recording a
+read for every message. Changing the key or provider, or locking the vault,
+drops that copy.
+
+## Errors and limits
+
+Provider failures appear as one plain sentence in the rail:
+
+| Message | Meaning |
+| --- | --- |
+| The provider rejected the key. | The provider refused the key (HTTP 401 or 403). Store a new one. |
+| The provider is rate-limiting this key. Wait a moment and try again. | The provider returned HTTP 429. |
+| Could not reach the provider. Check your network connection. | No response from the provider. |
+| The provider is having trouble right now. Try again shortly. | The provider returned a server error. |
+| The provider rejected the request: ... | Any other refusal, with the provider's own reason. |
+| The provider reported an error: ... | The reply failed after it had started, for example because the connection dropped. |
+
+One message waits at most 60 seconds for the provider to start answering and 2
+minutes in total. A reply is capped at 2,048 tokens. A conversation may hold up
+to 500 messages, each up to 32 KiB. Provider calls honor the `HTTPS_PROXY` and
+`HTTP_PROXY` environment variables.

@@ -1,0 +1,98 @@
+---
+title: Assistant
+description: Trò chuyện về usage AgentKit cục bộ trong AgentKit Desktop bằng API key Anthropic, OpenAI hoặc OpenRouter của chính bạn, và xem chính xác những gì rời khỏi máy.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Assistant là rail chat theo kiểu bring-your-own-key ở bên phải cửa sổ Desktop.
+Nó trả lời câu hỏi về usage AgentKit cục bộ của bạn dựa trên một bản tóm tắt
+tổng hợp ngắn, dùng API key bạn lưu cho Anthropic, OpenAI hoặc OpenRouter. Sau
+trang này bạn sẽ biết cách đặt provider và key, một tin nhắn gửi đi những gì, và
+ý nghĩa của các lỗi cùng giới hạn.
+
+<Callout type="info">
+  Assistant chỉ chạy trong ứng dụng Desktop. Browser dashboard do
+  `ak config start` khởi động hiển thị **Desktop app only** trong rail và không
+  có cách nào lưu key hay gửi tin nhắn, vì cả hai đều cần đọc key từ vault trên
+  chính máy của bạn.
+</Callout>
+
+## Mở rail
+
+Chọn **Open AI Assistant** ở mép phải cửa sổ để mở rộng rail, và **Collapse AI
+Assistant** để đóng lại. Rail chỉ xuất hiện khi cửa sổ đủ rộng, và Desktop nhớ
+bạn đã để rail mở hay không.
+
+## Chọn provider và model
+
+| Provider | Model mặc định |
+| --- | --- |
+| Anthropic | `claude-sonnet-5` |
+| OpenAI | `gpt-5.1` |
+| OpenRouter | `openrouter/auto` |
+
+**Provider** mặc định là Anthropic. **Model** là ô nhập tự do cho mọi provider:
+với Anthropic ô này gợi ý `claude-sonnet-5` và `claude-opus-5-5`, còn với OpenAI
+và OpenRouter bạn tự gõ model id. Thay đổi model được lưu khi bạn rời khỏi ô.
+Đổi provider sẽ đặt lại **Model** về model mặc định của provider đó.
+
+Desktop lưu provider và model, không bao giờ lưu key, trong
+`assistant/settings.json` dưới AgentKit home của bạn.
+
+## Lưu API key
+
+Dán key vào **API key** rồi chọn **Save** (hoặc nhấn `Enter`). Ô này chỉ ghi: nó
+được xoá ngay khi bạn lưu, và key không bao giờ được hiển thị lại. Rail chỉ báo
+**A key is stored for this provider.** hoặc **No key stored yet.** Mỗi provider
+giữ key riêng. Dán vào **Replace stored key** sẽ ghi đè key đó, và **Remove key**
+xoá nó.
+
+Key được lưu vào vault secrets cục bộ dưới tên `assistant-<provider>-api-key`
+(ví dụ `assistant-anthropic-api-key`), nên nó xuất hiện trên trang
+[Secrets](./secrets) như mọi tên đã lưu khác.
+
+## Kiểm tra những gì rời khỏi máy
+
+Chọn **What leaves your machine** để xem chính xác bản tóm tắt mà tin nhắn tiếp
+theo gửi làm ngữ cảnh, kèm văn bản bạn gõ, tới provider đã chọn. Bản tóm tắt chỉ
+gồm:
+
+- số session trong 7 ngày gần nhất;
+- tối đa năm skill được dùng nhiều nhất trong 7 ngày gần nhất, chỉ tên;
+- các loại sự kiện activity gần đây, chẳng hạn `run.started`; và
+- index analytics cục bộ đang bật hay tắt, cùng tình trạng health của nó.
+
+Không có đường dẫn file, transcript hay giá trị secret nào được đưa vào. Không có
+gì được gửi đi cho tới khi đã lưu key và bạn nhấn **Send**.
+
+## Chat
+
+Gõ vào ô tin nhắn rồi chọn **Send**, hoặc nhấn `Enter` (`Shift+Enter` để xuống
+dòng). Câu trả lời được stream vào rail khi đến; **Stop** dừng câu trả lời đang
+chạy mà không hiện lỗi. Mỗi tin nhắn gửi toàn bộ cuộc hội thoại tới thời điểm đó,
+và Desktop chỉ giữ cuộc hội thoại trong rail đang mở. **New chat** xoá nó, và
+thu gọn rail cũng kết thúc nó.
+
+Để gửi tin nhắn, Desktop đọc key từ vault. Lần đọc đó được ghi vào audit log của
+secrets với lý do `assistant: send chat message`, và Desktop dùng lại key trong
+bộ nhớ tối đa 15 phút thay vì ghi một lần đọc cho mỗi tin nhắn. Đổi key hoặc
+provider, hoặc khoá vault, sẽ bỏ bản sao đó.
+
+## Lỗi và giới hạn
+
+Lỗi từ provider hiển thị thành một câu đơn giản trong rail:
+
+| Thông báo | Ý nghĩa |
+| --- | --- |
+| The provider rejected the key. | Provider từ chối key (HTTP 401 hoặc 403). Hãy lưu key mới. |
+| The provider is rate-limiting this key. Wait a moment and try again. | Provider trả về HTTP 429. |
+| Could not reach the provider. Check your network connection. | Không nhận được phản hồi từ provider. |
+| The provider is having trouble right now. Try again shortly. | Provider trả về lỗi server. |
+| The provider rejected the request: ... | Mọi kiểu từ chối khác, kèm lý do của chính provider. |
+| The provider reported an error: ... | Câu trả lời lỗi sau khi đã bắt đầu, ví dụ vì kết nối bị ngắt. |
+
+Một tin nhắn chờ tối đa 60 giây để provider bắt đầu trả lời và tổng cộng 2 phút.
+Mỗi câu trả lời giới hạn ở 2.048 token. Một cuộc hội thoại chứa tối đa 500 tin
+nhắn, mỗi tin tối đa 32 KiB. Các lệnh gọi provider tuân theo biến môi trường
+`HTTPS_PROXY` và `HTTP_PROXY`.
