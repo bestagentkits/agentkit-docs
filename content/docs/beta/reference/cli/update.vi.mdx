@@ -40,10 +40,41 @@ discovery hay mutation và trả mã `2`. Trong wizard hợp nhất, cùng lựa
 global nhưng vẫn khả dụng cho bước project. Nếu không target nào đã chọn áp
 dụng được ở global scope, wizard bỏ qua bước đó rồi tiếp tục.
 
+## Cập nhật nền tự động (opt-in)
+
+`--schedule daily|weekly` bật cập nhật nền tách rời, khởi động ở lệnh `ak`
+thông thường đầu tiên sau khoảng thời gian đã chọn; `--schedule off` dừng và
+xóa state. Nó refresh CLI và kit global, cộng thêm mọi project đã opt-in bằng
+`--project <dir>` (lặp lại được; thư mục phải đã đăng ký qua
+`ak projects add`) có git tree sạch và không có agent session đang chạy.
+`--no-project <dir>` (lặp lại được) đưa một project ra khỏi danh sách, kể cả
+khi thư mục đó không còn tồn tại. `--status [--json]` báo schedule và kết quả
+nền gần nhất mà không đổi gì; thêm `--ack` để đánh dấu kết quả đó đã xem.
+
+Các cờ settings này chỉ ghi section `auto_update:` trong
+`~/.agentkit/config.yaml` — không cập nhật gì ngay, và không cờ nào trong số
+`--schedule`, `--project`, `--no-project`, `--status`, `--ack` được kết hợp với
+cờ cập nhật (`--kits`, `--force`, `--global`, …) hoặc đối số project-dir; hãy
+chạy chúng như các lệnh riêng.
+
+Cập nhật nền không bao giờ khởi động khi có `AK_NO_AUTO_UPDATE=1` hoặc `CI`, với
+lệnh gọi `--json`, hoặc với top-level command thuộc lifecycle/interactive
+(`update`, `self-update`, `setup`, `onboard`, `kit`, `init`, `migrate`,
+`backups`, `recover`, `gui`, `uninstall`, `completion`, `help`, `bootstrap*`).
+Liveness được theo dõi bởi Kit hook (`session-heartbeat.cjs`) đăng ký trên
+`SessionStart`, `UserPromptSubmit`, `Stop` và `SessionEnd`; hook ghi một marker
+theo session dưới AgentKit home để updater bỏ qua project đang có session
+chạy, và không bao giờ chặn hay làm hỏng session (tự thoát `0` khi lỗi). Tại
+`SessionStart`, kết quả nền chưa được xem sẽ in thành một dòng thông báo; xác
+nhận bằng `ak update --status --ack --json`. Xem check `auto_update` của
+[`ak doctor`](./doctor) để chẩn đoán schedule, run bị kẹt và project đã opt-in.
+
 ## Tùy chọn
 
 | Tùy chọn | Mặc định | Mục đích |
 | --- | --- | --- |
+| `--ack` | `false` | Cùng `--status`: đánh dấu kết quả cập nhật nền gần nhất đã xem. |
+| `--backup` | `false` | Snapshot toàn bộ project, không chỉ tệp mà refresh thay đổi; `backups.enabled: true` trong `~/.agentkit/config.yaml` làm đây thành mặc định. |
 | `--beta` | `false` | Bao gồm hành vi tự cập nhật CLI beta. |
 | `--channel <channel>` | `stable`, hoặc `kit.channel` đã lưu | Chọn kênh kit; giá trị tường minh được lưu lại. |
 | `--dry-run` | `false` | Xem trước mà không ghi bản cài dự án hoặc toàn cục. |
@@ -52,11 +83,15 @@ dụng được ở global scope, wizard bỏ qua bước đó rồi tiếp tụ
 | `--kits <names>` | Trống | Giới hạn danh sách kit phân tách bằng dấu phẩy. |
 | `--kits-dir <path>` | Trống | Đọc kit từ thư mục cục bộ. |
 | `--local` | `false` | Dùng nguồn kit cục bộ. |
-| `--no-backup` | `false` | Bỏ qua recovery snapshot trước khi cập nhật (chỉ dành cho power user — rủi ro mất dữ liệu). |
+| `--no-backup` | `false` | Bỏ qua recovery snapshot trước khi cập nhật, kể cả snapshot mà `--force` tạo (chỉ dành cho power user — rủi ro mất dữ liệu). |
+| `--no-project <dir>` | Trống | Gỡ một project khỏi cập nhật nền, kể cả khi thư mục đã mất (lặp lại được). |
+| `--project <dir>` | Trống | Opt-in một project đã đăng ký qua `ak projects add` vào cập nhật nền (lặp lại được). |
 | `--registry-url <url>` | Trống | Ghi đè URL registry. |
 | `--remote` | `true` | Dùng registry từ xa. |
 | `--runtime <runtime>` | `claude-code` | Alias của `--target`; chọn runtime từ ma trận scope và nguồn bên trên. |
+| `--schedule <daily\|weekly\|off>` | Trống | Đặt hoặc xóa schedule cập nhật nền (chỉ settings; không cập nhật gì ngay). |
 | `--show-diff` | `false` | Bao gồm diff tệp trong kế hoạch. |
+| `--status` | `false` | Hiện schedule cập nhật nền và kết quả gần nhất (chỉ đọc). |
 | `--target <target>` | Trống | Chọn runtime từ ma trận scope và nguồn bên trên; chỉ truyền một trong hai cờ `--target` hoặc `--runtime`. |
 | `--version <version>` | Trống | Ghim phiên bản kit. |
 
@@ -81,6 +116,13 @@ ak update --global --dry-run --kits core --runtime claude-code
 ak update --global --dry-run --kits core --local --kits-dir ./kits --target grok
 ```
 
+Bật cập nhật nền và kiểm tra status:
+
+```bash
+ak update --schedule daily --project .
+ak update --status --json
+```
+
 ## Đầu ra và luồng
 
 Với `--json`, stdout dùng envelope chung có `"kind": "update"`. `data` của dự án gồm `project_dir`, `files_updated`, `files_skipped`, `files_new` và `dry_run`; nó cũng có thể gồm các trường snapshot, `backup_skipped`, `skipped`, `diffs`, `project_config`, `project_config_created` và `scope`.
@@ -101,13 +143,15 @@ Lần xem trước JSON ngầm định in envelope thành công ra stdout rồi 
 | Mã | Ý nghĩa |
 | --- | --- |
 | `0` | Đã áp dụng cập nhật, hoàn tất dry-run tường minh hoặc từ chối lời nhắc tương tác. |
-| `1` | Runtime, vòng đời, nguồn, snapshot, ghi hoặc cập nhật toàn cục một phần thất bại. |
-| `2` | Flag, scope, nguồn, target hoặc lựa chọn bản cài global đủ điều kiện không hợp lệ. |
+| `1` | Runtime, vòng đời, nguồn, snapshot, ghi hoặc cập nhật toàn cục một phần thất bại; với auto-update settings và `--status --ack`, còn tính lỗi I/O hoặc state file đang bận. |
+| `2` | Flag, scope, nguồn, target hoặc lựa chọn bản cài global đủ điều kiện không hợp lệ; với auto-update settings, còn tính `--schedule` không hợp lệ, `--project` chưa đăng ký, hoặc cờ settings kết hợp với cờ cập nhật hay đối số project-dir. |
 | `3` | Lần xem trước ngầm định không tương tác cần `--yes` để áp dụng. |
 
 ## Tác động, an toàn và khôi phục
 
-Cập nhật dự án phân loại tệp thuộc quyền sở hữu. Tệp sạch có thể được thay thế; tệp đã sửa hoặc vị trí mới bị chiếm được bỏ qua trừ khi dùng `--force`. Apply cũng prune các tệp AgentKit sở hữu dưới `kits/<id>/` mà source tới không còn ship, và chỉ với kit có trong incoming set. Bản sạch và bản đã missing bị xóa; bản user đã sửa được giữ và báo cáo trừ khi có `--force`. Path không còn là regular file được để nguyên. Directory trống còn lại trong kit tree bị xóa; kit root thì không. Chế độ áp dụng tạo snapshot dự án trước khi ghi cập nhật trừ khi có `--no-backup`. `--no-backup` cảnh báo trên stderr, và `--force --no-backup` thêm cảnh báo nghiêm trọng hơn. Kết quả có cấu trúc báo `backup_skipped` nên `snapshot_id` trống chưa đủ để phân biệt skip chủ ý với lần chạy không có gì để capture. Apply trên Desktop vẫn luôn tạo snapshot và không nhận `--no-backup`. Một số tệp ngoài phạm vi khôi phục cần được phục hồi thủ công; làm theo `snapshot_data_dir` khi được báo cáo. Cấu hình dự án còn thiếu có thể được tạo trước bước phân loại và snapshot, ngay cả khi bước sau thất bại.
+Cập nhật dự án phân loại tệp thuộc quyền sở hữu. Tệp sạch có thể được thay thế; tệp đã sửa hoặc vị trí mới bị chiếm được bỏ qua trừ khi dùng `--force`. Apply cũng prune các tệp AgentKit sở hữu dưới `kits/<id>/` mà source tới không còn ship, và chỉ với kit có trong incoming set. Bản sạch và bản đã missing bị xóa; bản user đã sửa được giữ và báo cáo trừ khi có `--force`. Path không còn là regular file được để nguyên. Directory trống còn lại trong kit tree bị xóa; kit root thì không.
+
+Theo mặc định, apply chỉ snapshot đúng những tệp nó ghi hoặc prune — một bundle có thể restore, được authorize theo project root (`--allow-root`), và kết quả gồm cả lệnh restore. `--force`, `--backup`, hoặc `backups.enabled: true` trong `~/.agentkit/config.yaml` thay vào đó capture toàn bộ project; `--backup` không mở rộng snapshot của global kit refresh. `--no-backup` bỏ qua mọi snapshot, kể cả snapshot mà `--force` tạo, và cảnh báo trên stderr; `--force --no-backup` thêm cảnh báo nghiêm trọng hơn. Kết quả có cấu trúc báo `backup_skipped` nên `snapshot_id` trống chưa đủ để phân biệt skip chủ ý với lần chạy không có gì để capture. Desktop plan apply giữ nội dung người dùng dùng cùng cơ chế exact-file capture đó trừ khi nội dung người dùng bị ghi đè hoặc có `backups.enabled`, khi đó nó capture toàn bộ project; nó không nhận `--no-backup`. Một số tệp ngoài phạm vi khôi phục cần được phục hồi thủ công; làm theo `snapshot_data_dir` khi được báo cáo. Cấu hình dự án còn thiếu có thể được tạo trước bước phân loại và snapshot, ngay cả khi bước sau thất bại.
 
 Các tệp được ghi tuần tự nên lỗi có thể để lại cập nhật một phần. Cập nhật toàn cục tiếp tục qua các kit, báo cáo lỗi theo kit và có thể tạo gói hỗ trợ trong `~/.agentkit/support`. Chế độ force toàn cục có thể lưu trữ kỹ năng Codex cũ được cho phép, nhưng vẫn giữ nguyên sửa đổi của người dùng.
 

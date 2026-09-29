@@ -11,8 +11,8 @@ unsafe or overly broad operation, or update bounded workflow state. You do not
 invoke them as Skills or commands; the selected runtime calls the supported
 handlers when their events occur.
 
-The resolved Engineer package contains **54 Hook package entries**. That number
-is an artifact inventory, not 54 independent behaviors. It includes the Hook
+The resolved Engineer package contains **55 Hook package entries**. That number
+is an artifact inventory, not 55 independent behaviors. It includes the Hook
 manifest, event handlers, shared support libraries, and Engineer-specific state
 and statusline helpers. One handler can participate in several events, while a
 support file may never run on its own.
@@ -32,11 +32,12 @@ The active graph is organized around outcomes rather than package file count:
 | `PreToolUse` | Provides naming guidance for new files, checks sensitive-file access, stops overly broad or ignored-path scouting when the request falls outside the supported boundary, checks how much content a read, search, or shell command can return, and substitutes `${secret:NAME}` references in shell commands and fetch URLs. A check may allow the request, return guidance, or ask for approval. |
 | `PostToolUse` | Keeps plan formatting coherent after edits and writes, refreshes task/session state after supported task operations, updates usage state after tool activity, and records bounded tool-activity totals for the agent behavior linter. |
 | `PreCompact` | Captures enough workflow orientation to continue after context compaction and notes the compaction for the agent behavior linter. |
-| `SessionStart` | Initializes project and session context for the new session. |
+| `SessionStart` | Initializes project and session context for the new session, and refreshes this project's background-auto-update liveness marker. |
 | `SubagentStart` | Initializes subagent state and supplies the relevant team context. |
-| `Stop` | Refreshes session and usage state. When an active plan is bound, the plan reminder can return valid nonblocking JSON with `continue` and `systemMessage`; otherwise it exits silently. The agent behavior linter can add an advisory session report. |
+| `Stop` | Refreshes session and usage state, and refreshes the auto-update liveness marker. When an active plan is bound, the plan reminder can return valid nonblocking JSON with `continue` and `systemMessage`; otherwise it exits silently. The agent behavior linter can add an advisory session report. |
 | `SubagentStop` | Refreshes shared session state at the subagent boundary. |
-| `UserPromptSubmit` | Supplies project-development guidance, checks for secret-like output risk, applies the simplify-before-shipping gate when relevant, and refreshes usage state. |
+| `UserPromptSubmit` | Supplies project-development guidance, checks for secret-like output risk, applies the simplify-before-shipping gate when relevant, refreshes usage state, and refreshes the auto-update liveness marker. |
+| `SessionEnd` | Removes this session's auto-update liveness marker. |
 
 These outcomes support the Engineer workflow; they do not approve a plan,
 commit, merge, deploy, or release work for you.
@@ -93,6 +94,17 @@ Treat a released value as present on the host and rotate it when needed.
 
 Claude Code and Grok register the Hook for `Bash|WebFetch`, and Codex narrows it
 to `Bash`. Cursor support for this Hook is not established in this release.
+
+## Background auto-update liveness
+
+The `session-heartbeat.cjs` Hook is registered on `SessionStart`,
+`UserPromptSubmit`, `Stop`, and `SessionEnd`. It writes a per-session marker
+under the AgentKit home so the opt-in [background auto-update](../../../guides/updating)
+skips a project with a live agent session, and removes that marker at
+`SessionEnd`. On `SessionStart`, it also prints a one-line notice for an
+unacknowledged background-update result, acknowledged with
+`ak update --status --ack --json`. The Hook never blocks a session and exits
+`0` even on its own failure.
 
 ## Configured paths at session start
 

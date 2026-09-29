@@ -38,9 +38,10 @@ project. AgentKit home toàn cục nằm lồng trong project sẽ bị loại k
 | --- | --- | --- |
 | `--docs-dir <path>` | Unset | Lưu thư mục tài liệu vào `paths.docs`. |
 | `--plans-dir <path>` | Unset | Lưu `paths.plans`; dùng relative path để tương thích các reader kế hoạch. |
+| `--backup` | `false` | Snapshot `~/.claude/` và project state trước khi init; `backups.enabled: true` trong `~/.agentkit/config.yaml` làm đây thành mặc định. |
 | `--dry-run` | `false` | Phân loại và báo việc tiếp nhận mà không ghi snapshot, manifest, audit hay registry. |
 | `--force` | `false` | Chấp nhận drift hiện có rồi tiếp tục cập nhật bản ghi ownership. |
-| `--no-backup` | `false` | Bỏ qua protected pre-init snapshot của Claude home không rỗng. |
+| `--no-backup` | `false` | Bỏ qua mọi snapshot của init, kể cả snapshot mà `--force` tạo (chỉ dành cho power user — rủi ro mất dữ liệu). |
 | `--project-id <id>` | Tên thư mục | Đặt project ID trong lần khởi tạo đầu tiên. |
 
 Xem [quy ước CLI](../cli-conventions) để biết các cờ dùng chung về đầu ra và
@@ -53,6 +54,7 @@ ak init
 ak init ./my-project
 ak init ./my-project --dry-run --json
 ak init ./my-project --force --no-interactive
+ak init ./my-project --backup
 ```
 
 ## Hành vi TTY và xác nhận
@@ -72,9 +74,11 @@ Lần chạy lại xác minh hash của mọi tệp được theo dõi. Drift th
 `--force`. Force chấp nhận và báo drift; cờ này không ghi đè tệp đã sửa. Tệp
 managed mới được phát hiện sau đó có thể được thêm vào ownership.
 
-Dry-run không ghi dữ liệu và không tạo snapshot. Với project đã có manifest,
-lần chạy thường tạo pre-init snapshot trước khi xác minh drift, nên mã `6` vẫn
-có thể để lại recovery snapshot mới.
+Dry-run không ghi dữ liệu và không tạo snapshot. Lần chạy thường không tạo
+snapshot theo mặc định; `--backup` hoặc `backups.enabled: true` capture
+`~/.claude/` và project state trước khi xác minh drift, còn `--force` chỉ
+capture project ownership state. Snapshot nào cũng xảy ra trước khi xác minh
+drift, nên mã `6` vẫn có thể để lại recovery snapshot mới nếu đã yêu cầu.
 
 ## Đầu ra và các luồng
 
@@ -117,9 +121,11 @@ mà không đổi nội dung của chúng. Lần chạy non-dry thành công cò
 script-audit snapshot và thử thêm project vào global project registry. Hai thao
 tác sau là best-effort: lỗi của chúng không đổi mã thoát `0`.
 
-Với manifest hiện có, AgentKit tạo pre-init state snapshot. Lệnh còn tạo
-protected full-scope snapshot của Claude home không rỗng, trừ khi có
-`--no-backup`. Hãy kiểm tra ID được báo trước khi khôi phục:
+Init không tạo snapshot theo mặc định. `--force` chỉ capture project ownership
+state, trước khi chấp nhận drift. `--backup`, hoặc `backups.enabled: true`
+trong `~/.agentkit/config.yaml`, capture thêm Claude home không rỗng.
+`--no-backup` bỏ qua mọi snapshot của init, kể cả snapshot mà `--force` tạo.
+Hãy kiểm tra ID được báo trước khi khôi phục:
 
 ```bash
 ak backups show <id>

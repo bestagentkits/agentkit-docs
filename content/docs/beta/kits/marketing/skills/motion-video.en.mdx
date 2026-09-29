@@ -1,6 +1,6 @@
 ---
 title: Produce beat-synced motion-graphic videos with ak:motion-video
-description: Build a 1080p HyperFrames motion graphic with AI voice-over, captions, SFX, and music cut to the beat, in a named style profile or a per-scene mix, while keeping provider spend and publication separately approved.
+description: Build a production-grade 1080p HyperFrames motion graphic with AI voice-over, captions, SFX, and music cut to the beat, in a named style profile or a per-scene mix, with fast 1:1/9:16 editions, while keeping provider spend and publication separately approved.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
@@ -10,9 +10,9 @@ Use `ak:motion-video` to make a 1920×1080, 30 fps motion-graphic video where
 scene cuts land on the music's beats, reveals land on spoken words, and the
 audio mix is measured rather than guessed. The workflow is scripted end to end:
 facts, script, generated audio, forced alignment, beat grid, bar-spliced music,
-timeline and mix, HTML composition, lint and check, render, remux, and social
-encode. It renders through HyperFrames (HTML + GSAP) and does not publish the
-result.
+timeline and mix, HTML composition, lint and check, render, remux, social
+encode, and optional 1:1 or 9:16 editions. It renders through HyperFrames (HTML
++ GSAP) and does not publish the result.
 
 ## Choose the motion-video workflow
 
@@ -21,8 +21,8 @@ result.
 - You need a launch, release, changelog, feature, or explainer video with
   voice-over, captions, SFX, and music synced to the beat.
 - You want a restyle of an existing video as a separate project, or a partial
-  rework such as new music, re-timed drops, a re-mix, a re-render, or a social
-  encode.
+  rework such as new music, re-timed drops, a re-mix, a re-render, a social
+  encode, or a square/vertical edition of one.
 - You want one named style profile, or one base style with individual
   dimensions borrowed from other styles for particular scenes.
 - Every on-screen fact can be traced to a primary source such as release notes,
@@ -38,6 +38,21 @@ result.
 - You need talking-head editing. This Skill does not cover it.
 - You want a router across every installed motion or video Skill. Use
   [`ak:motion-graphics`](./motion-graphics).
+
+## Meet the production bar
+
+The workflow targets a real production piece, not a demo: every scene needs a
+focal point, depth, overlapping choreography, anticipation and follow-through,
+micro-motion through its holds, and a transition that carries into the next
+scene. Every scene passes a director's pass before the final render.
+
+By default, a director subagent writes the creative direction and reviews the
+draft for taste, and an executor subagent runs the pipeline and builds the
+composition from that brief; the main session pins the outcome, owns the
+brief, and verifies the result. Pass `--poor` for a single session with no
+subagents, lean reads, a compact brief, and one review round when token spend
+matters more than the full director/executor split — it never skips a
+verification check.
 
 ## Prepare the production route
 
@@ -96,6 +111,8 @@ $ak:motion-video "Make a 60-second release video for our v3.4 notes in the glass
   </Tab>
 </Tabs>
 
+Add `--poor` to the same request for the lean, single-session mode.
+
 ### Pick or mix a style
 
 Every look is a style profile: a compact motion-design grammar for palette,
@@ -135,9 +152,13 @@ composition skeleton plus the resolved style.
    loudness-normalized mix; `measure-mix-balance.py` reports music under speech.
 7. **Build and validate the composition.** `index.html` follows the composition
    contract and the resolved style, then passes `hyperframes lint`, `check`, and
-   scene `snapshot` review.
+   scene `snapshot` review, plus the director's pass on every scene.
 8. **Render, remux, and encode.** HyperFrames renders the video, the measured mix
    is remuxed back in, and an optional social encode produces a smaller file.
+9. **Add a square or vertical edition, when requested.** A re-layout edition
+   (`scripts/reframe.py --ratio 1x1|9x16`) reuses the master's voice-over,
+   music, and mix and adds only ratio-specific CSS and its own render; a quick
+   ffmpeg fit or crop is a faster, lower-fidelity alternative for previews.
 
 ## Keep generation, spend, and publishing gated
 
@@ -173,13 +194,17 @@ assets/videos/<slug>/renders/<slug>-social.mp4
 
 The Skill reports measured numbers, not impressions. It is done only when:
 
-- `hyperframes lint` and `check` pass and snapshots of every scene were reviewed.
+- `hyperframes lint` and `check` pass and snapshots of every scene were
+  reviewed, and every scene passed the director's pass.
 - `verify-arrangement.py` reports every segment within ±2 ms, and
   `measure-mix-balance.py` shows the music about 4–6 dB under speech.
-- `ffprobe` reports 1920×1080, 30 fps, the expected duration, and AAC 48 kHz
-  stereo; loudness is about −14 LUFS with peak at or below −1 dBFS, and
-  blackdetect finds nothing outside fades.
+- `ffprobe` reports the expected frame size (1920×1080 for the master, or the
+  requested 1:1/9:16 edition's own size), 30 fps, the expected duration, and
+  AAC 48 kHz stereo; loudness is about −14 LUFS with peak at or below −1 dBFS,
+  and blackdetect finds nothing outside fades.
 - `build-timeline` printed no clip, overlap, or missing-word warnings.
+- Each requested 1:1 or 9:16 edition passes the same lint, check, ffprobe,
+  loudness, and blackdetect checks as the master.
 - On-screen facts trace to the sources collected at the start.
 
 ## Troubleshoot safely
@@ -192,6 +217,7 @@ The Skill reports measured numbers, not impressions. It is done only when:
 | `verify-arrangement.py` reports drift | Re-fit the beat grid, adjust the arrangement, and re-run the arrangement and timeline steps. |
 | `lint` or `check` fails | Fix the composition against the composition contract before rendering. |
 | Only visuals changed | Re-run `lint`, `check`, `render`, and the remux; audio does not need regeneration. |
+| A 1:1 or 9:16 edition still shows 1920/1080-sized layout | Read `reframe.py`'s warnings for the affected lines, add the missing `data-ratio` override, and regenerate the edition; never hand-edit the generated edition directory. |
 
 Continue with the [Marketing Kit overview](../../marketing),
 [Projects, artifacts, and checkpoints](../../../concepts/projects-artifacts-checkpoints),
