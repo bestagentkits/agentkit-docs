@@ -39,9 +39,10 @@ excluded from ownership.
 | --- | --- | --- |
 | `--docs-dir <path>` | Unset | Persist the documentation directory as `paths.docs`. |
 | `--plans-dir <path>` | Unset | Persist `paths.plans`; use a relative path for compatibility with plan readers. |
+| `--backup` | `false` | Snapshot `~/.claude/` and the project state before init; `backups.enabled: true` in `~/.agentkit/config.yaml` makes this the default. |
 | `--dry-run` | `false` | Classify and report adoption without snapshots, manifest, audit, or registry writes. |
 | `--force` | `false` | Accept existing drift and continue updating ownership records. |
-| `--no-backup` | `false` | Skip the protected pre-init snapshot of a non-empty Claude home. |
+| `--no-backup` | `false` | Skip every init snapshot, including the one `--force` takes (power users only — data loss risk). |
 | `--project-id <id>` | Directory name | Set the project ID on first initialization. |
 
 See [CLI conventions](../cli-conventions) for shared output and interaction
@@ -54,6 +55,7 @@ ak init
 ak init ./my-project
 ak init ./my-project --dry-run --json
 ak init ./my-project --force --no-interactive
+ak init ./my-project --backup
 ```
 
 ## TTY and confirmation behavior
@@ -74,9 +76,12 @@ A re-run verifies every tracked hash. Drift exits `6` unless `--force` is
 used. Force accepts and reports the drift; it does not overwrite the modified
 file. Newly discovered managed files can then be added to ownership.
 
-Dry-run writes nothing and takes no snapshot. On an existing project, a normal
-run creates its pre-init snapshot before drift verification, so an exit `6`
-can still leave a new recovery snapshot.
+Dry-run writes nothing and takes no snapshot. A normal run takes no snapshot
+by default; `--backup` or `backups.enabled: true` captures `~/.claude/` and
+the project state before drift verification, and `--force` captures the
+project ownership state only. Either snapshot happens before drift
+verification, so an exit `6` can still leave a new recovery snapshot when one
+was requested.
 
 ## Output and streams
 
@@ -120,9 +125,11 @@ local script-audit snapshot and attempts to add the project to the global
 project registry. Those two follow-up operations are best-effort: their failure
 does not change exit `0`.
 
-For an existing manifest, AgentKit creates a pre-init state snapshot. It also
-takes a protected full-scope snapshot of a non-empty Claude home unless
-`--no-backup` is set. Inspect reported IDs before recovery:
+Init takes no snapshot by default. `--force` captures the project ownership
+state only, before accepting drift. `--backup`, or `backups.enabled: true` in
+`~/.agentkit/config.yaml`, additionally captures a non-empty Claude home.
+`--no-backup` skips every init snapshot, including the one `--force` takes.
+Inspect reported IDs before recovery:
 
 ```bash
 ak backups show <id>
