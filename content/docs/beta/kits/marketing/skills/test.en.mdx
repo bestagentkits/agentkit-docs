@@ -112,9 +112,11 @@ checkpoints or `--interview` to approve each proposed change group before edits.
 `--ultra` runs five independent read-only analysis candidates in one parallel
 wave with one verifier: `create` and `optimize` select one winning design
 unchanged, while `audit` returns the evidence-validated, deduplicated union of
-findings. The flags compose. Without `--interview`, `create` and `optimize`
-apply changes directly and report the full change list; `audit` reports findings
-and repairs only when you also request fixes.
+findings. Failed slots are retried once; unavailable parallel read-only dispatch
+or fewer than five usable results after retry fails closed. The flags compose.
+Without `--interview`, `create` and `optimize` apply in-scope changes directly and
+report the full change list. Audit remains report-only unless suite repair is
+separately authorized; omitting the flag does not authorize repairs or retirement.
 
 ```text
 /ak:test create "Cover the newsletter signup workflow" --interview
@@ -125,6 +127,21 @@ and repairs only when you also request fixes.
 Project-defined commands and coverage thresholds take priority. When the project
 defines no threshold, the Skill reports actual coverage and missing critical
 behavior instead of inventing a percentage gate.
+Reuse adequate existing tests; a covered refactor can add zero new tests.
+
+Before adding tests or running broad checks, name the accepted contract and its
+authority, affected risk, suitable existing check, and remaining evidence gap.
+An inferred expectation is a hypothesis until checked against that authority.
+Admit a new test only for a concrete protection gap; demonstrate its intended
+failure when safe and practical, or report that proof as unavailable.
+
+Combining, lowering the layer of, or retiring tests requires lifecycle review
+of the protected contracts, regression history, measured cost, and remaining
+protection. Sampled mutation-kill overlap or unchanged line coverage alone does
+not justify retirement. Review the remaining suite jointly, preserve required
+tests and mandatory gates, and obtain suite-repair authority for retirement.
+After authorized changes, rerun affected contracts and the same valid sampled
+faults against the remaining suite, followed by required gates.
 
 ## Use impact selection and optional semantic modes
 
@@ -148,21 +165,36 @@ experiment with an explicit `ui-regression` grant can add regression signals fro
 already-observed evidence; it never turns a failure into a pass or changes the UI
 test result.
 
+Optional agentic E2E through `tester-army/e2e` is only for projects already using
+it or when you explicitly request setup. This does not authorize installation,
+provider access, model calls, or telemetry; ordinary native UI checks need no
+model. Check the installed engine's capabilities before running it. Its cache
+replays actions, not passes: rerun exact outcome assertions on the current app.
+`--strict-cache` alone is not a no-model guarantee. If model calls are forbidden,
+use independently verified enforcement for the selected version or stay on the
+native route. Report actual replay/live execution and unfinished exploration;
+no findings or a cache hit does not verify unexercised release claims.
+
 ## Understand what happens during a run
 
-1. **The Skill determines scope.** It connects recent changes or requirements
-   to the smallest useful validation surface at the lowest reliable layer.
+1. **The Skill determines scope.** It maps the accepted contract, authority, and
+   risk to the smallest useful check at the lowest reliable layer, and names
+   missing evidence before adding work.
 2. **The Skill runs the narrowest relevant check first.** Type or build checks
-   run when they cover the affected contract.
+   run when they cover the affected contract; mandatory repository gates remain.
 3. **The Skill executes the selected suites** and analyzes the results with a
    focus on failures, flaky, slow, and skipped tests.
 4. **The Skill measures coverage when relevant** and names uncovered critical
    paths, error handlers, and edge-case branches.
-5. **The Skill exercises the UI when selected.** It uses
-   [`ak:agent-browser`](./agent-browser) or project-native browser tests,
-   organizes the test plan, saves screenshots in one report directory, and can
-   split pages, forms, navigation, user flows, accessibility, responsive layout,
-   performance, security, and SEO checks across parallel `tester` subagents.
+5. **The Skill exercises the UI when selected.** It sets a narrow charter with
+   routes, expected behavior, account/data authority, and mandatory checks. It
+   uses [`ak:agent-browser`](./agent-browser) or project-native browser tests,
+   sequentially by default; only independent, isolated targets with justified
+   capacity warrant `tester` delegation. Browser checks establish browser-observable
+   scope, not backend coverage. Assert exact identities, permissions, counts,
+   side effects, and any specifically claimed control/path; an alternate route
+   cannot rescue a broken control. Save relevant visual evidence in the report
+   directory rather than taking screenshots of every page.
 6. **The Skill produces the report.** It returns concise results for a small run
    or writes a structured report to the repository report location.
 
@@ -175,12 +207,19 @@ test result.
 </Callout>
 
 - Test commands may create coverage files, screenshots, build output, temporary
-  data, or browser state. State the allowed artifact locations and cleanup
-  requirements.
-- Mutation spot-checks for `create` or `audit` modify the code under test once
-  to prove a test fails on a plausible bug, then revert it.
+  data, or browser state. State allowed artifact locations, execution/retry
+  budgets, and cleanup requirements; clean only resources owned by this run.
+- Mutation proof is selective, not a routine execution or CI requirement. Use
+  bounded fault injections only in owned disposable copies, never the active
+  worktree. Record source identity, restore the copy exactly even on failure,
+  verify restoration, and rerun restored behavior. Only a target assertion
+  failure is a semantic kill; compilation, setup, infrastructure, or provider
+  failures are invalid or inconclusive evidence, not kills.
 - UI flows and end-to-end tests can submit forms or mutate data if the
   application behaves that way. Run them against a safe test environment.
+- Real Chrome profile access requires explicit authority and necessary login
+  state; bind to the exact profile-aware tab. External URLs, hosted browsers, and
+  provider or operational costs need their own authority.
 - The UI operation does not implement fixes. Product root-cause work belongs in
   `ak:debug` and `ak:fix`.
 
@@ -189,7 +228,10 @@ test result.
 A complete result should give you:
 
 - The exact scope and every command executed.
-- Totals for passed, failed, and skipped tests, plus duration.
+- Accepted contract and authority, source/input fingerprints before and after
+  execution, runner/configuration, environment, and linked receipts or artifacts.
+- Totals for passed, failed, and skipped tests, plus measured duration; retain
+  every failed attempt and its raw status even when a retry passes.
 - Every failed test with its error message and relevant stack trace.
 - Coverage values and specific uncovered files or functions when coverage was
   requested.
@@ -197,10 +239,24 @@ A complete result should give you:
 - UI pages tested, screenshot paths, console errors, and viewports checked or
   skipped.
 - Critical issues, prioritized recommendations, and unresolved questions.
+- Environment, authentication, and evidence limitations.
+- Applied versus proposed suite changes, their authority, and remaining protection.
+  Compare costs only under matched source tasks, environment, toolchain, and cache
+  conditions: include observed setup, generation/review, runner/model calls,
+  tokens, CI minutes, and device resources where available. Unknown metrics stay
+  unknown; elapsed time is not billed CI minutes, and fewer tests or tokens alone
+  do not establish savings.
 
 Treat the run as passing only when the requested checks report zero failures,
 the build exits successfully when included, and project thresholds are met. A
 partial or skipped check proves only the surface actually executed.
+
+A skipped or unavailable mandatory gate means insufficient evidence. Reuse
+receipts only when their scope, fresh source, relevant dirty/untracked inputs,
+configuration, and environment match; a commit SHA alone is insufficient.
+Invalid, stale, or foreign-scope receipts require rerunning the necessary checks,
+not blindly repeating the whole suite. Changed or unverified final inputs prevent
+a final-source pass claim; report the tested state and remaining gap.
 
 ## Troubleshoot or continue
 

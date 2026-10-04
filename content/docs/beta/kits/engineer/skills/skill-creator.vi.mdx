@@ -7,7 +7,8 @@ import { Callout } from 'fumadocs-ui/components/callout';
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
 Dùng `ak:skill-creator` để tạo, cập nhật, audit hoặc optimize một Skill tái sử dụng.
-`create` scaffold Skill mới. `update` áp dụng thay đổi được yêu cầu tại chỗ.
+`create` kiểm tra trước xem có cần Skill mới có thể định tuyến hay không rồi
+mới scaffold. `update` áp dụng thay đổi được yêu cầu tại chỗ.
 `audit` báo inventory, provenance và dated prompt pattern mà không ghi tệp Skill.
 `optimize` viết lại finding High và Medium và chỉ ghi khi có `--apply`. Skill mới
 mặc định nằm trong project hiện tại; authoring user-scope cần yêu cầu rõ. Thêm
@@ -18,7 +19,8 @@ benchmark, gate và decision.
 
 ### Dùng ak:skill-creator khi
 
-* Bạn cần Skill mới (`create`) hoặc thay đổi tại chỗ có giới hạn (`update`).
+* Bạn cần xác lập liệu Skill riêng có thể định tuyến có hợp lý không (`create`)
+  hoặc thực hiện thay đổi tại chỗ có giới hạn (`update`).
 * Skill hiện có cần inventory dated prompt pattern (`audit`).
 * Bạn muốn rewrite đề xuất chỉ sau khi truyền `--apply` (`optimize`).
 * Bạn cần repository Skill long-horizon (`--long-horizon`).
@@ -27,6 +29,9 @@ benchmark, gate và decision.
 ### Chọn workflow khác khi
 
 * Nhu cầu chỉ là prompt một lần, một preference cá nhân hoặc kiến thức model chung.
+* Owner, reference, script, validator, template hoặc project context hiện có
+  đã đáp ứng nhu cầu; mở rộng bề mặt đó thay vì thêm activation.
+* Bạn cần triển khai CLI hoặc MCP server thay vì author resource của Skill.
 * Bạn cần bundle có command, tool, MCP config, Hook hoặc app ngoài Skill. Dùng
   plugin workflow.
 * Bạn chỉ muốn cài Skill đã tồn tại. Dùng workflow discovery và installation
@@ -38,6 +43,22 @@ Cung cấp ví dụ dùng thật, trigger phrase, output mong đợi, non-goal, 
 boundary và evaluation khách quan có đáng làm hay không. Xác nhận output directory
 trước khi scaffold. Artifact chuẩn là `SKILL.md` cùng đúng các thư mục `scripts/`,
 `references/`, `agents/`, `assets/` mà workflow thực sự cần.
+
+Trước khi scaffold, chứng minh vì sao các bề mặt hiện có đó chưa đủ.
+Skill mới cần giá trị vận hành riêng, ranh giới thẩm quyền hoặc completion
+contract mà consumer không thể tự suy ra đáng tin cậy chỉ từ tác vụ.
+Thư viện kiến thức lớn hoặc persona tự nó không đủ để tạo activation surface
+mới; dùng reference được định tuyến cho domain detail còn thiếu, script hoặc
+validator cho công việc deterministic, template cho output lặp lại và project
+context cho convention cục bộ.
+
+Giữ core common-path của `SKILL.md` rõ ràng: **Outcome**, **Authority** và
+**Done when**. Chỉ thêm constraint, failure mode, routing, tool và bằng chứng
+hoàn tất riêng cho Skill; load framework, catalog, ví dụ và kiến thức sâu tùy
+chọn từ reference khi liên quan. Dùng guardrail, không áp lộ trình từng bước
+chung chung: bảo vệ ranh giới cụ thể và để ngỏ lựa chọn triển khai, trừ khi thứ
+tự cần thiết cho dependency, an toàn, khả năng tái lập hoặc độ tin cậy đã được
+chứng minh. Một loạt lệnh cấm chung chung không thay thế contract đó.
 
 | Runtime     | Cách gọi                | Ranh giới khả dụng                                                                                                             |
 | ----------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
@@ -90,8 +111,10 @@ diagnostic không phải bằng chứng rằng runtime kích hoạt Skill.
    `optimize` chỉ ghi khi có `--apply`.
 2. **Chọn target.** Mặc định là project hiện tại. Kit scope dành cho repository
    AgentKit. User scope cần yêu cầu rõ.
-3. **`create` ghi nhận intent, research trùng lặp, scaffold, viết, rồi
-   validate.** Skill không kết thúc khi linter prompt-cruft còn High finding.
+3. **`create` ghi nhận intent và chứng minh nhu cầu packaging trước scaffold.**
+   Hợp nhất activation trùng lặp vào owner hiện có; chỉ khởi tạo Skill mới khi
+   contract riêng được chứng minh, rồi author và validate. Skill không kết
+   thúc khi còn finding High prompt-cruft chưa giải quyết.
 4. **`update` scout Skill hiện có và agent dùng nó, chỉ áp dụng thay đổi được
    yêu cầu, lint mọi dòng đã đổi, và bump `metadata.version`.**
 5. **`audit` inventory provenance và dated pattern, đồng thời đo usage thực tế
@@ -105,10 +128,21 @@ diagnostic không phải bằng chứng rằng runtime kích hoạt Skill.
 7. **Validate.** Chạy quick validator và linter prompt-cruft trước khi coi Skill
    đã xong.
 8. **Evaluate routing và outcome.** `create` so với không có Skill; `update` so
-   với bản gốc và phải giữ behavior đã chấp nhận. Dùng case có cấu trúc với
-   assertion artifact thật. Ghi model, runtime, snapshot hash, chất lượng và
-   chi phí quan sát được. Blocked hoặc ungraded không phải pass.
+   với bản gốc và phải giữ behavior đã chấp nhận.
+   Test activation thật trong catalog với positive và near-miss negative cho
+   owner liền kề; không ép chọn rồi coi đó là bằng chứng routing. Dùng case có
+   cấu trúc với assertion artifact thật. Ghi model, runtime, snapshot hash,
+   chất lượng và chi phí quan sát được. Blocked hoặc ungraded không phải pass.
    `scripts/eval_skill.py` kiểm tra case, chấm artifact và tóm tắt lần chạy.
+
+Với các Skill nhiều kiến thức hoặc đã refactor, khi thực tế hãy so sánh Skill
+hiện tại/đầy đủ, Skill mỏng hướng constraint và không có Skill, với resource,
+tool, input và setting tương đương. Nhánh direct-context tùy chọn cung cấp
+cùng reference hữu ích mà không qua routing của Skill. Điều đó tách giá trị
+kiến thức khỏi giá trị đóng gói và kích hoạt nó thành Skill; giấu thông tin
+cần thiết khỏi baseline không chứng minh giá trị Skill. So sánh chất lượng
+artifact và chi phí quan sát được, gồm reference thực sự đã đọc. Core ngắn
+hơn tự nó không chứng minh tiết kiệm token hoặc hành vi provider.
 
 ## Giữ file write và distribution có chủ đích
 
@@ -140,6 +174,11 @@ Kết quả hoàn tất phụ thuộc subcommand:
   kit validation, và không ghi nếu thiếu `--apply`.
 * `--long-horizon`: layout observation, experiment, eval, benchmark và gate khi
   flag đó được yêu cầu.
+
+Với Skill mới có thể định tuyến, cũng cần lý do owner hoặc dạng resource hiện
+có chưa đủ và bằng chứng routing thật đối chiếu với owner liền kề. Khi làm
+mỏng Skill hiện có, giữ hành vi, thẩm quyền và ràng buộc hoàn tất đã chấp nhận;
+structural validity không tự chứng minh hiệu quả consumer.
 
 Quick validator kiểm tra YAML typed, duplicate key, placeholder và resource
 link. Linter prompt-cruft kiểm tra dated instruction pattern. Cả hai không

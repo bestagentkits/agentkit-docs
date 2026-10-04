@@ -95,9 +95,22 @@ $ak:marketing-planning "Create a 6-week launch plan from the approved audience a
    dependencies, approval gates, measurability, and unresolved questions, then
    return the plan path and summary without execution.
 
-When runtime plan context shows an active plan, the workflow asks before
-continuing it. A suggested plan is only a hint and must not be auto-used. After creating a new plan, the workflow marks that plan directory active using
-the support available in the current runtime.
+Reuse an active plan when it matches the requested work, after inspecting its
+acceptance criteria and completed evidence. A suggested plan is only a hint,
+not automatic authority to write into that directory; ask when competing plans
+make the target ambiguous.
+
+After creating a new plan, the workflow attempts session activation through
+`set-active-plan.cjs` where the runtime provides it. Activation requires a bound
+`CK_SESSION_ID` and an existing plan directory. Exit `0` confirms the pointer
+was persisted and read back; a nonzero exit means activation is not confirmed,
+not necessarily that no write occurred. If activation fails or the helper is
+unavailable, continue planning and pass the explicit plan path to subagents.
+Relative paths resolve from the immutable session launch root, not the current
+directory after a directory change; use an absolute path when needed.
+
+Passing `--clear` to `set-active-plan.cjs` clears the session pointer. This is
+distinct from the worktree-scoped current-plan pointer managed by `ak plan use`.
 
 ## Keep planning separate from authority
 
@@ -131,7 +144,8 @@ A decision-ready plan should include:
 | Symptom | Safe next step |
 | --- | --- |
 | Research or brand authority is absent | Pause for approved inputs or run the bounded research phase; do not invent customer or brand facts. |
-| Plan context shows “Suggested” | Ask whether to activate it or create a new plan; do not write reports into the suggestion automatically. |
+| Plan context shows “Suggested” | Inspect the hint and reuse only if its scope matches; ask if competing plans make the target ambiguous, and do not write reports into it automatically. |
+| Session activation returns nonzero | Treat activation as unconfirmed, keep planning, and pass the explicit plan path to subagents; check the session binding and existing directory without assuming no state was written. |
 | Budget or KPI values are unknown | Use ranges or placeholders labeled as proposals and assign an owner to approve them. |
 | A framework conflicts with the evidence | Adapt or omit the framework; RACE, SOSTAC, STP, and SMART are aids, not mandatory proof. |
 | The user asks to launch from this Skill | Finish the plan and stop; request separate authorization for the exact execution workflow. |
