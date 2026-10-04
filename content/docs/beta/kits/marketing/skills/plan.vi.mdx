@@ -107,8 +107,8 @@ Argument shape canonical là
 
 1. **Resolve plan context.** Nếu có active plan hoặc plan được gợi ý theo branch,
    Skill hỏi dùng hoặc activate thay vì âm thầm thay thế. Khi `fast` hoặc `hard`
-   tạo plan mới, Skill đánh dấu directory mới là active bằng support có sẵn
-   trong runtime hiện tại.
+   tạo plan mới, Skill thử activate trong session qua helper có sẵn trong
+   runtime hiện tại, thay vì coi việc tạo plan là bằng chứng activation.
 2. **Làm rõ task.** Skill chỉ hỏi chi tiết cần thiết để tạo plan hữu ích.
 3. **Tải route đã chọn.** Argument đầu chọn reference workflow tương ứng; nếu
    không có, Skill chọn fast hoặc hard theo độ phức tạp.
@@ -126,6 +126,17 @@ context, requirement, related file, implementation step, todo, success criteria,
 risk, security consideration và next step. Trên route `hard`, risk dựa trên
 breakable assumption còn ghi observable signal cho thấy assumption đã hỏng và
 response điều chỉnh hoặc dừng để lập lại plan.
+
+Khi có `set-active-plan.cjs`, activation cần `CK_SESSION_ID` đã được bind và
+plan directory tồn tại. Exit `0` xác nhận session pointer đã được lưu và đọc
+lại. Exit khác `0` nghĩa là activation chưa được xác nhận; không đảm bảo rằng
+chưa có lần ghi nào. Tiếp tục planning nếu activation lỗi hoặc helper không
+khả dụng, và truyền plan path rõ ràng cho subagent. Relative path được resolve
+từ session launch root bất biến, không phải current directory sau khi đổi
+directory; dùng absolute path khi cần.
+
+`set-active-plan.cjs --clear` xóa session pointer, không phải current-plan
+pointer riêng theo worktree do `ak plan use` quản lý.
 
 ## Tách planning khỏi hành động bên ngoài
 
@@ -171,6 +182,7 @@ không có private data hay claim hiệu suất không được hỗ trợ.
 | --- | --- |
 | Runtime không tìm thấy `ak:plan` | Xác nhận target và scope, khởi động lại runtime, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
 | Skill báo active hoặc suggested plan | Review path chính xác và chọn tiếp tục, activate hoặc tạo plan mới. |
+| Session activation trả exit khác `0` | Giữ plan, coi activation chưa được xác nhận và truyền path rõ ràng cho subagent; kiểm tra session đã bind cùng directory tồn tại, không mặc định rằng chưa ghi state. |
 | Routed surface `/plan:fast` hoặc `/plan:hard` không khả dụng | Dừng và báo dependency thiếu. Marketing Kit không export command catalog nên chỉ cài `ak:plan` không chứng minh mọi SlashCommand nội bộ chạy được trên mọi runtime. |
 | `ci` không đọc được run | Xác minh URL hoặc run ID, bản cài `gh`, authorization, repository access và network. Không dựng chẩn đoán từ log thiếu. |
 | Bằng chứng CRO chưa đủ | Đánh dấu giả định và data gap hoặc thu thập screenshot, content, URL evidence hay metric đã duyệt trước khi hoàn tất plan. |
