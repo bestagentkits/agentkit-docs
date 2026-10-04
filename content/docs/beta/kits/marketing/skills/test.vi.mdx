@@ -113,9 +113,12 @@ của `kongming` hoặc `--interview` để duyệt từng proposed change group
 edit. `--ultra` chạy năm analysis candidate read-only độc lập trong một parallel
 wave với một verifier: `create` và `optimize` chọn nguyên vẹn một design thắng
 cuộc, còn `audit` trả về union finding đã được xác minh bằng bằng chứng và
-deduplicate. Các flag có thể kết hợp với nhau. Khi không có `--interview`,
-`create` và `optimize` áp dụng thay đổi trực tiếp và báo cáo đầy đủ change list;
-`audit` báo cáo finding và chỉ sửa khi bạn yêu cầu thêm việc sửa.
+deduplicate. Slot thất bại được retry một lần; nếu không có dispatch song song
+read-only hoặc sau retry vẫn dưới năm kết quả usable, lần chạy fail closed.
+Các flag có thể kết hợp. Khi không có `--interview`, `create` và `optimize` áp
+dụng trực tiếp thay đổi trong scope và báo cáo đầy đủ change list. Audit chỉ
+báo cáo trừ khi được cấp quyền sửa suite riêng; bỏ flag không cấp quyền sửa hay
+retirement.
 
 ```text
 /ak:test create "Cover the newsletter signup workflow" --interview
@@ -126,6 +129,20 @@ deduplicate. Các flag có thể kết hợp với nhau. Khi không có `--inter
 Command và coverage threshold do project định nghĩa được ưu tiên. Khi project
 không định nghĩa threshold, Skill báo cáo coverage thực tế cùng behavior quan
 trọng còn thiếu thay vì tự đặt một ngưỡng phần trăm.
+Tái dùng test hiện có đủ bảo vệ; refactor đã được bao phủ có thể không thêm test mới.
+
+Trước khi thêm test hoặc chạy check rộng, nêu contract được chấp nhận cùng nguồn
+thẩm quyền, risk bị ảnh hưởng, check hiện có phù hợp và gap bằng chứng còn lại.
+Expectation suy ra chỉ là giả thuyết cho tới khi được đối chiếu với nguồn đó.
+Chỉ thêm test cho gap bảo vệ cụ thể; chứng minh failure dự kiến khi an toàn và
+khả thi, hoặc báo rõ chưa có bằng chứng đó.
+
+Kết hợp, hạ layer hoặc retirement test cần lifecycle review về contract được
+bảo vệ, lịch sử regression, chi phí đã đo và bảo vệ còn lại. Riêng overlap của
+mutation kill được lấy mẫu hay line coverage không đổi không đủ để retirement.
+Review toàn bộ suite còn lại, giữ test bắt buộc cùng mandatory gate và có quyền
+sửa suite cho retirement. Sau thay đổi được cấp quyền, chạy lại contract bị ảnh
+hưởng và cùng các fault lấy mẫu hợp lệ trên suite còn lại, rồi chạy gate bắt buộc.
 
 ## Dùng impact selection và các mode semantic tùy chọn
 
@@ -149,21 +166,36 @@ hay class manifest. Với UI testing, một thử nghiệm shadow
 thể thêm tín hiệu regression từ bằng chứng đã quan sát; nó không bao giờ biến một
 lỗi thành đạt hay thay đổi kết quả UI test.
 
+Agentic E2E tùy chọn qua `tester-army/e2e` chỉ dành cho project đã dùng engine đó
+hoặc khi bạn yêu cầu setup rõ ràng. Điều này không cấp quyền cài đặt, truy cập
+provider, gọi model hay telemetry; UI check native thông thường không cần model.
+Kiểm tra capability của engine đã cài trước khi chạy. Cache replay action, không
+phải pass: chạy lại assertion outcome chính xác trên app hiện tại.
+Riêng `--strict-cache` không bảo đảm không gọi model. Nếu cấm model call, dùng cơ
+chế cưỡng chế được xác minh độc lập cho version đã chọn hoặc giữ native route.
+Báo replay/live execution thực tế và exploration chưa hoàn tất; không có finding
+hay cache hit không xác minh release claim chưa được thực thi.
+
 ## Hiểu điều gì xảy ra trong một lần chạy
 
-1. **Skill xác định scope.** Skill nối thay đổi gần đây hoặc requirement với
-   validation surface nhỏ nhất hữu ích, ở layer thấp nhất đáng tin cậy.
-2. **Skill chạy check liên quan hẹp nhất trước.** Type check hoặc build check
-   chạy khi chúng bao phủ contract bị ảnh hưởng.
+1. **Skill xác định scope.** Skill nối contract được chấp nhận, nguồn thẩm quyền
+   và risk với check nhỏ nhất hữu ích ở layer thấp nhất đáng tin, rồi nêu gap
+   bằng chứng trước khi thêm việc.
+2. **Skill chạy check liên quan hẹp nhất trước.** Type hoặc build check chạy khi
+   bao phủ contract bị ảnh hưởng; gate repository bắt buộc vẫn được giữ.
 3. **Skill thực thi các suite đã chọn** và phân tích kết quả, tập trung vào test
    fail, flaky, chậm và bị skip.
 4. **Skill đo coverage khi phù hợp** và chỉ ra critical path, error handler cùng
    nhánh edge case chưa được bao phủ.
-5. **Skill kiểm tra UI khi được chọn.** Skill dùng
-   [`ak:agent-browser`](./agent-browser) hoặc browser test project-native, tổ
-   chức test plan, lưu screenshot trong một report directory, và có thể chia các
-   check page, form, navigation, user flow, accessibility, responsive layout,
-   performance, security và SEO cho các subagent `tester` chạy song song.
+5. **Skill kiểm tra UI khi được chọn.** Skill đặt charter hẹp với route,
+   behavior mong đợi, quyền account/data và check bắt buộc. Skill dùng
+   [`ak:agent-browser`](./agent-browser) hoặc browser test project-native,
+   mặc định tuần tự; chỉ target độc lập, cô lập với capacity phù hợp mới đáng
+   delegate cho `tester`. Browser check chỉ chứng minh scope quan sát được từ
+   browser, không phải coverage backend. Assert chính xác identity, permission,
+   count, side effect và control/path được claim; route khác không cứu được
+   control hỏng. Lưu visual evidence liên quan trong report directory thay vì
+   chụp screenshot mọi page.
 6. **Skill tạo report.** Skill trả kết quả ngắn gọn cho lần chạy nhỏ hoặc ghi
    report có cấu trúc vào vị trí report của repository.
 
@@ -176,11 +208,19 @@ lỗi thành đạt hay thay đổi kết quả UI test.
 </Callout>
 
 - Test command có thể tạo file coverage, screenshot, build output, dữ liệu tạm
-  hoặc browser state. Hãy nêu vị trí artifact được phép và yêu cầu dọn dẹp.
-- Mutation spot-check của `create` hoặc `audit` sửa code đang được test một lần
-  để chứng minh test fail trước một bug hợp lý, rồi revert lại.
+  hoặc browser state. Hãy nêu vị trí artifact, giới hạn execution/retry và yêu cầu
+  cleanup được phép; chỉ dọn resource do lần chạy này sở hữu.
+- Mutation proof có chọn lọc, không phải yêu cầu cho execution thường lệ hay CI.
+  Chỉ fault injection có giới hạn trong disposable copy do lần chạy sở hữu,
+  không trên active worktree. Ghi source identity, restore copy chính xác cả khi
+  fail, xác minh restoration và chạy lại behavior đã restore. Chỉ target
+  assertion failure là semantic kill; compilation, setup, infrastructure hay
+  provider failure là bằng chứng invalid hoặc inconclusive, không phải kill.
 - UI flow và end-to-end test có thể submit form hoặc thay đổi dữ liệu nếu ứng
   dụng hoạt động như vậy. Hãy chạy chúng trên test environment an toàn.
+- Truy cập Chrome profile thật cần quyền rõ ràng và login state cần thiết; bind
+  đúng tab nhận biết profile. URL bên ngoài, hosted browser cùng chi phí provider
+  hay vận hành cần quyền riêng.
 - Operation UI không triển khai fix. Việc tìm root cause của sản phẩm thuộc về
   `ak:debug` và `ak:fix`.
 
@@ -189,7 +229,10 @@ lỗi thành đạt hay thay đổi kết quả UI test.
 Một kết quả hoàn chỉnh nên cung cấp:
 
 - Scope chính xác và mọi command đã chạy.
-- Tổng số test pass, fail, skip, cùng thời lượng.
+- Contract được chấp nhận và nguồn thẩm quyền, source/input fingerprint trước
+  và sau execution, runner/configuration, environment cùng receipt hoặc artifact.
+- Tổng số test pass, fail và skip cùng duration đã đo; giữ mọi attempt thất bại
+  cùng raw status ngay cả khi retry pass.
 - Mọi test fail kèm error message và stack trace liên quan.
 - Giá trị coverage cùng file hoặc function cụ thể chưa được bao phủ khi có yêu
   cầu coverage.
@@ -197,10 +240,24 @@ Một kết quả hoàn chỉnh nên cung cấp:
 - Page UI đã test, đường dẫn screenshot, console error và viewport đã check hoặc
   bị bỏ qua.
 - Critical issue, recommendation đã xếp ưu tiên và câu hỏi chưa giải quyết.
+- Giới hạn environment, authentication và bằng chứng.
+- Thay đổi suite đã áp dụng so với đề xuất, quyền thực hiện và bảo vệ còn lại.
+  Chỉ so chi phí khi source task, environment, toolchain và cache condition tương
+  ứng: gồm setup, generation/review, runner/model call, token, CI minute và device
+  resource đã quan sát khi có. Metric chưa biết vẫn là unknown; elapsed time không
+  phải CI minute bị tính phí, và ít test hay token hơn riêng lẻ không chứng minh
+  tiết kiệm.
 
 Chỉ coi lần chạy là đạt khi các check được yêu cầu báo không có lỗi, build thoát
 thành công nếu có build, và threshold của project được đáp ứng. Một check chạy
 một phần hoặc bị skip chỉ chứng minh surface thực sự đã chạy.
+
+Mandatory gate bị skip hoặc không khả dụng nghĩa là chưa đủ bằng chứng. Chỉ tái
+dùng receipt khi scope, source mới, dirty/untracked input liên quan, configuration
+và environment khớp; riêng commit SHA không đủ. Receipt invalid, stale hoặc thuộc
+scope khác cần chạy lại check cần thiết, không lặp mù quáng toàn suite. Input cuối
+đã đổi hoặc chưa xác minh ngăn claim pass cho source cuối; báo state đã test và
+gap còn lại.
 
 ## Xử lý sự cố hoặc tiếp tục
 

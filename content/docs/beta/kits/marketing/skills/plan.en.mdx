@@ -111,8 +111,9 @@ The canonical argument shape is
 
 1. **Resolve plan context.** If an active or branch-suggested plan exists, the
    Skill asks whether to use or activate it instead of silently replacing it.
-   When `fast` or `hard` creates a new plan, it marks the new directory active
-   using the support available in the current runtime.
+   When `fast` or `hard` creates a new plan, it attempts session activation
+   through the helper available in the current runtime, rather than treating
+   plan creation itself as proof of activation.
 2. **Clarify the task.** It asks only for details needed to create a useful plan.
 3. **Load the selected route.** The first argument selects its matching
    reference workflow; otherwise the Skill chooses fast or hard based on
@@ -131,6 +132,18 @@ each phase records context, requirements, related files, implementation steps,
 todo items, success criteria, risks, security considerations, and next steps.
 On the `hard` route, a risk based on a breakable assumption also records the
 observable signal that it failed and whether to adjust or stop and replan.
+
+Where `set-active-plan.cjs` is available, activation requires a bound
+`CK_SESSION_ID` and an existing plan directory. Exit `0` confirms the session
+pointer was persisted and read back. A nonzero exit means activation is not
+confirmed; it does not guarantee that no write occurred. Continue planning if
+activation fails or the helper is unavailable, and pass the explicit plan path
+to subagents. Relative paths resolve from the immutable session launch root,
+not the current directory after a directory change; use an absolute path when
+needed.
+
+`set-active-plan.cjs --clear` clears the session pointer, not the distinct
+worktree-scoped current-plan pointer managed by `ak plan use`.
 
 ## Keep planning separate from external action
 
@@ -176,6 +189,7 @@ out as approvals, and no private data or unsupported performance claim appears.
 | --- | --- |
 | The runtime cannot find `ak:plan` | Confirm target and scope, restart the runtime, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
 | The Skill reports an active or suggested plan | Review the exact path and choose whether to continue, activate it, or create a new plan. |
+| Session activation returns nonzero | Keep the plan, treat activation as unconfirmed, and pass its explicit path to subagents; check the bound session and existing directory without assuming no state was written. |
 | A routed `/plan:fast` or `/plan:hard` surface is unavailable | Stop and report the missing dependency. Marketing Kit exports no command catalog, so installation of `ak:plan` alone does not prove every internal SlashCommand can execute on every runtime. |
 | `ci` cannot read the run | Verify the URL or run ID, `gh` installation, authorization, repository access, and network availability. Do not invent a diagnosis from missing logs. |
 | CRO evidence is incomplete | Mark assumptions and data gaps, or gather approved screenshots, content, URL evidence, or metrics before finalizing the plan. |
