@@ -42,8 +42,8 @@ Trước khi bắt đầu:
 - Xác định `Goal`, `Scope` và `Verify`; `Verify` phải exit thành công và in một
   numeric result.
 - Thêm `Guard` phát hiện regression mà không phụ thuộc tệp loop được phép sửa.
-- Chọn `Iterations`, `Direction`, `Noise`, `Min-Delta`, target và wall-clock
-  hoặc resource stop condition.
+- Chọn `Iterations`, `Direction`, `Noise`, `Min-Delta`, `Timeout`, target và
+  wall-clock hoặc resource stop condition.
 - Review mọi command sẽ chạy lặp lại để phát hiện destructive behavior, network
   write, credential, elevated privilege và thời gian dự kiến.
 
@@ -118,6 +118,7 @@ thu thập tất cả field còn thiếu cùng lúc trước mọi dry run.
 | `Noise` | `medium` | Cách xử lý measurement `low`, `medium` hoặc `high` |
 | `Min-Delta` | `0` | Thay đổi tối thiểu được tính là progress |
 | `Direction` | `higher` | Metric lớn hơn hay nhỏ hơn là tốt hơn |
+| `Timeout` | `30s` | Hạn chót cho mỗi lần chạy `Verify`; đặt giá trị dài hơn một cách tường minh khi workload đã đo cho thấy cần thiết |
 
 Với measurement có noise, hãy xác định repeat count và aggregation có chủ
 đích. Bundled guidance khuyến nghị lấy kết quả xấu hơn trong hai lần cho medium
@@ -145,8 +146,11 @@ seed, cache state và competing process—vẫn là trách nhiệm của bạn.
    rồi kiểm tra bound cùng stuck condition.
 
 Sau năm lần discard liên tiếp, workflow nên phân tích pattern và đổi strategy.
-Tại mười lần discard liên tiếp, nó dừng và trả bằng chứng. Verification timeout
-vượt giới hạn 30 giây do source định nghĩa cũng abort loop thay vì chạy vô hạn.
+Tại mười lần discard liên tiếp, nó dừng và trả bằng chứng. Khi một lần chạy
+`Verify` vượt `Timeout`, Skill dừng các process nó đã khởi chạy, ghi
+`error:timeout` kèm thời lượng, revert iteration đó một cách an toàn và coi là
+discard. Loop sau đó tiếp tục trong ngân sách iteration còn lại thay vì để một
+process chạy không giới hạn.
 
 ## Giữ quyền Git và command trong tay bạn
 
@@ -180,7 +184,10 @@ Run hoàn chỉnh nên cung cấp:
 - Tuyên bố rõ mọi push, merge hoặc deployment action vẫn chờ approval.
 
 Chỉ xem score cao hơn hay con số thấp hơn là có ý nghĩa nếu metric thực sự đại
-diện outcome dự kiến và guard bao phủ regression liên quan.
+diện outcome dự kiến và guard bao phủ regression liên quan. Coverage tăng nhờ
+làm yếu test là regression, và chi phí chưa biết không phải chi phí bằng 0. Khi
+metric cần tổng quát hóa, ghi baseline trước khi sửa và dành riêng các held-out
+case đại diện.
 
 ## Xử lý sự cố hoặc dừng
 
@@ -193,7 +200,7 @@ diện outcome dự kiến và guard bao phủ regression liên quan.
 | Revert conflict | Dừng, giữ conflict evidence và yêu cầu quyết định recovery. |
 | Năm trial liên tiếp bị discard | Đổi tệp hoặc kỹ thuật dựa trên log mà không mở rộng scope đã khai báo. |
 | Mười trial liên tiếp bị discard | Dừng và báo plateau để review thủ công. |
-| Verification vượt 30 giây | Abort hoặc thiết kế metric sample nhanh hơn trước loop khác. |
+| Iteration liên tục timeout | Đặt `Timeout` dài hơn một cách tường minh khi workload đã đo cho thấy cần thiết, hoặc dùng metric đại diện nhanh hơn. |
 | Runtime không tìm thấy Skill | Xác nhận installation và xem [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
 
 Dùng `ak:autoresearch` khi vẫn cần chọn route, hoặc tiếp tục với `ak:test` và
@@ -205,5 +212,5 @@ Dùng `ak:autoresearch` khi vẫn cần chọn route, hoặc tiếp tục với 
 - Iteration chạy tuần tự; workflow không parallelize experiment.
 - Loop không thể kiểm soát system noise, external service hay background load.
 - Chất lượng guard và độ hợp lệ của metric quyết định sức mạnh kết quả.
-- Giới hạn verification 30 giây do source định nghĩa khiến evaluation đắt tiền
-  không phù hợp trừ khi giảm thành sample nhanh và đại diện.
+- Mỗi lần chạy `Verify` bị giới hạn bởi `Timeout`. Evaluation đắt tiền cần giá
+  trị dài hơn một cách tường minh hoặc một sample nhanh và đại diện.
