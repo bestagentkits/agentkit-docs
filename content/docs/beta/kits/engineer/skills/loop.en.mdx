@@ -43,8 +43,8 @@ Before you start:
   print one numeric result.
 - Add a `Guard` that detects regressions without depending on files the loop may
   edit.
-- Choose `Iterations`, `Direction`, `Noise`, `Min-Delta`, a target, and a
-  wall-clock or resource stop condition.
+- Choose `Iterations`, `Direction`, `Noise`, `Min-Delta`, `Timeout`, a target,
+  and a wall-clock or resource stop condition.
 - Review every repeated command for destructive behavior, network writes,
   credentials, elevated privileges, and expected run time.
 
@@ -119,6 +119,7 @@ the Skill should collect all missing fields together before any dry run.
 | `Noise` | `medium` | `low`, `medium`, or `high` measurement treatment |
 | `Min-Delta` | `0` | Minimum change that counts as progress |
 | `Direction` | `higher` | Whether a larger or smaller metric is better |
+| `Timeout` | `30s` | Deadline for each `Verify` run; set a longer explicit value when the measured workload justifies it |
 
 For noisy measurements, define repeat count and aggregation deliberately. The
 bundled guidance recommends a worse-of-two result for medium noise and a median
@@ -147,8 +148,10 @@ state, and competing processes—remains your responsibility.
 
 After five consecutive discards, the workflow should analyze the pattern and
 shift strategy. At ten consecutive discards, it stops and returns the evidence.
-A verification timeout over the source-defined 30-second limit also aborts the
-loop rather than grinding indefinitely.
+When a `Verify` run exceeds `Timeout`, the Skill stops the processes it
+started, logs `error:timeout` with the duration, safely reverts that iteration,
+and treats it as a discard. The loop then continues within the remaining
+iteration budget rather than leaving an unbounded process running.
 
 ## Keep Git and command authority with you
 
@@ -183,7 +186,10 @@ A complete run should provide:
   approval.
 
 Treat a higher score or lower number as meaningful only if the metric actually
-represents the intended outcome and the guard covers relevant regressions.
+represents the intended outcome and the guard covers relevant regressions. A
+coverage gain from weakened tests is a regression, and unknown cost is not zero
+cost. When the metric should generalize, record a baseline before edits and
+reserve representative held-out cases.
 
 ## Troubleshoot or stop
 
@@ -196,7 +202,7 @@ represents the intended outcome and the guard covers relevant regressions.
 | A revert conflicts | Stop, preserve the conflict evidence, and request a recovery decision. |
 | Five consecutive trials are discarded | Shift file or technique based on the log without widening declared scope. |
 | Ten consecutive trials are discarded | Stop and report the plateau for manual review. |
-| Verification exceeds 30 seconds | Abort or redesign a faster sampled metric before another loop. |
+| Iterations keep timing out | Set a longer explicit `Timeout` when the measured workload justifies it, or use a faster representative metric. |
 | The runtime cannot find the Skill | Confirm installation and follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
 
 Use `ak:autoresearch` when you still need route selection, or continue with
@@ -208,5 +214,5 @@ Use `ak:autoresearch` when you still need route selection, or continue with
 - Iterations are sequential; the workflow does not parallelize experiments.
 - The loop cannot control system noise, external services, or background load.
 - Guard quality and metric validity determine the strength of the result.
-- The source-defined 30-second verification limit makes expensive evaluations a
-  poor fit unless reduced to a representative fast sample.
+- Every `Verify` run is bounded by `Timeout`. Expensive evaluations need an
+  explicit longer value or a representative fast sample.

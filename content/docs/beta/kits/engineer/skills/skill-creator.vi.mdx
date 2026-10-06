@@ -118,22 +118,19 @@ diagnostic không phải bằng chứng rằng runtime kích hoạt Skill.
 4. **`update` scout Skill hiện có và agent dùng nó, chỉ áp dụng thay đổi được
    yêu cầu, lint mọi dòng đã đổi, và bump `metadata.version`.**
 5. **`audit` inventory provenance và dated pattern, đồng thời đo usage thực tế
-   từ local session.** `scripts/session_usage.py` đọc transcript Claude Code
-   và Codex cục bộ (không bao giờ đọc nội dung prompt hay output) để lấy
-   turn, token, tool call, error và delegation trước khi report đánh giá text
-   của Skill. Có thể nhắm một Skill, một kit, hoặc `--all`. Nó không fail
-   Skill hiện có vì finding.
-6. **`optimize` viết lại finding High và Medium từ report hoặc path.** Xác nhận
-   diff, rồi truyền `--apply --from-audit <report>` để ghi.
-7. **Validate.** Chạy quick validator và linter prompt-cruft trước khi coi Skill
-   đã xong.
-8. **Evaluate routing và outcome.** `create` so với không có Skill; `update` so
-   với bản gốc và phải giữ behavior đã chấp nhận.
-   Test activation thật trong catalog với positive và near-miss negative cho
-   owner liền kề; không ép chọn rồi coi đó là bằng chứng routing. Dùng case có
-   cấu trúc với assertion artifact thật. Ghi model, runtime, snapshot hash,
-   chất lượng và chi phí quan sát được. Blocked hoặc ungraded không phải pass.
-   `scripts/eval_skill.py` kiểm tra case, chấm artifact và tóm tắt lần chạy.
+   từ local session.** Xem [Đọc bằng chứng session trong audit](#đọc-bằng-chứng-session-trong-audit).
+   Có thể nhắm một Skill, một kit, hoặc `--all`. Nó không fail Skill hiện có vì
+   finding và không bao giờ sửa tệp Skill.
+6. **`optimize` viết lại finding High và Medium từ report hoặc path.** Nó viết
+   lại thay vì xóa khi instruction vẫn còn mục đích, và giữ các ràng buộc nêu ở
+   [Review finding lint theo mục đích](#review-finding-lint-theo-mục-đích).
+   Xác nhận diff, rồi truyền `--apply --from-audit <report>` để ghi.
+7. **Validate.** Chạy structural validator và linter prompt-cruft mô tả ở
+   [Validate cấu trúc và prompt text](#validate-cấu-trúc-và-prompt-text) trước
+   khi coi Skill đã xong.
+8. **Evaluate routing và outcome.** So sánh hành vi consumer như mô tả ở
+   [Evaluate hành vi consumer](#evaluate-hành-vi-consumer). Blocked hoặc
+   ungraded không phải pass.
 
 Với các Skill nhiều kiến thức hoặc đã refactor, khi thực tế hãy so sánh Skill
 hiện tại/đầy đủ, Skill mỏng hướng constraint và không có Skill, với resource,
@@ -143,6 +140,157 @@ kiến thức khỏi giá trị đóng gói và kích hoạt nó thành Skill; g
 cần thiết khỏi baseline không chứng minh giá trị Skill. So sánh chất lượng
 artifact và chi phí quan sát được, gồm reference thực sự đã đọc. Core ngắn
 hơn tự nó không chứng minh tiết kiệm token hoặc hành vi provider.
+
+## Đọc bằng chứng session trong audit
+
+Trước khi đánh giá text của Skill, `audit` và `optimize` đo cách Skill thực sự
+chạy trong các local agent session. `scripts/session_usage.py` đi kèm đọc
+transcript Claude Code và Codex cục bộ và báo cáo các chỉ số như turn, token,
+tool call, tool error, lệnh gọi lặp lại, thời gian chờ tool, delegation và
+usage của subagent, cùng các tệp Skill đã được load. Script chỉ đọc và không
+bao giờ in nội dung prompt, reply hay tool output.
+
+* Audit loại trừ session đang chạy nó, vì session đó vẫn đang mở.
+* Không có invocation nào được ghi nhận nghĩa là không có bằng chứng, không
+  phải kết quả sạch. Report nêu khoảng trống đó và tiếp tục với static audit.
+* Signal của script là gợi ý, không phải finding. Một signal chỉ thành finding
+  sau khi audit gắn một chi phí cụ thể trong session với đoạn text cụ thể của
+  Skill hoặc một instruction còn thiếu.
+* Audit report thêm mục **Session evidence** trước các finding: phạm vi (root,
+  runtime, khoảng ngày, số invocation và session, phần loại trừ), chỉ số median
+  và p90, tool dùng nhiều nhất, và mỗi signal được chấp nhận kèm `file:line`
+  chịu trách nhiệm.
+* Report chỉ chứa số liệu tổng hợp. Transcript là dữ liệu người dùng và nội
+  dung untrusted; prompt, output, đường dẫn tuyệt đối của người dùng và
+  credential không được sao chép vào report.
+
+`optimize` áp dụng thay đổi dựa trên session theo từng mục tiêu một và chỉ chấp
+nhận thay đổi khi chất lượng output được giữ; một lần chạy nhanh hơn hoặc ngắn
+hơn nhưng mất check hay artifact bắt buộc là regression. Tệp
+`references/session-usage-analysis.md` trong Skill đã cài sở hữu tùy chọn thu
+thập, định nghĩa chỉ số và contract của report.
+
+## Validate cấu trúc và prompt text
+
+Chạy validator từ thư mục `ak:skill-creator` đã cài, hoặc gọi script bằng
+đường dẫn tuyệt đối:
+
+```bash
+uv run scripts/quick_validate.py <skill-dir>
+uv run --with PyYAML==6.0.3 scripts/lint_cruft.py <skill-dir> --routing
+```
+
+Các check hiểu YAML phụ thuộc PyYAML. `quick_validate.py` khai báo dependency
+đó trong inline script metadata, và tùy chọn `--with` cung cấp nó cho linter,
+nên `uv` tự resolve mà không đổi môi trường project của bạn. Môi trường Python
+đã cài `scripts/requirements.txt` của Skill có thể chạy trực tiếp các script
+này. Lint chỉ phần body, không có `--routing`, chỉ cần standard library.
+
+Structural validator parse frontmatter thành YAML typed bằng safe loader.
+Duplicate key, placeholder hoặc template marker chưa hoàn thiện từ
+initializer, và đường dẫn resource cụ thể không resolve được bên trong Skill
+đều là lỗi. Ví dụ giảng dạy cố ý nêu tệp không tồn tại có thể mang exemption
+`resource-link-example:` kèm lý do trên cùng dòng. Validator thoát `0` khi
+không có lỗi và `1` khi có lỗi; warning không bao giờ làm fail. Thiếu PyYAML
+được báo riêng là lỗi môi trường với exit `3`, không phải Skill không hợp lệ.
+
+Với Kit Skill, chạy thêm Kit validation và contract check nêu trong Kit
+contract reference của Skill đã cài. Checklist đầy đủ là
+`references/validation-checklist.md` trong Skill đã cài.
+
+### Review finding lint theo mục đích
+
+Linter prompt-cruft báo cáo pattern cần review; một match không chứng minh
+instruction đã lỗi thời. Phân loại mỗi finding theo mục đích của đoạn text và
+giải quyết finding High bằng cách viết lại hoặc ghi exemption có phạm vi hẹp
+cho một ràng buộc thật, không xóa ngay khi thấy. Giữ context chỉ tác giả biết,
+script chính xác cho thao tác dễ vỡ, contract của tool và tham số, ranh giới
+ủy quyền và an toàn, check capability của runtime, giới hạn tường minh của
+người dùng, ngân sách và ràng buộc ownership. Tệp
+`references/prompt-cruft-patterns.md` trong Skill đã cài sở hữu bảng rule,
+opt-out marker và quy trình audit, optimize.
+
+Cả hai validator đều không chứng minh runtime portability hay hiệu quả consumer.
+
+## Evaluate hành vi consumer
+
+Structural validity không phải bằng chứng hành vi. Hãy đánh giá thứ mà một
+consumer độc lập thực sự tạo ra. Các reference sau trong Skill đã cài sở hữu
+chi tiết:
+
+| Nhu cầu | Owner |
+| --- | --- |
+| Định dạng case | `assets/eval-cases.example.json` |
+| So sánh, holdout và đánh giá routing | `references/testing-and-iteration.md` |
+| Lệnh, loại assertion và định dạng record | `references/evaluation-tools.md` |
+| Đánh giá thay đổi của chính creator | `references/creator-consumer-evaluation.md` |
+
+### So sánh consumer mới trên case cố định
+
+* Viết case tại `evals/evals.json` trong Skill đích. Mỗi case có id, split
+  `train` hoặc `holdout`, prompt thực tế, expected output, tệp tùy chọn và
+  assertion. Giữ prompt holdout ngoài context authoring và rewrite, và giữ split
+  cố định qua các vòng lặp.
+* `create` so sánh candidate với không có Skill. `update` so với bản gốc và
+  chạy lại case cho hành vi phải giữ nguyên.
+* Dùng session mới và workspace sạch với prompt, tool, fixture và setting giống
+  hệt. Baseline không được phát hiện candidate, và consumer không bao giờ nhận
+  đáp án mong đợi.
+* Ghi model id thực tế do provider báo (alias được yêu cầu không phải bằng
+  chứng), runtime và phiên bản, snapshot hash của Skill, run hoặc session id,
+  tool có sẵn và vị trí output. Khi runner hoặc model đích không khả dụng, ghi
+  phần coverage đó là blocked.
+* Với thay đổi workflow của creator, giai đoạn author tạo Skill và các consumer
+  độc lập chạy chúng; author không phải người chấm duy nhất cho output của mình.
+
+### Tách routing quan sát được khỏi forced execution
+
+Bằng chứng routing đến từ catalog thật có các Skill cạnh tranh. Prompt routing
+không nêu tên hoặc ép Skill đích; quan sát read hoặc invocation thực tế trong
+runtime trace, và gồm near-miss negative dùng chung thuật ngữ với Skill liền
+kề. Báo cáo true/false positive và negative; precision hoặc recall có mẫu số
+rỗng là unknown. Lần chạy chức năng ép load Skill dùng để tách chất lượng thực
+thi và được gắn nhãn riêng; nó không phải bằng chứng activation. Hỏi model liệu
+nó có dùng Skill hay không chỉ là diagnostic, không phải bằng chứng routing.
+
+### Chấm và tóm tắt với eval_skill.py
+
+`scripts/eval_skill.py` dùng standard library. Nó kiểm tra tệp case, chấm
+artifact đã có và tóm tắt record. Nó không bao giờ gọi provider hay thực thi
+lệnh, nên bạn tự chạy consumer trước.
+
+```bash
+python3 scripts/eval_skill.py validate /absolute/target-skill/evals/evals.json
+
+python3 scripts/eval_skill.py grade /absolute/target-skill/evals/evals.json \
+  --case-id normalize-valid --outputs /absolute/run/outputs \
+  --run-id unique-session-id --variant candidate \
+  --model effective-model-id --runtime observed-runtime-version \
+  --skill /absolute/skill-snapshot > /absolute/run/record.json
+
+python3 scripts/eval_skill.py summarize /absolute/run-a/record.json \
+  /absolute/run-b/record.json > /absolute/comparison.json
+```
+
+* Assertion gồm `file-exists`, `json-equals`, `text-contains` hoặc `rubric`
+  (mặc định). Đường dẫn artifact tương đối với outputs root; đường dẫn thoát ra
+  ngoài và symlink đều fail. Rubric check giữ trạng thái ungraded cho đến khi
+  reviewer độc lập điền kèm bằng chứng được trích dẫn.
+* Với baseline không có Skill, truyền `--variant without_skill` và bỏ
+  `--skill`; các variant khác hash snapshot của Skill vào record.
+* Với lần chạy không hoàn tất, truyền `--status blocked` hoặc
+  `--status failed` và giữ lý do hoặc lỗi provider cạnh record.
+* Chỉ số quan sát tùy chọn (`--tokens`, `--duration-ms`, `--tool-calls`,
+  `--corrections`) giữ `null` khi bỏ qua; unknown không bao giờ được ghi là 0.
+  `--observations` nhập tệp bằng chứng trung lập với provider, có các field
+  được chấp nhận do `scripts/eval_contract.py` sở hữu. Nó không thể ghi đè run
+  identity, Skill hash, status hay verdict của check.
+* `grade` thoát `0` khi mọi check pass, `1` khi có check fail hoặc lần chạy
+  blocked, failed hay ungraded, và `2` khi input hoặc cấu hình không hợp lệ.
+  Vẫn lưu record khi exit `1`.
+* `summarize` nhóm record theo variant, model, runtime, split và Skill hash,
+  từ chối run id trùng lặp và liệt kê bằng chứng còn thiếu. Bản tóm tắt mô tả
+  quan sát; nó không promote candidate hay xác lập nguyên nhân.
 
 ## Giữ file write và distribution có chủ đích
 
@@ -154,8 +302,13 @@ hơn tự nó không chứng minh tiết kiệm token hoặc hành vi provider.
 
 Initializer tạo directory cùng placeholder file. Packaging ghi
 `<skill-directory-name>.zip` và có thể thay archive cùng tên, vì vậy kiểm tra
-destination trước. Packaging loại `node_modules/`, `venv/`, `.venv/` và `.env`;
-hãy ship `.env.example` thay thế. Test, benchmark model, docs lookup, ephemeral
+destination trước. Packaging loại các thư mục build và runtime như
+`node_modules/`, `venv/`, `.venv/`, thư mục `evals/` ở gốc Skill và `.env`;
+hãy ship `.env.example` thay thế. Packager chỉ validate thư mục nguồn. Hãy tự
+inspect các member của archive và validate một bản đã giải nén; archive
+containment và atomic replacement không được tự động hóa. Chỉ package source
+tree đã inspect, không có symlink hay cấu hình riêng tư, và ghi archive ra
+ngoài thư mục Skill. Test, benchmark model, docs lookup, ephemeral
 dependency runner và package installation có thể dùng network, compute, token
 cùng chi phí provider. Không đặt credential, personal data, private path hoặc
 internal prompt trong Skill text, ví dụ, log hay asset.
@@ -180,9 +333,9 @@ có chưa đủ và bằng chứng routing thật đối chiếu với owner li�
 mỏng Skill hiện có, giữ hành vi, thẩm quyền và ràng buộc hoàn tất đã chấp nhận;
 structural validity không tự chứng minh hiệu quả consumer.
 
-Quick validator kiểm tra YAML typed, duplicate key, placeholder và resource
-link. Linter prompt-cruft kiểm tra dated instruction pattern. Cả hai không
-chứng minh runtime portability; review trước distribution.
+Kết quả validator và linter chỉ là bằng chứng cấu trúc; xem
+[Validate cấu trúc và prompt text](#validate-cấu-trúc-và-prompt-text). Review
+runtime portability trước distribution.
 
 ## Xử lý sự cố và giới hạn
 
@@ -193,4 +346,6 @@ chứng minh runtime portability; review trước distribution.
 | `optimize` không đổi gì | Xác nhận đã truyền `--apply` sau khi review audit report. |
 | Packaging từ chối frontmatter | Sửa format name hoặc description, chạy lại quick validation rồi package lại. |
 | Skill chỉ chạy ở một runtime | Tách capability riêng runtime, thêm fallback an toàn và test mỗi runtime được claim. |
-| Evaluation bị blocked hoặc ungraded | Không coi Skill đã xong; mở rộng từ case fail, rồi chạy lại `scripts/eval_skill.py`. |
+| Evaluation bị blocked hoặc ungraded | Không coi Skill đã xong. Ghi coverage bị blocked hoặc hoàn tất rubric review kèm bằng chứng, mở rộng từ case fail, rồi chạy lại `scripts/eval_skill.py`. |
+| Validation thoát với mã `3` | Cài dependency PyYAML đã khai báo hoặc dùng lệnh `uv run` được tài liệu hóa; nội dung Skill chưa được đánh giá. |
+| Audit không tìm thấy invocation nào trong session | Báo cáo bằng chứng còn thiếu và tiếp tục static audit; không coi đó là kết quả sạch. |
