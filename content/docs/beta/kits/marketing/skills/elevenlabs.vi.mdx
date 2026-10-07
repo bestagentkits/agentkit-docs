@@ -1,22 +1,28 @@
 ---
-title: Tạo audio có kiểm soát với ak:elevenlabs
-description: Tạo speech, instant voice clone được phép hoặc sound effect qua ElevenLabs trong khi review consent, thay đổi tài khoản, chi phí provider và tệp audio.
+title: Viết, đạo diễn và tạo audio với ak:elevenlabs
+description: Biến ý tưởng thành voice script sẵn sàng biểu diễn, thêm chỉ dẫn diễn đạt mà không đổi lời, đạo diễn dialogue và tạo speech, voice clone hoặc sound effect qua ElevenLabs trong khi review consent, chi phí và tệp audio.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
-Dùng `ak:elevenlabs` cho ba hành động audio trực tiếp: biến text thành speech,
-tạo instant voice clone được phép hoặc tạo sound effect. Skill dùng ElevenLabs
-API và các helper Python đi kèm, vì vậy một lần chạy có thể tạo audio cục bộ,
-tiêu quota provider và, với cloning, thêm voice tồn tại lâu dài vào tài khoản
-ElevenLabs đã kết nối.
+Dùng `ak:elevenlabs` cho voice production trọn vòng: agent viết và đạo diễn,
+ElevenLabs biểu diễn. Skill biến ý tưởng hoặc bản nháp thành script sẵn sàng
+biểu diễn, thêm chỉ dẫn diễn đạt cho copy đã chốt, đạo diễn dialogue nhiều người
+nói, và tạo speech, instant voice clone được phép hoặc sound effect. Các hành động
+viết chỉ tạo text. Synthesis dùng ElevenLabs API và các helper Python đi kèm, vì
+vậy có thể tạo audio cục bộ, tiêu quota provider và, với cloning, thêm voice tồn
+tại lâu dài vào tài khoản ElevenLabs đã kết nối.
 
-## Chọn một hành động audio có scope rõ ràng
+## Chọn hành động
 
 ### Dùng ak:elevenlabs khi
 
-- Bạn cần text-to-speech từ text được cung cấp hoặc tệp text cục bộ.
+- Bạn có ý tưởng, outline, bài viết hoặc bản nháp và cần script viết cho tai
+  nghe, với chỉ dẫn mà model đích hiểu được.
+- Bạn có copy đã chốt và muốn thêm chỉ dẫn diễn đạt mà không đổi một lời nói nào.
+- Bạn cần dialogue nhiều người nói có chỉ dẫn từng lượt, có thể kèm synthesis.
+- Bạn cần text-to-speech từ script đã hoàn chỉnh hoặc tệp text cục bộ.
 - Bạn có quyền rõ ràng để tạo instant voice clone từ sample audio sạch.
 - Bạn cần sound effect được mô tả với thời lượng tối đa 30 giây.
 - Bạn có thể review pronunciation, identity, chất lượng audio, quyền, chi phí
@@ -24,18 +30,18 @@ ElevenLabs đã kết nối.
 
 ### Chọn workflow khác khi
 
-- Bạn cần production video hoàn chỉnh có script, storyboard, mixing và export.
-  Dùng `ak:video`.
+- Bạn cần production video hoàn chỉnh có storyboard, mixing và export. Dùng
+  `ak:video`.
 - Bạn cần edit, normalize, transcode hoặc mix audio mà không có request
   generation ElevenLabs. Dùng workflow media processing đã được duyệt.
 - Bạn muốn clone một người khi chưa có informed consent hoặc authorization.
-- Bạn cần integration conversational agent hoặc music composition. Các topic
-  đó có trong knowledge base của package, nhưng invocation hint trực tiếp expose
-  `speak`, `clone` và `sfx`, không có route riêng cho chúng.
+- Bạn cần conversational agent đang hoạt động. Guide trong package có đề cập voice
+  agent, nhưng không hành động nào tạo hoặc triển khai agent.
 
 ## Chuẩn bị provider và source material
 
-Trước khi bắt đầu:
+Các hành động viết (`script`, `enhance` và phần viết của `dialogue`) không cần API
+key. Trước mọi synthesis:
 
 - Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận
   Marketing Kit đã được cài cho runtime cùng scope hiện tại.
@@ -44,8 +50,8 @@ Trước khi bắt đầu:
 - Cung cấp `ELEVENLABS_API_KEY` qua cơ chế secret đã duyệt và cho phép request
   ra ElevenLabs.
 - Xác nhận tài khoản có feature access, quota, billing và license cần cho thao
-  tác đã chọn.
-- Với speech, cung cấp text đã duyệt hoặc path tệp text cục bộ cùng output path.
+  tác đã chọn, đồng thời xác nhận model cùng voice đã chọn khả dụng trên tài
+  khoản.
 - Với cloning, cung cấp tên voice và một hoặc nhiều tệp audio được phép. Helper
   chấp nhận path MP3, WAV, M4A, OGG, FLAC và WebM, đồng thời khuyến nghị một đến
   hai phút source audio rõ ràng.
@@ -63,60 +69,118 @@ delivery rộng hơn.
 
 ## Chạy Skill
 
-Nêu một hành động trực tiếp và ranh giới output. Ví dụ speech này chỉ yêu cầu
-bản nháp cục bộ.
+Nêu hành động và ranh giới output. Ví dụ này chỉ yêu cầu script, không synthesis.
 
 <Tabs items={['Claude Code', 'Cursor', 'Codex']}>
   <Tab value="Claude Code">
 
 ```text
-/ak:elevenlabs speak "Your data stays under your control." Dùng voice Rachel đã duyệt, model eleven_multilingual_v2, lưu vào assets/audio/privacy-intro.mp3, review pronunciation và không publish
+/ak:elevenlabs script "Đoạn intro 30 giây, ấm áp và tự tin cho tính năng quyền riêng tư: dữ liệu của bạn luôn do bạn kiểm soát." Nhắm eleven_v4, tiếng Việt. Trả về performance script và production notes; không synthesize
 ```
 
   </Tab>
   <Tab value="Cursor">
 
 ```text
-/ak:elevenlabs speak "Your data stays under your control." Dùng voice Rachel đã duyệt, model eleven_multilingual_v2, lưu vào assets/audio/privacy-intro.mp3, review pronunciation và không publish
+/ak:elevenlabs script "Đoạn intro 30 giây, ấm áp và tự tin cho tính năng quyền riêng tư: dữ liệu của bạn luôn do bạn kiểm soát." Nhắm eleven_v4, tiếng Việt. Trả về performance script và production notes; không synthesize
 ```
 
   </Tab>
   <Tab value="Codex">
 
 ```text
-$ak:elevenlabs speak "Your data stays under your control." Dùng voice Rachel đã duyệt, model eleven_multilingual_v2, lưu vào assets/audio/privacy-intro.mp3, review pronunciation và không publish
+$ak:elevenlabs script "Đoạn intro 30 giây, ấm áp và tự tin cho tính năng quyền riêng tư: dữ liệu của bạn luôn do bạn kiểm soát." Nhắm eleven_v4, tiếng Việt. Trả về performance script và production notes; không synthesize
 ```
 
   </Tab>
 </Tabs>
 
-### Hiểu hành động trực tiếp và control của helper
+Argument hint là `[action: script|enhance|speak|dialogue|clone|sfx] [text-or-file]`.
+Khi bạn bỏ qua hành động, Skill tự suy ra: ý tưởng hoặc outline thành `script`,
+copy đã chốt kèm "không đổi lời" thành `enhance`, nhiều người nói thành
+`dialogue`, và script sẵn sàng kèm yêu cầu tạo audio thành `speak`.
 
-| Hành động | Input | Control helper quan trọng | Tác động |
+### Hiểu các hành động
+
+| Hành động | Input | Output | Tác động provider |
 | --- | --- | --- | --- |
-| `speak` | Text hoặc một tệp | `-f`/`--file`, `-o`/`--output`, `-v`/`--voice`, `-m`/`--model`, `--stability`, `--similarity`, `--speed`, `--stream` | Ghi audio; output mặc định của helper là `output.mp3` |
-| `clone` | Tên voice và các tệp sample | `-d`/`--description`, `--labels` với JSON | Upload sample và tạo voice trong tài khoản provider; trả về voice ID |
-| `sfx` | Mô tả âm thanh | `-o`/`--output`, `-d`/`--duration`, `--loop`, `--influence` | Ghi tệp sound effect; mặc định của helper là `sound_effect.mp3` |
+| `script` | Ý tưởng, outline, bài viết hoặc bản nháp | Performance script có audio tag theo model và dấu câu điều khiển diễn đạt, kèm production notes riêng khi hữu ích | Không có |
+| `enhance` | Copy đã chốt | Cùng lời nói, thêm chỉ dẫn diễn đạt | Không có |
+| `dialogue` | Người nói và cảnh | Script nhiều người nói có chỉ dẫn từng lượt; tùy chọn synthesis qua Text to Dialogue trên v4 hoặc v3 | Chỉ khi synthesize |
+| `speak` | Script hoàn chỉnh hoặc tệp text | Một tệp audio | Gửi script, tiêu quota |
+| `clone` | Tên voice và tệp sample có consent | Voice mới trong tài khoản provider cùng voice ID | Upload sample, thay đổi tài khoản |
+| `sfx` | Mô tả âm thanh | Một tệp sound effect | Gửi prompt, tiêu quota |
 
-Helper text-to-speech mặc định dùng voice `Rachel`, model
-`eleven_multilingual_v2`, stability `0.5`, similarity `0.75` và speed `1.0`.
-Hãy coi đây là default trong package, không phải lời hứa voice hay model vẫn khả
-dụng trên tài khoản đã kết nối.
+Production notes gồm model, voice, tag rủi ro, pronunciation, chunking và các
+câu nên audition. Chỉ dẫn phải thuộc về âm thanh; chỉ dẫn sân khấu dạng hình ảnh
+nằm trong production notes, không bao giờ nằm trong text được nói.
+
+`enhance` giữ nguyên mọi lời nói: bỏ các tag đã thêm thì text phải khớp input của
+bạn, ngoại trừ dấu câu và viết hoa. Synthesis cũng không bao giờ viết lại lời.
+Nếu một câu cần đổi, hãy sửa script trước.
+
+## Chọn model theo use case
+
+Skill chọn theo use case và xác nhận model khả dụng trên tài khoản trước mọi lần
+gọi. Model ID, setting, giá và giới hạn có thể thay đổi, vì vậy trang này không
+liệt kê giá hay quota.
+
+| Use case | Model ưu tiên |
+| --- | --- |
+| Voiceover biểu cảm hoặc diễn xuất, audiobook, tệp dialogue | `eleven_v4` |
+| Dialogue hoặc agent realtime biểu cảm | `eleven_v4_turbo`, stream qua Text to Dialogue WebSocket |
+| Narration rất dài, cần ổn định | `eleven_multilingual_v2` |
+| Độ trễ thấp nhất | Các biến thể Flash |
+
+Cú pháp chỉ dẫn theo model. Eleven v4 và v3 lấy nhịp và cảm xúc từ audio tag,
+dấu câu và cấu trúc text, và không hỗ trợ SSML `<break>`. Multilingual v2 và
+Flash có thể dùng `<break>` ở nơi được hỗ trợ. Eleven v4 chỉ nhận voice setting
+stability và similarity.
+
+## Hiểu helper speech
+
+Helper text-to-speech đi kèm mặc định dùng model `eleven_v4`, voice `Rachel` và
+output `output.mp3`. Helper chỉ gửi các voice setting bạn truyền vào. Với model có
+trong bảng capability, helper từ chối setting, flag hoặc tag `<break>` mà model đó
+không hỗ trợ thay vì gửi đi; với model khác, helper cảnh báo và chỉ gửi những gì
+bạn đã truyền.
+
+| Control helper | Mục đích | Ranh giới model |
+| --- | --- | --- |
+| `-f`/`--file`, `-o`/`--output`, `-v`/`--voice`, `-m`/`--model` | Tệp input, output path, tên hoặc ID voice, model ID | `eleven_v4_turbo` bị từ chối vì helper dùng HTTP endpoint |
+| `--stability`, `--similarity` | Voice setting | Mọi model |
+| `--style`, `--speed`, `--speaker-boost`/`--no-speaker-boost` | Voice setting | Không dùng cho Eleven v4 |
+| `--language-code` | Ép một ngôn ngữ, ví dụ `fr` | Không dùng cho Multilingual v2 |
+| `--previous-text`, `--next-text` | Context để nối các chunk của script dài | Không dùng cho Eleven v3 |
+| `--text-normalization` | `auto`, `on` hoặc `off` | Mặc định của provider là `auto` |
+| `--output-format` | Output format của provider, ví dụ `mp3_44100_128` | Giá trị do provider định nghĩa |
+| `--stream`, `--list-voices` | Dùng streaming endpoint, hoặc liệt kê voice của tài khoản | Phụ thuộc tài khoản |
+
+Helper chỉ dùng một voice. Helper không gọi Text to Dialogue, vì vậy tệp nhiều
+người nói trên v4 hoặc v3 được synthesize riêng qua API đó. Hãy coi các default là
+giá trị trong package, không phải lời hứa voice hay model vẫn khả dụng trên tài
+khoản đã kết nối.
+
+Helper cloning nhận `-d`/`--description` và `--labels` với JSON. Helper sound
+effect nhận `-o`/`--output` (mặc định `sound_effect.mp3`), `-d`/`--duration`,
+`--loop` và `--influence`.
 
 ## Theo các giai đoạn audio
 
-1. **Xác nhận hành động.** Skill resolve `speak`, `clone` hoặc `sfx`, input
-   path, output path, quyền provider, consent và ranh giới publication.
-2. **Xác minh input cục bộ.** Skill kiểm tra text hoặc tệp trước khi gửi dữ
-   liệu. Sample bị thiếu hay không được hỗ trợ phải dừng cloning.
-3. **Xác nhận tác động tài khoản.** Speech và sound effect tạo audio; cloning
-   còn tạo voice có thể tái sử dụng trong tài khoản ElevenLabs.
+1. **Resolve hành động.** Skill chọn hành động, ngôn ngữ đích, model, input và
+   output path, quyền provider, consent và ranh giới publication.
+2. **Viết và đạo diễn.** Với `script`, `enhance` và `dialogue`, Skill viết cho tai
+   nghe, lên performance beat, thêm chỉ dẫn mà model đích hỗ trợ và chạy bước
+   kiểm tra khả năng đọc thành tiếng. Chỉ synthesize khi bạn muốn có audio.
+3. **Xác minh input cục bộ.** Skill kiểm tra text hoặc tệp trước khi gửi dữ
+   liệu. Sample bị thiếu hay không được hỗ trợ sẽ dừng cloning.
 4. **Gọi provider.** Helper xác thực bằng `ELEVENLABS_API_KEY`, gửi request và
-   báo lỗi provider thay vì bịa audio.
-5. **Ghi hoặc báo kết quả.** Chunk speech và sound effect được ghi vào output đã
+   báo lỗi provider thay vì bịa audio. Script dài được chia tại ranh giới tự
+   nhiên, kèm context trước và sau ở nơi model hỗ trợ.
+5. **Ghi hoặc báo kết quả.** Audio speech và sound effect được ghi vào output đã
    chọn. Cloning báo tên cùng voice ID đã tạo.
-6. **Review trước khi dùng.** Nghe để phát hiện pronunciation, artifact, identity
-   cue ngoài ý muốn, tone gây hiểu nhầm, silence, clipping và vấn đề quyền.
+6. **Review trước khi dùng.** Skill kiểm tra audio đã lưu: lời nói, ngôn ngữ,
+   duration, format, mối nối và artifact.
 
 ## Giữ rõ consent, thay đổi tài khoản và chi phí
 
@@ -129,9 +193,9 @@ dụng trên tài khoản đã kết nối.
 
 | Nhóm công việc | Ranh giới thông thường |
 | --- | --- |
-| Hướng dẫn và soạn nháp | Skill có thể chuẩn bị text, prompt và setting trước provider request. |
+| Viết và đạo diễn | `script`, `enhance` và phần viết dialogue chỉ tạo text và không gửi gì tới ElevenLabs. |
 | Thay đổi cục bộ | `speak` và `sfx` ghi audio vào path đã chọn. Xác nhận parent directory và giữ tệp hiện có. |
-| Tác động provider và chi phí | Request gửi text, prompt hoặc audio sample tới ElevenLabs, tiêu quota và có thể phát sinh chi phí theo plan đã kết nối. |
+| Tác động provider và chi phí | Request gửi script, prompt hoặc audio sample tới ElevenLabs, tiêu quota và có thể phát sinh chi phí theo plan đã kết nối. |
 | Thay đổi tài khoản | `clone` thêm voice. Voice manager đi kèm cũng có thể xóa voice, nhưng deletion là hành động phá hủy riêng có confirmation và không được ngụ ý bởi lần chạy Skill thông thường. |
 | Tác động publication | Skill không cấp quyền phân phối audio, gắn vào campaign, thực hiện cuộc gọi, tạo conversational agent đang hoạt động hay publish lên platform. |
 
@@ -143,8 +207,9 @@ không được phép, né disclosure rule hay testimony gây hiểu nhầm.
 
 Một lần chạy hoàn tất nên báo:
 
-- Hành động, source text hoặc sample path, setting provider và output path chính
-  xác hoặc voice ID trả về.
+- Hành động, source text hoặc sample path, model, setting provider và output path
+  chính xác hoặc voice ID trả về.
+- Với hành động viết, performance script và production notes khi hữu ích.
 - Provider response hoặc lỗi rõ ràng mà không có artifact bịa đặt.
 - Listening review về pronunciation, pacing, identity, artifact, duration và
   mức phù hợp với context đã duyệt.
@@ -152,9 +217,9 @@ Một lần chạy hoàn tất nên báo:
 - Request liên quan quota hoặc chi phí và mọi bước tài khoản hay publication còn
   chờ.
 
-Với cloning, giữ consent record cùng voice ID tách khỏi public content. Với TTS,
-so sánh tên, ngày, giá và wording pháp lý hoặc y tế với script đã duyệt sau khi
-nghe; text đúng không đảm bảo pronunciation đúng.
+Với cloning, giữ consent record cùng voice ID tách khỏi public content. Với
+speech, so sánh tên, ngày, giá và wording pháp lý hoặc y tế với script đã duyệt
+sau khi nghe; text đúng không đảm bảo pronunciation đúng.
 
 ## Xử lý sự cố an toàn
 
@@ -163,6 +228,9 @@ nghe; text đúng không đảm bảo pronunciation đúng.
 | Runtime không tìm thấy `ak:elevenlabs` | Xác nhận target cùng scope, mở session mới, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
 | Xuất hiện `ELEVENLABS_API_KEY not found` | Cấu hình key qua cơ chế secret đã duyệt; không dán hoặc commit key. |
 | Xuất hiện `elevenlabs package not installed` | Cài requirement Python trong package vào môi trường đã duyệt, rồi chỉ chạy lại hành động dự kiến. |
+| Helper báo model không hỗ trợ một setting, tag `<break>`, `--language-code` hoặc stitching | Bỏ tùy chọn không được hỗ trợ cho model đó. Trên v4, điều khiển nhịp và cảm xúc bằng audio tag và dấu câu. |
+| Helper từ chối `eleven_v4_turbo` | Dùng `eleven_v4` cho output dạng tệp; `eleven_v4_turbo` được stream từ ứng dụng qua Text to Dialogue WebSocket. |
+| Script đã enhance bị đổi lời | Bỏ tag, so với bản gốc và khôi phục lời gốc trước khi synthesize. |
 | Không tìm thấy voice được yêu cầu | Liệt kê voice của tài khoản đã kết nối hoặc chọn voice được phép và khả dụng. Không tự thay identity. |
 | Sample clone bị thiếu hoặc nhiễu | Dừng, thay bằng recording rõ ràng được phép và xác nhận lại consent trước upload. |
 | Labels parse lỗi | Truyền JSON hợp lệ vào `--labels`; không bỏ metadata identity hay consent chỉ để vượt lỗi. |
@@ -174,8 +242,10 @@ Tiếp tục với [Tổng quan Marketing Kit](../../marketing) hoặc
 
 ## Biết các giới hạn hiện tại
 
-- Argument hint trực tiếp là `[action: speak|clone|sfx] [text-or-file]`.
-  Reference ElevenLabs rộng hơn không tạo thêm routed action.
+- Danh sách model trong package là trích đoạn lịch sử, không phải inventory trực
+  tiếp. Xác nhận model, voice và setting trên tài khoản trước mỗi lần gọi.
+- Helper speech là text-to-speech HTTP một voice. Helper không synthesize Text to
+  Dialogue và không stream `eleven_v4_turbo`.
 - Helper sound effect hiện tại chấp nhận `--loop` và `--influence`, nhưng SDK
   request chỉ forward prompt cùng duration tùy chọn. Không tuyên bố tệp đã lưu
   seamless hay prompt influence đã được áp dụng khi chưa có bằng chứng riêng.

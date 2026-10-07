@@ -1,7 +1,9 @@
 ---
 title: CLI conventions
-description: Global flags, output modes, and standard exit codes shared by every ak command.
+description: Global flags, output modes, the JSON envelope, machine-readable command contracts, and exit codes shared by every ak command.
 ---
+
+import { Callout } from 'fumadocs-ui/components/callout';
 
 Every `ak` command follows the same conventions for flags, output, and exit
 codes. Command pages in the [CLI reference](./cli) list only what is specific
@@ -24,7 +26,7 @@ to that command; everything on this page applies everywhere.
 | --- | --- |
 | `pretty` | default on TTY (colors, ASCII markers) |
 | `plain` | auto when stdout piped or `--no-interactive` |
-| `json` | `--json` (single-object envelope, NDJSON-safe) |
+| `json` | `--json` (see [JSON output](#json-output)) |
 
 Lifecycle errors from `ak update`, `ak kit init` (including `ak kit install`),
 and `ak kit refresh` show their recovery reason by default in human and JSON
@@ -33,9 +35,85 @@ remain visible for recovery. This is not a blanket disclosure policy for
 every command. `--verbose` can expose raw diagnostics, so review them before
 sharing.
 
+## JSON output
+
+Result data goes to stdout; status, progress, warnings, and failures go to
+stderr. With `--json`, stdout carries one versioned envelope:
+
+```json
+{
+  "schema_version": 1,
+  "kind": "domain.operation",
+  "data": {}
+}
+```
+
+Gate on `schema_version`, dispatch on `kind`, and decode the payload under
+`data`. Ignore fields you do not recognize; additive fields do not change the
+schema version.
+
+A command can declare a different framing instead: `ndjson` for a stream of
+JSON lines (for example `ak run`), `protocol` for a stdio protocol, or
+`json-legacy` for an unwrapped document. `ak config prefs resolve --json` and
+`ak skill verify --json` keep their legacy unwrapped shape. Read a command's
+framing from [`ak describe`](#describe-a-command-contract) rather than inferring
+it from the presence of `--json`.
+
+<Callout type="warn" title="Read the payload under data">
+  Commands such as `ak migrate`, `ak backups create`,
+  `ak codex-agent-runtime register` and `unregister`, `ak config prefs set`,
+  `unset`, and `validate`, `ak content-search`, and `ak data` wrap their JSON
+  payload in the envelope. Scripts written against an earlier unwrapped shape
+  must read `.data` and dispatch on `.kind`. An applied `ak backups restore` or
+  `ak recover` prints a `backups.restore` envelope.
+</Callout>
+
+When a `--json` run fails, stderr ends with an error envelope:
+
+```json
+{"schema_version":1,"error":"unknown flag: --bogus","error_code":"validation_failed","exit_code":2}
+```
+
+This includes flag errors and unknown commands. A command that already printed
+its result and then exits non-zero, such as a completed preview that exits `3`,
+explains the exit in that result and adds no error envelope. Other notices, such
+as a first-launch hint, can precede the envelope on stderr. The `error_code`
+`lock_held` means another kit lifecycle operation holds the lock.
+
+## Describe a command contract
+
+`ak describe <command...> [--json]` prints a command's contract as data. It is
+read-only and offline, and the same binary always gives the same answer. With
+no arguments it describes the root command; a path that matches no command
+exits `5`.
+
+```bash
+ak describe kit install --json
+```
+
+The `command.describe` payload carries the command path, usage, aliases, flags
+(local and inherited), subcommands, help sections, declared `exit_codes`, and an
+`agent` contract: whether the command mutates, its risk tier, idempotency,
+preview, confirmation, snapshot, network, auth, long-running behavior, input and
+output framing, output kinds, and protocol.
+
+- A value the command does not declare reads `unspecified`. Treat it as
+  unknown, never as a safe default. `output_framing_source` tells you whether
+  the framing is `declared` or `unspecified`.
+- Confirmation `prompt` means the command asks on stdin unless `--yes`,
+  `--no-interactive`, or `--json` is passed.
+- The contract describes the command itself. It does not cover the opt-in
+  background auto-update that a human-mode run of some commands may start; that
+  check never runs under `--json`.
+
+See the [`ak describe` reference](./cli/describe) for its flags and output
+fields.
+
 ## Exit codes
 
-Every runnable command reports the same three base outcomes:
+Every runnable command declares `0` and `2`, plus the custom codes it can
+return. Read them from the command's help (**Exit status**) or from
+`ak describe` `exit_codes`. The base outcomes are:
 
 | Code | Meaning |
 | --- | --- |
@@ -43,8 +121,12 @@ Every runnable command reports the same three base outcomes:
 | `1` | command failure |
 | `2` | invalid flags or arguments |
 
+Flag parse errors exit `2`. Positional argument-count errors and unknown
+commands currently exit `1`.
+
 Codes `3` and above are command-specific, and the same number can mean
 different things on different commands. A command page's **Exit codes** section
 lists only those: `3` is user cancel on `ak recover`, `ak backups restore`,
 `ak setup`, and `ak onboard`, but reports a completed preview on the
-`ak analytics` subcommands.
+`ak analytics` subcommands. Consult the selected command's declared codes
+instead of applying one table everywhere.

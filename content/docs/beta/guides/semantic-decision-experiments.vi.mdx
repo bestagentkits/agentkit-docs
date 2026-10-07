@@ -1,0 +1,158 @@
+---
+title: Chạy thử nghiệm semantic decision
+description: Chọn tham gia các phép so sánh semantic decision chỉ ở chế độ shadow, chọn provider và credential, hiểu dữ liệu nào rời khỏi máy và tắt thử nghiệm khi cần.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Thử nghiệm semantic decision hỏi một model provider bên ngoài để lấy một phán
+đoán, rồi so sánh với quyết định AgentKit đã đưa ra theo quy tắc thông thường
+(quyết định legacy). Thử nghiệm chỉ chạy ở chế độ shadow: câu trả lời của
+provider là một quan sát để bạn kiểm tra. Nó không bao giờ thay thế quyết định
+legacy, cấp quyền cho một hành động hay kích hoạt bất cứ thứ gì trong runtime.
+Tính năng tắt cho đến khi bạn chọn tham gia ở user scope, và trang này không hứa
+hẹn chất lượng tốt hơn hay chi phí thấp hơn.
+
+<Callout type="warning" title="Chọn tham gia sẽ gửi dữ liệu tới provider và có thể tốn phí">
+  Khi được bật, mỗi lần chạy gửi tóm tắt tác vụ ngắn gọn và mô tả các capability
+  đã cài tới provider bạn chọn, và provider có thể tính phí cho mỗi request, dù
+  quyết định legacy vẫn có hiệu lực.
+</Callout>
+
+## Quyết định dữ liệu nào được rời khỏi máy
+
+Request chỉ nên chứa dữ kiện ngắn gọn đã chuẩn hóa: tóm tắt tác vụ, mô tả các
+capability đã cài cần cho phép so sánh và câu trả lời legacy. Không đưa tệp mã
+nguồn, transcript thô, credential, dữ liệu cá nhân hay chi tiết bảo mật của
+project vào các dữ kiện đó. AgentKit che các dạng bí mật phổ biến trước khi
+request rời máy, nhưng việc che chỉ là lớp bảo vệ bổ sung, không đảm bảo mọi đoạn
+text nhạy cảm đều an toàn.
+
+## Cấp consent ở user scope
+
+Consent nằm trong mục `semantic_decision` của cấu hình user
+(`$AGENTKIT_HOME/config.yaml`). Cấu hình project chỉ có thể thu hẹp consent: một
+project có thể tắt tính năng hoặc một consumer, nhưng không thể bật tính năng,
+chọn provider hay chọn model. Điều này bảo vệ consent của bạn khi mở một bản
+clone không đáng tin cậy. Việc có sẵn credential không bao giờ tự bật tính năng.
+
+Chọn provider trước, rồi bật tính năng, cả hai ở user scope bằng
+[`ak config prefs set`](../reference/cli/config/prefs/set):
+
+```bash
+ak config prefs set semantic_decision.provider cloudflare --scope user
+ak config prefs set semantic_decision.model clef-flash --scope user
+ak config prefs set semantic_decision.enabled true --scope user
+```
+
+Các key ghi được là `semantic_decision.enabled`, `provider`, `model`,
+`timeout_ms` và `consumers.<name>`. Chạy `ak config prefs set --help` từ binary
+bạn sẽ dùng để xác nhận các key hiện có.
+
+Sau khi bật, các consumer ban đầu `domain-routing`, `fix-complexity` và
+`orchestration-risk` được phép, trừ khi bạn liệt kê consumer một cách tường
+minh. Mỗi consumer mới hơn cần một giá trị `true` riêng ở user scope, ví dụ
+`semantic_decision.consumers.skill-routing-eval`, `review-triage`,
+`workflow-controller`, `ui-regression`, `test-impact` hoặc
+`e2e-classification`. Khi bạn đặt bất kỳ mục consumer nào, chỉ các mục có giá trị
+`true` mới được phép.
+
+## Chọn provider và credential
+
+Chọn đúng một provider; AgentKit không bao giờ tự đổi provider.
+
+| Provider | Model | Credential |
+| --- | --- | --- |
+| `typesafe` | Lấy từ provider | `TYPESAFE_API_KEY` |
+| `cloudflare` | Chỉ `clef` hoặc `clef-flash` | `CLOUDFLARE_ACCOUNT_ID` và `CLOUDFLARE_API_TOKEN` |
+
+Mỗi credential được đọc từ môi trường của process trước, sau đó từ tệp `.env`
+trong AgentKit home của user (`$AGENTKIT_HOME/.env`, mặc định
+`~/.agentkit/.env`):
+
+```bash
+# ~/.agentkit/.env
+TYPESAFE_API_KEY=...
+CLOUDFLARE_ACCOUNT_ID=...
+CLOUDFLARE_API_TOKEN=...
+```
+
+- Giá trị môi trường rỗng được coi là chưa đặt.
+- `.agentkit/.env` của project không bao giờ được đọc cho các credential này, vì
+  vậy một repository được clone không thể cung cấp hay ghi đè credential.
+- `AGENTKIT_HOME` dạng đường dẫn tương đối bị từ chối, và các lệnh semantic dừng
+  an toàn.
+- Credential không bao giờ thuộc về `config.yaml`, request, repository hay
+  report. AgentKit không in và không ghi lại credential.
+- Account id của Cloudflare phải là id hệ thập lục phân 32 ký tự. Hãy dùng API
+  token chỉ có quyền Workers AI, vì cùng tên biến có thể đang chứa token rộng hơn
+  trong shell của bạn.
+
+Credential chỉ được đọc khi một consumer đã bật và được phép thực sự được dùng.
+Nếu đã cấp consent nhưng không có credential dùng được (kể cả account id của
+Cloudflare bị thiếu hoặc sai dạng), kết quả báo `credential_missing` tại thời
+điểm đó, không phải lúc bạn cấu hình tính năng.
+
+### Model discovery
+
+Với `typesafe`, nếu bạn để trống `semantic_decision.model` và provider chỉ có
+một model, model đó được chọn tự động. Nếu provider có nhiều model, kết quả báo
+`model_required` cho đến khi bạn đặt một model. Cloudflare luôn có hai model, vì
+vậy hãy đặt `semantic_decision.model` là `clef` hoặc `clef-flash`.
+
+## Chạy một phép so sánh
+
+[`ak eval decision`](../reference/cli/eval/decision) chạy một shadow profile:
+`domain-routing`, `fix-complexity`, `orchestration-risk` hoặc
+`skill-routing-eval`. Request chứa consumer, state ngắn gọn và các câu trả lời
+legacy.
+
+```bash
+ak eval decision request.json --validate-only --json
+ak eval decision request.json --json
+```
+
+`--validate-only` kiểm tra mọi encoding của provider ngay trên máy. Lệnh không
+đọc preference hay credential và không gọi network, nên hãy chạy nó trước.
+
+Kiểm tra `status`, `fallback_reason` và provenance, không chỉ mức đồng thuận:
+
+- `completed` nghĩa là provider đã trả lời. Chỉ đồng thuận thôi không chứng minh
+  là đúng.
+- `disabled` nghĩa là thiếu consent hoặc quyền của consumer (`not_enabled` hoặc
+  `consumer_disabled`). Không có lời gọi provider nào.
+- `unavailable` nghĩa là thử nghiệm được phép nhưng chưa hoàn tất. Lý do là một
+  nhóm cố định như `credential_missing`, `model_required`, `model_unavailable`,
+  `timeout`, `rate_limited`, `authentication_failed` hoặc
+  `provider_unavailable`. Kết quả unavailable không phải là một phép so sánh đã
+  hoàn tất.
+
+Trong mọi trường hợp, quyết định legacy vẫn là quyết định có hiệu lực. Request
+hết thời gian sau `semantic_decision.timeout_ms` (mặc định 5000 ms; cho phép từ
+100 đến 30000 ms). Exit code của lệnh nằm trên trang tham chiếu của lệnh.
+
+## Tắt hoặc gỡ cấu hình
+
+- Đặt `semantic_decision.enabled` là `false` ở user scope để dừng mọi lần dùng
+  provider.
+- Đặt một consumer là `false` để chỉ dừng thử nghiệm đó.
+- Để hạn chế một project, đặt `semantic_decision.enabled` hoặc một consumer là
+  `false` với `--scope project`. `.agentkit/config.yaml` ở thư mục cha gần nhất
+  được áp dụng, nên hạn chế cũng có hiệu lực trong các thư mục con.
+- Gỡ từng key bằng
+  [`ak config prefs unset`](../reference/cli/config/prefs/unset). Gỡ hạn chế của
+  project sẽ khôi phục chính sách user; gỡ giá trị bật ở user scope sẽ quay về
+  trạng thái không cấp quyền.
+- Gỡ preference không thu hồi credential. Khi ngừng dùng, hãy xóa các biến của
+  provider khỏi môi trường, `$AGENTKIT_HOME/.env` và mọi cơ chế secret injection
+  bạn đã cấu hình.
+
+## Giới hạn
+
+- Tệp cấu hình phải viết tên mục là `semantic_decision`. Cách viết cũ
+  `semanticDecision` bị từ chối cho consent và không bao giờ cấp consent.
+- Profile `domain-routing` chấp nhận tối đa 15 capability. Nếu catalog liên quan
+  đầy đủ lớn hơn, hãy bỏ qua phép so sánh thay vì loại bớt các mục cạnh tranh để
+  vừa giới hạn.
+- Một phép so sánh đo mức đồng thuận với quyết định legacy theo input của bạn.
+  Nó không phải benchmark về chất lượng, chi phí hay độ trễ của provider.

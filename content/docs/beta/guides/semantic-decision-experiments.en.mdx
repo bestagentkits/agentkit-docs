@@ -1,0 +1,154 @@
+---
+title: Running semantic decision experiments
+description: Opt in to shadow-only semantic decision comparisons, choose a provider and credentials, understand what leaves your machine, and turn the experiment off again.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+A semantic decision experiment asks an external model provider for a judgment
+and compares it with the decision AgentKit already made by its ordinary rules
+(the legacy decision). It is shadow-only: the provider answer is an observation
+you inspect. It never replaces the legacy decision, authorizes an action, or
+activates anything in a runtime. The feature is off until you opt in at user
+scope, and nothing on this page promises better quality or lower cost.
+
+<Callout type="warning" title="Opting in sends data to a provider and can cost money">
+  When enabled, a run sends compact task summaries and installed capability
+  descriptions to the provider you choose, and the provider may charge for each
+  request, even though the legacy decision stays in effect.
+</Callout>
+
+## Decide what may leave your machine
+
+Only compact, normalized facts belong in a request: a short task summary, the
+installed capability descriptions needed for the comparison, and the legacy
+answer. Do not put source files, raw transcripts, credentials, personal data, or
+confidential project detail into those facts. AgentKit redacts common secret
+shapes before a request leaves, but redaction is a safety net, not a guarantee
+that arbitrary sensitive text is safe.
+
+## Grant consent at user scope
+
+Consent lives in the `semantic_decision` section of your user configuration
+(`$AGENTKIT_HOME/config.yaml`). Project configuration can only narrow it: a
+project can turn the feature or a consumer off, but it cannot turn it on, pick a
+provider, or choose a model. This protects your consent when you open an
+untrusted clone. A credential being present never enables the feature.
+
+Choose the provider first, then enable the feature, both at user scope with
+[`ak config prefs set`](../reference/cli/config/prefs/set):
+
+```bash
+ak config prefs set semantic_decision.provider cloudflare --scope user
+ak config prefs set semantic_decision.model clef-flash --scope user
+ak config prefs set semantic_decision.enabled true --scope user
+```
+
+The writable keys are `semantic_decision.enabled`, `provider`, `model`,
+`timeout_ms`, and `consumers.<name>`. Run `ak config prefs set --help` from the
+binary you will use to confirm its current surface.
+
+After enabling, the original `domain-routing`, `fix-complexity`, and
+`orchestration-risk` consumers are permitted unless you list consumers
+explicitly. Every newer consumer needs its own explicit user-scope `true`, for
+example `semantic_decision.consumers.skill-routing-eval`, `review-triage`,
+`workflow-controller`, `ui-regression`, `test-impact`, or
+`e2e-classification`. Once you set any consumer entry, only the entries set to
+`true` are permitted.
+
+## Choose a provider and credentials
+
+Pick one provider explicitly; AgentKit never switches providers on its own.
+
+| Provider | Models | Credentials |
+| --- | --- | --- |
+| `typesafe` | Discovered from the provider | `TYPESAFE_API_KEY` |
+| `cloudflare` | `clef` or `clef-flash` only | `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` |
+
+Each credential is read from the process environment first, then from the user
+AgentKit home `.env` file (`$AGENTKIT_HOME/.env`, by default `~/.agentkit/.env`):
+
+```bash
+# ~/.agentkit/.env
+TYPESAFE_API_KEY=...
+CLOUDFLARE_ACCOUNT_ID=...
+CLOUDFLARE_API_TOKEN=...
+```
+
+- A blank environment value counts as unset.
+- A project `.agentkit/.env` is never read for these credentials, so a cloned
+  repository cannot supply or override one.
+- A relative `AGENTKIT_HOME` is refused, and the semantic commands fail closed.
+- Credentials never belong in `config.yaml`, a request, a repository, or a
+  report. AgentKit does not print or record them.
+- The Cloudflare account id must be the 32-character hexadecimal id. Use an API
+  token scoped to Workers AI only, because the same variable name may already
+  hold a broader token in your shell.
+
+Credentials are read only when an enabled, permitted consumer is actually used.
+If consent is granted but no usable credential exists (including a missing or
+malformed Cloudflare account id), the result reports `credential_missing` at
+that point rather than when you configure the feature.
+
+### Model discovery
+
+For `typesafe`, a single discovered model is selected automatically when you
+leave `semantic_decision.model` unset. If the provider offers several models,
+the result reports `model_required` until you set one. Cloudflare always offers
+two models, so set `semantic_decision.model` to `clef` or `clef-flash`.
+
+## Run a comparison
+
+[`ak eval decision`](../reference/cli/eval/decision) runs one shadow profile:
+`domain-routing`, `fix-complexity`, `orchestration-risk`, or
+`skill-routing-eval`. The request holds the consumer, compact state, and the
+legacy answers.
+
+```bash
+ak eval decision request.json --validate-only --json
+ak eval decision request.json --json
+```
+
+`--validate-only` checks every provider encoding locally. It reads no
+preferences or credentials and makes no network call, so use it first.
+
+Inspect `status`, `fallback_reason`, and provenance, not only agreement:
+
+- `completed` means the provider answered. Agreement alone does not establish
+  correctness.
+- `disabled` means consent or the consumer permission is missing
+  (`not_enabled` or `consumer_disabled`). No provider call is made.
+- `unavailable` means the experiment was permitted but did not complete. The
+  reason is a fixed category such as `credential_missing`, `model_required`,
+  `model_unavailable`, `timeout`, `rate_limited`, `authentication_failed`, or
+  `provider_unavailable`. An unavailable result is not a completed comparison.
+
+In every case the legacy decision remains the effective decision. A request
+times out after `semantic_decision.timeout_ms` (5000 ms by default; 100 to
+30000 ms allowed). The command's exit codes are on its reference page.
+
+## Turn it off or remove it
+
+- Set `semantic_decision.enabled` to `false` at user scope to stop all provider
+  use.
+- Set a single consumer to `false` to stop just that experiment.
+- To restrict one project, set `semantic_decision.enabled` or a consumer to
+  `false` with `--scope project`. The nearest ancestor `.agentkit/config.yaml`
+  applies, so the restriction also holds in subdirectories.
+- Remove individual keys with
+  [`ak config prefs unset`](../reference/cli/config/prefs/unset). Removing a
+  project restriction restores your user policy; unsetting the user enablement
+  returns to no grant at all.
+- Removing preferences does not revoke a credential. Delete the provider
+  variables from your environment, `$AGENTKIT_HOME/.env`, and any secret
+  injection you configured when you retire access.
+
+## Limits
+
+- The config file must spell the section `semantic_decision`. The older
+  `semanticDecision` spelling is rejected for consent and never grants it.
+- The `domain-routing` profile accepts at most 15 capabilities. If the complete
+  relevant catalog is larger, skip the comparison instead of removing competing
+  entries to make it fit.
+- A comparison measures agreement with the legacy decision under your inputs. It
+  is not a benchmark of provider quality, cost, or latency.
