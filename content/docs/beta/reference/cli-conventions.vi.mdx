@@ -1,7 +1,9 @@
 ---
 title: Quy ước CLI
-description: Flag toàn cục, chế độ output và exit code chuẩn dùng chung cho mọi lệnh ak.
+description: Flag toàn cục, chế độ output, JSON envelope, contract máy đọc được của lệnh và exit code dùng chung cho mọi lệnh ak.
 ---
+
+import { Callout } from 'fumadocs-ui/components/callout';
 
 Mọi lệnh `ak` dùng chung một bộ quy ước về flag, output và exit code. Các trang
 trong [tham chiếu CLI](./cli) chỉ liệt kê phần riêng của từng lệnh; mọi thứ
@@ -24,7 +26,7 @@ trên trang này áp dụng cho tất cả.
 | --- | --- |
 | `pretty` | mặc định trên TTY (màu, ký hiệu ASCII) |
 | `plain` | tự chọn khi stdout bị pipe hoặc `--no-interactive` |
-| `json` | `--json` (một object duy nhất, an toàn NDJSON) |
+| `json` | `--json` (xem [Output JSON](#output-json)) |
 
 Lỗi vòng đời từ `ak update`, `ak kit init` (gồm `ak kit install`) và
 `ak kit refresh` hiển thị lý do cần để khôi phục theo mặc định trong output
@@ -33,9 +35,82 @@ URL được che; đường dẫn vẫn hiển thị để khôi phục. Đây k
 hiển thị lỗi chung cho mọi lệnh. `--verbose` có thể lộ chẩn đoán thô, nên hãy
 kiểm tra trước khi chia sẻ.
 
+## Output JSON
+
+Dữ liệu kết quả ghi ra stdout; trạng thái, tiến độ, cảnh báo và lỗi ghi ra
+stderr. Với `--json`, stdout chứa một envelope có phiên bản:
+
+```json
+{
+  "schema_version": 1,
+  "kind": "domain.operation",
+  "data": {}
+}
+```
+
+Kiểm tra `schema_version`, phân nhánh theo `kind` và đọc payload trong `data`.
+Bỏ qua các field bạn không nhận ra; field bổ sung không làm đổi schema version.
+
+Một lệnh có thể khai báo framing khác: `ndjson` cho luồng các dòng JSON (ví dụ
+`ak run`), `protocol` cho giao thức stdio, hoặc `json-legacy` cho document không
+bọc envelope. `ak config prefs resolve --json` và `ak skill verify --json` giữ
+dạng legacy không bọc. Hãy đọc framing của từng lệnh từ
+[`ak describe`](#mô-tả-contract-của-lệnh) thay vì suy ra từ việc lệnh có `--json`.
+
+<Callout type="warn" title="Đọc payload trong data">
+  Các lệnh như `ak migrate`, `ak backups create`,
+  `ak codex-agent-runtime register` và `unregister`, `ak config prefs set`,
+  `unset` và `validate`, `ak content-search` và `ak data` bọc payload JSON trong
+  envelope. Script viết theo dạng không bọc trước đây phải đọc `.data` và phân
+  nhánh theo `.kind`. `ak backups restore` hoặc `ak recover` khi đã áp dụng sẽ in
+  envelope `backups.restore`.
+</Callout>
+
+Khi một lần chạy `--json` thất bại, stderr kết thúc bằng error envelope:
+
+```json
+{"schema_version":1,"error":"unknown flag: --bogus","error_code":"validation_failed","exit_code":2}
+```
+
+Điều này áp dụng cả cho lỗi flag và lệnh không tồn tại. Lệnh đã in kết quả rồi
+mới thoát với mã khác 0, ví dụ preview hoàn tất thoát `3`, giải thích lý do thoát
+ngay trong kết quả đó và không thêm error envelope. Các thông báo khác, như gợi ý
+lần chạy đầu, có thể xuất hiện trước envelope trên stderr. `error_code`
+`lock_held` nghĩa là một thao tác vòng đời kit khác đang giữ lock.
+
+## Mô tả contract của lệnh
+
+`ak describe <command...> [--json]` in contract của một lệnh dưới dạng dữ liệu.
+Lệnh này chỉ đọc, chạy offline, và cùng một binary luôn trả cùng một kết quả.
+Không có tham số thì lệnh mô tả root command; đường dẫn không khớp lệnh nào thoát
+với mã `5`.
+
+```bash
+ak describe kit install --json
+```
+
+Payload `command.describe` gồm đường dẫn lệnh, usage, alias, flag (local và kế
+thừa), lệnh con, các phần help, `exit_codes` đã khai báo và contract `agent`: lệnh
+có thay đổi trạng thái không, risk tier, tính idempotent, preview, confirmation,
+snapshot, network, auth, chạy lâu, framing input và output, các output kind và
+protocol.
+
+- Giá trị lệnh không khai báo sẽ là `unspecified`. Hãy coi đó là chưa biết, không
+  bao giờ là mặc định an toàn. `output_framing_source` cho biết framing là
+  `declared` hay `unspecified`.
+- Confirmation `prompt` nghĩa là lệnh hỏi qua stdin trừ khi truyền `--yes`,
+  `--no-interactive` hoặc `--json`.
+- Contract mô tả chính lệnh đó. Contract không bao gồm auto-update chạy nền
+  (opt-in) mà một số lệnh có thể khởi động ở chế độ dành cho người dùng; bước kiểm
+  tra đó không bao giờ chạy với `--json`.
+
+Xem [tham chiếu `ak describe`](./cli/describe) để biết flag và các field output.
+
 ## Exit code
 
-Mọi lệnh chạy được đều trả về cùng ba kết quả cơ bản:
+Mọi lệnh chạy được đều khai báo `0` và `2`, cùng các mã riêng mà lệnh có thể trả
+về. Đọc chúng trong help của lệnh (**Exit status**) hoặc trong `exit_codes` của
+`ak describe`. Các kết quả cơ bản là:
 
 | Code | Ý nghĩa |
 | --- | --- |
@@ -43,8 +118,12 @@ Mọi lệnh chạy được đều trả về cùng ba kết quả cơ bản:
 | `1` | lệnh thất bại |
 | `2` | flag hoặc tham số không hợp lệ |
 
+Lỗi parse flag thoát `2`. Lỗi số lượng tham số vị trí và lệnh không tồn tại hiện
+thoát `1`.
+
 Code `3` trở lên là riêng theo từng lệnh, và cùng một con số có thể mang ý
 nghĩa khác nhau ở các lệnh khác nhau. Mục **Exit codes** trên trang mỗi lệnh
 chỉ liệt kê những mã đó: `3` là người dùng hủy ở `ak recover`,
 `ak backups restore`, `ak setup` và `ak onboard`, nhưng lại báo preview đã
-hoàn tất ở các lệnh con `ak analytics`.
+hoàn tất ở các lệnh con `ak analytics`. Hãy tra mã đã khai báo của lệnh đang dùng
+thay vì áp một bảng chung cho mọi lệnh.
