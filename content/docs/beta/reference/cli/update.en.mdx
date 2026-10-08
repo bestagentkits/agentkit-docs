@@ -19,6 +19,7 @@ ak update --global [options]
 - Remote preview can still authenticate, check entitlements, download kit content, and update the cache before it calculates the plan.
 - `--force` authorizes replacement only after a snapshot unless `--no-backup` is set. It does not turn global installation into unconditional overwrite.
 - `--json`, `--quiet`, `--no-interactive`, or a non-TTY selects scripted behavior. In an interactive project or global run, declining every prompt exits `0`.
+- An attended project update (TTY accept or `--yes`) refreshes the tracked `kits/` tree, then every installed runtime of each project kit. See [Project runtime refresh](#project-runtime-refresh).
 
 ## Arguments
 
@@ -30,7 +31,7 @@ Target validation uses both the selected scope and source:
 
 | Scope and source | Valid targets |
 | --- | --- |
-| Project, remote | Exactly one of `claude-code`, `codex`, `cursor`, `dsh`, `grok`, `omp`, or `pi` |
+| Project, remote | `claude-code`, `codex`, `cursor`, `dsh`, `grok`, `omp`, or `pi` |
 | Global, remote | `claude-code`, `codex`, `cursor`, `dsh`, `grok`, or `omp` |
 | Global, local | `claude-code`, `codex`, `cursor`, `dsh`, `grok`, or `omp` |
 
@@ -40,6 +41,40 @@ is projected onto each step: a project-only target such as `pi` is omitted from
 the global step but remains available to the project step. If no selected target
 applies globally, the wizard skips that step and continues.
 
+In both scopes, `--target a,b` filters which installed runtimes refresh; unset
+means every installed runtime. A requested runtime that has no install in that
+scope is listed under `skipped_targets` rather than created. At project scope
+the tracked `kits/` tree still comes from one runtime's download: `claude-code`
+when it is selected, installed, or nothing is selected; otherwise the first
+selected runtime.
+
+## Project runtime refresh
+
+After the tracked `kits/` tree, an attended project update refreshes every
+installed runtime of each project kit (`.claude`, `.codex`, and adapter roots)
+through the same path as [`ak kit refresh`](./kit/refresh), one pass per kit and
+runtime. The kits it considers are the `--kits` list when given, otherwise the
+kits tracked in `kits/` plus every kit with an owned project install.
+
+- A failed pass does not stop the others. Each pass reports its own row, and the
+  command exits `1` after all passes finish.
+- A project that has only `ak kit init` runtime installs, with no tracked
+  `kits/` tree, refreshes those installs instead of exiting `2`.
+- Preview and `--dry-run` list each planned refresh as a `preview` row and write
+  nothing.
+- The CLI preflight takes the highest kit CLI requirement across the selected
+  runtimes.
+- A project Claude Code plugin install is reported as `plugin_only`, not
+  converted. Refresh it with `ak kit refresh <kit> --target claude-code --switch-to-plugin --yes`.
+- A runtime the remote source does not serve is skipped with reason
+  `source_inapplicable`; re-run with `--local --kits-dir <dir>`.
+- When the project directory resolves to the user-level install (for example,
+  the home directory), that runtime is skipped with reason
+  `project_is_global_home` and never refreshed. Run `ak update --global` to
+  refresh it.
+- If `--target` matches no installed project runtime and there is no tracked
+  `kits/` tree, the command exits `2`.
+
 ## Background auto-update (opt-in)
 
 `--schedule daily|weekly` turns on a detached background update that starts on
@@ -47,7 +82,9 @@ the first ordinary `ak` command after the chosen interval; `--schedule off`
 stops it and clears its state. It refreshes the CLI and global kits, plus any
 project opted in with `--project <dir>` (repeatable; the directory must
 already be registered with `ak projects add`) whose git tree is clean and has
-no live agent session. `--no-project <dir>` (repeatable) opts a project back
+no live agent session. A background project update refreshes only the tracked
+`kits/` tree; it never refreshes project runtime installs. It records a notice
+to run `ak update <dir> --yes` or `ak kit refresh <kit>` instead. `--no-project <dir>` (repeatable) opts a project back
 out, even if its directory no longer exists. `--status [--json]` reports the
 schedule and the last background result without changing anything; add
 `--ack` to mark that result as seen.
@@ -90,11 +127,11 @@ opted-in-project diagnostics.
 | `--project <dir>` | Empty | Opt a project registered with `ak projects add` into background auto-update (repeatable). |
 | `--registry-url <url>` | Empty | Override the registry URL. |
 | `--remote` | `true` | Use the remote registry. |
-| `--runtime <runtime>` | `claude-code` | Alias of `--target`; select runtime(s) from the scope-and-source matrix above. |
+| `--runtime <runtime>` | `claude-code` | Alias of `--target`; select runtime(s) from the scope-and-source matrix above. The default is not an explicit selection. |
 | `--schedule <daily\|weekly\|off>` | Empty | Set or clear the background auto-update schedule (settings only; updates nothing now). |
 | `--show-diff` | `false` | Include file diffs in the plan. |
 | `--status` | `false` | Show the background auto-update schedule and last result (read-only). |
-| `--target <target>` | Empty | Select runtime(s) from the scope-and-source matrix above; pass only one of `--target` or `--runtime`. |
+| `--target <target>` | Empty | Comma-separated runtime(s) from the scope-and-source matrix above; unset means all installed runtimes. Pass only one of `--target` or `--runtime`. |
 | `--version <version>` | Empty | Pin a kit version. |
 
 ## Examples
@@ -109,6 +146,12 @@ Apply a project update without prompting:
 
 ```bash
 ak update . --yes
+```
+
+Refresh only the Claude Code and Codex installs of a project:
+
+```bash
+ak update . --target claude-code,codex --yes
 ```
 
 Preview global updates:
@@ -127,7 +170,9 @@ ak update --status --json
 
 ## Output and streams
 
-With `--json`, stdout uses the shared envelope with `"kind": "update"`. Project `data` includes `project_dir`, `files_updated`, `files_skipped`, `files_new`, and `dry_run`; it can also include snapshot fields, `backup_skipped`, `skipped`, `diffs`, `project_config`, `project_config_created`, and `scope`.
+With `--json`, stdout uses the shared envelope with `"kind": "update"`. Project `data` includes `project_dir`, `files_updated`, `files_skipped`, `files_new`, and `dry_run`; it can also include snapshot fields, `backup_skipped`, `skipped`, `diffs`, `project_config`, `project_config_created`, and `scope`. When the project has runtime installs,
+it also includes `kits` (one row per kit and runtime pass) and `skipped_targets`
+(requested runtimes with no project install).
 
 Global output also includes `locations`, `kits`, and `skipped_targets`. Each Kit result can report `kit`, `runtime`, `status`, `channel`, `reason`, `error`, `why`, `next`, snapshot fields, `locations`, and `warnings`. The global envelope can also report `backup_skipped`. A selected runtime that is not installed globally is reported as skipped rather than created.
 
@@ -155,8 +200,8 @@ diagnostics before sharing them.
 | Code | Meaning |
 | --- | --- |
 | `0` | Update applied, explicit dry-run completed, or an interactive prompt was declined. |
-| `1` | Runtime, lifecycle, source, snapshot, write, or partial global update failed; for the auto-update settings and `--status --ack`, also an I/O failure or a busy state file. |
-| `2` | Flags, scope, source, target, or eligible global installation selection is invalid; for the auto-update settings, also an invalid `--schedule`, an unregistered `--project`, or a settings flag combined with an update flag or a project-dir argument. |
+| `1` | Runtime, lifecycle, source, snapshot, write, partial global update, or a project runtime refresh pass failed; for the auto-update settings and `--status --ack`, also an I/O failure or a busy state file. |
+| `2` | Flags, scope, source, target, or eligible global installation selection is invalid; at project scope, there is no tracked kit and no runtime install, or `--target` matches no project runtime install; for the auto-update settings, also an invalid `--schedule`, an unregistered `--project`, or a settings flag combined with an update flag or a project-dir argument. |
 | `3` | A non-interactive implicit preview requires `--yes` to apply. |
 
 ## Effects, safety, and recovery
@@ -165,7 +210,7 @@ Project updates classify owned files. Clean files can be replaced; modified or n
 
 By default, apply snapshots only the exact files it writes or prunes — a restorable bundle authorized by its project root (`--allow-root`), whose result includes the restore command. `--force`, `--backup`, or `backups.enabled: true` in `~/.agentkit/config.yaml` instead captures the whole project; `--backup` does not widen global kit refresh snapshots. `--no-backup` skips every snapshot, including the one `--force` takes, and warns on stderr; `--force --no-backup` adds an escalated warning. Structured results report `backup_skipped` so a missing `snapshot_id` is not enough to tell an intentional skip from a no-op. Desktop plan apply that keeps user content takes the same exact-file capture unless user content is overwritten or `backups.enabled` is set, in which case it captures the whole project; it does not accept `--no-backup`. Some files outside its restore scope require manual recovery; follow `snapshot_data_dir` when reported. A missing project config can be created before classification and snapshot, even if a later step fails.
 
-Writes are sequential, so an error can leave a partial update. Global updates continue across kits, report per-kit failures, and can create a support bundle under `~/.agentkit/support`. Global force mode may archive authorized legacy Codex skills, but it still preserves user modifications.
+Writes are sequential, so an error can leave a partial update. Global updates continue across kits, report per-kit failures, and can create a support bundle under `~/.agentkit/support`. Global force mode may archive authorized legacy Codex skills, but it still preserves user modifications. Project `--force` never archives legacy ClaudeKit Codex skills: a project runtime pass that finds them reports a skipped row with reason `needs_legacy_migration`. Run [`ak migrate --from ck`](./migrate) from the project directory, then re-run the update. Archival through `--force` remains a `--global --force` consent.
 
 On Windows, `ak update` applies the signed CLI replacement in place under an exclusive update lock, validates the running binary preimage, then re-executes the original command inside a Windows Job Object so Kit refresh continues on the first invocation. Standalone [`ak self-update`](./self-update) still uses the staged detached helper handoff. Paired Desktop apply stages the matching CLI and Desktop artifacts, then a trusted helper commits the swap after the parent process releases the executables.
 
