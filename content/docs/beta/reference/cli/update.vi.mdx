@@ -19,6 +19,7 @@ ak update --global [options]
 - Lần xem trước từ xa vẫn có thể xác thực, kiểm tra quyền sử dụng, tải nội dung kit và cập nhật cache trước khi tính kế hoạch.
 - `--force` chỉ cho phép thay thế sau snapshot trừ khi có `--no-backup`. Tùy chọn này không biến cài đặt toàn cục thành ghi đè vô điều kiện.
 - `--json`, `--quiet`, `--no-interactive` hoặc môi trường không phải TTY chọn hành vi cho script. Trong lần chạy dự án hoặc toàn cục có tương tác, từ chối mọi lời nhắc sẽ thoát `0`.
+- Cập nhật dự án có người xác nhận (chấp nhận trong TTY hoặc `--yes`) refresh cây `kits/` được theo dõi, rồi refresh mọi runtime đã cài của từng kit dự án. Xem [Refresh runtime của dự án](#refresh-runtime-của-dự-án).
 
 ## Đối số
 
@@ -30,7 +31,7 @@ Việc xác minh target dùng cả scope và nguồn đã chọn:
 
 | Scope và nguồn | Target hợp lệ |
 | --- | --- |
-| Project, remote | Chính xác một trong `claude-code`, `codex`, `cursor`, `dsh`, `grok`, `omp` hoặc `pi` |
+| Project, remote | `claude-code`, `codex`, `cursor`, `dsh`, `grok`, `omp` hoặc `pi` |
 | Global, remote | `claude-code`, `codex`, `cursor`, `dsh`, `grok` hoặc `omp` |
 | Global, local | `claude-code`, `codex`, `cursor`, `dsh`, `grok` hoặc `omp` |
 
@@ -40,6 +41,39 @@ discovery hay mutation và trả mã `2`. Trong wizard hợp nhất, cùng lựa
 global nhưng vẫn khả dụng cho bước project. Nếu không target nào đã chọn áp
 dụng được ở global scope, wizard bỏ qua bước đó rồi tiếp tục.
 
+Ở cả hai scope, `--target a,b` lọc những runtime đã cài sẽ được refresh; nếu bỏ
+trống thì refresh mọi runtime đã cài. Runtime được yêu cầu nhưng chưa có bản cài
+trong scope đó được liệt kê trong `skipped_targets` thay vì được tạo mới. Ở
+project scope, cây `kits/` được theo dõi vẫn lấy từ bản tải của một runtime:
+`claude-code` khi runtime này được chọn, đã cài, hoặc khi không chọn runtime nào;
+nếu không thì lấy runtime đầu tiên được chọn.
+
+## Refresh runtime của dự án
+
+Sau cây `kits/` được theo dõi, cập nhật dự án có người xác nhận refresh mọi
+runtime đã cài của từng kit dự án (`.claude`, `.codex` và adapter root) qua cùng
+đường dẫn với [`ak kit refresh`](./kit/refresh), mỗi lượt cho một cặp kit và
+runtime. Danh sách kit được xét là `--kits` khi có, nếu không thì gồm các kit
+được theo dõi trong `kits/` cộng mọi kit có bản cài dự án thuộc quyền sở hữu.
+
+- Một lượt thất bại không dừng các lượt khác. Mỗi lượt báo một dòng riêng, và
+  lệnh thoát `1` sau khi mọi lượt hoàn tất.
+- Dự án chỉ có bản cài runtime từ `ak kit init`, không có cây `kits/` được theo
+  dõi, sẽ được refresh các bản cài đó thay vì thoát `2`.
+- Xem trước và `--dry-run` liệt kê từng refresh dự kiến thành một dòng `preview`
+  và không ghi gì.
+- Bước kiểm tra CLI trước khi chạy lấy yêu cầu CLI cao nhất của kit trong các
+  runtime đã chọn.
+- Bản cài Claude Code dạng plugin của dự án được báo là `plugin_only`, không bị
+  chuyển đổi. Refresh nó bằng `ak kit refresh <kit> --target claude-code --switch-to-plugin --yes`.
+- Runtime mà nguồn remote không phục vụ được bỏ qua với reason
+  `source_inapplicable`; chạy lại với `--local --kits-dir <dir>`.
+- Khi thư mục dự án trỏ tới bản cài cấp người dùng (ví dụ thư mục home), runtime
+  đó được bỏ qua với reason `project_is_global_home` và không bao giờ được
+  refresh. Chạy `ak update --global` để refresh nó.
+- Nếu `--target` không khớp runtime dự án nào đã cài và không có cây `kits/`
+  được theo dõi, lệnh thoát `2`.
+
 ## Cập nhật nền tự động (opt-in)
 
 `--schedule daily|weekly` bật cập nhật nền tách rời, khởi động ở lệnh `ak`
@@ -47,6 +81,9 @@ thông thường đầu tiên sau khoảng thời gian đã chọn; `--schedule 
 xóa state. Nó refresh CLI và kit global, cộng thêm mọi project đã opt-in bằng
 `--project <dir>` (lặp lại được; thư mục phải đã đăng ký qua
 `ak projects add`) có git tree sạch và không có agent session đang chạy.
+Cập nhật nền cho project chỉ refresh cây `kits/` được theo dõi; nó không bao giờ
+refresh bản cài runtime của project. Thay vào đó nó ghi một thông báo hướng dẫn
+chạy `ak update <dir> --yes` hoặc `ak kit refresh <kit>`.
 `--no-project <dir>` (lặp lại được) đưa một project ra khỏi danh sách, kể cả
 khi thư mục đó không còn tồn tại. `--status [--json]` báo schedule và kết quả
 nền gần nhất mà không đổi gì; thêm `--ack` để đánh dấu kết quả đó đã xem.
@@ -88,11 +125,11 @@ nhận bằng `ak update --status --ack --json`. Xem check `auto_update` của
 | `--project <dir>` | Trống | Opt-in một project đã đăng ký qua `ak projects add` vào cập nhật nền (lặp lại được). |
 | `--registry-url <url>` | Trống | Ghi đè URL registry. |
 | `--remote` | `true` | Dùng registry từ xa. |
-| `--runtime <runtime>` | `claude-code` | Alias của `--target`; chọn runtime từ ma trận scope và nguồn bên trên. |
+| `--runtime <runtime>` | `claude-code` | Alias của `--target`; chọn runtime từ ma trận scope và nguồn bên trên. Giá trị mặc định không được tính là lựa chọn tường minh. |
 | `--schedule <daily\|weekly\|off>` | Trống | Đặt hoặc xóa schedule cập nhật nền (chỉ settings; không cập nhật gì ngay). |
 | `--show-diff` | `false` | Bao gồm diff tệp trong kế hoạch. |
 | `--status` | `false` | Hiện schedule cập nhật nền và kết quả gần nhất (chỉ đọc). |
-| `--target <target>` | Trống | Chọn runtime từ ma trận scope và nguồn bên trên; chỉ truyền một trong hai cờ `--target` hoặc `--runtime`. |
+| `--target <target>` | Trống | Các runtime phân tách bằng dấu phẩy từ ma trận scope và nguồn bên trên; bỏ trống nghĩa là mọi runtime đã cài. Chỉ truyền một trong hai cờ `--target` hoặc `--runtime`. |
 | `--version <version>` | Trống | Ghim phiên bản kit. |
 
 ## Ví dụ
@@ -107,6 +144,12 @@ ak update . --dry-run --show-diff
 
 ```bash
 ak update . --yes
+```
+
+Chỉ refresh bản cài Claude Code và Codex của một dự án:
+
+```bash
+ak update . --target claude-code,codex --yes
 ```
 
 Xem trước cập nhật toàn cục:
@@ -125,7 +168,9 @@ ak update --status --json
 
 ## Đầu ra và luồng
 
-Với `--json`, stdout dùng envelope chung có `"kind": "update"`. `data` của dự án gồm `project_dir`, `files_updated`, `files_skipped`, `files_new` và `dry_run`; nó cũng có thể gồm các trường snapshot, `backup_skipped`, `skipped`, `diffs`, `project_config`, `project_config_created` và `scope`.
+Với `--json`, stdout dùng envelope chung có `"kind": "update"`. `data` của dự án gồm `project_dir`, `files_updated`, `files_skipped`, `files_new` và `dry_run`; nó cũng có thể gồm các trường snapshot, `backup_skipped`, `skipped`, `diffs`, `project_config`, `project_config_created` và `scope`. Khi dự án có bản cài runtime, nó còn gồm
+`kits` (một dòng cho mỗi lượt kit và runtime) và `skipped_targets` (runtime được
+yêu cầu nhưng chưa có bản cài dự án).
 
 Đầu ra global còn có `locations`, `kits` và `skipped_targets`. Mỗi kết quả Kit có thể báo cáo `kit`, `runtime`, `status`, `channel`, `reason`, `error`, `why`, `next`, các trường snapshot, `locations` và `warnings`. Envelope global cũng có thể báo `backup_skipped`. Runtime đã chọn nhưng chưa cài global được báo là bỏ qua thay vì được tạo mới.
 
@@ -152,8 +197,8 @@ tra chẩn đoán trước khi chia sẻ.
 | Mã | Ý nghĩa |
 | --- | --- |
 | `0` | Đã áp dụng cập nhật, hoàn tất dry-run tường minh hoặc từ chối lời nhắc tương tác. |
-| `1` | Runtime, vòng đời, nguồn, snapshot, ghi hoặc cập nhật toàn cục một phần thất bại; với auto-update settings và `--status --ack`, còn tính lỗi I/O hoặc state file đang bận. |
-| `2` | Flag, scope, nguồn, target hoặc lựa chọn bản cài global đủ điều kiện không hợp lệ; với auto-update settings, còn tính `--schedule` không hợp lệ, `--project` chưa đăng ký, hoặc cờ settings kết hợp với cờ cập nhật hay đối số project-dir. |
+| `1` | Runtime, vòng đời, nguồn, snapshot, ghi, cập nhật toàn cục một phần hoặc một lượt refresh runtime của dự án thất bại; với auto-update settings và `--status --ack`, còn tính lỗi I/O hoặc state file đang bận. |
+| `2` | Flag, scope, nguồn, target hoặc lựa chọn bản cài global đủ điều kiện không hợp lệ; ở project scope, không có kit được theo dõi và không có bản cài runtime, hoặc `--target` không khớp bản cài runtime nào của dự án; với auto-update settings, còn tính `--schedule` không hợp lệ, `--project` chưa đăng ký, hoặc cờ settings kết hợp với cờ cập nhật hay đối số project-dir. |
 | `3` | Lần xem trước ngầm định không tương tác cần `--yes` để áp dụng. |
 
 ## Tác động, an toàn và khôi phục
@@ -162,7 +207,7 @@ Cập nhật dự án phân loại tệp thuộc quyền sở hữu. Tệp sạc
 
 Theo mặc định, apply chỉ snapshot đúng những tệp nó ghi hoặc prune — một bundle có thể restore, được authorize theo project root (`--allow-root`), và kết quả gồm cả lệnh restore. `--force`, `--backup`, hoặc `backups.enabled: true` trong `~/.agentkit/config.yaml` thay vào đó capture toàn bộ project; `--backup` không mở rộng snapshot của global kit refresh. `--no-backup` bỏ qua mọi snapshot, kể cả snapshot mà `--force` tạo, và cảnh báo trên stderr; `--force --no-backup` thêm cảnh báo nghiêm trọng hơn. Kết quả có cấu trúc báo `backup_skipped` nên `snapshot_id` trống chưa đủ để phân biệt skip chủ ý với lần chạy không có gì để capture. Desktop plan apply giữ nội dung người dùng dùng cùng cơ chế exact-file capture đó trừ khi nội dung người dùng bị ghi đè hoặc có `backups.enabled`, khi đó nó capture toàn bộ project; nó không nhận `--no-backup`. Một số tệp ngoài phạm vi khôi phục cần được phục hồi thủ công; làm theo `snapshot_data_dir` khi được báo cáo. Cấu hình dự án còn thiếu có thể được tạo trước bước phân loại và snapshot, ngay cả khi bước sau thất bại.
 
-Các tệp được ghi tuần tự nên lỗi có thể để lại cập nhật một phần. Cập nhật toàn cục tiếp tục qua các kit, báo cáo lỗi theo kit và có thể tạo gói hỗ trợ trong `~/.agentkit/support`. Chế độ force toàn cục có thể lưu trữ kỹ năng Codex cũ được cho phép, nhưng vẫn giữ nguyên sửa đổi của người dùng.
+Các tệp được ghi tuần tự nên lỗi có thể để lại cập nhật một phần. Cập nhật toàn cục tiếp tục qua các kit, báo cáo lỗi theo kit và có thể tạo gói hỗ trợ trong `~/.agentkit/support`. Chế độ force toàn cục có thể lưu trữ các Skill Codex cũ được cho phép, nhưng vẫn giữ nguyên sửa đổi của người dùng. `--force` ở project không bao giờ lưu trữ các Skill Codex cũ của ClaudeKit: lượt refresh runtime của dự án gặp chúng sẽ báo một dòng bỏ qua với reason `needs_legacy_migration`. Chạy [`ak migrate --from ck`](./migrate) từ thư mục dự án, rồi chạy lại cập nhật. Việc lưu trữ qua `--force` vẫn chỉ là sự đồng ý của `--global --force`.
 
 Trên Windows, `ak update` thay CLI đã ký tại chỗ dưới update lock độc quyền, kiểm tra preimage của binary đang chạy, rồi re-execute lệnh gốc trong Windows Job Object để Kit refresh tiếp tục ngay lần gọi đầu. [`ak self-update`](./self-update) độc lập vẫn dùng staged detached helper. Paired Desktop apply stage các artifact CLI và Desktop khớp nhau, rồi helper đáng tin cậy commit thao tác thay thế sau khi process cha nhả các executable.
 
