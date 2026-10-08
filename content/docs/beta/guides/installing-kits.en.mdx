@@ -109,8 +109,8 @@ skipped. AGY is not a registry runtime identity or a refresh lifecycle peer.
 
 For Codex, native skills go to `.agents/skills` in a project or
 `~/.agents/skills` at user scope; other Codex resources use the corresponding
-project or user `.codex` surfaces. Cursor uses the corresponding `.cursor`
-scope.
+project or user `.codex` surfaces, described under **Use native Codex**
+below. Cursor uses the corresponding `.cursor` scope.
 
 Project and global copies can coexist. Installing one does not remove the
 other: project commands or rules may shadow user entries, and hooks from both
@@ -122,6 +122,47 @@ scopes may run. Remove an unwanted copy through the matching uninstall route.
   and Codex. Verify skill discovery in Cursor after installation before relying
   on it.
 </Callout>
+
+### Use native Codex
+
+A Codex emit resolves exactly one of three scopes:
+
+| Scope | Command | Codex runtime (`config.toml`, `hooks.json`, `agents/`, `AGENTS.md`) | Plugin package and lifecycle metadata |
+| --- | --- | --- | --- |
+| Package | `ak kit init <kit> --target codex --build-only --out <dir>` | `<out>/<kit>/.codex/`, which Codex does not load | `<out>/<kit>/` |
+| Global | `ak kit init <kit> --target codex --global` | `$CODEX_HOME` or `~/.codex/` | AgentKit home |
+| Project | `ak kit init <kit> --target codex` | `<project>/.codex/` | `<project>/.agentkit/adapters/codex/<kit>/` |
+
+Install, refresh, and uninstall merge or remove only AgentKit-owned entries in
+`config.toml` and `hooks.json`, so your own settings and other Kits' entries
+stay in place. A project install, refresh, or uninstall never writes
+`~/.codex`; project uninstall removes only AgentKit entries from
+`<project>/.codex/config.toml` and `hooks.json`. Running a project install from
+your home directory, where the project `.codex` would be the user Codex home, is
+refused before any change; use `--global` there.
+
+Codex loads `<project>/.codex` only for a trusted project. After a project
+install, AgentKit prints the runtime directory, the `hooks.json` path, and the
+project's trust state recorded in your user Codex configuration: `trusted`,
+`untrusted`, `not-recorded`, or `unknown`. JSON output reports the same fields
+under `codexRuntime`. AgentKit only reads the trust state and never writes it.
+To activate the project runtime, start Codex in the project and accept its trust
+prompt.
+
+Older releases nested a project install under `<project>/<kit>/`, where Codex
+never found it. The next project `ak kit init` or `ak kit refresh` migrates that
+layout without a prompt:
+
+1. It snapshots `<project>/<kit>/` first.
+2. It writes the project layout above.
+3. It removes only legacy files whose hashes still match the legacy install
+   manifest. Unknown, edited, and linked files stay in place, and without a
+   legacy install manifest nothing is removed.
+4. It prints a warning on stderr with the snapshot ID, its data directory, and
+   any files it kept. JSON output reports the same outcome under
+   `codexRuntime.legacyMigration`.
+
+An interrupted migration is detected again and finishes on the next run.
 
 ### Use native Grok Build
 
@@ -172,6 +213,32 @@ When the trusted project also contains the same `ak-<slug>` under
 project Pi install under `.pi/skills/` takes precedence; for a global Pi
 install, the trusted project's `.agents/skills/` copy takes precedence over the
 profile copy.
+
+#### Pi and Codex installed globally
+
+A global Codex install writes Skills to `~/.agents/skills`, which Pi also reads.
+Pi loads its profile `skills/` first, so when the same Kit is installed globally
+for both Pi and Codex, the `~/.agents/skills` copy never wins and would only make
+Pi report it under `[Skill conflicts]` at every startup.
+
+To prevent that, a global Pi or Codex install or refresh, and every
+`ak kit uninstall`, reconciles the `skills` list in the Pi profile
+`settings.json`. For each `ak-*` Skill present in both `~/.agents/skills` and
+the Pi profile `skills/`, AgentKit adds a `!<absolute path>` exclusion for the
+`~/.agents/skills` copy, and it removes exclusions that no longer apply:
+
+- AgentKit edits only the `skills` key of `~/.pi/agent/settings.json`, or
+  `$PI_CODING_AGENT_DIR/settings.json` when that variable is set, and only the
+  entries it added. Your own entries and every other key are kept.
+- The record of AgentKit-added entries lives in
+  `$AGENTKIT_HOME/pi-agents-skill-exclusions.json`.
+- A symlinked or unreadable `settings.json`, or one whose content AgentKit cannot
+  safely edit, is left unchanged with a warning.
+- While both copies exist, an AgentKit entry you remove is added back on the
+  next global install or refresh.
+
+If an older install still shows `ak:`-named Skills under `~/.agents/skills`,
+run `ak update --global` to refresh them.
 
 Pi is a spike Kit projection in this release. AgentKit does not provide
 `ak run --target pi`, does not wrap Pi's agent loop, and does not write
