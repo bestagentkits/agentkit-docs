@@ -76,6 +76,52 @@ Cả hai Hook đều bật theo mặc định. Để tắt một Hook, đặt `h
 hoặc `hooks.agent-behavior-linter` thành `false`; xem [Quản lý preference của
 Hook](../../../guides/managing-hook-preferences).
 
+## Phê duyệt truy cập tệp nhạy cảm
+
+Hook `privacy-block` chạy trước các lệnh gọi `Read`, `Write`, `Edit` và `Bash`,
+bảo vệ các tệp dotenv như `.env` và `.env.local`, tệp credentials,
+`secrets.yaml` hoặc `secret.yml`, tệp `.pem` và `.key`, cùng SSH private key.
+Lần truy cập đầu tiên vào một path như vậy bị từ chối trên mọi runtime và mọi
+đường công cụ, kể cả path nằm trong lệnh shell và các chỉnh sửa Codex
+`apply_patch` đi qua matcher `Edit` và `Write`. Các tệp mẫu như `.env.example`,
+`.env.sample` và `.env.template` vẫn được phép, và một biểu thức mã nguồn như
+`process.env.API_KEY` không bị coi là path tệp.
+
+Thông báo từ chối nêu rõ thao tác (`read`, `write` hoặc `edit`) và yêu cầu agent
+hỏi bạn qua khả năng ask-user của runtime: `AskUserQuestion` trên Claude Code,
+và `request_user_input` trên Codex khi có, nếu không thì một câu hỏi chat thông
+thường rồi kết thúc lượt. Các runtime khác nhận câu hỏi chat thông thường.
+
+1. **Agent hỏi bạn.** Bạn phê duyệt hoặc từ chối một lần truy cập vào path đã
+   nêu.
+2. **Agent thử lại một lần.** Sau khi được phê duyệt, agent lặp lại đúng lệnh
+   gọi đó với mỗi path được bảo vệ có tiền tố `APPROVED:`. Hook bỏ tiền tố trước
+   khi công cụ chạy, nên công cụ thấy path thật.
+3. **Phê duyệt được dùng hết.** Phê duyệt gắn với session, path đã chuẩn hóa và
+   thao tác, chỉ dùng cho một lệnh gọi và hết hạn sau 15 phút. Trên Claude Code,
+   lần thử lại đã được phê duyệt vẫn hiện permission prompt gốc với đúng lệnh
+   gọi.
+
+Tiền tố `APPROVED:` không có lần từ chối trước đó, lần thử lại thứ hai, phê
+duyệt đã hết hạn, hoặc lần chạy không có định danh session đều bị từ chối. Vì
+vậy lần chạy non-interactive fail closed: không ai trả lời được, nên agent tiếp
+tục mà không dùng tệp đó. Khi bạn từ chối, agent được yêu cầu tiếp tục mà không
+dùng tệp và không truy cập nó qua công cụ hay lệnh khác.
+
+<Callout type="warn" title="Rào chắn chống nhầm lẫn, không phải ranh giới bảo mật">
+  Luồng phê duyệt dựa trên sự hợp tác của model. Nó giảm việc vô tình đọc hoặc
+  ghi secret, nhưng không chống lại một model độc hại hoặc đã bị xâm phạm. Hãy
+  giữ credential trong secret store và dùng permission của runtime làm cơ chế
+  thực thi.
+</Callout>
+
+Trên Codex, atom `Read` bị bỏ, nên Hook chỉ bảo vệ đường shell và chỉnh sửa;
+các thao tác đọc qua MCP và local function tool không được bảo vệ. AgentKit báo
+điều này trong output cài đặt, như một phần của ghi chú matcher bị thu hẹp. Hook
+bật theo mặc định; đặt `hooks.privacy-block` thành `false` để tắt, như mô tả
+trong [Quản lý preference của
+Hook](../../../guides/managing-hook-preferences).
+
 ## Tham chiếu secret trong lệnh gọi công cụ
 
 Hook `secrets-inject` chạy trước các lệnh gọi `Bash` và `WebFetch`. Khi một
@@ -150,7 +196,9 @@ một group bị drop hoàn toàn và bốn matcher bị thu hẹp:
   `session-state.cjs` bị drop hoàn toàn. Các đăng ký `Stop` và `SubagentStop`
   riêng vẫn còn.
 - `Read|Write|Edit|Bash` trở thành `Write|Edit|Bash`, bỏ `Read` nhưng giữ
-  `privacy-block.cjs` hoạt động cho các atom được hỗ trợ.
+  `privacy-block.cjs` hoạt động cho các atom được hỗ trợ. Các thao tác đọc trên
+  Codex qua MCP và local function tool không được bảo vệ; xem [Phê duyệt truy
+  cập tệp nhạy cảm](#phê-duyệt-truy-cập-tệp-nhạy-cảm).
 - `Bash|Read` trở thành `Bash`, bỏ `Read` nhưng giữ `scout-block.cjs` hoạt động
   cho Bash.
 - `Bash|Read|Grep|Glob` trở thành `Bash`, bỏ `Read`, `Grep` và `Glob` nhưng giữ

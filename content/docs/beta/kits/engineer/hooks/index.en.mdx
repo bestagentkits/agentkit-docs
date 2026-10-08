@@ -74,6 +74,52 @@ Both Hooks are on by default. To turn one off, set `hooks.context-firewall` or
 `hooks.agent-behavior-linter` to `false`; see [Managing Hook
 preferences](../../../guides/managing-hook-preferences).
 
+## Sensitive-file approval
+
+The `privacy-block` Hook runs before `Read`, `Write`, `Edit`, and `Bash` calls
+and guards dotenv files such as `.env` and `.env.local`, credentials files,
+`secrets.yaml` or `secret.yml`, `.pem` and `.key` files, and SSH private keys.
+The first access to one of these paths is denied on every runtime and every
+tool path, including paths named inside shell commands and Codex `apply_patch`
+edits that arrive through the `Edit` and `Write` matchers. Template files such
+as `.env.example`, `.env.sample`, and `.env.template` stay allowed, and a
+source expression such as `process.env.API_KEY` is not treated as a file path.
+
+The denial names the operation (`read`, `write`, or `edit`) and tells the agent
+to ask you through the runtime's ask-user capability: `AskUserQuestion` on
+Claude Code, and `request_user_input` on Codex when it is available, otherwise
+a plain chat question that ends the turn. Other runtimes receive the plain chat
+question.
+
+1. **The agent asks.** You approve or decline one access to the named path.
+2. **The agent retries once.** After approval, it repeats the same call with
+   each protected path prefixed by `APPROVED:`. The Hook removes the prefix
+   before the tool runs, so the tool sees the real path.
+3. **The approval is consumed.** It is bound to the session, the normalized
+   path, and the operation, works for one call, and expires after 15 minutes.
+   On Claude Code the approved retry still shows the native permission prompt
+   with the exact call.
+
+An `APPROVED:` prefix without a preceding denial, a second retry, an expired
+approval, or a run with no session identity is denied. Non-interactive runs
+therefore fail closed: nobody can answer, so the agent continues without the
+file. When you decline, the agent is told to continue without the file and not
+to reach it through another tool or command.
+
+<Callout type="warn" title="A guard against accidents, not a security boundary">
+  The approval flow is model-cooperative. It reduces accidental reads and
+  writes of secrets, but it does not defend against a malicious or compromised
+  model. Keep credentials in a secret store and use runtime permissions as the
+  enforcing control.
+</Callout>
+
+On Codex, the `Read` atom is dropped, so the Hook guards shell and edit paths
+only; reads through MCP and local function tools are not guarded. AgentKit
+reports this in the install output as part of the narrowed-matcher note. The
+Hook is on by default; set `hooks.privacy-block` to `false` to turn it off, as
+described in [Managing Hook
+preferences](../../../guides/managing-hook-preferences).
+
 ## Secret references in tool calls
 
 The `secrets-inject` Hook runs before `Bash` and `WebFetch` calls. When a shell
@@ -149,7 +195,9 @@ one fully dropped group and four narrowed matchers:
   `session-state.cjs`, is fully dropped. Separate `Stop` and `SubagentStop`
   registrations remain.
 - `Read|Write|Edit|Bash` becomes `Write|Edit|Bash`, dropping `Read` while keeping
-  `privacy-block.cjs` active for the supported atoms.
+  `privacy-block.cjs` active for the supported atoms. Codex reads through MCP
+  and local function tools are not guarded; see [Sensitive-file
+  approval](#sensitive-file-approval).
 - `Bash|Read` becomes `Bash`, dropping `Read` while keeping `scout-block.cjs`
   active for Bash.
 - `Bash|Read|Grep|Glob` becomes `Bash`, dropping `Read`, `Grep`, and `Glob`

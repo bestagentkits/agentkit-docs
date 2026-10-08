@@ -11,6 +11,20 @@ Các chế độ semantic dùng consumer `test-impact`. Lệnh chỉ gọi provi
 
 Dùng `ak test optimize` với đối số và tùy chọn dưới đây. Phần help nguyên bản giữ nguyên thuật ngữ, cú pháp, tác động và điều kiện thực thi của CLI để đối chiếu chính xác.
 
+## Cấu hình manifest group
+
+Repository sở hữu `.agentkit/test-impact.json`. Mỗi group khai báo argv của lệnh, thư mục làm việc tương đối theo repository, các path mà group sở hữu, cạnh phụ thuộc, execution class và timeout. Manifest cũng khai báo `full_suite` không rỗng, group nào là mandatory hoặc critical, và các mapping `required_checks` tường minh cho policy đang hoạt động. `coverage_complete` là khai báo của bạn, không phải bằng chứng dữ liệu phụ thuộc đã đầy đủ.
+
+Việc chọn check luôn thận trọng. Check mandatory và critical luôn được áp dụng. Path không xác định, mapping chưa đầy đủ hoặc bằng chứng không chắc chắn sẽ mở rộng kế hoạch thành full suite và các safety check. Thiếu mapping policy sẽ chặn thực thi thay vì bỏ qua check bắt buộc, và việc bỏ qua cho thay đổi chỉ có tài liệu cần bằng chứng allowlist tường minh trong manifest. Đường mặc định `--semantic off` không gọi network hay provider. Các cổng preflight và CI hiện có vẫn là nguồn quyết định; lệnh này là một tuyến xác minh local.
+
+## Lập kế hoạch, chạy và lưu receipt
+
+Khi không có `--run`, lệnh chỉ lập kế hoạch: đọc Git, manifest và policy, rồi báo các group được chọn và bị bỏ qua kèm lý do, các check policy chưa giải quyết và lý do fallback. Thay đổi đã commit, cả hai đầu của một lần rename, và thay đổi dirty hoặc untracked ở local đều góp vào source fingerprint.
+
+`--run` chạy tuần tự các lệnh manifest đáng tin cậy với timeout và hủy theo cây process. Lệnh chỉ chạy trên checkout hiện tại: head được yêu cầu phải trùng với checkout đó, nên một head lịch sử có thể được lập kế hoạch nhưng không thể thực thi. Fingerprint của source, manifest và policy được kiểm tra trước khi thực thi, và thay đổi source trong lúc chạy làm bằng chứng mất hiệu lực. Symlink của thư mục làm việc phải nằm trong repository. Một group hẹp thất bại sẽ kích hoạt các check rộng hơn và vẫn được tính là thất bại. Các lệnh là mã repository mà bạn tin cậy; `--run` không phải sandbox.
+
+`--output <new-file>` tạo một receipt JSON local và không bao giờ thay thế tệp hoặc symlink đã có. Receipt ghi kết quả group, check bắt buộc, việc mở rộng, số lần thử, thời lượng và revision của source. Chi phí là `null` khi không được quan sát, và output thô của subprocess không được lưu. Tránh để test sửa source đã track hoặc để lại tệp untracked mới.
+
 ## Contract và help của lệnh
 
 Explain impact-selected checks, optionally execute trusted commands
