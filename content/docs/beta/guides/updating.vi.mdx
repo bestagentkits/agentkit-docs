@@ -140,6 +140,9 @@ mới thông thường.
   liệu trước khi dùng.
 </Callout>
 
+Để biết khi nào mỗi lệnh lifecycle tự động snapshot và cách `backups.scope` giới
+hạn phần capture `~/.claude/`, xem [`ak backups`](../reference/cli/backups).
+
 ## Cập nhật nền tự động (opt-in)
 
 `ak update --schedule daily|weekly` bật cập nhật nền tách rời, khởi động ở
@@ -164,6 +167,34 @@ qua; kết quả chưa xem in một lần ở `SessionStart` tiếp theo và có
 bằng `ak update --status --ack --json`. Xem
 [tham chiếu `ak update`](../reference/cli/update) và check `auto_update` của
 [`ak doctor`](../reference/cli/doctor) để biết chi tiết.
+
+Lần chạy nền dùng release channel từ `updates.channel`; khoá `auto_update:` chỉ
+chứa lịch chạy và các project đã opt-in. Project có thay đổi chưa commit hoặc có
+agent session đang chạy sẽ không được cập nhật; nó ở trạng thái chờ và được thử
+lại ở lần chạy đến hạn tiếp theo. Project không phải git repository sẽ bị bỏ
+qua. Kit global vẫn được cập nhật bất kể có agent
+session đang chạy hay không, giống như khi chạy `ak update --global` tương tác.
+
+Mỗi kết quả chạy nền chỉ hiển thị một lần: dưới dạng tóm tắt một dòng trên stderr
+của lệnh `ak` tương tác tiếp theo, hoặc qua thông báo lúc session bắt đầu, tuỳ
+cái nào đến trước. `ak update --status` vẫn tiếp tục hiển thị kết quả, và check
+**Auto-update** của `ak doctor` báo lịch chạy, kết quả gần nhất, lần chạy bị kẹt
+hoặc quá hạn, và các project đã opt-in nhưng không còn cập nhật được.
+
+Việc phát hiện session phụ thuộc vào các event mà runtime gửi tới Hook
+`session-heartbeat.cjs`:
+
+- Codex không có event `SessionEnd`, nên marker session của nó chỉ hết hạn sau
+  thời gian sống (TTL).
+- Pi chạy Hook khi session bắt đầu, khi gửi prompt và khi dừng, nhưng hoãn
+  `SessionEnd`; marker của nó cũng hết hạn theo TTL.
+
+Kiểm tra git tree sạch vẫn bảo vệ thay đổi chưa commit khi một session không được
+phát hiện.
+
+Trên Windows, lần chạy nền phải tách khỏi job object của terminal. Khi job đó cấm
+breakaway, AgentKit không khởi động lần chạy bên trong job; nó ghi nhận lần chạy
+là `deferred (spawn_in_job)` và thử lại sau.
 
 ## Xem trước cập nhật Kit global
 

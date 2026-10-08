@@ -70,8 +70,8 @@ Xem các cờ dùng chung tại [quy ước CLI](../cli-conventions).
 
 ## Resolve target, scope và mode
 
-Khi không có `--target`, refresh đọc lifecycle marker trong scope đã chọn.
-Project scope phát hiện Claude Code project-native, Cursor trong project và đầu
+Khi không có `--target`, refresh đọc lifecycle marker trong scope đã chọn và
+refresh mọi runtime đã cài mà nó phát hiện. Project scope phát hiện Claude Code project-native, Cursor trong project và đầu
 ra project được nhận diện. User scope quét các user lifecycle target đã đăng ký.
 Nếu không phát hiện target, lệnh thoát `6` và yêu cầu truyền `--target` hoặc cài
 Kit trước. Với route Grok hoặc Pi, truyền `--target grok` hoặc `--target pi` khi detection còn mơ hồ;
@@ -90,6 +90,31 @@ ak kit refresh engineer --global --switch-to-plugin --yes
 
 Claude plugin đã cài không bị âm thầm xem là đầu ra native, kể cả khi có target
 khác cùng tồn tại. Project scope và user scope vẫn độc lập.
+
+## Refresh nhiều runtime
+
+Package Kit từ xa gắn với từng runtime. Khi một lần refresh từ xa bao gồm nhiều
+runtime, dù được phát hiện hay liệt kê bằng `--target`, AgentKit refresh lần lượt
+từng runtime. Mỗi runtime có lượt tải đã xác minh, preflight, preview xác nhận và
+thao tác ghi có snapshot riêng. Nếu một runtime lỗi, chỉ thay đổi của runtime đó
+được rollback và các runtime còn lại vẫn được refresh.
+
+Sau runtime cuối cùng, lệnh in phần tổng hợp refresh với một dòng cho mỗi
+runtime. Mọi runtime chưa được refresh đều có lệnh `retry:` để refresh riêng
+runtime đó:
+
+```bash
+ak kit refresh <kit-name> [--global] --target <target> --yes
+```
+
+Lệnh retry lặp lại scope cùng các tuỳ chọn `--channel`, `--version`,
+`--registry-url`, `--no-backup`, `--switch-to-plugin` và `--yes` của lần chạy
+gốc. Hãy chạy nó sau khi đã xử lý lỗi được báo.
+
+Từ chối preview của một runtime sẽ dừng vòng lặp: runtime đó được báo là
+`declined` và các runtime sau là `not_attempted`. Interrupt cũng đánh dấu các
+runtime còn lại là `not_attempted`. Runtime đã refresh xong vẫn giữ kết quả.
+Refresh từ nguồn `--local` tường minh không dùng các lượt theo từng runtime này.
 
 ## Ví dụ
 
@@ -139,6 +164,20 @@ trường Skill, Hook, warning, transition và snapshot tuỳ chọn. Trừ khi 
 `--quiet`, stderr còn phát status record thô `preview` và `complete` với
 `action=install`.
 
+Lần refresh chạy một lượt cho mỗi runtime dùng envelope `kind=kit.refresh` thay
+thế. Dữ liệu gồm `kit` và mảng `targets[]` với một phần tử cho mỗi runtime:
+
+| Trường | Ý nghĩa |
+| --- | --- |
+| `target` | ID runtime. |
+| `status` | `refreshed`, `failed`, `declined` hoặc `not_attempted`. |
+| `error` | Lý do lỗi khi `status` là `failed`. |
+| `rerun` | Lệnh retry cho riêng runtime đó, có ở mọi runtime chưa được refresh. |
+| `result` | Kết quả refresh của runtime khi `status` là `refreshed`, kèm `warnings` và `notices` bên cạnh. |
+
+Mỗi runtime đã refresh cũng phát status record `preview` và `complete` riêng
+trên stderr.
+
 Dữ liệu projection Hook còn có thể chứa `hooksDropped`, `droppedHookSummaries`,
 `hookMatchersNarrowed` và `narrowedHookSummaries` tùy chọn. Output cho người dùng
 tách **Hook groups not projected** khỏi **Hook matchers narrowed
@@ -157,7 +196,7 @@ dẫn. `--verbose` có thể lộ lỗi gốc thô; hãy kiểm tra trước khi
 | Mã | Ý nghĩa |
 | --- | --- |
 | `0` | Route đã chọn được đồng bộ thành công. |
-| `1` | Lỗi validation, nguồn, xác thực, entitlement, mode, ownership, emission, snapshot, ghi dữ liệu hoặc từ chối trên TTY. Runtime hiện cũng dùng `1` cho phần lớn lỗi không tìm thấy Kit cục bộ và target không an toàn. |
+| `1` | Lỗi validation, nguồn, xác thực, entitlement, mode, ownership, emission, snapshot, ghi dữ liệu hoặc từ chối trên TTY. Runtime hiện cũng dùng `1` cho phần lớn lỗi không tìm thấy Kit cục bộ và target không an toàn. Trong refresh theo từng runtime, `1` nghĩa là ít nhất một runtime lỗi hoặc chưa chạy, kể cả khi runtime khác đã refresh. |
 | `2` | Cobra từ chối cờ, argument hoặc tổ hợp cờ. |
 | `3` | Đường huỷ hoặc interrupt dùng chung trả về trạng thái huỷ. |
 | `4` | Một thao tác vòng đời Kit khác đang giữ khoá. |

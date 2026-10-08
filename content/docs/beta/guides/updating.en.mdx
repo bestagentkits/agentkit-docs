@@ -139,6 +139,9 @@ that the snapshot is sufficient recovery; it is not a routine refresh flag.
   warning before using it.
 </Callout>
 
+For when each lifecycle command snapshots automatically and how `backups.scope`
+limits a `~/.claude/` capture, see [`ak backups`](../reference/cli/backups).
+
 ## Background auto-update (opt-in)
 
 `ak update --schedule daily|weekly` enables a detached background update that
@@ -164,6 +167,34 @@ updater skips it; an unacknowledged result prints once at the next
 `SessionStart` and can be acknowledged with `ak update --status --ack --json`.
 See the [`ak update` reference](../reference/cli/update) and the
 `auto_update` [`ak doctor`](../reference/cli/doctor) check for details.
+
+The background run uses the release channel from `updates.channel`; the
+`auto_update:` key holds only the schedule and opted-in projects. A project that
+has uncommitted changes or a live agent session is not updated; it stays pending
+and is retried on the next due run. A project that is not a git repository is
+skipped. Global Kits update whether or not agent
+sessions are live, just as an interactive `ak update --global` would.
+
+Each background result is shown once: as a one-line summary on the stderr of the
+next interactive `ak` command, or through the session-start notice, whichever
+comes first. `ak update --status` keeps showing it, and the `ak doctor`
+**Auto-update** check reports the schedule, the last result, a stuck or
+overdue run, and opted-in projects that can no longer be updated.
+
+Session detection depends on which events a runtime delivers to the
+`session-heartbeat.cjs` Hook:
+
+- Codex has no `SessionEnd` event, so its session markers expire only after
+  their time-to-live.
+- Pi runs the Hook on session start, prompt submit, and stop, but defers
+  `SessionEnd`; its markers also expire by time-to-live.
+
+The clean git tree check still protects uncommitted work when a session goes
+undetected.
+
+On Windows, the background run must leave the terminal's job object. When that
+job forbids breakaway, AgentKit does not start the run inside the job; it records
+the run as `deferred (spawn_in_job)` and retries later.
 
 ## Preview global kit updates
 

@@ -109,8 +109,8 @@ lifecycle refresh.
 
 Với Codex, Skill native được ghi vào `.agents/skills` trong project hoặc
 `~/.agents/skills` ở phạm vi người dùng; các tài nguyên Codex khác dùng các bề
-mặt `.codex` tương ứng của project hoặc người dùng. Cursor dùng phạm vi `.cursor`
-tương ứng.
+mặt `.codex` tương ứng của project hoặc người dùng, được mô tả trong mục
+**Dùng Codex native** bên dưới. Cursor dùng phạm vi `.cursor` tương ứng.
 
 Bản cài project và global có thể cùng tồn tại. Cài một bản không gỡ bản còn lại:
 lệnh hoặc quy tắc trong project có thể che mục của người dùng, còn hook từ cả
@@ -123,6 +123,47 @@ hai phạm vi có thể cùng chạy. Hãy gỡ bản không cần thiết bằn
   Claude Code và Codex. Hãy xác minh Cursor tìm thấy Skill sau khi cài trước khi
   phụ thuộc vào target này.
 </Callout>
+
+### Dùng Codex native
+
+Một lần emit Codex phân giải đúng một trong ba scope:
+
+| Scope | Lệnh | Runtime Codex (`config.toml`, `hooks.json`, `agents/`, `AGENTS.md`) | Plugin package và lifecycle metadata |
+| --- | --- | --- | --- |
+| Package | `ak kit init <kit> --target codex --build-only --out <dir>` | `<out>/<kit>/.codex/`, Codex không nạp thư mục này | `<out>/<kit>/` |
+| Global | `ak kit init <kit> --target codex --global` | `$CODEX_HOME` hoặc `~/.codex/` | AgentKit home |
+| Project | `ak kit init <kit> --target codex` | `<project>/.codex/` | `<project>/.agentkit/adapters/codex/<kit>/` |
+
+Cài đặt, refresh và gỡ cài đặt chỉ gộp hoặc gỡ các mục do AgentKit sở hữu trong
+`config.toml` và `hooks.json`, nên cài đặt riêng của bạn và mục của các Kit khác
+vẫn được giữ. Cài đặt, refresh hoặc gỡ cài đặt ở project không bao giờ ghi vào
+`~/.codex`; gỡ cài đặt project chỉ xoá mục AgentKit khỏi
+`<project>/.codex/config.toml` và `hooks.json`. Cài đặt project chạy từ thư mục
+home, nơi `.codex` của project chính là Codex home của người dùng, bị từ chối
+trước mọi thay đổi; hãy dùng `--global` trong trường hợp đó.
+
+Codex chỉ nạp `<project>/.codex` cho project đã được trust. Sau khi cài project,
+AgentKit in thư mục runtime, đường dẫn `hooks.json` và trạng thái trust của
+project được ghi trong cấu hình Codex của người dùng: `trusted`, `untrusted`,
+`not-recorded` hoặc `unknown`. Output JSON báo cùng các trường đó dưới
+`codexRuntime`. AgentKit chỉ đọc trạng thái trust và không bao giờ ghi nó. Để
+kích hoạt runtime của project, hãy khởi động Codex trong project và chấp nhận
+prompt trust.
+
+Các bản phát hành cũ lồng bản cài project dưới `<project>/<kit>/`, nơi Codex
+không bao giờ tìm thấy. Lần `ak kit init` hoặc `ak kit refresh` project tiếp theo
+sẽ di chuyển layout đó mà không hỏi:
+
+1. Snapshot `<project>/<kit>/` trước.
+2. Ghi layout project như bảng trên.
+3. Chỉ xoá các tệp legacy có hash vẫn khớp install manifest legacy. Tệp không
+   xác định, đã sửa và tệp liên kết được giữ nguyên; nếu không có install
+   manifest legacy thì không xoá gì.
+4. In cảnh báo trên stderr kèm snapshot ID, thư mục dữ liệu của snapshot và các
+   tệp được giữ lại. Output JSON báo cùng kết quả dưới
+   `codexRuntime.legacyMigration`.
+
+Lần di chuyển bị gián đoạn sẽ được phát hiện lại và hoàn tất ở lần chạy sau.
 
 ### Dùng Grok Build native
 
@@ -172,6 +213,33 @@ Khi project đã trust cũng có cùng `ak-<slug>` dưới `.agents/skills/`, Ag
 in cảnh báo mà không xóa bản nào. Bản cài Pi trong project dưới `.pi/skills/`
 được ưu tiên; với bản cài Pi global, bản `.agents/skills/` của project đã trust
 được ưu tiên hơn bản trong profile.
+
+#### Pi và Codex cùng cài global
+
+Bản cài Codex global ghi Skill vào `~/.agents/skills`, nơi Pi cũng đọc. Pi nạp
+`skills/` trong profile của nó trước, nên khi cùng một Kit được cài global cho
+cả Pi và Codex, bản trong `~/.agents/skills` không bao giờ được chọn và chỉ khiến
+Pi báo nó dưới `[Skill conflicts]` mỗi lần khởi động.
+
+Để tránh điều đó, mỗi lần cài hoặc refresh Pi hay Codex ở phạm vi global, cùng
+mọi lần chạy `ak kit uninstall`, sẽ reconcile danh sách `skills` trong
+`settings.json` của profile Pi. Với mỗi Skill `ak-*` có mặt ở cả
+`~/.agents/skills` và `skills/` của profile Pi, AgentKit thêm một exclusion
+`!<absolute path>` cho bản trong `~/.agents/skills`, và gỡ các exclusion không
+còn áp dụng:
+
+- AgentKit chỉ sửa khoá `skills` của `~/.pi/agent/settings.json`, hoặc
+  `$PI_CODING_AGENT_DIR/settings.json` khi biến đó được đặt, và chỉ sửa các mục
+  do nó thêm. Mục của bạn và mọi khoá khác được giữ nguyên.
+- Bản ghi các mục do AgentKit thêm nằm ở
+  `$AGENTKIT_HOME/pi-agents-skill-exclusions.json`.
+- `settings.json` là symlink, không đọc được, hoặc có nội dung AgentKit không thể
+  sửa an toàn sẽ được giữ nguyên kèm một cảnh báo.
+- Khi cả hai bản còn tồn tại, mục AgentKit mà bạn xoá sẽ được thêm lại ở lần cài
+  hoặc refresh global tiếp theo.
+
+Nếu bản cài cũ vẫn hiển thị Skill có tên dạng `ak:` dưới `~/.agents/skills`,
+hãy chạy `ak update --global` để refresh chúng.
 
 Pi là projection Kit dạng spike trong bản phát hành này. AgentKit không cung cấp
 `ak run --target pi`, không wrap agent loop của Pi và không ghi `.pi/commands/`.
