@@ -107,6 +107,9 @@ work. Server-relevant changes include:
   the same call with the answers.
 - Deprecated for new designs: sampling, roots, the logging capability, Dynamic
   Client Registration, and the HTTP+SSE transport.
+- Extensions use reverse-DNS identifiers, are off by default, and are
+  negotiated per request. Tasks moved out of the core protocol into an opt-in
+  extension.
 
 To migrate a v1 server, TypeScript uses
 `npx @modelcontextprotocol/codemod@latest v1-to-v2 .` and then fixes each
@@ -154,12 +157,23 @@ server. The Skill never passes client tokens upstream or places secrets in tool
 output. Package installation writes dependencies to disk and can download from
 package registries. API research and integration tests use network access.
 
+A remote HTTP server acts as an OAuth 2.1 resource server behind a separate
+authorization server. A missing or invalid token gets `401` with a
+`WWW-Authenticate` header that points to the resource metadata; a missing scope
+gets `403` with `insufficient_scope` and the complete scope set the operation
+needs, so the client can step up once. Design starts from a minimal read scope
+and challenges for write or admin scopes per tool rather than demanding every
+scope up front. The TypeScript SDK supports a per-tool scope challenge; the
+Python SDK enforces only server-wide required scopes at the HTTP layer, so a
+per-tool check raises a tool error instead of a `403`. The Skill reviews a
+threat checklist before shipping.
+
 The bundled evaluation harness calls a Claude model for every question and tool
 turn and connects to the target MCP server, so it can consume model tokens, API
 quotas, time, and provider charges. Its default model is `claude-opus-5-5`; pass
-`-m <model>` to choose another. It supports `stdio` and `http` transports, keeps
-`sse` only for legacy servers, starts and stops stdio servers itself, and does
-not start an HTTP server. Stop any HTTP server you started for the run. Keep
+`-m <model>` to choose another. Select the transport with `-t stdio|http|sse`
+(default `stdio`); `sse` is kept only for legacy servers. The harness starts
+and stops stdio servers itself and does not start an HTTP server. Stop any HTTP server you started for the run. Keep
 evaluation tasks read-only and use safe fixtures where possible.
 
 The MCP Registry is still in preview. Publishing is outward-facing and names are
