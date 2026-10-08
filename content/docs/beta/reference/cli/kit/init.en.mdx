@@ -261,18 +261,23 @@ cannot prove:
   Nothing is reset until you accept it.
 
 The risk token covers the exact risk kinds, paths, and files of that plan for
-that kit and target. A new risk or file changes the token. If the locked plan
-has fewer risks than you accepted, the reset proceeds. A token that accepts an
-unverified snapshot keeps accepting one for that target, so do not save it for
-later runs. `--accept-risks` without `--fresh` exits `2`.
+that kit and target. For an `other-kit-ownership` risk it also covers the kit
+that owns the root, so accepting one kit's record never covers another kit's. A
+new risk, file, or owning kit changes the token. If the locked plan has fewer
+risks than you accepted, the reset proceeds. A token passed to a plan with no
+risks is ignored with a notice. A token that accepts an unverified snapshot
+keeps accepting one for that target, so do not save it for later runs.
+`--accept-risks` without `--fresh` exits `2`.
 
 With `--json`, a stopped run writes an envelope with `kind=kit.init_fresh_plan`
 and `status: "confirmation-required"`. Its data includes `reason`
 (`not-confirmed`, `risks-not-accepted`, `risks-changed`, or
 `snapshot-unverified`), `resetRoots`, `notReset`, `unrecordedPaths`,
 `modifiedRecordedPaths`, `modifiedOutsidePaths`, `keptLinks`, `risks`,
-`riskToken`, `confirmWith`, and `command`. Human output caps each path list at
-25 entries; the JSON plan carries the complete lists.
+`riskToken`, `confirmWith`, and `command`. Each `risks` entry has `kind`,
+`path`, `detail`, `effect`, and `files`, plus `owner` for an
+`other-kit-ownership` risk. Human output caps each path list at 25 entries; the
+JSON plan carries the complete lists.
 
 ### Automatic adjustments
 
@@ -307,6 +312,10 @@ These exit `1` before any mutation:
   reset root that is not a directory.
 - A snapshot that cannot be taken.
 
+A project route that resolves to the user-level install, such as a project
+directory that is your home directory, exits `6` before the plan is built. Re-run
+with `--global` or from another project directory.
+
 ### Recovery output
 
 After a reset, human output reports each reset root with the number of removed
@@ -326,8 +335,10 @@ so and no snapshot is listed.
 With `--json`, `data.fresh` carries `resetRoots`, `notReset`, `snapshots`
 (each with `id`, `roots`, `verify_command`, and either `restore_command` or
 `manual_data_path`, plus `unverified` when accepted), `snapshotVerified`,
-`removedUnrecorded`, `removedStaleModified`, and `reason`. If the run fails
-after the snapshots, the error names each snapshot with its verify and restore
+`removedUnrecorded`, `removedStaleModified`, and `reason`. The legacy top-level
+`forceSnapshot` field names only a verified snapshot, so it is empty when the
+only snapshot is an accepted unverified one. If the run fails after the
+snapshots, the error names each snapshot with its verify and restore
 route.
 
 When `ak kit init` hands off to an updated CLI first, the continuation carries
