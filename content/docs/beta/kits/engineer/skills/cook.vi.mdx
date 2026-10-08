@@ -1,6 +1,6 @@
 ---
 title: Triển khai công việc đã duyệt với ak:cook
-description: Cung cấp cho ak:cook một task rõ ràng hoặc plan đã duyệt, giữ quyền kiểm soát tại các review gate và xác minh implementation tạo ra.
+description: Cung cấp cho ak:cook một task rõ ràng hoặc plan đã duyệt, để Skill tiếp tục qua các check và review đã được ủy quyền, và xác minh implementation tạo ra.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
@@ -63,9 +63,12 @@ scope, cách phân phối và từng loại component.
 
 ## Chạy Skill
 
-Nếu không truyền cờ chế độ, Skill chạy ở mode interactive; bạn cũng có thể chọn
-rõ mode này bằng `--interactive`. Skill dừng tại các review gate chính để bạn
-kiểm tra phát hiện, duyệt plan, yêu cầu chỉnh sửa hoặc dừng workflow.
+Nếu không truyền cờ chế độ, Skill tiếp tục công việc đã được ủy quyền qua
+implementation, xác minh, review và hoàn tất mà không dừng thường lệ. Skill chỉ
+dừng khi thiếu một quyết định quan trọng, gặp hành động nằm ngoài phạm vi bạn
+đã ủy quyền, hoặc có blocker có bằng chứng. Chọn `--interactive` khi bạn muốn
+Skill dừng sau research, planning, implementation và testing để bạn kiểm tra
+phát hiện, duyệt bước tiếp theo, yêu cầu chỉnh sửa hoặc dừng workflow.
 
 <Tabs items={['Claude Code', 'Cursor', 'Codex']}>
   <Tab value="Claude Code">
@@ -101,11 +104,12 @@ project trước khi thay đổi.
 
 | Input hoặc tùy chọn | Thay đổi điều gì | Điều vẫn được thực thi |
 | --- | --- | --- |
-| Không truyền cờ chế độ, hoặc `--interactive` | Chạy workflow đầy đủ và dừng giữa các giai đoạn chính | Plan, kiểm thử, code review và quyết định của con người |
+| Không truyền cờ chế độ | Tiếp tục implementation, check, review và hoàn tất đã được ủy quyền mà không dừng thường lệ | Kiểm thử, code review, sửa regression do thay đổi gây ra và quyết định của bạn cho mọi việc ngoài phạm vi đã ủy quyền |
+| `--interactive` | Dừng để bạn review sau research, planning, implementation và testing | Plan, kiểm thử, code review và quyết định của con người |
 | Đường dẫn plan đã duyệt | Dùng lại plan hiện có thay vì tạo plan khác | Kiểm tra project hiện tại, implementation check, kiểm thử và review |
 | `--fast` | Bỏ giai đoạn research và chuyển từ kiểm tra project sang plan ngắn gọn | Vẫn có plan trước khi viết code; kiểm thử và review vẫn chạy |
 | `--parallel` | Cho phép các implementation phase độc lập chạy đồng thời | Dependency và ownership tệp phải rõ ràng; kiểm thử và review vẫn chạy |
-| `--auto` | Bỏ các lần dừng thường lệ cho con người và áp dụng quyết định review tự động của workflow | Kiểm thử, code review bắt buộc, security policy và escalation khi blocker chưa được xử lý |
+| `--auto` | Chọn tường minh việc tiếp tục qua mọi giai đoạn đã ủy quyền mà không cần phê duyệt thường lệ | Kiểm thử, code review bắt buộc, security policy và escalation khi blocker chưa được xử lý |
 | `--no-test` | Bỏ giai đoạn kiểm thử | Code review bắt buộc vẫn còn và rủi ro chưa có test phải được nêu rõ |
 | `--tdd` | Thêm cách làm tests-first trong implementation phase phù hợp | Base mode đã chọn, review và completion check |
 | `--advice` | Thêm checkpoint tư vấn cho kết quả phase, blocker, quyết định rủi ro cao và lần xác minh thất bại bất ngờ đầu tiên | Lời khuyên không viết code, duyệt gate hay thay thế workflow implementation chính |
@@ -150,7 +154,7 @@ thích:
    có, instruction của project, tài liệu gần đó và public contract có thể bị
    ảnh hưởng.
 3. **Skill tạo hoặc tải plan.** Research được thực hiện khi mode đã chọn cần.
-   Trong mode interactive, bạn review plan trước implementation.
+   Với `--interactive`, bạn review plan trước implementation.
 4. **Skill triển khai scope đã duyệt.** Công việc theo thứ tự plan và quy ước
    project đã tìm thấy, còn tiến độ được đồng bộ với active plan khi có.
 5. **Skill xác minh thay đổi.** Kiểm thử chạy theo mặc định và code review là bắt
@@ -212,7 +216,7 @@ code review không chứng minh implementation hoạt động.
 | --- | --- |
 | Runtime không nhận diện `ak:cook` | Xác nhận target cùng scope, mở runtime session mới, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
 | Skill hỏi để làm rõ | Bổ sung outcome, constraint, non-goal, acceptance criterion hoặc quyết định quyền hạn còn thiếu. Đừng trả lời bằng blanket approval nếu lựa chọn làm thay đổi behavior hay an toàn. |
-| Lần chạy dừng sau research, planning, implementation hoặc testing | Đây là hành vi mong đợi trong workflow interactive mặc định. Review bằng chứng, yêu cầu thay đổi, duyệt bước tiếp theo hoặc dừng. |
+| Lần chạy dừng sau research, planning, implementation hoặc testing | Đây là hành vi mong đợi khi bạn chọn `--interactive`. Review bằng chứng, yêu cầu thay đổi, duyệt bước tiếp theo hoặc dừng. Không có flag đó, việc dừng nghĩa là thiếu quyết định, hành động chưa được ủy quyền hoặc có blocker; đọc lý do được báo cáo. |
 | Test hoặc review phát hiện regression | Giữ lỗi hiển thị và chọn sửa, lập lại plan, khôi phục compatibility hoặc dừng. Không bỏ verification để coi như đã sửa. |
 | Tệp ngoài scope dự kiến bị thay đổi | Dừng, kiểm tra diff và giữ công việc không liên quan. Xem [Projects, artifacts và checkpoints](../../../concepts/projects-artifacts-checkpoints) trước khi khôi phục. |
 | Trạng thái cài đặt hoặc ownership có vẻ sai | Dùng [Cài đặt Kit](../../../guides/installing-kits) và [Lỗi cài Kit](../../../troubleshooting/kit-installation) trước khi cài lại hoặc force write. |

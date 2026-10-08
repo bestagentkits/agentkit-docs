@@ -107,6 +107,9 @@ thay đổi ảnh hưởng tới server gồm:
   đó kèm câu trả lời.
 - Deprecated cho thiết kế mới: sampling, roots, logging capability, Dynamic
   Client Registration và transport HTTP+SSE.
+- Extension dùng định danh reverse-DNS, tắt theo mặc định và được thương lượng
+  theo từng request. Tasks đã chuyển khỏi protocol lõi thành một extension
+  opt-in.
 
 Để migrate server v1, TypeScript dùng
 `npx @modelcontextprotocol/codemod@latest v1-to-v2 .` rồi sửa từng marker
@@ -154,13 +157,24 @@ server này. Skill không bao giờ chuyển client token lên upstream hay đ�
 vào tool output. Package installation ghi dependency xuống disk và có thể tải từ
 package registry. API research cùng integration test dùng network.
 
+Server HTTP từ xa đóng vai trò OAuth 2.1 resource server đứng sau một
+authorization server riêng. Token thiếu hoặc không hợp lệ nhận `401` với header
+`WWW-Authenticate` trỏ tới resource metadata; thiếu scope nhận `403` với
+`insufficient_scope` và toàn bộ tập scope mà thao tác cần, để client có thể nâng
+quyền một lần. Thiết kế bắt đầu từ một scope đọc tối thiểu và yêu cầu scope ghi
+hoặc admin theo từng tool qua scope challenge thay vì đòi mọi scope ngay từ
+đầu. TypeScript SDK hỗ trợ scope challenge theo từng tool; Python SDK chỉ áp
+dụng required scope toàn server ở tầng HTTP, nên kiểm tra theo từng tool sẽ trả
+về tool error thay vì `403`. Skill rà soát một threat checklist trước khi
+ship.
+
 Evaluation harness đi kèm gọi Claude model cho mỗi question và tool turn, kết nối
 tới MCP server đích, vì vậy có thể tiêu model token, API quota, thời gian và chi
 phí provider. Model mặc định là `claude-opus-5-5`; truyền `-m <model>` để chọn
-model khác. Harness hỗ trợ transport `stdio` và `http`, chỉ giữ `sse` cho server
-legacy, tự khởi động và dừng stdio server, và không khởi động HTTP server. Hãy
-dừng mọi HTTP server bạn đã khởi động cho lần chạy. Giữ evaluation task
-read-only và ưu tiên fixture an toàn.
+model khác. Chọn transport bằng `-t stdio|http|sse` (mặc định `stdio`); `sse`
+chỉ được giữ cho server legacy. Harness tự khởi động và dừng stdio server, và
+không khởi động HTTP server. Hãy dừng mọi HTTP server bạn đã khởi động cho lần
+chạy. Giữ evaluation task read-only và ưu tiên fixture an toàn.
 
 MCP Registry vẫn đang ở giai đoạn preview. Publish là hành động công khai và tên
 khó lấy lại: package được publish trước, sau đó metadata `server.json` qua

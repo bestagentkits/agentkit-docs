@@ -42,7 +42,10 @@ export const RELEASE_QUALITY_BASELINE = Object.freeze({
     searchBudgetBytes: SEARCH_ASSET_BUDGET_BYTES,
     // Counts follow each channel's reviewed route inventory. Equal Kit artifact
     // snapshots require equal Kit route coverage across Stable and Beta.
-    searchPagesPerLocaleChannel: { stable: 488, beta: 488 },
+    // Beta includes the bilingual guides/semantic-decision-experiments and
+    // reference/cli/describe pages, plus the kits/marketing/skills/filmmaking
+    // guide, ahead of promotion.
+    searchPagesPerLocaleChannel: { stable: 488, beta: 491 },
     // Pages outside every channel (the unlisted `_showcase` visual QA page) are
     // real site routes but never search results: each shard must contain only
     // the pages served under its own locale/channel prefix.

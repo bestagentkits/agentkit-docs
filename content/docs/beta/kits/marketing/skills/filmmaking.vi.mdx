@@ -1,0 +1,275 @@
+---
+title: Lập kế hoạch và sản xuất phim AI dài với ak:filmmaking
+description: Đạo diễn một phim AI dài 5–30 phút dưới dạng production graph với bible nhân vật, continuity theo scene và shot, cổng storyboard và animatic, thoại audio-first và lipsync, sound stem tách riêng, routing có kiểm soát chi phí, QC theo từng shot và dựng bản cuối.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak:filmmaking` để đạo diễn một phim AI dài, khoảng 5 đến 30 phút, như một
+pipeline sản xuất có thể kiểm soát thay vì một lần generation dài. Một phim
+10–15 phút thường gồm 8–18 scene và 70–150 shot dài 3–10 giây. Ranh giới shot đi
+theo mục đích kể chuyện và ngữ pháp điện ảnh, không bao giờ theo giới hạn độ dài
+clip của provider.
+
+Mọi trạng thái sản xuất nằm trong production graph `films/<slug>/`: screenplay,
+beat, bible, scene, shot, liên kết continuity, audio cue, bản ghi QC và bằng
+chứng chi phí. Mọi artifact trung gian đều được giữ lại, nên bất kỳ shot nào
+cũng có thể được tạo lại riêng mà không đụng đến phần còn lại của phim.
+
+## Chọn workflow filmmaking
+
+### Dùng ak:filmmaking khi
+
+- Bạn làm phim AI tự sự, phim ngắn, một tập phim hoặc câu chuyện điện ảnh.
+- Production xoay quanh nhân vật hoặc có thoại qua nhiều scene, nên danh tính,
+  trang phục, đạo cụ và khẩu hình phải nhất quán qua nhiều shot.
+- Continuity và đồng bộ audio quan trọng hơn một clip đơn lẻ ấn tượng.
+
+### Chọn workflow khác khi
+
+- Bạn cần video marketing, social, sản phẩm hoặc promo ngắn. Dùng
+  [`ak:video`](./video).
+- Bạn cần motion graphic HyperFrames khớp beat. Dùng
+  [`ak:motion-video`](./motion-video).
+- Composition là project React hoặc Remotion. Dùng
+  [`ak:remotion`](./remotion).
+- Bạn chỉ cần một clip được tạo sinh thay vì một bộ phim.
+
+`ak:filmmaking` cũng dựa vào các owner lân cận thay vì tự làm lại phần của họ:
+
+| Nhu cầu | Owner | Phần `ak:filmmaking` giữ |
+| --- | --- | --- |
+| Tạo giọng nói, hiệu ứng âm thanh và nhạc | Skill giọng nói hoặc audio đã cài, ví dụ [`ak:elevenlabs`](./elevenlabs) | Timing của câu thoại, vị trí cue và việc tách stem |
+| Tạo ảnh và video, công cụ lipsync | Các Skill image-generation và video-generation đã cài | Routing, biên dịch prompt và bản ghi generation trên từng shot |
+| Render, conform và mix bằng FFmpeg | Skill [`ak:media-processing`](../../engineer/skills/media-processing) của Engineer Kit, hoặc một capability media-processing khác đã cài | Timeline và danh sách track concat mà bước render dùng |
+
+Nếu chưa cài Skill cho một capability cần thiết, workflow báo capability còn
+thiếu thay vì tự bịa lời gọi provider.
+
+## Chuẩn bị route sản xuất
+
+Bạn cần:
+
+- Python 3 để chạy `scripts/film.py` đi kèm. Script chỉ dùng standard library.
+- Các Skill generation, giọng nói, lipsync và media-processing đã cài, cùng
+  quyền truy cập provider của riêng bạn cho các stage định chạy.
+- Một project có quyền ghi và đủ dung lượng cho ảnh tham chiếu, generation,
+  audio stem và bản cut cuối.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak:filmmaking ...` | Native delivery là mặc định; plugin delivery tường minh cũng được hỗ trợ. Các stage generation vẫn phụ thuộc vào Skill provider đã cài và quyền truy cập của bạn. |
+| Cursor | `/ak:filmmaking ...` | Slash invocation đã được người dùng xác minh. Hành vi của công cụ hỗ trợ có thể khác nhau theo setup. |
+| Codex | `$ak:filmmaking ...` | Skill dùng native Codex discovery. Yêu cầu về provider và media không đổi. |
+
+Đọc [Runtime adapters](../../../concepts/runtime-adapters) trước khi giả định
+mọi runtime có cùng bề mặt sản xuất.
+
+## Chạy Skill
+
+Skill nhận một subcommand tùy chọn và một brief hoặc project có sẵn:
+`[create|script|breakdown|bible|storyboard|animatic|render|audio|qc|assemble] [brief-or-project]`.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:filmmaking create "A 12-minute drama about two sisters who reconnect in a rainy café. Balanced budget, 16:9, stop at each approval gate and before any paid generation"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:filmmaking create "A 12-minute drama about two sisters who reconnect in a rainy café. Balanced budget, 16:9, stop at each approval gate and before any paid generation"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:filmmaking create "A 12-minute drama about two sisters who reconnect in a rainy café. Balanced budget, 16:9, stop at each approval gate and before any paid generation"
+```
+
+  </Tab>
+</Tabs>
+
+`create` chạy mọi stage theo thứ tự và dừng ở các cổng phê duyệt. Các
+subcommand còn lại chạy một stage trên project có sẵn:
+
+| Subcommand | Tạo ra |
+| --- | --- |
+| `create` | Project mới qua `film.py init`, rồi từng stage theo thứ tự |
+| `script` | Screenplay và beat sheet |
+| `breakdown` | Scene, shot, kế hoạch coverage và liên kết continuity |
+| `bible` | Nhân vật, trang phục, bối cảnh, đạo cụ và reference pack |
+| `storyboard` | Ảnh storyboard và keyframe đã duyệt |
+| `animatic` | Bản cut đủ độ dài đầu tiên trên thoại master |
+| `audio` | Giọng master, forced alignment, Foley, ambience và music cue |
+| `render` | Generation và lượt lipsync theo từng shot đã được route và biên dịch |
+| `qc` | Lỗi có timestamp cùng stage mà mỗi lỗi quay về |
+| `assemble` | Timeline cuối, remux thoại master và mix stem |
+
+## Theo các stage sản xuất
+
+1. **Khởi tạo.** `python3 scripts/film.py init films <slug> --title "..." --minutes 12 --budget balanced`
+   tạo graph với budget mode `low`, `balanced` hoặc `quality`.
+2. **Viết kịch bản.** Viết screenplay và beat sheet, rồi review câu chuyện.
+3. **Phân rã.** Chia scene thành shot, gán render class và liên kết mỗi shot
+   với shot mà nó tiếp nối.
+4. **Dựng bible.** Tạo reference pack bắt đầu từ một ảnh chính diện đã duyệt;
+   bạn duyệt các danh tính canonical.
+5. **Ghi audio trước.** Chỉ đạo giọng, tạo thoại master và chạy forced
+   alignment trước khi có bất kỳ shot nào phụ thuộc lipsync.
+6. **Storyboard, rồi animatic.** Animatic đủ độ dài trên thoại master là cổng
+   kiểm soát chi phí. Bạn duyệt nó trước khi bắt đầu render theo route.
+7. **Render và QC.** Render từng shot theo thứ tự đã route, chạy QC và chỉ lặp
+   lại các shot lỗi.
+8. **Dựng phim.** Dựng timeline cuối, đặt thoại master và mix các stem riêng.
+
+Chạy `validate` giữa các stage. Error chặn stage tiếp theo; warning cần một
+quyết định, hoặc sửa, hoặc ghi nhận rằng người dùng chấp nhận.
+
+### Vòng đời shot
+
+```text
+PLANNED -> STORYBOARDED -> APPROVED_FRAME -> GENERATED -> (LIPSYNCED) -> APPROVED -> ASSEMBLED
+                                     QC_FAILED -> cheapest return stage
+```
+
+`validate` thực thi từng cổng. Không shot nào ngoài shot previs được ghi một
+generation đang dùng trước khi frame của nó được duyệt và animatic được duyệt.
+Các generation bị loại vẫn nằm trên shot làm lịch sử và bằng chứng chi phí.
+
+## Hiểu production graph
+
+```text
+films/<slug>/
+  project.json            title, budget mode, fps, aspect, currency, scene order, style, animatic sign-off
+  screenplay.md           human-readable script; scene headings are scene IDs
+  beat-sheet.json         beats -> scenes, purpose, dramatic question, music theme
+  bibles/
+    characters/<id>.json  identity version, hair, accessories, reference pack
+    characters/<id>/      front, three-quarter, profile, and expression images
+    locations/<id>.json
+    props/<id>.json
+    wardrobe/<id>.json    owned by one character
+  scenes/<S01>/scene.json            location, time of day, cast, wardrobe, props, shot order
+  scenes/<S01>/shots/<S01_SH001>/    shot.json, references/, keyframes/, generations/, approved/
+  storyboard/  animatic/  renders/  qc/  final/
+  audio/cues.json                    every DX/FX/AMB/MX cue on the scene timeline
+  audio/dialogue/ alignment/ ambience/ sfx/ music/ stems/
+```
+
+ID không bao giờ đổi sau khi đã dùng: scene là `S03`, shot là `S03_SH007`, beat
+là `B02`, còn nhân vật, bối cảnh, đạo cụ, trang phục, cue và ảnh tham chiếu dùng
+`UPPER_SNAKE` như `MAI_01` hoặc `DX_MAI_003`. Để chèn shot, hãy sửa thứ tự shot
+của scene thay vì đánh số lại. Các JSON schema trong thư mục `schemas/` của
+Skill là contract chính xác, và project mẫu `assets/examples/rain-check/` đi kèm
+minh họa mọi field. Đường dẫn media trong mẫu chỉ được khai báo chứ không đi
+kèm file, nên `--check-media` báo thiếu theo thiết kế.
+
+## Dùng các công cụ film.py
+
+`scripts/film.py` là deterministic. Hãy chạy nó thay vì tự suy ra lại kết quả.
+Script thoát với `0` khi sạch, `1` khi có finding hoặc blocker chặn stage tiếp
+theo, và `2` khi lỗi cách dùng hoặc I/O.
+
+| Lệnh | Báo cáo hoặc ghi |
+| --- | --- |
+| `init <films-dir> <slug> --title ...` | Một graph mới. Tùy chọn `--minutes`, `--budget low\|balanced\|quality`, `--aspect`, `--fps` và `--currency`. |
+| `validate <film> [--check-media] [--json]` | Finding về schema, tính toàn vẹn, cổng stage và continuity. `--check-media` kiểm tra thêm các file đã khai báo có tồn tại. |
+| `continuity <film> [--json]` | Chỉ finding về continuity. |
+| `prompt <film> <shot-id> [--json]` | Prompt đã biên dịch của shot và thứ tự input tham chiếu. |
+| `route <film>` | Tier render và capability cần có cho từng shot. |
+| `coverage <film>` | Thoại có lipsync hiển thị so với thoại ngoài khung hình. |
+| `cue-sheet <film>` | Music cue sheet và danh mục stem. |
+| `timeline <film> --mode animatic\|final [--write]` | Timeline animatic hoặc final cùng các blocker. `--write` từ chối ghi khi còn blocker. |
+| `costs <film>` | Chi phí ước tính so với đã ghi nhận theo render class và stem. Lệnh không quy đổi tiền tệ và không tự điền giá còn thiếu. |
+| `qc <film>` | Lỗi QC có timestamp cùng stage mà mỗi lỗi quay về. |
+
+Finding mang timecode của phim (`HH:MM:SS.mmm`) khi áp dụng cho một điểm trong
+bản cut, để người review tua thẳng đến chỗ có vấn đề.
+
+## Giữ continuity, audio và chi phí trong tầm kiểm soát
+
+- **Continuity nằm trong graph.** Mỗi shot đọc trạng thái được mang theo chuỗi
+  `continuity_from`. Thay đổi có chủ đích được khai báo trong
+  `continuity_changes` kèm lý do.
+- **Danh tính đến từ reference pack canonical.** Một frame được tạo ra không
+  bao giờ dùng để điều kiện hóa shot cho đến khi bạn promote nó một cách tường
+  minh. Lệch danh tính là lỗi QC cần route, không phải lý do để chỉnh prompt.
+- **Thoại theo hướng audio-first.** Giọng master và forced alignment có trước
+  công việc lipsync. Coverage dạng reaction, over-the-shoulder, insert và
+  cutaway giúp chỉ một phần thoại cần khẩu hình hiển thị.
+- **Âm thanh giữ ở dạng stem.** Thoại (DX), hiệu ứng (FX), ambience (AMB) và
+  nhạc (MX) tách riêng cho đến bản mix cuối. Nhạc đi theo theme và motif trên
+  cue sheet. Bản cut cuối dùng thoại master, không bao giờ dùng audio do video
+  generator tạo ra.
+- **Routing theo render class và budget mode.** Shot được xếp loại `PREVIS`,
+  `CHEAP_BROLL`, `STANDARD`, `CHARACTER_CRITICAL` hoặc `HERO`, và
+  `film.py route` ánh xạ mỗi class cùng budget mode sang tier `economy`,
+  `standard` hoặc `premium`. Một shot insert không bao giờ nhận tier của cận
+  cảnh hero.
+- **Thông tin provider đến từ bằng chứng hiện hành.** Skill không đóng gói sẵn
+  lựa chọn model hay bảng giá. Skill thu thập bằng chứng hiện hành từ Skill
+  generation đã cài, docs của provider hoặc tài khoản của bạn, và ghi nguồn cùng
+  ngày cho mỗi quyết định.
+- **Shot lỗi quay về stage rẻ nhất có thể sửa.** Ví dụ, lỗi danh tính hoặc đạo
+  cụ quay về storyboard, lỗi morphing được tạo lại từ frame đã duyệt, và lỗi
+  phát âm được sửa trong audio stem mà không tạo lại video. Một clip hỏng không
+  bao giờ kéo theo render lại cả scene hay cả phim.
+
+Nếu phim không hoạt động ở dạng animatic, hãy sửa câu chuyện và timing. Model
+video đắt hơn sẽ không cứu được nó.
+
+## Giữ generation, chi phí và việc publish có cổng kiểm soát
+
+<Callout type="warn" title="Một brief phim không cho phép chi tiêu provider">
+  Request generation, giọng nói, lipsync và nhạc được gửi đến provider đằng sau
+  các Skill bạn đã cài, và mỗi lần thử lại là một request có tính phí khác.
+  Skill cần bạn phê duyệt để chi vượt budget mode đã thống nhất.
+</Callout>
+
+| Loại công việc | Ranh giới thông thường |
+| --- | --- |
+| Thay đổi cục bộ | Workflow ghi và sửa production graph cùng các thư mục media, và chạy `scripts/film.py`. |
+| Tác động provider và mạng | Các Skill generation, giọng nói, lipsync và media đã cài gửi prompt, ảnh tham chiếu và audio đến provider của chúng cho các stage bạn yêu cầu. |
+| Quyết định danh tính | Promote một ảnh tham chiếu danh tính canonical mới cần bạn phê duyệt. |
+| Publish và tác động tài khoản | Skill chỉ tạo file. Mọi việc publish đều cần bạn. |
+
+Xác nhận quyền và sự đồng ý cho mọi chân dung, giọng nói, ảnh tham chiếu và bản
+nhạc trước khi tạo sinh.
+
+## Review output và bằng chứng
+
+Skill chỉ hoàn tất khi:
+
+- `scripts/film.py validate <film>` không báo error cho các stage được khẳng
+  định, và mọi warning đã được sửa hoặc được chấp nhận tường minh.
+- Artifact được yêu cầu tồn tại trên đĩa. Một kế hoạch không bao giờ được báo
+  là bản render; `validate --check-media` chạy trước khi khẳng định đã có media.
+- Trước mọi generation video tốn kém, storyboard của shot đã được duyệt, kèm
+  keyframe với shot từ `STANDARD` trở lên, và toàn bộ animatic đã được review.
+- Bản cut cuối dùng thoại master và các stem riêng, và
+  `timeline --mode final` không còn blocker.
+
+Báo cáo trích dẫn output của `film.py` như finding, coverage, route, chi phí và
+timecode QC, cùng các file đã tạo. Tổng chi phí chỉ lấy từ bằng chứng đã ghi
+nhận, và mọi stage đã lên kế hoạch nhưng chưa chạy đều được nêu tên.
+
+## Xử lý sự cố an toàn
+
+| Triệu chứng | Bước an toàn tiếp theo |
+| --- | --- |
+| Runtime không tìm thấy `ak:filmmaking` | Xác nhận target và scope, mở session mới, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+| `validate` từ chối một generation trên shot | Duyệt frame của shot và lấy sign-off cho animatic trước khi tạo sinh. |
+| `timeline --mode final --write` từ chối ghi | Giải quyết mọi blocker được liệt kê: shot chưa duyệt hoặc QC lỗi, thiếu nguồn hình, và cue chưa ở trạng thái master hoặc chưa có file. |
+| Nhân vật bị lệch giữa các shot | Ghi lỗi QC `identity` và đưa shot về stage storyboard với reference pack canonical. Đừng chỉnh prompt. |
+| Lipsync bị trôi trên một câu thoại | Chạy lại lượt lipsync riêng trên video hiện có, hoặc tạo lại shot native-lipsync từ frame đã duyệt. |
+| Chưa cài Skill generation hoặc media | Cài capability cho stage đó rồi chạy lại. Skill sẽ không tự bịa lời gọi provider. |
+
+Tiếp tục với [Tổng quan Marketing Kit](../../marketing),
+[Project, artifact và checkpoint](../../../concepts/projects-artifacts-checkpoints),
+hoặc [Cài đặt kit](../../../guides/installing-kits).

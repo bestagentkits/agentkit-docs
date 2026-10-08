@@ -16,8 +16,11 @@ export const RELEASE_SHAPE_BASELINE = Object.freeze({
   // shape guard still requires Beta to contain every Stable route; the Kit
   // catalog guard separately enforces each channel's exact inventory snapshot.
   // The approved Stable docs exception adds guides/pi-extensions in both locales.
-  sourceRoutesPerLocaleChannel: { stable: 490, beta: 490 },
-  routesPerLocaleChannel: { stable: 489, beta: 489 },
+  // Beta adds the bilingual guides/semantic-decision-experiments and
+  // reference/cli/describe routes, plus the kits/marketing/skills/filmmaking
+  // guide, ahead of promotion.
+  sourceRoutesPerLocaleChannel: { stable: 490, beta: 493 },
+  routesPerLocaleChannel: { stable: 489, beta: 492 },
   reviewedSourceOnlyRoutes: [
     {
       route: 'changelog',

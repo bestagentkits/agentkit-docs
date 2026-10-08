@@ -70,10 +70,10 @@ Shared flags are documented in [CLI conventions](../cli-conventions).
 ## Target, scope, and mode resolution
 
 When `--target` is omitted, refresh inspects lifecycle markers for the chosen
-scope. Project scope detects project-native Claude Code, project Cursor, and
-recognized project output. User scope scans registered user lifecycle targets.
-If no target is detected, the command exits `6` and asks you to pass `--target`
-or install the kit first. For Grok or Pi routes, pass `--target grok` or
+scope and refreshes every installed runtime it detects. Project scope detects
+project-native Claude Code, project Cursor, and recognized project output. User
+scope scans registered user lifecycle targets. If no target is detected, the
+command exits `6` and asks you to pass `--target` or install the kit first. For Grok or Pi routes, pass `--target grok` or
 `--target pi` when detection is ambiguous; remote registry resolution remains
 the default unless you explicitly select `--local --kits-dir <dir>`.
 
@@ -89,6 +89,32 @@ ak kit refresh engineer --global --switch-to-plugin --yes
 
 An installed Claude plugin is not silently treated as native output, even when
 another target is also present. Project and user scopes remain independent.
+
+## Refresh several runtimes
+
+Remote Kit packages are runtime-specific. When a remote refresh covers more than
+one runtime, whether detected or listed with `--target`, AgentKit refreshes them
+one at a time. Each runtime gets its own verified download, preflight,
+confirmation preview, and snapshot-backed write. If one runtime fails, only that
+runtime's changes roll back and the remaining runtimes still refresh.
+
+After the last runtime, the command prints a refresh summary with one line per
+runtime. Every runtime that did not refresh gets a `retry:` command that
+refreshes it alone:
+
+```bash
+ak kit refresh <kit-name> [--global] --target <target> --yes
+```
+
+The retry command repeats the scope and any `--channel`, `--version`,
+`--registry-url`, `--no-backup`, `--switch-to-plugin`, and `--yes` options from
+the original run. Run it after fixing the reported error.
+
+Declining a runtime's preview stops the loop: that runtime is reported as
+`declined` and later runtimes as `not_attempted`. An interrupt also marks the
+remaining runtimes `not_attempted`. Runtimes that already refreshed stay
+refreshed. A refresh from an explicit `--local` source does not use these
+per-runtime passes.
 
 ## Examples
 
@@ -137,6 +163,21 @@ optional `targets`, `mode`, `installMode`, `scope`, `outDir`, `filesWritten`,
 Unless `--quiet` is set, stderr also emits raw `preview` and `complete` status
 records with `action=install`.
 
+A refresh that runs one pass per runtime uses a `kind=kit.refresh` envelope
+instead. Its data holds `kit` and a `targets[]` array with one entry per
+runtime:
+
+| Field | Meaning |
+| --- | --- |
+| `target` | The runtime ID. |
+| `status` | `refreshed`, `failed`, `declined`, or `not_attempted`. |
+| `error` | The failure reason when `status` is `failed`. |
+| `rerun` | The single-runtime retry command for every runtime that did not refresh. |
+| `result` | That runtime's refresh result when `status` is `refreshed`, with its `warnings` and `notices` beside it. |
+
+Each refreshed runtime also emits its own `preview` and `complete` status
+records on stderr.
+
 Hook projection data can also include optional `hooksDropped`,
 `droppedHookSummaries`, `hookMatchersNarrowed`, and `narrowedHookSummaries`.
 Human output separates **Hook groups not projected** from
@@ -156,7 +197,7 @@ known secret shapes and URL query strings redacted and paths preserved.
 | Exit | Meaning |
 | --- | --- |
 | `0` | The selected route was reconciled successfully. |
-| `1` | Validation, source, authentication, entitlement, mode, ownership, emission, snapshot, write, or TTY-decline failure. Current runtime also uses `1` for most local-kit-not-found and unsafe-target errors. |
+| `1` | Validation, source, authentication, entitlement, mode, ownership, emission, snapshot, write, or TTY-decline failure. Current runtime also uses `1` for most local-kit-not-found and unsafe-target errors. In a per-runtime refresh, `1` means at least one runtime failed or did not run, even if others refreshed. |
 | `2` | Cobra rejected flags, arguments, or a flag combination. |
 | `3` | A shared cancellation or interrupt path returned cancellation. |
 | `4` | Another kit lifecycle mutation holds the lock. |
