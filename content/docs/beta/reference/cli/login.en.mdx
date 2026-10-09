@@ -42,9 +42,10 @@ prints the API key, license key, OTP, access token, or refresh credential.
 </Callout>
 
 <Callout type="warning">
-  Email login always reads the OTP from stdin after printing `Enter OTP code:`
-  to stdout. `--json` and `--no-interactive` do not suppress that prompt. The
-  prompt therefore precedes the JSON object on stdout in email JSON mode.
+  Email login is interactive-only. It needs a terminal on both stdin and
+  stdout, and it refuses to start with `--yes`, `--json`, `--no-interactive`,
+  or `--quiet`. In those cases it exits `2` before contacting the registry and
+  points you to `--api-key`, which is the method for scripts and CI.
 </Callout>
 
 ## Options
@@ -53,7 +54,7 @@ prints the API key, license key, OTP, access token, or refresh credential.
 | --- | --- | --- |
 | `--api-key <key>` | Empty | Authenticate with a user API key from your web profile. |
 | `--device-name <name>` | Hostname | Name the device created by `--license-key`. |
-| `--email <address>` | Empty | Start email OTP login, then read the code from stdin. |
+| `--email <address>` | Empty | Start email OTP login in an interactive terminal, then read the code from stdin. |
 | `--license-key <key>` | Empty | Activate a license-key App device session. |
 | `--registry-url <url>` | Environment or release default | Override the registry used for authentication and later session checks. |
 
@@ -90,8 +91,9 @@ JSON success is one versioned envelope on stdout:
 {"schema_version":1,"kind":"auth.login","data":{"email":"you@example.com","authMethod":"api_key","success":true}}
 ```
 
-Runtime and authentication errors use stderr; JSON mode emits the shared error
-envelope. Flag-parse errors happen earlier and can remain plain-text usage.
+Runtime and authentication errors use stderr. JSON-mode failures, including
+flag-parse errors (exit `2`), end stderr with the shared
+[error envelope](../cli-conventions#json-output).
 
 ## Exit status
 
@@ -99,7 +101,7 @@ envelope. Flag-parse errors happen earlier and can remain plain-text usage.
 | --- | --- | --- |
 | `0` | Registry authentication succeeded and the selected local slot was saved. | Run `ak whoami` and `ak licenses`. |
 | `1` | No method was selected, OTP input ended, the registry rejected the request, the response was incomplete, or private storage failed. | Correct the method or credential, then retry; do not publish the secret in logs. |
-| `2` | A flag could not be parsed. | Correct the invocation. |
+| `2` | A flag could not be parsed, or email login was started without an interactive terminal or with `--yes`, `--json`, `--no-interactive`, or `--quiet`. | Correct the invocation; use `--api-key` for scripted login. |
 
 There is no preview, dry-run, confirmation, or decline path. Storage occurs
 only after the remote login response validates. Re-running login replaces the

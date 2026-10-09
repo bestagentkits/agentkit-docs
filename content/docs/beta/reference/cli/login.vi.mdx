@@ -43,9 +43,10 @@ công không in API key, license key, OTP, access token hay refresh credential.
 </Callout>
 
 <Callout type="warning">
-  Đăng nhập bằng email luôn đọc OTP từ stdin sau khi in `Enter OTP code:` ra
-  stdout. `--json` và `--no-interactive` không bỏ prompt này. Vì vậy, trong chế
-  độ email JSON, prompt xuất hiện trước object JSON trên stdout.
+  Đăng nhập bằng email chỉ chạy tương tác. Lệnh cần terminal ở cả stdin và
+  stdout, và từ chối bắt đầu khi có `--yes`, `--json`, `--no-interactive` hoặc
+  `--quiet`. Khi đó lệnh thoát `2` trước khi liên hệ registry và chỉ bạn sang
+  `--api-key`, là phương thức dành cho script và CI.
 </Callout>
 
 ## Tuỳ chọn
@@ -54,7 +55,7 @@ công không in API key, license key, OTP, access token hay refresh credential.
 | --- | --- | --- |
 | `--api-key <key>` | Trống | Xác thực bằng user API key từ web profile. |
 | `--device-name <name>` | Hostname | Đặt tên device do `--license-key` tạo. |
-| `--email <address>` | Trống | Bắt đầu đăng nhập email OTP rồi đọc code từ stdin. |
+| `--email <address>` | Trống | Bắt đầu đăng nhập email OTP trong terminal tương tác rồi đọc code từ stdin. |
 | `--license-key <key>` | Trống | Kích hoạt phiên App device bằng license key. |
 | `--registry-url <url>` | Biến môi trường hoặc mặc định của bản phát hành | Ghi đè registry dùng để xác thực và kiểm tra phiên sau này. |
 
@@ -91,8 +92,9 @@ JSON thành công là một envelope có phiên bản trên stdout:
 {"schema_version":1,"kind":"auth.login","data":{"email":"you@example.com","authMethod":"api_key","success":true}}
 ```
 
-Lỗi runtime và xác thực dùng stderr; chế độ JSON phát error envelope dùng chung.
-Lỗi parse cờ xảy ra sớm hơn và có thể vẫn là hướng dẫn dùng dạng plain text.
+Lỗi runtime và xác thực dùng stderr. Lỗi trong chế độ JSON, kể cả lỗi phân tích
+cờ (mã thoát `2`), kết thúc stderr bằng
+[error envelope](../cli-conventions#output-json) dùng chung.
 
 ## Kết quả và mã thoát
 
@@ -100,7 +102,7 @@ Lỗi parse cờ xảy ra sớm hơn và có thể vẫn là hướng dẫn dùn
 | --- | --- | --- |
 | `0` | Xác thực registry thành công và slot cục bộ đã chọn đã được lưu. | Chạy `ak whoami` và `ak licenses`. |
 | `1` | Chưa chọn phương thức, stdin OTP kết thúc, registry từ chối request, response thiếu dữ liệu hoặc lưu riêng tư thất bại. | Sửa phương thức hoặc credential rồi thử lại; không đưa secret vào log. |
-| `2` | Không parse được cờ. | Sửa cách gọi. |
+| `2` | Không parse được cờ, hoặc đăng nhập email được gọi khi không có terminal tương tác hay có `--yes`, `--json`, `--no-interactive` hoặc `--quiet`. | Sửa cách gọi; dùng `--api-key` cho đăng nhập bằng script. |
 
 Lệnh không có preview, dry-run, confirmation hay đường từ chối. Dữ liệu chỉ
 được lưu sau khi response đăng nhập từ xa hợp lệ. Chạy lại login sẽ thay slot đã
