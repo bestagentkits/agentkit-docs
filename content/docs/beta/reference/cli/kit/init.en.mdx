@@ -73,7 +73,9 @@ otherwise `stable`.
 | `--build-only` | `false` | Build to a local directory instead of installing. |
 | `--channel <channel>` | `stable`, or persisted `kit.channel` | Select the remote registry channel; an explicit value is persisted. |
 | `--exclude-skills <names>` | Empty | Install all kit skills except a comma-separated set. |
+| `--accept-risks <token>` | Empty | With `--fresh`, accept exactly the safety risks a previous plan listed, by its printed token. |
 | `--force` | `false` | Authorize overwrite of an existing output within lifecycle and snapshot boundaries. |
+| `--fresh` | `false` | Reset one selected installed target to kit-only output after confirmation and a verified snapshot. Not with `--force`, `--no-backup`, `--build-only`, or `--out`. |
 | `-g, --global` | `false` | Use the adapter's user directory instead of the current project. |
 | `--kits-dir <dir>` | Empty | Select an explicit local kit directory for development, CI, or a local build. |
 | `--local` | `false` | Use the explicit local source instead of the remote registry. |
@@ -162,6 +164,7 @@ On an interactive TTY, install mode prints a destination preview and asks
   `--json`, `--no-interactive`, and non-TTY stdin skip the install prompt and
   can proceed to writes without `--yes`. Use `--yes` in automation to make that
   intent explicit; do not rely on a missing prompt as a safety gate.
+  `--fresh` is the exception: a scripted run without `--yes` stops with exit `3`.
 </Callout>
 
 A TTY decline currently exits `1`, not `3`. Build and export routes do not show
@@ -195,6 +198,165 @@ explicit `--force` authorize a bounded overwrite. Before destructive refresh or
 mode-transition writes, AgentKit normally creates recovery snapshots. Do not
 use `--no-backup` for routine installation.
 
+## Reset one target with `--fresh`
+
+`ak kit init <kit> --fresh` resets one selected install target to kit-only
+output. A target is one kit, one runtime, and one scope. Use it when the kit's
+own lifecycle root has collected custom or stale files that a refresh or
+`--force` keeps. `ak kit install` accepts the same flag.
+
+```bash
+# Review the plan; a scripted run stops here with exit 3.
+ak kit init engineer --fresh --target codex
+
+# Reset after reviewing the plan.
+ak kit init engineer --fresh --target codex --yes
+```
+
+The reset runs in this order:
+
+1. Build a read-only plan. It lists the kit-exclusive reset root, the existing
+   files there, the custom or unrecorded files it removes, the recorded files
+   whose local edits it discards (inside and outside the reset root), the links
+   and special files it keeps, the shared runtime roots it does not reset, and
+   any safety risks.
+2. Ask for consent once (see below).
+3. Rebuild the plan under the lifecycle lock. If the safety risks changed, ask
+   again on a TTY or stop with exit `3` in a scripted run.
+4. Snapshot every path the reset can delete or overwrite, then verify each
+   snapshot. A snapshot that fails verification is retaken once.
+5. Emit the kit.
+6. Sweep leftover files inside the reset root. A file changed since the plan
+   was built is kept. This kit's stale recorded files are removed even when
+   they were modified, because the verified snapshot holds their bytes.
+
+What the reset leaves alone:
+
+- Shared runtime roots, such as `.claude` or `~/.codex`, change only through
+  this kit's recorded files, as they would under `--force`.
+- Sibling kits, other runtimes, and the other project or global install are not
+  reset.
+- Links, junctions, reparse points, and special files inside the reset root are
+  kept and never followed.
+- The previous skill selection is not inherited. The whole kit is installed
+  unless you pass `--skills`, `--exclude-skills`, or `--select-skills`.
+
+For Codex, an `[agents.<slug>]` table that points to a removed agent file is
+pruned, so no dangling `config_file` entry remains.
+
+### Consent and safety risks
+
+| Run | Plan without risks | Plan with risks |
+| --- | --- | --- |
+| TTY | One `Reset this target? [y/N]` prompt; `--yes` skips it. | One prompt that names the risks, even with `--yes`; `--yes --accept-risks <token>` skips it. |
+| Scripted, `--json`, or `--no-interactive` | `--yes` proceeds. Without it, the command prints the plan and the exact rerun command, then exits `3`. | Only `--yes --accept-risks <token>` proceeds. Otherwise the command prints the plan, the risk token, and the exact rerun command, then exits `3`. |
+
+`--yes` alone never accepts a risk. A plan lists a risk for each check it
+cannot prove:
+
+- `unproven-ownership`: the occupied reset root has no install manifest, or the
+  manifest is unreadable.
+- `other-kit-ownership`: the reset root's install manifest names another kit.
+- `snapshot-unverified`: the recovery snapshot failed verification twice.
+  Nothing is reset until you accept it.
+
+The risk token covers the exact risk kinds, paths, and files of that plan for
+that kit and target. For an `other-kit-ownership` risk it also covers the kit
+that owns the root, so accepting one kit's record never covers another kit's. A
+new risk, file, or owning kit changes the token. If the locked plan has fewer
+risks than you accepted, the reset proceeds. A token passed to a plan with no
+risks is ignored with a notice. A token that accepts an unverified snapshot
+keeps accepting one for that target, so do not save it for later runs.
+`--accept-risks` without `--fresh` exits `2`.
+
+With `--json`, a stopped run writes an envelope with `kind=kit.init_fresh_plan`
+and `status: "confirmation-required"`. Its data includes `reason`
+(`not-confirmed`, `risks-not-accepted`, `risks-changed`, or
+`snapshot-unverified`), `resetRoots`, `notReset`, `unrecordedPaths`,
+`modifiedRecordedPaths`, `modifiedOutsidePaths`, `keptLinks`, `risks`,
+`riskToken`, `confirmWith`, and `command`. Each `risks` entry has `kind`,
+`path`, `detail`, `effect`, and `files`, plus `owner` for an
+`other-kit-ownership` risk. Human output caps each path list at 25 entries; the
+JSON plan carries the complete lists.
+
+### Automatic adjustments
+
+- `pi`, `grok`, `omp`, and `dsh` keep kit output and runtime files in one
+  folder, so no kit-only boundary exists. A fresh request there runs a
+  snapshot-backed `--force` refresh instead, prints a notice, and keeps custom
+  files.
+- A reset root reached through a link or reparse point also falls back to the
+  snapshot-backed `--force` refresh with a notice.
+- A Claude Code plugin install is reset in place in plugin mode, even when
+  `--switch-to-plugin` is omitted.
+- A Codex install that still uses the legacy skills layout is migrated first
+  with a snapshot-backed `--force` refresh, then reset in the same command.
+
+### Refusals
+
+These exit `2` before the reset touches anything:
+
+- `--fresh` with `--force`, `--no-backup`, `--build-only`, or `--out`.
+- More than one target.
+- An export-only target such as `portable`.
+
+These exit `1` before any mutation:
+
+- A pending native-to-plugin switch. Finish it with
+  `ak kit init <kit> --switch-to-plugin`, then run `--fresh`.
+- A pending legacy migration transition. Run `ak migrate rollback` first.
+- Recorded ownership evidence that cannot be read.
+- A global Claude home that is not AgentKit-owned. Run
+  `ak kit init <kit> --global` to establish ownership first.
+- An ambiguous boundary, such as a runtime root inside the reset root, or a
+  reset root that is not a directory.
+- A snapshot that cannot be taken.
+
+A project route that resolves to the user-level install, such as a project
+directory that is your home directory, exits `6` before the plan is built. Re-run
+with `--global` or from another project directory.
+
+### Recovery output
+
+After a reset, human output reports each reset root with the number of removed
+custom or unrecorded files and modified stale files, each shared root that was
+not reset, and each pre-reset snapshot:
+
+```text
+[i] Fresh reset: <reset-root> now holds only engineer output (removed 3 custom/unrecorded and 1 modified stale file(s))
+[i] Pre-reset target saved (verified <id>). Roll back: <restore-command>
+```
+
+A snapshot outside restore scope reports `Manual recovery data: <path>`
+instead of a restore command. An accepted unverified snapshot is labeled
+`UNVERIFIED, may be incomplete`. If nothing existed to reset, the output says
+so and no snapshot is listed.
+
+With `--json`, `data.fresh` carries `resetRoots`, `notReset`, `snapshots`
+(each with `id`, `roots`, `verify_command`, and either `restore_command` or
+`manual_data_path`, plus `unverified` when accepted), `snapshotVerified`,
+`removedUnrecorded`, `removedStaleModified`, and `reason`. The legacy top-level
+`forceSnapshot` field names only a verified snapshot, so it is empty when the
+only snapshot is an accepted unverified one. If the run fails after the
+snapshots, the error names each snapshot with its verify and restore
+route.
+
+When `ak kit init` hands off to an updated CLI first, the continuation carries
+`--fresh` and any accepted `--accept-risks` token, never `--force`. Desktop,
+`ak update`, and `ak doctor` have no fresh mode.
+
+### How `--fresh` differs from `--force`
+
+| | `--force` | `--fresh` |
+| --- | --- | --- |
+| Custom or unrecorded files in the kit's lifecycle root | Kept | Removed |
+| This kit's recorded files with local edits | Overwritten only on collision; modified stale files are kept | Discarded; modified stale files are removed |
+| Recovery snapshot | Taken unless `--no-backup` | Always taken and verified; `--no-backup` is refused |
+| Targets | One or more | Exactly one |
+| Consent | Install preview; scripted runs can proceed without `--yes` | Plan plus one confirmation; scripted runs need `--yes` and any risk token |
+
+The two flags are mutually exclusive.
+
 ## Read human and JSON output
 
 In human modes, progress, the destination preview, and confirmation appear on
@@ -226,7 +388,7 @@ and URL query strings are redacted while paths remain visible.
 | `0` | The selected build or install completed. | Verify the reported target, scope, mode, files, and warnings. |
 | `1` | A runtime, validation, authentication, entitlement, source, emission, or write error occurred; a TTY decline also currently uses this exit. | Read the error and recovery fields before retrying. |
 | `2` | Flags, arguments, or a flag combination were invalid. | Correct the route or selection flags. |
-| `3` | The command was interrupted or cancelled through the shared cancellation path. | Inspect current state and any recovery output before retrying. |
+| `3` | The command was interrupted or cancelled through the shared cancellation path, or a `--fresh` reset was not run because it needs confirmation or acceptance of listed risks. | Inspect current state and any recovery output before retrying. For `--fresh`, review the plan and run the printed command. |
 | `4` | Another AgentKit kit lifecycle operation holds the mutation lock. | Let it finish, then retry after a few seconds. |
 | `5` | A kit was not found in the selected local kit directory. | Check the kit name and explicit local source. |
 | `6` | The target already exists and cannot be replaced without `--force`, or the project route resolves to the user-level install. | Verify ownership and route; use `--force` only after reviewing the bounded overwrite. For a user-level route, re-run with `--global` or from another project directory. |
