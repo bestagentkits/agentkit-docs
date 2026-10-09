@@ -1,0 +1,178 @@
+---
+title: Dùng Jev và Clef cùng AgentKit
+description: Hiểu cách Jev và Clef hỗ trợ đánh giá công việc, thiết lập một lần và yêu cầu Agent đối chiếu khi cần.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Bạn đang sửa một lỗi. Agent đã tìm ra nguyên nhân và cho rằng bản sửa đơn giản.
+Bạn muốn có thêm một nhận định trước khi tiếp tục. Jev hoặc Clef có thể đánh giá
+bản tóm tắt của công việc, rồi AgentKit đặt kết quả cạnh đánh giá ban đầu để bạn
+xem xét.
+
+**Bạn không cần nhớ lệnh hoặc tự viết JSON để làm việc theo cách này.** Bạn có
+thể yêu cầu Agent chuẩn bị và chạy phép đối chiếu. Cần thiết lập tài khoản,
+khóa API và quyền sử dụng lần đầu; các lần sau dùng lại cấu hình đã lưu.
+
+<Callout type="info">
+  Các mẫu yêu cầu bên dưới dành cho Agent có thể chạy CLI AgentKit trong môi
+  trường của bạn; chúng không phải lệnh chat đặc biệt. Kiểm tra phần hỗ trợ
+  bằng CLI đang cài. Xem chi tiết cấu hình tại
+  [Chạy thử nghiệm semantic decision](./semantic-decision-experiments).
+  Nếu thiếu phần tích hợp, xem [Cập nhật AgentKit](./updating).
+</Callout>
+
+## Jev và Clef giúp gì cho bạn?
+
+[Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev) của TypeSafe
+và [Clef](https://developers.cloudflare.com/workers-ai/models/clef/) của
+Cloudflare là các mô hình chuyên đưa ra nhận định theo câu hỏi có đáp án hoặc
+thang đánh giá xác định. Chẳng hạn: bản sửa này đơn giản, vừa hay phức tạp?
+
+Agent lập trình vẫn tìm nguyên nhân, viết code và kiểm tra kết quả. Jev/Clef
+đánh giá thông tin mà Agent chuẩn bị. Chất lượng nhận định phụ thuộc vào thông
+tin đó: nếu bản tóm tắt bỏ sót ảnh hưởng quan trọng, câu trả lời vẫn có thể sai.
+
+| Khi bạn muốn… | Có thể dùng để… |
+| --- | --- |
+| Xem lại độ phức tạp của lỗi đã chẩn đoán | Đối chiếu đánh giá trước khi chọn cách xử lý. |
+| Hiểu vì sao một yêu cầu được ghép với Skill nào đó | So sánh lựa chọn với các khả năng đã quan sát trong danh mục. |
+| Xem xét các phát hiện sau một lượt review | Nhận thêm tín hiệu về phát hiện cần kiểm tra kỹ. |
+| Xem lại bước tiếp theo trong một quy trình có giới hạn | So sánh đề xuất với quyết định hiện tại. |
+
+Bạn không cần bật tính năng này cho mọi công việc. Hãy bắt đầu với một quyết
+định cụ thể mà bạn muốn kiểm chứng. Với việc chưa rõ nguyên nhân, tiếp tục
+chẩn đoán cùng Agent trước.
+
+## Một lần đối chiếu diễn ra thế nào?
+
+1. **Agent đưa ra đánh giá ban đầu.** Ví dụ: nguyên nhân đã rõ, bản sửa nằm trong một file nên được đánh giá là đơn giản.
+2. **Agent chuẩn bị bản tóm tắt.** Bản tóm tắt chỉ chứa thông tin cần thiết và được kiểm tra để loại dữ liệu nhạy cảm.
+3. **AgentKit kiểm tra quyền sử dụng.** Cần bật tính năng, cho phép đúng mục đích và có khóa API của nhà cung cấp đã chọn.
+4. **Jev/Clef đánh giá bản tóm tắt.** AgentKit gửi thông tin đã chuẩn hóa cùng câu hỏi; đánh giá ban đầu được giữ cục bộ trong phép đối chiếu quyết định.
+5. **Agent báo lại hai kết quả.** Bạn xem chỗ đồng ý, chỗ khác nhau và quyết định có hiệu lực.
+
+Cách chạy này gọi là **shadow**, tức đối chiếu song song. Quyết định ban đầu
+vẫn có hiệu lực dù mô hình trả lời khác. Kết quả không tự chạy Skill, sửa file,
+phê duyệt triển khai hoặc thay model của Agent lập trình.
+
+Bật cấu hình chỉ cho phép sử dụng. Nó không tự tạo phép đối chiếu cho mọi tin
+nhắn hay mỗi lần khởi động Skill. Khi muốn đối chiếu một công việc, hãy yêu cầu
+rõ mục đích và phạm vi.
+
+## Bắt đầu lần đầu
+
+### 1. Chọn tài khoản bạn sẽ sử dụng
+
+| Bạn chọn | Cần chuẩn bị |
+| --- | --- |
+| Jev | Quyền truy cập TypeSafe và khóa API TypeSafe. |
+| Clef hoặc Clef Flash | Tài khoản Cloudflare, account ID và token có quyền Workers AI. |
+
+Chỉ cần chọn một nhà cung cấp. AgentKit không tự chuyển sang nhà cung cấp khác
+khi có lỗi. Xem [TypeSafe](https://typesafe.ai/) hoặc
+[hướng dẫn tạo token Workers AI](https://developers.cloudflare.com/workers-ai/get-started/rest-api/)
+để chuẩn bị tài khoản. Chưa có tài khoản? Bạn vẫn có thể nhờ Agent chuẩn bị và
+kiểm tra đầu vào cục bộ, nhưng chưa lấy được nhận định thật từ Jev/Clef.
+
+### 2. Nhờ Agent thiết lập một lần
+
+Ví dụ dưới đây chọn Clef Flash để thử đánh giá độ phức tạp của bản sửa.
+Bạn có thể chép vào cuộc trò chuyện với Agent:
+
+> Giúp tôi thiết lập Clef Flash trong AgentKit để đối chiếu độ phức tạp của bản
+> sửa. Kiểm tra CLI có hỗ trợ trước. Hướng dẫn tôi lưu credential cục bộ, không
+> yêu cầu tôi gửi key vào chat và không in giá trị bí mật. Tôi cho phép cấu hình
+> ở cấp người dùng cho mục đích này; giữ nguyên các thiết lập không liên quan.
+> Sau khi thiết lập, kiểm tra đầu vào cục bộ và báo rõ phần nào chưa xác minh.
+> Chưa gọi provider cho tới khi tôi chọn công việc cần đối chiếu.
+
+Nếu chọn Jev, thay câu đầu bằng "Giúp tôi thiết lập Jev qua TypeSafe trong
+AgentKit để đối chiếu độ phức tạp của bản sửa." Agent cần xác định model được
+tài khoản của bạn hỗ trợ.
+
+Bạn cung cấp credential qua môi trường cục bộ hoặc `.env` cấp người dùng,
+thường là `~/.agentkit/.env`, theo hướng dẫn của Agent. Không dán key vào chat
+hay lưu trong repository. AgentKit không lấy các credential này từ `.env`
+của dự án.
+
+**Cấu hình được lưu cho những lần sau.** Không cần chạy lại lệnh bật tính năng
+mỗi khi mở phiên mới. Nếu Agent chạy trên máy hoặc môi trường khác, môi trường
+đó cũng cần cấu hình và quyền truy cập credential phù hợp.
+
+### 3. Áp dụng vào một công việc
+
+Sau khi Agent đã tìm ra nguyên nhân của lỗi, bạn có thể yêu cầu:
+
+> Đối chiếu đánh giá độ phức tạp của bản sửa vừa chẩn đoán bằng provider đã cấu
+> hình. Chỉ dùng bản tóm tắt không chứa mã nguồn, dữ liệu cá nhân hoặc thông tin
+> mật. Cho tôi xem nội dung sẽ gửi trước; nếu chưa thể loại thông tin nhạy cảm
+> thì dừng ở bước chuẩn bị. Giữ nguyên đánh giá ban đầu để so sánh.
+
+Sau khi đã xem nội dung, bạn có thể cho phép một lần gọi:
+
+> Tôi đồng ý gửi bản tóm tắt này tới provider đã cấu hình cho một lần đối chiếu,
+> bao gồm chi phí API có thể phát sinh. Hãy chạy và báo trạng thái, hai đánh giá,
+> điểm khác nhau và quyết định vẫn có hiệu lực.
+
+Đây là cách bắt đầu với phạm vi rõ ràng. Quyền cấu hình được lưu không có nghĩa
+là mọi dữ liệu của dự án đều phù hợp để gửi. Nếu bạn đã cho phép một phạm vi
+công việc cụ thể, Agent có thể làm trong phạm vi đó mà không cần hỏi lại từng
+lệnh; quyền kỹ thuật trong AgentKit vẫn phải hợp lệ.
+
+## Bạn nên nhận được gì?
+
+Một báo cáo dễ đọc cần nói rõ lần gọi đã hoàn tất hay chưa, model đã dùng,
+đánh giá ban đầu, nhận định của provider và quyết định có hiệu lực.
+
+Ví dụ minh họa, không phải kết quả đã đo:
+
+> Đã hoàn tất đối chiếu bằng Clef Flash. Đánh giá ban đầu: đơn giản. Clef Flash:
+> mức vừa. Hai đánh giá khác nhau; quyết định có hiệu lực vẫn là đơn giản.
+> Cần kiểm tra lại phạm vi ảnh hưởng trước khi thay đổi cách xử lý.
+
+Bạn có thể yêu cầu Agent kiểm tra nguyên nhân bất đồng trong code hoặc bằng
+bằng chứng hiện có. Câu trả lời khác nhau chỉ là lý do để xem xét thêm;
+provider không nhất thiết trả về lời giải thích cho lựa chọn của nó.
+
+| Kết quả | Bạn nên hiểu và làm gì? |
+| --- | --- |
+| Hai đánh giá đồng ý | Có thêm một ý kiến trùng khớp; vẫn thực hiện kiểm tra cần thiết cho công việc. |
+| Hai đánh giá khác nhau | Yêu cầu Agent kiểm tra lại thông tin và phạm vi ảnh hưởng trước khi đổi quyết định. |
+| Tính năng đang tắt hoặc chưa được cấp quyền | Chưa có phép đối chiếu với provider; nhờ Agent kiểm tra thiết lập cho đúng mục đích. |
+| Thiếu key, model không hợp lệ hoặc provider lỗi | Chưa có nhận định hoàn chỉnh; tiếp tục theo quyết định ban đầu và sửa cấu hình nếu muốn thử lại. |
+| Chỉ kiểm tra cục bộ thành công | Đầu vào hợp lệ, nhưng chưa chứng minh kết nối hoặc chất lượng nhận định. |
+
+Độ tin cậy cao không bảo đảm nhận định đúng. Trong shadow, công việc ban đầu
+vẫn chạy; không coi số việc mô hình đề xuất bỏ qua là chi phí thực sự đã tiết kiệm.
+
+## Dùng tiếp và dừng sử dụng
+
+Lần sau, bạn chỉ cần nêu việc cần đối chiếu. Muốn áp dụng cho lựa chọn Skill,
+review hoặc quy trình khác, nhờ Agent kiểm tra phần tích hợp tương ứng và quyền
+riêng cho mục đích đó. Quyền đánh giá độ phức tạp không tự cấp quyền cho mọi
+phần tích hợp. Mỗi phần cũng cần dạng đầu vào phù hợp.
+
+Đối chiếu chọn Skill có giới hạn kích thước danh mục. Agent cần giữ đầy đủ các
+lựa chọn liên quan hoặc bỏ qua phép đối chiếu khi vượt giới hạn; không được bớt
+Skill cạnh tranh để vừa đầu vào. Phần đánh giá UI nhận bản tóm tắt bằng văn bản,
+không nhận ảnh hay video trực tiếp qua tích hợp này.
+
+Với đánh giá tác động đến test, shadow giữ kế hoạch hiện có; advisory chỉ được
+bổ sung kiểm tra hoặc mở rộng xác minh, không bỏ kiểm tra bắt buộc hay quan trọng.
+Phân loại E2E chỉ đưa ra khuyến nghị. Các giới hạn và yêu cầu phê duyệt của quy
+trình vẫn áp dụng.
+
+Khi muốn dừng, bạn có thể nói:
+
+> Tắt semantic decision ở cấp người dùng trong AgentKit. Giữ nguyên các cấu
+> hình khác và xác nhận đã tắt mà không in credential.
+
+Tắt tính năng sẽ dừng sử dụng provider qua cơ chế này. Nếu ngừng dùng tài khoản,
+bạn còn cần xóa credential cục bộ và thu hồi key tại nhà cung cấp.
+
+## Tham khảo lệnh
+
+Xem chi tiết cấu hình, nguồn credential, quyền consumer và ví dụ CLI tại
+[Chạy thử nghiệm semantic decision](./semantic-decision-experiments) và
+[tham khảo `ak eval decision`](../reference/cli/eval/decision).
