@@ -44,8 +44,8 @@ export const RELEASE_QUALITY_BASELINE = Object.freeze({
     // snapshots require equal Kit route coverage across Stable and Beta.
     // Beta includes the bilingual guides/semantic-decision-experiments and
     // reference/cli/describe pages, plus the kits/marketing/skills/filmmaking
-    // guide, ahead of promotion.
-    searchPagesPerLocaleChannel: { stable: 488, beta: 491 },
+    // and guides/external-skills guides, ahead of promotion.
+    searchPagesPerLocaleChannel: { stable: 488, beta: 492 },
     // Pages outside every channel (the unlisted `_showcase` visual QA page) are
     // real site routes but never search results: each shard must contain only
     // the pages served under its own locale/channel prefix.
