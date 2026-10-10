@@ -20,8 +20,8 @@ These behaviors can add guidance or stop an operation for review, depending on
 the event and runtime. They are workflow guardrails, not a general security
 boundary or a replacement for the runtime's own permission controls.
 
-The reused `context-firewall` Hook runs before `Bash`, `Read`, `Grep`, and
-`Glob` calls. It warns about a whole-file read of 256 KB or more, a shell dump
+The reused `context-firewall` Hook runs before `Bash`, `PowerShell`, `Read`,
+`Grep`, and `Glob` calls. It warns about a whole-file read of 256 KB or more, a shell dump
 of 128 KB or more, an unbounded `content` search, and unbounded log, history,
 or recursive shell output. It blocks a whole-file read of 2 MB or more, a shell
 dump of 512 KB or more, and an unbounded `content` search with a broad pattern,
@@ -34,7 +34,7 @@ Hook preferences](../../../guides/managing-hook-preferences).
 
 The reused `privacy-block` Hook denies the first read, write, or edit of a
 dotenv file, credentials file, secrets YAML file, or private key on every tool
-path, including shell commands. The agent then asks you through the runtime's
+path, including `Bash` and `PowerShell` commands. The agent then asks you through the runtime's
 ask-user capability. After you approve, it retries the same call once with the
 path prefixed by `APPROVED:`; that approval is bound to the session, path, and
 operation, and expires after 15 minutes. A retry without a preceding denial, a
@@ -50,24 +50,28 @@ the same Hook in both Kits.
 
 ## Secret references in tool calls
 
-The `secrets-inject` Hook runs before `Bash` and `WebFetch` calls. When a shell
-command or fetch URL contains a `${secret:NAME}` reference, the Hook asks
-`ak secrets resolve` for the stored value and substitutes it in memory, so the
-model can compose the call without seeing the credential. Only `Bash.command`
-and `WebFetch.url` are scanned; file contents and prompts are left untouched.
+The `secrets-inject` Hook runs before `Bash`, `PowerShell`, and `WebFetch`
+calls. When a shell command or fetch URL contains a `${secret:NAME}` reference,
+the Hook asks `ak secrets resolve` for the stored value and substitutes it in
+memory, so the model can compose the call without seeing the credential. Only
+`Bash.command`, `PowerShell.command`, and `WebFetch.url` are scanned; file contents and prompts are left untouched.
 An [`ak secrets`](../../../reference/cli/secrets) grant for the calling agent binary decides whether a
 value is released, and a grant restricted with `--allow-host` also checks the
 fetch destination.
 
 Every failure blocks the tool call rather than passing the literal reference
 through, including a missing grant, an invalid name, or a value with
-shell-special characters bound for a `Bash` command. The Hook writes no copy of
+shell-special characters bound for a `Bash` or `PowerShell` command. For a
+`PowerShell` command only, a value that contains `,`, `@`, or a typographic
+quote is also refused, because PowerShell would read it as an array separator,
+a splat, or a quote; pass such a value through an environment variable instead.
+The Hook writes no copy of
 the value, but the substituted input still reaches the tool process and
 whatever the runtime records for an executed call, such as its transcript.
 Treat a released value as present on the host and rotate it when needed.
 
-Claude Code and Grok register the Hook for `Bash|WebFetch`, and Codex narrows it
-to `Bash`. Cursor support for this Hook is not established in this release.
+Claude Code and Grok register the Hook for `Bash|PowerShell|WebFetch`, and Codex
+narrows it to `Bash`. Cursor support for this Hook is not established in this release.
 
 ## Background auto-update liveness
 
@@ -107,7 +111,7 @@ Discord notifications automatically. Its failure paths are non-blocking.
 
 ## Codex behavior in this release
 
-- Marketing projects no fully dropped Codex group and five narrowed matchers. Shared `Read|Write|Edit|Bash` becomes `Write|Edit|Bash`; shared `Bash|Read` becomes `Bash`; shared `Bash|Read|Grep|Glob` becomes `Bash`; shared `Bash|WebFetch` becomes `Bash`; Marketing's `Edit|Write|MultiEdit` becomes `Edit|Write`. The original handlers remain active for the supported atoms.
+- Marketing projects no fully dropped Codex group and five narrowed matchers. Shared `Read|Write|Edit|Bash|PowerShell` becomes `Write|Edit|Bash`; shared `Bash|PowerShell|Read` becomes `Bash`; shared `Bash|PowerShell|Read|Grep|Glob` becomes `Bash`; shared `Bash|PowerShell|WebFetch` becomes `Bash`; Marketing's `Edit|Write|MultiEdit` becomes `Edit|Write`. The original handlers remain active for the supported atoms.
 - Human output reports narrowing under **Hook matchers narrowed (some tool matches unsupported on this target)**. Machine-readable output uses optional `hookMatchersNarrowed` and `narrowedHookSummaries`; full-drop fields remain absent for this projection.
 - On Windows, an eligible `.cjs` Hook under the Codex home can use a managed `.cmd` shim when an ordinary path contains spaces. A spaced `.cjs` path outside that home remains unshimmed. Paths with `cmd.exe` metacharacters, non-ASCII shim basenames, and unsafe or non-ASCII baked arguments also remain refused, so this is not a blanket compatibility guarantee.
 - A wrapper-managed Codex home may alias only its final `hooks` leaf to canonical `~/.codex/hooks`, using a POSIX symlink or a Windows directory junction; writes, translated commands, rollback, and ownership use that canonical identity. Linked parents and other targets are refused.
