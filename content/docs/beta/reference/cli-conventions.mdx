@@ -74,11 +74,18 @@ When a `--json` run fails, stderr ends with an error envelope:
 {"schema_version":1,"error":"unknown flag: --bogus","error_code":"validation_failed","exit_code":2}
 ```
 
-This includes flag errors and unknown commands. A command that already printed
-its result and then exits non-zero, such as a completed preview that exits `3`,
-explains the exit in that result and adds no error envelope. Other notices, such
-as a first-launch hint, can precede the envelope on stderr. The `error_code`
-`lock_held` means another kit lifecycle operation holds the lock.
+This includes flag errors and unknown commands: with `--json`, a flag error
+always ends in this envelope. A command that already printed its result and
+then exits non-zero, such as a completed preview that exits `3`, explains the
+exit in that result and adds no error envelope. A `--json` run does not print
+the one-time macOS first-launch hint, so no human notice precedes the envelope;
+the hint waits for a later run without `--json`.
+
+The `error_code` `lock_held` means another operation holds a lock the command
+needs, so the run can be retried after it finishes. Kit lifecycle commands and
+`ak migrate` report it for the kit lifecycle lock (exit `4`); `ak backups
+restore`, `ak backups prune`, and `ak recover` report it for backup lock
+contention (exit `4`).
 
 ## Describe a command contract
 
@@ -128,5 +135,5 @@ Codes `3` and above are command-specific, and the same number can mean
 different things on different commands. A command page's **Exit codes** section
 lists only those: `3` is user cancel on `ak recover`, `ak backups restore`,
 `ak setup`, and `ak onboard`, but reports a completed preview on the
-`ak analytics` subcommands. Consult the selected command's declared codes
+`ak analytics` subcommands and `ak content-search delete`. Consult the selected command's declared codes
 instead of applying one table everywhere.
