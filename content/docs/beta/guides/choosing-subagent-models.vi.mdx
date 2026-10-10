@@ -1,0 +1,210 @@
+---
+title: Chọn model cho subagent
+description: Ghim, kế thừa và đối soát model mà từng subagent AgentKit dùng trên mỗi runtime, bằng ak agents model hoặc trang Models trong Desktop.
+---
+
+AgentKit lưu model mà mỗi subagent dùng dưới dạng **policy** trong cấu hình
+riêng, tách khỏi các file Agent đã cài. Khi cập nhật Kit, refresh, hay cập nhật
+CLI hoặc ứng dụng, AgentKit áp dụng lại policy đó thay vì làm mất nó. Model bạn
+sửa trực tiếp trong file Agent của runtime được giữ lại và báo cáo, không bao giờ
+bị ghi đè âm thầm.
+
+Dùng `ak agents model` trong terminal, hoặc **Subagents → Models** trong ứng
+dụng Desktop. Cả hai đọc và ghi cùng một policy và đưa ra cùng quyết định. Về
+model mà mỗi Kit xuất mặc định, xem [Model của Agent trên từng runtime](./agent-models).
+
+## Policy nằm ở đâu
+
+Policy được lưu dưới `agent_models.<runtime>` trong một trong hai file:
+
+| Scope | File | Áp dụng cho |
+| --- | --- | --- |
+| `user` (mặc định) | `~/.agentkit/config.yaml` | Bản cài global và bản cài project |
+| `project` | `.agentkit/config.yaml` trong project | Chỉ các bản cài của project đó |
+
+Mỗi runtime có ba phần. Mỗi mục đặt `model`, cộng thêm `reasoning_effort` hoặc
+`provider` khi runtime hỗ trợ, hoặc `inherit: true` để runtime tự chọn:
+
+```yaml
+agent_models:
+  codex:
+    agents:
+      kongming:
+        model: YOUR_MODEL_ID
+        reasoning_effort: high
+  cursor:
+    tiers:
+      opus:
+        model: YOUR_CURSOR_MODEL_ID
+  omp:
+    roles:
+      task:
+        inherit: true
+```
+
+- `agents.<name>` nhắm vào một subagent.
+- `tiers.<tier>` nhắm vào mọi subagent được viết với một tier của Kit: `opus`,
+  `sonnet`, `haiku`, `fable` hoặc `inherit`.
+- `roles.<role>` nhắm vào một role của OMP: `advisor`, `plan`, `smol` hoặc `task`.
+
+Nên dùng các lệnh bên dưới thay vì sửa tay; chúng kiểm tra mục theo runtime và
+cập nhật file đã cài trong cùng một bước.
+
+## Thứ tự ưu tiên
+
+Mỗi trường (`model`, `reasoning_effort`, `provider`) được resolve riêng, lấy từ
+lớp đầu tiên có đặt nó:
+
+1. Policy project cho agent.
+2. Policy user cho agent.
+3. Policy project cho tier hoặc role của agent.
+4. Policy user cho tier hoặc role của agent.
+5. Giá trị mặc định của adapter cho tier Kit của agent.
+6. Mặc định của chính runtime (kế thừa).
+
+Một mục `inherit` ở bất kỳ lớp nào sẽ dừng việc resolve tại đó, nên cả mapping
+tier mặc định của Kit cũng bị bỏ qua. Bản cài global chỉ đọc policy user; policy
+project không bao giờ áp dụng cho nó. Chạy `ak agents model explain <agent>
+--runtime <id>` để xem lớp nào đặt từng trường.
+
+## Dùng CLI
+
+Lệnh đọc:
+
+```bash
+ak agents model list                                   # mọi runtime và subagent được quản lý
+ak agents model list --runtime codex --json
+ak agents model get kongming --runtime claude-code     # một subagent, mọi bản cài
+ak agents model explain kongming --runtime codex       # lớp nào đặt từng trường
+```
+
+`list` in trạng thái hỗ trợ của từng runtime, rồi một dòng cho mỗi subagent đã
+cài với model mong muốn (từ policy), model AgentKit ghi lần cuối, model hiện có
+trong file runtime, model thực tế và trạng thái. Thêm `--global` cho `list`,
+`get` hoặc `explain` để bỏ qua project hiện tại và chỉ hiển thị policy user và
+bản cài global.
+
+Lệnh thay đổi nhận một target: tên agent, `tier:<tier>` hoặc `role:<role>`.
+Truyền `--runtime` và, tùy chọn, `--scope user|project`:
+
+```bash
+ak agents model set kongming --runtime claude-code --model opus
+ak agents model set kongming --runtime codex --model YOUR_MODEL_ID --effort high --scope project
+ak agents model set tier:sonnet --runtime cursor --model YOUR_CURSOR_MODEL_ID
+ak agents model set role:task --runtime omp --model YOUR_PROVIDER/YOUR_MODEL
+ak agents model inherit tier:haiku --runtime claude-code   # để runtime tự chọn
+ak agents model reset kongming --runtime claude-code       # xoá mục; các lớp thấp hơn áp dụng lại
+```
+
+- `set` cần ít nhất một trong `--model`, `--effort` (chỉ Codex) hoặc
+  `--provider` (chỉ Pi). Các trường bạn bỏ qua giữ giá trị đã đặt ở scope đó.
+- Model ID chỉ được kiểm tra định dạng, không đối chiếu với catalog của nhà cung
+  cấp. Hãy dùng ID mà runtime và tài khoản của bạn thực sự chạy được.
+- `set`, `inherit` và `reset` sao lưu file config, rồi cập nhật các file Agent
+  đã cài còn mang model mà AgentKit ghi lần cuối. File đã sửa trong runtime được
+  liệt kê là giữ nguyên.
+- `ak kit init --refresh` và `ak update` áp dụng cùng policy ở lần xuất kế tiếp.
+
+Exit code `2` nghĩa là input không hợp lệ hoặc runtime bị giới hạn năng lực
+(capability-gated); hãy xem trạng thái runtime trong `ak agents model list` thay
+vì chạy lại.
+
+## Xử lý model đã sửa trong runtime
+
+Nếu bạn tự đổi `model` trong file Agent của runtime, AgentKit đánh dấu bản cài
+đó là **drifted**. Ghi policy và refresh không đụng tới trường model, còn phần
+còn lại của file vẫn nhận cập nhật Kit. Có hai cách xử lý:
+
+```bash
+ak agents model adopt kongming --runtime codex              # giữ chỉnh sửa của bạn làm policy
+ak agents model apply kongming --runtime codex              # ghi đè bằng policy
+```
+
+- `adopt` chép model hiện tại trong file vào policy ở `--scope` (mặc định
+  `user`), để các lần refresh sau giữ nó mà không báo drift. Lệnh nhận tên agent,
+  không nhận tier hay role.
+- `apply` ghi lại mọi bản cài của agent về model mong muốn. Mỗi file được sao lưu
+  vào AgentKit home trước. Ghi đè chỉnh sửa trong runtime cần xác nhận; trong
+  script hoặc với `--json`, truyền `--yes`. Nếu thiếu, không có gì được ghi và
+  lệnh thoát với mã `3`.
+
+## Đọc model thực tế
+
+Model ghi trong file Agent không phải lúc nào cũng là model được chạy. Mỗi bản
+cài báo một giá trị thực tế:
+
+| Thực tế | Ý nghĩa |
+| --- | --- |
+| `derived` | Đọc từ file Agent của runtime; không có gì AgentKit thấy được ưu tiên hơn nó. Trên Codex, profile hoặc flag lúc khởi chạy vẫn có thể ghi đè file role. |
+| `observed` | Một thiết lập của runtime ưu tiên hơn file: `CLAUDE_CODE_SUBAGENT_MODEL` (biến môi trường hoặc `env` trong settings của Claude Code) cho Claude Code, hoặc `subagents.agentOverrides.<name>.model` trong settings của Pi. |
+| `unknown` | AgentKit không quan sát được runtime resolve ra gì: role alias của OMP như `@advisor`, agent của Grok, hoặc agent không có file đã cài. |
+
+`unknown` là câu trả lời trung thực, không phải lỗi. Khi cần chắc chắn, hãy xác
+nhận model trong session đang chạy.
+
+Mỗi bản cài cũng có một trạng thái:
+
+| Trạng thái | Ý nghĩa |
+| --- | --- |
+| `in-sync` | File mang đúng giá trị policy resolve ra. |
+| `pending` | Policy đã đổi kể từ lần cuối AgentKit ghi file; refresh hoặc `apply` sẽ cập nhật. |
+| `drifted` | Model trong file đã bị sửa trong runtime. |
+| `overridden-externally` | Một thiết lập runtime quan sát được ưu tiên hơn file với model khác. |
+| `not-materialized` | Có policy nhưng không tìm thấy file do AgentKit cài. |
+| `capability-gated` | Runtime không nhận model policy. |
+
+## Hỗ trợ theo runtime
+
+`ak agents model list` báo cùng trạng thái cho từng runtime:
+
+| Runtime | Trạng thái | Trường có thể đặt | Ghi chú |
+| --- | --- | --- | --- |
+| Claude Code (`claude-code`) | Hỗ trợ | model, tier, inherit | Ghi `model` trong frontmatter của agent. `CLAUDE_CODE_SUBAGENT_MODEL` (biến môi trường hoặc settings) ưu tiên hơn và được báo là bị ghi đè. |
+| Codex (`codex`) | Hỗ trợ | model, mức suy luận, tier, inherit | Ghi `model` và `model_reasoning_effort` trong TOML của role. Profile hoặc flag CLI chọn lúc khởi chạy không quan sát được. |
+| Cursor (`cursor`) | Hỗ trợ | model, tier, inherit | Ghi `model` trong frontmatter của agent với model ID của Cursor. |
+| Oh My Pi (`omp`) | Hỗ trợ | model, tier, role, inherit | Ghi `model` trong frontmatter của agent. Role alias như `@advisor` được resolve qua `modelRoles` của OMP, nên model cụ thể là không rõ. |
+| Pi (`pi`) | Hỗ trợ có giới hạn | model, provider, tier, inherit | Ghi frontmatter dạng `provider/id`, được runner Pi của AgentKit ghim. Tier của Kit không có mapping cho Pi và kế thừa session cha. `subagents.agentOverrides` của Pi ưu tiên hơn file. |
+| Grok Build (`grok`) | Bị giới hạn năng lực | — | Schema model theo từng agent chưa được xác minh nên lệnh ghi bị từ chối. Model bạn thêm vào file agent vẫn được giữ khi refresh. |
+| DeepSeek Harness (`dsh`) | Bị giới hạn năng lực | — | Agent được xuất thành nội dung hỗ trợ không hoạt động; lệnh ghi bị từ chối. |
+| Antigravity (`agy`) | Bị giới hạn năng lực | — | Antigravity chọn model lúc khởi chạy; lệnh ghi bị từ chối. |
+
+Xem [Runtime adapter](../concepts/runtime-adapters) để biết các khác biệt rộng
+hơn giữa các runtime.
+
+## Dùng ứng dụng Desktop
+
+Mở **Subagents**, rồi chọn **Models** (route `/subagents/models`). Bộ chọn ở
+thanh trên cùng quyết định góc nhìn: **User (global)** hiển thị policy user và
+bản cài global; chọn một project đã đăng ký sẽ thêm policy và bản cài của
+project đó.
+
+- Các ô số đếm subagent, bản cài đồng bộ, bản cài đã sửa trong runtime và bản
+  cài không rõ model thực tế.
+- **Runtime support** liệt kê trạng thái của từng runtime, các trường runtime
+  nhận và ghi chú.
+- **Subagent models** liệt kê policy user và project của từng agent và, theo
+  từng bản cài, model mong muốn, model trong file và model thực tế. Lọc theo
+  runtime hoặc **Needs attention**.
+- **Edit** mở trình chỉnh sửa. Chọn **Applies to** (agent, tier của nó, hoặc
+  role của OMP) và **Write to** (User, hoặc Project khi đang xem một project),
+  nhập model, cộng mức suy luận cho Codex hoặc provider cho Pi, rồi chọn
+  **Save**, **Use runtime default** hoặc **Reset**. Trình chỉnh sửa cũng cho
+  thấy mỗi giá trị đến từ đâu. Runtime bị giới hạn năng lực sẽ hiển thị lý do.
+- Agent bị drift hiển thị **Adopt** và **Reapply**. **Reapply** xác nhận trước
+  khi ghi đè chỉnh sửa trong runtime và sao lưu từng file trước.
+
+Quản lý model cần ứng dụng Desktop; ở nơi khác hãy dùng `ak agents model`. Xem
+[Quản lý entities](../desktop-app/managing-entities) cho phần còn lại của
+Subagents.
+
+## Cấu hình Cursor kiểu cũ
+
+Dạng cũ cho Cursor vẫn hoạt động và được resolve thành model của tier đó:
+
+```bash
+ak config prefs set agent_models.cursor.opus YOUR_CURSOR_MODEL_ID
+```
+
+Nó không bao giờ bị ghi lại khi đọc, và `ak agents model reset tier:opus
+--runtime cursor` cũng xoá nó. Với cấu hình mới, hãy dùng `ak agents model set
+tier:<tier> --runtime cursor --model <id>`.

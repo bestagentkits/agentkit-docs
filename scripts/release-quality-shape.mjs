@@ -17,10 +17,10 @@ export const RELEASE_SHAPE_BASELINE = Object.freeze({
   // catalog guard separately enforces each channel's exact inventory snapshot.
   // The approved Stable docs exception adds guides/pi-extensions in both locales.
   // Beta adds the bilingual guides/semantic-decision-experiments and
-  // reference/cli/describe routes, plus the kits/marketing/skills/filmmaking
-  // guide, ahead of promotion.
-  sourceRoutesPerLocaleChannel: { stable: 490, beta: 493 },
-  routesPerLocaleChannel: { stable: 489, beta: 492 },
+  // reference/cli/describe routes, the kits/marketing/skills/filmmaking guide,
+  // and guides/choosing-subagent-models, ahead of promotion.
+  sourceRoutesPerLocaleChannel: { stable: 490, beta: 494 },
+  routesPerLocaleChannel: { stable: 489, beta: 493 },
   reviewedSourceOnlyRoutes: [
     {
       route: 'changelog',
