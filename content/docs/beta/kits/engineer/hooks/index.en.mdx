@@ -127,6 +127,63 @@ Hook is on by default; set `hooks.privacy-block` to `false` to turn it off, as
 described in [Managing Hook
 preferences](../../../guides/managing-hook-preferences).
 
+### Skip known-safe paths with `.akignore`
+
+A `.akignore` file lists sensitive-looking paths the `privacy-block` Hook skips,
+so you can allow them persistently instead of approving each access or turning
+the whole guard off. The Hook reads up to three files, in this order, and later
+rules win:
+
+1. `<AGENTKIT_HOME>/.akignore` (user scope, `~/.agentkit/.akignore` by default)
+2. `<project>/.akignore`
+3. `<project>/.agentkit/.akignore`
+
+The project is the git root of the session's working directory. Rules use
+`.gitignore` syntax and are matched against the path relative to that root,
+after links are resolved. A matching path skips the privacy check, and a `!`
+rule protects a path again. The usual `.gitignore` limit applies: a negation
+cannot re-include a file under a directory that an earlier rule already
+matched.
+
+```text title=".akignore"
+# Local test fixtures that only look like secrets
+fixtures/**/*.pem
+.env.test
+!fixtures/prod/*.pem
+```
+
+User-scope rules apply directly. Project rules arrive with a clone, so they
+skip nothing until you trust that exact content:
+
+1. **The first access is still denied.** On Claude Code and Codex, the approval
+   question names the project `.akignore` files, lists their rules, and offers
+   **Yes, approve and trust**. Other runtimes never offer the trust, so project
+   rules have no effect there.
+2. **The approved retry records the trust.** AgentKit stores a digest of the
+   project rule files for that project root under the AgentKit home.
+3. **Any edit revokes it.** Changing a project `.akignore` file needs a new
+   approval before its rules apply again.
+4. **Every skip is announced.** Each access a trusted project rule opens prints
+   a notice naming the file; on Claude Code it appears as a system message.
+
+A project `!` rule can protect a path that your user rules skip, but project
+rules never skip a path on your behalf without that trust.
+
+Some accesses are never skipped, whatever the rules say:
+
+- a path that resolves outside the project;
+- a path the shell or tool may still rewrite, such as one containing `~`,
+  `$VAR`, command substitution, braces, or glob characters;
+- any path in a shell command that may run in another directory, such as one
+  using `cd`, `pushd`, `-C`, `--cwd`, `find`, or `xargs`;
+- a path written with the `APPROVED:` prefix, which keeps the one-time
+  approval flow.
+
+A `.akignore` that is a symlink, larger than 64 KB, or unreadable adds no
+rules. `.ckignore` is unrelated: it only tunes the scout-block size filter and
+never affects the privacy guard. To turn the whole guard off instead, run
+`ak config prefs set hooks.privacy-block false`.
+
 ## Secret references in tool calls
 
 The `secrets-inject` Hook runs before `Bash`, `PowerShell`, and `WebFetch`
