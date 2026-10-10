@@ -1,0 +1,213 @@
+---
+title: Choosing subagent models
+description: Pin, inherit, and reconcile the model each AgentKit subagent runs on, per runtime, with ak agents model or the Desktop Models page.
+---
+
+AgentKit keeps the model each subagent runs on as **policy** in its own
+configuration, separate from the installed agent files. Kit updates, refreshes,
+and CLI or app updates re-apply that policy instead of losing it. A model you
+change directly in a runtime agent file is kept and reported, never silently
+overwritten.
+
+Use `ak agents model` in a terminal, or **Subagents → Models** in the Desktop
+app. Both read and write the same policy and make the same decisions. For the
+models each Kit emits by default, see [Agent models across runtimes](./agent-models).
+
+## Where policy lives
+
+Policy is stored under `agent_models.<runtime>` in one of two files:
+
+| Scope | File | Applies to |
+| --- | --- | --- |
+| `user` (default) | `~/.agentkit/config.yaml` | Global installs and project installs |
+| `project` | `.agentkit/config.yaml` in the project | That project's installs only |
+
+Each runtime has three sections. Every entry sets `model`, plus
+`reasoning_effort` or `provider` where the runtime supports them, or
+`inherit: true` to let the runtime choose:
+
+```yaml
+agent_models:
+  codex:
+    agents:
+      kongming:
+        model: YOUR_MODEL_ID
+        reasoning_effort: high
+  cursor:
+    tiers:
+      opus:
+        model: YOUR_CURSOR_MODEL_ID
+  omp:
+    roles:
+      task:
+        inherit: true
+```
+
+- `agents.<name>` targets one subagent.
+- `tiers.<tier>` targets every subagent authored with a Kit tier: `opus`,
+  `sonnet`, `haiku`, `fable`, or `inherit`.
+- `roles.<role>` targets an OMP role: `advisor`, `plan`, `smol`, or `task`.
+
+Prefer the commands below over hand-editing; they validate the entry for the
+runtime and update installed files in the same step.
+
+## Precedence
+
+Each field (`model`, `reasoning_effort`, `provider`) resolves on its own, from
+the first layer that sets it:
+
+1. Project policy for the agent.
+2. User policy for the agent.
+3. Project policy for the agent's tier or role.
+4. User policy for the agent's tier or role.
+5. The adapter default for the agent's Kit tier.
+6. The runtime's own default (inherit).
+
+An `inherit` entry at any layer stops resolution there, so even the Kit's
+default tier mapping is skipped. A global install reads user policy only;
+project policy never reaches it. Run `ak agents model explain <agent> --runtime
+<id>` to see which layer set each field.
+
+## Use the CLI
+
+Read commands:
+
+```bash
+ak agents model list                                   # every runtime and managed subagent
+ak agents model list --runtime codex --json
+ak agents model get kongming --runtime claude-code     # one subagent, every install
+ak agents model explain kongming --runtime codex       # which layer sets each field
+```
+
+`list` prints each runtime's support status, then one row per installed
+subagent with its desired model (from policy), the model AgentKit last wrote,
+the model in the runtime file now, the effective model, and a status. Add
+`--global` to `list`, `get`, or `explain` to ignore the current project and show
+only user policy and global installs.
+
+Change commands take a target: an agent name, `tier:<tier>`, or `role:<role>`.
+Pass `--runtime` and, optionally, `--scope user|project`:
+
+```bash
+ak agents model set kongming --runtime claude-code --model opus
+ak agents model set kongming --runtime codex --model YOUR_MODEL_ID --effort high --scope project
+ak agents model set tier:sonnet --runtime cursor --model YOUR_CURSOR_MODEL_ID
+ak agents model set role:task --runtime omp --model YOUR_PROVIDER/YOUR_MODEL
+ak agents model inherit tier:haiku --runtime claude-code   # let the runtime pick
+ak agents model reset kongming --runtime claude-code       # remove the entry; lower layers apply again
+```
+
+- `set` needs at least one of `--model`, `--effort` (Codex only), or
+  `--provider` (Pi only). Fields you omit keep the value already set at that
+  scope.
+- Model IDs are checked for shape, not against a provider catalog. Use an ID
+  your runtime and account can actually run.
+- `set`, `inherit`, and `reset` back up the config file, then update installed
+  agent files that still carry the model AgentKit last wrote. Files edited in
+  the runtime are listed as kept.
+- `ak kit init --refresh` and `ak update` apply the same policy on the next
+  emit.
+
+Exit code `2` means invalid input or a capability-gated runtime; check the
+runtime status in `ak agents model list` instead of retrying.
+
+## Handle a model edited in the runtime
+
+If you change `model` inside a runtime agent file yourself, AgentKit marks that
+install **drifted**. Policy writes and refreshes leave the model field alone,
+while the rest of the file still receives Kit updates. Resolve it one of two
+ways:
+
+```bash
+ak agents model adopt kongming --runtime codex              # keep your edit as policy
+ak agents model apply kongming --runtime codex              # overwrite it with policy
+```
+
+- `adopt` copies the file's current model into policy at `--scope` (default
+  `user`), so later refreshes keep it without reporting drift. It takes an agent
+  name, not a tier or role.
+- `apply` rewrites every install of the agent to the desired model. Each file is
+  backed up under the AgentKit home first. Overwriting a runtime edit asks for
+  confirmation; in scripts or with `--json`, pass `--yes`. Without it, nothing is
+  written and the command exits `3`.
+
+## Read the effective model
+
+The model written to an agent file is not always the model that runs. Each
+install reports an effective value:
+
+| Effective | Meaning |
+| --- | --- |
+| `derived` | Read from the runtime agent file; nothing AgentKit can see outranks it. On Codex, a profile or launch flag can still override the role file. |
+| `observed` | A runtime setting outranks the file: `CLAUDE_CODE_SUBAGENT_MODEL` (environment or Claude Code settings `env`) for Claude Code, or `subagents.agentOverrides.<name>.model` in Pi settings. |
+| `unknown` | AgentKit cannot observe what the runtime resolves: an OMP role alias such as `@advisor`, a Grok agent, or an agent with no installed file. |
+
+`unknown` is an honest answer, not an error. Confirm the model in the running
+session when it matters.
+
+Each install also has a status:
+
+| Status | Meaning |
+| --- | --- |
+| `in-sync` | The file carries what policy resolves. |
+| `pending` | Policy changed since AgentKit last wrote the file; a refresh or `apply` updates it. |
+| `drifted` | The model in the file was edited in the runtime. |
+| `overridden-externally` | An observed runtime setting outranks the file with a different model. |
+| `not-materialized` | Policy exists, but no AgentKit-installed file was found. |
+| `capability-gated` | The runtime does not accept model policy. |
+
+## Runtime support
+
+`ak agents model list` reports the same status for each runtime:
+
+| Runtime | Status | Fields you can set | Notes |
+| --- | --- | --- | --- |
+| Claude Code (`claude-code`) | Supported | model, tiers, inherit | Writes agent frontmatter `model`. `CLAUDE_CODE_SUBAGENT_MODEL` (environment or settings) outranks it and is reported as overridden. |
+| Codex (`codex`) | Supported | model, reasoning effort, tiers, inherit | Writes role TOML `model` and `model_reasoning_effort`. A profile or CLI flag chosen at launch is not observable. |
+| Cursor (`cursor`) | Supported | model, tiers, inherit | Writes agent frontmatter `model` with Cursor model IDs. |
+| Oh My Pi (`omp`) | Supported | model, tiers, roles, inherit | Writes agent frontmatter `model`. A role alias such as `@advisor` resolves through OMP `modelRoles`, so its concrete model is unknown. |
+| Pi (`pi`) | Supported with limitations | model, provider, tiers, inherit | Writes `provider/id` frontmatter, which the AgentKit Pi runner pins. Kit tiers have no Pi mapping and inherit the parent session. Pi `subagents.agentOverrides` outranks the file. |
+| Grok Build (`grok`) | Capability-gated | — | The per-agent model schema is unverified, so writes are rejected. A model you add to an agent file is still kept on refresh. |
+| DeepSeek Harness (`dsh`) | Capability-gated | — | Agents are projected as inactive supporting content; writes are rejected. |
+| Antigravity (`agy`) | Capability-gated | — | Antigravity picks the model at launch; writes are rejected. |
+
+See [Runtime adapters](../concepts/runtime-adapters) for broader differences
+between runtimes.
+
+## Use the Desktop app
+
+Open **Subagents**, then select **Models** (route `/subagents/models`). The
+selector in the top bar chooses the view: **User (global)** shows user policy
+and global installs; selecting a registered project adds that project's policy
+and installs.
+
+- Tiles count subagents, installs in sync, installs edited in the runtime, and
+  installs whose effective model is unknown.
+- **Runtime support** lists each runtime's status, the fields it accepts, and
+  its notes.
+- **Subagent models** lists each agent's user and project policy and, per
+  install, the desired model, the model in the file, and the effective model.
+  Filter by runtime or by **Needs attention**.
+- **Edit** opens an editor. Choose **Applies to** (the agent, its tier, or an
+  OMP role) and **Write to** (User, or Project in a project view), enter the
+  model, plus reasoning effort for Codex or provider for Pi, then choose
+  **Save**, **Use runtime default**, or **Reset**. The editor also shows where
+  each value comes from. Capability-gated runtimes show the reason instead.
+- A drifted agent shows **Adopt** and **Reapply**. **Reapply** confirms before
+  overwriting runtime edits and backs up each file first.
+
+Model management needs the Desktop app; in other contexts use `ak agents model`.
+See [Managing entities](../desktop-app/managing-entities) for the rest of the
+Subagents surface.
+
+## Earlier Cursor configuration
+
+The older Cursor form still works and resolves as that tier's model:
+
+```bash
+ak config prefs set agent_models.cursor.opus YOUR_CURSOR_MODEL_ID
+```
+
+It is never rewritten when read, and `ak agents model reset tier:opus --runtime
+cursor` also removes it. For new configuration, use `ak agents model set
+tier:<tier> --runtime cursor --model <id>`.
