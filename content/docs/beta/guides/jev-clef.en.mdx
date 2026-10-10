@@ -1,0 +1,180 @@
+---
+title: Using Jev and Clef with AgentKit
+description: Understand how Jev and Clef assess work, set them up once, and ask your Agent for a comparison when needed.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+You are fixing a bug. Your Agent has identified the cause and considers the
+repair simple. You want another assessment before continuing. Jev or Clef can
+evaluate a summary of the work. AgentKit then places that result beside the
+original assessment for you to review.
+
+**You do not need to memorize commands or write JSON to work this way.** You
+can ask your Agent to prepare and run the comparison. Set up your account, API
+credential, and permissions first; later comparisons reuse the saved configuration.
+
+<Callout type="info">
+  These example requests are for an Agent that can run the AgentKit CLI in
+  your environment. They are ordinary instructions, not special chat commands.
+  Check support with your installed CLI. For configuration details, see
+  [Running semantic decision experiments](./semantic-decision-experiments).
+  If the integration is missing, see [Updating AgentKit](./updating).
+</Callout>
+
+## What Jev and Clef help you do
+
+TypeSafe's [Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev)
+and Cloudflare's [Clef](https://developers.cloudflare.com/workers-ai/models/clef/)
+are models for judgments with defined answers or scoring criteria. For example:
+is this repair simple, moderate, or complex?
+
+Your coding Agent still investigates the cause, writes code, and verifies the
+result. Jev/Clef evaluates the facts the Agent prepares. The assessment depends
+on those facts: an incomplete summary can still produce a wrong answer.
+
+| When you want to… | Use a comparison to… |
+| --- | --- |
+| Reconsider the complexity of a diagnosed bug | Compare assessments before choosing how to handle the repair. |
+| Understand which Skill fits a request | Compare the choice against observed capabilities in the catalog. |
+| Examine findings after a review | Get another signal about findings that deserve closer inspection. |
+| Reconsider the next step in a bounded workflow | Compare a suggestion with the current decision. |
+
+You do not need this feature for every task. Start with one specific decision
+you want to check. If the cause is still unknown, continue investigating with
+your Agent first.
+
+## How a comparison works
+
+1. **Your Agent makes its original assessment.** For example, the cause is confirmed and the repair affects one file, so it considers the repair simple.
+2. **Your Agent prepares a summary.** It includes only necessary facts and checks the text for sensitive information.
+3. **AgentKit checks permission.** The feature must be enabled, the purpose permitted, and a credential available for the selected provider.
+4. **Jev/Clef evaluates the summary.** AgentKit sends normalized facts and questions. In a decision comparison, the original answer stays local.
+5. **Your Agent reports both results.** You can inspect agreement, disagreement, and the decision that remains effective.
+
+This is called **shadow mode**: the comparison runs alongside the existing
+decision. That decision remains effective even when the model disagrees. The
+result does not run a Skill, repair files, approve deployment, or replace your
+coding Agent's model.
+
+Enabling configuration grants access. It does not create a comparison for every
+message or Skill startup. When you want a comparison, specify its purpose and
+scope.
+
+## Get started
+
+### 1. Choose the account you will use
+
+| Your choice | What you need |
+| --- | --- |
+| Jev | TypeSafe access and a TypeSafe API key. |
+| Clef or Clef Flash | A Cloudflare account, account ID, and token with Workers AI permissions. |
+
+Choose one provider. AgentKit does not switch providers automatically when one
+fails. Use [TypeSafe](https://typesafe.ai/) or
+[Cloudflare's Workers AI token setup](https://developers.cloudflare.com/workers-ai/get-started/rest-api/)
+to prepare your account. Without an account, your Agent can still prepare and
+validate an input locally, but cannot obtain a live Jev/Clef assessment.
+
+### 2. Ask your Agent to set it up once
+
+This example selects Clef Flash to assess repair complexity. You can copy it
+into your conversation with the Agent:
+
+> Help me configure Clef Flash in AgentKit to compare repair complexity.
+> Check CLI support first. Guide me through storing credentials locally;
+> do not ask me to paste a key into chat or print secret values. I authorize
+> user-scope configuration for this purpose; preserve unrelated settings.
+> After setup, validate an input locally and explain what remains unverified.
+> Do not call the provider until I choose work to compare.
+
+For Jev, replace the first sentence with "Help me configure Jev through
+TypeSafe in AgentKit to compare repair complexity." Your Agent needs to
+identify a model your account supports.
+
+Supply credentials through your local environment or the user `.env`, normally
+`~/.agentkit/.env`, following the Agent's instructions. Keep keys out of chat
+and repositories. AgentKit does not load these credentials from a project's
+`.env`.
+
+**The configuration persists.** You do not need to enable the feature again
+for each session. If your Agent runs on another machine or in another
+environment, that environment also needs suitable configuration and credential access.
+
+### 3. Apply it to a task
+
+After your Agent has diagnosed a bug, ask:
+
+> Compare the complexity assessment of this diagnosed repair using my
+> configured provider. Use only a summary without source code, personal data,
+> or confidential details. Show me what will be sent first. If sensitive
+> information cannot be removed, stop at preparation. Preserve the original
+> assessment for comparison.
+
+After reviewing the summary, you can authorize one call:
+
+> I agree to send this summary to my configured provider for one comparison,
+> including any API charges. Run it and report the status, both assessments,
+> disagreements, and the decision that remains effective.
+
+This gives your first comparison a clear scope. Saved configuration does not
+mean all project data is suitable for sending. If you already authorized a
+specific scope of work, your Agent can act within it without asking about each
+command. The technical permissions in AgentKit must still be valid.
+
+## What you should receive
+
+An understandable report states whether the call completed, which model was
+used, the original assessment, the provider's assessment, and the effective decision.
+
+Illustrative example, not a measured result:
+
+> Comparison completed with Clef Flash. Original assessment: simple.
+> Clef Flash: moderate. The assessments disagree; the effective decision remains
+> simple. Check the affected scope before changing the repair approach.
+
+Ask your Agent to investigate the disagreement using code or existing evidence.
+A disagreement is a reason to look closer. The provider does not necessarily
+return an explanation for its choice.
+
+| Result | What it means and what to do |
+| --- | --- |
+| The assessments agree | You have another matching opinion; still perform the verification the work requires. |
+| The assessments disagree | Ask your Agent to recheck the facts and affected scope before changing the decision. |
+| The feature is disabled or permission is missing | No provider comparison occurred; ask your Agent to check permission for this purpose. |
+| A key is missing, a model is invalid, or the provider fails | No complete assessment is available; retain the original decision and resolve setup if you want to retry. |
+| Only local validation succeeded | The input is valid, but connectivity and judgment quality remain unverified. |
+
+High confidence does not guarantee a correct answer. In shadow mode, the
+original work still runs. Suggested avoided work is not a measured cost saving.
+
+## Keep using it, or turn it off
+
+Next time, describe the work you want compared. For Skill selection, reviews,
+or another workflow, ask your Agent to check the relevant integration and its
+separate permission. Repair-complexity permission does not enable every
+integration. Each integration also needs its own input shape.
+
+Skill-routing comparisons have catalog size limits. Your Agent must preserve
+all relevant candidates or skip the comparison when the limit is exceeded.
+Removing competing Skills would change the comparison. UI evaluation takes
+text summaries; this integration does not accept images or video directly.
+
+For test-impact evaluation, shadow retains the existing plan. Advisory mode
+can only add checks or broaden verification, preserving mandatory and critical
+checks. E2E classification is a recommendation only. Workflow limits and
+approval requirements still apply.
+
+To stop using the feature, ask:
+
+> Disable semantic decision at user scope in AgentKit. Preserve other
+> configuration and confirm it is disabled without printing credentials.
+
+Disabling the feature stops provider use through this mechanism. When retiring
+account access, also remove local credentials and revoke the key with the provider.
+
+## Command reference
+
+For exact configuration, credential lookup, consumer permissions, and CLI
+examples, see [Running semantic decision experiments](./semantic-decision-experiments)
+and the [`ak eval decision` reference](../reference/cli/eval/decision).
