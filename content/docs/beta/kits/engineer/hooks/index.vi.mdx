@@ -131,6 +131,62 @@ bật theo mặc định; đặt `hooks.privacy-block` thành `false` để tắ
 trong [Quản lý preference của
 Hook](../../../guides/managing-hook-preferences).
 
+### Bỏ qua path an toàn đã biết bằng `.akignore`
+
+Tệp `.akignore` liệt kê các path trông nhạy cảm mà Hook `privacy-block` bỏ qua,
+để bạn cho phép chúng lâu dài thay vì phê duyệt từng lần truy cập hoặc tắt toàn
+bộ rào chắn. Hook đọc tối đa ba tệp theo thứ tự sau, và rule sau thắng:
+
+1. `<AGENTKIT_HOME>/.akignore` (phạm vi người dùng, mặc định là
+   `~/.agentkit/.akignore`)
+2. `<project>/.akignore`
+3. `<project>/.agentkit/.akignore`
+
+Project là git root của thư mục làm việc của session. Rule dùng cú pháp
+`.gitignore` và được so khớp với path tương đối so với root đó, sau khi đã phân
+giải liên kết. Path khớp sẽ bỏ qua bước kiểm tra privacy, và rule `!` bảo vệ lại
+path đó. Giới hạn thông thường của `.gitignore` vẫn áp dụng: rule phủ định không
+thể đưa lại một tệp nằm trong thư mục mà rule trước đã khớp.
+
+```text title=".akignore"
+# Fixture kiểm thử cục bộ chỉ trông giống secret
+fixtures/**/*.pem
+.env.test
+!fixtures/prod/*.pem
+```
+
+Rule phạm vi người dùng áp dụng ngay. Rule của project đến cùng bản clone, nên
+chúng không bỏ qua gì cho đến khi bạn tin cậy đúng nội dung đó:
+
+1. **Lần truy cập đầu tiên vẫn bị từ chối.** Trên Claude Code và Codex, câu hỏi
+   phê duyệt nêu các tệp `.akignore` của project, liệt kê rule của chúng và đưa
+   ra lựa chọn **Yes, approve and trust**. Các runtime khác không bao giờ đưa ra
+   lựa chọn tin cậy, nên rule của project không có tác dụng ở đó.
+2. **Lần thử lại đã được phê duyệt ghi nhận sự tin cậy.** AgentKit lưu digest
+   của các tệp rule project cho project root đó trong AgentKit home.
+3. **Mọi chỉnh sửa đều thu hồi sự tin cậy.** Thay đổi một tệp `.akignore` của
+   project cần phê duyệt mới trước khi rule của nó áp dụng lại.
+4. **Mỗi lần bỏ qua đều được thông báo.** Mỗi lần truy cập được rule project
+   đã tin cậy mở ra sẽ in một thông báo nêu tên tệp; trên Claude Code thông báo
+   hiện dưới dạng system message.
+
+Rule `!` của project có thể bảo vệ một path mà rule người dùng của bạn bỏ qua,
+nhưng rule project không bao giờ bỏ qua path thay bạn khi chưa được tin cậy.
+
+Một số truy cập không bao giờ được bỏ qua, bất kể rule nói gì:
+
+- path phân giải ra ngoài project;
+- path mà shell hoặc công cụ vẫn có thể viết lại, như path chứa `~`, `$VAR`,
+  command substitution, dấu ngoặc nhọn hoặc ký tự glob;
+- mọi path trong lệnh shell có thể chạy ở thư mục khác, như lệnh dùng `cd`,
+  `pushd`, `-C`, `--cwd`, `find` hoặc `xargs`;
+- path viết với tiền tố `APPROVED:`, vốn giữ luồng phê duyệt một lần.
+
+Tệp `.akignore` là symlink, lớn hơn 64 KB hoặc không đọc được sẽ không thêm rule
+nào. `.ckignore` không liên quan: nó chỉ điều chỉnh bộ lọc kích thước của
+scout-block và không bao giờ ảnh hưởng tới rào chắn privacy. Để tắt toàn bộ rào
+chắn thay vào đó, chạy `ak config prefs set hooks.privacy-block false`.
+
 ## Tham chiếu secret trong lệnh gọi công cụ
 
 Hook `secrets-inject` chạy trước các lệnh gọi `Bash`, `PowerShell` và
