@@ -1,0 +1,125 @@
+---
+title: External Skills
+description: Find, preview, install, update, and remove third-party Skills from the open Skills CLI ecosystem with ak skills external.
+---
+
+`ak skills external` manages third-party Skills from the open Skills CLI
+ecosystem ([skills.sh](https://skills.sh)) for Claude Code and Codex. AgentKit
+drives the separately installed `skills` CLI, but stages and checks every
+source itself, shows you a plan, and records where each installed file came
+from. Kit Skills and `ak skills install` are not affected.
+
+## Install the Skills CLI first
+
+AgentKit never installs the Skills CLI for you. Install it yourself (it needs
+Node.js 22.20 or later):
+
+```bash
+npm install -g skills
+```
+
+AgentKit looks for `skills` on your `PATH`. To use a specific install, set
+`AGENTKIT_SKILLS_CLI` to its absolute path. AgentKit is verified against Skills
+CLI 1.7.2; an older version still runs, with a warning to update it if a
+command fails. Run `ak skills external doctor` to check the setup.
+
+## Commands
+
+| Goal | Command |
+| --- | --- |
+| Search the skills.sh registry | `ak skills external find <query>` |
+| See what a source would install, without installing | `ak skills external inspect <source>` |
+| Preview and install Skills from a source | `ak skills external add <source>` |
+| List external Skills and their drift status | `ak skills external list` |
+| Preview and apply updates | `ak skills external update <name...>` or `--all` |
+| Preview and remove AgentKit-managed Skills | `ak skills external remove <name...>` |
+| Diagnose problems without changing anything | `ak skills external doctor` |
+
+A typical flow searches, inspects, then adds:
+
+```bash
+ak skills external find pdf
+ak skills external inspect anthropics/skills@pdf
+ak skills external add anthropics/skills@pdf --target claude-code
+```
+
+### Placement flags
+
+`add`, `list`, `update`, and `remove` accept:
+
+- `--target claude-code|codex` — the coding agent whose skills folder is used.
+  `add` defaults to `claude-code`; the other commands filter by it when given.
+- `--project` / `-p` (the default for `add`) or `--global` / `-g` — the project
+  skills folder or the user-level one. They are mutually exclusive.
+- `--project-dir <path>` — the project to use instead of the current directory.
+
+### Other flags
+
+- `--yes` applies an `add`, `update`, or `remove` plan without asking.
+- `--json` prints a versioned JSON envelope for scripts.
+- `--skill <name>` (repeatable) on `add` and `inspect` picks Skills from a
+  source that contains several.
+- `--allow-shadow` on `add` accepts a same-name Skill in the other scope.
+- `--allow-risky` on `add` and `update` accepts content assessed as risky.
+  Bundled scripts are still never run.
+- `--no-telemetry` on `find`, `inspect`, `add`, and `update` turns off the
+  Skills CLI's anonymous telemetry for that run. The plan says whether it is on.
+- `--owner <owner>` on `find` limits results to one GitHub owner, and
+  `--managed-only` on `list` skips asking the Skills CLI for installs AgentKit
+  does not manage.
+
+## Supported sources
+
+- GitHub shorthand: `owner/repo`, `owner/repo@skill`, or `owner/repo/path`,
+  each with an optional `#ref` (branch, tag, or commit).
+- GitHub URLs: `https://github.com/owner/repo`, or a
+  `https://github.com/owner/repo/tree/<ref>/<path>` URL.
+- A local folder, such as `./my-skills`.
+
+Any other transport, and any URL carrying credentials, is rejected.
+
+## How AgentKit keeps installs safe
+
+- **Staged first.** Each source is fetched into
+  `~/.agentkit/external-skills/staging`, never straight into a skills folder,
+  and a GitHub source is pinned to a commit. The staging copy is removed
+  afterwards.
+- **Checked.** Staged Skills are checked for path escapes, links, oversized or
+  hidden content, and executable files. AgentKit never runs bundled scripts.
+- **Previewed.** `add`, `update`, and `remove` show a plan with the destination,
+  pinned commit, risk, and executable files. Nothing changes until you confirm
+  at the terminal prompt or pass `--yes`.
+- **Never overwrites.** An existing destination folder always blocks the plan,
+  and the `ak-` and `ck-` name prefixes stay reserved for Kits.
+- **Snapshots.** `update` and `remove` take an `ak backups` snapshot before
+  changing anything.
+- **Keeps your edits.** `update` is blocked for a Skill whose installed files
+  you changed. `remove` deletes only files that still match what AgentKit
+  installed; files you changed or added are kept and listed.
+
+Provenance is recorded in `~/.agentkit/external-skills/state.json`, separately
+from Kit metadata, and covers only what AgentKit installed. `list` shows each
+managed Skill as `ok`, `modified`, `missing`, or `broken`, plus Skills the
+Skills CLI installed on its own as **not managed**; AgentKit never changes
+those.
+
+## Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Success |
+| `1` | Failure, or `doctor` found at least one error |
+| `2` | Usage error, unsupported source or target, or a reserved name |
+| `3` | Plan shown but not applied (no `--yes`, or you declined) |
+| `4` | Another Kit lifecycle operation holds the lock |
+| `5` | The Skills CLI is not installed |
+| `6` | Plan blocked |
+
+## In the desktop app
+
+The Desktop Skills page has an **External** tab with the same workflow: search
+skills.sh, inspect a source, preview an add, update, or remove, then **Apply**
+the plan. Choose the coding agent and install scope on the tab, and use
+**Diagnose** for the same checks as `doctor`. Managing external Skills writes
+your runtime skills folders, so the web dashboard shows the CLI commands
+instead of these actions.
