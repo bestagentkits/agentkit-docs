@@ -58,7 +58,9 @@ director/executor đầy đủ — nó không bao giờ bỏ qua bước kiểm 
 
 Pin outcome trước khi chạm vào bất kỳ file nào: chủ đề và nguồn, style,
 duration, ngôn ngữ voice, phần kết và chữ ký. Mặc định là voice-over tiếng Anh
-với caption tiếng Việt. Skill chỉ hỏi khi chưa rõ style hoặc nguồn fact.
+với caption tiếng Việt. Skill chỉ hỏi khi chưa rõ style hoặc nguồn fact; khi
+chỉ còn style chưa chốt, Skill chạy
+[bake-off style](#so-sánh-style-bằng-bake-off) thay vì hỏi chung chung.
 
 Tuyến đầy đủ còn cần:
 
@@ -74,6 +76,11 @@ Tuyến đầy đủ còn cần:
   `scripts/resolve-style.py`.
 - Project có quyền ghi và đủ storage cho audio WAV và MP3 được tạo, snapshot
   và bản render MP4 1080p.
+- Chỉ cho [art tĩnh được tạo sinh](#thêm-art-tĩnh-được-tạo-sinh): image
+  generation của multix. Khi có CLI `codex` đã đăng nhập trên `PATH`, Skill
+  dùng route ảnh OpenAI của multix qua Codex CLI cục bộ; nếu không, Skill dùng
+  route ảnh Gemini. Cả hai đều dùng credential đã cấu hình riêng của multix;
+  Skill không thêm API key mới.
 
 | Runtime | Cách gọi | Ranh giới khả dụng |
 | --- | --- | --- |
@@ -117,7 +124,10 @@ Thêm `--poor` vào cùng request cho mode gọn nhẹ, một session.
 Mỗi look là một style profile: ngữ pháp motion design gọn cho palette,
 typography, layout, material, texture, camera, transition, nhịp độ, phản ứng
 với beat, UI choreography, diagram, chuyển động nhân vật, caption và âm thanh.
-`references/styles/index.yaml` liệt kê khoảng 60 profile. Tên thương hiệu như
+`references/styles/index.yaml` liệt kê khoảng 70 profile. Nhóm look in ấn và
+thủ công gồm editorial collage explainer (kiểu Vox), mid-century retro, punk
+zine, constructivist poster, WPA screenprint, groovy seventies, ink woodblock,
+newsprint editorial và art deco luxury. Tên thương hiệu như
 Apple, Nike, Linear hay NVIDIA là alias dẫn tới một ngôn ngữ motion chuẩn (ví
 dụ Apple-like dẫn tới `cinematic-product-launch`); output không bao giờ dùng
 logo, font hay asset của thương hiệu.
@@ -132,16 +142,87 @@ Ba style có thêm reference chi tiết: `comic-multiverse`, `glass-keynote` và
 đóng gói; mọi video mới bắt đầu từ composition skeleton của Skill cùng style
 đã resolve.
 
+### So sánh style bằng bake-off
+
+Khi brief không nêu style, hoặc hai ứng viên ngang nhau, Skill chọn 3–4
+profile hợp với thời kỳ, văn hóa và tông của chủ đề, dựng cùng một scene hook
+cho từng ứng viên từ skeleton, chụp `snapshot` khoảnh khắc dày đặc nhất và đặt
+các ảnh tĩnh cạnh nhau. Bạn chọn bằng mắt, và lựa chọn đó trở thành style nền.
+Bake-off không tạo audio, nên nó chạy trước mọi lần tạo audio có trả phí.
+
+### Định hướng câu chuyện và shot
+
+Style quyết định video trông thế nào; kế hoạch câu chuyện và shot quyết định
+video nói gì, theo thứ tự nào và mỗi scene được đóng khung ra sao.
+
+- **Narrative arc.** Skill chọn một trong 14 arc theo chủ đề, ví dụ
+  `hook_payoff` (mặc định cho một ý duy nhất), `pas`, `how_it_works`,
+  `timeline`, `myth_buster`, `listicle`, hoặc `release_tour` cho video launch
+  và changelog (hook, con số tiêu đề, các feature với feature mạnh nhất ở đầu
+  và cuối, bằng chứng, outro).
+- **Hook và phần kết.** Câu nói đầu tiên và những chữ đầu tiên trên màn hình
+  mang lời hứa trong vòng 3 giây, theo một hook pattern có tên như
+  `surprising_stat` hoặc `direct_question`. Phần kết là `hard_cut`,
+  `quick_cta`, `loop_close` hoặc `signature_outro` (mặc định cho release).
+- **Số scene.** Số scene được tính theo duration: khoảng 6–8 scene cho 30 giây,
+  10–12 cho 60 giây và 14–16 cho khoảng hai phút rưỡi.
+- **Shot.** Mỗi scene có một shot size (`EST_WIDE`, `WIDE`, `MEDIUM`, `CLOSE`,
+  `DETAIL`) và một camera move trên camera group của nó: `static`, `push_in`,
+  `pull_out`, `pan`, `tilt`, `parallax` hoặc `element`. Các move mạnh hơn như
+  `orbit`, `roll`, `whip` và `dolly_zoom` chỉ dùng khi dimension camera của
+  style nền cho phép.
+- **Chống đơn điệu.** Hai scene liền kề không bao giờ lặp camera move, và
+  `static` được dành cho payoff. Cứ 3–5 giây lại có thứ thay đổi rõ ràng: scene
+  dài hơn khoảng 7 giây có một cut-in bên trong, từ khung rộng sang cận cảnh
+  trên một từ khóa được nói, nên không khung hình nào giữ quá khoảng 8 giây.
+
+Arc, hook, phần kết và shot của từng scene được ghi thành các trường tùy chọn
+`arc`, `hook`, `ending` và `shot` trong `data/script.json`.
+
+Trước khi tạo audio có trả phí, Skill cho bạn xem beat map một lần: arc, hook
+và một dòng cho mỗi scene. Skill bỏ qua bước review này khi bạn đã cung cấp
+script cuối cùng.
+
+### Thêm art tĩnh được tạo sinh
+
+Một số look in ấn hoặc thủ công, như collage, woodblock hay poster, không thể
+vẽ thuyết phục bằng CSS và SVG. Với các look đó, Skill có thể tạo layer minh
+họa tĩnh qua CLI `multix`, dùng một route ảnh cho cả video:
+
+| Điều kiện | Route ảnh |
+| --- | --- |
+| Có CLI `codex` trên `PATH` | Route ảnh OpenAI của multix qua Codex CLI cục bộ |
+| Ngược lại, hoặc khi route Codex thất bại | Route ảnh Gemini của multix |
+
+Các mảnh được tạo trên nền chroma phẳng, cắt nền cục bộ bằng FFmpeg, bake thành
+layer PNG trong suốt dưới `assets/images/` và được animate bằng GSAP. Skill
+review mọi ảnh trước khi animate và ghi cách tạo từng asset vào
+`data/art.json` để lần tạo lại giữ đúng look. Không có video model nào tham
+gia; footage AI text-to-video hoặc image-to-video vẫn thuộc về
+[`ak:video`](./video).
+
+- **Text vẫn là HTML sống.** Headline không bao giờ bị bake vào ảnh được tạo,
+  nên chữ luôn sắc nét và mọi fact vẫn chỉnh sửa được.
+- **Ảnh bạn cung cấp được đặt vào, không vẽ lại.** Ảnh người hoặc sản phẩm do
+  bạn cung cấp được đặt như một cut-out ảnh chụp. Khuôn mặt, hình dáng sản phẩm
+  và nhãn giữ nguyên như trong ảnh, và Skill kiểm tra lại chúng trong ảnh tĩnh
+  được tạo trước khi cắt nền.
+- **Scene UI, data, terminal và diagram vẫn là HTML sống.** Art được tạo sinh
+  chỉ dành cho hình ảnh in ấn hoặc thủ công.
+
 ## Theo dõi các stage production
 
 1. **Pin outcome.** Chủ đề, nguồn, style nền cùng layer nếu có, duration, ngôn
-   ngữ voice, phần kết và chữ ký được ghi lại.
+   ngữ voice, phần kết và chữ ký được ghi lại. Nếu style còn để ngỏ, bake-off
+   chốt nó ở bước này.
 2. **Scaffold project.** Skill tạo `assets/videos/<slug>/` và một plan dưới
    `plans/`, rồi chép script template, file data mẫu, `hyperframes.json` và
    composition skeleton. Bản đã hoàn tất không bao giờ bị ghi đè; restyle là
    một thư mục project mới.
 3. **Viết fact và script.** Fact chỉ lấy từ nguồn gốc, kèm report bằng chứng
-   ngắn trước khi viết script. `data/script.json` chứa các scene và line.
+   ngắn trước khi viết script. Skill chọn arc, hook và phần kết, tính số scene
+   và lên shot cho từng scene. `data/script.json` chứa các scene và line. Bạn
+   review beat map một lần ở đây, trừ khi bạn đã cung cấp script cuối cùng.
 4. **Tạo và căn audio.** multix tạo voice-over, SFX và nhạc; ElevenLabs forced
    alignment ánh xạ lời nói sang timing.
 5. **Fit beat và sắp xếp nhạc.** `fit-beat-grid.py` báo BPM và bảng theo từng
@@ -149,8 +230,10 @@ Ba style có thêm reference chi tiết: `comic-multiverse`, `glass-keynote` và
    `verify-arrangement.py` kiểm tra mối splice.
 6. **Dựng timeline và mix.** `build-timeline` render bản mix đã duck và chuẩn
    hóa loudness; `measure-mix-balance.py` báo mức nhạc dưới giọng nói.
-7. **Dựng và kiểm tra composition.** `index.html` theo composition contract và
-   style đã resolve, rồi pass `hyperframes lint`, `check` và review
+7. **Dựng và kiểm tra composition.** Khi style cần hình ảnh in ấn hoặc thủ
+   công, hoặc bạn cung cấp ảnh cần đặt vào, các layer art được tạo sinh được
+   bake trước. `index.html` theo composition contract, style đã resolve và shot
+   đã lên cho từng scene, rồi pass `hyperframes lint`, `check` và review
    `snapshot` từng scene, cùng lượt director's pass trên mọi scene.
 8. **Render, remux và encode.** HyperFrames render video, bản mix đã đo được
    remux trở lại, và social encode tùy chọn tạo file nhỏ hơn.
@@ -164,14 +247,16 @@ Ba style có thêm reference chi tiết: `comic-multiverse`, `glass-keynote` và
 
 <Callout type="warn" title="Brief video không cho phép chi phí provider">
   Request voice, SFX, nhạc và alignment đi qua multix tới Gemini và ElevenLabs.
-  Tạo lại scene hoặc nhạc sinh thêm request provider. Phê duyệt từng stage
-  generation theo policy provider, quota và billing của bạn.
+  Tạo lại scene hoặc nhạc sinh thêm request provider. Art tĩnh được tạo sinh là
+  một request image generation tùy chọn, cộng thêm vào các request audio, và
+  bake-off có thể dùng một backdrop được tạo cho mỗi style ứng viên. Phê duyệt
+  từng stage generation theo policy provider, quota và billing của bạn.
 </Callout>
 
 | Loại công việc | Ranh giới thông thường |
 | --- | --- |
 | Thay đổi cục bộ | Workflow tạo thư mục project, plan, file data, audio được tạo, snapshot và bản render. Nó không ghi đè bản đã hoàn tất. |
-| Tác động provider và network | multix gửi text script và audio tới Gemini và ElevenLabs; `npx --yes hyperframes@0.8.77` có thể tải package đã pin. |
+| Tác động provider và network | multix gửi text script và audio tới Gemini và ElevenLabs. Khi có art được tạo sinh, multix còn gửi prompt ảnh và mọi ảnh bạn cung cấp để đặt vào tới OpenAI qua Codex CLI cục bộ, hoặc tới Gemini. `npx --yes hyperframes@0.8.77` có thể tải package đã pin. |
 | Process | `hyperframes preview` chạy như background process được theo dõi, được tái sử dụng cho project này và dừng khi session kết thúc. |
 | Tác động publishing và account | Skill tạo file và để việc đăng cho bạn. Nó không upload, lên lịch hay đăng lên tài khoản social. |
 
@@ -192,6 +277,9 @@ assets/videos/<slug>/renders/<slug>.mp4
 assets/videos/<slug>/renders/<slug>-social.mp4
 ```
 
+Khi có art được tạo sinh, project còn chứa các layer đã bake dưới
+`assets/images/` và nguồn gốc của chúng trong `data/art.json`.
+
 Skill báo số liệu đã đo, không phải cảm nhận. Nó chỉ xong khi:
 
 - `hyperframes lint` và `check` pass, snapshot của mọi scene đã được review, và
@@ -206,6 +294,8 @@ Skill báo số liệu đã đo, không phải cảm nhận. Nó chỉ xong khi:
 - Mỗi bản 1:1 hoặc 9:16 được yêu cầu pass cùng các check lint, check, ffprobe,
   loudness và blackdetect như bản gốc.
 - Fact trên màn hình truy được về nguồn đã thu thập lúc bắt đầu.
+- Không có hai scene liền kề nào dùng chung camera move, và không khung hình
+  nào giữ quá khoảng 8 giây.
 
 ## Troubleshoot an toàn
 
@@ -216,6 +306,7 @@ Skill báo số liệu đã đo, không phải cảm nhận. Nó chỉ xong khi:
 | Alignment cảnh báo số từ đã căn khác số token của script | Sửa text `en` hoặc `say` của scene, hoặc tạo lại voice-over của scene đó, rồi căn lại. |
 | `verify-arrangement.py` báo lệch | Fit lại beat grid, chỉnh arrangement và chạy lại các bước arrangement và timeline. |
 | `lint` hoặc `check` thất bại | Sửa composition theo composition contract trước khi render. |
+| Route ảnh Codex thất bại (chưa đăng nhập hoặc lỗi driver) | Skill chuyển sang route ảnh Gemini cho cả video và ghi chú trong plan. Đăng nhập `codex` trước video kế tiếp nếu bạn muốn dùng route OpenAI. |
 | Chỉ visual thay đổi | Chạy lại `lint`, `check`, `render` và remux; không cần tạo lại audio. |
 | Bản 1:1 hoặc 9:16 vẫn hiển thị layout cỡ 1920/1080 | Đọc cảnh báo của `reframe.py` cho các dòng bị ảnh hưởng, thêm override `data-ratio` còn thiếu và tạo lại bản edition; không bao giờ tự sửa tay thư mục edition đã sinh ra. |
 
