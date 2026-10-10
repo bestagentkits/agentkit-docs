@@ -98,16 +98,27 @@ data.plan.RemoveTrees
 data.plan.AuthorizedRoots
 ```
 
-The plan field names are case-sensitive. Applied success has a deliberate
-exception: even with `--json`, stdout is empty and stderr contains a plain line:
+The plan field names are case-sensitive. An applied restore with `--json`
+writes one success envelope on stdout:
+
+```text
+schema_version: 1
+kind: backups.restore
+data.id
+data.restored
+data.plan
+```
+
+`data.plan` uses the same case-sensitive fields as the dry-run plan. Without
+`--json`, an applied restore writes a plain completion line to stderr, and
+`--quiet` does not suppress it:
 
 ```text
 [OK] restored <id>
 ```
 
-`--quiet` does not suppress that direct completion line. JSON execution errors
-use a structured error envelope on stderr; flag-parse errors can remain
-plain-text usage.
+JSON-mode failures, including flag-parse errors (exit `2`), write a structured
+error envelope to stderr.
 
 ## Exit status
 
@@ -117,7 +128,7 @@ plain-text usage.
 | `1` | Integrity, topology, authority, destination, I/O, or partial-restore failure. |
 | `2` | Missing or malformed ID, too many arguments, invalid flags, or ID combined with `--latest`. |
 | `3` | The stdin confirmation was declined or reached end-of-file. |
-| `4` | Another backup mutation holds the registry lock at apply time. |
+| `4` | Another backup mutation holds the registry lock at apply time. With `--json`, the error envelope names `error_code` `lock_held`. |
 | `5` | A valid-shaped ID was not found, or `--latest` found no snapshot. |
 
 An exit `1` after live mutation may mean earlier files were already restored.

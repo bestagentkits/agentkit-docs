@@ -42,14 +42,16 @@ itself*.
 2. Inspect the installed binary's version and command help. Reuse that evidence within the session while the binary, version and target are unchanged; inspect again after an update or target change.
 3. Use read-only status/validation before lifecycle changes. Inspect partial state before a retry; a retry within the existing authorized scope does not require repeated confirmation.
 4. Continue additive or safely reconcilable changes inside existing user authorization. `--yes` and `--no-interactive` are appropriate for authorized scripted work when supported by that command. A prompt is not the only mutation boundary; some writers act directly.
-5. Destructive overwrite, reset, restore or removal needs explicit scope authorization and the supported preview/snapshot safeguards. Preserve unknown and modified files. Never combine `--force` and `--fresh`.
+5. Destructive overwrite, reset, restore or removal needs explicit scope authorization and the supported preview/snapshot safeguards. Preserve unknown and modified files. Never combine `--force` and `--fresh`. When a `--fresh` plan stops with listed risks and a risk token, show the user each risk and its files, and rerun with `--accept-risks <token>` only after the user accepts that exact list. A token covers only the project, target, and Kit whose plan printed it; never reuse it elsewhere or save it for later runs. See [`ak kit init --fresh`](../../../reference/cli/kit/init#reset-one-target-with---fresh).
 6. Report the exact command, scope, result and unresolved evidence. Use `--json` for machine-readable output. `--quiet` overrides `--verbose`; do not rerun a mutation merely to obtain verbose logs.
 
 ## Command families by task
 
 - **Bootstrap and setup** — `ak init`, `ak new`, `ak setup`, `ak onboard`. All mutating;
   confirm intended kit and scope first. `ak setup` writes user config only.
-  `ak onboard` runs setup, CLI login, then kit install.
+  `ak onboard` runs setup, CLI login, then kit install. Basic setup preserves
+  stored telemetry consent and does not ask about it; change consent explicitly
+  through `ak setup`, not as an onboarding prerequisite.
 - **Kits** — `ak kit init|install|refresh|validate|uninstall|list-kits|repair-install-mode`.
   `list-kits` and `validate` are read-only; the rest mutate.
 - **Skills** — inventory (`ak skills list|show|search|install|remove|graph`)
@@ -62,16 +64,23 @@ itself*.
   create|check|uncheck|add-phase|update|use|archive|close|reindex|migrate`
   mutate. `ak plan kanban` is a diagnostic TUI. `ak journal
   list|show|validate` read; `ak journal create` writes.
-- **Diagnostics** — `ak doctor`, `ak activity`, `ak audit`, `ak sessions`,
-  `ak analytics`, `ak backups`, `ak versions`, `ak changelog`,
+- **Diagnostics** — `ak describe`, `ak doctor`, `ak activity`, `ak audit`,
+  `ak sessions`, `ak analytics`, `ak backups`, `ak versions`, `ak changelog`,
   `ak diagnostics export`. Mostly read-only; `enable`/`disable`/`delete`
-  under `analytics` and `content-search` mutate.
+  under `analytics` and `content-search` mutate. `ak describe <cmd> --json`
+  returns a command's flags, exit codes, and agent contract offline.
+- **Improvement work** — `ak insights work list` is read-only. `work create`
+  writes a scoped plan in a registered project, and
+  `work defer|dismiss|awaiting-verification|verify` persist local lifecycle
+  state; classify them as mutating. `verify` compares recorded evidence and
+  never runs a model or edits an artifact.
 - **Shadow decision comparison** — `ak eval decision <request.json|->` runs an
   explicit shadow comparison. Treat it as mutating: enabled calls send data
   externally and may incur charges, even though it writes no local report. It
   requires user-scope `semantic_decision` consent, and project config can only
-  restrict it. Never enable it from an ambient credential or as part of
-  ordinary routing. Check `status`, `fallback_reason`, and provenance; the
+  restrict it. Credentials resolve from the process environment, then the
+  AgentKit home `.env`, never a project `.env`. Never enable it from an ambient
+  credential or as part of ordinary routing. Check `status`, `fallback_reason`, and provenance; the
   effective decision always remains the supplied legacy decision. See the
   [`ak eval decision` reference](../../../reference/cli/eval/decision).
 - **Workflow, triage, and UI experiments** — [`ak eval workflow`](../../../reference/cli/eval/workflow)
@@ -116,7 +125,9 @@ itself*.
   resolve|set|unset|validate`, top-level auth (`ak login`, `ak logout`,
   `ak whoami`, `ak licenses`), and `ak mcp
   add|link|list|remove|show|verify`. Auth commands are top-level, not
-  under an `ak auth` parent.
+  under an `ak auth` parent. Email OTP login needs an interactive terminal;
+  for scripted or headless login, use the API-key route instead of piping a
+  code.
 - **Self-update and migrations** — `ak self-update`, `ak migrate
   prefs|rollback`. Run `ak versions` and check `ak changelog` before
   invoking.

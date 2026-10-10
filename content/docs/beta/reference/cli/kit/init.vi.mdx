@@ -25,12 +25,13 @@ hiện một bản cài mới buộc ghi đè.
 
 ## Trước khi bắt đầu
 
-Theo mặc định, Kit phát hành dùng remote registry có xác thực. Khi bạn không
-truyền `--channel`, `ak kit init` dùng `kit.channel` đã lưu nếu khóa đó đã được
-đặt; nếu không thì dùng `stable`. Truyền `--channel stable` hoặc
-`--channel beta` sẽ lưu giá trị đó cho các lần `ak kit init`, `ak kit refresh`
-và `ak update` sau. Kit trả phí yêu cầu phiên CLI hợp lệ và entitlement trước
-khi hiển thị preview hoặc ghi dữ liệu.
+Theo mặc định, Kit phát hành dùng remote registry có xác thực. Channel được
+resolve theo thứ tự: `--channel` tường minh, rồi channel ghi trong install
+receipt của destination đã có, rồi `kit.channel`, rồi `stable`. `--channel`
+tường minh chỉ áp dụng cho request đó và không được lưu; nó không đổi các lần
+`ak kit init`, `ak kit refresh` hay `ak update` sau. Receipt mâu thuẫn tạo cảnh
+báo, chuyển sang `kit.channel` và không bao giờ bị ghi đè. Kit trả phí yêu cầu
+phiên CLI hợp lệ và entitlement trước khi hiển thị preview hoặc ghi dữ liệu.
 
 ```bash
 ak whoami
@@ -62,7 +63,8 @@ Trong script, hãy cung cấp một tên Kit có thể cài. Trên TTY tương t
 trống tên có thể mở wizard thiết lập; lần gọi từ script thiếu tên sẽ thất bại.
 
 Với ví dụ remote, hãy thay `<channel>` bằng kênh phát hành đang chọn trên header
-tài liệu. Nếu bỏ `--channel`, lệnh dùng `kit.channel` đã lưu khi có, nếu không thì `stable`.
+tài liệu. Nếu bỏ `--channel`, lệnh dùng channel trong receipt hiện có, rồi
+`kit.channel`, rồi `stable`.
 
 ## Tuỳ chọn của lệnh
 
@@ -70,14 +72,16 @@ tài liệu. Nếu bỏ `--channel`, lệnh dùng `kit.channel` đã lưu khi c�
 | --- | --- | --- |
 | `--beta` | `false` | Viết tắt của `--channel beta`. |
 | `--build-only` | `false` | Build vào thư mục cục bộ thay vì cài đặt. |
-| `--channel <channel>` | `stable`, hoặc `kit.channel` đã lưu | Chọn channel remote registry; giá trị tường minh được lưu lại. |
+| `--channel <channel>` | Channel trong receipt, rồi `kit.channel`, rồi `stable` | Chọn channel remote registry chỉ cho request này; giá trị không được lưu. |
 | `--exclude-skills <names>` | Trống | Cài toàn bộ Skill của Kit ngoại trừ tập tên phân tách bằng dấu phẩy. |
+| `--accept-risks <token>` | Trống | Cùng `--fresh`, chấp nhận đúng các rủi ro an toàn mà kế hoạch trước đã liệt kê, bằng token đã in ra. |
 | `--force` | `false` | Cho phép ghi đè đầu ra hiện có trong phạm vi vòng đời và snapshot. |
+| `--fresh` | `false` | Đặt lại một install target đã chọn về chỉ còn đầu ra của Kit sau khi xác nhận và có snapshot đã xác minh. Không dùng cùng `--force`, `--no-backup`, `--build-only` hoặc `--out`. |
 | `-g, --global` | `false` | Dùng thư mục user của adapter thay cho project hiện tại. |
 | `--kits-dir <dir>` | Trống | Chọn thư mục Kit cục bộ rõ ràng cho development, CI hoặc local build. |
 | `--local` | `false` | Dùng nguồn cục bộ đã chỉ định thay cho remote registry. |
 | `--no-backup` | `false` | Bỏ qua recovery snapshot trước khi cài và biện pháp bảo vệ liên quan khi tiếp quản Claude native-global. |
-| `--out <dir>` | Trống | Đặt thư mục gốc đầu ra cho route build hoặc export. |
+| `--out <dir>` | Trống | Đặt thư mục gốc đầu ra cho route build hoặc export. Trên Windows, đường dẫn drive-relative như `D:out` thoát với mã `2` trước mọi thao tác ghi; hãy đặt đường dẫn trong dấu nháy hoặc dùng dấu gạch chéo xuôi. |
 | `--registry-url <url>` | Biến môi trường hoặc mặc định của bản phát hành | Ghi đè URL gốc của AgentKit registry. |
 | `--remote` | `true` | Dùng remote registry có xác thực; không cần truyền rõ vì đây là mặc định. |
 | `--select-skills` | `false` | Chọn Skill của Kit bằng giao diện tương tác. |
@@ -162,7 +166,8 @@ hay `yes`, đều là từ chối.
   `--json`, `--no-interactive` và stdin không phải TTY sẽ bỏ qua prompt cài đặt
   và có thể tiếp tục ghi dữ liệu mà không cần `--yes`. Trong tự động hoá, hãy
   dùng `--yes` để thể hiện chủ đích rõ ràng; đừng xem việc không có prompt là
-  một chốt an toàn.
+  một chốt an toàn. Ngoại lệ là `--fresh`: lần chạy dạng script thiếu `--yes`
+  sẽ dừng với mã `3`.
 </Callout>
 
 Hiện tại, từ chối trên TTY thoát với mã `1`, không phải `3`. Route build và
@@ -196,6 +201,162 @@ Tệp không xác định và tệp do người dùng sửa được giữ nguy�
 phá huỷ hoặc ghi để chuyển mode, AgentKit thường tạo recovery snapshot. Không
 dùng `--no-backup` cho cài đặt thông thường.
 
+## Đặt lại một target với `--fresh`
+
+`ak kit init <kit> --fresh` đặt lại một install target đã chọn về chỉ còn đầu ra
+của Kit. Một target gồm một Kit, một runtime và một scope. Dùng lệnh này khi
+lifecycle root riêng của Kit đã tích tụ tệp tuỳ chỉnh hoặc tệp cũ mà refresh hay
+`--force` vẫn giữ lại. `ak kit install` nhận cùng cờ này.
+
+```bash
+# Xem kế hoạch; lần chạy dạng script dừng tại đây với mã 3.
+ak kit init engineer --fresh --target codex
+
+# Đặt lại sau khi đã xem kế hoạch.
+ak kit init engineer --fresh --target codex --yes
+```
+
+Quá trình đặt lại chạy theo thứ tự:
+
+1. Dựng kế hoạch chỉ đọc. Kế hoạch liệt kê reset root riêng của Kit, các tệp
+   hiện có ở đó, tệp tuỳ chỉnh hoặc chưa được ghi nhận sẽ bị xoá, tệp đã ghi
+   nhận có chỉnh sửa cục bộ sẽ bị bỏ (trong và ngoài reset root), link và tệp
+   đặc biệt được giữ, các runtime root dùng chung không bị đặt lại, và mọi rủi
+   ro an toàn.
+2. Hỏi đồng ý một lần (xem bên dưới).
+3. Dựng lại kế hoạch khi đang giữ khoá vòng đời. Nếu rủi ro an toàn đã thay đổi,
+   lệnh hỏi lại trên TTY hoặc dừng với mã `3` trong lần chạy dạng script.
+4. Snapshot mọi đường dẫn mà lần đặt lại có thể xoá hoặc ghi đè, rồi xác minh
+   từng snapshot. Snapshot xác minh thất bại sẽ được chụp lại một lần.
+5. Emit Kit.
+6. Quét các tệp còn sót trong reset root. Tệp đã thay đổi kể từ lúc dựng kế
+   hoạch được giữ lại. Tệp cũ đã ghi nhận của Kit này bị xoá kể cả khi đã bị
+   sửa, vì snapshot đã xác minh giữ nội dung của chúng.
+
+Những gì lần đặt lại không động tới:
+
+- Runtime root dùng chung, như `.claude` hoặc `~/.codex`, chỉ thay đổi qua các
+  tệp mà Kit này đã ghi nhận, giống như với `--force`.
+- Các Kit khác, các runtime khác và bản cài project hoặc global còn lại không bị
+  đặt lại.
+- Link, junction, reparse point và tệp đặc biệt trong reset root được giữ và
+  không bao giờ bị đi theo.
+- Lựa chọn Skill trước đó không được kế thừa. Toàn bộ Kit được cài trừ khi bạn
+  truyền `--skills`, `--exclude-skills` hoặc `--select-skills`.
+
+Với Codex, bảng `[agents.<slug>]` trỏ tới tệp Agent đã bị xoá sẽ được dọn, nên
+không còn mục `config_file` treo.
+
+### Đồng ý và rủi ro an toàn
+
+| Lần chạy | Kế hoạch không có rủi ro | Kế hoạch có rủi ro |
+| --- | --- | --- |
+| TTY | Một prompt `Reset this target? [y/N]`; `--yes` bỏ qua prompt. | Một prompt nêu tên các rủi ro, kể cả khi có `--yes`; `--yes --accept-risks <token>` bỏ qua prompt. |
+| Script, `--json` hoặc `--no-interactive` | `--yes` cho phép tiếp tục. Nếu thiếu, lệnh in kế hoạch và lệnh chạy lại chính xác, rồi thoát `3`. | Chỉ `--yes --accept-risks <token>` cho phép tiếp tục. Nếu không, lệnh in kế hoạch, risk token và lệnh chạy lại chính xác, rồi thoát `3`. |
+
+Riêng `--yes` không bao giờ chấp nhận rủi ro. Kế hoạch liệt kê một rủi ro cho
+mỗi kiểm tra mà nó không chứng minh được:
+
+- `unproven-ownership`: reset root đang có dữ liệu nhưng không có install
+  manifest, hoặc manifest không đọc được.
+- `other-kit-ownership`: install manifest của reset root ghi tên Kit khác.
+- `snapshot-unverified`: recovery snapshot xác minh thất bại hai lần. Không có
+  gì bị đặt lại cho tới khi bạn chấp nhận rủi ro này.
+
+Risk token bao trùm đúng loại rủi ro, đường dẫn và tệp của kế hoạch đó cho Kit
+và target đó. Với rủi ro `other-kit-ownership`, token còn bao trùm Kit sở hữu
+root, nên việc chấp nhận bản ghi của một Kit không bao giờ bao trùm bản ghi của
+Kit khác. Rủi ro, tệp hoặc Kit sở hữu mới sẽ đổi token. Nếu kế hoạch dưới khoá
+có ít rủi ro hơn những gì bạn đã chấp nhận, lần đặt lại vẫn tiếp tục. Token
+truyền cho kế hoạch không có rủi ro sẽ bị bỏ qua kèm thông báo. Token đã chấp nhận
+snapshot chưa xác minh sẽ tiếp tục chấp nhận điều đó cho target ấy, nên đừng lưu
+lại cho các lần chạy sau. `--accept-risks` mà không có `--fresh` thoát `2`.
+
+Với `--json`, lần chạy bị dừng ghi envelope có `kind=kit.init_fresh_plan` và
+`status: "confirmation-required"`. Data gồm `reason` (`not-confirmed`,
+`risks-not-accepted`, `risks-changed` hoặc `snapshot-unverified`),
+`resetRoots`, `notReset`, `unrecordedPaths`, `modifiedRecordedPaths`,
+`modifiedOutsidePaths`, `keptLinks`, `risks`, `riskToken`, `confirmWith` và
+`command`. Mỗi mục trong `risks` có `kind`, `path`, `detail`, `effect` và
+`files`, thêm `owner` với rủi ro `other-kit-ownership`. Đầu ra cho người dùng
+giới hạn mỗi danh sách đường dẫn ở 25 mục; kế hoạch JSON mang đầy đủ danh sách.
+
+### Điều chỉnh tự động
+
+- `pi`, `grok`, `omp` và `dsh` giữ đầu ra Kit và tệp runtime trong cùng một thư
+  mục, nên không có ranh giới chỉ thuộc Kit. Yêu cầu fresh ở đó chạy refresh
+  `--force` có snapshot thay thế, in một thông báo và giữ tệp tuỳ chỉnh.
+- Reset root đi qua link hoặc reparse point cũng chuyển sang refresh `--force`
+  có snapshot kèm thông báo.
+- Bản cài Claude Code dạng plugin được đặt lại tại chỗ ở plugin mode, kể cả khi
+  bỏ `--switch-to-plugin`.
+- Bản cài Codex vẫn dùng bố cục Skill cũ được migrate trước bằng refresh
+  `--force` có snapshot, rồi được đặt lại trong cùng lệnh.
+
+### Các trường hợp bị từ chối
+
+Các trường hợp sau thoát `2` trước khi lần đặt lại động tới bất cứ thứ gì:
+
+- `--fresh` cùng `--force`, `--no-backup`, `--build-only` hoặc `--out`.
+- Nhiều hơn một target.
+- Target chỉ để export như `portable`.
+
+Các trường hợp sau thoát `1` trước mọi thay đổi:
+
+- Đang chờ chuyển từ native sang plugin. Hoàn tất bằng
+  `ak kit init <kit> --switch-to-plugin`, rồi chạy `--fresh`.
+- Đang chờ một legacy migration transition. Chạy `ak migrate rollback` trước.
+- Bằng chứng ownership đã ghi nhận không đọc được.
+- Claude home global không thuộc AgentKit. Chạy `ak kit init <kit> --global` để
+  thiết lập ownership trước.
+- Ranh giới mơ hồ, như runtime root nằm trong reset root, hoặc reset root không
+  phải thư mục.
+- Không chụp được snapshot.
+
+Route project trỏ vào bản cài cấp người dùng, chẳng hạn thư mục project chính là
+thư mục home của bạn, thoát `6` trước khi kế hoạch được lập. Chạy lại với
+`--global` hoặc từ thư mục project khác.
+
+### Đầu ra khôi phục
+
+Sau khi đặt lại, đầu ra cho người dùng báo từng reset root cùng số tệp tuỳ chỉnh
+hoặc chưa ghi nhận và tệp cũ đã sửa bị xoá, từng root dùng chung không bị đặt
+lại, và từng snapshot trước khi đặt lại:
+
+```text
+[i] Fresh reset: <reset-root> now holds only engineer output (removed 3 custom/unrecorded and 1 modified stale file(s))
+[i] Pre-reset target saved (verified <id>). Roll back: <restore-command>
+```
+
+Snapshot ngoài phạm vi restore báo `Manual recovery data: <path>` thay cho lệnh
+restore. Snapshot chưa xác minh đã được chấp nhận được gắn nhãn
+`UNVERIFIED, may be incomplete`. Nếu không có gì để đặt lại, đầu ra nói rõ điều
+đó và không liệt kê snapshot.
+
+Với `--json`, `data.fresh` gồm `resetRoots`, `notReset`, `snapshots` (mỗi mục có
+`id`, `roots`, `verify_command`, và `restore_command` hoặc `manual_data_path`,
+thêm `unverified` khi đã được chấp nhận), `snapshotVerified`,
+`removedUnrecorded`, `removedStaleModified` và `reason`. Trường cũ
+`forceSnapshot` ở cấp trên chỉ nêu snapshot đã xác minh, nên nó trống khi
+snapshot duy nhất là snapshot chưa xác minh đã được chấp nhận. Nếu lần chạy thất bại
+sau khi đã chụp snapshot, lỗi nêu từng snapshot cùng cách xác minh và restore.
+
+Khi `ak kit init` chuyển tiếp sang CLI đã cập nhật trước, lệnh tiếp nối mang
+`--fresh` và mọi token `--accept-risks` đã chấp nhận, không bao giờ mang
+`--force`. Desktop, `ak update` và `ak doctor` không có fresh mode.
+
+### `--fresh` khác `--force` thế nào
+
+| | `--force` | `--fresh` |
+| --- | --- | --- |
+| Tệp tuỳ chỉnh hoặc chưa ghi nhận trong lifecycle root của Kit | Giữ lại | Xoá |
+| Tệp đã ghi nhận của Kit này có chỉnh sửa cục bộ | Chỉ ghi đè khi trùng đường dẫn; tệp cũ đã sửa được giữ | Bỏ chỉnh sửa; tệp cũ đã sửa bị xoá |
+| Recovery snapshot | Chụp trừ khi có `--no-backup` | Luôn chụp và xác minh; `--no-backup` bị từ chối |
+| Target | Một hoặc nhiều | Đúng một |
+| Đồng ý | Install preview; lần chạy dạng script có thể tiếp tục mà không cần `--yes` | Kế hoạch cùng một lần xác nhận; lần chạy dạng script cần `--yes` và mọi risk token |
+
+Hai cờ này loại trừ lẫn nhau.
+
 ## Đọc đầu ra dành cho người dùng và JSON
 
 Ở chế độ hiển thị cho người dùng, tiến trình, preview destination và prompt xác
@@ -227,7 +388,7 @@ và query string của URL được che, còn đường dẫn vẫn hiển thị
 | `0` | Route build hoặc cài đặt đã chọn hoàn tất. | Xác minh target, scope, mode, tệp và cảnh báo được báo cáo. |
 | `1` | Xảy ra lỗi runtime, kiểm tra dữ liệu, xác thực, quyền sử dụng, nguồn Kit, quá trình tạo đầu ra hoặc ghi dữ liệu; thao tác từ chối trên TTY hiện cũng dùng mã này. | Đọc lỗi và trường khôi phục trước khi thử lại. |
 | `2` | Cờ, argument hoặc tổ hợp cờ không hợp lệ. | Sửa route hoặc cờ lựa chọn. |
-| `3` | Lệnh bị ngắt hoặc huỷ qua đường xử lý huỷ dùng chung. | Kiểm tra trạng thái hiện tại và mọi đầu ra khôi phục trước khi thử lại. |
+| `3` | Lệnh bị ngắt hoặc huỷ qua đường xử lý huỷ dùng chung, hoặc lần đặt lại `--fresh` chưa chạy vì cần xác nhận hoặc cần chấp nhận các rủi ro đã liệt kê. | Kiểm tra trạng thái hiện tại và mọi đầu ra khôi phục trước khi thử lại. Với `--fresh`, xem kế hoạch rồi chạy lệnh đã in ra. |
 | `4` | Một thao tác vòng đời Kit khác đang giữ khoá thay đổi. | Đợi thao tác đó hoàn tất rồi thử lại sau vài giây. |
 | `5` | Không tìm thấy Kit trong thư mục Kit cục bộ đã chọn. | Kiểm tra tên Kit và nguồn cục bộ rõ ràng. |
 | `6` | Target đã tồn tại và không thể thay thế nếu thiếu `--force`, hoặc route project trỏ vào bản cài cấp người dùng. | Xác minh ownership và route; chỉ dùng `--force` sau khi xem lại phạm vi ghi đè. Với route cấp người dùng, chạy lại với `--global` hoặc từ thư mục project khác. |

@@ -25,10 +25,10 @@ Lệnh không nhận đối số theo vị trí trong cú pháp được công b
 | `--yes` | `false` | Apply plan được tạo trong chính lần gọi này. |
 
 Lệnh không có prompt TTY và không đọc stdin. `--no-interactive` không cấp quyền
-xoá. Khi thiếu `--yes`, lệnh in preview rồi thoát `2`.
+xoá. Khi thiếu `--yes`, lệnh in preview rồi thoát `3`.
 
 ```bash
-# Chỉ xem trước; dự kiến exit 2.
+# Chỉ xem trước; dự kiến exit 3.
 ak content-search delete --project <uuid> --json
 
 # Chủ động apply.
@@ -37,7 +37,8 @@ ak content-search delete --project <uuid> --yes --no-interactive --json
 
 ## Đọc preview
 
-JSON preview là object thô trên stdout:
+JSON preview là success envelope dùng chung với kind
+`content_search.delete_plan` trên stdout. Các field trong `data` là:
 
 ```text
 planId: token plan ngẫu nhiên của process hiện tại
@@ -50,8 +51,9 @@ createdAt: timestamp UTC
 
 Token preview chỉ tồn tại trong process hiện tại. Với `--yes`, cùng lần gọi kiểm
 tra lại `generation` rồi xoá `.db`, WAL, SHM, journal và lifecycle marker của
-project. JSON apply là `{"projectId":"<uuid>","deleted":"true"}`; `deleted`
-là string, không phải boolean. Đầu ra human là `deleted`.
+project. JSON apply là envelope `content_search.delete` có `data` là
+`{"projectId":"<uuid>","deleted":"true"}`; `deleted` là string, không phải
+boolean. Đầu ra human là `deleted`.
 
 <Callout type="warning">
   Apply không tạo backup hay recovery snapshot. Generation cũ sẽ bị từ chối,
@@ -68,10 +70,12 @@ provider, xác thực, entitlement hay network.
 | --- | --- |
 | `0` | Các tệp shard đã được xoá; sidecar đã vắng mặt cũng không gây lỗi cho bước xoá đã apply. |
 | `1` | Phân giải owner, UUID project, operational store, kiểm tra shard, generation hoặc xoá tệp thất bại. |
-| `2` | Chỉ preview vì thiếu `--yes`, hoặc giá trị flag không phân tích được. |
+| `2` | Giá trị flag không phân tích được. |
+| `3` | Chỉ preview: plan đã được in và chưa xoá gì. Chạy lại với `--yes` để apply. |
 
-Thiếu `--project` required hiện thoát `1`. JSON preview vẫn hợp lệ dù exit dự
-kiến là `2`; hãy kiểm tra cả stdout và process status.
+Thiếu `--project` required hiện thoát `1`. Preview là kết quả đã hoàn tất, không
+phải lỗi: plan nằm trên stdout và không có error envelope theo sau trên stderr,
+dù process thoát `3`. Hãy kiểm tra cả output và process status.
 
 ## Xác minh và khôi phục
 

@@ -1,11 +1,12 @@
 ---
 title: ak kit list-kits
-description: Inspect installable kits from an explicit local authoring source without registry or disk mutation.
+description: List the kits available from the remote catalog, or inspect an explicit local authoring source, without changing disk or install state.
 ---
 
-Use `ak kit list-kits` to inspect Kit metadata and export counts in a local Kits
-directory. This command is for local authoring, development, and CI discovery;
-it does not query the release registry.
+Use `ak kit list-kits` to see which Kits are available. By default it reads the
+remote catalog for your signed-in account. With an explicit local source, it
+reads Kit metadata and export counts from that directory instead, for authoring,
+development, and CI discovery.
 
 ## Syntax
 
@@ -19,18 +20,23 @@ The command accepts no positional arguments.
 
 Source resolution uses this order:
 
-1. `--kits-dir <dir>`
-2. `AGENTKIT_KITS_DIR`
-3. `./kits`
+1. `--kits-dir <dir>` selects a local Kits directory.
+2. `AGENTKIT_KITS_DIR` selects a local Kits directory.
+3. Otherwise, the remote catalog.
 
-The selected directory must be readable as a local Kit source. The command does
-not use authentication, entitlement, network access, verified cache, project
-scope, user scope, or runtime delivery mode.
+There is no implicit `./kits`: a `kits` folder in the current directory is not
+read unless you name it, and it is never treated as installed.
+
+The remote catalog needs a signed-in session for the configured registry
+(`ak login`). It resolves metadata only and does not download or install
+anything. A local source must be a readable directory; it uses no
+authentication, network access, project scope, user scope, or runtime delivery
+mode.
 
 ## Arguments
 
-This command accepts no positional arguments. Select the source with
-`--kits-dir` or the documented environment/default resolution.
+This command accepts no positional arguments. Select a local source with
+`--kits-dir` or `AGENTKIT_KITS_DIR`; otherwise the remote catalog is used.
 
 The command has no alias.
 
@@ -38,7 +44,7 @@ The command has no alias.
 
 | Option | Default | Effect |
 | --- | --- | --- |
-| `--kits-dir <dir>` | `AGENTKIT_KITS_DIR` or `./kits` | Select the local Kits directory. |
+| `--kits-dir <dir>` | `AGENTKIT_KITS_DIR`, else the remote catalog | Select a local Kits directory. Wins over `AGENTKIT_KITS_DIR`. |
 
 Shared flags are documented in [CLI conventions](../cli-conventions).
 `--yes` and `--no-interactive` do not change this read-only operation.
@@ -46,14 +52,14 @@ Shared flags are documented in [CLI conventions](../cli-conventions).
 ## Examples
 
 ```bash
-# Read ./kits.
+# List Kits from the remote catalog.
 ak kit list-kits
 
 # Read an explicit local authoring tree.
-ak kit list-kits --kits-dir ./fixtures/kits
+ak kit list-kits --kits-dir ./kits
 
 # Consume the versioned JSON envelope.
-ak kit list-kits --kits-dir ./kits --json | jq '.data.kits'
+ak kit list-kits --json | jq '.data.kits'
 ```
 
 ## Output and streams
@@ -61,11 +67,11 @@ ak kit list-kits --kits-dir ./kits --json | jq '.data.kits'
 Human output on stdout is a sorted table with these columns:
 
 ```text
-NAME VERSION TIER EXTENDS AGENTS SKILLS COMMANDS HOOKS RULES OUTPUT-STYLES SCRIPTS
+NAME VERSION REGISTRY TIER EXTENDS AGENTS SKILLS COMMANDS HOOKS RULES OUTPUT-STYLES SCRIPTS
 ```
 
-The internal composition Kit is excluded from the public list. If the selected
-source is empty, human mode writes `No kits found` to stderr and exits `0`.
+The internal composition Kit is excluded. If the selected source is empty,
+human mode writes `No kits found` to stderr and exits `0`.
 
 With `--json`, stdout contains:
 
@@ -73,38 +79,46 @@ With `--json`, stdout contains:
 schema_version: 1
 kind: kit.list
 data.kits: array
+data.warnings: optional array
 ```
 
-Each Kit object has `name`, `version`, `extends`, `tier`, and `counts`. The
-`counts` object has `agents`, `skills`, `commands`, `hooks`, `rules`,
-`output_styles`, and `scripts`. An empty source produces `data.kits=[]`.
+Each Kit object has `name`, `version`, `extends`, `tier`, `counts`,
+`registry_version`, and `source_metadata_known`. Counts and the source
+`version` are measured only when `source_metadata_known` is `true`, which is
+the case for a local source. Remote catalog rows carry `registry_version` and
+`tier`, have `source_metadata_known: false`, and print `unknown` for the source
+version. The `counts` object has `agents`, `skills`, `commands`, `hooks`,
+`rules`, `output_styles`, and `scripts`. An empty source produces
+`data.kits=[]`.
 
-If one discovered Kit fails to load, the command writes a warning for that Kit
-to stderr, skips it, and continues. JSON can therefore be valid and exit `0`
-while omitting a broken Kit; inspect stderr in CI.
+A local Kit that fails to load is skipped with a warning on stderr. In the
+remote catalog, a Kit that cannot be verified is skipped and the result adds a
+`Remote catalog is incomplete` warning. In both cases JSON can be valid and exit
+`0` while omitting a Kit, so inspect stderr and `data.warnings` in CI.
 
 ## Exit status
 
 | Exit | Meaning |
 | --- | --- |
-| `0` | The local source was listed, including an empty source or a source with individual skipped load errors. |
-| `1` | The selected source could not be opened or listed, or another runtime read error occurred. |
-| `2` | Cobra rejected flags or positional arguments. |
+| `0` | The source was listed, including an empty source or one with skipped Kits. |
+| `1` | The source could not be opened or listed, you are not signed in for the remote catalog, or no remote Kit could be resolved. |
+| `2` | Flags or positional arguments were invalid. |
 
-Command help reserves exit `5` for a missing Kits directory, but the current
-implementation returns an unclassified source error, so the process exits `1`.
-Do not branch on `5` for this command until runtime classification changes.
+Command help reserves exit `5` for an explicit local Kits directory that does
+not exist, but the current implementation returns an unclassified source error,
+so the process exits `1`. Do not branch on `5` for this command until runtime
+classification changes.
 
 ## Effects, safety, and limitations
 
-The command reads directory entries, `kit.yaml` files, inherited Kit metadata,
-and referenced exports to compute counts. It does not write files, spawn a
-runtime, contact a provider, or change authentication or cache state.
+A local source reads directory entries, `kit.yaml` files, inherited Kit
+metadata, and referenced exports to compute counts. The remote catalog reads
+registry metadata. Neither writes files, spawns a runtime, or changes
+authentication or cache state.
 
-This is not a licensed remote catalog. A Kit absent from the selected local
-directory is absent from the result even if your account can install it from the
-registry. Conversely, local visibility does not prove registry entitlement or
-that an install will succeed for a target runtime.
+Availability is not entitlement. A Kit listed in the remote catalog, or present
+in a local directory, does not prove your account can install it or that an
+install will succeed for a target runtime.
 
 ## Related commands
 

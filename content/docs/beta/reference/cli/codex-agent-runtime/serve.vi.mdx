@@ -21,7 +21,7 @@ Lệnh không nhận argument theo vị trí.
 
 | Cờ | Mặc định | Mô tả |
 | --- | --- | --- |
-| `--codex-home <dir>` | `CODEX_HOME` hoặc `~/.codex` | Chọn user agent dưới `<dir>/agents`. |
+| `--codex-home <dir>` | `CODEX_HOME` hoặc `~/.codex` | Chọn user agent dưới `<dir>/agents` và Codex config ghi nhận trust của project. |
 | `--plugin-root <dir>` | `AGENTKIT_PLUGIN_DIR` hoặc `~/.claude/plugins` | Chọn staged Kit agent discovery. |
 | `--list-only` | `false` | In discovery rồi thoát mà không mở MCP transport. |
 
@@ -35,11 +35,31 @@ ak codex-agent-runtime serve --list-only
 ```
 
 List-only output là plain text trên stdout kể cả với `--json`. Nó in Codex home,
-plugin root, số lượng, agent slug và Kit sở hữu nếu biết. Path và tên có thể
-nhạy cảm trong support output.
+plugin root, dòng `project agents:` khi tìm thấy thư mục project agent, số
+lượng, agent slug và nguồn gốc nếu biết: Kit sở hữu, hoặc `(project)` với
+project agent. Path và tên có thể nhạy cảm trong support output.
 
-Discovery scan filename `*.toml` hợp lệ. User agent ưu tiên hơn staged agent
-cùng slug; conflict giữa staged Kit resolve theo thứ tự tên Kit. Root thiếu được
+Discovery đọc ba nguồn:
+
+1. **Project agent.** `<dir>/.codex/agents/` gần nhất tại hoặc phía trên thư mục
+   làm việc, nơi Codex khởi chạy runtime. Việc tìm kiếm dừng ở repository root
+   (thư mục đầu tiên có `.git`), trước thư mục home của user và ở gốc
+   filesystem. Thư mục chỉ được phục vụ khi Codex config dưới Codex home đã chọn
+   đánh dấu project đó, hoặc repository root chứa nó, là trusted. AgentKit không
+   ghi trust này.
+2. **User agent** dưới `<codex-home>/agents/`.
+3. **Staged Kit agent** dưới `<plugin-root>/<kit>/.codex/agents/`.
+
+`project agents: <dir>` nghĩa là thư mục project được phục vụ.
+`project agents: skipped (<reason>)` nghĩa là đã tìm thấy nhưng không phục vụ,
+ví dụ vì project untrusted hoặc chưa được ghi nhận, thư mục `.codex` hoặc
+`agents` là symlink hoặc Windows junction, hoặc thư mục không đọc được; server
+ghi cùng lý do đó ra stderr khi khởi động. File TOML dạng link bên trong thư mục
+project bị bỏ qua.
+
+Discovery scan filename `*.toml` hợp lệ. Project agent thay thế user agent cùng
+slug, và server ghi chú việc thay thế này ra stderr. User agent ưu tiên hơn
+staged agent cùng slug; conflict giữa staged Kit resolve theo thứ tự tên Kit. Root thiếu được
 chấp nhận là rỗng. Root không đọc được trả `1`. Tệp agent riêng lẻ không đọc
 được vẫn xuất hiện với parsed policy rỗng, tức permissive.
 
