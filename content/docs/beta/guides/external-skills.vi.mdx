@@ -1,0 +1,126 @@
+---
+title: Skill bên ngoài
+description: Tìm, xem trước, cài, cập nhật và gỡ các Skill bên thứ ba từ hệ sinh thái Skills CLI mở bằng ak skills external.
+---
+
+`ak skills external` quản lý các Skill bên thứ ba từ hệ sinh thái Skills CLI mở
+([skills.sh](https://skills.sh)) cho Claude Code và Codex. AgentKit điều khiển
+CLI `skills` mà bạn cài riêng, nhưng tự stage và kiểm tra mọi nguồn, cho bạn
+xem kế hoạch, và ghi lại nguồn gốc của từng tệp đã cài. Các Skill của Kit và
+`ak skills install` không bị ảnh hưởng.
+
+## Cài Skills CLI trước
+
+AgentKit không bao giờ cài Skills CLI thay bạn. Hãy tự cài (cần Node.js 22.20
+trở lên):
+
+```bash
+npm install -g skills
+```
+
+AgentKit tìm `skills` trên `PATH`. Để dùng một bản cài cụ thể, đặt
+`AGENTKIT_SKILLS_CLI` thành path tuyệt đối của nó. AgentKit đã được kiểm chứng
+với Skills CLI 1.7.2; phiên bản cũ hơn vẫn chạy, kèm cảnh báo nên cập nhật nếu
+một lệnh thất bại. Chạy `ak skills external doctor` để kiểm tra thiết lập.
+
+## Các lệnh
+
+| Mục tiêu | Lệnh |
+| --- | --- |
+| Tìm trong registry skills.sh | `ak skills external find <query>` |
+| Xem một nguồn sẽ cài gì, mà không cài | `ak skills external inspect <source>` |
+| Xem trước và cài Skill từ một nguồn | `ak skills external add <source>` |
+| Liệt kê Skill bên ngoài và trạng thái drift | `ak skills external list` |
+| Xem trước và áp dụng cập nhật | `ak skills external update <name...>` hoặc `--all` |
+| Xem trước và gỡ Skill do AgentKit quản lý | `ak skills external remove <name...>` |
+| Chẩn đoán sự cố mà không thay đổi gì | `ak skills external doctor` |
+
+Một luồng điển hình là tìm, kiểm tra, rồi thêm:
+
+```bash
+ak skills external find pdf
+ak skills external inspect anthropics/skills@pdf
+ak skills external add anthropics/skills@pdf --target claude-code
+```
+
+### Flag vị trí cài
+
+`add`, `list`, `update` và `remove` nhận:
+
+- `--target claude-code|codex` — coding agent có thư mục skills được dùng.
+  `add` mặc định là `claude-code`; các lệnh khác lọc theo nó khi được truyền.
+- `--project` / `-p` (mặc định của `add`) hoặc `--global` / `-g` — thư mục
+  skills của project hoặc thư mục cấp người dùng. Hai flag này loại trừ nhau.
+- `--project-dir <path>` — project dùng thay cho thư mục hiện tại.
+
+### Các flag khác
+
+- `--yes` áp dụng kế hoạch `add`, `update` hoặc `remove` mà không hỏi.
+- `--json` in một JSON envelope có phiên bản cho script.
+- `--skill <name>` (lặp lại được) trên `add` và `inspect` chọn Skill từ một
+  nguồn chứa nhiều Skill.
+- `--allow-shadow` trên `add` chấp nhận một Skill cùng tên ở phạm vi còn lại.
+- `--allow-risky` trên `add` và `update` chấp nhận nội dung được đánh giá là rủi
+  ro. Script đi kèm vẫn không bao giờ được chạy.
+- `--no-telemetry` trên `find`, `inspect`, `add` và `update` tắt telemetry ẩn
+  danh của Skills CLI cho lần chạy đó. Kế hoạch cho biết telemetry đang bật hay
+  tắt.
+- `--owner <owner>` trên `find` giới hạn kết quả vào một GitHub owner, và
+  `--managed-only` trên `list` bỏ qua bước hỏi Skills CLI về các bản cài mà
+  AgentKit không quản lý.
+
+## Nguồn được hỗ trợ
+
+- Dạng rút gọn GitHub: `owner/repo`, `owner/repo@skill` hoặc `owner/repo/path`,
+  mỗi dạng có thể kèm `#ref` (branch, tag hoặc commit).
+- URL GitHub: `https://github.com/owner/repo`, hoặc URL dạng
+  `https://github.com/owner/repo/tree/<ref>/<path>`.
+- Một thư mục cục bộ, như `./my-skills`.
+
+Mọi giao thức khác, và mọi URL chứa credential, đều bị từ chối.
+
+## Cách AgentKit giữ bản cài an toàn
+
+- **Stage trước.** Mỗi nguồn được tải vào `~/.agentkit/external-skills/staging`,
+  không bao giờ vào thẳng thư mục skills, và nguồn GitHub được ghim vào một
+  commit. Bản staging bị xóa sau đó.
+- **Được kiểm tra.** Các Skill đã stage được kiểm tra path thoát ra ngoài, liên
+  kết, nội dung quá lớn hoặc ẩn, và tệp thực thi. AgentKit không bao giờ chạy
+  script đi kèm.
+- **Được xem trước.** `add`, `update` và `remove` hiện kế hoạch với đích cài,
+  commit đã ghim, mức rủi ro và các tệp thực thi. Không có gì thay đổi cho đến
+  khi bạn xác nhận ở prompt của terminal hoặc truyền `--yes`.
+- **Không bao giờ ghi đè.** Một thư mục đích đã tồn tại luôn chặn kế hoạch, và
+  tiền tố tên `ak-` và `ck-` được dành riêng cho Kit.
+- **Snapshot.** `update` và `remove` tạo snapshot `ak backups` trước khi thay
+  đổi bất cứ thứ gì.
+- **Giữ chỉnh sửa của bạn.** `update` bị chặn với Skill có tệp đã cài bị bạn
+  thay đổi. `remove` chỉ xóa các tệp vẫn khớp với những gì AgentKit đã cài; tệp
+  bạn thay đổi hoặc thêm vào được giữ lại và liệt kê.
+
+Nguồn gốc được ghi trong `~/.agentkit/external-skills/state.json`, tách biệt
+khỏi metadata của Kit, và chỉ bao gồm những gì AgentKit đã cài. `list` hiện mỗi
+Skill được quản lý là `ok`, `modified`, `missing` hoặc `broken`, cùng các Skill
+do Skills CLI tự cài với nhãn **not managed**; AgentKit không bao giờ thay đổi
+chúng.
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Thành công |
+| `1` | Thất bại, hoặc `doctor` tìm thấy ít nhất một lỗi |
+| `2` | Lỗi cách dùng, nguồn hoặc target không được hỗ trợ, hoặc tên dành riêng |
+| `3` | Đã hiện kế hoạch nhưng chưa áp dụng (không có `--yes`, hoặc bạn từ chối) |
+| `4` | Một thao tác lifecycle Kit khác đang giữ lock |
+| `5` | Chưa cài Skills CLI |
+| `6` | Kế hoạch bị chặn |
+
+## Trong ứng dụng desktop
+
+Trang Skills của Desktop có tab **Bên ngoài** (**External** trong giao diện
+tiếng Anh) với cùng quy trình: tìm trên skills.sh, kiểm tra một nguồn, xem trước
+việc thêm, cập nhật hoặc gỡ, rồi **Áp dụng** kế hoạch. Chọn coding agent và phạm
+vi cài trên tab, và dùng **Chẩn đoán** cho cùng các kiểm tra như `doctor`. Việc
+quản lý Skill bên ngoài ghi vào thư mục skills của runtime, nên web dashboard
+hiện các lệnh CLI thay cho những thao tác này.

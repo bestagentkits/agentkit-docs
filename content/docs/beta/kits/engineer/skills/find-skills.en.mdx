@@ -38,8 +38,9 @@ Before you start:
 - Complete [Onboarding](../../../getting-started/onboarding), and confirm
   Engineer Kit is installed for the runtime and scope you are using.
 - Describe one concrete task and its domain.
-- For external discovery, ensure the environment can run `npx` and access the
-  Skills registry.
+- For external discovery, install the Skills CLI yourself (`npm install -g
+  skills`, Node.js 22.20 or later) and allow network access to the Skills
+  registry. AgentKit never installs it.
 - Decide whether you only want recommendations or may also install a reviewed
   result.
 
@@ -80,8 +81,8 @@ The Skill has no mode flags. Your intent selects one of two paths:
 | Intent | Path | External effect |
 | --- | --- | --- |
 | Choose among installed AgentKit Skills | Reads the local domain-routing map and recommends one primary Skill | None beyond local reads |
-| Discover an external Skill | Runs `npx skills find <query>` and presents matching packages | May download or execute the Skills CLI and contact its registry |
-| Install an accepted result | Runs `npx skills add <owner/repo@skill> -g -y` after you choose to proceed | Writes a user-level Skill installation and skips the CLI's confirmation prompt |
+| Discover an external Skill | Runs `ak skills external find <query>` and presents matching packages | Runs the Skills CLI and contacts its registry |
+| Install an accepted result | Runs `ak skills external inspect <source>`, then `ak skills external add <source> --yes` after you choose to proceed | Writes a project-scope Skill (user scope only when you ask) and records its provenance |
 
 ## Describe the search clearly
 
@@ -110,13 +111,16 @@ can try a bounded synonym such as “deployment” after “deploy.”
    or codebase maps to `ak:excalidraw`, interactive system maps and editorial
    diagrams from typed JSON IR, Mermaid, or templates to `ak:diagram`, and
    non-templated publish-grade technical diagrams to `ak:tech-graph`.
-3. **The Skill searches externally when requested.** It runs a focused Skills
-   CLI query and reads the returned package identifiers and source pages.
+3. **The Skill searches externally when requested.** It runs a focused
+   `ak skills external find` query and reads the returned package identifiers
+   and source pages.
 4. **The Skill presents candidates.** Each recommendation includes what the
    Skill appears to do, the exact install command, and a page where you can
    inspect it.
-5. **The Skill waits for the install decision.** Installation happens only when
-   you choose to proceed.
+5. **The Skill reviews, then waits for the install decision.** It runs
+   `ak skills external inspect` and reports the pinned commit, risk level,
+   executable files, and upstream security notes. Installation happens only
+   when you choose to proceed.
 6. **The Skill falls back honestly.** If no suitable package appears, it offers
    general assistance or suggests creating a reusable Skill.
 
@@ -128,10 +132,13 @@ can try a bounded synonym such as “deployment” after “deploy.”
   security or quality review.
 </Callout>
 
-The documented install command uses `-g -y`: it writes at user scope and skips
-the Skills CLI confirmation. The assistant should use it only after you accept
-the exact package and scope. A search request alone does not authorize an
-install, update, or execution of the discovered Skill.
+Without `--yes`, `ak skills external add` only prints the plan and exits `3`.
+The assistant re-runs it with `--yes` only after you accept the exact package,
+runtime, and scope. Project scope is the default; `--global` is used only for an
+explicit user-wide install. A blocked plan (exit `6`) is explained, not worked
+around. A search request alone does not authorize an install, update, or
+execution of the discovered Skill. See [External Skills](../../../guides/external-skills)
+for the safety checks AgentKit applies.
 
 External search and installation may use network access and run package-manager
 code. Do not include credentials, private source, or unrelated workspace
@@ -159,7 +166,7 @@ task before trusting it with broader access.
 | --- | --- |
 | Results are too broad | Add the framework, task, and expected output to the query. |
 | Local routing suggests several Skills | Choose the most specific primary owner, then use other Skills only for distinct follow-up work. |
-| `npx skills find` is unavailable | Check Node, npm, network, and tool policy, or continue with installed AgentKit routing only. |
+| The Skills CLI is missing (exit `5`) | Install it with `npm install -g skills`, check network and tool policy, or continue with installed AgentKit routing only. |
 | A package looks relevant but untrusted | Inspect its source and instructions; do not install until the trust boundary is acceptable. |
 | No suitable Skill is found | Use the assistant's general capabilities or create a new Skill for a recurring workflow. |
 | The installed Skill is not recognized | Restart the runtime, confirm the install scope, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
@@ -174,7 +181,7 @@ runtime discovery differences.
   provide.
 - The Skill does not independently certify package security, maintenance, or
   compatibility.
-- External installation uses the Skills CLI rather than AgentKit's Kit
-  ownership lifecycle.
+- External installation goes through `ak skills external`, which records
+  provenance separately from AgentKit's Kit ownership lifecycle.
 - Cursor slash invocation is user-verified, but broader CLI and permission
   parity is not established.
