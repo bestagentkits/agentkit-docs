@@ -1,6 +1,6 @@
 ---
 title: ak orchestrate
-description: Coordinate and inspect agent jobs. External process supervision is Darwin-only; observation and runtime discovery do not claim process-control support.
+description: Coordinate and inspect agent jobs. External CLI process supervision requires Darwin; the plan engine, internal dispatch, and evidence reads work on every host.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
@@ -13,13 +13,18 @@ This is the process-lifecycle and observation layer that the `/ak:orchestrate`
 skill delegates to when supervising CLI job graphs.
 
 <Callout type="warning">
-  External process supervision in `ak orchestrate` v1 supports **Darwin only**
-  (macOS). `start`, `resume`, and `stop` return exit code `6` on every other
-  GOOS. Plan commands that spawn CLI jobs require Darwin for that dispatch;
-  failures from those commands map to exit code `1`, not `6`. Historical
-  observation (`events`, `output`, `diagnose`) and runtime discovery (`probe`)
-  do not claim process-control support. Callers on Linux or Windows should not
-  treat those read paths as proof that jobs can be supervised on that host.
+  External CLI process supervision in `ak orchestrate` v1 requires **Darwin**
+  (macOS). On Linux, Windows, and other hosts, `start`, `resume`, `status`, and
+  `stop` fail closed with `unsupported platform` (exit code `6`). The plan
+  engine (`prepare`, `advance`, `accept`, `plan-status`) and evidence reads
+  (`probe`, `events`, `output`, `diagnose`) work on every host, and
+  `runtime: internal` jobs dispatch when the live harness qualifies an agent.
+  CLI jobs and declared `verification:` commands in a plan also need Darwin;
+  failures from those plan commands map to exit code `1`, not `6`. On a
+  non-Darwin host, route jobs to qualified internal agents, omit
+  `verification:`, run descriptive `checks:` from the coordinator before
+  `accept`, and block or move to a Darwin host any job that needs a CLI runtime
+  or supervised checks. Never bypass the gate.
 </Callout>
 
 ## Usage
