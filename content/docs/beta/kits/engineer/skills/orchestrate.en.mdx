@@ -144,9 +144,14 @@ floors, the job blocks rather than silently weakening them.
    Linux, Windows, and other hosts the plan engine and in-session
    `runtime: internal` dispatch still work: the Skill routes jobs to internal
    Agents qualified in the live harness, omits `verification:`, and runs the
-   descriptive `checks:` from the coordinator before `accept`. A job that
-   needs a CLI runtime or supervised checks is blocked or moved to a Darwin
-   host; the gate is never bypassed.
+   descriptive `checks:` from the coordinator before `accept`, writing their
+   results to a report file listed in the job's `outputs` so the receipt
+   hashes it; those checks have no engine deadline. A job that needs a CLI
+   runtime or supervised checks is blocked or moved to a Darwin host; the gate
+   is never bypassed. If a spec with CLI jobs or `verification:` was already
+   prepared on such a host, the Skill does not retry: it reports those jobs
+   blocked and prepares a corrected spec in a new run directory, or continues
+   on a Darwin host.
 8. **The Skill runs an arbiter.** A separate judgment route checks expected
    outputs, contradictions, safety gaps, failed checks, unsupported claims, and
    unresolved questions.
@@ -237,7 +242,11 @@ Compare `ak:team` for live multi-session collaboration, or continue with the
 - Orchestrate is not macOS-only. On Darwin, CLI process supervision, internal
   dispatch, and declared `verification:` commands are all available. On Linux,
   Windows, and other hosts, the plan engine (`prepare`, `advance`, `accept`,
-  `plan-status`) and evidence reads (`probe`, `events`, `output`, `diagnose`)
-  work, and `runtime: internal` jobs dispatch when the live harness qualifies
-  an Agent. CLI jobs and declared `verification:` commands fail closed with
-  `unsupported platform`; discovery never implies lifecycle support.
+  `plan-status`) and `probe` work, and `runtime: internal` jobs dispatch when
+  the live harness qualifies an Agent. CLI jobs and declared `verification:`
+  commands fail closed with `unsupported platform`: a CLI job in `advance`
+  stays `uncertain`, and a job with `verification:` stays `awaiting-accept`.
+  `events`, `output`, and `diagnose` are not gated, but no supervisor run
+  exists to read there; an internal plan's evidence is the run directory's
+  `state.json`, `metrics.jsonl`, receipts, and artifacts. Discovery never
+  implies lifecycle support.

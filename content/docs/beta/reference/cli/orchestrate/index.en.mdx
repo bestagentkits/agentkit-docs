@@ -1,6 +1,6 @@
 ---
 title: ak orchestrate
-description: Coordinate and inspect agent jobs. External CLI process supervision requires Darwin; the plan engine, internal dispatch, and evidence reads work on every host.
+description: Coordinate and inspect agent jobs. External CLI process supervision requires Darwin; the plan engine, probe, and internal dispatch work on every host.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
@@ -16,15 +16,22 @@ skill delegates to when supervising CLI job graphs.
   External CLI process supervision in `ak orchestrate` v1 requires **Darwin**
   (macOS). On Linux, Windows, and other hosts, `start`, `resume`, `status`, and
   `stop` fail closed with `unsupported platform` (exit code `6`). The plan
-  engine (`prepare`, `advance`, `accept`, `plan-status`) and evidence reads
-  (`probe`, `events`, `output`, `diagnose`) work on every host, and
-  `runtime: internal` jobs dispatch when the live harness qualifies an agent.
-  CLI jobs and declared `verification:` commands in a plan also need Darwin;
-  failures from those plan commands map to exit code `1`, not `6`. On a
-  non-Darwin host, route jobs to qualified internal agents, omit
-  `verification:`, run descriptive `checks:` from the coordinator before
-  `accept`, and block or move to a Darwin host any job that needs a CLI runtime
-  or supervised checks. Never bypass the gate.
+  engine (`prepare`, `advance`, `accept`, `plan-status`) and `probe` work on
+  every host, and `runtime: internal` jobs dispatch when the live harness
+  qualifies an agent. CLI jobs and declared `verification:` commands in a plan
+  also need Darwin; failures from those plan commands map to exit code `1`,
+  not `6`. Elsewhere, `advance` leaves a CLI job `uncertain` and a job with
+  `verification:` stays `awaiting-accept`. `events`, `output`, and `diagnose`
+  are not gated, but no supervisor run exists to read; an internal plan's
+  evidence is the run directory's `state.json`, `metrics.jsonl`, receipts, and
+  artifacts. On a non-Darwin host, route jobs to qualified internal agents,
+  omit `verification:`, run descriptive `checks:` from the coordinator before
+  `accept` and write their results to a report file listed in the job's
+  `outputs` (they have no engine deadline), and block or move to a Darwin host
+  any job that needs a CLI runtime or supervised checks. Never bypass the
+  gate. If such a spec was already prepared, do not retry those jobs: report
+  them blocked and prepare a corrected spec in a new run directory, or continue
+  on a Darwin host.
 </Callout>
 
 ## Usage

@@ -1,6 +1,6 @@
 ---
 title: ak orchestrate
-description: Điều phối và kiểm tra job agent. Giám sát process CLI bên ngoài yêu cầu Darwin; plan engine, dispatch nội bộ và các lệnh đọc evidence hoạt động trên mọi host.
+description: Điều phối và kiểm tra job agent. Giám sát process CLI bên ngoài yêu cầu Darwin; plan engine, probe và dispatch nội bộ hoạt động trên mọi host.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
@@ -16,15 +16,21 @@ tới khi giám sát job graph CLI.
   Giám sát process CLI bên ngoài trong `ak orchestrate` v1 yêu cầu **Darwin**
   (macOS). Trên Linux, Windows và host khác, `start`, `resume`, `status` và
   `stop` fail closed với `unsupported platform` (mã thoát `6`). Plan engine
-  (`prepare`, `advance`, `accept`, `plan-status`) cùng các lệnh đọc evidence
-  (`probe`, `events`, `output`, `diagnose`) hoạt động trên mọi host, và job
-  `runtime: internal` được dispatch khi live harness qualify một agent. Job CLI
-  và lệnh `verification:` đã khai báo trong plan cũng cần Darwin; lỗi từ các
-  lệnh plan đó map sang mã thoát `1`, không phải `6`. Trên host không phải
-  Darwin, route job tới agent nội bộ đã qualify, bỏ `verification:`, chạy
-  `checks:` mô tả từ coordinator trước `accept`, và block hoặc chuyển sang host
-  Darwin mọi job cần CLI runtime hay supervised check. Không bao giờ bypass
-  gate.
+  (`prepare`, `advance`, `accept`, `plan-status`) cùng `probe` hoạt động trên
+  mọi host, và job `runtime: internal` được dispatch khi live harness qualify
+  một agent. Job CLI và lệnh `verification:` đã khai báo trong plan cũng cần
+  Darwin; lỗi từ các lệnh plan đó map sang mã thoát `1`, không phải `6`. Ở host
+  khác, `advance` để job CLI ở lại `uncertain` và job có `verification:` ở lại
+  `awaiting-accept`. `events`, `output` và `diagnose` không bị chặn, nhưng không
+  có supervisor run nào để đọc; evidence của plan nội bộ là `state.json`,
+  `metrics.jsonl`, receipt và artifact trong run directory. Trên host không
+  phải Darwin, route job tới agent nội bộ đã qualify, bỏ `verification:`, chạy
+  `checks:` mô tả từ coordinator trước `accept` và ghi kết quả vào file report
+  nằm trong `outputs` của job (các check này không có deadline của engine), và
+  block hoặc chuyển sang host Darwin mọi job cần CLI runtime hay supervised
+  check. Không bao giờ bypass gate. Nếu spec như vậy đã được prepare, không
+  retry các job đó: báo chúng là blocked rồi prepare spec đã sửa trong run
+  directory mới, hoặc tiếp tục trên host Darwin.
 </Callout>
 
 ## Cách dùng
