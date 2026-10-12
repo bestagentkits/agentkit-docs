@@ -54,6 +54,30 @@ Trước khi bắt đầu:
 
 Runtime gọi Skill không tự động là runtime được chọn cho mọi job.
 
+## Kiểm tra hỗ trợ nền tảng
+
+`ak:orchestrate` không chỉ dành cho macOS. Chỉ việc giám sát process bên ngoài
+bởi `ak orchestrate` mới yêu cầu Darwin.
+
+| Capability | Darwin | Linux, Windows, nền tảng khác |
+| --- | --- | --- |
+| `probe`, `prepare`, `advance`, `accept`, `plan-status` | Có | Có |
+| `events`, `output`, `diagnose` | Có | Có, nhưng chỉ cho run được ghi trên host có giám sát |
+| Job `runtime: internal` (in-session subagent) | Có, khi live harness đủ điều kiện | Có, khi live harness đủ điều kiện |
+| Job CLI và Pi được `ak orchestrate` giám sát | Có | Không: `advance` báo nền tảng không được hỗ trợ và job ở trạng thái `uncertain` |
+| Check `verification:` thực thi được trong job spec | Có | Không: attempt ở trạng thái `awaiting-accept` và không thể phục hồi trên host đó |
+| `start`, `status`, `resume`, `stop` cho supervisor run | Có | Không: help của từng lệnh nêu exit code cho nền tảng không được hỗ trợ |
+
+Trên host không phải Darwin, Skill route job đủ điều kiện qua
+`runtime: internal`. Job cần process CLI hoặc Pi được giám sát được giữ ngoài
+spec đã prepare và được báo blocked kèm lý do nền tảng. `verification:` do bạn
+hoặc spec được cung cấp khai báo là acceptance constraint: job đó bị block, không
+bao giờ được chuyển đổi. Chỉ trong spec do Skill tự soạn, Skill mới liệt kê check
+command trong `checks:`, chạy chúng trong harness và ghi nhận là
+harness-attested. Skill không bao giờ bypass supervision gate, launch process
+không được giám sát để thay thế, hay advance lại job đã bị kẹt ở gate đó. Khi
+cũng không có in-session Agent nào đủ điều kiện, lần chạy block và nêu lý do.
+
 ## Chạy Skill
 
 <Tabs items={['Claude Code', 'Cursor', 'Codex']}>
@@ -138,9 +162,9 @@ thay vì âm thầm hạ thấp yêu cầu.
    chồng lấn.
 7. **Skill capture durable evidence.** State transition, bounded output,
    artifact, error, duration và usage được báo đáng tin vẫn sẵn sàng cho
-   diagnosis cùng resume. Giám sát process của supervisor yêu cầu Darwin;
-   discovery và quan sát lịch sử không suy ra lifecycle tương đương trên host
-   khác.
+   diagnosis cùng resume. Process CLI và Pi được giám sát yêu cầu Darwin; trên
+   host khác, internal job đủ điều kiện tiếp tục qua cùng vòng `prepare`,
+   `advance` và `accept`, như mô tả trong phần Kiểm tra hỗ trợ nền tảng ở trên.
 8. **Skill chạy arbiter.** Judgment route riêng kiểm tra expected output,
    contradiction, safety gap, failed check, unsupported claim và unresolved
    question.
@@ -226,4 +250,7 @@ So sánh `ak:team` cho live multi-session collaboration, hoặc tiếp tục v�
   riêng.
 - Usage cùng cost chỉ xuất hiện khi harness đã chọn báo đáng tin.
 - Skill điều phối runtime hiện có; Skill không tạo daemon, dashboard, account
-  pool hay provider adapter. Giám sát process của `ak orchestrate` yêu cầu Darwin.
+  pool hay provider adapter.
+- Job CLI và Pi được giám sát, check `verification:` thực thi được và các lệnh
+  supervisor `start`, `status`, `resume`, `stop` yêu cầu Darwin. Host khác chạy
+  job `runtime: internal` đủ điều kiện và block phần còn lại.
