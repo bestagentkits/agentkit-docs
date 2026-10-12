@@ -405,12 +405,19 @@ than adopting whatever happens to exist at the destination.
 | Shared | More than one installed Kit owns the same matching path | Preserved until every owner releases it |
 
 Symlinks, unsafe path transitions, and other ambiguous filesystem state normally
-fail closed or remain preserved. The bounded exception is a Codex `hooks` leaf
-that points exactly to the resolved user's canonical `~/.codex/hooks`, whether
-through a POSIX symlink or a Windows directory junction; AgentKit uses that
-canonical identity for the complete Hook lifecycle. Linked parents and other
-targets still fail closed. Ownership evidence qualifies cleanup; it never means deleting
-an entire `.claude`, `.codex`, `.grok`, or user runtime directory.
+fail closed or remain preserved. Codex has two distinct bounded link exceptions:
+
+- A `hooks` directory leaf may point exactly to the resolved user's canonical
+  `~/.codex/hooks`, through a POSIX symlink or a Windows directory junction.
+  AgentKit uses that canonical identity for the complete Hook lifecycle;
+  other Hooks-directory targets still fail closed.
+- The final `config.toml` leaf may be a symlink to a regular file. Managed writes
+  go through to that target; if apply fails, rollback restores the target's
+  previous bytes and retains the link. Nonregular targets are refused.
+
+Linked parents remain refused in both cases; these exceptions do not permit
+arbitrary linked paths. Ownership evidence qualifies cleanup; it never means
+deleting an entire `.claude`, `.codex`, `.grok`, or user runtime directory.
 
 ## Refresh an installed kit
 
