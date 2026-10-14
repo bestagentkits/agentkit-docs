@@ -33,14 +33,20 @@ does not prompt, so `--yes` and `--no-interactive` do not change it. There is no
 
 ## Key and value validation
 
-Five key shapes are accepted:
+These key shapes are accepted:
 
 - `hooks.<name>` — `<name>` must be a lowercase kebab-case Hook script basename
   matching `^[a-z0-9]+(?:-[a-z0-9]+)*$` and cannot contain another dot.
 - `journal.auto` — the exact literal, no nested keys under `journal`.
 - `worktree.root` — the exact literal, no nested keys under `worktree`.
-- `agent_models.<runtime>.<tier>` — `<runtime>` is the closed set `cursor`, and
-  `<tier>` is one of `inherit`, `sonnet`, `opus`, `fable`, or `haiku`.
+- `agent_models.<runtime>.<tier>` — `<runtime>` is one of `claude-code`,
+  `codex`, `cursor`, `omp`, or `pi`, and `<tier>` is one of `inherit`,
+  `sonnet`, `opus`, `fable`, or `haiku`.
+- `agent_models.<runtime>.agents.<agent>.<field>` — pins one Agent, named in
+  kebab-case; `<field>` is `model`, and also `reasoning_effort` on `codex` and
+  `omp`.
+- `agent_models.omp.roles.<role>.<field>` — binds an OMP role to a model;
+  `<field>` is `model` or `reasoning_effort`.
 - `semantic_decision.<leaf>` — `<leaf>` is `enabled`, `provider`, `model`,
   `timeout_ms`, or `consumers.<consumer>`, where `<consumer>` is
   `domain-routing`, `fix-complexity`, `orchestration-risk`,
@@ -51,10 +57,12 @@ For `hooks.<name>` and `journal.auto` the value must be the exact lowercase
 literal `true` or `false`. For `worktree.root` the value is a filesystem path;
 project scope only accepts a relative path (resolved against the project root),
 while user scope accepts either a relative path (also resolved against the
-project root) or an absolute path. For `agent_models.<runtime>.<tier>` the value
-is the model ID to emit for that tier: a single non-empty token whose shape is
+project root) or an absolute path. For an `agent_models` tier or `model` key
+the value is the model ID to emit: a single non-empty token whose shape is
 checked, never whether a catalog entry with that ID exists. A runtime or tier
-you leave unauthored keeps that adapter's built-in catalog default.
+you leave unauthored keeps that adapter's built-in catalog default. See
+[Choosing subagent models](../../../../guides/choosing-subagent-models#config-keys) for precedence, OMP role
+aliases, and `ak agents model`, which writes the same keys.
 
 ```bash
 ak config prefs set hooks.simplify-gate false
@@ -63,17 +71,19 @@ ak config prefs set journal.auto false
 ak config prefs set worktree.root /Volumes/Portable/agentkit-worktrees
 ak config prefs set worktree.root ../my-app-worktrees --scope project
 ak config prefs set agent_models.cursor.sonnet claude-sonnet-4-6
+ak config prefs set agent_models.claude-code.agents.kongming.model opus
 ak config prefs set semantic_decision.provider typesafe --scope user
 ak config prefs set semantic_decision.enabled true --scope user
 ```
 
 Keys such as `keys.anthropic`, `api.token`, `telemetry.enabled`,
 `hooks.Bad-Name`, `hooks.a.b`, any `journal.<other>`, any `worktree.<other>`,
-any `agent_models.<runtime>` other than `cursor`, any unrecognized
-`agent_models.<runtime>.<tier>`, and any `semantic_decision` leaf not listed
+any `agent_models.<runtime>` outside that runtime set, any unrecognized
+tier, Agent field, or OMP role, and any `semantic_decision` leaf not listed
 above (such as `semantic_decision.api_key`) are rejected before a preference write. This
 allowlist prevents the command from being used as a general secret or config
-editor.
+editor. A capability-gated runtime, `grok` or `dsh`, is rejected with its
+reason; run with `--verbose` or `--json` to see it.
 
 For a Hook toggle, `false` lets a Hook that honors this preference exit early
 on its next run; `true` records the opposite preference. Harness registration
