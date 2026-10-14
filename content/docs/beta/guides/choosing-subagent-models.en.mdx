@@ -1,0 +1,246 @@
+---
+title: Choosing subagent models
+description: Pin, inherit, reset, adopt, and reapply the model each installed AgentKit Agent runs on, per runtime and scope, with choices that survive updates.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Each Kit Agent names a runtime-neutral capability tier (`opus`, `haiku`,
+`fable`, `sonnet`, or `inherit`), and each runtime adapter maps that tier to a
+model it understands. `ak agents model` lets you replace that choice for one
+Agent, and `agent_models` config lets you remap a whole tier.
+
+Your choice lives in AgentKit config, not only in the generated Agent file.
+Every install, `ak update`, and `ak kit refresh` resolves the model from config
+again, so an override survives updates, refreshes, and reinstalls instead of
+being overwritten by the Kit default.
+
+For the default mapping of each Kit Agent on each runtime, see
+[Agent models across runtimes](./agent-models).
+
+## Commands at a glance
+
+| Command | What it does |
+| --- | --- |
+| `ak agents model list` | List installed Agents with the model in the file, the model config resolves to, and a status |
+| `ak agents model get <agent>` | Show one Agent's model layer by layer: Kit default, adapter default, user and project config, AgentKit's recorded choice, and the runtime file |
+| `ak agents model explain <agent>` | Walk the precedence chain, mark the layer that decides, and say what to do about a pending or drifted file |
+| `ak agents model set <agent>` | Pin a model (and, on Codex and OMP, a reasoning effort) in config, then apply it |
+| `ak agents model inherit <agent>` | Run the Agent on the parent session's model |
+| `ak agents model reset <agent>` | Remove the Agent's override from one scope so the next layer decides |
+| `ak agents model adopt <agent>` | Keep a model edited directly in the runtime by recording it in config |
+| `ak agents model apply [agent]` | Write the configured model into installed Agent files |
+
+Every subcommand takes `--runtime` (`claude-code`, `codex`, `cursor`, `omp`,
+or `pi`) and `--project <dir>` to select a project other than the current
+directory. `list` and `apply` read every runtime when `--runtime` is omitted.
+`--json` emits machine-readable output. Run `ak agents model <command> --help`
+for the full flags and exit codes.
+
+### Examples
+
+```bash
+# See every installed Agent and its status.
+ak agents model list
+
+# Put kongming on Opus in Claude Code.
+ak agents model set kongming --runtime claude-code --model opus
+
+# Codex model and reasoning effort, for this project only.
+ak agents model set kongming --runtime codex --model gpt-5.5 --effort high --scope project
+
+# OMP: point an Agent at an OMP role alias.
+ak agents model set planner --runtime omp --model @plan
+
+# Pi: pin a provider/model ID.
+ak agents model set debugger --runtime pi --model anthropic/claude-sonnet-4-5
+
+# Let a Cursor Agent run on the parent session's model.
+ak agents model inherit code-reviewer --runtime cursor
+
+# Drop the project override and fall back to the next layer.
+ak agents model reset kongming --runtime codex --scope project
+
+# Ask which layer decides, and why.
+ak agents model explain kongming --runtime claude-code
+```
+
+`set` also accepts `--model inherit`. `ak agents model` changes one Agent at a
+time; to remap a whole tier, use [config keys](#config-keys).
+
+`set`, `inherit`, `reset`, and `adopt` back up the config file they change
+before writing, then update every installed file of the Agent whose model
+AgentKit still owns. A file whose model was edited in the runtime is left alone
+and reported; see [Status and drift](#status-and-drift).
+
+Setting a model for an Agent that is not installed yet still writes config,
+with a warning; the value applies when a Kit installs that Agent.
+
+## Scopes
+
+`--scope` selects which config file a command writes:
+
+- `user` (default) writes your AgentKit home config, normally
+  `~/.agentkit/config.yaml`.
+- `project` writes `.agentkit/config.yaml` in the project.
+
+A project install reads both files. A global install reads **user config
+only**; project config never reaches a shared global install. If an Agent is
+installed globally, a `--scope project` override does not change it.
+
+## Precedence
+
+From highest to lowest:
+
+1. Project per-Agent override
+2. User per-Agent override
+3. Project tier override
+4. User tier override
+5. Kit frontmatter and adapter default
+
+The two config files are merged field by field, so a project can set only
+`reasoning_effort` for an Agent and keep the user's `model` for it.
+`ak agents model explain <agent>` shows which layer decides each installed file.
+
+## Status and drift
+
+`list` reports one status per installed Agent file:
+
+| Status | Meaning |
+| --- | --- |
+| `in-sync` | The file carries the model config resolves to |
+| `pending` | Config changed since AgentKit last wrote the file; the next refresh or `apply` updates it without asking |
+| `drift` | The model was edited directly in the runtime file; refreshes keep that edit |
+| `not-materialized` | The file is missing or has no model AgentKit can read |
+
+AgentKit records which model it chose for each file. When you edit a model
+directly in a runtime Agent file, a later refresh keeps your edited model,
+still updates the rest of the file (instructions, description), warns, and
+reports the file as drift. Settle drift in one of two ways:
+
+- **Keep the runtime edit:** `ak agents model adopt <agent> --runtime <runtime>`
+  records the file's current model in config, so refreshes stop reporting it.
+  Choose the scope the install actually reads: a global install reads only user
+  config, and a project config that pins the Agent outranks a user-scope adopt.
+  If the chosen scope reaches none of the files, `adopt` refuses and leaves
+  config unchanged.
+- **Replace the runtime edit:** `ak agents model apply` writes the configured
+  model. Pending files are updated directly; drifted files are replaced only
+  with confirmation, and each is backed up first. In a terminal, `apply` asks.
+  In scripts and CI, pass `--yes`; without confirmation nothing is written and
+  `--json` output names the files under `need_confirmation`.
+
+```bash
+ak agents model adopt kongming --runtime codex
+ak agents model apply kongming --runtime codex --yes
+```
+
+Codex rewrites its role files on every refresh: only the kept model fields
+survive, and other edits to a Codex role file are replaced. On Claude Code,
+Cursor, and OMP, a file edited beyond its model is left alone.
+
+## Effective model certainty
+
+`get` and `explain` report the effective model with a certainty:
+
+- `derived`: the runtime file names the model the runtime runs.
+- `unknown`: the runtime decides. This applies when the Agent inherits the
+  parent session's model, when no readable file exists, when the runtime can
+  override the file through a setting AgentKit does not read (OMP and Pi), and
+  for a directly edited Claude Code plugin Agent until `ak kit refresh`
+  re-activates the plugin, because Claude Code runs plugin Agents from its own
+  plugin cache.
+
+When the certainty is `unknown`, confirm the model the running Agent reports.
+
+## Runtime support
+
+| Runtime | Status | Limitation |
+| --- | --- | --- |
+| Claude Code | supported | None. Accepts aliases such as `opus` and full model IDs. |
+| Codex | supported | None. A tier override replaces the model and keeps the Agent's pinned reasoning effort; set `--effort` if the new model does not accept it. |
+| Cursor | supported | None. Model IDs are not provider-qualified. |
+| OMP | supported with limitations | OMP resolves an `@role` alias through its own `modelRoles`, and its `task.agentModelOverrides` and Agent Hub settings outrank Agent frontmatter. AgentKit neither writes nor reads them, so the effective model is `unknown`. |
+| Pi | supported with limitations | Only AgentKit's agentkit-agent runner passes the `.pi/agents` model to the child `pi`. If another extension, such as pi-subagents, registered the Agent tool first, that extension decides the model. Pi has no reasoning effort field. |
+| Grok Build | capability-gated | No verified per-Agent model field. Grok's subagent settings live in your own `~/.grok/config.toml`, which AgentKit does not write. |
+| DSH | capability-gated | No markdown Agent surface; subagent models follow DSH's own provider configuration. |
+
+Runtimes not listed, such as Antigravity (`agy`), are not rated yet.
+
+A capability-gated runtime is never a silent no-op: `ak agents model` and
+`ak config prefs set` reject it with the reason, and an install or refresh warns
+once about any `agent_models` keys you authored for it by hand.
+`ak config prefs unset agent_models.<runtime>` (add `--scope project` for
+project config) removes them.
+
+Codex, Cursor, OMP, and Pi reject the bare tier names (`opus`, `sonnet`,
+`haiku`, `fable`) as model IDs. Values are checked for shape only, never
+against a model catalog, so a well-formed ID your account cannot use is reported
+by the runtime, not by AgentKit.
+
+## OMP role aliases
+
+On OMP, a model value can be a provider/model ID or an `@<role>` alias from
+OMP's role set: `@advisor`, `@commit`, `@default`, `@designer`, `@plan`,
+`@slow`, `@smol`, `@task`, `@tiny`, `@vision`. By default AgentKit maps the Kit
+tiers to roles: `sonnet` to `@task`, `opus` to `@plan`, `haiku` to `@smol`, and
+`fable` to `@advisor`.
+
+Without a binding, AgentKit writes the alias and OMP resolves it through its
+own `modelRoles`. To have AgentKit write a concrete model instead, bind the
+role in AgentKit config:
+
+```bash
+# Route the sonnet tier through @smol, then bind @smol to a model.
+ak config prefs set agent_models.omp.sonnet @smol
+ak config prefs set agent_models.omp.roles.smol.model anthropic/claude-haiku-4-5
+ak config prefs set agent_models.omp.roles.smol.reasoning_effort low
+```
+
+An Agent whose resolved value is a bound alias gets the bound model, and its
+reasoning effort is written as `thinking-level`. A per-Agent effort outranks the
+role's. A role binding must be a model, not another alias. To configure OMP's
+own `modelRoles` instead, see
+[Configure OMP roles](./agent-models#configure-omp-roles).
+
+## Config keys
+
+`ak agents model` writes these keys for you. You can also set them directly with
+[`ak config prefs set`](../reference/cli/config/prefs/set):
+
+| Key | Scope of the change |
+| --- | --- |
+| `agent_models.<runtime>.<tier>` | Remap a whole tier on one runtime |
+| `agent_models.<runtime>.agents.<agent>.model` | Pin one Agent |
+| `agent_models.<runtime>.agents.<agent>.reasoning_effort` | Pin one Agent's effort (Codex and OMP) |
+| `agent_models.omp.roles.<role>.model` and `.reasoning_effort` | Bind an OMP role |
+
+The existing Cursor tier key keeps working:
+
+```bash
+ak config prefs set agent_models.cursor.opus YOUR_CURSOR_MODEL_ID
+```
+
+A tier or role override set this way lands on the next `ak update` or
+`ak kit refresh`. A per-Agent key that matches no installed Agent produces an
+install warning naming the key.
+
+## Desktop: Subagents → Models
+
+<Callout type="warn">
+  The Models page is in development and is not in a released Desktop build yet.
+  Until it ships, use `ak agents model`.
+</Callout>
+
+In AgentKit Desktop, **Subagents → Models** manages the same `agent_models`
+config as `ak agents model`. It provides:
+
+- a **scope** selector for user or project config;
+- **drift** badges on Agents whose model was edited in the runtime;
+- **Set** to pin a model;
+- **Use runtime default** to stop pinning a model for the Agent;
+- **Reset** to remove an override from the selected scope;
+- **Adopt** to keep a runtime edit by recording it in config;
+- **Reapply** to write the configured model over the installed file.
+
+The scope, precedence, and drift rules on this page apply to Desktop actions too.
