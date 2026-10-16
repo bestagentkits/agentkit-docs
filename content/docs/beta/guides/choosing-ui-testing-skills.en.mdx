@@ -1,0 +1,197 @@
+---
+title: Choose the right UI testing Skill
+description: Understand when to use ak:test, ak:test ui, ak:web-testing, or ak:agent-browser for code evidence, deployed journeys, and exploratory customer review.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+An app can pass its test suite and complete a deployed journey while still
+confusing customers. These results are not contradictory: each workflow asks a
+different question and produces a different kind of evidence.
+
+Use this guide when choosing between [`ak:test`](../kits/engineer/skills/test),
+[`ak:web-testing`](../kits/engineer/skills/web-testing), and
+[`ak:agent-browser`](../kits/engineer/skills/agent-browser).
+
+## Start with the question
+
+| Workflow | Primary question | Best evidence | Use it when |
+| --- | --- | --- | --- |
+| `ak:test` | Does the project still satisfy the selected code and integration contracts? | Runner output, assertions, and relevant type-check, coverage, or build results | Source code changed and you need repository-level confidence |
+| `ak:test ui <URL>` | Does the running UI have broad observable problems? | Screenshots, responsive and accessibility observations, form results, and console errors | You want a general QA sweep of a deployed or local site |
+| `ak:web-testing` | Does a defined web journey pass repeatably? | Playwright assertions, traces, videos, screenshots, visual diffs, and machine-readable reports | The journey should run again locally or in CI |
+| `ak:agent-browser` | What happens during direct exploratory use of the app? | Accessibility-tree snapshots, screenshots, recordings, browser state, and reproduction steps | You need profile-independent exploration, a bug hunt, or a customer-perspective review |
+
+The shortest rule is:
+
+- Choose `ak:test` for **code-level validation**.
+- Choose `ak:test ui` for a **broad running-UI check**.
+- Choose `ak:web-testing` for **durable, repeatable journey coverage**.
+- Choose `ak:agent-browser` for **direct browser exploration**.
+
+## Understand the overlap
+
+`ak:test` is the broad validation workflow. Without `ui`, it identifies the
+requested scope, type-checks or analyzes when appropriate, and runs the relevant
+existing suites. Coverage and build verification are added when they apply; the
+Skill does not promise to run every possible gate on every invocation.
+
+With `ui <URL>`, `ak:test` switches to its live UI workflow. It can route browser
+work through `ak:agent-browser`, `ak:chrome-profile`, `ak:web-testing`, or a
+project-native runner, then produces a structured QA report.
+
+`ak:web-testing` specializes in test strategy and repeatable runners such as
+Playwright, Vitest, axe, Lighthouse, and k6. Give it a known journey, expected
+behavior, test data, environment, and required artifacts. It is the strongest
+choice when PASS or FAIL should be reproducible later.
+
+`ak:agent-browser` drives a fresh or tool-managed browser directly. It supports
+long autonomous sessions, snapshots, screenshots, form interaction, persistent
+state, and video recording. Its exploratory QA workflow is useful when the path
+is not fully known in advance. It does not create independent customer users by
+itself: persona review is a prompt contract executed through explicit accounts,
+sessions, viewports, and reset boundaries.
+
+<Callout type="info" title="Same browser, different contract">
+  Opening the same URL does not make these workflows equivalent. The contract
+  is what matters: broad inspection, repeatable assertions, or exploratory user
+  behavior.
+</Callout>
+
+## Compare one deployed journey
+
+Suppose a customer connects a provider, sees `Connected`, refreshes the page,
+and expects the connection to remain.
+
+### Check the running UI broadly
+
+```text
+/ak:test ui https://app.example.com
+
+Check the connection flow on desktop and mobile. Capture form, responsive,
+accessibility, and console evidence. Use only the supplied test account and do
+not change unrelated production data.
+```
+
+This can reveal a clipped mobile form, a browser error, or poor contrast. It is
+a useful sweep, but it does not automatically turn every observation into a
+permanent regression test.
+
+### Make the journey repeatable
+
+```text
+/ak:web-testing e2e "Against https://app.example.com, verify the connected
+journey: sign in with the approved test account, connect the test provider,
+assert the exact Connected state, refresh, and assert the same connection
+persists. Run sequentially in Chromium. Preserve the Playwright trace and
+failure screenshots. Do not contact billing, send messages, or modify unrelated
+production data."
+```
+
+Choose this when the expected state is known and the same check should protect
+later releases.
+
+### Review through several customer lenses
+
+```text
+/ak:agent-browser https://app.example.com
+
+Run four separate exploratory passes: new customer, returning customer, mobile
+customer, and power user. For each pass, use the approved account or browser
+session, viewport, starting state, and reset boundary. Interact only through the
+visible UI. Record confusion, blocked steps, unexpected state, and recovery
+behavior. Capture screenshots at the observed state and return reproduction
+steps. Do not fabricate or recreate evidence after the run.
+```
+
+These are persona-guided passes, not four real customers or four independent
+agents. Use separate accounts or sessions when the personas require different
+server or browser state.
+
+## Choose the correct authentication route
+
+`ak:agent-browser` is for profile-independent work in a fresh or tool-managed
+browser. Use `ak:chrome-profile` instead when the journey requires cookies,
+login state, a Google account, tenant, or workspace already open in the user's
+real Chrome profile. Use project-native authentication fixtures for repeatable
+tests whenever possible.
+
+## Turn exploration into durable coverage
+
+1. Run `ak:test` before deployment for the selected code-level gates.
+2. Run `ak:web-testing` for critical journeys that need repeatable assertions.
+3. Use `ak:test ui <URL>` for a broader live-site sweep.
+4. Use `ak:agent-browser` for exploratory gaps the written requirements did not anticipate.
+5. Convert confirmed functional regressions into focused `ak:web-testing` cases.
+
+Keep subjective customer-friction findings in product or UX review when an
+automated assertion would not express them honestly. Use the smallest workflow
+that can prove the risk you are trying to control.
+
+## Ask for evidence explicitly
+
+No Skill name alone guarantees the exact report you want. State the evidence
+contract in the prompt:
+
+- Target environment and exact journey;
+- Test account, session, fixture, starting state, and cleanup boundary;
+- Expected state after each important action;
+- Browser, device, viewport, and authentication method;
+- Screenshots, traces, videos, visual diffs, or console evidence required;
+- Separate pass, fail, blocked, skipped, and unverified outcomes;
+- Finding IDs that map each claim to its evidence;
+- Data and external services that must not be touched.
+
+`ak:agent-browser` can save browser artifacts such as screenshots and video, but
+it does not define a Markdown report schema. Ask the calling agent or `ak:test
+ui` workflow to materialize the findings and artifact links into a reviewed
+report.
+
+## Create a visual HTML showcase
+
+[`ak:show-off`](../kits/engineer/skills/show-off) creates a designed showcase;
+it is not a forensic renderer. Its workflow can research supporting material,
+rewrite content, add visual treatments, and capture new screenshots of the
+generated page. Those derived showcase images are not app evidence.
+
+First review the Markdown report and original browser artifacts. Then request a
+local, presentation-only run:
+
+```text
+/ak:show-off artifacts/customer-review/report.md --no-publish --no-screenshots
+--no-editorial-visuals --languages vi
+
+Create a local HTML customer-review showcase from this source. Preserve every
+finding ID and original evidence image. Keep blocked and unverified findings
+explicit. Do not add product findings, counts, screenshots, or claims absent
+from the reviewed source. Return the local HTML path.
+```
+
+Even with those controls, review the generated HTML against the source report.
+The HTML proves only that findings were presented; it does not validate the app
+again. If you require a byte-preserving or deterministic evidence renderer, use
+a dedicated report generator instead of `ak:show-off`.
+
+## Protect production
+
+<Callout type="warn" title="A browser test can mutate production">
+  Clicking through a deployed journey can create accounts or records, send
+  email, charge an integration, consume quota, or delete data. A production URL
+  is not read-only evidence by default.
+</Callout>
+
+Before testing production, define the approved account and test-data namespace,
+allowed writes, forbidden actions, integration isolation, cleanup ownership,
+and stop conditions. Do not run load, destructive, security, payment, or
+irreversible lifecycle checks against production without exact authorization
+and an isolation plan.
+
+## Choose quickly
+
+| If you are saying… | Start with |
+| --- | --- |
+| “I changed the implementation; prove the selected contracts still hold.” | `ak:test` |
+| “Scan this deployed UI for broad observable problems.” | `ak:test ui <URL>` |
+| “This checkout or connection journey must not regress.” | `ak:web-testing` |
+| “Explore this app through several customer lenses.” | `ak:agent-browser` with explicit sessions and state |
+| “Turn reviewed evidence into a designed local HTML showcase.” | `ak:show-off` with publishing and derived screenshots disabled |
