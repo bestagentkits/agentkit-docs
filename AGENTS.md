@@ -119,7 +119,8 @@ prompt trust.
     [`docs/workflows/release-and-deploy.md`](docs/workflows/release-and-deploy.md).
     Do not whole-copy Beta when unrelated CLI or release evidence differs. The
     executable gate is `pnpm check:catalog`, `pnpm check:kit-docs` (historical; use
-    `check:kit-docs:current` only right after `--apply`), and
+    `check:kit-docs:current` only right after `--apply`), and, for
+    reconciliation PRs only (same exact-tree limit),
     `node scripts/reconcile-kit-docs.mjs --check-diff <base-sha>`; evidence and
     reconciliation records are committed under `release-evidence/kit-catalog/`
     and `docs-reconciliations/`.

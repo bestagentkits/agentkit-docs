@@ -98,8 +98,9 @@ incomplete or tooling cannot produce that record, remain blocked. See
 
 Executable checks are `pnpm check:catalog` for exact channel inventory and
 full-tree equality, `pnpm check:kit-docs` for the reviewed reconciliation
-manifest (`check:kit-docs:current` only right after `--apply`), and `node scripts/reconcile-kit-docs.mjs --check-diff <base-sha>` for
-the Stable diff allowlist. Evidence triads live under
+manifest (`check:kit-docs:current` only right after `--apply`), and
+`node scripts/reconcile-kit-docs.mjs --check-diff <base-sha>` for the Stable diff
+allowlist (reconciliation PRs only; exact like `:current`). Evidence triads live under
 `release-evidence/kit-catalog/`; reviewed manifests live under
 `docs-reconciliations/`. Run `--apply` only after the manifest and preimages are
 reviewed; a rerun resumes exact preimage targets and skips postimages.

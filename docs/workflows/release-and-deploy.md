@@ -111,6 +111,7 @@ The executable gate is:
 ```bash
 pnpm check:catalog
 pnpm check:kit-docs
+# reconciliation PRs only, right after --apply (exact like check:kit-docs:current):
 node scripts/reconcile-kit-docs.mjs --check-diff <base-sha>
 ```
 
@@ -122,7 +123,8 @@ the recorded reconciliation postimages in the current Stable tree; run it only
 right after `--apply`, because any later promotion legitimately adds or changes
 Stable paths and makes it fail. CI uses the historical check only when Stable is
 unchanged. Stable reconciliation diffs use
-the exact `--check-diff` allowlist; ordinary promotions use the promotion receipt
+the exact `--check-diff` allowlist, which also requires the exact postimage tree and so
+holds only for a reconciliation transaction; ordinary promotions use the promotion receipt
 validator described below.
 
 Committed manifest/sidecar evidence lives in `release-evidence/kit-catalog/`;
