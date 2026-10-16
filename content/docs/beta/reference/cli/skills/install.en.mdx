@@ -20,8 +20,9 @@ ak skills install <kit>/<skill>
 
 The canonical reference is recommended. Reference shorthands `ak:`, `ake:`, and
 `akm:` are also accepted. Source and destination roots are controlled by
-`AGENTKIT_KITS_DIR` and `AGENTKIT_PLUGIN_DIR`; this command has no
-`--kits-dir`, target, scope, or channel flag.
+`AGENTKIT_KITS_DIR` and `AGENTKIT_PLUGIN_DIR`; the local route has no
+`--kits-dir`, target, scope, or channel flag. `--scope`, `--runtime`, and
+`--dry-run` apply only to the [SkillX source](#skillx-source).
 
 ## Resolution and disk effects
 
@@ -54,8 +55,28 @@ runtime dependency, remove only the partial destination you reviewed, and rerun.
 The shared runtime cache is not a backup of skill content.
 
 `--yes` and `--no-interactive` do not change behavior because the command never
-prompts. It does not contact the AgentKit registry or check entitlement, though
+prompts. The local route does not contact the AgentKit registry or check entitlement, though
 runtime provisioning can contact PyPI or npm through `uv` or `pnpm`.
+
+## SkillX source
+
+With `AGENTKIT_SKILLX=1` and `AGENTKIT_SKILL_STORE=1`, `--source skillx`
+installs a verified SkillX release named `@publisher/slug[@version]` instead of
+a local kit skill:
+
+```bash
+ak skills install @publisher/review-guardrails@1.2.0 --source skillx --dry-run --json
+```
+
+The plan shows the release identity, digest, trust, targets, projected paths,
+and declared scripts. It applies without prompting unless `--dry-run` is set.
+`--runtime` selects `claude-code`, `codex`, or both (default `claude-code`), and
+`--scope` selects the `project` (default) or `global` lock and skills root.
+
+One journaled transaction under the kit lifecycle lock writes the release into
+the skill store under `AGENTKIT_HOME`, the projected files (mode `0644`, never
+executable) into each runtime's native skills root, and the scope's skill lock
+and receipts. It never runs a declared script, npm, npx, or a SkillX installer.
 
 ## Output
 
@@ -77,8 +98,10 @@ was set.
 | `0` | Content was copied and any requested runtime provisioning completed. |
 | `1` | Copying, path safety, runtime provisioning, or filesystem work failed. |
 | `2` | The reference or flags were invalid. |
-| `5` | No matching local source skill was found. |
-| `6` | The destination already existed without `--force`. |
+| `4` | `--source skillx` only: another kit lifecycle operation holds the lock. |
+| `5` | No matching local source skill or SkillX release was found. |
+| `6` | The destination already existed without `--force`; with `--source skillx`, an alias collision or an unowned or modified path. |
+| `7` | `--source skillx` only: the release is revoked, yanked, or untrusted, a target path contains a link, or a digest did not match. |
 
 For exits `2`, `5`, and `6`, the current JSON error envelope can contain
 `exit_code: 1`; trust process status. Missing or extra positional arguments are

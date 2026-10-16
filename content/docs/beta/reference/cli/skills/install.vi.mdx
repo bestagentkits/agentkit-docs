@@ -20,8 +20,9 @@ ak skills install <kit>/<skill>
 
 Nên dùng reference chuẩn. Shorthand reference `ak:`, `ake:` và `akm:` cũng được
 chấp nhận. Source và destination root do `AGENTKIT_KITS_DIR` và
-`AGENTKIT_PLUGIN_DIR` điều khiển; lệnh không có cờ `--kits-dir`, target, scope
-hoặc channel.
+`AGENTKIT_PLUGIN_DIR` điều khiển; route cục bộ không có cờ `--kits-dir`, target,
+scope hoặc channel. `--scope`, `--runtime` và `--dry-run` chỉ áp dụng cho
+[nguồn SkillX](#nguồn-skillx).
 
 ## Resolution và tác động trên đĩa
 
@@ -52,9 +53,31 @@ Hãy tự backup user change trước khi force. Khi thất bại, sửa local s
 runtime dependency, chỉ xoá partial destination đã review rồi chạy lại. Shared
 runtime cache không phải backup của nội dung skill.
 
-`--yes` và `--no-interactive` không đổi hành vi vì lệnh không hỏi xác nhận. Lệnh
-không truy cập AgentKit registry hoặc kiểm tra entitlement, dù runtime
+`--yes` và `--no-interactive` không đổi hành vi vì lệnh không hỏi xác nhận. Route
+cục bộ không truy cập AgentKit registry hoặc kiểm tra entitlement, dù runtime
 provisioning có thể truy cập PyPI hay npm qua `uv` hoặc `pnpm`.
+
+## Nguồn SkillX
+
+Khi bật `AGENTKIT_SKILLX=1` và `AGENTKIT_SKILL_STORE=1`, `--source skillx` cài
+một SkillX release đã xác minh tên `@publisher/slug[@version]` thay cho skill
+trong Kit cục bộ:
+
+```bash
+ak skills install @publisher/review-guardrails@1.2.0 --source skillx --dry-run --json
+```
+
+Plan hiển thị identity, digest, trust, target, đường dẫn được chiếu và script
+được khai báo của release. Lệnh áp dụng mà không hỏi xác nhận, trừ khi có
+`--dry-run`. `--runtime` chọn `claude-code`, `codex` hoặc cả hai (mặc định
+`claude-code`), còn `--scope` chọn lock và skills root `project` (mặc định) hoặc
+`global`.
+
+Một transaction có journal, chạy dưới kit lifecycle lock, ghi release vào skill
+store dưới `AGENTKIT_HOME`, ghi các tệp được chiếu (mode `0644`, không bao giờ
+executable) vào skills root gốc của từng runtime, và ghi skill lock cùng receipt
+của scope. Lệnh không bao giờ chạy script được khai báo, npm, npx hay trình cài
+SkillX.
 
 ## Đầu ra
 
@@ -76,8 +99,10 @@ switch đã được đặt.
 | `0` | Nội dung đã được copy và runtime provisioning được yêu cầu đã hoàn tất. |
 | `1` | Copy, path safety, runtime provisioning hoặc filesystem thất bại. |
 | `2` | Reference hoặc cờ không hợp lệ. |
-| `5` | Không tìm thấy local source skill khớp. |
-| `6` | Destination đã tồn tại mà không có `--force`. |
+| `4` | Chỉ với `--source skillx`: một thao tác vòng đời Kit khác đang giữ khoá. |
+| `5` | Không tìm thấy local source skill hoặc SkillX release khớp. |
+| `6` | Destination đã tồn tại mà không có `--force`; với `--source skillx`, alias bị trùng hoặc đường dẫn không thuộc sở hữu hay đã bị sửa. |
+| `7` | Chỉ với `--source skillx`: release đã bị thu hồi, yank hoặc không được tin cậy, đường dẫn target chứa link, hoặc digest không khớp. |
 
 Với mã `2`, `5` và `6`, JSON error envelope hiện có thể chứa `exit_code: 1`;
 hãy tin process status. Argument theo vị trí bị thiếu hoặc thừa bị từ chối trước
