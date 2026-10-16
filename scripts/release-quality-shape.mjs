@@ -19,9 +19,10 @@ export const RELEASE_SHAPE_BASELINE = Object.freeze({
   // Beta adds the bilingual guides/semantic-decision-experiments and
   // reference/cli/describe routes, plus the kits/marketing/skills/filmmaking
   // guide, ahead of promotion. The bilingual guides/jev-clef adds an Agent-first entry,
-  // and guides/choosing-subagent-models adds the subagent model guide.
-  sourceRoutesPerLocaleChannel: { stable: 490, beta: 495 },
-  routesPerLocaleChannel: { stable: 489, beta: 494 },
+  // guides/choosing-ui-testing-skills adds a Beta-only guide, and
+  // guides/choosing-subagent-models adds the subagent model guide.
+  sourceRoutesPerLocaleChannel: { stable: 490, beta: 496 },
+  routesPerLocaleChannel: { stable: 489, beta: 495 },
   reviewedSourceOnlyRoutes: [
     {
       route: 'changelog',
