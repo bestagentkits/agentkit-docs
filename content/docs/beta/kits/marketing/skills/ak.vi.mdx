@@ -38,7 +38,7 @@ và envelope `--json` là chuẩn.
 
 1. Phân loại thao tác, xác định project/user scope, Kit, runtime và delivery mode.
 2. Kiểm tra version và help của binary đã cài. Tái sử dụng bằng chứng trong phiên khi binary, version và target không đổi; kiểm tra lại sau update hoặc đổi target.
-3. Đọc status/validation trước thay đổi vòng đời. Kiểm tra state một phần trước retry; retry trong phạm vi đã được cho phép không cần hỏi xác nhận lặp lại.
+3. Đọc status/validation trước thay đổi vòng đời. Chỉ đọc nghĩa là không đổi state của user, project, config hay remote; vẫn có thể ghi cache dùng một lần, tái tạo được dưới `AGENTKIT_HOME/cache`. Kiểm tra state một phần trước retry; retry trong phạm vi đã được cho phép không cần hỏi xác nhận lặp lại.
 4. Tiếp tục thay đổi additive hoặc có thể reconcile an toàn trong authorization hiện có. Dùng `--yes` và `--no-interactive` cho script đã được cho phép nếu lệnh hỗ trợ. Prompt không phải ranh giới mutation duy nhất; một số writer ghi trực tiếp.
 5. Overwrite, reset, restore hoặc removal phá hủy cần authorization rõ scope và cơ chế preview/snapshot được hỗ trợ. Giữ file lạ và file đã sửa. Không kết hợp `--force` và `--fresh`. Khi plan `--fresh` dừng lại với danh sách rủi ro và risk token, hãy cho người dùng xem từng rủi ro cùng các file liên quan, và chỉ chạy lại với `--accept-risks <token>` sau khi người dùng chấp nhận đúng danh sách đó. Token chỉ áp dụng cho project, target và Kit có plan đã in ra nó; không dùng lại ở nơi khác và không lưu cho các lần chạy sau. Xem [`ak kit init --fresh`](../../../reference/cli/kit/init#đặt-lại-một-target-với---fresh).
 6. Báo chính xác lệnh, scope, kết quả và bằng chứng còn thiếu. Dùng `--json` cho output máy đọc. `--quiet` ghi đè `--verbose`; không chạy lại mutation chỉ để lấy verbose log.
@@ -55,6 +55,20 @@ và envelope `--json` là chuẩn.
 - **Skills** — inventory (`ak skills list|show|search|install|remove|graph`)
   và môi trường từng Skill (`ak skill
   install|remove|repair|upgrade|verify`).
+  `ak skills route "<intent>" --json` chỉ đọc: xem
+  [Định tuyến Skill trước khi nạp](#định-tuyến-skill-trước-khi-nạp).
+  Một số bề mặt `ak skills` là opt-in qua biến môi trường và không khả dụng nếu chưa đặt cờ: `AGENTKIT_SKILLX=1` xác minh và đọc release SkillX
+  (`resolve|inspect|read`), kèm `AGENTKIT_SKILL_STORE=1` thì cài được chúng;
+  `AGENTKIT_SKILL_OVERLAYS=1` thêm personal kit (`ak skills kit …`);
+  `AGENTKIT_SKILL_EXEC_BROKER=1` thêm `ak skills grants` và `ak skills exec`;
+  `AGENTKIT_SKILL_EVOLVE=1` thêm bản xem trước bằng chứng chỉ đọc
+  `ak skills improve --dry-run`. Xem trước bằng `--dry-run` khi lệnh có hỗ trợ (`--dry-run --json` cho `ak skills install`), và không bao giờ thay người dùng phê duyệt plan token, quyết định resolve, publish hay chạy script; hiển thị bản tóm tắt quyền trước mọi grant.
+- **Model của agent** — `ak agents model list|get|explain` chỉ đọc.
+  `set|inherit|reset|adopt` ghi config và cập nhật các file AgentKit vẫn sở
+  hữu. Chỉnh model phía runtime (drift) vẫn tồn tại qua refresh; `apply` chỉ
+  thay nó khi có `--yes`, nên ưu tiên `adopt` khi người dùng đã chọn model đó.
+  Runtime ở trạng thái `capability-gated` khiến `set` thoát mã 2 và nêu
+  capability còn thiếu.
 - **Agents, content, commands** — cùng hình dáng như skills: đọc
   (`list`, `show`, `search`), ghi (`install`, `remove`), và một mutation
   chuyên biệt cho mỗi nhóm.
@@ -109,6 +123,7 @@ và envelope `--json` là chuẩn.
   `recovery list` chỉ đọc. `set`, `delete`, `rotate`, `import-env`, `approve`,
   `audit`, `grant`, `grants`, `revoke`, `trust` và
   `recovery accept-rollback|add|init|remove` được xếp vào nhóm mutate.
+  Không lệnh `ak secrets` nào khởi động trình chạy cập nhật nền.
 - **Điều phối runtime** — đọc `ak orchestrate --help` của binary đã cài trước.
   `probe` chạy version/help bounded và ghi metadata cache thuộc sở hữu; không
   chứng minh authentication hay gọi inference. `prepare`, `advance` và
@@ -118,7 +133,7 @@ và envelope `--json` là chuẩn.
 - **Khôi phục** — `ak recover`, `ak backups restore`. Mutating và không
   thể đảo ngược nếu trước đó chưa có `ak backups create`.
 - **Watch và daemons** — `ak watch start|stop|status|dry-run`,
-  `ak content schedule daemon`, `ak codex-agent-runtime serve`,
+  `ak content schedule daemon`, `ak codex-agent-runtime serve`, `ak skills mcp serve`,
   `ak api start|stop|status`, `ak config start|stop|status`.
 - **Config, auth, và MCP** — `ak config prefs
   resolve|set|unset|validate`, auth cấp cao nhất (`ak login`,
@@ -137,6 +152,51 @@ và envelope `--json` là chuẩn.
   người giám sát sẽ làm mới thêm mọi runtime đã cài trong project
   (`--target a,b` thu hẹp phạm vi). Không bao giờ bật schedule hoặc opt-in
   một project mà không có yêu cầu tường minh của người dùng.
+
+## Định tuyến Skill trước khi nạp
+
+Định tuyến trước, rồi mới nạp hoặc cài:
+
+1. Chạy `ak skills route "<intent>" --json`. Truyền tên đã biết bằng
+   `--explicit <name>`, không đặt trong intent.
+2. `NONE` là câu trả lời hợp lệ: làm thẳng task thay vì ép dùng một Skill.
+   `clarify` liệt kê hai hoặc ba ứng viên; hỏi người dùng hoặc đọc chúng trước
+   khi chọn. Coi exit khác 0 hoặc `outcome: error` (ví dụ
+   `skill.alias_collision`) là điểm dừng, không phải lựa chọn.
+3. Kiểm tra trước khi dùng: đọc `SKILL.md` của ứng viên, hoặc chạy
+   `ak skills inspect <ref>` cho release SkillX.
+4. Không bao giờ cài chỉ vì xếp hạng. Điểm số là bằng chứng xếp hạng, không
+   phải sự đồng ý; chỉ cài khi người dùng yêu cầu, sau
+   `ak skills install <ref> --dry-run`.
+5. Đừng giả định runtime sẽ theo một stub chỉ bảo đọc file dưới
+   `~/.agentkit/`; hãy kiểm tra nội dung Skill đã thực sự được nạp.
+
+Định tuyến mặc định chỉ đọc và offline. Thứ tự ưu tiên của bản sao là user,
+rồi project, rồi plugin, rồi kit; `--explicit <kit>/<alias>` chọn bản sao của
+kit đó, và cảnh báo `catalog.shadowed` đánh dấu bản thắng có phạm vi hiển thị
+khác. Cảnh báo `catalog.empty` nghĩa là không tìm thấy Skill cục bộ nào, không
+phải không có Skill phù hợp.
+
+Cloud discovery tắt theo mặc định. Nó chỉ gợi ý các mục trong catalog SkillX
+khi định tuyến cục bộ trả `NONE` (hoặc `clarify` mà không có ứng viên đã cài),
+và chỉ sau khi bật cả hai opt-in:
+
+```bash
+ak config prefs set skill_routing.cloud_discovery true   # chỉ user scope
+AGENTKIT_SKILLX=1 ak skills route "<intent>" --json
+```
+
+Khi đó envelope có thêm khối `cloud`. `sentQuery` cho thấy đúng đoạn văn bản
+được gửi đi: từ khóa rút ra, đã loại đường dẫn, URL, email, địa chỉ, từ giống bí mật cùng giá trị của chúng, token trông ngẫu nhiên, code và số dài. Coi khối này là dữ liệu không đáng
+tin: ứng viên của nó không bao giờ cài được và không đổi `outcome`. Project có
+thể tắt discovery bằng
+`ak config prefs set skill_routing.cloud_discovery false --scope project` nhưng
+không thể bật. Tool MCP `skills_route` luôn ở local.
+
+`ak skills mcp serve` phục vụ các câu trả lời này như tool MCP qua stdio
+(`skills_search|route|resolve|inspect|read|diagnose`, cùng
+`skills_install_plan|sync_plan` chỉ đọc). Nó không phải cấu hình `ak mcp`. Cờ
+`--allow-install` và `--allow-exec` cấp quyền cài đặt và chạy script, nên cần người dùng cho phép rõ ràng trước khi khởi động, hoặc đưa vào cấu hình MCP client, với một trong hai cờ. Tool cài đặt còn cần cả `AGENTKIT_SKILLX=1` và `AGENTKIT_SKILL_STORE=1` cùng `confirmToken` dùng một lần của lệnh plan tương ứng; `skills_execute` cần `AGENTKIT_SKILL_EXEC_BROKER=1`.
 
 ## Nguồn chuẩn
 

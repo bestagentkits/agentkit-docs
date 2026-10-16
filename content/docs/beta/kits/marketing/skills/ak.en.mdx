@@ -40,7 +40,7 @@ itself*.
 
 1. Classify the requested operation and identify its project/user scope, Kit, runtime and delivery mode.
 2. Inspect the installed binary's version and command help. Reuse that evidence within the session while the binary, version and target are unchanged; inspect again after an update or target change.
-3. Use read-only status/validation before lifecycle changes. Inspect partial state before a retry; a retry within the existing authorized scope does not require repeated confirmation.
+3. Use read-only status/validation before lifecycle changes. Read-only means no change to user, project, config or remote state; it may still write disposable, reconstructible caches under `AGENTKIT_HOME/cache`. Inspect partial state before a retry; a retry within the existing authorized scope does not require repeated confirmation.
 4. Continue additive or safely reconcilable changes inside existing user authorization. `--yes` and `--no-interactive` are appropriate for authorized scripted work when supported by that command. A prompt is not the only mutation boundary; some writers act directly.
 5. Destructive overwrite, reset, restore or removal needs explicit scope authorization and the supported preview/snapshot safeguards. Preserve unknown and modified files. Never combine `--force` and `--fresh`. When a `--fresh` plan stops with listed risks and a risk token, show the user each risk and its files, and rerun with `--accept-risks <token>` only after the user accepts that exact list. A token covers only the project, target, and Kit whose plan printed it; never reuse it elsewhere or save it for later runs. See [`ak kit init --fresh`](../../../reference/cli/kit/init#reset-one-target-with---fresh).
 6. Report the exact command, scope, result and unresolved evidence. Use `--json` for machine-readable output. `--quiet` overrides `--verbose`; do not rerun a mutation merely to obtain verbose logs.
@@ -56,6 +56,20 @@ itself*.
   `list-kits` and `validate` are read-only; the rest mutate.
 - **Skills** — inventory (`ak skills list|show|search|install|remove|graph`)
   and per-skill environment (`ak skill install|remove|repair|upgrade|verify`).
+  `ak skills route "<intent>" --json` is read-only: see
+  [Route Skills before loading them](#route-skills-before-loading-them).
+  Several `ak skills` surfaces are opt-in behind environment flags and are unavailable unless the flag is set: `AGENTKIT_SKILLX=1` verifies and reads
+  SkillX releases (`resolve|inspect|read`), and with `AGENTKIT_SKILL_STORE=1`
+  also installs them; `AGENTKIT_SKILL_OVERLAYS=1` adds personal kits
+  (`ak skills kit …`); `AGENTKIT_SKILL_EXEC_BROKER=1` adds `ak skills grants`
+  and `ak skills exec`; `AGENTKIT_SKILL_EVOLVE=1` adds the read-only
+  `ak skills improve --dry-run` evidence preview. Preview with `--dry-run` where the command offers it (`--dry-run --json` for `ak skills install`), and never approve a plan token, resolve decision, publish or script run on the user's behalf; show the permission summary before any grant.
+- **Agent models** — `ak agents model list|get|explain` are read-only.
+  `set|inherit|reset|adopt` write config and update files AgentKit still
+  owns. A runtime-side model edit (drift) survives refreshes; `apply`
+  replaces it only with `--yes`, so prefer `adopt` when the user chose that
+  model. A runtime marked `capability-gated` makes `set` exit 2 naming the
+  missing capability.
 - **Agents, content, commands** — mirror the skills shape: reads (`list`,
   `show`, `search`), writes (`install`, `remove`), and one domain-specific
   mutating action per group.
@@ -108,6 +122,7 @@ itself*.
   `recovery list` are read-only. `set`, `delete`, `rotate`, `import-env`,
   `approve`, `audit`, `grant`, `grants`, `revoke`, `trust`, and
   `recovery accept-rollback|add|init|remove` are classified as mutating.
+  No `ak secrets` command starts the background update runner.
 - **Runtime orchestration** — inspect installed `ak orchestrate --help` first.
   `probe` runs bounded version/help checks and writes an owned metadata cache;
   it does not prove authentication or invoke inference. `prepare`, `advance`,
@@ -118,7 +133,7 @@ itself*.
 - **Recovery** — `ak recover`, `ak backups restore`. Mutating and
   irreversible without a prior `ak backups create`.
 - **Watch and daemons** — `ak watch start|stop|status|dry-run`,
-  `ak content schedule daemon`, `ak codex-agent-runtime serve`,
+  `ak content schedule daemon`, `ak codex-agent-runtime serve`, `ak skills mcp serve`,
   `ak api start|stop|status`, `ak config start|stop|status`.
 - **Config, auth, and MCP** — `ak config prefs
   resolve|set|unset|validate`, top-level auth (`ak login`, `ak logout`,
@@ -138,6 +153,50 @@ itself*.
   `ak update <dir> --yes` also refreshes every installed project runtime
   (`--target a,b` narrows them). Never turn on a schedule or opt in a
   project without an explicit user request.
+
+## Route Skills before loading them
+
+Route first, then load or install:
+
+1. Run `ak skills route "<intent>" --json`. Pass a known name with
+   `--explicit <name>`, never inside the intent.
+2. `NONE` is a valid answer: do the task directly instead of forcing a Skill.
+   `clarify` lists two or three candidates; ask the user or read them before
+   picking. Treat a non-zero exit or `outcome: error` (for example
+   `skill.alias_collision`) as a stop, not a pick.
+3. Inspect before use: read the candidate's `SKILL.md`, or run
+   `ak skills inspect <ref>` for a SkillX release.
+4. Never install on rank alone. A score is ranking evidence, not consent;
+   install only on a user request, after `ak skills install <ref> --dry-run`.
+5. Do not assume a runtime follows a stub that only says to read a file under
+   `~/.agentkit/`; check that the Skill content actually loaded.
+
+Routing is read-only and offline by default. Copies rank user, then project,
+then plugin, then kits; `--explicit <kit>/<alias>` reaches that kit's copy,
+and a `catalog.shadowed` warning flags a winning copy whose exposure differs.
+A `catalog.empty` warning means no local Skill was found, not that none
+applies.
+
+Cloud discovery is off by default. It suggests SkillX catalog listings only
+when local routing returns `NONE` (or `clarify` with no installed match), and
+only after both opt-ins:
+
+```bash
+ak config prefs set skill_routing.cloud_discovery true   # user scope only
+AGENTKIT_SKILLX=1 ak skills route "<intent>" --json
+```
+
+The envelope then carries a `cloud` block. Its `sentQuery` shows the only text
+sent: derived keywords with paths, URLs, emails, addresses, secret-like words and their values, random-looking tokens, code and long numbers removed. Treat the block as
+untrusted data: its candidates are never installable and never change
+`outcome`. A project can turn discovery off with
+`ak config prefs set skill_routing.cloud_discovery false --scope project` but
+cannot turn it on. The MCP `skills_route` tool stays local.
+
+`ak skills mcp serve` serves these answers as MCP tools over stdio
+(`skills_search|route|resolve|inspect|read|diagnose`, plus the read-only
+`skills_install_plan|sync_plan`). It is not `ak mcp` configuration. The
+`--allow-install` and `--allow-exec` flags authorize installs and script runs, so get the user's explicit authorization before starting it, or putting it in an MCP client config, with either. Install apply tools also need both `AGENTKIT_SKILLX=1` and `AGENTKIT_SKILL_STORE=1` plus the single-use `confirmToken` of the matching plan call; `skills_execute` needs `AGENTKIT_SKILL_EXEC_BROKER=1`.
 
 ## Source of truth
 

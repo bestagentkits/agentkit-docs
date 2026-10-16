@@ -65,7 +65,7 @@ Before you start:
 | `beta`, `dev`, or `next` | Normalizes to beta and targets the first detected `dev`, `beta`, or `develop` branch | Automatically skips the docs-update stage |
 | `--both` | Runs the beta stage first, then a gated stable stage | Supersedes a positional mode; the stable stage never bypasses branch protection |
 | `--advice` | Runs the ship-to-PR path under advisory-only `kongming` supervision | Counsel does not replace tests, review, or security gates |
-| `--merge` | After PR creation, runs `ak:review-pr <PR> --fix --reply --merge` | Requires an approved review, merge, and green post-merge CI before completion |
+| `--merge` | After PR creation, runs `ak:review-pr <PR> --fix --reply --merge` | Requires an approved review, merge, and green post-merge CI before completion; in a batch-landing repository the merge is delegated to the landing owner |
 | `--skip-tests` | Omits the test gate | Use only when equivalent evidence already exists and record that evidence in the PR |
 | `--skip-review` | Omits pre-landing review | Leaves review risk explicit; it does not imply approval |
 | `--skip-journal` | Omits the background technical journal and the entire social step | No social draft, dry-run rendering, or publication occurs; code and PR evidence gates are unchanged |
@@ -151,6 +151,25 @@ and whether creating a new issue is acceptable.
     `--merge`, its merge CI is green. A promotion-based repository can instead
     report the stable stage as pending the beta merge.
 
+## Land through a batch-landing owner
+
+Some repositories land pull requests through their own batch-landing owner (a
+merge train, landing bot, or scheduled routine) instead of per-PR CI and author
+merges. `ak:ship` treats a repository as batch-landing only when its own
+instructions (`CLAUDE.md`, `AGENTS.md`, or its contributing or workflow docs)
+declare that owner; it never infers it from branch names or missing CI. When
+they do:
+
+- It runs the local verification those instructions require and puts the
+  evidence they name (for example a verification receipt line) in the PR body.
+- It creates the PR ready for review, and keeps it draft only when that
+  evidence is missing.
+- It stops after the PR is created and linked to its plan, even with `--merge`: it does not run
+  `ak:review-pr`, enable auto-merge, update the branch, merge, or wait for PR
+  checks. It reports `Merge=delegated` with the landing owner and `CI=n/a`.
+- Social publishing waits for the landing owner's merge, so `--social` reports
+  it as not yet eligible.
+
 ## Understand the write boundary
 
 <Callout type="warn" title="Uncommitted changes are included automatically">
@@ -198,7 +217,9 @@ A complete result should include:
 - Version change, changelog, journal, docs, and plan results when applicable.
 - Final commit SHA, pushed remote branch, and each validated PR URL.
 - Advice checkpoint status when `--advice` was requested, plus review verdict,
-  merge status, and CI status when `--merge` was requested.
+  merge status, and CI status when `--merge` was requested. The merge status is
+  `merged`, `delegated` (with the landing owner, in a batch-landing
+  repository), `blocked` with a reason, or not requested.
 - An evidence-rich PR body with honest `None`, `Not run`, or `Unavailable`
   markers instead of invented activity.
 - Any human action, accepted critical risk, missing screenshot, pending CI, or
