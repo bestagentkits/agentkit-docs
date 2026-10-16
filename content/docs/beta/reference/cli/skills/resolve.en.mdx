@@ -1,0 +1,87 @@
+---
+title: ak skills resolve
+description: Resolve a SkillX reference to a verified release and report its trust state without downloading skill files.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak skills resolve` to turn a SkillX reference into one verified release:
+its identity, version, release digest, and trust state. The command is a
+read-only lookup. It installs nothing and never reads or runs skill files.
+
+## Usage
+
+```bash
+ak skills resolve <@publisher/slug[@version][@sha256:<hex>]> [flags]
+```
+
+Supply exactly one reference. Without a version, the newest published stable
+release is selected. A digest without a version is refused by the provider.
+The `@agentkit` publisher is reserved for kit content and is refused.
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--source <provider>` | `skillx` | Select the skill source. Only `skillx` is supported. |
+
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+## Requirements
+
+SkillX access is off until you opt in.
+
+| Setting | Effect |
+| --- | --- |
+| `AGENTKIT_SKILLX=1` | Required. Any other value, or none, fails with `source skillx is disabled (set AGENTKIT_SKILLX=1)` and exit `2`. |
+| `ak secrets` ref `SKILLX_TOKEN` | Optional bearer token. A missing ref means anonymous reads. The token is read only when a request needs it and is never written. |
+| `AGENTKIT_HOME` | State home for the verified cache under `cache/skillx`. Must be an absolute path. |
+
+A vault passphrase is prompted for only from a terminal, and not with `--json`
+or `--no-interactive`.
+
+<Callout type="warning">
+  `AGENTKIT_SKILLX_HOST` and `AGENTKIT_SKILLX_DEV_TOKEN` are development
+  overrides. The host must be `localhost`, `127.0.0.1`, or `::1` with a port.
+  The dev token is honored only together with that host, and the command prints
+  a warning when it is used. Do not use either against a real account.
+</Callout>
+
+## Output
+
+The result is always marked untrusted: `untrusted` is `true`, `readable` is
+`true`, and both `installable` and `executable` are `false`. Resolving does not
+approve the skill for install or execution.
+
+JSON uses `kind=skills.resolve` with these fields under `data`:
+
+```text
+identity, version, releaseDigest, trust
+source: provider, host, keyId, manifestDigest
+cache: offline, stale
+untrusted, readable, installable, executable
+warnings[]
+```
+
+When SkillX is unreachable, the command serves verified cached data and adds an
+`offline_stale` warning. Text mode also prints a notice on stderr.
+
+## Effects and exits
+
+The command writes nothing except the disposable, size-capped SkillX cache
+under `AGENTKIT_HOME/cache/skillx`. The default blob cap is 512 MiB.
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The release was resolved. |
+| `1` | SkillX is offline with no verified cache, or the credential was refused. |
+| `2` | SkillX is disabled, flags or arguments are invalid, or the request is unsupported. |
+| `5` | The release was not found. |
+| `7` | The release is untrusted, revoked, yanked, or quarantined, or an identity or tree check failed. |
+
+## Related commands
+
+- [Complete `ak skills resolve` command facts](../cli/ak_skills_resolve)
+- [Inspect a release's metadata and files](./inspect)
+- [Read one file from a release](./read)
+- [Sync locked skills](./sync)

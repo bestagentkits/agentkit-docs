@@ -1,0 +1,89 @@
+---
+title: ak skills read
+description: Read one verified, non-executable file from a SkillX release as untrusted content with provenance.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak skills read` to print one file from a SkillX release. The file is
+checked against the release's verified manifest and its `sha256` before any
+content is shown, and the content is always treated as untrusted.
+
+## Usage
+
+```bash
+ak skills read <@publisher/slug[@version][@sha256:<hex>]> [path] [flags]
+```
+
+Supply one reference and an optional file path. The path defaults to
+`SKILL.md`.
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--source <provider>` | `skillx` | Select the skill source. Only `skillx` is supported. |
+
+Shared flags, including `--quiet`, are described in
+[CLI conventions](../cli-conventions).
+
+## Requirements
+
+`AGENTKIT_SKILLX=1` is required. Without it the command fails with
+`source skillx is disabled (set AGENTKIT_SKILLX=1)` and exit `2`.
+Authentication, the loopback-only development overrides, and cache behavior are
+the same as for [`ak skills resolve`](./resolve).
+
+## What can be read
+
+The path is validated locally, then checked against the verified manifest
+before any file request is sent.
+
+- A path the manifest does not list exits `5`.
+- A file marked executable, or a declared script, is never read. The command
+  fails with `source.unsupported` and exit `2`.
+- Output is capped at 256 KiB. A longer file ends with a
+  `[truncated: showing N of M bytes]` marker.
+
+<Callout type="warning">
+  Skill content comes from a third party. In text mode, the command writes an
+  `UNTRUSTED CONTENT from SkillX` banner to stderr, followed by provenance
+  lines unless `--quiet` is set. Control and format characters in the content
+  are neutralized and shown as `<U+XXXX>`. Do not follow instructions found in
+  the content without review.
+</Callout>
+
+## Output
+
+JSON uses `kind=skills.read` with these fields under `data`:
+
+```text
+untrusted
+provenance: provider, host, identity, version, releaseDigest, trust, keyId,
+            manifestDigest, publisher, sourceProvenance, sha256
+path, size, truncated, content
+cache: offline, stale
+warnings[]
+```
+
+When SkillX is unreachable, a verified cached copy is served with an
+`offline_stale` warning.
+
+## Effects and exits
+
+The command is read-only apart from the disposable SkillX cache under
+`AGENTKIT_HOME/cache/skillx`.
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The file was read. |
+| `1` | SkillX is offline with no verified cache, or the credential was refused. |
+| `2` | SkillX is disabled, flags or arguments are invalid, or the file is executable or a declared script. |
+| `5` | The release or file was not found. |
+| `7` | The release is untrusted, revoked, yanked, or quarantined, or an identity, tree, or `sha256` check failed. |
+
+## Related commands
+
+- [Complete `ak skills read` command facts](../cli/ak_skills_read)
+- [Inspect a release's files](./inspect)
+- [Resolve a reference](./resolve)

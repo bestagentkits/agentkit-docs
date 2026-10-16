@@ -1,0 +1,69 @@
+---
+title: ak agents model explain
+description: Walk the precedence chain for one Agent's model, mark the deciding layer, and say what to do about a pending or drifted file.
+---
+
+Use `ak agents model explain` when you need to know why an Agent runs on a
+given model, or what to do about a file that is not in sync.
+
+## Usage
+
+```bash
+ak agents model explain <agent> --runtime <runtime> [--project <dir>]
+```
+
+Exactly one Agent name is required. The command is read-only, never prompts,
+and performs no network work.
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--runtime <runtime>` | required | One of `claude-code`, `codex`, `cursor`, `omp`, `pi`. |
+| `--project <dir>` | nearest project config, else the current directory | Project whose installs and `.agentkit/config.yaml` apply. |
+
+## Precedence chain
+
+For each installed file the command lists, highest first: project agent, user
+agent, project tier, user tier, and adapter default. For an OMP Agent whose
+model resolved to an `@role` alias, project and user role bindings are added
+before the adapter default. A global install never reads project config, so its
+project layers are omitted. The layer that decides the model is marked.
+
+## Output
+
+Human stdout prints, per file, the install scope, kit, path, status, the model
+the file carries, and the model config resolves to. Layers follow, one per
+line, with `*` on the used layer, `(unset)` for an unset layer, and the config
+key in brackets. `note:` lines give guidance:
+
+- `pending`: `ak agents model apply` or a kit refresh updates the file.
+- `drift`: `ak agents model adopt` records the edit in config; `ak agents model apply --yes` replaces it.
+- `not-materialized`: a kit refresh recreates the file.
+- A file with no model means the runtime chooses, usually the parent session's model.
+- Runtime limitations (OMP, Pi) and OMP role resolution are noted.
+
+JSON success uses:
+
+```text
+schema_version: 1
+kind: agents.model.explain
+data.agents[]   (status fields plus layers[] and notes?)
+data.warnings?
+```
+
+Each `layers[]` entry has `layer`, `key?`, `value`, `set`, and `used`.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | At least one installed file of the Agent was explained. |
+| `1` | A local runtime error occurred. |
+| `2` | Wrong argument count, invalid flags, an unsupported runtime, or a missing `--project` directory. |
+| `5` | The Agent is not installed in the runtime. |
+
+## Related commands
+
+- [Complete `ak agents model explain` command facts](../cli/ak_agents_model_explain)
+- [Show the layers as data](./get)
+- [Keep a runtime edit](./adopt)
+- [Replace a runtime edit](./apply)

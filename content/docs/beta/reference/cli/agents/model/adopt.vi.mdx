@@ -1,0 +1,83 @@
+---
+title: ak agents model adopt
+description: Giữ model đã sửa trong runtime bằng cách ghi nó vào config như lựa chọn của AgentKit, để refresh không còn báo drift.
+---
+
+Dùng `ak agents model adopt` sau khi bạn sửa model của một Agent trực tiếp
+trong tệp runtime và muốn AgentKit giữ nguyên bản sửa đó.
+
+## Cách dùng
+
+```bash
+ak agents model adopt <agent> --runtime <runtime> [--scope user|project] [--project <dir>]
+```
+
+Phải có đúng một tên Agent.
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--runtime <runtime>` | bắt buộc | Một trong `claude-code`, `codex`, `cursor`, `omp`, `pi`. |
+| `--scope user\|project` | `user` | Config cần ghi: AgentKit home, hoặc `.agentkit/config.yaml` trong project. |
+| `--project <dir>` | config project gần nhất, nếu không có thì thư mục hiện tại | Project có bản cài và config được áp dụng. |
+
+## Lệnh làm gì
+
+Lệnh đọc model mà tệp đã cài của Agent đang mang, ghi nó vào config của scope
+đã chọn và ghi nhận nó là lựa chọn của AgentKit. Tệp không có model được adopt
+thành `inherit`. Trên `codex` và `omp`, reasoning effort của tệp cũng được
+adopt, và effort đã ghim sẽ bị xóa khi tệp không có effort. Giá trị phải qua
+cùng các kiểm tra như [`set`](./set), nếu không lệnh thoát với mã `2`.
+
+Lệnh không ghi lại model trong tệp Agent. Lệnh cập nhật ownership hash của tệp
+để refresh giữ nguyên tệp và uninstall vẫn xóa được nó.
+
+Mọi tệp đã cài đọc được của Agent phải mang cùng một model. Nếu khác nhau, lệnh
+thất bại với mã `1` và bảo bạn dùng `set`.
+
+## Quy tắc scope
+
+Một tệp chỉ được adopt khi config, sau khi được ghi, resolve ra đúng model hiện
+tại của tệp. Các tệp khác giữ nguyên bản ghi và được nêu trong cảnh báo:
+
+- Bản cài global chỉ đọc config user nên `--scope project` không tác động tới nó.
+- Khi config project ghim Agent, nó thắng config user, nên hãy dùng `--scope project`.
+
+Nếu scope không tác động tới tệp nào của Agent, lệnh thoát với mã `2` và để
+nguyên config.
+
+## Tác động phụ
+
+Lệnh lấy kit lifecycle lock, sao lưu rồi ghi lại `config.yaml` của scope khi
+tệp tồn tại (project scope tạo sẵn tệp trước). Lệnh chứng minh AgentKit vẫn sở
+hữu mọi tệp sắp ghi nhận trước khi đổi config. Tệp mà AgentKit không chứng minh
+được quyền sở hữu khiến lệnh thoát với mã `1` và không ghi gì.
+
+## Đầu ra
+
+Stdout cho người dùng báo `adopt <runtime> agent <agent> in <config path>`, rồi
+đến bảng trạng thái. JSON thành công dùng:
+
+```text
+schema_version: 1
+kind: agents.model.adopt
+data.action, data.runtime, data.agent, data.scope
+data.config_path, data.config_changed
+data.backup_paths?, data.applied?
+data.agents[], data.warnings?
+```
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Bản sửa đã được ghi nhận. |
+| `1` | Lệnh thất bại, gồm các tệp mang model khác nhau hoặc tệp mà AgentKit không chứng minh được quyền sở hữu. |
+| `2` | Tên Agent, scope, cờ hoặc giá trị adopt không hợp lệ, runtime không được hỗ trợ, scope không adopt được tệp nào, hoặc thư mục `--project` không tồn tại. |
+| `4` | Một thao tác AgentKit khác đang giữ kit lifecycle lock. |
+| `5` | Không có tệp đã cài đọc được của Agent trong runtime. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak agents model adopt`](../cli/ak_agents_model_adopt)
+- [Giải thích một tệp drift](./explain)
+- [Thay thế bản sửa thay vì giữ](./apply)

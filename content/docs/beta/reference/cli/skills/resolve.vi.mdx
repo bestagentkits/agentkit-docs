@@ -1,0 +1,87 @@
+---
+title: ak skills resolve
+description: Resolve một reference SkillX thành release đã xác minh và báo trạng thái trust mà không tải file của Skill.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak skills resolve` để biến một reference SkillX thành một release đã xác
+minh: identity, version, release digest và trạng thái trust. Lệnh chỉ tra cứu,
+không ghi gì. Nó không cài đặt và không bao giờ đọc hay chạy file của Skill.
+
+## Cách dùng
+
+```bash
+ak skills resolve <@publisher/slug[@version][@sha256:<hex>]> [flags]
+```
+
+Cung cấp đúng một reference. Nếu không có version, release stable mới nhất đã
+publish sẽ được chọn. Provider từ chối digest không kèm version. Publisher
+`@agentkit` được dành riêng cho nội dung Kit và bị từ chối.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--source <provider>` | `skillx` | Chọn nguồn Skill. Hiện chỉ hỗ trợ `skillx`. |
+
+Các cờ dùng chung nằm trong [quy ước CLI](../cli-conventions).
+
+## Điều kiện
+
+Truy cập SkillX bị tắt cho đến khi bạn bật.
+
+| Thiết lập | Tác dụng |
+| --- | --- |
+| `AGENTKIT_SKILLX=1` | Bắt buộc. Giá trị khác hoặc không đặt sẽ lỗi `source skillx is disabled (set AGENTKIT_SKILLX=1)` và thoát `2`. |
+| Ref `ak secrets` `SKILLX_TOKEN` | Bearer token tuỳ chọn. Thiếu ref nghĩa là đọc ẩn danh. Token chỉ được đọc khi request cần và không bao giờ bị ghi ra. |
+| `AGENTKIT_HOME` | State home chứa cache đã xác minh tại `cache/skillx`. Phải là đường dẫn tuyệt đối. |
+
+Passphrase của vault chỉ được hỏi từ terminal, và không hỏi khi dùng `--json`
+hoặc `--no-interactive`.
+
+<Callout type="warning">
+  `AGENTKIT_SKILLX_HOST` và `AGENTKIT_SKILLX_DEV_TOKEN` là override cho phát
+  triển. Host phải là `localhost`, `127.0.0.1` hoặc `::1` kèm port. Dev token
+  chỉ có hiệu lực cùng host đó, và lệnh in cảnh báo khi dùng. Không dùng chúng
+  với tài khoản thật.
+</Callout>
+
+## Đầu ra
+
+Kết quả luôn được đánh dấu untrusted: `untrusted` là `true`, `readable` là
+`true`, còn `installable` và `executable` đều là `false`. Resolve không phê
+duyệt Skill để cài hay chạy.
+
+JSON dùng `kind=skills.resolve` với các trường sau dưới `data`:
+
+```text
+identity, version, releaseDigest, trust
+source: provider, host, keyId, manifestDigest
+cache: offline, stale
+untrusted, readable, installable, executable
+warnings[]
+```
+
+Khi không kết nối được SkillX, lệnh trả dữ liệu cache đã xác minh và thêm cảnh
+báo `offline_stale`. Chế độ text còn in thông báo ra stderr.
+
+## Tác động và mã thoát
+
+Lệnh không ghi gì ngoài cache SkillX dùng một lần, có giới hạn dung lượng, tại
+`AGENTKIT_HOME/cache/skillx`. Giới hạn blob mặc định là 512 MiB.
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Release đã được resolve. |
+| `1` | SkillX offline và không có cache đã xác minh, hoặc credential bị từ chối. |
+| `2` | SkillX bị tắt, cờ hoặc argument không hợp lệ, hoặc request không được hỗ trợ. |
+| `5` | Không tìm thấy release. |
+| `7` | Release untrusted, bị revoke, yank hoặc quarantine, hoặc kiểm tra identity hay tree thất bại. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skills resolve`](../cli/ak_skills_resolve)
+- [Inspect metadata và file của release](./inspect)
+- [Đọc một file của release](./read)
+- [Sync Skill theo lock](./sync)

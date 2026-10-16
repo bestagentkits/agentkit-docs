@@ -33,8 +33,8 @@ export const RELEASE_QUALITY_BASELINE = Object.freeze({
   locales: ['en', 'vi'],
   deterministic: {
     outputBytes: 3_047_146_912,
-    // Preserve the previous per-route allowance as coverage grows 411 -> 449 -> 456 -> 481 -> 482 -> 485 -> 517.
-    outputBudgetBytes: 3_610_495_897,
+    // Preserve the previous per-route allowance as coverage grows 411 -> 449 -> 456 -> 481 -> 482 -> 485 -> 517 -> 541.
+    outputBudgetBytes: 3_778_301_367,
     fileCount: 23_584,
     fileCountBudget: 27_484,
     // Aggregate across the four locale/channel shards.
@@ -46,7 +46,7 @@ export const RELEASE_QUALITY_BASELINE = Object.freeze({
     // reference/cli/describe pages, plus the kits/marketing/skills/filmmaking
     // guide, guides/jev-clef, guides/choosing-ui-testing-skills and
     // guides/choosing-subagent-models, ahead of promotion.
-    searchPagesPerLocaleChannel: { stable: 488, beta: 494 },
+    searchPagesPerLocaleChannel: { stable: 488, beta: 518 },
     // Pages outside every channel (the unlisted `_showcase` visual QA page) are
     // real site routes but never search results: each shard must contain only
     // the pages served under its own locale/channel prefix.

@@ -1,0 +1,105 @@
+---
+title: ak skills sync
+description: Project every skill pinned in the skill lock at exactly its locked digest, without upgrading or changing the pins.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak skills sync --locked` to make the installed skills match the skill lock
+for a scope. Each locked package is projected at exactly its locked digest. The
+command never upgrades a skill and does not change what the lock pins.
+
+## Usage
+
+```bash
+ak skills sync --locked [flags]
+```
+
+The command accepts no positional arguments. `--locked` is required; without it
+the command exits `2` with a usage error.
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--locked` | `false` | Required. Confirms the sync follows the lock and never upgrades. |
+| `--scope <scope>` | `project` | Select `project` or `global`. |
+| `--runtime <list>` | Runtimes whose receipt records a user owner, else `claude-code` | Repeatable or comma-separated, such as `claude-code,codex`. |
+| `--dry-run` | `false` | Plan the changes and report them without writing. |
+
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+## Requirements
+
+Both gates must be set to exactly `1`.
+
+| Setting | Effect |
+| --- | --- |
+| `AGENTKIT_SKILLX=1` | Enables SkillX release-state checks. |
+| `AGENTKIT_SKILL_STORE=1` | Enables the content store the packages are projected from. |
+
+If either is off, the command exits `2`.
+
+## What it reads and writes
+
+| Item | Location |
+| --- | --- |
+| Project lock | `.agentkit/skill-state/skill-lock.json` |
+| Global lock | `AGENTKIT_HOME/state/skill-lock.json` |
+| Project Claude Code skills | `<project>/.claude/skills` |
+| Global Claude Code skills | `<claude home>/skills` |
+| Codex skills | Resolved by the Codex adapter |
+
+The command applies without a prompt. It never runs declared scripts, `npm`,
+`npx`, or SkillX installers. Projected files have mode `0644` and are never
+executable.
+
+- An intact, already projected package needs no network.
+- Offline, a package with a verified store copy still installs, with an
+  `offline_stale` warning. A package without a copy fails with `source.offline`
+  and nothing changes.
+- A digest that does not match the lock fails with `store.digest_mismatch`.
+
+<Callout type="warning">
+  The sync is one journaled transaction under the kit lifecycle lock, which
+  waits 10 seconds before reporting busy. It refuses a lock that changed during
+  the run, and it refuses project state that is not recorded in the root
+  registry, treating it as untrusted. Preview with `--dry-run` first on a project you did not
+  create.
+</Callout>
+
+## Output
+
+JSON uses `kind=skills.sync` with these fields under `data`:
+
+```text
+operation, scope, dryRun, applied, changed, planDigest
+lockPath, lockGeneration
+packages[]: identity, version, releaseDigest, trust, exposure, alias, host,
+            keyId, manifestDigest, declaredScripts, executable (false), fromStore
+targets[]: runtime, root, rootIdentity, alias, action, projectionDigest,
+           writes, removes, preserved
+warnings[]
+```
+
+A target `action` is `create`, `replace`, `co-own`, `repair`, `unchanged`,
+`remove`, or `release`.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The sync succeeded or there was nothing to change. |
+| `1` | Offline without a verified copy, a credential was refused, a path was too long, or recovery is required. |
+| `2` | SkillX or the store is disabled, flags or arguments are invalid, or an alias is reserved. |
+| `4` | The kit lifecycle lock is held by another operation. |
+| `5` | A release was not found or not entitled. |
+| `6` | Alias collision, an unowned or modified path, untrusted project state, or the lock changed during the run. |
+| `7` | A release is revoked, yanked, quarantined, or untrusted, a link sits in a target path, or a digest mismatched. |
+
+## Related commands
+
+- [Complete `ak skills sync` command facts](../cli/ak_skills_sync)
+- [Install a skill](./install)
+- [Remove a skill](./remove)
+- [Resolve a SkillX reference](./resolve)

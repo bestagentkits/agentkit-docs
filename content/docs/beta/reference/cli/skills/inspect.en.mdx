@@ -1,0 +1,76 @@
+---
+title: ak skills inspect
+description: Show a verified SkillX release's metadata, provenance, file list, and declared scripts without reading executable files.
+---
+
+Use `ak skills inspect` to review a SkillX release before you decide anything
+else: who published it, where it came from, which files it holds, and which
+scripts it declares. The command reads `SKILL.md` frontmatter only. It never
+requests executable or declared-script files.
+
+## Usage
+
+```bash
+ak skills inspect <@publisher/slug[@version][@sha256:<hex>]> [flags]
+```
+
+Supply exactly one reference. Without a version, the newest published stable
+release is selected. A digest without a version is refused by the provider.
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--source <provider>` | `skillx` | Select the skill source. Only `skillx` is supported. |
+
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+## Requirements
+
+`AGENTKIT_SKILLX=1` is required. Without it the command fails with
+`source skillx is disabled (set AGENTKIT_SKILLX=1)` and exit `2`.
+Authentication, the `ak secrets` ref `SKILLX_TOKEN`, the loopback-only
+development overrides, and cache behavior are the same as for
+[`ak skills resolve`](./resolve).
+
+## Output
+
+Text output lists the release, then each file. A file that cannot be read is
+marked `[declared script, not readable]` or `[executable, not readable]`.
+
+JSON uses `kind=skills.inspect` with the `resolve` fields plus these under
+`data`:
+
+```text
+kind, channel, createdAt, name, description
+publisher: handle, verifiedBy
+sourceProvenance: repo, commit, path
+files[]: path, mode, size, sha256, readable
+declaredScripts, exposure
+compatibility: declared, verified ("unknown")
+license: declared, entitlement ("readable")
+frontmatter
+```
+
+The result is untrusted: `compatibility.verified` is always `unknown`, and
+inspecting does not approve the skill for install or execution. When SkillX is
+unreachable, verified cached data is served with an `offline_stale` warning.
+
+## Effects and exits
+
+The command is read-only apart from the disposable SkillX cache under
+`AGENTKIT_HOME/cache/skillx`.
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The release was inspected. |
+| `1` | SkillX is offline with no verified cache, or the credential was refused. |
+| `2` | SkillX is disabled, flags or arguments are invalid, or the request is unsupported. |
+| `5` | The release was not found. |
+| `7` | The release is untrusted, revoked, yanked, or quarantined, or an identity or tree check failed. |
+
+## Related commands
+
+- [Complete `ak skills inspect` command facts](../cli/ak_skills_inspect)
+- [Resolve a reference](./resolve)
+- [Read one file from a release](./read)

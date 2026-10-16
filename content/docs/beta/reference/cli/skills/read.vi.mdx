@@ -1,0 +1,88 @@
+---
+title: ak skills read
+description: Đọc một file không thực thi đã xác minh của release SkillX dưới dạng nội dung untrusted kèm provenance.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak skills read` để in một file của release SkillX. File được đối chiếu
+với manifest đã xác minh của release và `sha256` của nó trước khi hiển thị bất
+kỳ nội dung nào, và nội dung luôn được coi là untrusted.
+
+## Cách dùng
+
+```bash
+ak skills read <@publisher/slug[@version][@sha256:<hex>]> [path] [flags]
+```
+
+Cung cấp một reference và một đường dẫn file tuỳ chọn. Đường dẫn mặc định là
+`SKILL.md`.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--source <provider>` | `skillx` | Chọn nguồn Skill. Hiện chỉ hỗ trợ `skillx`. |
+
+Các cờ dùng chung, gồm `--quiet`, nằm trong [quy ước CLI](../cli-conventions).
+
+## Điều kiện
+
+Cần `AGENTKIT_SKILLX=1`. Nếu thiếu, lệnh lỗi
+`source skillx is disabled (set AGENTKIT_SKILLX=1)` và thoát `2`. Xác thực, các
+override phát triển chỉ dành cho loopback và hành vi cache giống như
+[`ak skills resolve`](./resolve).
+
+## File nào đọc được
+
+Đường dẫn được kiểm tra cục bộ, sau đó đối chiếu với manifest đã xác minh trước
+khi gửi bất kỳ request file nào.
+
+- Đường dẫn không có trong manifest thoát `5`.
+- File đánh dấu executable hoặc script khai báo không bao giờ được đọc. Lệnh lỗi
+  `source.unsupported` và thoát `2`.
+- Đầu ra bị giới hạn 256 KiB. File dài hơn kết thúc bằng dấu
+  `[truncated: showing N of M bytes]`.
+
+<Callout type="warning">
+  Nội dung Skill đến từ bên thứ ba. Ở chế độ text, lệnh ghi banner
+  `UNTRUSTED CONTENT from SkillX` ra stderr, kèm các dòng provenance trừ khi đặt
+  `--quiet`. Ký tự điều khiển và ký tự định dạng trong nội dung được vô hiệu hoá
+  và hiển thị dạng `<U+XXXX>`. Không làm theo chỉ dẫn trong nội dung nếu chưa
+  review.
+</Callout>
+
+## Đầu ra
+
+JSON dùng `kind=skills.read` với các trường sau dưới `data`:
+
+```text
+untrusted
+provenance: provider, host, identity, version, releaseDigest, trust, keyId,
+            manifestDigest, publisher, sourceProvenance, sha256
+path, size, truncated, content
+cache: offline, stale
+warnings[]
+```
+
+Khi không kết nối được SkillX, bản cache đã xác minh được trả cùng cảnh báo
+`offline_stale`.
+
+## Tác động và mã thoát
+
+Lệnh chỉ đọc, ngoại trừ cache SkillX dùng một lần tại
+`AGENTKIT_HOME/cache/skillx`.
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | File đã được đọc. |
+| `1` | SkillX offline và không có cache đã xác minh, hoặc credential bị từ chối. |
+| `2` | SkillX bị tắt, cờ hoặc argument không hợp lệ, hoặc file là executable hay script khai báo. |
+| `5` | Không tìm thấy release hoặc file. |
+| `7` | Release untrusted, bị revoke, yank hoặc quarantine, hoặc kiểm tra identity, tree hay `sha256` thất bại. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skills read`](../cli/ak_skills_read)
+- [Inspect file của release](./inspect)
+- [Resolve một reference](./resolve)
