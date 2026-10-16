@@ -150,8 +150,7 @@ prompt trust.
 - **Runtime setup-target claims:** AgentKit has seven setup targets
   (`claude-code`, `codex`, `cursor`, `dsh`, `grok`, `omp`, `pi`); `agy` and
   `portable` are export-only and Cloud Harness is distribution-only. Production
-  versus spike status, `ak run --target` dispatch (`dsh`, `grok`, `omp`; never
-  `pi`), and the restricted lists are recorded in
+  versus spike status, `ak run --target` dispatch (every setup target except `pi`), and the restricted lists are recorded in
   `fixtures/runtime-targets/setup-targets.json`. Update that fixture from the
   AgentKit runtime support matrix when a runtime changes, and run
   `pnpm check:runtime-targets` (add `--source <agentkit-checkout>` to compare the

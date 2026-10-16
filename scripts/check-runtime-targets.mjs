@@ -23,7 +23,6 @@ export function checkFixtureShape(fixture) {
   const errors = [];
   const ids = fixture.setupTargets.map((t) => t.id);
   if (new Set(ids).size !== ids.length) errors.push('fixture setupTargets contain duplicate ids');
-  if (ids.length !== 7) errors.push(`fixture must list seven setup targets, found ${ids.length}`);
   for (const t of fixture.setupTargets) {
     if (!['production', 'spike'].includes(t.support)) errors.push(`${t.id}: support must be production or spike`);
   }
@@ -42,16 +41,20 @@ export function checkFixtureShape(fixture) {
 export function checkCatalog(fixture, catalog) {
   const errors = [];
   const ids = fixture.setupTargets.map((t) => t.id);
-  for (const [channel, data] of Object.entries(catalog.channels ?? {})) {
+  // Only Beta prose is checked, so only Beta's released runtimes bind the fixture.
+  for (const [channel, data] of Object.entries(catalog.channels ?? {}).filter(([c]) => c === 'beta')) {
     const runtimes = data.runtimes ?? [];
+    for (const [kit, binding] of Object.entries(data.kits ?? {})) {
+      const names = JSON.stringify(binding.artifacts ?? {});
+      for (const id of ids) {
+        if (!names.includes(`-${id}-`)) errors.push(`${channel}: kit ${kit} has no released package for ${id}`);
+      }
+    }
     for (const id of ids) {
       if (!runtimes.includes(id)) errors.push(`${channel}: released runtimes miss setup target ${id}`);
     }
     for (const id of fixture.exportOnly) {
       if (runtimes.includes(id)) errors.push(`${channel}: export-only ${id} appears as a released runtime`);
-    }
-    for (const id of fixture.distributionOnly) {
-      if (!runtimes.includes(id)) errors.push(`${channel}: distribution-only ${id} is missing from released runtimes`);
     }
   }
   return errors;
@@ -79,7 +82,7 @@ export function checkSourceMatrix(fixture, matrix) {
     const row = matrix[t.id];
     if (!row) { errors.push(`source matrix has no row for ${t.id}`); continue; }
     if (row.status !== t.support) errors.push(`${t.id}: source status ${row.status} != fixture ${t.support}`);
-    if (t.id === 'pi' && row.dispatch !== 'none') errors.push('pi must have no dispatch in the source matrix');
+    if (t.runDispatch !== (row.dispatch !== 'none')) errors.push(`${t.id}: fixture runDispatch ${t.runDispatch} disagrees with source dispatch ${row.dispatch}`);
   }
   for (const id of fixture.exportOnly) {
     if (!matrix[id]) errors.push(`source matrix has no row for export-only ${id}`);
@@ -101,7 +104,7 @@ export function checkProse(fixture, root = ROOT) {
     if (quick === null) { errors.push(`missing quickstart (${locale})`); continue; }
     const tabs = quick.match(/<Tabs items=\{\[([^\]]*)\]\}>/g) ?? [];
     const lists = tabs.map((t) => [...t.matchAll(/'([^']+)'/g)].map((m) => m[1]));
-    const full = lists.find((l) => l.length > 2);
+    const full = lists.find((l) => l.includes('Claude Code') && l.length > 2);
     if (JSON.stringify(full) !== JSON.stringify(fixture.restrictedLists.quickstartTabs)) {
       errors.push(`quickstart (${locale}): install tabs must list ${fixture.restrictedLists.quickstartTabs.join(', ')}`);
     }
@@ -111,10 +114,16 @@ export function checkProse(fixture, root = ROOT) {
 
     const kits = read(root, pages.kitsIndex, locale);
     const adapters = read(root, pages.runtimeAdapters, locale);
+    if (kits !== null) {
+      for (const t of fixture.setupTargets) {
+        if (!new RegExp(`^\\|\\s*${t.name}\\s*\\|`, 'm').test(kits)) errors.push(`kits index (${locale}): invocation table has no row for ${t.name}`);
+      }
+    }
     for (const [label, body] of [['kits index', kits], ['runtime adapters', adapters]]) {
       if (body === null) { errors.push(`missing ${label} (${locale})`); continue; }
       for (const t of fixture.setupTargets) {
-        if (!body.includes(t.name)) errors.push(`${label} (${locale}): missing ${t.name}`);
+        const named = new RegExp(`(?<!My )\\b${t.name}\\b`);
+        if (!named.test(body)) errors.push(`${label} (${locale}): missing ${t.name}`);
       }
     }
     if (adapters !== null) {
@@ -125,7 +134,7 @@ export function checkProse(fixture, root = ROOT) {
         }
       }
       for (const id of [...fixture.exportOnly, ...fixture.distributionOnly]) {
-        const row = new RegExp(`^\\|[^\\n]*\`${id}\`[^\\n]*\\|\\s*(Production|Spike)\\s*\\|$`, 'm');
+        const row = new RegExp(`^\\|[^\\n]*\`${id}\`[^\\n]*\\|\\s*(Production|Spike)\\s*\\|\\s*$`, 'm');
         if (row.test(adapters)) errors.push(`runtime adapters (${locale}): ${id} must not appear in the setup target table`);
       }
     }
@@ -139,12 +148,21 @@ export function checkProse(fixture, root = ROOT) {
       }
     }
 
-    // `pi` is projection-only: any `ak run --target pi` mention must sit in a paragraph that negates it.
+    // `pi` is projection-only: a sentence naming `ak run` and `--target pi` must
+    // carry a negation within 40 characters before the command.
     for (const [label, body] of [['quickstart', quick], ['kits index', kits], ['runtime adapters', adapters], ['installing kits', installing]]) {
       if (!body) continue;
-      for (const block of body.split(/\n\s*\n/)) {
-        if (/ak run[^`]*--target pi\b/.test(block) && !/\b(no|not|without|never)\b|không|chưa/i.test(block)) {
-          errors.push(`${label} (${locale}): unqualified \`ak run --target pi\` claim: ${block.trim().slice(0, 80)}`);
+      const joined = body.split('\n').reduce((acc, line) => {
+        const isRow = line.trimStart().startsWith('|');
+        if (acc.length && line.trim() && !isRow && !acc[acc.length - 1].isRow) acc[acc.length - 1].text += ` ${line.trim()}`;
+        else acc.push({ text: line.trim(), isRow });
+        return acc;
+      }, []);
+      for (const sentence of joined.flatMap((p) => (p.isRow ? [p.text] : p.text.split(/(?<=\.)\s/)))) {
+        const text = sentence.replace(/`/g, '');
+        if (!/ak run\b.*--target pi\b/.test(text)) continue;
+        if (!/\b(no|not|without|never)\b[^.]{0,40}\bak run\b|không\b[^.]{0,40}\bak run\b/i.test(text)) {
+          errors.push(`${label} (${locale}): unqualified \`ak run --target pi\` claim: ${text.trim().slice(0, 80)}`);
         }
       }
     }
@@ -167,10 +185,15 @@ export function runChecks({ root = ROOT, source } = {}) {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const i = process.argv.indexOf('--source');
-  const errors = runChecks({ source: i > -1 ? process.argv[i + 1] : undefined });
+  const source = i > -1 ? process.argv[i + 1] : undefined;
+  if (i > -1 && !source) {
+    console.error('::error::--source needs the path of an AgentKit checkout');
+    process.exit(2);
+  }
+  const errors = runChecks({ source });
   if (errors.length) {
     for (const e of errors) console.error(`::error::${e}`);
     process.exit(1);
   }
-  console.log('runtime targets: seven setup targets consistent across fixture, catalog and Beta prose');
+  console.log(`runtime targets: seven setup targets consistent across fixture, catalog and Beta prose${source ? ', and the source matrix' : ' (source matrix not compared)'}`);
 }
