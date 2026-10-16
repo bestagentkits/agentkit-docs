@@ -35,9 +35,9 @@ observed data rather than invented narrative.
   Engineer Kit is installed for the runtime and scope you are using.
 - Open a Git repository with the history you intend to analyze.
 - Choose a supported timeframe and confirm repository-local time boundaries.
-- Ensure common shell tools and `git` are available.
+- Ensure `git` and Python are available for the bundled metrics collector.
 - Make `gh` available and authenticated only if you want optional issue data.
-- Review author-email privacy before requesting `--team` output.
+- Review author-name privacy before requesting `--team` output.
 
 | Runtime | Invocation | Availability boundary |
 | --- | --- | --- |
@@ -111,17 +111,23 @@ $ak:retro 2026-07-15:2026-07-28 --compare --team --format md
 
 1. **The Skill resolves dates.** It converts the timeframe to `SINCE` and
    `UNTIL`; comparison mode also creates the equal-length preceding window.
-2. **It gathers raw Git metrics.** Commands count commits, active dates, LOC
-   added and removed, changed files, hotspots, commit-subject types, authors,
-   and test-file changes. Empty results become `0` or `N/A`.
+2. **It captures one Git snapshot per period.** The bundled
+   `scripts/collect-git-metrics.py` reads one bounded history snapshot between
+   explicit ISO timestamps, including timezone, and returns JSON. Totals,
+   activity days, authors, commit-subject types, file hotspots, line changes,
+   and test-file changes all derive from that snapshot. A failed Git command is
+   unavailable evidence, not zero activity.
 3. **It computes derived indicators.** The report shows commit frequency,
    active-day ratio, test-to-code change ratio, and churn formulas rather than
    presenting them as opaque scores.
-4. **It checks optional issue evidence.** When `gh` is available, it may query
-   closed issues for the period; otherwise issue metrics remain `N/A`.
-5. **It scans recent plan files.** It creates a temporary period sentinel and
-   inspects up to twenty matching Markdown files under `plans/`, counting checked
-   and unchecked tasks.
+4. **It checks optional issue evidence.** When `gh` is available, it may count
+   opened and closed issues for the period, separately from plan completion;
+   otherwise issue metrics remain `N/A`.
+5. **It checks plans touched in the period.** It uses the snapshot's changed
+   paths under the plan root to find tracked plans, then reads their current
+   checkbox state. Current checklist state is reported separately from
+   historical completion evidence, and file modification time is not treated as
+   Git history.
 6. **It writes the report.** Markdown goes to
    `plans/reports/retro-{YYMMDD}-{slug}.md`; HTML uses the same name with
    `.html` and inline CSS. Enabled AntV panels retain the jsDelivr dependency
@@ -139,14 +145,21 @@ Skill may split it into multiple report files.
   to prompt investigation, not to rank contributors or claim product quality.
 </Callout>
 
-- Binary files and non-numeric `git --numstat` rows are excluded from LOC sums.
+- The report keeps the collector's provenance: the pinned `HEAD` revision, the
+  shallow-history flag, the explicit ISO bounds, and the date, diff, and path
+  policies. Git filters by committer date, and activity days keep each
+  committer timestamp's own offset rather than one shared reporting timezone.
+- A shallow clone may omit activity. Binary changes have no numeric LOC and are
+  counted separately from line totals.
+- Commit counts, LOC, and author activity are descriptive signals, not
+  individual productivity or code quality.
 - Test-to-code ratio measures changed filenames matching test patterns, not test
   coverage or test quality.
 - Conventional-commit distribution is only meaningful when subjects follow
   that convention.
 - Churn uses `(added + removed) / max(net, 1)`; negative or near-zero net change
   can make the value hard to interpret.
-- Author grouping uses Git email addresses and may split one person across
+- Author grouping uses Git author names and may split one person across
   identities or expose personal data in the report.
 - Issue data requires an authenticated `gh` command and may make a read-only
   network request to GitHub. If unavailable, record `N/A` rather than prompting
@@ -155,7 +168,7 @@ Skill may split it into multiple report files.
 ## Keep effects and approvals bounded
 
 - Source files remain read-only, but the workflow does write retrospective
-  artifacts under `plans/reports/` and a temporary sentinel under `/tmp`.
+  artifacts under `plans/reports/`.
 - Shell and Git processes run locally and may scan substantial history; large
   repositories or long periods can take longer than the default seven-day run.
 - HTML output uses inline CSS. When AntV panels are enabled, opening the report
@@ -199,8 +212,7 @@ and confirm no source files changed before sharing the retrospective.
 
 - The report does not include product outcomes, review quality, incident data,
   deployment frequency, or uncommitted work unless you provide separate evidence.
-- The issue completion formula described by the Skill requires opened and closed
-  counts, while its example query gathers closed issues only; report the rate as
-  `N/A` unless both sides are verified.
+- Plan evidence reflects the current checklist state of plans touched in the
+  period, not a historical record of when each task was completed.
 - Editorial visuals apply only to `--format html`; `--format md` remains
   unchanged.

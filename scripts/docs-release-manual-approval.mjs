@@ -134,7 +134,7 @@ async function validateManualV1(args) {
     suppliedChanges,
     await resolveV1GitChanges(repoRoot, args['--docs-base-sha']),
   );
-  const violations = v1WriteViolations(changes, request.paths);
+  const violations = v1WriteViolations(changes, request.paths, request.pathActions ?? []);
   if (violations.length) {
     throw new Error(`V1 write scope rejected:\n${violations.map((item) => `- ${item}`).join('\n')}`);
   }

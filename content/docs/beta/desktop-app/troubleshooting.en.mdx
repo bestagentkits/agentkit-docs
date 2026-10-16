@@ -3,7 +3,7 @@ title: Troubleshoot the Desktop app
 description: Diagnose first-launch, license, local-data, platform, and staged-update problems without deleting user state.
 ---
 
-Start with the symptom below. Keep the verified v2.15.0-beta.3 artifact and preserve
+Start with the symptom below. Keep the verified vAK_DESKTOP_VERSION artifact and preserve
 AgentKit state while you diagnose the issue.
 
 ## The window does not open
@@ -11,12 +11,21 @@ AgentKit state while you diagnose the issue.
 | Symptom | Meaning | Safe next step |
 | --- | --- | --- |
 | `ak gui` prints a Desktop download hint and exits `1` | You ran the standard non-Wails CLI artifact | Run the verified Desktop artifact directly |
-| Linux ARM64 or Windows ARM64 prints an availability warning and exits `0` | v2.15.0-beta.3 has no Desktop package for that architecture | Use the CLI or browser dashboard; do not substitute an x64 binary |
+| Linux ARM64 or Windows ARM64 prints an availability warning and exits `0` | No vAK_DESKTOP_VERSION Desktop package was published for that architecture | Use the CLI or browser dashboard; do not substitute an x64 binary |
 | macOS blocks the app | Gatekeeper has not allowed this bundle | Recheck SHA-256, then use the allow-once flow in [Installation](./installation) |
-| Linux reports permission denied | The AppImage is not executable | Run `chmod +x ak-gui_2.15.0-beta.3_linux_amd64.AppImage` as your user |
+| Linux reports permission denied | The AppImage is not executable | Run `chmod +x AK_DESKTOP_FILE_linux_amd64` as your user |
 | Linux reports a FUSE error | The host lacks the AppImage FUSE compatibility layer | Install the distribution's compatibility package; do not run as root |
+| Linux reports that the WebKitGTK runtime for this build was not found, then exits | The startup preflight could not find the WebKit helper processes the window needs | Install the WebKitGTK 4.1 runtime (`libwebkit2gtk-4.1-0` on Debian and Ubuntu, `webkit2gtk4.1` on Fedora, `webkit2gtk-4.1` on Arch), then retry |
 | Windows shows SmartScreen | Windows is evaluating the downloaded executable | Recheck SHA-256 before choosing **More info → Run anyway** for the matching release artifact |
 | Windows reports that Microsoft Edge WebView2 Runtime was not found | The startup preflight could not find the required WebView2 runtime | Install or repair WebView2 from [Microsoft's official download page](https://developer.microsoft.com/microsoft-edge/webview2/consumer/), then retry |
+
+On Linux, the AppImage is currently verified on Debian and Ubuntu. On Fedora,
+Arch, and other distributions that install WebKit's helper processes in a
+different location, the window can still fail to open with the 4.1 runtime
+installed; see [Installation](./installation). If your runtime is installed in
+a working layout that the preflight check does not recognize, set
+`AK_GUI_SKIP_WEBKIT_PREFLIGHT=1` to launch anyway. Skipping the check does not
+fix a missing runtime; the launch can still abort.
 
 Desktop requires a graphical session. `--no-interactive` does not suppress the
 window, and `--json` and `--quiet` do not create a structured or silent launch.
@@ -33,8 +42,20 @@ appropriate authentication and network controls.
 ## Desktop remains on the license screen
 
 A successful CLI login does not activate Desktop. Enter a valid App license in
-Desktop while online. If the 72-hour offline grace period has expired, reconnect
-so Desktop can verify it again.
+Desktop while online. If Desktop says **Offline access expired**, the 72-hour
+offline grace period since the last successful check has run out; reconnect
+and activate again so Desktop can verify the license. A message that this device was signed out of
+the license, or that the license is no longer active, is a registry decision;
+activate again with the license key or contact support.
+
+If activation reports that the device limit is reached, a single-seat license
+moves to this device automatically and a full multi-seat license offers **Move
+the license to this device**. `ak login --license-key` does not move seats,
+so use Desktop for that choice. Each move signs the previous device out and
+emails the license owner. If Desktop says the license already moved between
+devices 3 times in the last 24 hours, remove a device at
+[agentkit.best/account/licenses](https://agentkit.best/account/licenses) or try
+again later.
 
 If Desktop reports that it cannot read or save the session, inspect ownership
 and permissions of `$AGENTKIT_HOME/auth/session.json`. Do not paste the file
@@ -53,10 +74,21 @@ Sign out** clears only the local App slot; `ak logout` clears only the CLI slot.
   `$AGENTKIT_HOME/analytics/analytics.db` while Desktop is open. An empty view
   can mean there is no supported local evidence yet; it does not prove files
   were deleted.
+- Desktop sets up the local analytics index on its own and rebuilds one it can
+  no longer open, unless you disabled or deleted the index. After a disable or
+  delete, switch **Use local index** back on in the Settings Database tab or run
+  `ak analytics enable`. Use **Sync now** in that tab to refresh it.
 - Removing a project in Desktop removes only its AgentKit registry entry. It
   does not delete the project directory.
 
-Desktop v2.15.0-beta.3 does not launch Kit skills or agent runs. Run the skill in its
+{/* Evidence: #1740. */}
+
+If onboarding reports that Node.js is missing, use its explicit Node.js LTS
+installation action or the displayed manual hint. Wait for the version recheck,
+then rerun the affected Kit install or refresh so Node-backed Hooks and status
+lines can be configured.
+
+Desktop vAK_DESKTOP_VERSION does not launch Kit skills or agent runs. Run the skill in its
 coding assistant before expecting new Activity or session evidence.
 
 ## A port is busy
@@ -75,8 +107,7 @@ does not stop a dashboard or API server started separately.
 
 ## An update will not complete
 
-- Windows x64 rejects paired Desktop apply in v2.15.0-beta.3. Download and verify the
-  replacement Desktop zip manually.
+- Windows x64 stages the matching CLI and Desktop artifacts, then a trusted handoff helper commits the swap after the parent process releases the executables. If that cannot complete, download and verify the replacement Desktop zip manually.
 - On macOS or Linux x64, keep the matching standard CLI installed and preserve
   `$AGENTKIT_HOME/updater/pending-binary-update.json` plus its reported staging
   directory.
@@ -98,7 +129,7 @@ Quit Desktop, open a terminal, and launch the exact installed executable:
 ```
 
 ```bash
-./ak-gui_2.15.0-beta.3_linux_amd64.AppImage
+./AK_DESKTOP_FILE_linux_amd64
 ```
 
 ```powershell

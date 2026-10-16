@@ -20,13 +20,33 @@ Lệnh không nhận argument theo vị trí.
 | --- | --- | --- |
 | `--project <name>` | `[]` | Chỉ lấy project đã đăng ký này; có thể lặp. |
 | `--runtime <name>` | `""` | Lọc theo source, thường là `claude-code` hoặc `codex`. |
-| `--metric <name>` | `tokens` | Tổng hợp `tokens`, `tool_calls`, `skills_used`, `sessions`, `projects`, `duration`, `messages`, `subagent_spawns` hoặc `loc`. |
-| `--by <dimension>` | `runtime` | Nhóm theo `runtime`, `model`, `provider`, `project` hoặc `date`. |
+| `--metric <name>` | `tokens` | Tổng hợp `tokens`, `tool_calls`, `skills_used`, `sessions`, `projects`, `duration`, `messages`, `subagent_spawns`, `invocations` hoặc `loc`. |
+| `--by <dimension>` | `runtime` | Nhóm theo `runtime`, `model`, `provider`, `project`, `date`, `duration`, `subagent` hoặc `command`. |
 | `--window <duration>` | `720h0m0s` | Khoảng lookback. Duration không dương trở về 30 ngày. |
 | `--refresh` | `false` | Bỏ qua index và memoized-cache có thể dùng, rồi tính lại. |
 
 Hãy dùng đúng token metric và dimension ở trên. Token lạ không được từ chối
 nhất quán và có thể rơi về phép tính token/runtime nhưng vẫn giữ label đã nhập.
+
+## Dimension subagent và command
+
+`--by subagent` nhóm theo loại subagent mà mỗi lệnh gọi Task/Agent ủy quyền tới,
+còn `--by command` nhóm theo tên slash command, đọc từ tag `<command-name>` mà
+Claude Code ghi khi chạy slash command. Một session có thể thêm row vào nhiều key,
+hoặc không key nào. Cả hai dimension luôn tính live và báo quality `estimated`.
+
+Chỉ một số metric có giá trị theo từng subagent hoặc command:
+
+| `--by` | Metric | Giá trị |
+| --- | --- | --- |
+| `subagent` | `sessions` | Số session đã gọi loại subagent đó. |
+| `subagent` | `subagent_spawns` | Số lần gọi loại subagent đó. |
+| `subagent` | `tokens` | Token usage quy cho các lần chạy của loại subagent đó. |
+| `command` | `sessions` | Số session đã chạy command đó. |
+| `command` | `invocations` | Số lần chạy command đó, tính cả lần lặp trong một session. |
+
+Các metric khác trả `0` dưới hai dimension này. `invocations` chỉ có ý nghĩa
+với `--by command`; dưới dimension khác nó rơi về phép tính token.
 
 ## Nguồn, quyền riêng tư và cache
 
@@ -50,6 +70,7 @@ dưới `~/.agentkit/cache/analytics`. `AGENTKIT_HOME` thay root. `--refresh` b�
 ak sessions stats --json
 ak sessions stats --metric tokens --by model --window 168h --json
 ak sessions stats --project myapp --runtime codex --by date --refresh --json
+ak sessions stats --by command --metric invocations --json
 ```
 
 Human stdout in tổng và các row. JSON stdout dùng `kind=sessions.stats`; `data`

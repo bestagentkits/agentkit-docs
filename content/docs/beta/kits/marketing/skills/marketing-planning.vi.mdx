@@ -93,9 +93,22 @@ $ak:marketing-planning "Create a 6-week launch plan from the approved audience a
    dependency, approval gate, measurability cùng câu hỏi chưa giải quyết rồi trả
    plan path cùng summary mà không execution.
 
-Khi runtime plan context hiển thị active plan, workflow hỏi trước khi tiếp tục.
-Suggested plan chỉ là hint và không được auto-use. Sau khi tạo plan mới, workflow đánh dấu plan directory đó là active bằng
-support có sẵn trong runtime hiện tại.
+Tái sử dụng active plan khi khớp công việc được yêu cầu, sau khi kiểm tra
+acceptance criteria và bằng chứng hoàn thành. Suggested plan chỉ là hint,
+không tự cấp quyền ghi vào directory đó; hỏi khi có các plan cạnh tranh
+khiến target không rõ ràng.
+
+Sau khi tạo plan mới, workflow thử activate trong session qua
+`set-active-plan.cjs` khi runtime cung cấp helper này. Activation cần
+`CK_SESSION_ID` đã được bind và plan directory tồn tại. Exit `0` xác nhận
+pointer đã được lưu và đọc lại; exit khác `0` nghĩa là activation chưa được
+xác nhận, không nhất thiết là chưa có lần ghi nào. Nếu activation lỗi hoặc
+helper không khả dụng, tiếp tục planning và truyền plan path rõ ràng cho
+subagent. Relative path được resolve từ session launch root bất biến, không
+phải current directory sau khi đổi directory; dùng absolute path khi cần.
+
+Truyền `--clear` cho `set-active-plan.cjs` để xóa session pointer. Pointer này
+khác current-plan pointer theo worktree do `ak plan use` quản lý.
 
 ## Tách planning khỏi authority
 
@@ -128,7 +141,8 @@ Plan sẵn sàng cho quyết định nên gồm:
 | Triệu chứng | Bước tiếp theo an toàn |
 | --- | --- |
 | Thiếu research hoặc brand authority | Dừng để lấy input đã duyệt hoặc chạy research phase có giới hạn; không bịa customer hay brand fact. |
-| Plan context hiển thị “Suggested” | Hỏi có activate hay tạo plan mới; không tự ghi report vào suggestion. |
+| Plan context hiển thị “Suggested” | Kiểm tra hint và chỉ tái sử dụng khi scope khớp; hỏi nếu các plan cạnh tranh khiến target không rõ ràng, không tự ghi report vào đó. |
+| Session activation trả exit khác `0` | Coi activation chưa được xác nhận, tiếp tục planning và truyền plan path rõ ràng cho subagent; kiểm tra session binding và directory tồn tại, không mặc định rằng chưa ghi state. |
 | Chưa biết budget hoặc KPI | Dùng range hay placeholder gắn nhãn proposal và chỉ định owner duyệt. |
 | Framework xung đột bằng chứng | Điều chỉnh hoặc bỏ framework; RACE, SOSTAC, STP cùng SMART là aid, không phải proof bắt buộc. |
 | Người dùng yêu cầu launch từ Skill này | Hoàn thành plan và dừng; yêu cầu authorization riêng cho execution workflow chính xác. |

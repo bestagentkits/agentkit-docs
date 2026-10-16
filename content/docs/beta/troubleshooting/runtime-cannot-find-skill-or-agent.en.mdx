@@ -45,6 +45,12 @@ changing that selector. Oh My
 Pi owns its configured backend and credentials, so file presence alone still
 does not prove that the runtime loaded the content.
 
+For DeepSeek Harness, project installs write Skills below `.dsh/skills/` and user
+installs below `${DSH_HOME:-~/.dsh}/skills/`. Setup resolves `AGENTKIT_DSH_BIN` or
+`dsh` and leaves model, authentication, and sandbox ownership with the runtime.
+`ak run <kit>/<skill> --target dsh` resolves and dispatches one Skill separately
+without changing that installed inventory.
+
 Check the destination that matches the selected delivery:
 
 | Delivery | Project scope | Global/user scope |
@@ -52,9 +58,9 @@ Check the destination that matches the selected delivery:
 | Claude native | `<project>/.claude/` | `~/.claude/` |
 | Claude plugin | `<project>/ak-<kit>/` | `${AGENTKIT_PLUGIN_DIR:-~/.claude/plugins}/ak-<kit>/` |
 | Codex Skills | `<project>/.agents/skills/<name>/` | `~/.agents/skills/<name>/` |
-| Codex Agents, config, and hooks | `<project>/<kit>/.codex/` | `${CODEX_HOME:-~/.codex}/` |
+| Codex Agents, config, and hooks | `<project>/.codex/` | `${CODEX_HOME:-~/.codex}/` |
 | Cursor | `<project>/.cursor/` | `~/.cursor/` |
-| DeepSeek Harness | Not a Kit projection target in this release; use `ak run --target dsh` for dispatch | Not a Kit projection target in this release |
+| DeepSeek Harness | `<project>/.dsh/skills/` plus `<project>/.agentkit/adapters/dsh/<kit>/` | `${DSH_HOME:-~/.dsh}/skills/` plus `${AGENTKIT_HOME:-~/.agentkit}/adapters/dsh/<kit>/` |
 | Grok Build | `<project>/.grok/` plus `.agentkit/adapters/grok/<kit>/` | `${GROK_HOME:-~/.grok}/` plus `${AGENTKIT_HOME:-~/.agentkit}/adapters/grok/<kit>/` |
 | Pi | `<project>/.pi/{skills,agents,rules,extensions}` plus Pi lifecycle metadata | Active Pi coding-agent profile (`PI_CODING_AGENT_DIR` or `~/.pi/agent`) with no extra `.pi/` segment |
 | Oh My Pi | `<project>/.omp/{skills,agents,rules}`, `<project>/AGENTS.md`, and `<project>/.agentkit/adapters/omp/<kit>/` | `{skills,agents,rules}` and `AGENTS.md` below the resolved OMP root, plus user-scope lifecycle metadata |
@@ -160,18 +166,34 @@ ak codex-agent-runtime serve --list-only
 
 Registration idempotently updates `${CODEX_HOME:-~/.codex}/config.toml` and
 preserves other MCP server entries. The list-only command is read-only and must
-name the expected Agents before you continue. For project-staged Agents, run
-the check from the project root with the project as the staging root:
+name the expected Agents before you continue.
 
-```bash
-ak codex-agent-runtime serve --list-only --plugin-root .
-```
+For project-scope Agents, run the check from the project directory, where Codex
+launches the runtime. No extra flag is needed: the runtime serves the nearest
+`<dir>/.codex/agents/` at or above its working directory. The search stops at
+the repository root (the first directory with `.git`), before your home
+directory, and at the filesystem root.
 
-This override verifies `<project>/<kit>/.codex/agents/`; it does not move those
-Agents into user scope or rewrite the registered server. If only the overridden
-check finds them, resolve the scope mismatch instead of copying TOML files.
-After registration or scope correction, close and start a fresh Codex session
-so it reloads MCP configuration.
+The runtime serves project Agents only when your Codex config marks that
+project, or the repository root that contains it, as trusted, the same rule
+Codex uses to load a project `.codex` layer. AgentKit does not write that
+trust. List-only output shows the result on a `project agents:` line:
+
+- `project agents: <dir>` means the directory is served. Its Agents are listed
+  with a `(project)` suffix.
+- `project agents: skipped (<reason>)` means a directory was found but not
+  served. For an untrusted or unrecorded project, the reason explains how to
+  trust it: start Codex in that project and accept the trust prompt, or change
+  that project's `trust_level` to `"trusted"` in your Codex config.
+
+A project Agent replaces a user Agent from `~/.codex/agents/` with the same
+name, and user Agents still win over plugin-staged Kit Agents. A `.codex` or
+`.codex/agents` directory that is a symlink or Windows junction is reported as
+a link and skipped, and linked TOML files inside the project directory are
+ignored. If the expected Agents still do not appear, resolve the scope or trust
+mismatch instead of copying TOML files. After registration, trust, or scope
+correction, close and start a fresh Codex session so it reloads MCP
+configuration.
 
 ## If Codex cannot find ak:team
 
@@ -194,7 +216,7 @@ error rather than silently substitute ordinary Codex subagents.
 On a Codex target, a successful install can include this exact summary:
 
 ```text
-[!] Hooks dropped (unsupported on this target): 1 group - see warnings
+[!] Hook groups not projected: 1 group - see warnings
 ```
 
 This is a supported partial-projection diagnostic, not a hidden install
@@ -279,3 +301,5 @@ report.
 - [Kit installation problems](./kit-installation)
 - [Installing Kits](../guides/installing-kits)
 - [Configuration problems](./configuration)
+
+`hooksDeferred` is a subset of `hooksDropped`: the harness bridge defers that subscription, which does not mean the runtime cannot express it. Read the summary to distinguish deferred from unsupported groups.

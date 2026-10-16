@@ -1,0 +1,280 @@
+---
+title: Plan and produce long-form AI films with ak:filmmaking
+description: Direct a 5–30 minute AI film as a production graph with character bibles, scene and shot continuity, storyboard and animatic gates, audio-first dialogue and lipsync, separate sound stems, cost-aware routing, shot-level QC, and final assembly.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak:filmmaking` to direct a long-form AI film, roughly 5 to 30 minutes, as
+a controllable production pipeline rather than one long generation. A 10–15
+minute film is typically 8–18 scenes and 70–150 shots of 3–10 seconds. Shot
+boundaries follow narrative purpose and cinematic grammar, never a provider's
+clip limit.
+
+All production state lives in a `films/<slug>/` production graph: screenplay,
+beats, bibles, scenes, shots, continuity links, audio cues, QC records, and
+cost evidence. Every intermediate artifact is kept, so any single shot can be
+regenerated without touching the rest of the film.
+
+## Choose the filmmaking workflow
+
+### Use ak:filmmaking when
+
+- You are making a narrative AI film, short film, episode, or cinematic story.
+- The production is character-driven or has multi-scene dialogue, so identity,
+  wardrobe, props, and lip movement must stay consistent across many shots.
+- Continuity and audio synchronization matter more than a single impressive
+  clip.
+
+### Choose another workflow when
+
+- You need a marketing, social, product, or short promo video. Use
+  [`ak:video`](./video).
+- You need a beat-synced HyperFrames motion graphic. Use
+  [`ak:motion-video`](./motion-video).
+- The composition is a React or Remotion project. Use
+  [`ak:remotion`](./remotion).
+- You need one generated clip rather than a film.
+
+`ak:filmmaking` also leans on adjacent owners instead of re-implementing them:
+
+| Need | Owner | What `ak:filmmaking` keeps |
+| --- | --- | --- |
+| Voice, sound effects, and music generation | The installed voice or audio Skill, for example [`ak:elevenlabs`](./elevenlabs) | Line timing, cue placement, and stem separation |
+| Image and video generation, lipsync tools | The installed image-generation and video-generation Skills | Routing, prompt compilation, and the generation record on each shot |
+| FFmpeg rendering, conforming, and mixing | The Engineer Kit [`ak:media-processing`](../../engineer/skills/media-processing) Skill, or another installed media-processing capability | The timeline and the concat track list it renders from |
+
+If no Skill for a needed capability is installed, the workflow reports the
+missing capability instead of inventing provider calls.
+
+## Prepare the production route
+
+You need:
+
+- Python 3 to run the bundled `scripts/film.py`. It uses only the standard
+  library.
+- Installed generation, voice, lipsync, and media-processing Skills with your
+  own provider access for the stages you plan to run.
+- A writable project and enough storage for reference images, generations,
+  audio stems, and the final cut.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak:filmmaking ...` | Native delivery is the default; explicit plugin delivery is also supported. Generation stages still depend on the installed provider Skills and your access. |
+| Cursor | `/ak:filmmaking ...` | Slash invocation is user-verified. Supporting tool behavior can vary by setup. |
+| Codex | `$ak:filmmaking ...` | The Skill uses native Codex discovery. Provider and media requirements are unchanged. |
+
+Read [Runtime adapters](../../../concepts/runtime-adapters) before assuming the
+same production surface everywhere.
+
+## Run the Skill
+
+The Skill takes an optional subcommand and a brief or an existing project:
+`[create|script|breakdown|bible|storyboard|animatic|render|audio|qc|assemble] [brief-or-project]`.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak:filmmaking create "A 12-minute drama about two sisters who reconnect in a rainy café. Balanced budget, 16:9, stop at each approval gate and before any paid generation"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak:filmmaking create "A 12-minute drama about two sisters who reconnect in a rainy café. Balanced budget, 16:9, stop at each approval gate and before any paid generation"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak:filmmaking create "A 12-minute drama about two sisters who reconnect in a rainy café. Balanced budget, 16:9, stop at each approval gate and before any paid generation"
+```
+
+  </Tab>
+</Tabs>
+
+`create` runs every stage in order and stops at the approval gates. The other
+subcommands run one stage on an existing project:
+
+| Subcommand | Produces |
+| --- | --- |
+| `create` | A new project via `film.py init`, then each stage in order |
+| `script` | Screenplay and beat sheet |
+| `breakdown` | Scenes, shots, coverage plan, and continuity links |
+| `bible` | Characters, wardrobe, locations, props, and reference packs |
+| `storyboard` | Storyboard stills and approved keyframes |
+| `animatic` | The first full-length cut on master dialogue |
+| `audio` | Voice master, forced alignment, Foley, ambience, and music cues |
+| `render` | Routed, compiled per-shot generations and lipsync passes |
+| `qc` | Timestamped failures with the stage each one returns to |
+| `assemble` | Final timeline, dialogue master remux, and stem mix |
+
+## Follow the production stages
+
+1. **Initialize.** `python3 scripts/film.py init films <slug> --title "..." --minutes 12 --budget balanced`
+   creates the graph with a budget mode of `low`, `balanced`, or `quality`.
+2. **Script.** Write the screenplay and beat sheet, then review the story.
+3. **Break down.** Split scenes into shots, assign render classes, and link
+   each shot to the one it continues from.
+4. **Build bibles.** Generate reference packs from one approved front image
+   outward; you approve canonical identities.
+5. **Record audio first.** Direct voices, produce the dialogue master, and run
+   forced alignment before any lipsync-dependent shot exists.
+6. **Storyboard, then animatic.** The full-length animatic on master dialogue
+   is the cost-control gate. You sign it off before routed rendering starts.
+7. **Render and QC.** Render shot by shot in routed order, run QC, and loop
+   only the failed shots.
+8. **Assemble.** Build the final timeline, lay the dialogue master, and mix the
+   separate stems.
+
+Run `validate` between stages. Errors block the next stage; warnings need a
+decision, either a fix or a recorded user acceptance.
+
+### Shot lifecycle
+
+```text
+PLANNED -> STORYBOARDED -> APPROVED_FRAME -> GENERATED -> (LIPSYNCED) -> APPROVED -> ASSEMBLED
+                                     QC_FAILED -> cheapest return stage
+```
+
+`validate` enforces each gate. No shot except a previs shot may record a live
+generation before its frame is approved and the animatic is approved.
+Discarded generations stay on the shot as history and cost evidence.
+
+## Understand the production graph
+
+```text
+films/<slug>/
+  project.json            title, budget mode, fps, aspect, currency, scene order, style, animatic sign-off
+  screenplay.md           human-readable script; scene headings are scene IDs
+  beat-sheet.json         beats -> scenes, purpose, dramatic question, music theme
+  bibles/
+    characters/<id>.json  identity version, hair, accessories, reference pack
+    characters/<id>/      front, three-quarter, profile, and expression images
+    locations/<id>.json
+    props/<id>.json
+    wardrobe/<id>.json    owned by one character
+  scenes/<S01>/scene.json            location, time of day, cast, wardrobe, props, shot order
+  scenes/<S01>/shots/<S01_SH001>/    shot.json, references/, keyframes/, generations/, approved/
+  storyboard/  animatic/  renders/  qc/  final/
+  audio/cues.json                    every DX/FX/AMB/MX cue on the scene timeline
+  audio/dialogue/ alignment/ ambience/ sfx/ music/ stems/
+```
+
+IDs never change once used: scenes are `S03`, shots `S03_SH007`, beats `B02`,
+and characters, locations, props, wardrobe, cues, and reference images use
+`UPPER_SNAKE` such as `MAI_01` or `DX_MAI_003`. To insert a shot, edit the
+scene's shot order instead of renumbering. The JSON schemas in the Skill's
+`schemas/` folder are the exact contract, and the bundled
+`assets/examples/rain-check/` project shows every field in use. Its media paths
+are declared but not bundled, so `--check-media` reports them as missing by
+design.
+
+## Use the film.py tools
+
+`scripts/film.py` is deterministic. Run it instead of re-deriving its output.
+It exits `0` when clean, `1` when findings or blockers stop the next stage,
+and `2` on a usage or I/O error.
+
+| Command | Reports or writes |
+| --- | --- |
+| `init <films-dir> <slug> --title ...` | A new graph. Optional `--minutes`, `--budget low\|balanced\|quality`, `--aspect`, `--fps`, and `--currency`. |
+| `validate <film> [--check-media] [--json]` | Schema, integrity, stage gates, and continuity findings. `--check-media` also checks that declared files exist. |
+| `continuity <film> [--json]` | Continuity findings only. |
+| `prompt <film> <shot-id> [--json]` | The compiled shot prompt and its reference input order. |
+| `route <film>` | Render tier and required capabilities for each shot. |
+| `coverage <film>` | Visible-lipsync versus off-screen dialogue. |
+| `cue-sheet <film>` | Music cue sheet and stem inventory. |
+| `timeline <film> --mode animatic\|final [--write]` | The animatic or final timeline and its blockers. `--write` refuses to write while blockers remain. |
+| `costs <film>` | Estimated versus recorded spend by render class and stem. It never converts currencies or fills in missing prices. |
+| `qc <film>` | Timestamped QC failures with the stage each one returns to. |
+
+Findings carry a film timecode (`HH:MM:SS.mmm`) where they apply to a point in
+the cut, so a reviewer can scrub straight to the problem.
+
+## Keep continuity, audio, and cost under control
+
+- **Continuity lives in the graph.** Each shot reads the state carried along its
+  `continuity_from` chain. An intended change is declared in
+  `continuity_changes` with a reason.
+- **Identity comes from canonical reference packs.** A generated frame never
+  conditions a shot until you explicitly promote it. Identity drift is a QC
+  failure to route, not a prompt to tweak.
+- **Dialogue is audio-first.** The master voice and its forced alignment exist
+  before lipsync work. Reaction, over-the-shoulder, insert, and cutaway
+  coverage keep visible lips to part of the dialogue.
+- **Sound stays in stems.** Dialogue (DX), effects (FX), ambience (AMB), and
+  music (MX) stay separate until the final mix. Music follows themes and motifs
+  on a cue sheet. The final cut uses the dialogue master, never the audio a
+  video generator produced.
+- **Routing follows render class and budget mode.** Shots are classed
+  `PREVIS`, `CHEAP_BROLL`, `STANDARD`, `CHARACTER_CRITICAL`, or `HERO`, and
+  `film.py route` maps each class and budget mode to an `economy`, `standard`,
+  or `premium` tier. An insert shot never gets the hero close-up's tier.
+- **Provider facts come from live evidence.** The Skill does not ship model
+  choices or prices. It collects current evidence from the installed
+  generation Skill, the provider's docs, or your account, and records the
+  source and date with each decision.
+- **Failed shots return to the cheapest fixing stage.** For example, an
+  identity or prop failure returns to the storyboard, a morphing artifact is
+  regenerated from the approved frame, and a pronunciation issue is fixed in
+  the audio stem without regenerating video. One bad clip never triggers a
+  scene or film rerender.
+
+If the film does not work as an animatic, fix story and timing. More expensive
+video models will not save it.
+
+## Keep generation, spend, and publishing gated
+
+<Callout type="warn" title="A film brief does not authorize provider spend">
+  Generation, voice, lipsync, and music requests go to the providers behind your
+  installed Skills, and each retry is another paid request. The Skill needs your
+  approval to spend beyond the agreed budget mode.
+</Callout>
+
+| Work category | Normal boundary |
+| --- | --- |
+| Local mutations | The workflow writes and edits the production graph and its media folders, and runs `scripts/film.py`. |
+| Provider and network effects | Installed generation, voice, lipsync, and media Skills send prompts, references, and audio to their providers for the stages you requested. |
+| Identity decisions | Promoting a new canonical identity reference requires your approval. |
+| Publishing and account effects | The Skill produces files only. Publishing anything requires you. |
+
+Confirm rights and consent for every likeness, voice, reference image, and
+piece of music before generation.
+
+## Review outputs and evidence
+
+The Skill is done only when:
+
+- `scripts/film.py validate <film>` reports no errors for the stages claimed,
+  and every warning is fixed or explicitly accepted.
+- The requested artifact exists on disk. A plan is never reported as a render;
+  `validate --check-media` runs before produced media is claimed.
+- Before any expensive video generation, the shot's storyboard is approved,
+  plus its keyframe for `STANDARD` and above, and the full animatic has been
+  reviewed.
+- The final cut uses the dialogue master and separate stems, and
+  `timeline --mode final` has no blockers.
+
+Reports cite `film.py` output such as findings, coverage, routes, costs, and QC
+timecodes, plus the produced files. Cost totals come only from recorded
+evidence, and any stage that was planned but not executed is named.
+
+## Troubleshoot safely
+
+| Symptom | Safe next step |
+| --- | --- |
+| Runtime cannot find `ak:filmmaking` | Confirm target and scope, start a fresh session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+| `validate` rejects a generation on a shot | Approve the shot's frame and get the animatic signed off before generating. |
+| `timeline --mode final --write` refuses to write | Resolve every listed blocker: unapproved or QC-failed shots, missing picture sources, and cues that are not master or have no file. |
+| A character drifts between shots | Record an `identity` QC failure and return the shot to the storyboard stage with the canonical reference pack. Do not tweak the prompt. |
+| Lipsync drifts on a line | Rerun the dedicated lipsync pass on the existing video, or regenerate a native-lipsync shot from its approved frame. |
+| No generation or media Skill is installed | Install the capability for the stage, then rerun it. The Skill will not invent provider calls. |
+
+Continue with the [Marketing Kit overview](../../marketing),
+[Projects, artifacts, and checkpoints](../../../concepts/projects-artifacts-checkpoints),
+or [Installing kits](../../../guides/installing-kits).

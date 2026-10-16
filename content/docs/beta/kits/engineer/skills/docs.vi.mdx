@@ -20,6 +20,8 @@ phá các bề mặt thẩm quyền thật của repo, giữ lại lý do và r�
   tài liệu bị ảnh hưởng cần được đối chiếu.
 - Bạn cần bản tóm tắt project dựa trên bằng chứng mà không bắt buộc tạo tệp mới.
 - Tài liệu hiện có chứa path cũ, hướng dẫn trùng lặp hoặc inventory được sao chép.
+- Bạn yêu cầu rõ việc xác lập nguyên tắc sản phẩm bền vững qua phỏng vấn tác
+  giả bằng `philosophy`.
 
 ### Chọn workflow khác khi
 
@@ -80,13 +82,42 @@ $ak:docs update "Reconcile onboarding docs with the current authentication flow.
 
 | Input | Kết quả | Hành vi mặc định |
 | --- | --- | --- |
-| `init` | Thiết lập tuyến tài liệu nhỏ nhất dành riêng cho project | Tái sử dụng tuyến hiện có mạch lạc và tránh tệp template trống |
+| `init` | Thiết lập tuyến tài liệu nhỏ nhất dành riêng cho project, hoặc cấu trúc `docs/` cố định với `--preset classic` | Tái sử dụng tuyến hiện có mạch lạc và tránh tệp template trống; khám phá là mặc định, cấu trúc classic là opt-in rõ ràng |
 | `update` | Đối chiếu tài liệu bị ảnh hưởng với ý định và bằng chứng hiện tại | Chỉ chạm vào bề mặt thẩm quyền bị ảnh hưởng và loại bỏ phần trùng lặp đã cũ |
 | `summarize` | Tạo bản tóm tắt dựa trên bằng chứng | Trả lời trong cuộc trò chuyện trừ khi project đã chỉ định summary hoặc bạn yêu cầu rõ output bền vững |
-| `agent-context` | Author, audit hoặc tối ưu process memory tại repository root | Nhắm tới `CLAUDE.md` của Claude Code hoặc `AGENTS.md` của Codex; hỏi trước mọi lần ghi |
+| `agent-context` | Author, audit hoặc tối ưu process memory tại repository root | Nhắm tới `CLAUDE.md` của Claude Code hoặc `AGENTS.md` của Codex; tự cấp quyền cho việc bảo trì thường xuyên trong phạm vi; chỉ hỏi trước khi thay thế prose hiện có, một tài liệu sở hữu, hoặc chỉnh sửa của bạn |
 | `agents` | Chắt lọc lỗi lặp lại và gotcha không thể tự suy ra thành quy tắc process ở root | Khai thác git và lịch sử CI có giới hạn; hỏi trước khi ghi các quy tắc đã xác nhận |
+| `philosophy` | Xác lập nguyên tắc sản phẩm được tác giả xác nhận với mức thẩm quyền rõ ràng | Chỉ khi opt-in rõ ràng; dùng bằng chứng project và local session cùng project có giới hạn; chỉ ghi diff tại destination đã duyệt |
 | `llms` | Tạo hoặc cập nhật index tài liệu mà AI có thể đọc | Tạo `llms.txt` và `llms-full.txt` từ tuyến tài liệu đã khám phá |
 | Trống hoặc không rõ | Không tự giả định thao tác | Hỏi bạn chọn thao tác |
+
+## Chọn cấu trúc docs cố định với `--preset classic`
+
+Theo mặc định, `ak:docs init` khám phá tuyến tài liệu thật của project: đọc chỉ
+dẫn repo, README gốc và navigation docs hiện có, sau đó chỉ tạo những tệp
+xứng đáng có mặt. Project muốn dùng cấu trúc cố định trước đây có thể opt-in
+rõ ràng:
+
+```text
+/ak:docs init --preset classic
+```
+
+`--preset classic` tạo bảy tệp dưới `docs/`: `project-overview-pdr.md`,
+`code-standards.md`, `codebase-summary.md`, `design-guidelines.md`,
+`deployment-guide.md`, `system-architecture.md` và `project-roadmap.md`.
+
+Khai báo cùng tuyến này trong `CLAUDE.md`, `AGENTS.md` hoặc `docs/README.md`
+của chính project đạt kết quả tương tự mà không cần flag, và nó tồn tại cho
+các lần chạy `update`, `summarize` sau — Skill tái sử dụng bất kỳ tuyến nào
+project đã cam kết.
+
+Preset chỉ chọn tên tệp. Mọi quy tắc nội dung vẫn áp dụng: mỗi tệp trỏ tới
+code sở hữu hành vi thay vì mô tả lại nó, và tệp không có thông tin thật sẽ bị
+bỏ qua thay vì lấp đầy bằng placeholder.
+
+Khám phá là mặc định vì tài liệu mô tả lại code trở thành nguồn sự thật thứ
+hai mà không test nào kiểm tra được — nó lệch dần và gây hiểu sai cho agent —
+và mỗi tệp được tạo ra đều tốn context ở mọi phiên sau.
 
 ## Quản lý agent context ở root
 
@@ -105,6 +136,34 @@ vi runtime hiện tại, loại secret và chỉ khuyến nghị—không sửa�
 hình Hook mang tính deterministic. Bản phát hành này không định nghĩa filename
 root context cho Cursor.
 
+`ak:docs` áp dụng một bậc thang write-authority chung cho `init`, `update` và
+`agent-context`: việc bảo trì thường xuyên, trong phạm vi được tự cấp quyền,
+và Skill chỉ dừng lại để xác nhận trước khi thay thế prose hiện có, một tài
+liệu sở hữu, hoặc một chỉnh sửa bạn đã đưa ra trước đó. Điều này bao gồm cả
+việc tự bảo trì — đối chiếu lại các instruction bị ảnh hưởng sau khi có công
+việc đã được cấp quyền khác trong project, kể cả khi không có source file nào
+thay đổi. Khi không có gì bền vững thực sự thay đổi, lần chạy đó là no-op
+thật sự: không ghi gì.
+
+Với một tuyến vận hành — cách lấy một secret, log source và window nào cần đọc
+cho một environment, hoặc destination nào được phép cho audience nào — Skill
+giữ chi tiết lookup trong operational guide riêng của project và chỉ để lại
+một pointer một dòng tới đó trong agent context ở root. Skill redact output
+quan sát được trước khi lưu giữ, chuyển giao hoặc publish, và không bao giờ
+ghi credential value, tokenized URL, account hoặc project ID, hay tên khách
+hàng vào bất kỳ tệp repo nào, kể cả operational guide và chính tệp agent
+context.
+
+Mỗi tuyến là một bản ghi gồm bảy trường: khi nào dùng, scope (project,
+account, region và environment, không bao giờ ngầm dùng account mặc định),
+nguồn sự thật, cách tra cứu, quyền truy cập và permission, giới hạn, cùng xác
+minh và phương án dự phòng. Mỗi chủ đề có một owner duy nhất để các trang khác
+link tới; một tệp như `docs/deployment.md` chỉ là ví dụ destination, không phải
+cây thư mục bắt buộc. Trước khi ghi một locator, URL dashboard hoặc định danh
+account, Skill kiểm tra audience và quyền truy cập thực tế của destination; khi
+destination là public hoặc không xác minh được, Skill giữ chi tiết ở một owner
+bị giới hạn đã được duyệt và báo blocker.
+
 Dùng `agents` khi các quy tắc process ở root cần xuất phát từ bằng chứng lặp lại
 thay vì một audit không giới hạn:
 
@@ -120,6 +179,61 @@ chạy CI. Nếu `gh` chưa được xác thực, thao tác báo đã bỏ qua C
 tục chỉ với bằng chứng Git. `--source` bổ sung việc khai thác source marker chỉ
 đọc vào lượt kiểm tra git và CI; `--dry-run` dừng sau khi xếp hạng signal, không
 khởi chạy adviser và không ghi gì. Các quy tắc đề xuất vẫn cần bạn xác nhận.
+
+## Xác lập nguyên tắc sản phẩm với `philosophy`
+
+Opt-in rõ ràng khi bạn muốn tác giả hoặc người xây dựng sản phẩm quyết định
+ranh giới và ưu tiên bền vững:
+
+```text
+/ak:docs philosophy
+```
+
+Trong Codex, dùng `$ak:docs philosophy`. Việc bảo trì tài liệu thông thường
+không bắt đầu phỏng vấn này hoặc đọc lịch sử local session nếu không được yêu
+cầu rõ. Nó giữ nguyên tắc đã được tác giả xác nhận ngay cả khi không có lịch
+sử incident hoặc implementation đã lệch; code chứng minh hành vi, không cấp
+thẩm quyền đổi ý định.
+
+Phỏng vấn dùng bằng chứng repo và mặc định 90 ngày gần nhất của local session
+đã xác minh thuộc cùng project, gồm các worktree đã chứng minh quan hệ. Skill
+lọc metadata project trước khi đọc nội dung trò chuyện và dùng thời điểm event,
+không dùng thời gian sửa tệp. Quyết định và sự chấp nhận của tác giả được tách
+khỏi đề xuất của assistant và suy luận; chỉ giữ attribution đã làm sạch,
+không giữ lịch sử thô, credential hay dữ liệu cá nhân. Lịch sử thiếu hoặc không
+được hỗ trợ là khoảng trống coverage cần báo cáo, không phải lý do bịa bằng
+chứng hoặc mở rộng quyền truy cập.
+
+Bạn trả lời từng câu hỏi chưa giải quyết. Mỗi nguyên tắc được giữ lại nêu
+scope và hệ quả hành vi dưới dạng **ranh giới bắt buộc** hoặc **ưu tiên định
+hướng**, để ngỏ lựa chọn triển khai trong các ranh giới đó. Nguyên tắc đã xác
+nhận vẫn có hiệu lực cho tới khi tác giả duyệt thay thế; đề xuất lặp lại của
+assistant không tạo ra thẩm quyền đó.
+
+Trước khi ghi, xem chính xác phần thêm, sửa, xóa và destination đã resolve của
+từng tệp bị ảnh hưởng. Target chuẩn của symlink trong project được preview và
+sửa mà không thay thế link; destination bên ngoài cần cấp quyền rõ ràng. Nếu
+thiếu câu trả lời hoặc phê duyệt exact-diff, kết quả chỉ là đề xuất và câu hỏi
+chưa giải quyết. Chỉ dùng lại phê duyệt trước đó khi target và patch còn hợp
+lệ; target đã đổi cần preview lại thay vì ghi đè chỉnh sửa đồng thời. Lặp lại
+nguyên tắc tương đương là no-op. Hướng dẫn được ghi là contract cộng tác,
+không chứng minh mọi runtime đều load hoặc thực thi nó.
+
+Bằng chứng session chỉ đến từ lịch sử local mà runtime cho phép đọc. Claude Code
+và Codex lưu lịch sử session local mà Skill có thể xác minh và đọc; runtime khác
+chỉ được quét qua một reader local đã xác minh. Báo cáo nêu rõ nguồn bị thiếu,
+không truy cập được hoặc chưa được hỗ trợ thay vì khẳng định coverage đầy đủ.
+
+Trước khi đề xuất destination, Skill đọc cả `AGENTS.md` và `CLAUDE.md` ở root
+khi có, xác định symlink và nơi đang sở hữu nguyên tắc; Skill không mặc định
+`CLAUDE.md` là bản chuẩn. Khi hai tệp độc lập, Skill preview cùng các nguyên tắc
+chung trong cả hai và giữ instruction riêng theo runtime của từng tệp. Khi không
+tệp nào tồn tại và project không khai báo owner, Skill đề xuất `AGENTS.md` làm
+điểm vào portable mà không khẳng định mọi runtime đều tự động đọc nó. Các lần
+chạy `update` và `agent-context` sau đó giữ nguyên ý nghĩa và thẩm quyền của
+nguyên tắc đã xác nhận mà không bắt đầu lại phỏng vấn, và nêu xung đột hoặc dấu
+hiệu bị thay thế cho tác giả thay vì âm thầm làm yếu, xóa hay nâng cấp một
+nguyên tắc.
 
 ## Tạo index tài liệu mà AI có thể đọc
 
@@ -187,6 +301,8 @@ Các ranh giới quan trọng:
 - Khi tài liệu hoặc root context chứa hướng dẫn test, Skill áp dụng các nguyên
   tắc test qua cùng gate về bằng chứng riêng cho project và xác nhận thay vì sao
   chép nguyên khối hướng dẫn chung.
+- `philosophy` luôn giữ gate phê duyệt exact-diff; quyền bảo trì thường xuyên,
+  flag và tư vấn không thể bỏ qua gate đó.
 - Workflow trong source không yêu cầu provider bên ngoài, xuất bản, credential
   hay dịch vụ trả phí.
 
@@ -200,6 +316,7 @@ Bằng chứng phụ thuộc thao tác đã chọn:
 | `update` | Claim đã đổi được ánh xạ tới bằng chứng hiện tại; diff tối thiểu; phần trùng lặp đã cũ được xóa; validator hoặc generator hiện có được chạy khi phù hợp |
 | `summarize` | Bản tóm tắt tập trung tách hành vi hiện tại, hướng dự kiến và bằng chứng có trạng thái; chỉ tạo tệp khi được yêu cầu hoặc đã được chỉ định |
 | `agents` | Signal git và CI đã xếp hạng; chỉ ghi quy tắc root-context đã xác nhận; có evidence anchor, gồm source anchor với `--source`; không ghi khi dùng `--dry-run` |
+| `philosophy` | Ranh giới và ưu tiên đã xác nhận với quyền tự do triển khai; attribution session đã làm sạch và khoảng trống coverage; diff tại destination đã duyệt hoặc kết quả chỉ đề xuất/no-op |
 | `llms` | `llms.txt` và `llms-full.txt` hợp lệ; link đã được xác minh; báo cáo số entry và kích thước full-content |
 
 Kết quả đầy đủ cũng liệt kê câu hỏi chưa giải quyết ở cuối. Tài liệu ngắn là hợp
@@ -209,11 +326,12 @@ lệ khi project có ít lý do bền vững mà code không thể biểu đạt
 
 | Triệu chứng | Bước tiếp theo an toàn |
 | --- | --- |
-| Skill đề xuất cây tệp chuẩn | Trỏ Skill về chỉ dẫn repo và navigation hiện có; từ chối placeholder theo template. |
+| Skill đề xuất cây tệp chuẩn | Trỏ Skill về chỉ dẫn repo và navigation hiện có; từ chối placeholder theo template, hoặc opt-in rõ ràng với `--preset classic` nếu thật sự muốn cấu trúc cố định. |
 | Một lần update chạm mọi tài liệu | Thu hẹp contract đã đổi và ánh xạ từng claim bị ảnh hưởng tới owner hiện tại. |
 | Prose lặp lại code hoặc lệnh | Thay prose bằng pointer ổn định tới source, test, manifest hoặc reference được tạo. |
 | Summary tạo tệp không mong muốn | Dùng `summarize` mà không yêu cầu output bền vững; output trong cuộc trò chuyện là mặc định. |
 | Tài liệu generated sắp bị sửa tay | Dừng lại và tìm generator hoặc source do máy sở hữu trước khi tiếp tục. |
+| Target philosophy đổi sau phê duyệt | Giữ chỉnh sửa đồng thời và preview lại diff bị ảnh hưởng; chỉ dùng lại phê duyệt cho target và patch không đổi. |
 | Runtime không nhận ra Skill | Xác nhận target và scope, khởi động lại phiên runtime, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
 
 ## Biết giới hạn hiện tại
@@ -226,4 +344,3 @@ lệ khi project có ít lý do bền vững mà code không thể biểu đạt
   quy tắc ownership và chống drift.
 - Cách gọi slash trên Cursor là bằng chứng do người dùng xác minh, không chứng
   minh tính tương đương về delegation hay tool sơ đồ.
-- Stable và beta đóng gói cùng mode và quy tắc tài liệu của `ak:docs`.

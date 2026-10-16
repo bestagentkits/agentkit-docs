@@ -1,0 +1,120 @@
+---
+title: ak policy
+description: Kiểm tra, biên dịch, chấp nhận và truy vấn policy agent có thể thực thi của project.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak policy` để biến phần mang tính xác định trong hướng dẫn agent của
+project thành các quy tắc mà máy luôn trả lời giống nhau: đường dẫn nào không
+được ghi, lệnh nên dùng chương trình nào, diff cần chạy những check nào và loại
+diff nào được phép bỏ qua check nào. Mọi câu trả lời đều nêu các quy tắc đã tạo
+ra nó và nguồn gốc của từng quy tắc.
+
+## Cách dùng
+
+```bash
+ak policy <subcommand> [flags]
+```
+
+| Subcommand | Mục đích | Thay đổi tệp |
+| --- | --- | --- |
+| [`ak policy status`](./policy-status) | Liệt kê các quy tắc đang có hiệu lực và nguồn gốc của chúng. | Không |
+| [`ak policy check`](./policy-check) | Hỏi policy nói gì về một đường dẫn, một lệnh hoặc một diff. | Không |
+| [`ak policy validate`](./policy-validate) | Báo cáo quy tắc xung đột và nguồn đã thay đổi, dùng cho CI. | Không |
+| [`ak policy compile`](./policy-compile) | Đề xuất quy tắc từ các tệp hướng dẫn. | Chỉ ghi đề xuất |
+| [`ak policy adopt`](./policy-adopt) | Đưa các đề xuất được chỉ định vào policy đang hoạt động. | Ghi policy đang hoạt động |
+
+Mọi subcommand đều nhận `--dir <path>` (mặc định `.`) để chọn thư mục project.
+Các cờ dùng chung như `--json`, `--no-interactive`, `--quiet`, `--verbose` và
+`--yes` được mô tả trong [quy ước CLI](../cli-conventions).
+
+## Các tệp policy
+
+Một project có hai tệp:
+
+| Đường dẫn | Được đánh giá | Chứa |
+| --- | --- | --- |
+| `.agentkit/policy.yaml` | Có | Các quy tắc đang có hiệu lực. |
+| `.agentkit/policy-candidates.yaml` | Không bao giờ | Các đề xuất đang chờ bạn chấp nhận. |
+
+`ak policy compile` chỉ ghi tệp đề xuất. `ak policy adopt` là lệnh duy nhất
+chuyển một quy tắc vào `.agentkit/policy.yaml`. Cả hai tệp đều được ghi với
+quyền chỉ dành cho chủ sở hữu (`0600`).
+
+## Các loại quy tắc
+
+Tài liệu khai báo `schema_version: 1` và danh sách `rules`. Mỗi quy tắc có `id`,
+`kind`, `reason`, `source` và `action` tuỳ chọn (mặc định `warn`):
+
+| Kind | So khớp theo | Action được phép |
+| --- | --- | --- |
+| `protected_path` | `paths`: mẫu đường dẫn tệp | `block`, `warn` |
+| `command` | `executables`: tên chương trình | `block`, `warn`, `rewrite` (kèm `rewrite_to`) |
+| `required_check` | `when_changed`: mẫu đường dẫn đã thay đổi; liệt kê `checks` | `block`, `warn` |
+| `diff_class` | `when_all_changed`: mọi đường dẫn đã thay đổi; liệt kê `skip_checks` | `warn` |
+
+Mỗi quy tắc chỉ được dùng các trường so khớp của kind của nó. Mẫu đường dẫn dùng
+`*` và `?` trong một segment, `**` cho nhiều segment, với `/` làm dấu phân cách.
+Dấu phân cách kiểu Windows được chuẩn hoá và việc so khớp phân biệt chữ hoa chữ
+thường.
+
+Quy tắc viết tay dùng `source.origin: declared`. Quy tắc biên dịch từ văn bản
+dùng `source.origin: compiled` và ghi lại tệp, dòng, nội dung và digest mà nó
+đến từ đó. Quy tắc compiled chỉ có thể `warn` hoặc `rewrite`; để chuyển sang
+`block`, bạn phải tự sửa tài liệu và đánh dấu quy tắc là `declared`.
+
+## Quy trình thường dùng
+
+```bash
+# Propose rules from AGENTS.md and CLAUDE.md.
+ak policy compile
+
+# Review the proposals, then adopt the ones you want by id.
+ak policy adopt no-curl
+
+# Confirm what is in force and that the document is coherent.
+ak policy status
+ak policy validate --fail-on-stale
+
+# Ask about one operation.
+ak policy check --path internal/gen/api.pb.go
+```
+
+Hãy chạy `ak policy validate` trong CI. Tài liệu có bất kỳ quy tắc xung đột nào
+sẽ không được nạp, nên không quy tắc nào trong đó có hiệu lực cho đến khi bạn
+sửa xung đột.
+
+## Bypass
+
+Đặt `AGENTKIT_POLICY_BYPASS` thành đúng `1` hoặc `true` sẽ vô hiệu hoá tác động
+của quyết định `block`, `warn` hoặc `rewrite`. Quyết định vẫn được báo cáo:
+outcome trở thành `allow`, `bypassed` là `true` và các quy tắc bị bỏ qua được
+liệt kê. Bypass không áp dụng cho tài liệu không nạp được. Truyền
+`ak policy check --no-bypass` để bỏ qua biến này và xem liệu một quy tắc có
+được kích hoạt hay không.
+
+<Callout type="warning">
+  Policy giúp ngăn sai sót của một agent hợp tác. Đây không phải ranh giới bảo
+  mật: các tệp nằm trong working tree của bạn, và bất kỳ process nào có thể đặt
+  biến môi trường của mình đều có thể bypass nó. Hãy tiếp tục dựa vào sandbox và
+  thiết lập quyền của runtime để bảo đảm an ninh.
+</Callout>
+
+## Đầu ra cho tự động hoá
+
+Với `--json`, mỗi subcommand ghi một envelope có phiên bản ra stdout:
+
+```text
+schema_version: 1
+kind: policy.<subcommand>   (for example, policy.check)
+data: the subcommand's payload
+```
+
+Trang của từng subcommand liệt kê các trường trong `data`. `check`, `validate`
+và `adopt` vẫn ghi payload khi thoát với mã policy khác không, để bạn đọc được
+lời giải thích.
+
+## Lệnh liên quan
+
+- [Quy ước CLI](../cli-conventions)

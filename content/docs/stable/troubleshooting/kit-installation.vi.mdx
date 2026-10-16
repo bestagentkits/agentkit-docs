@@ -29,10 +29,12 @@ ak kit init engineer --target claude-code --channel <channel>
 ak kit init engineer --target codex --channel <channel>
 ak kit init engineer --target grok --channel <channel>
 ak kit init engineer --target pi --channel <channel>
+ak kit init engineer --target omp --channel <channel>
 ```
 
 Hãy thay `<channel>` bằng kênh phát hành đang chọn trên header tài liệu. Nếu bỏ
-`--channel`, CLI resolve `stable` và có thể trả `version_not_available` cho
+`--channel` trên `ak kit init`, lệnh dùng `kit.channel` đã lưu khi khóa đó đã
+được đặt; nếu không thì resolve `stable` và có thể trả `version_not_available` cho
 target chỉ tồn tại ở kênh khác. Scope mặc định là project hiện tại; `--global`
 chọn user scope của runtime. Cài thành công trong một scope không làm Kit xuất
 hiện trong project hoặc user profile khác.
@@ -64,6 +66,16 @@ cảnh báo bản nào được ưu tiên: `.pi/skills/` thắng ở scope proje
 `.agents/skills/` của project thắng bản trong profile Pi global. Cảnh báo không
 xóa hoặc ghi lại Skill nào.
 
+OMP projection thư mục Skill portable và tên top-level trong `SKILL.md` thành
+`ak-<slug>` mà không viết lại alias trong body như `/ak:cook` hoặc `$ak:cook`.
+`ak run <kit>/<skill> --target omp` giữ nguyên selector dispatch. OMP trong
+project đã trust cũng discover `.agents/skills` của project. Khi trùng tên,
+`.omp/skills` của project che `.agents/skills` với bản cài OMP project;
+`.agents/skills` của project che bản trong profile OMP khi dùng bản cài OMP
+global từ project đó. Cả `ak kit init` và `ak kit install` đều cảnh báo rồi tiếp
+tục mà không bỏ qua emission OMP hay thay đổi Skill, `.agents` hoặc setting OMP.
+Đây không phải exit `6` và không cần `--force`.
+
 Bản cài Grok native trong project ghi dưới `<project>/.grok` và lưu quyền sở hữu
 lifecycle dưới `<project>/.agentkit/adapters/grok/<kit>`. Bản cài global dùng
 `${GROK_HOME:-~/.grok}` và
@@ -91,7 +103,7 @@ journal, cache entry hoặc staged write có thể đã tồn tại. Giữ mọi
 và audit target trước khi thử lại.
 
 Bản cài Codex vẫn có thể thành công khi in
-`Hooks dropped (unsupported on this target)`. Đây là partial projection được
+`Hook groups not projected`. Đây là partial projection được
 công bố, không phải lỗi exit. JSON báo `hooksDropped` và
 `droppedHookSummaries`; hãy xem event, matcher và handler được nêu thay vì thử
 lại với `--force`. Xem [Runtime không tìm thấy Skill hoặc
@@ -108,11 +120,10 @@ Khi đích đã có tệp, không thử lại ngay với `--force`. Trước ti�
 nội dung do AgentKit sở hữu, thuộc install mode khác hay chứa thay đổi của người
 dùng.
 
-Với Hook Codex global, đừng xem mọi symlink là tương đương. Trên POSIX, chỉ leaf
-`hooks` cuối cùng được trỏ tới `~/.codex/hooks` canonical của user đã resolve;
-parent có link và target khác bị từ chối. Symlink cùng reparse point trên
-Windows vẫn không được hỗ trợ. Hãy xử lý path không khớp thay vì retry bằng
-`--force`.
+Với Hook Codex global, đừng xem mọi link là tương đương. Chỉ leaf `hooks` cuối
+cùng được trỏ tới `~/.codex/hooks` canonical của user đã resolve, dưới dạng
+symlink POSIX hoặc directory junction trên Windows; parent có link và target
+khác bị từ chối. Hãy xử lý path không khớp thay vì retry bằng `--force`.
 
 ## Kiểm tra runtime và nội dung đã ghi nhận
 
@@ -188,3 +199,5 @@ hoặc Agent](./runtime-cannot-find-skill-or-agent).
 - [Cài Kit](../guides/installing-kits)
 - [Đăng nhập và quyền sử dụng Kit](./authentication)
 - [Cập nhật và khôi phục](./updates)
+
+`hooksDeferred` là tập con của `hooksDropped`: harness bridge chưa project được subscription này, không đồng nghĩa runtime không hỗ trợ. Đọc summary để phân biệt deferred và unsupported.

@@ -1,0 +1,75 @@
+---
+title: ak policy validate
+description: Kiểm tra policy của project nạp được mà không xung đột và báo cáo độ lệch của các quy tắc compiled.
+---
+
+Dùng `ak policy validate` để xác nhận tài liệu policy nhất quán. Lệnh báo cáo mọi
+cặp quy tắc bất đồng về một đầu vào mà cả hai cùng mô tả, và mọi quy tắc
+compiled có câu hướng dẫn nguồn đã thay đổi. Tài liệu có bất kỳ xung đột nào sẽ
+không thực thi gì, vì vậy hãy chạy lệnh này trong CI để một lỗi đánh máy trở
+thành build thất bại thay vì một lỗ hổng thực thi âm thầm.
+
+## Cách dùng
+
+```bash
+ak policy validate [flags]
+```
+
+Lệnh không nhận argument theo vị trí và không thay đổi gì. Lệnh đọc
+`.agentkit/policy.yaml` và các tệp hướng dẫn mà tài liệu này nêu tên.
+
+## Tuỳ chọn của lệnh
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--dir <path>` | `.` | Thư mục project chứa `.agentkit/policy.yaml`. |
+| `--fail-on-stale` | `false` | Thoát thêm với mã `1` khi câu hướng dẫn nguồn của một quy tắc compiled đã thay đổi hoặc không còn. |
+
+Các cờ dùng chung được mô tả trong [quy ước CLI](../cli-conventions).
+
+## Ví dụ thường dùng
+
+```bash
+ak policy validate
+ak policy validate --fail-on-stale --json
+```
+
+## Xung đột và độ lệch
+
+Hai quy tắc xung đột khi chúng có thể mô tả cùng một đầu vào nhưng trả lời khác
+nhau, ví dụ một `block` và một `warn` trên các mẫu đường dẫn chồng lấn, hoặc một
+check mà quy tắc này yêu cầu cho một diff trong khi quy tắc khác cho phép bỏ qua.
+Engine không áp dụng thứ tự ưu tiên nào giữa chúng; nó từ chối toàn bộ tài liệu.
+
+Các phát hiện về độ lệch dùng các giá trị `state` sau:
+
+| State | Ý nghĩa | Làm `--fail-on-stale` thất bại |
+| --- | --- | --- |
+| `source_changed` | Tệp nguồn không còn chứa câu hướng dẫn mà quy tắc được biên dịch từ đó. | Có |
+| `source_missing` | Tệp nguồn không còn, không đọc được hoặc nằm ngoài project. | Có |
+| `target_absent` | Chưa có gì tồn tại ở phần cố định của một mẫu đường dẫn được bảo vệ. Chỉ mang tính thông tin. | Không |
+
+Việc dàn lại đoạn văn, đánh số lại hoặc di chuyển câu hướng dẫn trong cùng tệp
+không phải là độ lệch; chỉ thay đổi câu chữ mới là độ lệch. Quy tắc bị lệch vẫn
+tiếp tục thực thi cho đến khi bạn chấp nhận lại hoặc xoá nó.
+
+## Đầu ra cho tự động hoá
+
+`kind` là `policy.validate`. Payload `data` gồm `document`, `rules` (số quy tắc),
+`loadable`, `conflicts` (mỗi mục có `rules`, `kinds` và `detail`) và `stale`
+(mỗi mục có `rule`, `state` và `detail`).
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa | Bạn nên làm gì |
+| --- | --- | --- |
+| `0` | Tài liệu nạp được. Độ lệch vẫn có thể được báo cáo. | Xem lại mọi phát hiện về độ lệch. |
+| `1` | Tài liệu không tồn tại hoặc không đọc được, hoặc `--fail-on-stale` phát hiện độ lệch. | Sửa tệp, hoặc chấp nhận lại hay xoá quy tắc bị lệch. |
+| `2` | Argument không hợp lệ. | Sửa cách gọi. |
+| `4` | Các quy tắc xung đột, nên không gì trong tài liệu được thực thi. | Sửa các quy tắc xung đột để chúng thống nhất. |
+
+## Lệnh liên quan
+
+- [`ak policy`](./policy)
+- [`ak policy status`](./policy-status)
+- [`ak policy adopt`](./policy-adopt)

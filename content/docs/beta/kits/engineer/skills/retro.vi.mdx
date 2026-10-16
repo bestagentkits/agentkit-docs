@@ -35,9 +35,9 @@ với dữ liệu quan sát được thay vì narrative được tạo ra.
   Engineer Kit đã được cài cho đúng runtime cùng scope bạn đang dùng.
 - Mở Git repository có history bạn muốn phân tích.
 - Chọn timeframe được hỗ trợ và xác nhận time boundary cục bộ của repository.
-- Bảo đảm common shell tool cùng `git` khả dụng.
+- Bảo đảm `git` và Python khả dụng cho metrics collector đi kèm.
 - Chỉ làm `gh` khả dụng và authenticated nếu muốn optional issue data.
-- Review privacy của author email trước khi yêu cầu output `--team`.
+- Review privacy của tên author trước khi yêu cầu output `--team`.
 
 | Runtime | Cách gọi | Ranh giới khả dụng |
 | --- | --- | --- |
@@ -111,17 +111,22 @@ $ak:retro 2026-07-15:2026-07-28 --compare --team --format md
 
 1. **Skill resolve date.** Skill chuyển timeframe thành `SINCE` cùng `UNTIL`;
    comparison mode còn tạo preceding window có độ dài bằng nhau.
-2. **Skill thu thập raw Git metric.** Command đếm commit, active date, LOC thêm
-   cùng xóa, changed file, hotspot, commit-subject type, author và test-file
-   change. Kết quả trống thành `0` hoặc `N/A`.
+2. **Skill chụp một Git snapshot cho mỗi kỳ.** `scripts/collect-git-metrics.py`
+   đi kèm đọc một history snapshot có giới hạn giữa các ISO timestamp tường
+   minh, gồm cả timezone, và trả về JSON. Tổng số, activity day, author,
+   commit-subject type, file hotspot, line change và test-file change đều lấy từ
+   snapshot đó. Git command thất bại là evidence không khả dụng, không phải
+   activity bằng 0.
 3. **Skill tính derived indicator.** Report hiển thị công thức commit frequency,
    active-day ratio, test-to-code change ratio cùng churn thay vì đưa ra opaque
    score.
 4. **Skill kiểm tra optional issue evidence.** Khi `gh` khả dụng, Skill có thể
-   query closed issue trong kỳ; nếu không, issue metric giữ `N/A`.
-5. **Skill scan recent plan file.** Skill tạo temporary period sentinel và kiểm
-   tra tối đa hai mươi Markdown file phù hợp dưới `plans/`, đếm task đã check và
-   chưa check.
+   đếm issue opened và closed trong kỳ, tách riêng khỏi plan completion; nếu
+   không, issue metric giữ `N/A`.
+5. **Skill kiểm tra plan được chạm trong kỳ.** Skill dùng changed path của
+   snapshot dưới plan root để tìm tracked plan, rồi đọc trạng thái checkbox hiện
+   tại. Trạng thái checklist hiện tại được báo cáo tách khỏi evidence hoàn tất
+   trong lịch sử, và thời gian sửa tệp không được coi là Git history.
 6. **Skill ghi report.** Markdown vào
    `plans/reports/retro-{YYMMDD}-{slug}.md`; HTML dùng cùng tên với `.html` và
    inline CSS. Panel AntV được bật vẫn giữ dependency jsDelivr đã mô tả ở trên.
@@ -138,21 +143,28 @@ chia thành nhiều report file.
   để bắt đầu investigation, không để xếp hạng contributor hoặc claim product quality.
 </Callout>
 
-- Binary file cùng row `git --numstat` không phải số bị loại khỏi LOC sum.
+- Report giữ provenance của collector: revision `HEAD` đã pin, cờ
+  shallow-history, ISO bound tường minh, cùng policy về date, diff và path. Git
+  lọc theo committer date, và activity day giữ offset của từng committer
+  timestamp thay vì một reporting timezone chung.
+- Shallow clone có thể thiếu activity. Binary change không có LOC dạng số và
+  được đếm riêng khỏi line total.
+- Commit count, LOC và author activity là tín hiệu mô tả, không phải năng suất
+  cá nhân hay chất lượng code.
 - Test-to-code ratio đo changed filename khớp test pattern, không đo test
   coverage hoặc test quality.
 - Conventional-commit distribution chỉ có ý nghĩa khi subject theo convention đó.
 - Churn dùng `(added + removed) / max(net, 1)`; negative hoặc near-zero net
   change có thể làm value khó diễn giải.
-- Author grouping dùng Git email và có thể tách một người thành nhiều identity
-  hoặc expose personal data trong report.
+- Author grouping dùng tên Git author và có thể tách một người thành nhiều
+  identity hoặc expose personal data trong report.
 - Issue data cần command `gh` authenticated và có thể tạo read-only network
   request tới GitHub. Nếu unavailable, ghi `N/A` thay vì hỏi secret hay tạo số.
 
 ## Giữ effect và approval có giới hạn
 
 - Source file vẫn read-only, nhưng workflow ghi retrospective artifact dưới
-  `plans/reports/` cùng temporary sentinel dưới `/tmp`.
+  `plans/reports/`.
 - Shell cùng Git process chạy local và có thể scan lượng history lớn; repository
   lớn hoặc period dài có thể lâu hơn default bảy ngày.
 - HTML output dùng inline CSS. Khi panel AntV được bật, việc mở report có thể
@@ -194,7 +206,6 @@ xác nhận source file không đổi trước khi share retrospective.
 
 - Report không gồm product outcome, review quality, incident data, deployment
   frequency hoặc uncommitted work trừ khi bạn cung cấp evidence riêng.
-- Issue completion formula do Skill mô tả cần opened cùng closed count, trong
-  khi example query chỉ lấy closed issue; ghi rate là `N/A` trừ khi cả hai phía
-  được xác minh.
+- Plan evidence phản ánh trạng thái checklist hiện tại của plan được chạm trong
+  kỳ, không phải bản ghi lịch sử về thời điểm mỗi task hoàn tất.
 - Editorial visual chỉ áp dụng cho `--format html`; `--format md` vẫn không đổi.

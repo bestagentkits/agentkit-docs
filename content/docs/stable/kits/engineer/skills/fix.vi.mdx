@@ -85,7 +85,7 @@ $ak:fix "POST /api/sessions returns 500 when expiresAt is absent. Reproduce with
 | `--quick` | Dùng cycle scout, diagnosis, repair, verification và review ngắn | Chỉ dành cho lỗi type, lint, syntax hoặc defect trực tiếp trong một tệp; bằng chứng root cause vẫn bắt buộc |
 | `--parallel` | Chuyển issue độc lập vào workstream có ownership riêng | Issue phải độc lập, ownership không chồng lấn và runtime delegation phải khả dụng cùng được cho phép |
 | `--ultra` | Chạy lựa chọn fix plan sau diagnosis dưới dạng best-of-5 verifier pass | Yêu cầu parallel read-only dispatch và xung đột với `--quick` cùng `--parallel` |
-| `--advice` | Thêm checkpoint tư vấn sau mỗi phase, khi bị kẹt và trước quyết định rủi ro cao | Adviser chỉ đưa counsel; không thể edit, approve hay mở rộng quyền hạn |
+| `--advice` | Thêm checkpoint tư vấn sau mỗi phase, khi bị kẹt, trước quyết định rủi ro cao và ở lần xác minh thất bại bất ngờ đầu tiên | Adviser chỉ đưa counsel; không thể edit, approve hay mở rộng quyền hạn. Tuân Failure Protocol của plan khi có; dừng cho `kongming` trước khi tự suy luận |
 
 `--ultra` chạy Steps 0-2 một lần, sau đó gửi diagnosis đã xác nhận trong một
 immutable evidence packet tới đúng năm candidate độc lập, read-only trong một
@@ -120,6 +120,35 @@ chung nguyên nhân nhưng để diagnosis chứng minh hoặc bác bỏ việc 
 7. **Skill review và hoàn tất.** Finding được chấp nhận sẽ được sửa rồi
    re-verify. Tiến độ plan được đối chiếu, ảnh hưởng tài liệu được đánh giá và
    journal local ghi lại lịch sử kỹ thuật.
+
+## So sánh shadow tùy chọn
+
+Skill hoàn tất phần đánh giá độ phức tạp của chính nó trước và không gọi dịch
+vụ quyết định nào theo mặc định. Chỉ khi bạn yêu cầu một thử nghiệm semantic,
+hoặc context đã có sẵn một opt-in đáng tin cậy từ bạn, Skill mới có thể chạy
+[`ak eval decision`](../../../reference/cli/eval/decision) để so sánh kết quả
+phân loại với một kết quả shadow. Skill chỉ gửi bản tóm tắt ngắn, không nhạy
+cảm về chẩn đoán, không bao giờ gửi tệp source, log, transcript hay credential.
+
+Phép so sánh chỉ mang tính shadow. Skill vẫn theo workflow độ phức tạp hiện có,
+giữ nguyên `--parallel` tường minh và giữ kết quả của chính nó khi có bất đồng,
+timeout hoặc provider không khả dụng. Lệnh tự kiểm tra consent ở user scope một
+cách độc lập. Một phép so sánh là bằng chứng thử nghiệm, không phải cải thiện đã
+được đo lường.
+
+Ngoài ra, chỉ khi bạn yêu cầu tường minh, Skill mới có thể chuẩn bị một request có
+giới hạn và đã được review cho [`ak eval workflow`](../../../reference/cli/eval/workflow) với
+workflow `fix`. Mode mặc định `off` xác thực request cục bộ. `--mode shadow`
+còn cần cấu hình master và provider ở user scope, consent tường minh
+`workflow-controller: true` của bạn và credential của provider; Skill không bao
+giờ suy ra consent từ một key có sẵn trong môi trường. Mode shadow có thể gửi dữ
+kiện đã được làm sạch tới provider bên ngoài và phát sinh chi phí.
+
+Thử nghiệm không bao giờ thay đổi việc Skill làm. Quyết định retry, replan và
+escalation có hiệu lực được giữ nguyên, gợi ý chỉ được ghi lại để so sánh, và
+khi có lỗi, độ tin cậy thấp hoặc provider không khả dụng thì Skill dùng workflow
+hiện có. Skill không bao giờ thực thi một gợi ý hay coi nó là quyền. Giới hạn hiện có, lệnh dừng của bạn, checkpoint con người sau ba lần sửa thất bại và các kiểm soát phê duyệt vẫn có hiệu lực.
+Việc dùng Skill thông thường không gọi lệnh này.
 
 ## Giữ nguyên các hard gate
 

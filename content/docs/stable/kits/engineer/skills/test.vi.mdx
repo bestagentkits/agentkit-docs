@@ -9,7 +9,9 @@ import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 Dùng `ak:test` để biến một thay đổi hoặc câu hỏi quality thành bằng chứng
 validation mới. Skill có thể chạy unit, integration, end-to-end, build,
 coverage và browser-based UI check. Skill cũng có thể tạo test suite bao phủ,
-tối ưu suite cùng chi phí CI hoặc audit và sửa test yếu.
+tối ưu suite cùng chi phí CI hoặc audit và sửa test yếu. Các rule test-principles
+của Skill chi phối scope, layer, environment và cách thực thi cho mọi operation;
+hãy nạp chúng trước khi thiết kế hoặc thay đổi test.
 
 ## Chọn ak:test khi validation là outcome
 
@@ -57,7 +59,8 @@ Trước khi bắt đầu:
 Nếu bạn cung cấp scope, Skill tiếp tục với code validation liên quan. Khi không
 có argument, Skill hỏi operation cần chạy. Dùng `ui <url>` để chọn trực tiếp
 browser workflow hoặc bắt đầu bằng `create`, `optimize` hay `audit` để làm việc
-trên chính test suite.
+trên chính test suite. Mọi thay đổi suite, đề xuất optimize hoặc audit, hay
+QA report đều phải nhất quán với các rule test-principles.
 
 <Tabs items={['Claude Code', 'Cursor', 'Codex']}>
   <Tab value="Claude Code">
@@ -97,6 +100,7 @@ $ak:test ui http://localhost:3000/settings
 
 | Operation | Nội dung bao phủ | Input hữu ích |
 | --- | --- | --- |
+| Test principles | Scope, layer, environment, chạy tuần tự hay song song, test đắt và triage failure | Chọn những gì cần test, một test chậm hoặc song song có đáng giữ, triage failure, hoặc đối chiếu test với specification đã đổi |
 | Kiểm thử code | Type hoặc syntax check, unit, integration, end-to-end, coverage và production build | Behavior đã đổi, module bị ảnh hưởng, command bắt buộc, threshold project và giới hạn thời gian |
 | `ui <url>` | Page discovery, screenshot, responsive behavior, accessibility, form, console error và user flow đã chọn | URL, state mong đợi, viewport, cách auth, ranh giới data safety và browser availability |
 | `create [scope]` | Scout code cùng docs, lập coverage matrix, rồi tạo hoặc mở rộng test suite | Feature hoặc workflow cần bao phủ, framework hiện có, critical path và threshold project |
@@ -119,17 +123,40 @@ chạy fail closed. Khi không có `--interview`, Skill áp dụng trực tiếp
 /ak:test audit "Check skipped and ineffective authorization tests" --ultra
 ```
 
-Command và threshold do project định nghĩa được ưu tiên. Khi project không có
-coverage policy, reference guidance của Skill dùng 80% line và 70% branch
-coverage làm target chung, đồng thời chú ý đặc biệt tới critical path.
+Command và threshold do project định nghĩa được ưu tiên. Khi project không định
+nghĩa coverage threshold, Skill báo coverage thực tế và các critical behavior
+còn thiếu test; Skill không tự đặt ra gate phần trăm. Khi `create` dựng suite
+mới, Skill nhắm tới threshold của project, mặc định 80% cho critical path.
+
+## Dùng impact selection và các mode semantic tùy chọn
+
+Với repository có test-impact manifest đáng tin cậy, `optimize` dùng
+[`ak test optimize --base <ref> --json`](../../../reference/cli/test/optimize) để lập kế hoạch chọn các nhóm check theo
+thứ hạng một cách tất định, kèm lý do chọn hoặc bỏ qua. Việc lập kế hoạch là
+read-only. `--run` thực thi các lệnh thuộc repository đã được chọn, và đây không
+phải sandbox; `--output <new-file>` lưu kết quả cục bộ. Khi không chắc chắn, phạm
+vi chọn được mở rộng về phía full suite đã khai báo, các nhóm bắt buộc và policy
+check vẫn phải chạy, và policy mapping chưa được giải quyết sẽ chặn việc thực
+thi. Đường này không liên hệ provider semantic nào.
+
+Các mode semantic chỉ chạy khi opt in, và Skill không bao giờ suy ra consent từ
+một key có sẵn trong môi trường. Với grant tường minh cho consumer `test-impact`,
+`--semantic shadow` giữ nguyên baseline có hiệu lực, còn `--semantic advisory`
+chỉ có thể thêm check hoặc mở rộng phạm vi chọn. Mode semantic đã được cấp quyền
+có thể gửi dữ kiện ngắn gọn tới provider bên ngoài và phát sinh chi phí.
+[`ak test classify-e2e`](../../../reference/cli/test/classify-e2e) cần grant riêng và không bao giờ thay đổi lịch chạy E2E
+hay class manifest. Với UI testing, một thử nghiệm shadow
+[`ak eval ui`](../../../reference/cli/eval/ui) được yêu cầu, có grant tường minh `ui-regression`, có
+thể thêm tín hiệu regression từ bằng chứng đã quan sát; nó không bao giờ biến một
+lỗi thành đạt hay thay đổi kết quả UI test.
 
 ## Hiểu điều gì xảy ra trong một lần chạy
 
 Operation mặc định và `ui` theo validation flow này:
 
 1. **Skill xác định scope.** Skill nối thay đổi gần đây hoặc requirement với bề
-   mặt validation nhỏ nhất hữu ích, rồi xác định critical path cùng error
-   scenario.
+   mặt validation nhỏ nhất hữu ích theo scope dựa trên rủi ro và tầng kiểm thử
+   thấp nhất còn đáng tin, rồi xác định critical path cùng error scenario.
 2. **Skill chạy pre-flight check.** Type, syntax, lint hoặc analysis riêng của
    ngôn ngữ chạy trước behavioral test để compilation failure hiển thị sớm.
 3. **Skill chạy suite đã chọn.** Skill bắt đầu tập trung, mở rộng sang

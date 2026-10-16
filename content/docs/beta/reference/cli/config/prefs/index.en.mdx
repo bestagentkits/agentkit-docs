@@ -1,6 +1,6 @@
 ---
 title: ak config prefs
-description: Choose a preference lookup, validation, or bounded Hook or journal.auto mutation while preserving scope, defaults, secrets, and backup boundaries.
+description: Choose a preference lookup, validation, or bounded Hook, journal.auto, worktree root, agent model, or semantic_decision mutation while preserving scope, defaults, secrets, and backup boundaries.
 ---
 
 Use `ak config prefs` to discover the commands that resolve or change
@@ -23,11 +23,13 @@ into a preference payload.
 | --- | --- | --- |
 | See effective authored values | `ak config prefs resolve` | Reads user and current-project config, then deep-merges project over user. |
 | Check config syntax and schema | `ak config prefs validate` | Reads existing user/project files, or one explicit `--file`; writes nothing. |
-| Pin one Hook toggle, the automatic journal step, or the default worktree root | `ak config prefs set <key> <value>` | Backs up an existing selected config, then atomically writes one `hooks.<name>` boolean, the exact `journal.auto` leaf, or the exact `worktree.root` path. |
-| Stop pinning one Hook toggle, `journal.auto`, or `worktree.root` | `ak config prefs unset <key>` | Removes one selected-scope `hooks.<name>`, `journal.auto`, or `worktree.root` leaf when present, with a backup before rewrite. |
+| Pin one Hook toggle, the automatic journal step, the default worktree root, one runtime capability-tier agent model, or one semantic decision setting | `ak config prefs set <key> <value>` | Backs up an existing selected config, then atomically writes one `hooks.<name>` boolean, the exact `journal.auto` leaf, the exact `worktree.root` path, one `agent_models.<runtime>.<tier>` model ID, or one `semantic_decision.*` leaf. |
+| Stop pinning one Hook toggle, `journal.auto`, `worktree.root`, an agent model, or a semantic decision setting | `ak config prefs unset <key>` | Removes one selected-scope `hooks.<name>`, `journal.auto`, `worktree.root`, `agent_models.<runtime>.<tier>`, or `semantic_decision.*` leaf when present, with a backup before rewrite. |
 
 These commands do not edit provider keys, API tokens, update settings, or other
-setup-owned sections.
+setup-owned sections. Semantic decision credentials come from the
+process environment or `$AGENTKIT_HOME/.env`, never from config. See
+[providers and credentials](../../../../guides/semantic-decision-experiments#choose-a-provider-and-credentials).
 
 ## Understand scope and precedence
 
@@ -47,6 +49,13 @@ Kit Hook applies its own built-in default when a value is absent, and
 current project's file. Scope is based on the process working directory, not a
 registered project chosen elsewhere.
 
+`semantic_decision` is an exception to project-over-user precedence. Only user
+scope can grant provider consent or choose provider settings; project scope can
+only set `semantic_decision.enabled` or a
+`semantic_decision.consumers.<consumer>` entry to `false`. See
+[ak eval decision](../cli/ak_eval_decision) for how the grant is resolved and
+what it sends.
+
 ## Privacy and output boundary
 
 Resolve allowlists preference sections and converts their field names to the
@@ -55,14 +64,14 @@ including `keys` and `api`, are excluded. The `extensions` section is passed
 through verbatim, however, so treat preference output as potentially sensitive
 user-authored data and review it before sharing logs.
 
-The preference commands use command-specific raw JSON objects rather than the
-shared `schema_version`/`kind`/`data` success envelope. Bare `ak config prefs`
+`set`, `unset`, and `validate` write the shared `schema_version`/`kind`/`data`
+success envelope. `resolve` keeps its raw preference document because Kit Hooks
+parse it directly. Bare `ak config prefs`
 prints ordinary Cobra help to stdout and normally exits `0`.
 
-Runtime failures in these preference commands are not centrally converted to a
-JSON error envelope. With `--json`, a failure can produce no diagnostic object;
-use the process exit status and validate success output before consuming it.
-Flag-parse errors can still print plain-text usage and exit `2`.
+With `--json`, a failure in these preference commands, including a flag-parse
+error (exit `2`), writes the shared error envelope to stderr. Use the process
+exit status and validate success output before consuming it.
 An unknown subcommand or extra positional token instead follows the generic
 runtime error path and exits `1`.
 
@@ -80,4 +89,5 @@ path; no automatic preference rollback command is provided.
 
 ## Related commands
 
+- [Managing Hook preferences](../../../../guides/managing-hook-preferences)
 - [CLI conventions](../cli-conventions)

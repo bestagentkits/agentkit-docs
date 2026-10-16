@@ -27,10 +27,24 @@ on macOS and Linux and `%USERPROFILE%\.agentkit` on Windows. The session file is
 protected with owner-only permissions where the operating system supports
 them; it is not a reason to share the file or license key.
 
-After a successful online verification, Desktop allows up to 72 hours of
-offline use. When that grace period expires, reconnect and verify the license
-again. Signing out in Desktop clears local App credentials; it does not revoke
-the license remotely or sign the CLI out.
+While online, Desktop rechecks the App session in the background about every
+six hours, so an active device stays signed in. After the last successful
+check, Desktop allows up to 72 hours of offline use; a network failure keeps
+that grace period, while a definitive rejection such as a revoked device or an
+inactive license locks the app. When the grace period expires, reconnect and
+verify the license again.
+
+Activating again on the same device reuses its existing seat. When a
+single-seat license is already active on another device, Desktop moves the
+license to this device automatically; on a multi-seat license that is full,
+Desktop offers **Move the license to this device**. Desktop then names the
+device the license moved from, and that device is signed out. The license
+owner is notified by email about each move, and a license can move between
+devices at most 3 times in 24 hours; after that, remove a device at
+[agentkit.best/account/licenses](https://agentkit.best/account/licenses) or try
+again later. `ak login --license-key` never moves a seat. Signing out in Desktop
+clears local App credentials; it does not revoke the license remotely or sign
+the CLI out.
 
 ## Complete onboarding
 
@@ -38,13 +52,25 @@ Desktop scans the local setup for supported coding agents, registered projects,
 installed and entitled Kits, configuration, health, licenses, and updates.
 Review the results before applying changes.
 
+{/* Evidence: #1740. */}
+
+The scan also reports Node.js dependency readiness. If Node.js is missing,
+Desktop shows an installation hint and an explicit Node.js LTS installation
+action. Selecting that action grants consent to install through a detected
+supported package manager; Desktop then resolves Node.js again and checks the
+version against the `20.11` minimum. Without a supported manager, follow the
+manual hint. Non-interactive mode does not grant consent; CLI or CI callers must
+set `AK_AUTO_INSTALL_NODE=1` explicitly to authorize automatic installation.
+
 The optional Kit step installs only the Kits you select, globally for the
-detected coding agents, from the Kit catalog used by Desktop v2.15.0-beta.3. You can
+detected coding agents, from the Kit catalog used by Desktop vAK_DESKTOP_VERSION. You can
 skip it when you do not have a matching runtime or entitlement. After
 installation, restart the coding assistant or open a new runtime session before
-using the new skills.
+using the new skills. Other Kit content can still be installed while Node.js is
+missing, but Node-backed Hooks and status lines require it. After Node.js is
+ready, rerun the affected Kit install or refresh action.
 
-Desktop v2.15.0-beta.3 does not start a Kit skill or agent run. Launch the installed
+Desktop vAK_DESKTOP_VERSION does not start a Kit skill or agent run. Launch the installed
 skill from its coding assistant, or use the appropriate CLI workflow.
 
 ## Use the main workflows
@@ -87,8 +113,10 @@ Network access depends on the action:
 
 - App activation, entitlement checks, and Kit catalog actions contact AgentKit
   services;
-- Update checks, changelog, and announcements contact the release service; and
-- Feedback is sent only when you submit it.
+- Update checks, changelog, and announcements contact the release service;
+- Feedback is sent only when you submit it; and
+- The **Your reports** list on Feedback reads each filed report's issue state
+  from the public GitHub API, without authentication.
 
 Never include a license key, session file, unmasked config value, or private
 session content in feedback or diagnostics. Next, review [signed Desktop

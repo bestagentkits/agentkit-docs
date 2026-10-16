@@ -18,7 +18,8 @@ AgentKit phát hành qua hai kênh `stable` và `beta`:
   đổi về tương thích.
 
 Các lệnh Kit mặc định dùng `stable`; `beta` cần được chọn rõ ràng. Lệnh
-`ak self-update` có thể kế thừa kênh đã lưu, vì vậy hãy truyền `--channel stable`
+`ak self-update` dùng `--channel`, rồi `updates.channel` đã lưu, rồi kênh của
+binary phát hành đang chạy, rồi `stable`, vì vậy hãy truyền `--channel stable`
 hoặc `--channel beta` khi lựa chọn này quan trọng. Giữ CLI và Kit trên cùng kênh
 bạn đã chọn.
 
@@ -39,8 +40,16 @@ ak update --yes
 `--yes` chấp nhận các bước được đề xuất, nhưng kiểm tra bản cập nhật CLI đã ký
 hoặc phiên bản tối thiểu vẫn là cổng bắt buộc trước mọi thay đổi Kit. Dùng các
 lệnh có phạm vi bên dưới khi bạn chỉ muốn cập nhật một lớp. Lỗi ở cổng CLI, lỗi
-một phần khi cập nhật Kit hoặc gián đoạn sau khi đã thay đổi trả mã `1`; target
-hoặc phạm vi không hợp lệ trả `2`.
+một phần khi cập nhật Kit hoặc gián đoạn sau khi đã thay đổi trả mã `1`; target,
+phạm vi hoặc nguồn không hợp lệ trả `2`.
+
+Trên Windows, cổng CLI đó thay binary tại chỗ dưới update lock độc quyền, kiểm tra preimage của binary đang chạy, rồi re-execute lệnh `ak update` gốc để Kit refresh tiếp tục ngay lần gọi đầu. `ak self-update` độc lập vẫn dùng staged detached helper. Paired Desktop apply stage các artifact CLI và Desktop khớp nhau, rồi helper đáng tin cậy commit thao tác thay thế sau khi process cha nhả các executable.
+
+Wizard chiếu một lựa chọn `--target` lên từng bước. Ví dụ, `pi` vẫn hợp lệ cho
+bước project nhưng bị bỏ qua ở bước Kit global; nếu không target nào đã chọn áp
+dụng được ở global scope, wizard bỏ qua bước đó rồi tiếp tục. Target tường minh
+không áp dụng cho scope và nguồn đã chọn sẽ bị từ chối trước discovery hoặc
+mutation.
 
 ## Xem lại bản phát hành CLI
 
@@ -103,10 +112,110 @@ hoạch đã review bằng:
 ak update . --kits engineer --channel stable --yes
 ```
 
-Khi áp dụng, cập nhật project tạo snapshot trước thay đổi. Theo mặc định, file
-do người dùng sửa được giữ lại. Chỉ dùng `--force` sau khi review chính xác diff
-và quyết định snapshot là đủ để khôi phục; đây không phải flag làm mới thông
-thường.
+Sau cây `kits/` được theo dõi, cập nhật project khi áp dụng còn refresh mọi
+runtime đã cài của từng Kit trong project (`.claude`, `.codex` và adapter root),
+mỗi lượt cho một cặp Kit và runtime. Project chỉ có bản cài runtime từ
+`ak kit init` sẽ được refresh các bản cài đó. Bản xem trước và `--dry-run` liệt
+kê các refresh runtime dự kiến mà không ghi gì. Một lượt thất bại không dừng các
+lượt khác, và lệnh trả mã thoát `1` ở cuối. Thu hẹp runtime bằng `--target`:
+
+```bash
+ak update . --target claude-code,codex --yes
+```
+
+Runtime được yêu cầu nhưng chưa có bản cài trong project được báo trong
+`skipped_targets`. Thư mục project trỏ tới bản cài cấp người dùng, như thư mục
+home, sẽ bỏ qua refresh runtime và hướng dẫn chạy `ak update --global`. `--force`
+ở project không lưu trữ các Skill Codex cũ của ClaudeKit; việc đó vẫn thuộc
+`ak update --global --force` hoặc `ak migrate --from ck`. Xem
+[Refresh runtime của dự án](../reference/cli/update#refresh-runtime-của-dự-án).
+
+Theo mặc định, cập nhật project áp dụng chỉ snapshot đúng những tệp nó ghi
+hoặc prune — một bundle có thể restore, và kết quả gồm cả lệnh restore.
+`--force`, `--backup`, hoặc `backups.enabled: true` trong
+`~/.agentkit/config.yaml` capture toàn bộ project thay vào đó; `--no-backup`
+bỏ qua hoàn toàn snapshot, kể cả snapshot mà `--force` tạo. Theo mặc định,
+file do người dùng sửa được giữ lại. Chỉ dùng `--force` sau khi review chính
+xác diff và quyết định snapshot là đủ để khôi phục; đây không phải flag làm
+mới thông thường.
+
+<Callout type="warn" title="--no-backup bỏ qua recovery snapshot">
+  Bản xem trước và `--dry-run` vẫn không ghi gì. `ak update` khi apply mặc
+  định snapshot: đúng những tệp đã đổi trừ khi có `--force`, `--backup` hoặc
+  `backups.enabled: true`, khi đó nó capture toàn bộ project. Truyền
+  `--no-backup` là opt-out tường minh: lệnh cảnh báo trên stderr, và
+  `--force --no-backup` thêm cảnh báo nghiêm trọng hơn. Kết quả có cấu trúc
+  báo `backup_skipped` nên `snapshot_id` trống chưa đủ để phân biệt skip chủ ý
+  với lần chạy không có gì để capture. Desktop plan apply giữ nội dung người
+  dùng dùng cùng cơ chế exact-file capture, chỉ mở rộng thành toàn bộ project
+  khi nội dung người dùng bị ghi đè hoặc có `backups.enabled`; nó không nhận
+  `--no-backup`. `--backup` và `--no-backup` loại trừ lẫn nhau, và `--backup`
+  không mở rộng snapshot của global kit refresh. Flag `--no-backup` này cũng
+  có trên [`ak init`](../reference/cli/init) (opt-in qua `--backup` hoặc
+  `backups.enabled`, mặc định tắt),
+  [`ak kit init`](../reference/cli/kit/init),
+  [`ak kit install`](../reference/cli/kit/install) và
+  [`ak kit refresh`](../reference/cli/kit/refresh) — hãy xem cảnh báo mất dữ
+  liệu trước khi dùng.
+</Callout>
+
+Để biết khi nào mỗi lệnh lifecycle tự động snapshot và cách `backups.scope` giới
+hạn phần capture `~/.claude/`, xem [`ak backups`](../reference/cli/backups).
+
+## Cập nhật nền tự động (opt-in)
+
+`ak update --schedule daily|weekly` bật cập nhật nền tách rời, khởi động ở
+lệnh `ak` thông thường đầu tiên sau khoảng thời gian đã chọn, refresh CLI và
+kit global cộng thêm mọi project đã opt-in bằng `--project <dir>` (đã đăng ký
+qua `ak projects add`) có git tree sạch và không có agent session đang chạy. Cập nhật nền cho project chỉ refresh cây
+`kits/` được theo dõi; nó không bao giờ refresh bản cài runtime và ghi một thông
+báo hướng dẫn chạy `ak update <dir> --yes`:
+
+```bash
+ak update --schedule daily --project .
+ak update --status --json
+ak update --schedule off
+```
+
+Các cờ settings (`--schedule`, `--project`, `--no-project`, `--status`,
+`--ack`) chỉ đổi `auto_update:` trong `~/.agentkit/config.yaml` hoặc đọc
+state; chúng không bao giờ tự áp dụng cập nhật và không thể kết hợp với cờ
+cập nhật hay đối số project-dir. Cập nhật nền không bao giờ khởi động khi có
+`AK_NO_AUTO_UPDATE=1` hoặc `CI`, với lệnh gọi `--json`, hoặc với lệnh thuộc
+lifecycle/interactive như `update`, `init` hay `kit`. Một Kit hook
+(`session-heartbeat.cjs`) đánh dấu project đang có session sống để updater bỏ
+qua; kết quả chưa xem in một lần ở `SessionStart` tiếp theo và có thể xác nhận
+bằng `ak update --status --ack --json`. Xem
+[tham chiếu `ak update`](../reference/cli/update) và check `auto_update` của
+[`ak doctor`](../reference/cli/doctor) để biết chi tiết.
+
+Lần chạy nền dùng release channel từ `updates.channel`; khoá `auto_update:` chỉ
+chứa lịch chạy và các project đã opt-in. Project có thay đổi chưa commit hoặc có
+agent session đang chạy sẽ không được cập nhật; nó ở trạng thái chờ và được thử
+lại ở lần chạy đến hạn tiếp theo. Project không phải git repository sẽ bị bỏ
+qua. Kit global vẫn được cập nhật bất kể có agent
+session đang chạy hay không, giống như khi chạy `ak update --global` tương tác.
+
+Mỗi kết quả chạy nền chỉ hiển thị một lần: dưới dạng tóm tắt một dòng trên stderr
+của lệnh `ak` tương tác tiếp theo, hoặc qua thông báo lúc session bắt đầu, tuỳ
+cái nào đến trước. `ak update --status` vẫn tiếp tục hiển thị kết quả, và check
+**Auto-update** của `ak doctor` báo lịch chạy, kết quả gần nhất, lần chạy bị kẹt
+hoặc quá hạn, và các project đã opt-in nhưng không còn cập nhật được.
+
+Việc phát hiện session phụ thuộc vào các event mà runtime gửi tới Hook
+`session-heartbeat.cjs`:
+
+- Codex không có event `SessionEnd`, nên marker session của nó chỉ hết hạn sau
+  thời gian sống (TTL).
+- Pi chạy Hook khi session bắt đầu, khi gửi prompt và khi dừng, nhưng hoãn
+  `SessionEnd`; marker của nó cũng hết hạn theo TTL.
+
+Kiểm tra git tree sạch vẫn bảo vệ thay đổi chưa commit khi một session không được
+phát hiện.
+
+Trên Windows, lần chạy nền phải tách khỏi job object của terminal. Khi job đó cấm
+breakaway, AgentKit không khởi động lần chạy bên trong job; nó ghi nhận lần chạy
+là `deferred (spawn_in_job)` và thử lại sau.
 
 ## Xem trước cập nhật Kit global
 
@@ -126,11 +235,20 @@ ak update --global --kits engineer --target codex --channel stable --yes
 ak update --global --kits engineer --local --kits-dir ./kits --target grok --yes
 ```
 
-Cập nhật global luôn giữ file do người dùng sửa. Runtime bạn đã chọn nhưng chưa
-cài global được báo là bỏ qua thay vì được tạo mới. Dùng `--target` hoặc alias
-`--runtime` để chọn runtime đã cài như `claude-code`, `codex`, `cursor`,
-`grok` hoặc `omp`; chỉ truyền một trong hai tên cờ. Phân biệt giữa bản xem trước ngầm định
-trả `3` và dry run rõ ràng trả `0` cũng áp dụng ở phạm vi global.
+Cập nhật global luôn giữ file do người dùng sửa. Tính hợp lệ của target phụ
+thuộc cả scope và nguồn: cập nhật project từ remote chấp nhận bất kỳ runtime
+nào trong `claude-code`, `codex`, `cursor`, `dsh`, `grok`, `omp` hoặc `pi`; cập nhật
+global từ remote chấp nhận `claude-code`, `codex`, `cursor`, `dsh`, `grok` hoặc
+`omp`; cập nhật global từ local cũng chấp nhận tập đó. Dùng `--target` hoặc alias
+`--runtime`, nhưng chỉ truyền một tên flag. Target tường minh không áp dụng cho
+scope và nguồn đã chọn sẽ bị từ chối trước discovery hoặc mutation.
+
+Runtime đã chọn nhưng chưa cài global được báo là bỏ qua thay vì được tạo mới.
+Trong lần chạy remote `--global` không có bộ lọc, bản cài chỉ dùng nguồn local
+vẫn xuất hiện dưới dạng kết quả bỏ qua với reason `source_inapplicable`; lệnh
+không ngầm refresh từ nguồn khác. Hãy làm theo hướng dẫn `next` và chạy
+`ak update --global --local --kits-dir <dir>`. Phân biệt giữa bản xem trước ngầm
+định trả `3` và dry run tường minh trả `0` cũng áp dụng ở global scope.
 
 Nếu discovery Claude Code global đi tới một Claude home không được đánh dấu là
 do AgentKit sở hữu, lệnh update từ chối takeover foreign home trước mọi mutation
@@ -173,6 +291,11 @@ Sau khi cập nhật:
 
 Nếu Kit cần CLI mới hơn, hãy cập nhật `ak` trên cùng kênh trước rồi chạy lại bản
 xem trước của Kit.
+
+Khi lọc chẩn đoán tiếp theo, `ak doctor --adapter` chỉ chấp nhận `claude-code`,
+`codex` và `cursor`, là các adapter có doctor suite riêng. Mọi giá trị adapter
+khác đều không hợp lệ và trả mã `2` thay vì trả về tập kiểm tra rỗng nhưng thành
+công.
 
 ## Nếu các file mong đợi không thay đổi
 

@@ -17,30 +17,82 @@ ak update --global [options]
 - Lần xem trước ngầm định không tương tác thoát với mã `3`. Thêm `--dry-run` để xem trước tường minh và thoát `0`, hoặc `--yes` để áp dụng.
 - Lệnh trần trong TTY mở trình hướng dẫn hợp nhất. Mỗi cập nhật CLI, kit toàn cục và kit dự án mặc định là không; `--yes` chấp nhận các bước phù hợp.
 - Lần xem trước từ xa vẫn có thể xác thực, kiểm tra quyền sử dụng, tải nội dung kit và cập nhật cache trước khi tính kế hoạch.
-- `--force` chỉ cho phép thay thế sau snapshot. Tùy chọn này không biến cài đặt toàn cục thành ghi đè vô điều kiện.
+- `--force` chỉ cho phép thay thế sau snapshot trừ khi có `--no-backup`. Tùy chọn này không biến cài đặt toàn cục thành ghi đè vô điều kiện.
 - `--json`, `--quiet`, `--no-interactive` hoặc môi trường không phải TTY chọn hành vi cho script. Trong lần chạy dự án hoặc toàn cục có tương tác, từ chối mọi lời nhắc sẽ thoát `0`.
 
 ## Đối số
 
-`[project-dir]` chọn một dự án. Nếu bỏ qua, chế độ dự án tìm dự án hiện tại trừ khi đặt `--global`. Lệnh không có alias.
+`[project-dir]` chọn một project. Nếu bỏ qua, chế độ project tìm project hiện tại trừ khi đặt `--global`. Lệnh không có alias.
+
+## Target runtime và nguồn
+
+Việc xác minh target dùng cả scope và nguồn đã chọn:
+
+| Scope và nguồn | Target hợp lệ |
+| --- | --- |
+| Project, remote | Chính xác một trong `claude-code`, `codex`, `cursor`, `dsh`, `grok`, `omp` hoặc `pi` |
+| Global, remote | `claude-code`, `codex`, `cursor`, `dsh`, `grok` hoặc `omp` |
+| Global, local | `claude-code`, `codex`, `cursor`, `dsh`, `grok` hoặc `omp` |
+
+Target tường minh không áp dụng cho scope hoặc nguồn sẽ bị từ chối trước
+discovery hay mutation và trả mã `2`. Trong wizard hợp nhất, cùng lựa chọn đó
+được chiếu lên từng bước: target chỉ dành cho project như `pi` bị bỏ qua ở bước
+global nhưng vẫn khả dụng cho bước project. Nếu không target nào đã chọn áp
+dụng được ở global scope, wizard bỏ qua bước đó rồi tiếp tục.
+
+## Cập nhật nền tự động (opt-in)
+
+`--schedule daily|weekly` bật cập nhật nền tách rời, khởi động ở lệnh `ak`
+thông thường đầu tiên sau khoảng thời gian đã chọn; `--schedule off` dừng và
+xóa state. Nó refresh CLI và kit global, cộng thêm mọi project đã opt-in bằng
+`--project <dir>` (lặp lại được; thư mục phải đã đăng ký qua
+`ak projects add`) có git tree sạch và không có agent session đang chạy.
+`--no-project <dir>` (lặp lại được) đưa một project ra khỏi danh sách, kể cả
+khi thư mục đó không còn tồn tại. `--status [--json]` báo schedule và kết quả
+nền gần nhất mà không đổi gì; thêm `--ack` để đánh dấu kết quả đó đã xem.
+
+Các cờ settings này chỉ ghi section `auto_update:` trong
+`~/.agentkit/config.yaml` — không cập nhật gì ngay, và không cờ nào trong số
+`--schedule`, `--project`, `--no-project`, `--status`, `--ack` được kết hợp với
+cờ cập nhật (`--kits`, `--force`, `--global`, …) hoặc đối số project-dir; hãy
+chạy chúng như các lệnh riêng.
+
+Cập nhật nền không bao giờ khởi động khi có `AK_NO_AUTO_UPDATE=1` hoặc `CI`, với
+lệnh gọi `--json`, hoặc với top-level command thuộc lifecycle/interactive
+(`update`, `self-update`, `setup`, `onboard`, `kit`, `init`, `migrate`,
+`backups`, `recover`, `gui`, `uninstall`, `completion`, `help`, `bootstrap*`).
+Liveness được theo dõi bởi Kit hook (`session-heartbeat.cjs`) đăng ký trên
+`SessionStart`, `UserPromptSubmit`, `Stop` và `SessionEnd`; hook ghi một marker
+theo session dưới AgentKit home để updater bỏ qua project đang có session
+chạy, và không bao giờ chặn hay làm hỏng session (tự thoát `0` khi lỗi). Tại
+`SessionStart`, kết quả nền chưa được xem sẽ in thành một dòng thông báo; xác
+nhận bằng `ak update --status --ack --json`. Xem check `auto_update` của
+[`ak doctor`](./doctor) để chẩn đoán schedule, run bị kẹt và project đã opt-in.
 
 ## Tùy chọn
 
 | Tùy chọn | Mặc định | Mục đích |
 | --- | --- | --- |
+| `--ack` | `false` | Cùng `--status`: đánh dấu kết quả cập nhật nền gần nhất đã xem. |
+| `--backup` | `false` | Snapshot toàn bộ project, không chỉ tệp mà refresh thay đổi; `backups.enabled: true` trong `~/.agentkit/config.yaml` làm đây thành mặc định. |
 | `--beta` | `false` | Bao gồm hành vi tự cập nhật CLI beta. |
-| `--channel <channel>` | `stable` | Chọn kênh kit. |
+| `--channel <channel>` | `stable`, hoặc `kit.channel` đã lưu | Chọn kênh kit; giá trị tường minh được lưu lại. |
 | `--dry-run` | `false` | Xem trước mà không ghi bản cài dự án hoặc toàn cục. |
-| `--force` | `false` | Cho phép thay thế drift sau backup. |
+| `--force` | `false` | Cho phép thay thế drift sau backup trừ khi có `--no-backup`. |
 | `-g, --global` | `false` | Cập nhật bản cài kit toàn cục. |
 | `--kits <names>` | Trống | Giới hạn danh sách kit phân tách bằng dấu phẩy. |
 | `--kits-dir <path>` | Trống | Đọc kit từ thư mục cục bộ. |
 | `--local` | `false` | Dùng nguồn kit cục bộ. |
+| `--no-backup` | `false` | Bỏ qua recovery snapshot trước khi cập nhật, kể cả snapshot mà `--force` tạo (chỉ dành cho power user — rủi ro mất dữ liệu). |
+| `--no-project <dir>` | Trống | Gỡ một project khỏi cập nhật nền, kể cả khi thư mục đã mất (lặp lại được). |
+| `--project <dir>` | Trống | Opt-in một project đã đăng ký qua `ak projects add` vào cập nhật nền (lặp lại được). |
 | `--registry-url <url>` | Trống | Ghi đè URL registry. |
 | `--remote` | `true` | Dùng registry từ xa. |
-| `--runtime <runtime>` | `claude-code` | Alias của `--target`; chọn runtime toàn cục, phân tách bằng dấu phẩy, như `claude-code`, `codex`, `cursor` hoặc `grok`. |
+| `--runtime <runtime>` | `claude-code` | Alias của `--target`; chọn runtime từ ma trận scope và nguồn bên trên. |
+| `--schedule <daily\|weekly\|off>` | Trống | Đặt hoặc xóa schedule cập nhật nền (chỉ settings; không cập nhật gì ngay). |
 | `--show-diff` | `false` | Bao gồm diff tệp trong kế hoạch. |
-| `--target <target>` | Trống | Chọn runtime cần cập nhật, phân tách bằng dấu phẩy, như `claude-code`, `codex`, `cursor` hoặc `grok`; chỉ truyền một trong hai cờ `--target` hoặc `--runtime`. |
+| `--status` | `false` | Hiện schedule cập nhật nền và kết quả gần nhất (chỉ đọc). |
+| `--target <target>` | Trống | Chọn runtime từ ma trận scope và nguồn bên trên; chỉ truyền một trong hai cờ `--target` hoặc `--runtime`. |
 | `--version <version>` | Trống | Ghim phiên bản kit. |
 
 ## Ví dụ
@@ -64,27 +116,47 @@ ak update --global --dry-run --kits core --runtime claude-code
 ak update --global --dry-run --kits core --local --kits-dir ./kits --target grok
 ```
 
+Bật cập nhật nền và kiểm tra status:
+
+```bash
+ak update --schedule daily --project .
+ak update --status --json
+```
+
 ## Đầu ra và luồng
 
-Với `--json`, stdout dùng envelope chung có `"kind": "update"`. `data` của dự án gồm `project_dir`, `files_updated`, `files_skipped`, `files_new` và `dry_run`; nó cũng có thể gồm các trường snapshot, `skipped`, `diffs`, `project_config`, `project_config_created` và `scope`.
+Với `--json`, stdout dùng envelope chung có `"kind": "update"`. `data` của dự án gồm `project_dir`, `files_updated`, `files_skipped`, `files_new` và `dry_run`; nó cũng có thể gồm các trường snapshot, `backup_skipped`, `skipped`, `diffs`, `project_config`, `project_config_created` và `scope`.
 
-Đầu ra toàn cục còn có `locations`, `kits` và `skipped_targets`. Mỗi kết quả kit có thể báo cáo `kit`, `runtime`, `status`, `channel`, `reason`, `error`, `why`, `next`, các trường snapshot, `locations` và `warnings`. Runtime đã chọn nhưng chưa cài global được báo là bỏ qua thay vì được tạo mới. Lần xem trước JSON ngầm định in envelope thành công ra stdout rồi thoát `3`. Lỗi lệnh có cấu trúc đi tới stderr; lỗi phân tích vẫn là văn bản thuần.
+Đầu ra global còn có `locations`, `kits` và `skipped_targets`. Mỗi kết quả Kit có thể báo cáo `kit`, `runtime`, `status`, `channel`, `reason`, `error`, `why`, `next`, các trường snapshot, `locations` và `warnings`. Envelope global cũng có thể báo `backup_skipped`. Runtime đã chọn nhưng chưa cài global được báo là bỏ qua thay vì được tạo mới.
+
+Lần chạy remote global không có bộ lọc có thể discover một bản cài hiện có chỉ
+dùng nguồn local. Lệnh báo bản cài đó bằng `status: "skipped"` và
+`reason: "source_inapplicable"` thay vì ngầm đổi nguồn. Hãy làm theo hướng dẫn
+`next` và chạy `ak update --global --local --kits-dir <dir>` để refresh từ nguồn
+local tường minh. Target tường minh không tương thích với nguồn là lỗi xác minh trả mã
+`2`, không phải kết quả `source_inapplicable`.
+
+Lần xem trước JSON ngầm định in envelope thành công ra stdout rồi thoát `3`. Lỗi lệnh có cấu trúc đi tới stderr; lỗi phân tích vẫn là văn bản thuần.
 
 ## Trạng thái thoát
 
 | Mã | Ý nghĩa |
 | --- | --- |
 | `0` | Đã áp dụng cập nhật, hoàn tất dry-run tường minh hoặc từ chối lời nhắc tương tác. |
-| `1` | Runtime, vòng đời, nguồn, snapshot, ghi hoặc cập nhật toàn cục một phần thất bại. |
-| `2` | Cờ, phạm vi, mục tiêu hoặc lựa chọn bản cài toàn cục đủ điều kiện không hợp lệ. |
+| `1` | Runtime, vòng đời, nguồn, snapshot, ghi hoặc cập nhật toàn cục một phần thất bại; với auto-update settings và `--status --ack`, còn tính lỗi I/O hoặc state file đang bận. |
+| `2` | Flag, scope, nguồn, target hoặc lựa chọn bản cài global đủ điều kiện không hợp lệ; với auto-update settings, còn tính `--schedule` không hợp lệ, `--project` chưa đăng ký, hoặc cờ settings kết hợp với cờ cập nhật hay đối số project-dir. |
 | `3` | Lần xem trước ngầm định không tương tác cần `--yes` để áp dụng. |
 
 ## Tác động, an toàn và khôi phục
 
-Cập nhật dự án phân loại tệp thuộc quyền sở hữu. Tệp sạch có thể được thay thế; tệp đã sửa hoặc vị trí mới bị chiếm được bỏ qua trừ khi dùng `--force`. Chế độ áp dụng tạo snapshot dự án bắt buộc trước khi ghi cập nhật. Một số tệp ngoài phạm vi khôi phục cần được phục hồi thủ công; làm theo `snapshot_data_dir` khi được báo cáo. Cấu hình dự án còn thiếu có thể được tạo trước bước phân loại và snapshot, ngay cả khi bước sau thất bại.
+Cập nhật dự án phân loại tệp thuộc quyền sở hữu. Tệp sạch có thể được thay thế; tệp đã sửa hoặc vị trí mới bị chiếm được bỏ qua trừ khi dùng `--force`. Apply cũng prune các tệp AgentKit sở hữu dưới `kits/<id>/` mà source tới không còn ship, và chỉ với kit có trong incoming set. Bản sạch và bản đã missing bị xóa; bản user đã sửa được giữ và báo cáo trừ khi có `--force`. Path không còn là regular file được để nguyên. Directory trống còn lại trong kit tree bị xóa; kit root thì không.
+
+Theo mặc định, apply chỉ snapshot đúng những tệp nó ghi hoặc prune — một bundle có thể restore, được authorize theo project root (`--allow-root`), và kết quả gồm cả lệnh restore. `--force`, `--backup`, hoặc `backups.enabled: true` trong `~/.agentkit/config.yaml` thay vào đó capture toàn bộ project; `--backup` không mở rộng snapshot của global kit refresh. `--no-backup` bỏ qua mọi snapshot, kể cả snapshot mà `--force` tạo, và cảnh báo trên stderr; `--force --no-backup` thêm cảnh báo nghiêm trọng hơn. Kết quả có cấu trúc báo `backup_skipped` nên `snapshot_id` trống chưa đủ để phân biệt skip chủ ý với lần chạy không có gì để capture. Desktop plan apply giữ nội dung người dùng dùng cùng cơ chế exact-file capture đó trừ khi nội dung người dùng bị ghi đè hoặc có `backups.enabled`, khi đó nó capture toàn bộ project; nó không nhận `--no-backup`. Một số tệp ngoài phạm vi khôi phục cần được phục hồi thủ công; làm theo `snapshot_data_dir` khi được báo cáo. Cấu hình dự án còn thiếu có thể được tạo trước bước phân loại và snapshot, ngay cả khi bước sau thất bại.
 
 Các tệp được ghi tuần tự nên lỗi có thể để lại cập nhật một phần. Cập nhật toàn cục tiếp tục qua các kit, báo cáo lỗi theo kit và có thể tạo gói hỗ trợ trong `~/.agentkit/support`. Chế độ force toàn cục có thể lưu trữ kỹ năng Codex cũ được cho phép, nhưng vẫn giữ nguyên sửa đổi của người dùng.
 
+Trên Windows, `ak update` thay CLI đã ký tại chỗ dưới update lock độc quyền, kiểm tra preimage của binary đang chạy, rồi re-execute lệnh gốc trong Windows Job Object để Kit refresh tiếp tục ngay lần gọi đầu. [`ak self-update`](./self-update) độc lập vẫn dùng staged detached helper. Paired Desktop apply stage các artifact CLI và Desktop khớp nhau, rồi helper đáng tin cậy commit thao tác thay thế sau khi process cha nhả các executable.
+
 ## Lệnh liên quan và giới hạn
 
-Dùng [`ak new`](./new) cho dự án mới, [`ak uninstall`](./uninstall) để xóa tệp thuộc quyền sở hữu và [`ak doctor`](./doctor) sau lỗi một phần. Xem [quy ước CLI](../cli-conventions) về cờ dùng chung.
+Dùng [`ak new`](./new) cho project mới và [`ak uninstall`](./uninstall) để xóa file thuộc quyền sở hữu. Sau lỗi một phần, [`ak doctor`](./doctor) chỉ có thể lọc doctor suite riêng cho `claude-code`, `codex` và `cursor`; mọi giá trị `--adapter` khác đều không hợp lệ và trả mã `2`. Xem [quy ước CLI](../cli-conventions) về flag dùng chung.

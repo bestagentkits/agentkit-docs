@@ -38,10 +38,19 @@ Agent dưới `.pi/agents/`, rule dưới `.pi/rules/` và extension dưới
 hành này.
 
 Với Oh My Pi, hãy phân biệt discovery của bản cài với dispatch trực tiếp. Bản
-cài project cho runtime discover Skill, Agent và rule bên dưới `.omp/`; `ak run
-<kit>/<skill> --target omp` resolve rồi dispatch riêng một Skill. Oh My Pi sở
+cài project cho runtime discover Skill portable dưới `.omp/skills/ak-<slug>/`,
+với `name: ak-<slug>` ở top-level trong mỗi `SKILL.md` đã projection, cùng Agent
+và rule dưới `.omp/`. Alias trong body như `/ak:cook` và `$ak:cook` được giữ
+nguyên. `ak run <kit>/<skill> --target omp` resolve rồi dispatch riêng một Skill
+mà không thay đổi selector đó. Oh My Pi sở
 hữu backend và credential đã cấu hình, vì vậy chỉ có file chưa chứng minh runtime
 đã tải nội dung.
+
+Với DeepSeek Harness, bản cài project ghi Skill dưới `.dsh/skills/`, còn bản cài
+user ghi dưới `${DSH_HOME:-~/.dsh}/skills/`. Setup resolve `AGENTKIT_DSH_BIN` hoặc
+`dsh` và để model, xác thực cùng sandbox cho runtime sở hữu. `ak run
+<kit>/<skill> --target dsh` resolve rồi dispatch riêng một Skill mà không thay
+đổi inventory đã cài.
 
 Kiểm tra destination khớp delivery đã chọn:
 
@@ -52,7 +61,7 @@ Kiểm tra destination khớp delivery đã chọn:
 | Codex Skill | `<project>/.agents/skills/<name>/` | `~/.agents/skills/<name>/` |
 | Codex Agent, config và hook | `<project>/<kit>/.codex/` | `${CODEX_HOME:-~/.codex}/` |
 | Cursor | `<project>/.cursor/` | `~/.cursor/` |
-| DeepSeek Harness | Không phải target projection Kit trong bản phát hành này; dùng `ak run --target dsh` để dispatch | Không phải target projection Kit trong bản phát hành này |
+| DeepSeek Harness | `<project>/.dsh/skills/` cùng `<project>/.agentkit/adapters/dsh/<kit>/` | `${DSH_HOME:-~/.dsh}/skills/` cùng `${AGENTKIT_HOME:-~/.agentkit}/adapters/dsh/<kit>/` |
 | Grok Build | `<project>/.grok/` cùng `.agentkit/adapters/grok/<kit>/` | `${GROK_HOME:-~/.grok}/` cùng `${AGENTKIT_HOME:-~/.agentkit}/adapters/grok/<kit>/` |
 | Pi | `<project>/.pi/{skills,agents,rules,extensions}` cùng metadata vòng đời Pi | Profile Pi coding-agent đang hoạt động (`PI_CODING_AGENT_DIR` hoặc `~/.pi/agent`) không có đoạn `.pi/` bổ sung |
 | Oh My Pi | `<project>/.omp/{skills,agents,rules}`, `<project>/AGENTS.md` và `<project>/.agentkit/adapters/omp/<kit>/` | `{skills,agents,rules}` và `AGENTS.md` dưới root OMP đã phân giải, cùng metadata vòng đời ở user scope |
@@ -63,6 +72,13 @@ Kiểm tra `skills/<name>/SKILL.md`, `agents/<name>.md`, `rules/<name>.md` và b
 `AGENTKIT-OMP` theo Kit trong `AGENTS.md`. Export không được hỗ trợ dưới
 `.agentkit/adapters/omp/<kit>/sidecars/` được giữ để quan sát lifecycle; sự tồn
 tại của chúng không biến chúng thành bề mặt OMP đang hoạt động.
+
+OMP trong project đã trust cũng discover `.agents/skills` của project. Nếu các
+dạng canonical như `ak:advise` và `ak-advise` xung đột, `.omp/skills` của project
+che bản `.agents/skills` với bản cài OMP project. Khi dùng bản cài OMP global từ
+project đó, `.agents/skills` của project che bản trong profile. Cảnh báo cài đặt
+không bỏ qua emission OMP, xóa hoặc viết lại Skill, thay đổi `.agents` hay setting
+OMP, yêu cầu `--force` hoặc báo exit `6`.
 
 ## Kiểm tra adapter, không chỉ sự tồn tại của tệp
 
@@ -184,7 +200,7 @@ vì âm thầm dùng ordinary Codex subagent thay thế.
 Trên target Codex, bản cài thành công có thể chứa đúng dòng tóm tắt này:
 
 ```text
-[!] Hooks dropped (unsupported on this target): 1 group - see warnings
+[!] Hook groups not projected: 1 group - see warnings
 ```
 
 Đây là chẩn đoán partial projection được hỗ trợ, không phải lỗi cài đặt bị che.
@@ -207,11 +223,11 @@ báo.
 
 ## Link ở Codex hooks root bị từ chối
 
-Trên POSIX, Codex home do wrapper quản lý chỉ được liên kết leaf `hooks` cuối
-cùng tới `~/.codex/hooks` canonical của user đã resolve. AgentKit dùng path
-canonical đó cho command Hook, thao tác ghi, rollback và ownership. Parent có
-link hoặc target khác đều bị từ chối. Trên Windows, mọi symlink hay reparse
-point trong boundary này đều bị từ chối.
+Codex home do wrapper quản lý chỉ được liên kết leaf `hooks` cuối cùng tới
+`~/.codex/hooks` canonical của user đã resolve, dưới dạng symlink POSIX hoặc
+directory junction trên Windows. AgentKit dùng path canonical đó cho command
+Hook, thao tác ghi, rollback và ownership. Parent có link, hoặc leaf resolve ra
+bất kỳ đích nào khác thư mục hooks canonical của user, đều bị từ chối.
 
 Hãy kiểm tra `CODEX_HOME` đã cấu hình, leaf `hooks` và target sau khi resolve.
 Sửa wrapper hoặc layout filesystem; không dùng `--force`, thay parent bằng link
@@ -269,3 +285,5 @@ Ghi lại Kit, target, scope, các Skill đã chọn và phiên bản runtime c�
 - [Lỗi cài Kit](./kit-installation)
 - [Cài Kit](../guides/installing-kits)
 - [Lỗi cấu hình](./configuration)
+
+`hooksDeferred` là tập con của `hooksDropped`: harness bridge chưa project được subscription này, không đồng nghĩa runtime không hỗ trợ. Đọc summary để phân biệt deferred và unsupported.

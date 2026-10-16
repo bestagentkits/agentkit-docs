@@ -20,14 +20,36 @@ The command accepts no positional arguments.
 | --- | --- | --- |
 | `--project <name>` | `[]` | Include only this registered project; repeatable. |
 | `--runtime <name>` | `""` | Filter by source, normally `claude-code` or `codex`. |
-| `--metric <name>` | `tokens` | Aggregate `tokens`, `tool_calls`, `skills_used`, `sessions`, `projects`, `duration`, `messages`, `subagent_spawns`, or `loc`. |
-| `--by <dimension>` | `runtime` | Group by `runtime`, `model`, `provider`, `project`, or `date`. |
+| `--metric <name>` | `tokens` | Aggregate `tokens`, `tool_calls`, `skills_used`, `sessions`, `projects`, `duration`, `messages`, `subagent_spawns`, `invocations`, or `loc`. |
+| `--by <dimension>` | `runtime` | Group by `runtime`, `model`, `provider`, `project`, `date`, `duration`, `subagent`, or `command`. |
 | `--window <duration>` | `720h0m0s` | Lookback duration. Non-positive durations normalize to 30 days. |
 | `--refresh` | `false` | Bypass usable index and memoized-cache reads, then recompute. |
 
 Use the canonical metric and dimension tokens above. Unknown tokens are not
 rejected consistently and can fall back to token/runtime calculations while
 retaining the supplied label.
+
+## Subagent and command dimensions
+
+`--by subagent` groups by the subagent type each Task/Agent call delegated to,
+and `--by command` groups by slash command name, read from the
+`<command-name>` tag Claude Code writes when a slash command runs. One session
+can add rows under several keys, or none. Both dimensions always compute live
+and report `estimated` quality.
+
+Only some metrics have a value per subagent or command:
+
+| `--by` | Metric | Value |
+| --- | --- | --- |
+| `subagent` | `sessions` | Sessions that invoked that subagent type. |
+| `subagent` | `subagent_spawns` | Invocations of that subagent type. |
+| `subagent` | `tokens` | Token usage attributed to that subagent type's runs. |
+| `command` | `sessions` | Sessions that ran that command. |
+| `command` | `invocations` | Runs of that command, counting repeats in one session. |
+
+Other metrics report `0` under these two dimensions. `invocations` is meaningful
+only with `--by command`; under other dimensions it falls back to the token
+calculation.
 
 ## Sources, privacy, and cache
 
@@ -53,6 +75,7 @@ network request and never prompts.
 ak sessions stats --json
 ak sessions stats --metric tokens --by model --window 168h --json
 ak sessions stats --project myapp --runtime codex --by date --refresh --json
+ak sessions stats --by command --metric invocations --json
 ```
 
 Human stdout prints totals and rows. JSON stdout uses `kind=sessions.stats`;

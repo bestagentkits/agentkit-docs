@@ -1,22 +1,31 @@
 ---
-title: Generate governed audio with ak:elevenlabs
-description: Create speech, an authorized instant voice clone, or a sound effect through ElevenLabs while reviewing consent, account changes, provider cost, and audio files.
+title: Write, direct, and generate audio with ak:elevenlabs
+description: Turn ideas into performance-ready voice scripts, add delivery directions without changing the words, direct dialogue, and generate speech, cloned voices, or sound effects through ElevenLabs while reviewing consent, cost, and audio files.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
-Use `ak:elevenlabs` for three direct audio actions: turn text into speech, create
-an authorized instant voice clone, or generate a sound effect. The Skill uses
-the ElevenLabs API and bundled Python helpers, so a run can create local audio,
-consume provider quota, and, for cloning, add a persistent voice to the
-connected ElevenLabs account.
+Use `ak:elevenlabs` for end-to-end voice production: the agent writes and directs,
+and ElevenLabs performs. The Skill turns an idea or rough copy into a
+performance-ready script, adds delivery directions to finished copy, directs
+multi-speaker dialogue, and generates speech, an authorized instant voice clone,
+or a sound effect. Writing actions produce text only. Synthesis uses the
+ElevenLabs API and bundled Python helpers, so it can create local audio, consume
+provider quota, and, for cloning, add a persistent voice to the connected
+ElevenLabs account.
 
-## Choose a bounded audio action
+## Choose the action
 
 ### Use ak:elevenlabs when
 
-- You need text-to-speech from supplied text or a local text file.
+- You have an idea, outline, article, or rough copy and need a script written for
+  the ear, with directions the target model understands.
+- You have final copy and want delivery directions added without changing a
+  single spoken word.
+- You need a multi-speaker dialogue with per-turn direction, optionally
+  synthesized.
+- You need text-to-speech from a finished script or a local text file.
 - You have explicit authority to create an instant voice clone from clean audio
   samples.
 - You need a described sound effect of up to 30 seconds.
@@ -25,18 +34,18 @@ connected ElevenLabs account.
 
 ### Choose another workflow when
 
-- You need a complete video production with scripts, storyboards, mixing, and
-  exports. Use `ak:video`.
+- You need a complete video production with storyboards, mixing, and exports.
+  Use `ak:video`.
 - You need audio editing, normalization, transcoding, or mixing without an
   ElevenLabs generation request. Use an approved media-processing workflow.
 - You want to clone a person without their informed consent or authorization.
-- You need a conversational agent or music-composition integration. Those
-  topics exist in the packaged knowledge base, but the direct invocation hint
-  exposes `speak`, `clone`, and `sfx` rather than a dedicated route for them.
+- You need a live conversational agent. The packaged guide covers voice agents,
+  but no action creates or deploys one.
 
 ## Prepare the provider and source material
 
-Before you start:
+Writing actions (`script`, `enhance`, and the writing half of `dialogue`) need
+no API key. Before any synthesis:
 
 - Complete [Onboarding](../../../getting-started/onboarding), and confirm
   Marketing Kit is installed for the current runtime and scope.
@@ -45,8 +54,8 @@ Before you start:
 - Make `ELEVENLABS_API_KEY` available through the approved secret mechanism and
   allow outbound requests to ElevenLabs.
 - Confirm the account has the required feature access, quota, billing, and
-  licensing for the selected operation.
-- For speech, supply approved text or a local text-file path and an output path.
+  licensing for the selected operation, and confirm that the chosen model and
+  voices are available on it.
 - For cloning, supply a voice name and one or more authorized audio files. The
   helper accepts MP3, WAV, M4A, OGG, FLAC, and WebM paths and recommends one to
   two minutes of clear source audio.
@@ -64,61 +73,121 @@ differences.
 
 ## Run the Skill
 
-Name one direct action and state the output boundary. This speech example asks
-for a local draft only.
+Name the action and state the output boundary. This example asks for a script
+only, with no synthesis.
 
 <Tabs items={['Claude Code', 'Cursor', 'Codex']}>
   <Tab value="Claude Code">
 
 ```text
-/ak:elevenlabs speak "Your data stays under your control." Use the approved Rachel voice, model eleven_multilingual_v2, save to assets/audio/privacy-intro.mp3, review pronunciation, and do not publish
+/ak:elevenlabs script "A 30-second warm, confident intro for our privacy feature: your data stays under your control." Target eleven_v4, English. Return the performance script and production notes; do not synthesize
 ```
 
   </Tab>
   <Tab value="Cursor">
 
 ```text
-/ak:elevenlabs speak "Your data stays under your control." Use the approved Rachel voice, model eleven_multilingual_v2, save to assets/audio/privacy-intro.mp3, review pronunciation, and do not publish
+/ak:elevenlabs script "A 30-second warm, confident intro for our privacy feature: your data stays under your control." Target eleven_v4, English. Return the performance script and production notes; do not synthesize
 ```
 
   </Tab>
   <Tab value="Codex">
 
 ```text
-$ak:elevenlabs speak "Your data stays under your control." Use the approved Rachel voice, model eleven_multilingual_v2, save to assets/audio/privacy-intro.mp3, review pronunciation, and do not publish
+$ak:elevenlabs script "A 30-second warm, confident intro for our privacy feature: your data stays under your control." Target eleven_v4, English. Return the performance script and production notes; do not synthesize
 ```
 
   </Tab>
 </Tabs>
 
-### Understand the direct actions and helper controls
+The argument hint is `[action: script|enhance|speak|dialogue|clone|sfx] [text-or-file]`.
+When you omit the action, the Skill infers it: an idea or outline becomes
+`script`, final copy with "don't change the words" becomes `enhance`, several
+speakers become `dialogue`, and a ready script with a request for audio becomes
+`speak`.
 
-| Action | Input | Important helper controls | Effect |
+### Understand the actions
+
+| Action | Input | Output | Provider effect |
 | --- | --- | --- | --- |
-| `speak` | Text or a file | `-f`/`--file`, `-o`/`--output`, `-v`/`--voice`, `-m`/`--model`, `--stability`, `--similarity`, `--speed`, `--stream` | Writes audio; the helper default output is `output.mp3` |
-| `clone` | Voice name and sample files | `-d`/`--description`, `--labels` with JSON | Uploads samples and creates a voice in the provider account; returns its voice ID |
-| `sfx` | Sound description | `-o`/`--output`, `-d`/`--duration`, `--loop`, `--influence` | Writes a sound-effect file; the helper default is `sound_effect.mp3` |
+| `script` | Idea, outline, article, or rough copy | A performance script with model-aware audio tags and performance punctuation, plus separate production notes when useful | None |
+| `enhance` | Final copy | The same words with delivery directions added | None |
+| `dialogue` | Speakers and scene | A multi-speaker script with per-turn direction; optional synthesis through Text to Dialogue on v4 or v3 | Only when synthesized |
+| `speak` | A finished script or a text file | An audio file | Sends the script, consumes quota |
+| `clone` | Voice name and consented sample files | A new voice in the provider account and its voice ID | Uploads samples, changes the account |
+| `sfx` | Sound description | A sound-effect file | Sends the prompt, consumes quota |
 
-The text-to-speech helper defaults to voice `Rachel`, model
-`eleven_multilingual_v2`, stability `0.5`, similarity `0.75`, and speed `1.0`.
-Treat these as bundled defaults, not a promise that the voice or model remains
+Production notes cover the model, voice, risky tags, pronunciation, chunking,
+and lines worth auditioning. Directions must be auditory; visual stage
+directions stay in the production notes, never in the spoken text.
+
+`enhance` preserves every spoken word: strip the added tags and the text must
+match your input apart from punctuation and capitalization. Synthesis never
+rewrites the wording either. If a line needs to change, fix the script first.
+
+## Pick a model by use case
+
+The Skill chooses by use case and confirms live availability on your account
+before any call. Model IDs, settings, prices, and limits change, so this page
+does not list prices or quotas.
+
+| Use case | Preferred model |
+| --- | --- |
+| Expressive or acted voiceover, audiobooks, dialogue files | `eleven_v4` |
+| Expressive realtime dialogue or agents | `eleven_v4_turbo`, streamed over the Text to Dialogue WebSocket |
+| Very long-form, stable narration | `eleven_multilingual_v2` |
+| Lowest latency | Flash variants |
+
+Direction syntax follows the model. Eleven v4 and v3 take pacing and emotion
+from audio tags, punctuation, and text structure, and do not support SSML
+`<break>` tags. Multilingual v2 and Flash may use `<break>` where supported.
+Eleven v4 accepts only the stability and similarity voice settings.
+
+## Understand the speech helper
+
+The bundled text-to-speech helper defaults to model `eleven_v4`, voice `Rachel`,
+and output `output.mp3`. It sends only the voice settings you pass. For a model in
+its capability table, it refuses a setting, flag, or `<break>` tag that model does
+not support instead of sending it; for any other model, it warns and sends only
+what you passed.
+
+| Helper control | Purpose | Model boundary |
+| --- | --- | --- |
+| `-f`/`--file`, `-o`/`--output`, `-v`/`--voice`, `-m`/`--model` | Input file, output path, voice name or ID, model ID | `eleven_v4_turbo` is refused because the helper uses the HTTP endpoint |
+| `--stability`, `--similarity` | Voice settings | All models |
+| `--style`, `--speed`, `--speaker-boost`/`--no-speaker-boost` | Voice settings | Not Eleven v4 |
+| `--language-code` | Enforce a language, such as `fr` | Not Multilingual v2 |
+| `--previous-text`, `--next-text` | Context for stitching long scripts split into chunks | Not Eleven v3 |
+| `--text-normalization` | `auto`, `on`, or `off` | Provider default is `auto` |
+| `--output-format` | Provider output format, such as `mp3_44100_128` | Provider-defined values |
+| `--stream`, `--list-voices` | Use the streaming endpoint, or list account voices | Account-dependent |
+
+The helper is single-voice. It does not call Text to Dialogue, so synthesized
+multi-speaker files on v4 or v3 go through that API separately. Treat the
+defaults as bundled values, not a promise that the voice or model remains
 available on the connected account.
+
+The cloning helper accepts `-d`/`--description` and `--labels` with JSON. The
+sound-effect helper accepts `-o`/`--output` (default `sound_effect.mp3`),
+`-d`/`--duration`, `--loop`, and `--influence`.
 
 ## Follow the audio stages
 
-1. **Confirm the action.** The Skill resolves `speak`, `clone`, or `sfx`, input
-   paths, output path, provider authority, consent, and publication boundary.
-2. **Validate local input.** It checks text or files before sending data. A
-   missing or unsupported sample should stop cloning.
-3. **Confirm the account effect.** Speech and sound effects generate audio;
-   cloning additionally creates a reusable voice in the ElevenLabs account.
-4. **Call the provider.** The helper authenticates with
-   `ELEVENLABS_API_KEY`, sends the request, and reports provider errors rather
-   than fabricating audio.
-5. **Write or report the result.** Speech and sound-effect chunks are written to
+1. **Resolve the action.** The Skill picks the action, target language, model,
+   input and output paths, provider authority, consent, and publication boundary.
+2. **Write and direct.** For `script`, `enhance`, and `dialogue`, it writes for
+   the ear, plans performance beats, adds directions the target model supports,
+   and runs a voice-readability pass. Synthesis follows only when you want audio.
+3. **Validate local input.** It checks text or files before sending data. A
+   missing or unsupported sample stops cloning.
+4. **Call the provider.** The helper authenticates with `ELEVENLABS_API_KEY`,
+   sends the request, and reports provider errors rather than fabricating audio.
+   Long scripts are split at natural boundaries, with previous and next context
+   where the model supports it.
+5. **Write or report the result.** Speech and sound-effect audio is written to
    the chosen output. Cloning reports the created name and voice ID.
-6. **Review before use.** Listen for pronunciation, artifacts, unintended
-   identity cues, misleading tone, silence, clipping, and rights concerns.
+6. **Review before use.** The Skill inspects the saved audio: spoken words,
+   language, duration, format, seams, and artifacts.
 
 ## Keep consent, account mutation, and spend explicit
 
@@ -131,9 +200,9 @@ available on the connected account.
 
 | Work category | Normal boundary |
 | --- | --- |
-| Guidance and drafting | The Skill can prepare text, prompts, and settings before a provider request. |
+| Writing and directing | `script`, `enhance`, and dialogue writing produce text only and send nothing to ElevenLabs. |
 | Local mutations | `speak` and `sfx` write audio to the selected path. Confirm the parent directory and preserve existing files. |
-| Provider and cost effects | Requests send text, prompts, or audio samples to ElevenLabs, consume quota, and may incur charges under the connected plan. |
+| Provider and cost effects | Requests send scripts, prompts, or audio samples to ElevenLabs, consume quota, and may incur charges under the connected plan. |
 | Account mutations | `clone` adds a voice. The bundled voice manager can also delete a voice, but deletion is a separate destructive action with its own confirmation and is not implied by an ordinary Skill run. |
 | Publishing effects | The Skill does not authorize distributing audio, attaching it to a campaign, making calls, creating a live conversational agent, or publishing to any platform. |
 
@@ -145,8 +214,9 @@ endorsement, evasion of disclosure rules, or misleading testimony.
 
 A complete run should report:
 
-- The action, source text or sample paths, provider settings, and exact output
-  path or returned voice ID.
+- The action, source text or sample paths, model, provider settings, and exact
+  output path or returned voice ID.
+- For writing actions, the performance script and, when useful, production notes.
 - The provider response or a clear failure without a fabricated artifact.
 - A listening review covering pronunciation, pacing, identity, artifacts,
   duration, and suitability for the approved context.
@@ -155,7 +225,7 @@ A complete run should report:
   pending.
 
 For cloning, retain the consent record and voice ID separately from public
-content. For TTS, compare names, dates, prices, and legal or medical wording
+content. For speech, compare names, dates, prices, and legal or medical wording
 against the approved script after listening; correct text does not guarantee
 correct pronunciation.
 
@@ -166,6 +236,9 @@ correct pronunciation.
 | Runtime cannot find `ak:elevenlabs` | Confirm target and scope, start a fresh session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
 | `ELEVENLABS_API_KEY not found` appears | Configure the key through the approved secret mechanism; do not paste or commit it. |
 | `elevenlabs package not installed` appears | Install the packaged Python requirement in the approved environment, then rerun only the intended action. |
+| The helper says the model does not support a setting, `<break>` tags, `--language-code`, or stitching | Remove the unsupported option for that model. On v4, direct pacing and emotion with audio tags and punctuation instead. |
+| The helper refuses `eleven_v4_turbo` | Use `eleven_v4` for file output; `eleven_v4_turbo` streams from an application over the Text to Dialogue WebSocket. |
+| An enhanced script changed the wording | Strip the tags, compare with the original, and restore the original words before synthesis. |
 | The requested voice is not found | List voices for the connected account or choose an authorized available voice. Do not silently substitute an identity. |
 | A clone sample is missing or noisy | Stop, replace it with an authorized clear recording, and reconfirm consent before upload. |
 | Labels fail to parse | Pass valid JSON to `--labels`; do not discard identity or consent metadata merely to bypass the error. |
@@ -177,8 +250,10 @@ Continue with the [Marketing Kit overview](../../marketing) or
 
 ## Know the current limits
 
-- The direct argument hint is `[action: speak|clone|sfx] [text-or-file]`.
-  Broader ElevenLabs references do not create additional routed actions.
+- The packaged list of available models is a historical excerpt, not a live
+  inventory. Confirm models, voices, and settings on the account before a call.
+- The speech helper is single-voice HTTP text-to-speech. It does not synthesize
+  Text to Dialogue or stream `eleven_v4_turbo`.
 - The current sound-effect helper accepts `--loop` and `--influence`, but its
   SDK request forwards only the prompt and optional duration. Do not claim the
   saved file is seamless or that prompt influence was applied without separate

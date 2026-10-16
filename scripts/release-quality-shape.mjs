@@ -8,15 +8,20 @@ import { repoRoot } from './lib/paths.mjs';
 
 export const RELEASE_SHAPE_BASELINE = Object.freeze({
   schemaVersion: 1,
-  reviewedAt: '2026-08-27',
-  sourceCommit: '506cf5b11e17001af6afe5622765674dc80865d4',
+  reviewedAt: '2026-09-22',
+  sourceCommit: '9dd2b81',
   channels: ['beta', 'stable'],
   locales: ['en', 'vi'],
   // Per-channel route counts follow each channel's immutable evidence. The
   // shape guard still requires Beta to contain every Stable route; the Kit
   // catalog guard separately enforces each channel's exact inventory snapshot.
-  sourceRoutesPerLocaleChannel: { stable: 407, beta: 408 },
-  routesPerLocaleChannel: { stable: 406, beta: 407 },
+  // The approved Stable docs exception adds guides/pi-extensions in both locales.
+  // Beta adds the bilingual guides/semantic-decision-experiments and
+  // reference/cli/describe routes, plus the kits/marketing/skills/filmmaking
+  // guide, ahead of promotion. The bilingual guides/jev-clef adds an Agent-first entry, and
+  // guides/choosing-ui-testing-skills adds a Beta-only guide.
+  sourceRoutesPerLocaleChannel: { stable: 490, beta: 495 },
+  routesPerLocaleChannel: { stable: 489, beta: 494 },
   reviewedSourceOnlyRoutes: [
     {
       route: 'changelog',

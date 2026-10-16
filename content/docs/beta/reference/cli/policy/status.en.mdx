@@ -1,0 +1,63 @@
+---
+title: ak policy status
+description: List every rule the project policy enforces, with its action and where it came from.
+---
+
+Use `ak policy status` to see what the project's policy currently enforces. Each
+rule shows its kind, action, reason, and origin. A hand-written rule reports
+`declared`; a rule compiled from prose names the file and line it came from, so
+you can trace any enforcement back to the instruction that asked for it.
+
+## Usage
+
+```bash
+ak policy status [flags]
+```
+
+The command accepts no positional arguments and changes nothing. It reads
+`.agentkit/policy.yaml` and the instruction files it names.
+
+## Command flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--dir <path>` | `.` | Project directory holding `.agentkit/policy.yaml`. |
+
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+## Common examples
+
+```bash
+ak policy status
+ak policy status --json
+```
+
+If the document's rules conflict, the output says `NOT LOADED` and none of the
+listed rules is enforced. A compiled rule whose source instruction has changed
+is marked `source changed`; it keeps enforcing until you re-adopt or remove it.
+
+## Automation output
+
+`kind` is `policy.status`. The `data` payload contains:
+
+| Field | Description |
+| --- | --- |
+| `document` | Absolute path of the policy document. |
+| `loadable` | `false` when conflicting rules keep the document from loading. |
+| `sources` | Instruction files the document compiles from. Defaults to `AGENTS.md` and `CLAUDE.md`. |
+| `rules` | One entry per rule: `id`, `kind`, `action`, `reason`, `origin`, `source` (compiled rules only, as `file:line`), and `stale`. |
+| `conflicts` | Present only when rules conflict: `rules`, `kinds`, and `detail` for each pair. |
+
+## Exit behavior
+
+| Exit | Meaning | What to do |
+| --- | --- | --- |
+| `0` | The status was reported, including for a document that did not load. | Read `loadable` or the `NOT LOADED` line. |
+| `1` | The policy document is missing or unreadable. | Run [`ak policy compile`](./policy-compile) and [`ak policy adopt`](./policy-adopt), or fix the file. |
+| `2` | Arguments were invalid. | Correct the invocation. |
+
+## Related commands
+
+- [`ak policy`](./policy)
+- [`ak policy validate`](./policy-validate)
+- [`ak policy check`](./policy-check)

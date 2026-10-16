@@ -46,7 +46,7 @@ reference for the exact syntax supported by the active release.
 ## Choose a runtime and scope
 
 Released runtime installs use `--target claude-code`, `--target codex`,
-`--target cursor`, `--target grok`, `--target pi`, or `--target omp`. Claude
+`--target cursor`, `--target dsh`, `--target grok`, `--target pi`, or `--target omp`. Claude
 Code is the default when you omit the flag. Released registry packages are
 resolved for one runtime at a time, so run a separate install for each runtime
 you use. Pi projection and Oh My Pi dispatch are separate: Pi uses
@@ -55,11 +55,16 @@ also be selected by `ak run --target omp` for Skill dispatch.
 
 Every remote Kit operation below passes `--channel <channel>`. Replace
 `<channel>` with the release channel selected in the docs header. Omitting the
-flag resolves `stable`, which can return `version_not_available` when the
-selected runtime package exists only on another channel.
+flag on `ak kit init` and `ak kit refresh` uses the channel recorded in the
+existing destination's install receipt, then `kit.channel`, then `stable`.
+`stable` can return `version_not_available` when the selected runtime package
+exists only on another channel. `ak kit install` still resolves `stable` when the flag is omitted.
 
 The default scope is the current project. Add `--global` when you want the kit
-in the runtime's user directory and available beyond one project. Together,
+in the runtime's user directory and available beyond one project. A project
+install, refresh, or uninstall whose route for any runtime resolves to the
+user-level install, such as one run from your home directory, is refused with
+exit `6` before any change; use `--global` there. Together,
 target, scope, and delivery mode identify one install route:
 
 | Target route | Scope | Delivery | Primary destination |
@@ -107,8 +112,8 @@ skipped. AGY is not a registry runtime identity or a refresh lifecycle peer.
 
 For Codex, native skills go to `.agents/skills` in a project or
 `~/.agents/skills` at user scope; other Codex resources use the corresponding
-project or user `.codex` surfaces. Cursor uses the corresponding `.cursor`
-scope.
+project or user `.codex` surfaces, described under **Use native Codex**
+below. Cursor uses the corresponding `.cursor` scope.
 
 Project and global copies can coexist. Installing one does not remove the
 other: project commands or rules may shadow user entries, and hooks from both
@@ -120,6 +125,55 @@ scopes may run. Remove an unwanted copy through the matching uninstall route.
   and Codex. Verify skill discovery in Cursor after installation before relying
   on it.
 </Callout>
+
+### Use native Codex
+
+A Codex emit resolves exactly one of three scopes:
+
+| Scope | Command | Codex runtime (`config.toml`, `hooks.json`, `agents/`, `AGENTS.md`) | Plugin package and lifecycle metadata |
+| --- | --- | --- | --- |
+| Package | `ak kit init <kit> --target codex --build-only --out <dir>` | `<out>/<kit>/.codex/`, which Codex does not load | `<out>/<kit>/` |
+| Global | `ak kit init <kit> --target codex --global` | `$CODEX_HOME` or `~/.codex/` | AgentKit home |
+| Project | `ak kit init <kit> --target codex` | `<project>/.codex/` | `<project>/.agentkit/adapters/codex/<kit>/` |
+
+Install, refresh, and uninstall merge or remove only AgentKit-owned entries in
+`config.toml` and `hooks.json`, so your own settings and other Kits' entries
+stay in place. A project install, refresh, or uninstall never writes
+`~/.codex`; project uninstall removes only AgentKit entries from
+`<project>/.codex/config.toml` and `hooks.json`. Running a project install from
+your home directory, where the project `.codex` would be the user Codex home, is
+refused with exit `6` before any change; use `--global` there.
+
+Uninstall also removes this Kit's managed rules block from `AGENTS.md` in the
+Codex runtime directory and keeps your own text and other Kits' blocks. A
+project uninstall also removes this Kit's entry from
+`<project>/.agents/plugins/marketplace.json` and keeps the other entries. The
+repository `AGENTS.md` is never changed. Codex does not read `AGENTS.md` from
+the project `.codex` directory, so a project install warns that rules written
+there are preserved but not active.
+
+Codex loads `<project>/.codex` only for a trusted project. After a project
+install, AgentKit prints the runtime directory, the `hooks.json` path, and the
+project's trust state recorded in your user Codex configuration: `trusted`,
+`untrusted`, `not-recorded`, or `unknown`. JSON output reports the same fields
+under `codexRuntime`. AgentKit only reads the trust state and never writes it.
+To activate the project runtime, start Codex in the project and accept its trust
+prompt.
+
+Older releases nested a project install under `<project>/<kit>/`, where Codex
+never found it. The next project `ak kit init` or `ak kit refresh` migrates that
+layout without a prompt:
+
+1. It snapshots `<project>/<kit>/` first.
+2. It writes the project layout above.
+3. It removes only legacy files whose hashes still match the legacy install
+   manifest. Unknown, edited, and linked files stay in place, and without a
+   legacy install manifest nothing is removed.
+4. It prints a warning on stderr with the snapshot ID, its data directory, and
+   any files it kept. JSON output reports the same outcome under
+   `codexRuntime.legacyMigration`.
+
+An interrupted migration is detected again and finishes on the next run.
 
 ### Use native Grok Build
 
@@ -171,11 +225,40 @@ project Pi install under `.pi/skills/` takes precedence; for a global Pi
 install, the trusted project's `.agents/skills/` copy takes precedence over the
 profile copy.
 
+#### Pi and Codex installed globally
+
+A global Codex install writes Skills to `~/.agents/skills`, which Pi also reads.
+Pi loads its profile `skills/` first, so when the same Kit is installed globally
+for both Pi and Codex, the `~/.agents/skills` copy never wins and would only make
+Pi report it under `[Skill conflicts]` at every startup.
+
+To prevent that, a global Pi or Codex install or refresh, and every
+`ak kit uninstall`, reconciles the `skills` list in the Pi profile
+`settings.json`. For each `ak-*` Skill present in both `~/.agents/skills` and
+the Pi profile `skills/`, AgentKit adds a `!<absolute path>` exclusion for the
+`~/.agents/skills` copy, and it removes exclusions that no longer apply:
+
+- AgentKit edits only the `skills` key of `~/.pi/agent/settings.json`, or
+  `$PI_CODING_AGENT_DIR/settings.json` when that variable is set, and only the
+  entries it added. Your own entries and every other key are kept.
+- The record of AgentKit-added entries lives in
+  `$AGENTKIT_HOME/pi-agents-skill-exclusions.json`.
+- A symlinked or unreadable `settings.json`, or one whose content AgentKit cannot
+  safely edit, is left unchanged with a warning.
+- While both copies exist, an AgentKit entry you remove is added back on the
+  next global install or refresh.
+
+If an older install still shows `ak:`-named Skills under `~/.agents/skills`,
+run `ak update --global` to refresh them.
+
 Pi is a spike Kit projection in this release. AgentKit does not provide
 `ak run --target pi`, does not wrap Pi's agent loop, and does not write
 `.pi/commands/`. Use Pi's own Skill discovery for installed `.pi/skills/*`
 content, and use `ak run --target omp` only when you intentionally dispatch
 through Oh My Pi instead.
+
+For optional web access, code feedback, delegation, and other additions, see
+[Recommended Pi extensions](./pi-extensions).
 
 ### Use native Oh My Pi
 
@@ -292,9 +375,13 @@ scripts, and assets required by the selected skills.
 
 ## Choose a release channel
 
-Kit installation and refresh use the `stable` registry channel by default. To
-try a prerelease kit, opt into `beta` explicitly and keep the CLI on a
-compatible channel:
+Kit installation still uses the `stable` registry channel when `--channel` is
+omitted. `ak kit init`, `ak kit refresh`, and `ak update` resolve an explicit
+`--channel` first, then the channel recorded in an existing destination's
+install receipt, then `kit.channel`, then `stable`. An explicit `--channel`
+applies to that request only and is not saved, so set `kit.channel` if you want
+a lasting default. To try a prerelease kit, opt into `beta` explicitly and keep
+the CLI on a compatible channel:
 
 ```bash
 ak kit install engineer --target claude-code --channel beta
@@ -318,12 +405,19 @@ than adopting whatever happens to exist at the destination.
 | Shared | More than one installed Kit owns the same matching path | Preserved until every owner releases it |
 
 Symlinks, unsafe path transitions, and other ambiguous filesystem state normally
-fail closed or remain preserved. The bounded exception is a Codex `hooks` leaf
-that points exactly to the resolved user's canonical `~/.codex/hooks`, whether
-through a POSIX symlink or a Windows directory junction; AgentKit uses that
-canonical identity for the complete Hook lifecycle. Linked parents and other
-targets still fail closed. Ownership evidence qualifies cleanup; it never means deleting
-an entire `.claude`, `.codex`, `.grok`, or user runtime directory.
+fail closed or remain preserved. Codex has two distinct bounded link exceptions:
+
+- A `hooks` directory leaf may point exactly to the resolved user's canonical
+  `~/.codex/hooks`, through a POSIX symlink or a Windows directory junction.
+  AgentKit uses that canonical identity for the complete Hook lifecycle;
+  other Hooks-directory targets still fail closed.
+- The final `config.toml` leaf may be a symlink to a regular file. Managed writes
+  go through to that target; if apply fails, rollback restores the target's
+  previous bytes and retains the link. Nonregular targets are refused.
+
+Linked parents remain refused in both cases; these exceptions do not permit
+arbitrary linked paths. Ownership evidence qualifies cleanup; it never means
+deleting an entire `.claude`, `.codex`, `.grok`, or user runtime directory.
 
 ## Refresh an installed kit
 
@@ -352,6 +446,13 @@ skills are not added to that subset automatically.
 Review the preview before confirming. Do not add `--no-backup`, and do not use a
 broad `--force` reinstall as routine recovery. First resolve an incorrect
 target, scope, delivery mode, or ownership conflict.
+
+When one target must hold only kit output again, use
+`ak kit init <kit> --fresh --target <runtime>`. It previews the exact files it
+removes, asks once, takes and verifies a recovery snapshot, emits the kit, and
+then sweeps leftovers inside the kit's own lifecycle root. Shared runtime roots
+change only through the kit's recorded files. See
+[Reset one target with `--fresh`](../reference/cli/kit/init#reset-one-target-with---fresh).
 
 ### Reconcile current and stale output
 
@@ -414,8 +515,7 @@ ownership to unrelated runtime content.
 
 ## Read Codex hook disclosures
 
-A successful Codex install can report both **Hooks dropped (unsupported on this
-target)** and **Hook matchers narrowed (some tool matches unsupported on this
+A successful Codex install can report both **Hook groups not projected** and **Hook matchers narrowed (some tool matches unsupported on this
 target)**. A full drop removes an unsupported group. A narrow keeps its handlers
 on the supported matcher subset and reports only the removed atoms.
 
@@ -497,3 +597,9 @@ or a path replaced during cleanup is rejected rather than followed or removed.
 ## See also
 
 - [Updating AgentKit and kits](./updating)
+
+## Runtime capability map
+
+DeepSeek Harness is a signed registry target. Use `--target dsh`; project Skills go under `.dsh/skills`, user Skills under `${DSH_HOME:-~/.dsh}/skills`. Install scope, dispatch and live verification are separate capabilities. See the [runtime matrix](../concepts/runtime-adapters#runtime-capability-matrix).
+
+`hooksDeferred` is a subset of `hooksDropped`: the harness bridge defers that subscription, which does not mean the runtime cannot express it. Read the summary to distinguish deferred from unsupported groups.

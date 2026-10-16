@@ -46,7 +46,7 @@ tham chiếu CLI để xem cú pháp chính xác của bản phát hành đang h
 ## Chọn runtime và phạm vi
 
 Các bản cài runtime đã phát hành dùng `--target claude-code`, `--target codex`,
-`--target cursor`, `--target grok`, `--target pi` hoặc `--target omp`. Nếu bỏ qua flag này, mặc
+`--target cursor`, `--target dsh`, `--target grok`, `--target pi` hoặc `--target omp`. Nếu bỏ qua flag này, mặc
 định là Claude Code. Package từ registry được resolve cho từng runtime, vì vậy
 hãy chạy một lệnh cài riêng cho mỗi runtime bạn sử dụng. Projection Pi và
 dispatch Oh My Pi là hai tuyến riêng: Pi dùng `ak kit init ... --target pi` cho
@@ -54,12 +54,17 @@ nội dung Kit cài được, còn Oh My Pi cũng có thể được chọn bằ
 `ak run --target omp` cho Skill dispatch.
 
 Mỗi thao tác Kit remote bên dưới đều truyền `--channel <channel>`. Hãy thay
-`<channel>` bằng kênh phát hành đang chọn trên header tài liệu. Nếu bỏ cờ này,
-CLI resolve `stable`; target chỉ có package ở kênh khác có thể trả
-`version_not_available`.
+`<channel>` bằng kênh phát hành đang chọn trên header tài liệu. Nếu bỏ cờ này
+trên `ak kit init` và `ak kit refresh`, lệnh dùng channel ghi trong install
+receipt của destination đã có, rồi `kit.channel`, rồi `stable`. Target chỉ có
+package ở kênh khác có thể trả `version_not_available` với `stable`. `ak kit install` vẫn resolve `stable`
+khi bỏ cờ.
 
 Phạm vi mặc định là project hiện tại. Thêm `--global` khi bạn muốn cài Kit vào
-thư mục người dùng của runtime để dùng ngoài một project. Target, scope và
+thư mục người dùng của runtime để dùng ngoài một project. Cài đặt, refresh hoặc
+gỡ cài đặt ở project mà route của bất kỳ runtime nào trỏ vào bản cài cấp người
+dùng, chẳng hạn khi chạy từ thư mục home, bị từ chối với mã thoát `6` trước mọi
+thay đổi; hãy dùng `--global` trong trường hợp đó. Target, scope và
 delivery mode kết hợp thành một tuyến cài đặt:
 
 | Tuyến target | Scope | Delivery | Đích chính |
@@ -107,8 +112,8 @@ lifecycle refresh.
 
 Với Codex, Skill native được ghi vào `.agents/skills` trong project hoặc
 `~/.agents/skills` ở phạm vi người dùng; các tài nguyên Codex khác dùng các bề
-mặt `.codex` tương ứng của project hoặc người dùng. Cursor dùng phạm vi `.cursor`
-tương ứng.
+mặt `.codex` tương ứng của project hoặc người dùng, được mô tả trong mục
+**Dùng Codex native** bên dưới. Cursor dùng phạm vi `.cursor` tương ứng.
 
 Bản cài project và global có thể cùng tồn tại. Cài một bản không gỡ bản còn lại:
 lệnh hoặc quy tắc trong project có thể che mục của người dùng, còn hook từ cả
@@ -121,6 +126,55 @@ hai phạm vi có thể cùng chạy. Hãy gỡ bản không cần thiết bằn
   Claude Code và Codex. Hãy xác minh Cursor tìm thấy Skill sau khi cài trước khi
   phụ thuộc vào target này.
 </Callout>
+
+### Dùng Codex native
+
+Một lần emit Codex phân giải đúng một trong ba scope:
+
+| Scope | Lệnh | Runtime Codex (`config.toml`, `hooks.json`, `agents/`, `AGENTS.md`) | Plugin package và lifecycle metadata |
+| --- | --- | --- | --- |
+| Package | `ak kit init <kit> --target codex --build-only --out <dir>` | `<out>/<kit>/.codex/`, Codex không nạp thư mục này | `<out>/<kit>/` |
+| Global | `ak kit init <kit> --target codex --global` | `$CODEX_HOME` hoặc `~/.codex/` | AgentKit home |
+| Project | `ak kit init <kit> --target codex` | `<project>/.codex/` | `<project>/.agentkit/adapters/codex/<kit>/` |
+
+Cài đặt, refresh và gỡ cài đặt chỉ gộp hoặc gỡ các mục do AgentKit sở hữu trong
+`config.toml` và `hooks.json`, nên cài đặt riêng của bạn và mục của các Kit khác
+vẫn được giữ. Cài đặt, refresh hoặc gỡ cài đặt ở project không bao giờ ghi vào
+`~/.codex`; gỡ cài đặt project chỉ xoá mục AgentKit khỏi
+`<project>/.codex/config.toml` và `hooks.json`. Cài đặt project chạy từ thư mục
+home, nơi `.codex` của project chính là Codex home của người dùng, bị từ chối
+với mã thoát `6` trước mọi thay đổi; hãy dùng `--global` trong trường hợp đó.
+
+Gỡ cài đặt cũng xoá khối rules được quản lý của Kit này khỏi `AGENTS.md` trong
+thư mục runtime Codex, đồng thời giữ nguyên văn bản của bạn và khối của các Kit
+khác. Gỡ cài đặt project còn xoá mục của Kit này khỏi
+`<project>/.agents/plugins/marketplace.json` và giữ các mục khác. `AGENTS.md`
+của repository không bao giờ bị thay đổi. Codex không đọc `AGENTS.md` trong thư
+mục `.codex` của project, nên cài đặt project sẽ cảnh báo rằng rules ghi ở đó
+được giữ lại nhưng không có hiệu lực.
+
+Codex chỉ nạp `<project>/.codex` cho project đã được trust. Sau khi cài project,
+AgentKit in thư mục runtime, đường dẫn `hooks.json` và trạng thái trust của
+project được ghi trong cấu hình Codex của người dùng: `trusted`, `untrusted`,
+`not-recorded` hoặc `unknown`. Output JSON báo cùng các trường đó dưới
+`codexRuntime`. AgentKit chỉ đọc trạng thái trust và không bao giờ ghi nó. Để
+kích hoạt runtime của project, hãy khởi động Codex trong project và chấp nhận
+prompt trust.
+
+Các bản phát hành cũ lồng bản cài project dưới `<project>/<kit>/`, nơi Codex
+không bao giờ tìm thấy. Lần `ak kit init` hoặc `ak kit refresh` project tiếp theo
+sẽ di chuyển layout đó mà không hỏi:
+
+1. Snapshot `<project>/<kit>/` trước.
+2. Ghi layout project như bảng trên.
+3. Chỉ xoá các tệp legacy có hash vẫn khớp install manifest legacy. Tệp không
+   xác định, đã sửa và tệp liên kết được giữ nguyên; nếu không có install
+   manifest legacy thì không xoá gì.
+4. In cảnh báo trên stderr kèm snapshot ID, thư mục dữ liệu của snapshot và các
+   tệp được giữ lại. Output JSON báo cùng kết quả dưới
+   `codexRuntime.legacyMigration`.
+
+Lần di chuyển bị gián đoạn sẽ được phát hiện lại và hoàn tất ở lần chạy sau.
 
 ### Dùng Grok Build native
 
@@ -171,10 +225,40 @@ in cảnh báo mà không xóa bản nào. Bản cài Pi trong project dưới `
 được ưu tiên; với bản cài Pi global, bản `.agents/skills/` của project đã trust
 được ưu tiên hơn bản trong profile.
 
+#### Pi và Codex cùng cài global
+
+Bản cài Codex global ghi Skill vào `~/.agents/skills`, nơi Pi cũng đọc. Pi nạp
+`skills/` trong profile của nó trước, nên khi cùng một Kit được cài global cho
+cả Pi và Codex, bản trong `~/.agents/skills` không bao giờ được chọn và chỉ khiến
+Pi báo nó dưới `[Skill conflicts]` mỗi lần khởi động.
+
+Để tránh điều đó, mỗi lần cài hoặc refresh Pi hay Codex ở phạm vi global, cùng
+mọi lần chạy `ak kit uninstall`, sẽ reconcile danh sách `skills` trong
+`settings.json` của profile Pi. Với mỗi Skill `ak-*` có mặt ở cả
+`~/.agents/skills` và `skills/` của profile Pi, AgentKit thêm một exclusion
+`!<absolute path>` cho bản trong `~/.agents/skills`, và gỡ các exclusion không
+còn áp dụng:
+
+- AgentKit chỉ sửa khoá `skills` của `~/.pi/agent/settings.json`, hoặc
+  `$PI_CODING_AGENT_DIR/settings.json` khi biến đó được đặt, và chỉ sửa các mục
+  do nó thêm. Mục của bạn và mọi khoá khác được giữ nguyên.
+- Bản ghi các mục do AgentKit thêm nằm ở
+  `$AGENTKIT_HOME/pi-agents-skill-exclusions.json`.
+- `settings.json` là symlink, không đọc được, hoặc có nội dung AgentKit không thể
+  sửa an toàn sẽ được giữ nguyên kèm một cảnh báo.
+- Khi cả hai bản còn tồn tại, mục AgentKit mà bạn xoá sẽ được thêm lại ở lần cài
+  hoặc refresh global tiếp theo.
+
+Nếu bản cài cũ vẫn hiển thị Skill có tên dạng `ak:` dưới `~/.agents/skills`,
+hãy chạy `ak update --global` để refresh chúng.
+
 Pi là projection Kit dạng spike trong bản phát hành này. AgentKit không cung cấp
 `ak run --target pi`, không wrap agent loop của Pi và không ghi `.pi/commands/`.
 Dùng discovery riêng của Pi cho nội dung `.pi/skills/*` đã cài; chỉ dùng
 `ak run --target omp` khi bạn chủ động dispatch qua Oh My Pi.
+
+Để bổ sung truy cập web, phản hồi mã nguồn, giao việc và các khả năng khác, xem
+[Các extension Pi được đề xuất](./pi-extensions).
 
 ### Dùng Oh My Pi native
 
@@ -290,8 +374,12 @@ Skill đã chọn cần dùng.
 
 ## Chọn kênh phát hành
 
-Cài đặt và làm mới Kit dùng kênh registry `stable` theo mặc định. Để thử Kit
-prerelease, hãy chủ động chọn `beta` và giữ CLI trên kênh tương thích:
+`ak kit install` vẫn dùng kênh registry `stable` khi bỏ `--channel`.
+`ak kit init`, `ak kit refresh` và `ak update` resolve `--channel` tường minh
+trước, rồi channel ghi trong install receipt của destination đã có, rồi
+`kit.channel`, rồi `stable`. `--channel` tường minh chỉ áp dụng cho request đó
+và không được lưu, nên hãy đặt `kit.channel` nếu muốn mặc định lâu dài. Để thử
+Kit prerelease, hãy chủ động chọn `beta` và giữ CLI trên kênh tương thích:
 
 ```bash
 ak kit install engineer --target claude-code --channel beta
@@ -314,13 +402,22 @@ vì nhận mọi thứ đang tồn tại ở đích làm nội dung được qu�
 | Dùng chung | Nhiều Kit đã cài cùng sở hữu một đường dẫn khớp | Được giữ đến khi mọi owner đều nhả đường dẫn |
 
 Symlink, chuyển tiếp đường dẫn không an toàn và trạng thái filesystem mơ hồ khác
-thường fail closed hoặc được giữ lại. Exception có giới hạn là leaf `hooks` của
-Codex trỏ chính xác tới `~/.codex/hooks` canonical của user đã resolve, qua
-symlink POSIX hoặc directory junction trên Windows; AgentKit dùng identity
-canonical đó cho toàn bộ lifecycle Hook. Parent có link và target khác vẫn fail
-closed.
-Bằng chứng ownership giới hạn cleanup; nó không bao giờ có nghĩa xóa toàn bộ
-`.claude`, `.codex`, `.grok` hoặc thư mục runtime của người dùng.
+thường fail closed hoặc được giữ lại. Codex có hai exception liên kết riêng biệt,
+có giới hạn:
+
+- Leaf thư mục `hooks` có thể trỏ chính xác tới `~/.codex/hooks` canonical của
+  user đã resolve, qua symlink POSIX hoặc directory junction trên Windows.
+  AgentKit dùng identity canonical đó cho toàn bộ lifecycle Hook; target thư mục
+  Hook khác vẫn fail closed.
+- Leaf cuối `config.toml` có thể là symlink tới tệp thông thường. Thao tác ghi
+  được quản lý đi xuyên qua link tới target; nếu apply thất bại, rollback khôi
+  phục bytes trước đó của target và giữ nguyên link. Target không phải tệp
+  thông thường bị từ chối.
+
+Parent có link vẫn bị từ chối trong cả hai trường hợp; các exception này không
+cho phép đường dẫn có link tùy ý. Bằng chứng ownership giới hạn cleanup; nó không
+bao giờ có nghĩa xóa toàn bộ `.claude`, `.codex`, `.grok` hoặc thư mục runtime
+của người dùng.
 
 ## Làm mới Kit đã cài
 
@@ -349,6 +446,13 @@ không tự động được thêm vào tập đã chọn.
 Hãy xem bản xem trước trước khi xác nhận. Không thêm `--no-backup`, và không dùng
 cài lại diện rộng với `--force` như cách khôi phục thông thường. Trước tiên hãy
 xử lý sai target, phạm vi, chế độ phân phối hoặc xung đột quyền sở hữu.
+
+Khi một target cần trở lại chỉ chứa đầu ra của Kit, hãy dùng
+`ak kit init <kit> --fresh --target <runtime>`. Lệnh xem trước chính xác các tệp
+sẽ bị xoá, hỏi một lần, chụp và xác minh recovery snapshot, emit Kit, rồi quét
+các tệp còn sót trong lifecycle root riêng của Kit. Runtime root dùng chung chỉ
+thay đổi qua các tệp mà Kit đã ghi nhận. Xem
+[Đặt lại một target với `--fresh`](../reference/cli/kit/init#đặt-lại-một-target-với---fresh).
 
 ### Reconcile output hiện tại và output đã nghỉ
 
@@ -410,8 +514,7 @@ hữu Kit sang nội dung runtime không liên quan.
 
 ## Đọc thông báo về hook Codex
 
-Một lần cài Codex thành công có thể báo cả **Hooks dropped (unsupported on this
-target)** và **Hook matchers narrowed (some tool matches unsupported on this
+Một lần cài Codex thành công có thể báo cả **Hook groups not projected** và **Hook matchers narrowed (some tool matches unsupported on this
 target)**. Full drop gỡ group không được hỗ trợ. Narrow vẫn giữ handler trên tập
 matcher được hỗ trợ và chỉ báo các atom bị bỏ.
 
@@ -491,3 +594,9 @@ thay vì đi theo hay gỡ path đó.
 ## Xem thêm
 
 - [Cập nhật AgentKit và Kit](./updating)
+
+## Bảng capability theo runtime
+
+DeepSeek Harness là target registry đã ký. Dùng `--target dsh`; Skill project ở `.dsh/skills`, Skill user ở `${DSH_HOME:-~/.dsh}/skills`. Scope cài đặt, dispatch và live verification là các capability riêng. Xem [bảng runtime](../concepts/runtime-adapters#runtime-capability-matrix).
+
+`hooksDeferred` là tập con của `hooksDropped`: harness bridge chưa project được subscription này, không đồng nghĩa runtime không hỗ trợ. Đọc summary để phân biệt deferred và unsupported.

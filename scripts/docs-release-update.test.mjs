@@ -31,6 +31,7 @@ import {
   localizedBetaPair,
   releaseOutputDir,
   v1WriteViolations,
+  validateOwnerDirectedActions,
   validateOwnerDirectedPaths,
 } from './lib/docs-release-paths.mjs';
 import { writeV0Reports } from './lib/docs-release-reports.mjs';
@@ -508,6 +509,85 @@ test('owner-directed path input is normalized and fails closed outside modify-on
   await assert.rejects(
     () => ownerDirectedEvidence([grokOwnerPaths[0]]),
     /requires paired path/,
+  );
+});
+
+test('action-scoped owner paths permit paired add and retire while legacy paths stay modify-only', async () => {
+  const addedPaths = [
+    'content/docs/beta/guides/action-scoped-new.en.mdx',
+    'content/docs/beta/guides/action-scoped-new.vi.mdx',
+  ];
+  const actions = [
+    { action: 'retire', paths: grokOwnerPaths },
+    { action: 'add', paths: addedPaths },
+  ];
+  const normalized = validateOwnerDirectedActions(actions, repoRoot);
+  assert.deepEqual(normalized, [
+    { action: 'add', path: addedPaths[0] },
+    { action: 'add', path: addedPaths[1] },
+    { action: 'retire', path: grokOwnerPaths[0] },
+    { action: 'retire', path: grokOwnerPaths[1] },
+  ]);
+  const { ledger, impactMap } = await changedEvidence();
+  const request = createApprovalRequest({ ledger, impactMap, target: ledger.to.version, ownerActions: actions });
+  assert.deepEqual(request.pathActions, normalized);
+  assert.deepEqual(v1WriteViolations([
+    ...addedPaths.map((path) => ({ status: 'A', path })),
+    ...grokOwnerPaths.map((path) => ({ status: 'D', path })),
+  ], request.paths, request.pathActions), []);
+  assert.match(v1WriteViolations([{ status: 'M', path: addedPaths[0] }], request.paths, request.pathActions)[0], /requires A/);
+  assert.throws(
+    () => validateOwnerDirectedActions([{ action: 'add', paths: [addedPaths[0]] }], repoRoot),
+    /requires paired add path/,
+  );
+  const symlinkRoot = join(temporary, 'owner-action-symlink-root');
+  await mkdir(join(symlinkRoot, 'content', 'docs', 'beta', 'guides'), { recursive: true });
+  await symlink(repoRoot, join(symlinkRoot, 'content', 'docs', 'beta', 'guides', 'escape'));
+  assert.throws(
+    () => validateOwnerDirectedActions([{ action: 'add', paths: [
+      'content/docs/beta/guides/escape/new.en.mdx',
+      'content/docs/beta/guides/escape/new.vi.mdx',
+    ] }], symlinkRoot),
+    /must not traverse a symlink/,
+  );
+});
+
+test('add may introduce a new Beta directory only with its paired nav metadata and index', async () => {
+  const group = 'content/docs/beta/guides/action-scoped-group';
+  const members = [
+    `${group}/index.en.mdx`,
+    `${group}/index.vi.mdx`,
+    `${group}/meta.json`,
+    `${group}/meta.vi.json`,
+    `${group}/child.en.mdx`,
+    `${group}/child.vi.mdx`,
+  ];
+  const normalized = validateOwnerDirectedActions([{ action: 'add', paths: members }], repoRoot);
+  assert.deepEqual(normalized.map(({ path }) => path), [...members].sort());
+  const { ledger, impactMap } = await changedEvidence();
+  const request = createApprovalRequest({ ledger, impactMap, target: ledger.to.version, ownerActions: [{ action: 'add', paths: members }] });
+  assert.deepEqual(v1WriteViolations(members.map((path) => ({ status: 'A', path })), request.paths, request.pathActions), []);
+
+  const withoutMeta = members.filter((path) => !path.includes('/meta'));
+  assert.throws(
+    () => validateOwnerDirectedActions([{ action: 'add', paths: withoutMeta }], repoRoot),
+    new RegExp(`new directory ${group} requires add path ${group}/meta.json`),
+  );
+  const withoutIndex = members.filter((path) => !path.includes('/index.'));
+  assert.throws(
+    () => validateOwnerDirectedActions([{ action: 'add', paths: withoutIndex }], repoRoot),
+    new RegExp(`new directory ${group} requires add path ${group}/index.en.mdx`),
+  );
+  assert.throws(
+    () => validateOwnerDirectedActions([{ action: 'add', paths: [
+      'content/docs/beta/guides/meta.json',
+      'content/docs/beta/guides/meta.vi.json',
+    ] }], repoRoot),
+    /add path already exists|add is limited/,
+  );
+  assert.throws(
+    () => validateOwnerDirectedActions([{ action: 'modify', paths: [`${group}/index.en.mdx`, `${group}/index.vi.mdx`] }], repoRoot),
+    /modify path does not exist/,
   );
 });
 

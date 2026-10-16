@@ -37,10 +37,19 @@ below `.pi/agents/`, rules below `.pi/rules/`, and extensions below
 segment there. Pi has no `ak run --target pi` route in this release.
 
 For Oh My Pi, distinguish installed discovery from direct dispatch. A project
-install discovers Skills, Agents, and rules below `.omp/`; `ak run
-<kit>/<skill> --target omp` resolves and dispatches one Skill separately. Oh My
+install discovers portable Skills below `.omp/skills/ak-<slug>/`, with top-level
+`name: ak-<slug>` in each projected `SKILL.md`, plus Agents and rules below
+`.omp/`. Body aliases such as `/ak:cook` and `$ak:cook` remain unchanged. `ak run
+<kit>/<skill> --target omp` resolves and dispatches one Skill separately without
+changing that selector. Oh My
 Pi owns its configured backend and credentials, so file presence alone still
 does not prove that the runtime loaded the content.
+
+For DeepSeek Harness, project installs write Skills below `.dsh/skills/` and user
+installs below `${DSH_HOME:-~/.dsh}/skills/`. Setup resolves `AGENTKIT_DSH_BIN` or
+`dsh` and leaves model, authentication, and sandbox ownership with the runtime.
+`ak run <kit>/<skill> --target dsh` resolves and dispatches one Skill separately
+without changing that installed inventory.
 
 Check the destination that matches the selected delivery:
 
@@ -51,7 +60,7 @@ Check the destination that matches the selected delivery:
 | Codex Skills | `<project>/.agents/skills/<name>/` | `~/.agents/skills/<name>/` |
 | Codex Agents, config, and hooks | `<project>/<kit>/.codex/` | `${CODEX_HOME:-~/.codex}/` |
 | Cursor | `<project>/.cursor/` | `~/.cursor/` |
-| DeepSeek Harness | Not a Kit projection target in this release; use `ak run --target dsh` for dispatch | Not a Kit projection target in this release |
+| DeepSeek Harness | `<project>/.dsh/skills/` plus `<project>/.agentkit/adapters/dsh/<kit>/` | `${DSH_HOME:-~/.dsh}/skills/` plus `${AGENTKIT_HOME:-~/.agentkit}/adapters/dsh/<kit>/` |
 | Grok Build | `<project>/.grok/` plus `.agentkit/adapters/grok/<kit>/` | `${GROK_HOME:-~/.grok}/` plus `${AGENTKIT_HOME:-~/.agentkit}/adapters/grok/<kit>/` |
 | Pi | `<project>/.pi/{skills,agents,rules,extensions}` plus Pi lifecycle metadata | Active Pi coding-agent profile (`PI_CODING_AGENT_DIR` or `~/.pi/agent`) with no extra `.pi/` segment |
 | Oh My Pi | `<project>/.omp/{skills,agents,rules}`, `<project>/AGENTS.md`, and `<project>/.agentkit/adapters/omp/<kit>/` | `{skills,agents,rules}` and `AGENTS.md` below the resolved OMP root, plus user-scope lifecycle metadata |
@@ -62,6 +71,13 @@ Check `skills/<name>/SKILL.md`, `agents/<name>.md`, `rules/<name>.md`, and the
 Kit-scoped `AGENTKIT-OMP` block in `AGENTS.md`. Unsupported exports under
 `.agentkit/adapters/omp/<kit>/sidecars/` are retained for lifecycle visibility;
 their presence does not make them active OMP surfaces.
+
+Trusted project OMP also discovers project `.agents/skills`. If canonical forms
+such as `ak:advise` and `ak-advise` collide, project `.omp/skills` shadows the
+project `.agents/skills` copy for a project OMP install. When a global OMP install
+is used from that project, project `.agents/skills` shadows the profile copy.
+The install warning does not skip OMP emission, delete or rewrite either Skill,
+alter `.agents` or OMP settings, require `--force`, or indicate exit `6`.
 
 ## Check the adapter, not only file presence
 
@@ -184,7 +200,7 @@ error rather than silently substitute ordinary Codex subagents.
 On a Codex target, a successful install can include this exact summary:
 
 ```text
-[!] Hooks dropped (unsupported on this target): 1 group - see warnings
+[!] Hook groups not projected: 1 group - see warnings
 ```
 
 This is a supported partial-projection diagnostic, not a hidden install
@@ -207,11 +223,11 @@ runtime home to remove the warning.
 
 ## A Codex hooks-root link is refused
 
-On POSIX, a wrapper-managed Codex home may link only its final `hooks` leaf to
-the resolved user's canonical `~/.codex/hooks`. AgentKit uses that canonical
-path for Hook commands, writes, rollback, and ownership. A linked parent or any
-other target is refused. On Windows, every symlink or reparse point in this
-boundary is refused.
+A wrapper-managed Codex home may link only its final `hooks` leaf to the
+resolved user's canonical `~/.codex/hooks`, as a POSIX symlink or a Windows
+directory junction. AgentKit uses that canonical path for Hook commands, writes,
+rollback, and ownership. A linked parent, or a leaf that resolves anywhere other
+than the canonical user hooks directory, is refused.
 
 Inspect the configured `CODEX_HOME`, the `hooks` leaf, and its resolved target.
 Correct the wrapper or filesystem layout; do not use `--force`, replace a parent
@@ -269,3 +285,5 @@ report.
 - [Kit installation problems](./kit-installation)
 - [Installing Kits](../guides/installing-kits)
 - [Configuration problems](./configuration)
+
+`hooksDeferred` is a subset of `hooksDropped`: the harness bridge defers that subscription, which does not mean the runtime cannot express it. Read the summary to distinguish deferred from unsupported groups.

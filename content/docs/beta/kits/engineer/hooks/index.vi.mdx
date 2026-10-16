@@ -11,8 +11,8 @@ một thao tác không an toàn hoặc quá rộng, hay cập nhật trạng th�
 giới hạn. Bạn không gọi Hook như Skill hoặc command; runtime đã chọn sẽ gọi các
 handler được hỗ trợ khi event tương ứng xảy ra.
 
-Package Engineer đã resolve có **44 entry Hook**. Con số này là inventory của
-artifact, không phải 44 behavior độc lập. Nó bao gồm manifest của Hook, event
+Package Engineer đã resolve có **55 entry Hook**. Con số này là inventory của
+artifact, không phải 55 behavior độc lập. Nó bao gồm manifest của Hook, event
 handler, thư viện hỗ trợ dùng chung, cùng helper về trạng thái và statusline
 riêng của Engineer. Một handler có thể tham gia nhiều event, còn tệp hỗ trợ có
 thể không bao giờ tự chạy.
@@ -30,17 +30,141 @@ package:
 
 | Event | Điều bạn có thể quan sát |
 | --- | --- |
-| `PreToolUse` | Cung cấp hướng dẫn đặt tên cho tệp mới, kiểm tra truy cập tệp nhạy cảm và dừng hoạt động scout quá rộng hoặc đi vào path bị bỏ qua khi request vượt ngoài ranh giới được hỗ trợ. Check có thể cho phép request, trả về hướng dẫn hoặc yêu cầu phê duyệt. |
-| `PostToolUse` | Giữ định dạng plan nhất quán sau khi edit và write, làm mới trạng thái task/session sau thao tác task được hỗ trợ và cập nhật trạng thái sử dụng sau hoạt động của tool. |
-| `PreCompact` | Ghi lại đủ định hướng workflow để tiếp tục sau khi compact context. |
-| `SessionStart` | Khởi tạo context của project và session cho phiên mới. |
+| `PreToolUse` | Cung cấp hướng dẫn đặt tên cho tệp mới, kiểm tra truy cập tệp nhạy cảm, dừng hoạt động scout quá rộng hoặc đi vào path bị bỏ qua khi request vượt ngoài ranh giới được hỗ trợ, kiểm tra lượng nội dung mà một lệnh read, search hoặc shell có thể trả về, và thay thế tham chiếu `${secret:NAME}` trong lệnh shell và URL fetch. Check có thể cho phép request, trả về hướng dẫn hoặc yêu cầu phê duyệt. |
+| `PostToolUse` | Giữ định dạng plan nhất quán sau khi edit và write, làm mới trạng thái task/session sau thao tác task được hỗ trợ, cập nhật trạng thái sử dụng sau hoạt động của tool và ghi lại số liệu tổng hợp có giới hạn về hoạt động tool cho agent behavior linter. |
+| `PreCompact` | Ghi lại đủ định hướng workflow để tiếp tục sau khi compact context và đánh dấu lần compact đó cho agent behavior linter. |
+| `SessionStart` | Khởi tạo context của project và session cho phiên mới, đồng thời làm mới marker liveness cho background auto-update của project này. |
 | `SubagentStart` | Khởi tạo trạng thái subagent và cung cấp team context liên quan. |
-| `Stop` | Làm mới trạng thái session và usage. Khi có plan đang hoạt động, lời nhắc plan có thể trả JSON hợp lệ, không chặn với `continue` và `systemMessage`; nếu không, hook thoát im lặng. |
+| `Stop` | Làm mới trạng thái session và usage, đồng thời làm mới marker liveness auto-update. Khi có plan đang hoạt động, lời nhắc plan có thể trả JSON hợp lệ, không chặn với `continue` và `systemMessage`; nếu không, hook thoát im lặng. Agent behavior linter có thể thêm một báo cáo session mang tính tư vấn. |
 | `SubagentStop` | Làm mới trạng thái session dùng chung tại ranh giới subagent. |
-| `UserPromptSubmit` | Cung cấp hướng dẫn phát triển theo project, kiểm tra rủi ro output giống secret, áp dụng gate đơn giản hóa trước khi ship khi phù hợp và làm mới trạng thái usage. |
+| `UserPromptSubmit` | Cung cấp hướng dẫn phát triển theo project, kiểm tra rủi ro output giống secret, áp dụng gate đơn giản hóa trước khi ship khi phù hợp, làm mới trạng thái usage và làm mới marker liveness auto-update. |
+| `SessionEnd` | Gỡ marker liveness auto-update của session này. |
 
 Những kết quả này hỗ trợ workflow Engineer; chúng không tự phê duyệt plan,
 commit, merge, deploy hay phát hành công việc thay bạn.
+
+## Context firewall và agent behavior linter
+
+Hook `context-firewall` chạy trước các lệnh `Bash`, `PowerShell`, `Read`, `Grep`
+và `Glob`,
+rồi ước tính lượng nội dung mà lệnh đó có thể trả về. Hook cho phép lệnh thông
+thường, cảnh báo mà không chặn, hoặc chặn lệnh và nêu một cách thay thế có giới
+hạn:
+
+| Lệnh | Cảnh báo | Chặn |
+| --- | --- | --- |
+| Đọc toàn bộ tệp mà không có `offset`, `limit` hay khoảng trang | Tệp từ 256 KB trở lên | Tệp từ 2 MB trở lên |
+| Search ở output mode `content` mà không có `head_limit` từ 100 trở xuống | Mọi pattern khác | Pattern mà check scout đã xem là quá rộng |
+| Lệnh shell in toàn bộ một tệp, ví dụ `cat` hoặc `Get-Content` | Tệp từ 128 KB trở lên | Tệp từ 512 KB trở lên |
+| Stream log không giới hạn, search hoặc duyệt cây thư mục đệ quy, hay toàn bộ lịch sử hoặc diff Git | Luôn luôn | — |
+
+Khi cùng một thao tác đã bị cảnh báo chạm tới lần can thiệp thứ ba trong một
+session, cảnh báo trở thành chặn. Mỗi lần can thiệp được ghi vào một bản ghi
+theo session có giới hạn, với giá trị credential đã được che. Firewall luôn
+fail-open: nếu Hook gặp lỗi ngoài dự kiến, lệnh vẫn được thực hiện.
+
+Hook `agent-behavior-linter` quan sát hoạt động tool trong session và, tại
+`Stop`, có thể báo cáo các pattern mà nó chứng minh được từ hoạt động đó: đọc
+lại một tệp không thay đổi, chạy lại một lệnh thất bại với cùng lỗi, search
+rộng lặp lại, output tool lớn mà không tệp nào thay đổi, và chạy toàn bộ test
+suite sau một thay đổi chỉ liên quan tài liệu. Mỗi phát hiện nêu điều đã quan
+sát, việc nên làm thay thế và nguyên tắc tương ứng trong `ak:context-engineering`.
+Linter chỉ giữ số liệu tổng hợp có giới hạn trong trạng thái riêng theo
+session, không bao giờ chặn lệnh tool và không in báo cáo khi không có phát
+hiện nào.
+
+Cả hai Hook đều bật theo mặc định. Để tắt một Hook, đặt `hooks.context-firewall`
+hoặc `hooks.agent-behavior-linter` thành `false`; xem [Quản lý preference của
+Hook](../../../guides/managing-hook-preferences).
+
+## Phê duyệt truy cập tệp nhạy cảm
+
+Hook `privacy-block` chạy trước các lệnh gọi `Read`, `Write`, `Edit`, `Bash` và
+`PowerShell`,
+bảo vệ các tệp dotenv như `.env` và `.env.local`, tệp credentials,
+`secrets.yaml` hoặc `secret.yml`, tệp `.pem` và `.key`, cùng SSH private key.
+Lần truy cập đầu tiên vào một path như vậy bị từ chối trên mọi runtime và mọi
+đường công cụ, kể cả path nằm trong lệnh shell và các chỉnh sửa Codex
+`apply_patch` đi qua matcher `Edit` và `Write`. Việc kiểm tra lệnh shell cũng
+bao gồm những gì một shell đọc stdin (`sh`, `bash -s`, `iex`) chạy từ một đoạn
+pipeline phía trước, đoạn script truyền vào `[scriptblock]::Create` hoặc
+`InvokeScript`, lệnh chạy qua `Start-Process` hoặc `xargs`, và các wrapper có
+option nhận giá trị như `sudo -u`, `wsl -d` hoặc `timeout -s`. Tên tệp dotenv
+được ghép bằng phép nối chuỗi PowerShell, khớp qua glob bắt đầu bằng dấu chấm,
+hoặc viết dưới dạng NTFS alternate data stream hay tên ngắn 8.3 của Windows cũng
+được nhận diện. Các tệp mẫu như `.env.example`,
+`.env.sample` và `.env.template` vẫn được phép, và một biểu thức mã nguồn như
+`process.env.API_KEY` không bị coi là path tệp.
+
+Thông báo từ chối nêu rõ thao tác (`read`, `write` hoặc `edit`) và yêu cầu agent
+hỏi bạn qua khả năng ask-user của runtime: `AskUserQuestion` trên Claude Code,
+và `request_user_input` trên Codex khi có, nếu không thì một câu hỏi chat thông
+thường rồi kết thúc lượt. Các runtime khác nhận câu hỏi chat thông thường.
+
+1. **Agent hỏi bạn.** Bạn phê duyệt hoặc từ chối một lần truy cập vào path đã
+   nêu.
+2. **Agent thử lại một lần.** Sau khi được phê duyệt, agent lặp lại đúng lệnh
+   gọi đó với mỗi path được bảo vệ có tiền tố `APPROVED:`. Hook bỏ tiền tố trước
+   khi công cụ chạy, nên công cụ thấy path thật.
+3. **Phê duyệt được dùng hết.** Phê duyệt gắn với session, path đã chuẩn hóa và
+   thao tác, chỉ dùng cho một lệnh gọi và hết hạn sau 15 phút. Trên Claude Code,
+   lần thử lại đã được phê duyệt vẫn hiện permission prompt gốc với đúng lệnh
+   gọi.
+
+Tiền tố `APPROVED:` không có lần từ chối trước đó, lần thử lại thứ hai, phê
+duyệt đã hết hạn, hoặc lần chạy không có định danh session đều bị từ chối. Vì
+vậy lần chạy non-interactive fail closed: không ai trả lời được, nên agent tiếp
+tục mà không dùng tệp đó. Khi bạn từ chối, agent được yêu cầu tiếp tục mà không
+dùng tệp và không truy cập nó qua công cụ hay lệnh khác.
+
+<Callout type="warn" title="Rào chắn chống nhầm lẫn, không phải ranh giới bảo mật">
+  Luồng phê duyệt dựa trên sự hợp tác của model. Nó giảm việc vô tình đọc hoặc
+  ghi secret, nhưng không chống lại một model độc hại hoặc đã bị xâm phạm. Hãy
+  giữ credential trong secret store và dùng permission của runtime làm cơ chế
+  thực thi.
+</Callout>
+
+Trên Codex, atom `Read` bị bỏ, nên Hook chỉ bảo vệ đường shell và chỉnh sửa;
+các thao tác đọc qua MCP và local function tool không được bảo vệ. AgentKit báo
+điều này trong output cài đặt, như một phần của ghi chú matcher bị thu hẹp. Hook
+bật theo mặc định; đặt `hooks.privacy-block` thành `false` để tắt, như mô tả
+trong [Quản lý preference của
+Hook](../../../guides/managing-hook-preferences).
+
+## Tham chiếu secret trong lệnh gọi công cụ
+
+Hook `secrets-inject` chạy trước các lệnh gọi `Bash`, `PowerShell` và
+`WebFetch`. Khi một lệnh shell hoặc URL fetch chứa tham chiếu `${secret:NAME}`,
+Hook hỏi
+`ak secrets resolve` để lấy giá trị đã lưu và thay thế trong bộ nhớ, nhờ đó
+model có thể soạn lệnh gọi mà không nhìn thấy credential. Chỉ `Bash.command`,
+`PowerShell.command` và `WebFetch.url` được quét; nội dung tệp và prompt được giữ nguyên. Grant
+[`ak secrets`](../../../reference/cli/secrets) cho binary agent đang gọi quyết định giá trị có được
+giải phóng hay không, và grant bị giới hạn bằng `--allow-host` còn kiểm tra đích
+fetch.
+
+Mọi lỗi đều chặn lệnh gọi công cụ thay vì chuyển nguyên văn tham chiếu đi,
+bao gồm thiếu grant, tên không hợp lệ hoặc giá trị có ký tự đặc biệt của shell
+khi đi vào một lệnh `Bash` hoặc `PowerShell`. Riêng với lệnh `PowerShell`, giá
+trị chứa `,`, `@` hoặc dấu nháy typographic cũng bị từ chối, vì PowerShell sẽ
+đọc chúng thành dấu tách mảng, splat hoặc dấu nháy; hãy truyền giá trị như vậy
+qua biến môi trường. Hook không ghi bản sao nào của giá trị, nhưng input
+đã thay thế vẫn tới process của công cụ và mọi thứ runtime ghi lại cho một lệnh
+gọi đã thực thi, chẳng hạn transcript. Hãy coi giá trị đã giải phóng là có mặt
+trên host và rotate khi cần.
+
+Claude Code và Grok đăng ký Hook cho `Bash|PowerShell|WebFetch`, còn Codex thu
+hẹp thành `Bash`. Hỗ trợ Cursor cho Hook này chưa được xác lập trong bản phát hành này.
+
+## Liveness cho cập nhật nền tự động
+
+Hook `session-heartbeat.cjs` đăng ký trên `SessionStart`, `UserPromptSubmit`,
+`Stop` và `SessionEnd`. Nó ghi một marker theo session dưới AgentKit home để
+[cập nhật nền opt-in](../../../guides/updating) bỏ qua project đang có agent
+session sống, và gỡ marker đó ở `SessionEnd`. Tại `SessionStart`, nó cũng in
+một dòng thông báo cho kết quả cập nhật nền chưa được xem, xác nhận bằng
+`ak update --status --ack --json`. Hook không bao giờ chặn session và tự
+thoát `0` ngay cả khi lỗi.
 
 ## Path đã cấu hình khi bắt đầu session
 
@@ -79,18 +203,29 @@ statusline chỉ vì package chứa tệp hỗ trợ statusline.
 ## Hỗ trợ một phần trên Codex
 
 Codex có event model và matcher model nhỏ hơn Claude Code. Engineer projection
-một group bị drop hoàn toàn và hai matcher bị thu hẹp:
+một group bị drop hoàn toàn và bốn matcher bị thu hẹp:
 
 - Matcher `PostToolUse` `Agent|Task|TodoWrite|TodoRead` với handler
   `session-state.cjs` bị drop hoàn toàn. Các đăng ký `Stop` và `SubagentStop`
   riêng vẫn còn.
-- `Read|Write|Edit|Bash` trở thành `Write|Edit|Bash`, bỏ `Read` nhưng giữ
-  `privacy-block.cjs` hoạt động cho các atom được hỗ trợ.
-- `Bash|Read` trở thành `Bash`, bỏ `Read` nhưng giữ `scout-block.cjs` hoạt động
-  cho Bash.
+- `Read|Write|Edit|Bash|PowerShell` trở thành `Write|Edit|Bash`, bỏ `Read` và
+  `PowerShell` nhưng giữ
+  `privacy-block.cjs` hoạt động cho các atom được hỗ trợ. Các thao tác đọc trên
+  Codex qua MCP và local function tool không được bảo vệ; xem [Phê duyệt truy
+  cập tệp nhạy cảm](#phê-duyệt-truy-cập-tệp-nhạy-cảm).
+- `Bash|PowerShell|Read` trở thành `Bash`, bỏ `PowerShell` và `Read` nhưng giữ
+  `scout-block.cjs` hoạt động cho Bash.
+- `Bash|PowerShell|Read|Grep|Glob` trở thành `Bash`, bỏ `PowerShell`, `Read`,
+  `Grep` và `Glob` nhưng giữ
+  `context-firewall.cjs` hoạt động cho Bash.
+- `Bash|PowerShell|WebFetch` trở thành `Bash`, bỏ `PowerShell` và `WebFetch`
+  nhưng giữ `secrets-inject.cjs` hoạt động cho Bash.
+
+Các đăng ký `agent-behavior-linter.cjs` trên `PostToolUse`, `PreCompact` và
+`Stop` được projection mà không bị thu hẹp.
 
 Drop hoặc narrow không làm cài đặt thất bại. Output cho người dùng liệt kê chúng
-dưới **Hooks dropped (unsupported on this target)** và **Hook matchers narrowed
+dưới **Hook groups not projected** và **Hook matchers narrowed
 (some tool matches unsupported on this target)**. JSON dùng các field tùy chọn
 `hooksDropped`, `droppedHookSummaries`, `hookMatchersNarrowed` và
 `narrowedHookSummaries`. Hãy xem chúng là disclosure về capability, không phải
@@ -172,6 +307,10 @@ hoặc toàn bộ tệp cấu hình Hook dùng chung để sửa lỗi.
    đã được người dùng sửa và kiểm tra mọi snapshot khôi phục trước khi áp dụng
    thay đổi.
 
+Để bật, tắt hoặc khôi phục soft-preference của một Hook mà không đổi việc cài
+đặt của nó, hãy xem [Quản lý preference của
+Hook](../../../guides/managing-hook-preferences).
+
 Để xem flag cài đặt chính xác, hãy đọc [Cài đặt
 Kit](../../../guides/installing-kits) và [tham chiếu `ak kit
 init`](../../../reference/cli/kit-init). Để xem khác biệt capability giữa
@@ -179,3 +318,5 @@ các adapter, hãy đọc [Runtime adapter](../../../concepts/runtime-adapters).
 việc cài đặt hoặc discovery vẫn chưa rõ, hãy tiếp tục với [Lỗi cài
 Kit](../../../troubleshooting/kit-installation) và [Runtime không tìm thấy Skill
 hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent).
+
+Nhóm Hook chưa được project có thể là unsupported hoặc được harness bridge trì hoãn. Đọc `hooksDeferred` riêng với nhóm unsupported; deferred không đồng nghĩa không được hỗ trợ vĩnh viễn.

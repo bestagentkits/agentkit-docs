@@ -1,0 +1,74 @@
+---
+title: ak test optimize
+description: "Explain impact-selected checks, optionally execute trusted commands"
+---
+
+Use `ak test optimize` for the operation described below. The command help records its arguments, effects, and options.
+
+Without a manifest at the `--manifest` path the command fails and asks you to configure trusted groups and `full_suite`. With `--run`, the command reloads the manifest and fails if it changed after planning.
+
+Semantic modes use the `test-impact` consumer. A provider call happens only when you have enabled `semantic_decision` at user scope, set `semantic_decision.consumers.test-impact` to `true`, and made the selected provider's credential available (see [providers and credentials](../../../guides/semantic-decision-experiments#choose-a-provider-and-credentials)). The grant is required even when you have no `consumers` map. See [ak config prefs set](../config/prefs/set).
+
+## Configure the group manifest
+
+The repository owns `.agentkit/test-impact.json`. Each group declares its command argv, a repository-relative working directory, the paths it owns, dependency edges, an execution class, and a timeout. The manifest also declares a nonempty `full_suite`, which groups are mandatory or critical, and explicit `required_checks` mappings for active policy. `coverage_complete` is your declaration, not proof that the dependency data is complete.
+
+Selection stays conservative. Mandatory and critical checks always apply. An unknown path, an incomplete mapping, or uncertain evidence broadens the plan to the full suite and safety checks. A missing policy mapping blocks execution instead of skipping a required check, and a documentation-only skip requires explicit allowlist evidence in the manifest. The default `--semantic off` path makes no network or provider call. Existing preflight and CI gates remain authoritative; this command is a local verification route.
+
+## Plan, run, and save a receipt
+
+Without `--run`, the command only plans: it reads Git, the manifest, and policy, then reports selected and skipped groups with reasons, unresolved policy checks, and fallback reasons. Committed changes, both endpoints of a rename, and local dirty or untracked changes all contribute to the source fingerprint.
+
+`--run` executes the trusted manifest commands sequentially with timeouts and process-tree cancellation. It runs only against the current checkout: the requested head must equal it, so a historical head can be planned but not executed. Source, manifest, and policy fingerprints are checked before execution, and a source change during the run invalidates the evidence. A working-directory symlink must stay inside the repository. A failing narrow group triggers broader checks and remains a failure. The commands are repository code you trust; `--run` is not a sandbox.
+
+`--output <new-file>` creates a local JSON receipt and never replaces an existing file or symlink. The receipt records group results, required checks, broadening, attempt counts, duration, and the source revision. Cost is `null` when it was not observed, and raw subprocess output is not stored. Avoid tests that modify tracked source or leave new untracked files behind.
+
+## Command contract
+
+Explain impact-selected checks, optionally execute trusted commands
+
+### Synopsis
+
+Default is read-only planning. Supply a trusted manifest with group commands, ownership, full-suite groups and explicit policy mappings. Invalid optional evidence broadens; missing mandatory mappings block. --run executes repository code without a sandbox.
+
+Effects:
+  Planning reads Git and policy only. --run executes trusted commands in this repository; --output creates a local receipt. Semantic mode defaults off; an explicitly permitted mode may send compact facts and incur provider charges. Shadow never changes the effective plan.
+
+Exit status:
+  0   executable plan or all selected checks passed
+  1   invalid inputs, blocked plan, failed or stale execution
+  2   invalid arguments
+
+```
+ak test optimize [flags]
+```
+
+### Examples
+
+```
+  ak test optimize --base origin/dev --json
+  ak test optimize --base origin/dev --run --json
+```
+
+### Options
+
+```
+      --base string               Git comparison base (required)
+      --evidence string           Optional bounded external evidence JSON
+      --head string               Git comparison head; local changes also count (default "HEAD")
+  -h, --help                      help for optimize
+      --json                      Emit machine-readable JSON (implies --no-interactive)
+      --manifest string           Repository-owned executable group manifest (default ".agentkit/test-impact.json")
+      --no-interactive            Disable interactive prompts (CI-safe)
+      --output string             Create a new local JSON result file; never overwrite
+  -q, --quiet                     Suppress non-error output on stderr
+      --run                       Execute trusted manifest commands; this is not a sandbox
+      --semantic string           Optional semantic observations: off, shadow, or advisory; requires explicit user consent (default "off")
+      --semantic-context string   Reviewed compact semantic context JSON bound to this request
+  -V, --verbose                   Extra diagnostic output on stderr (loses to --quiet)
+  -y, --yes                       Assume yes for all prompts
+```
+
+### SEE ALSO
+
+* [ak test](./index)	 - Plan and execute repository test-impact checks

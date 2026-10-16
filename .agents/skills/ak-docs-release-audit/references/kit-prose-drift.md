@@ -127,6 +127,67 @@ Run this whenever complete matrices differ, in addition to identity comparison:
    `kit-prose-drift: no candidates` only after inventory, body/support-file, and
    cross-page scans all ran.
 
+## Public Skill disposition gate
+
+Every normal artifact-delta pass must produce a tuple-sorted disposition table
+for every public Skill identity whose package subtree changed in any verified
+runtime. The table is the release audit's proof that Skill drift was either
+routed to prose or consciously rejected as non-prose-impacting; catalog identity
+parity alone is not enough.
+
+Build the table from the complete six-runtime artifact matrix, not from one
+representative runtime. Aggregate by `(kitId, sourceIdentity)` only after
+recording per-runtime evidence. A row is required when any runtime shows one of
+these changes under that Skill's subtree:
+
+- `added` or `removed` Skill identity;
+- `frontmatter-only` change in `SKILL.md`;
+- `body` change in `SKILL.md` outside purely non-public metadata;
+- `support-file` change in `skill.yaml`, `.env.example`, references, scripts,
+  templates, examples, or runtime configuration;
+- route, invocation, model-routing, adapter, package-version, safety-gate,
+  lifecycle, or availability wording changed in any support file.
+
+Each row must contain exactly enough evidence for review:
+
+| Field | Requirement |
+| --- | --- |
+| `kitId` | `engineer`, `marketing`, or another verified Kit ID. |
+| `sourceIdentity` | Source Skill directory identity, for example `ak-docs`. |
+| `declaredInvocation` | Invocation exposed by the current catalog. |
+| `classification` | Current catalog classification. |
+| `changedRuntimes` | Runtime list with changed archive hashes and changed member paths. |
+| `changeKinds` | One or more of `added`, `removed`, `frontmatter-only`, `body`, `support-file`. |
+| `publicRoutes` | Existing EN/VI Beta route paths, or explicit `none`. |
+| `externalClaimHits` | Human-owned Beta paths whose prose names the changed claim, or `[]`. |
+| `disposition` | `update`, `no-prose-impact`, `retired-route-ok`, or `blocked`. |
+| `rationale` | Evidence-backed reason. `no-prose-impact` must say why the changed bytes do not affect public docs meaning. |
+| `ownerDirectedPaths` | EN/VI path set required when `disposition: update`; otherwise `[]`. |
+
+Disposition semantics:
+
+- `update` — public prose must change. Include exact EN/VI Beta paths in
+  `ownerDirectedPaths`, pass them through the V0 owner-directed path mechanism,
+  and require a fresh approval request before authoring.
+- `no-prose-impact` — changed package bytes do not change public meaning. This
+  is allowed only with a concrete reason such as category-only metadata not
+  surfaced in docs, internal execution notes, or docs already stating the new
+  behavior.
+- `retired-route-ok` — the release intentionally removed or retired the Skill
+  while docs keep a reviewed retained route or redirect. Cite the retained route
+  and catalog exception.
+- `blocked` — evidence is missing, generated tooling cannot bind the path set,
+  locales are not paired, or a changed claim has no approved route. A blocked
+  row stops V1 and PR-ready status.
+
+Zero unclassified public Skill rows is a hard gate before presenting V0 for
+approval and again before marking the PR ready. If the first audit missed this
+pass, run a supplemental read-only pass, attach the disposition table to the
+release plan or PR body, and either record every row as `no-prose-impact` /
+`retired-route-ok` or generate a new V0 request for every `update` path. Do not
+reuse an older approval request whose digest did not bind the newly discovered
+Skill rows.
+
 ## Owner prompt
 
 ```text

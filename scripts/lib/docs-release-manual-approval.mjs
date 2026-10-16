@@ -138,7 +138,10 @@ export function validateManualOwnerApprovalRecord(approval, options = {}) {
     normalizeRepoPath(path);
     if (!isHumanOwnedBetaFile(path)) fail('manual-owner approval paths contain a non-prose Beta path');
   }
-  if (!equal(scope.actions, ['modify'])) fail('manual-owner scope actions must be exactly ["modify"]');
+  if (!Array.isArray(scope.actions) || !equal(scope.actions, sortedUnique(scope.actions)) || !scope.actions.length
+    || !scope.actions.every((action) => ['modify', 'add', 'retire'].includes(action))) {
+    fail('manual-owner scope actions must be sorted non-empty actions from modify, add, retire');
+  }
 
   const owner = object(approval.owner, 'manual-owner owner');
   exactKeys(owner, ['label'], 'manual-owner owner');
@@ -195,6 +198,7 @@ function validateBoundArtifacts(request, options) {
       impactMap: artifacts.impactMap.value,
       target: request.target,
       ownerPaths: request.ownerDirectedPaths ?? [],
+      ownerActions: request.pathActions ?? [],
     });
     if (!equal(expectedRequest, request)) {
       fail('approval request scope is not derived from the bound impact map and owner-directed paths');
@@ -233,6 +237,8 @@ export function validateManualOwnerApprovalBinding(request, approval, options = 
   if (approval.request.impactMapDigest !== request.impactMapDigest) fail('manual-owner impact map digest does not match request');
   if (!equal(approval.claimIds, request.claimIds)) fail('manual-owner claim IDs do not match request');
   if (!equal(approval.scope.paths, request.paths)) fail('manual-owner approval paths do not match request');
+  const requestActions = sortedUnique(['modify', ...(request.pathActions ?? []).map(({ action }) => action)]);
+  if (!equal(approval.scope.actions, requestActions)) fail('manual-owner approval actions do not match request');
   validateBoundArtifacts(request, options);
   return approval;
 }
@@ -262,7 +268,7 @@ export function createManualOwnerApprovalRecord({
     },
     docsBaseSha,
     claimIds: [...request.claimIds],
-    scope: { paths: [...request.paths], actions: ['modify'] },
+    scope: { paths: [...request.paths], actions: sortedUnique(['modify', ...(request.pathActions ?? []).map(({ action }) => action)]) },
     owner: { label: ownerLabel },
     approvalStatement,
     issuedAt,

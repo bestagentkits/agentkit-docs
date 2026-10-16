@@ -56,6 +56,7 @@ The command has no alias.
 
 | Option | Default | Effect |
 | --- | --- | --- |
+| `--beta` | `false` | Shorthand for `--channel beta`. |
 | `--build-only` | `false` | Build into a local output directory instead of installing. |
 | `--channel <channel>` | `stable` | Select the remote kit channel. |
 | `--exclude-skills <names>` | Empty | Install every Skill except a comma-separated set. |
@@ -70,7 +71,7 @@ The command has no alias.
 | `--select-skills` | `false` | Choose Skills interactively; requires a TTY. |
 | `--skills <names>` | Empty | Install only a comma-separated set of Skills. |
 | `--switch-to-plugin` | `false` | Select Claude Code plugin delivery at the chosen scope. |
-| `--target <ids>` | `claude-code` | Select one or more comma-separated emitter targets, including `grok` and `pi`; generated command facts may lag newly registered Kit projection targets. |
+| `--target <ids>` | `claude-code` | Select one or more comma-separated emitter targets, including `dsh`, `grok`, and `pi`; generated command facts may lag newly registered Kit projection targets. |
 | `--version <version>` | Channel latest | Select a remote kit version. |
 | `--zip` | `false` | With `--target portable`, also write one uploadable ZIP per Skill. |
 
@@ -89,8 +90,10 @@ are documented in [CLI conventions](../cli-conventions).
 | User Claude plugin | `--target claude-code --global --switch-to-plugin` | `ak-<kit>` under the configured user plugin root. |
 | Project or user Codex | `--target codex` with optional `--global` | Project or user `.agents` and `.codex` surfaces. |
 | Project or user Cursor | `--target cursor` with optional `--global` | Project or user `.cursor` surfaces. |
+| Project or user DeepSeek Harness | `--target dsh` with optional `--global` | Project `.dsh/skills/` or `${DSH_HOME:-~/.dsh}/skills/` plus lifecycle metadata. |
 | Project or user Grok Build | `--target grok` with optional `--global` | Project `.grok` or `$GROK_HOME` (default `~/.grok`) plus lifecycle metadata. |
 | Project or user Pi | `--target pi` with optional `--global` | Project `.pi/{skills,agents,rules,extensions}` or the active Pi coding-agent profile. |
+| Project or user Oh My Pi | `--target omp` with optional `--global` | Portable `ak-<slug>` Skills under project `.omp/skills` or the resolved OMP profile root, plus the corresponding OMP surfaces. |
 | User AGY | `--target agy --global` | Global Gemini/AGY Skills plus optional Agents under `~/.gemini/config/agents/<name>/agent.md`, projected from the signed remote `claude-code` package with runtime-compatible frontmatter. |
 | Build or export | `--build-only --out <dir>` or `--target portable --out <dir>` | The selected output directory. |
 
@@ -110,6 +113,17 @@ init: target "portable" is export-only and has no install mode; re-run with --ou
 `--build-only --out` uses the local-development source default. Add `--zip` when
 a portable export should also produce one uploadable ZIP per Skill. AGY is
 global-only and is not a refresh lifecycle peer.
+
+Because `install` uses the init implementation, OMP behavior is identical.
+Projected Skill directories and top-level `SKILL.md` names use `ak-<slug>`, while
+body aliases such as `/ak:cook` and `$ak:cook` and the `ak run
+<kit>/<skill> --target omp` selector stay unchanged. Trusted project OMP also
+discovers project `.agents/skills`: project `.omp/skills` shadows a colliding
+project `.agents/skills` copy for a project install, while project
+`.agents/skills` shadows the OMP profile copy when a global install is used from
+that project. The command warns and continues; it does not skip OMP emission,
+delete or rewrite either Skill, alter `.agents` or OMP settings, require
+`--force`, or return exit `6`.
 
 ## Examples
 
@@ -166,7 +180,7 @@ Flag-parse errors can remain plain-text usage.
 
 Hook projection data can also include optional `hooksDropped`,
 `droppedHookSummaries`, `hookMatchersNarrowed`, and `narrowedHookSummaries`.
-Human output separates `Hooks dropped (unsupported on this target): <count>
+Human output separates `Hook groups not projected: <count>
 group(s) - see warnings` from `Hook matchers narrowed (some tool matches
 unsupported on this target): <count> matcher(s) - see warnings`. A disclosed
 drop or narrow does not make the install fail.
@@ -216,10 +230,10 @@ On Windows, eligible Codex `.cjs` Hooks inside the Codex home can use owned
 `.cmd` shims for paths containing spaces; external, metacharacter, or unsafe
 non-ASCII paths remain limited and are reported.
 
-On POSIX, a wrapper-managed Codex home may alias only its final `hooks` leaf to
-canonical `~/.codex/hooks`; Hook commands, writes, rollback, and ownership use
-that canonical identity. Linked parents, noncanonical targets, and all Windows
-links or reparse points remain unsupported.
+A wrapper-managed Codex home may alias only its final `hooks` leaf to canonical
+`~/.codex/hooks`, using a POSIX symlink or a Windows directory junction; Hook
+commands, writes, rollback, and ownership use that canonical identity. Linked
+parents and noncanonical targets remain unsupported.
 
 - [`ak kit init`](./kit-init) uses the same installation implementation.
 - [`ak kit refresh`](./kit-refresh) reconciles an existing route and removes stale clean owned output.
@@ -227,3 +241,5 @@ links or reparse points remain unsupported.
 - [Complete command facts](../cli/ak_kit_install)
 - [Install kits safely](../../guides/installing-kits)
 - [Kit installation troubleshooting](../../troubleshooting/kit-installation)
+
+`hooksDeferred` is a subset of `hooksDropped`: the harness bridge defers that subscription, which does not mean the runtime cannot express it. Read the summary to distinguish deferred from unsupported groups.

@@ -43,12 +43,12 @@ export async function checkKitCatalog({
   const reports = [];
   const observations = new Map();
 
-  if (errors.length === 0 && registry.schemaVersion === 2 && registry.channels && registry.inventorySnapshots) {
+  if (errors.length === 0 && [2, 3].includes(registry.schemaVersion) && registry.channels && registry.inventorySnapshots) {
     for (const channel of CHANNELS) {
       for (const [kitId, binding] of Object.entries(registry.channels[channel]?.kits ?? {})) {
         const snapshot = registry.inventorySnapshots[binding?.snapshotDigest];
         if (!snapshot || !Array.isArray(snapshot.identities)) continue;
-        const observed = await observeKitDocs({ docsRoot, channel, kitId, snapshot, errors });
+        const observed = await observeKitDocs({ docsRoot, channel, kitId, snapshot, reviewedRetiredSkillRoutes: binding.reviewedRetiredSkillRoutes ?? [], errors });
         observations.set(`${channel}:${kitId}`, observed);
         const inventoryKey = `${channel}:${kitId}`;
         const inventoryChecked = await validateInventory(snapshot, inventories[inventoryKey], inventoryKey, errors);

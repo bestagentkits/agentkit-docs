@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { repoRoot } from './lib/paths.mjs';
 import { DEFAULT_MANIFEST_PATH } from './lib/kit-docs-reconciliation.mjs';
+import { STABLE_DOCS_EXCEPTIONS_PREFIX } from './lib/stable-docs-exception.mjs';
 
 export const STABLE_PREFIX = 'content/docs/stable/';
 export const PROMOTIONS_PREFIX = 'docs-promotions/';
@@ -62,6 +63,10 @@ function touchesPromotionEvidence(row) {
   return row.path.startsWith(STABLE_PROMOTION_EVIDENCE_PREFIX) || row.oldPath?.startsWith(STABLE_PROMOTION_EVIDENCE_PREFIX);
 }
 
+function touchesStableDocsException(row) {
+  return row.path.startsWith(STABLE_DOCS_EXCEPTIONS_PREFIX) || row.oldPath?.startsWith(STABLE_DOCS_EXCEPTIONS_PREFIX);
+}
+
 function validateReceiptRows(rows) {
   for (const row of rows) {
     if (row.status !== 'A' || row.oldPath || !/^docs-promotions\/v\d+\.\d+\.\d+\.json$/.test(row.path)) {
@@ -74,6 +79,14 @@ function validateEvidenceRows(rows) {
   for (const row of rows) {
     if (row.status !== 'A' || row.oldPath || !/^release-evidence\/stable-promotions\/v\d+\.\d+\.\d+\/(?:manifest\.json|release-notes\.md)$/.test(row.path)) {
       fail(`Stable promotion evidence is add-only and closed-world: ${row.status} ${row.oldPath ? `${row.oldPath} -> ` : ''}${row.path}`);
+    }
+  }
+}
+
+function validateStableDocsExceptionRows(rows) {
+  for (const row of rows) {
+    if (row.status !== 'A' || row.oldPath || !/^stable-docs-exceptions\/[a-z0-9][a-z0-9-]*\.json$/.test(row.path)) {
+      fail(`Stable docs exception receipts are add-only and require Git status A: ${row.status} ${row.oldPath ? `${row.oldPath} -> ` : ''}${row.path}`);
     }
   }
 }
@@ -98,22 +111,37 @@ export function selectKitDocsCiMode(rows, { manifestPath = DEFAULT_MANIFEST_PATH
 
   const receiptRows = rows.filter(touchesPromotionReceipt);
   const evidenceRows = rows.filter(touchesPromotionEvidence);
+  const exceptionRows = rows.filter(touchesStableDocsException);
   validateReceiptRows(receiptRows);
   validateEvidenceRows(evidenceRows);
+  validateStableDocsExceptionRows(exceptionRows);
 
   const stableChanged = rows.some(touchesStable);
   if (!stableChanged) {
-    if (receiptRows.length || evidenceRows.length) fail('promotion receipt/evidence changed without a Stable diff');
+    if (receiptRows.length || evidenceRows.length || exceptionRows.length) fail('Stable transaction receipt/evidence changed without a Stable diff');
     return { mode: 'history', reason: 'no Stable diff' };
   }
 
   if (manifestRows.length) {
-    if (receiptRows.length || evidenceRows.length) fail('reconciliation and promotion transaction changes cannot share a Stable diff');
+    if (receiptRows.length || evidenceRows.length || exceptionRows.length) fail('reconciliation and another Stable transaction cannot share a Stable diff');
     return { mode: 'diff', reason: 'Stable diff with reconciliation manifest change' };
   }
 
+  // A complete promotion transaction may carry exception receipts that already
+  // landed on dev; each one is replayed against its own recorded transaction.
+  const completePromotion = receiptRows.length === 1 && evidenceRows.length === 2;
+  if (exceptionRows.length && !completePromotion) {
+    if (exceptionRows.length !== 1) fail('Stable docs exception requires exactly one add-only receipt');
+    if (receiptRows.length || evidenceRows.length) fail('Stable docs exception and promotion transaction changes cannot share a Stable diff');
+    return {
+      mode: 'exception',
+      reason: 'Stable authored docs diff with deterministic exception receipt',
+      receiptPath: exceptionRows[0].path,
+    };
+  }
+
   if (receiptRows.length !== 1 || evidenceRows.length !== 2) {
-    fail('Stable changed without reconciliation evidence or exactly one added receipt plus two added promotion evidence files');
+    fail('Stable changed without reconciliation evidence, a docs exception receipt, or exactly one promotion receipt plus two evidence files');
   }
   const stableTag = stableTagFromReceiptPath(receiptRows[0].path);
   const actualEvidencePaths = evidenceRows.map((row) => row.path).sort();
@@ -122,24 +150,40 @@ export function selectKitDocsCiMode(rows, { manifestPath = DEFAULT_MANIFEST_PATH
   }
   return {
     mode: 'promotion',
-    reason: 'Stable diff with deterministic promotion receipt and source evidence',
+    reason: exceptionRows.length
+      ? 'Stable diff with deterministic promotion receipt, source evidence, and carried exception receipts'
+      : 'Stable diff with deterministic promotion receipt and source evidence',
     receiptPath: receiptRows[0].path,
+    carriedExceptionPaths: exceptionRows.map((row) => row.path).sort(),
   };
 }
 
-function defaultRunValidation({ root, mode, base, receiptPath }) {
-  const promotion = mode === 'promotion';
-  const script = fileURLToPath(new URL(promotion ? './check-stable-promotion.mjs' : './reconcile-kit-docs.mjs', import.meta.url));
-  const args = promotion
-    ? [script, base, receiptPath]
-    : mode === 'diff'
-      ? [script, '--check-diff', base]
-      : [script, '--check-history'];
+function runValidator(root, args, label) {
   const result = spawnSync(process.execPath, args, { cwd: root, stdio: 'inherit' });
-  const label = promotion ? 'promotion' : 'reconciliation';
   if (result.error) fail(`cannot run ${label} validator: ${result.error.message}`);
   if (result.signal) fail(`${label} validator terminated by ${result.signal}`);
   if (result.status !== 0) fail(`${label} validator failed with exit ${result.status}`);
+}
+
+function defaultRunValidation({ root, mode, base, receiptPath, carriedExceptionPaths = [] }) {
+  const promotion = mode === 'promotion';
+  const exception = mode === 'exception';
+  const script = fileURLToPath(new URL(
+    promotion ? './check-stable-promotion.mjs' : exception ? './check-stable-docs-exception.mjs' : './reconcile-kit-docs.mjs',
+    import.meta.url,
+  ));
+  const args = promotion
+    ? [script, base, receiptPath]
+    : exception
+      ? [script, base, receiptPath]
+    : mode === 'diff'
+      ? [script, '--check-diff', base]
+      : [script, '--check-history'];
+  runValidator(root, args, promotion ? 'promotion' : exception ? 'Stable docs exception' : 'reconciliation');
+  const exceptionScript = fileURLToPath(new URL('./check-stable-docs-exception.mjs', import.meta.url));
+  for (const carried of carriedExceptionPaths) {
+    runValidator(root, [exceptionScript, '--carried', carried], 'carried Stable docs exception');
+  }
 }
 
 export async function checkKitDocsCi({
@@ -151,10 +195,17 @@ export async function checkKitDocsCi({
   if (typeof base !== 'string' || !base) fail('a Git base revision is required');
   const resolvedBase = git(root, ['rev-parse', '--verify', '--end-of-options', `${base}^{commit}`]).toString('utf8').trim();
   if (!/^[a-f0-9]{40}$/.test(resolvedBase)) fail(`invalid Git base revision ${base}`);
-  const rows = parseNameStatus(git(root, ['diff', '--name-status', '-z', '--find-renames', '--find-copies-harder', resolvedBase, 'HEAD', '--']));
+  const rows = parseNameStatus(git(root, ['diff', '--name-status', '-z', '--find-renames', resolvedBase, 'HEAD', '--']));
   const route = selectKitDocsCiMode(rows, { manifestPath });
   console.log(`Kit docs CI route: ${route.mode} (${route.reason}); base=${resolvedBase}`);
-  await runValidation({ root: resolve(root), mode: route.mode, base: resolvedBase, rows, receiptPath: route.receiptPath });
+  await runValidation({
+    root: resolve(root),
+    mode: route.mode,
+    base: resolvedBase,
+    rows,
+    receiptPath: route.receiptPath,
+    carriedExceptionPaths: route.carriedExceptionPaths ?? [],
+  });
   return { ...route, base: resolvedBase, rows };
 }
 

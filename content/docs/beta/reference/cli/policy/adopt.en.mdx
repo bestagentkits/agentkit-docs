@@ -1,0 +1,79 @@
+---
+title: ak policy adopt
+description: Promote named rule proposals into the active project policy.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak policy adopt` to copy proposals from `.agentkit/policy-candidates.yaml`
+into `.agentkit/policy.yaml`, where the engine reads them. Adopting is the
+explicit confirmation a generated rule needs, so you name each proposal or pass
+`--all`. The adopted rule records the proposal id in `source.adopted_from`,
+along with the instruction it came from.
+
+## Usage
+
+```bash
+ak policy adopt <candidate-id>... [flags]
+ak policy adopt --all [flags]
+```
+
+Run [`ak policy compile`](./policy-compile) first to create proposals. If
+`.agentkit/policy.yaml` does not exist yet, the first adopt creates it.
+
+## Command flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--dir <path>` | `.` | Project directory holding `.agentkit/policy.yaml`. |
+| `--all` | `false` | Adopt every proposal instead of naming them. |
+
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+## Common examples
+
+```bash
+ak policy adopt no-curl
+ak policy adopt --all --json
+```
+
+## What adopt refuses
+
+Adopt writes nothing when any of these apply:
+
+- You named no proposal and did not pass `--all`.
+- There are no proposals, or a named id is not among them.
+- A named id already belongs to an active rule. Rename or remove that rule first.
+- A proposal asks for `block`, or claims an origin other than `compiled`.
+- The result would not load, or its rules would conflict with each other.
+
+<Callout type="warning">
+  Adopt rewrites `.agentkit/policy.yaml` in canonical form. No existing rule is
+  changed or removed, but rules are re-sorted by id and YAML comments are not
+  kept. Put notes about a rule in its `reason` field instead.
+</Callout>
+
+## Automation output
+
+`kind` is `policy.adopt`. On success, the `data` payload contains `document`
+(path of the active policy), `adopted` (the adopted ids), and `rules` (the
+number of rules now in force).
+
+When the adoption would make rules conflict, the command exits `4` and the
+payload has the same shape as [`ak policy validate`](./policy-validate):
+`document`, `rules`, `loadable` (`false`), and `conflicts`.
+
+## Exit behavior
+
+| Exit | Meaning | What to do |
+| --- | --- | --- |
+| `0` | The named proposals are in force. | Run [`ak policy status`](./policy-status) to review them. |
+| `1` | No proposals, an unknown id, a proposal that would overwrite an active rule, or another refusal listed above. | Read the message; run `ak policy compile` if there are no proposals. |
+| `2` | Arguments were invalid. | Correct the invocation. |
+| `4` | The resulting document would conflict with itself, so nothing was written. | Resolve the conflict with the existing rule, then adopt again. |
+
+## Related commands
+
+- [`ak policy`](./policy)
+- [`ak policy compile`](./policy-compile)
+- [`ak policy validate`](./policy-validate)

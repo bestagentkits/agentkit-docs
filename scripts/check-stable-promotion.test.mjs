@@ -4,12 +4,19 @@ import { chmod, mkdir, mkdtemp, readFile, rename, rm, symlink, unlink, writeFile
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import {
   checkStablePromotion,
+  resolvePromotionBetaCommit,
+  createPromotionReceipt,
   inventoryDigest,
   promotionReceiptDigest,
+  promotionReceiptPath,
+  absoluteReceiptPath,
 } from './lib/stable-promotion.mjs';
+import { parseManifest } from './lib/manifest.mjs';
+import { syncDesktopAssets } from './lib/desktop-assets.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const projectRoot = join(here, '..');
@@ -45,6 +52,7 @@ async function makePromotedFixture() {
   git(root, ['config', 'commit.gpgsign', 'false']);
 
   await write(root, 'content/docs/beta/index.mdx', '---\ntitle: Beta\n---\nBeta body.\n');
+  await write(root, 'content/docs/beta/desktop-app/index.mdx', '---\ntitle: Desktop\n---\nDesktop v0.42.0-beta.7 package.\n');
   await write(root, 'content/docs/beta/guides/example.mdx', '---\ntitle: Guide\n---\nGuide body.\n');
   await write(
     root,
@@ -260,4 +268,99 @@ test('Stable symlink cannot enter the committed postimage', async (t) => {
     () => checkStablePromotion({ root: fixture.root, base: fixture.base }),
     /non-regular Git entry is not allowed/,
   );
+});
+
+test('resealed arbitrary desktop prose fails derived Layer A postimage', async () => {
+  const fixture = await makePromotedFixture();
+  const assets = [
+    { name: 'ak-gui_0.42.0_darwin_amd64.zip', size: 11, sha256: '1'.repeat(64) },
+    { name: 'ak-gui_0.42.0_darwin_arm64.zip', size: 12, sha256: '2'.repeat(64) },
+    { name: 'ak-gui_0.42.0_linux_amd64.AppImage', size: 13, sha256: '3'.repeat(64) },
+    { name: 'ak-gui_0.42.0_windows_amd64.zip', size: 14, sha256: '4'.repeat(64) },
+  ];
+  await write(fixture.root, 'release-evidence/desktop/v0.42.0.json', `${JSON.stringify({
+    schemaVersion: 1,
+    tag: 'v0.42.0',
+    fromTag: 'v0.42.0-beta.7',
+    assets,
+  }, null, 2)}\n`);
+  await syncDesktopAssets({
+    repoRoot: fixture.root,
+    channel: 'stable',
+    fromTag: 'v0.42.0-beta.7',
+    toTag: 'v0.42.0',
+    assets,
+  });
+  const receiptPath = join(fixture.root, RECEIPT);
+  await unlink(receiptPath);
+  const manifestBytes = await readFile(join(projectRoot, 'fixtures/docs-bundle-stable/manifest.json'));
+  const releaseNotesSourceBytes = await readFile(join(projectRoot, 'fixtures/docs-bundle-stable/release-notes.md'));
+  await createPromotionReceipt({
+    root: fixture.root,
+    baseDocsCommit: fixture.receiptBase,
+    manifest: parseManifest(manifestBytes.toString('utf8'), { expectedChannel: 'stable' }),
+    manifestBytes,
+    releaseNotesSourceBytes,
+    betaRef: 'refs/tags/docs/v0.42.0-beta.7',
+    betaCommit: git(fixture.root, ['rev-parse', 'refs/tags/docs/v0.42.0-beta.7']).stdout.trim(),
+    betaChannelsTagProof: 'v0.42.0-beta.7',
+    receiptPath,
+  });
+  commit(fixture.root, 'bind desktop Layer A');
+  await checkStablePromotion({ root: fixture.root, base: fixture.base });
+
+  const tampered = '---\ntitle: Desktop\n---\nArbitrary prose.\n';
+  await write(fixture.root, 'content/docs/stable/desktop-app/index.mdx', tampered);
+  const receipt = JSON.parse(await readFile(receiptPath, 'utf8'));
+  const row = receipt.stablePostimageInventory.find((item) => item.path === 'desktop-app/index.mdx');
+  const tamperedBytes = Buffer.from(tampered);
+  row.size = tamperedBytes.length;
+  row.sha256 = createHash('sha256').update(tamperedBytes).digest('hex');
+  receipt.stablePostimageInventoryDigest = inventoryDigest(receipt.stablePostimageInventory);
+  receipt.receiptDigest = promotionReceiptDigest(receipt);
+  await writeFile(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`);
+  commit(fixture.root, 'reseal arbitrary desktop prose');
+  await assert.rejects(
+    () => checkStablePromotion({ root: fixture.root, base: fixture.base }),
+    /Stable desktop Layer A is not the derived Beta transform/,
+  );
+});
+
+
+test('immutable correction preserves original tag ancestry and channel identity', async () => {
+  const { root, base } = await makePromotedFixture();
+  git(root, ['checkout', '-q', '-b', 'correction', base]);
+  await write(root, 'content/docs/beta/guides/example.mdx', 'Corrected release-matched guidance.\n');
+  const corrected = commit(root, 'correct historical guidance');
+  const ref = 'refs/tags/docs/v0.42.0-beta.7-correction.1';
+  git(root, ['tag', ref.slice('refs/tags/'.length), corrected]);
+  assert.equal(resolvePromotionBetaCommit(root, 'v0.42.0-beta.7', ref), corrected);
+  assert.equal(resolvePromotionBetaCommit(root, 'v0.42.0-beta.7'), base);
+  const channels = JSON.parse(await readFile(join(root, 'channels.json'), 'utf8'));
+  channels.beta.sha = 'c'.repeat(40);
+  await write(root, 'channels.json', JSON.stringify(channels));
+  const changed = commit(root, 'different product source');
+  git(root, ['tag', 'docs/v0.42.0-beta.7-correction.2', changed]);
+  assert.throws(() => resolvePromotionBetaCommit(root, 'v0.42.0-beta.7', 'refs/tags/docs/v0.42.0-beta.7-correction.2'), /preserve the original channel identity/);
+});
+
+test('marker promotion requires evidence before mutation and binds final output', async () => {
+  const { root, base } = await makePromotedFixture();
+  git(root, ['checkout', '-q', '-b', 'marker-correction', base]);
+  await write(root, 'content/docs/beta/desktop-app/index.mdx', '---\ntitle: Desktop\n---\nAK_DESKTOP_VERSION\n<DesktopDownloads />\n');
+  const corrected = commit(root, 'migrate historical Desktop markers');
+  const ref = 'refs/tags/docs/v0.42.0-beta.7-correction.1';
+  git(root, ['tag', ref.slice('refs/tags/'.length), corrected]);
+  const args = [promoteCli, '--bundle', stableBundle, '--beta-ref', ref, '--repoRoot', root];
+  const missing = spawnSync(process.execPath, args, { encoding: 'utf8' });
+  assert.notEqual(missing.status, 0);
+  assert.match(missing.stderr, /requires target release evidence before mutation/);
+  assert.equal(git(root, ['status', '--porcelain']).stdout, '');
+  const assets = ['darwin_amd64', 'darwin_arm64', 'linux_amd64', 'windows_amd64'].map(platform => ({ name: `ak-gui_0.42.0_${platform}.${platform === 'linux_amd64' ? 'AppImage' : 'zip'}`, size: 123, sha256: 'a'.repeat(64) }));
+  await write(root, 'release-evidence/desktop/v0.42.0.json', JSON.stringify({ schemaVersion: 1, tag: 'v0.42.0', fromTag: 'v0.42.0-beta.7', assets }, null, 2) + '\n');
+  commit(root, 'bind verified target Desktop data');
+  const promoted = spawnSync(process.execPath, args, { encoding: 'utf8' });
+  assert.equal(promoted.status, 0, promoted.stderr);
+  commit(root, 'promote corrected snapshot');
+  await checkStablePromotion({ root, base });
 });

@@ -54,9 +54,9 @@ ak migrate rollback
 
 ## Output and streams
 
-JSON output is a command-specific object, not the shared envelope. Stdout contains `schema_version: 1` and a `status` object with `from`, `dry_run`, `status`, `message`, `schema_version`, and optional `backup_id`. Generic migrations add `discovery`, optional `plan`, `transition_preview`, `terminal`, and `prefs`. Legacy migrations use `legacy_discovery`, `legacy_plan`, optional `legacy_terminal`, and `prefs`.
+JSON output is the shared success envelope with kind `migrate.run`. Its `data` contains a `status` object with `from`, `dry_run`, `status`, `message`, `schema_version`, and optional `backup_id`. Generic migrations add `discovery`, optional `plan`, `transition_preview`, `terminal`, and `prefs`. Legacy migrations use `legacy_discovery`, `legacy_plan`, optional `legacy_terminal`, and `prefs`.
 
-Status values include `planned`, `completed`, `failed`, and `no_candidates`. A failed apply can print the failed JSON status to stdout and a human failure line to stderr. Errors that occur before result construction can be plain text on stderr without a JSON error object. Human progress uses stdout; failures use stderr.
+Status values include `planned`, `completed`, `failed`, and `no_candidates`. A failed apply writes the `migrate.run` envelope with status `failed` to stdout and exits `1` without a second error envelope. Errors that occur before the result is written, including flag-parse errors (exit `2`), write the shared error envelope to stderr. Human progress uses stdout; failures use stderr.
 
 ## Exit status
 
@@ -66,6 +66,7 @@ Status values include `planned`, `completed`, `failed`, and `no_candidates`. A f
 | `1` | Discovery, snapshot, runtime, apply, or partial migration failed. |
 | `2` | Flags or the migration source are invalid. |
 | `3` | Apply lacked `--yes`, or unresolved conflicts block the transition. |
+| `4` | Another AgentKit operation holds the kit lifecycle lock. With `--json`, the error envelope names `error_code` `lock_held`. Retry after it finishes. |
 | `5` | Apply found neither a migratable source nor preferences to migrate. |
 
 ## Effects, safety, and recovery
