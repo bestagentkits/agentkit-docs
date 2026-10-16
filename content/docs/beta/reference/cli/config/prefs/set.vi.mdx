@@ -31,7 +31,7 @@ không có `--dry-run`, `--force` hay preview mode.
 
 ## Validate key và value
 
-Bảy dạng key được chấp nhận:
+Các dạng key sau được chấp nhận:
 
 - `hooks.<name>` — `<name>` phải là basename Hook script dạng kebab-case chữ
   thường, khớp `^[a-z0-9]+(?:-[a-z0-9]+)*$` và không được chứa thêm dấu chấm.
@@ -40,13 +40,11 @@ Bảy dạng key được chấp nhận:
 - `agent_models.<runtime>.<tier>` — `<runtime>` là một trong `claude-code`,
   `codex`, `cursor`, `omp`, hoặc `pi`, và `<tier>` là một trong `inherit`,
   `sonnet`, `opus`, `fable`, hoặc `haiku`.
-- `agent_models.<runtime>.agents.<agent>.<field>` — cùng tập runtime, tên agent
-  dạng kebab-case, và `<field>` là `model`; `codex` và `omp` nhận thêm
-  `reasoning_effort`, một từ chữ thường. `agent_models.omp.roles.<role>.<field>`
-  gán một model role của OMP (`advisor`, `commit`, `default`, `designer`, `plan`,
-  `slow`, `smol`, `task`, `tiny`, hoặc `vision`) theo cùng cách.
-- `skill_routing.cloud_discovery` — literal chính xác, `true` hoặc `false`. Chỉ
-  user scope mới cấp được quyền này; project scope chỉ ghi được `false`.
+- `agent_models.<runtime>.agents.<agent>.<field>` — ghim một Agent, đặt tên
+  theo kebab-case; `<field>` là `model`, và thêm `reasoning_effort` trên
+  `codex` và `omp`.
+- `agent_models.omp.roles.<role>.<field>` — gắn một role OMP với một model;
+  `<field>` là `model` hoặc `reasoning_effort`.
 - `semantic_decision.<leaf>` — `<leaf>` là `enabled`, `provider`, `model`,
   `timeout_ms`, hoặc `consumers.<consumer>`, trong đó `<consumer>` là
   `domain-routing`, `fix-complexity`, `orchestration-risk`,
@@ -57,10 +55,12 @@ Với `hooks.<name>` và `journal.auto`, value phải là literal chữ thườn
 xác `true` hoặc `false`. Với `worktree.root`, value là một filesystem path;
 project scope chỉ chấp nhận relative path (resolve theo project root), còn
 user scope chấp nhận cả relative path (cũng resolve theo project root) lẫn
-absolute path. Với `agent_models.<runtime>.<tier>`, value là model ID sẽ được
-emit cho tier đó: một token không rỗng, chỉ kiểm tra hình dạng chứ không kiểm
-tra catalog có entry với ID đó hay không. Runtime hoặc tier bạn không ghi sẽ
-giữ default catalog tích hợp của adapter tương ứng.
+absolute path. Với key tier hoặc key `model` của `agent_models`, value là
+model ID sẽ được emit: một token không rỗng, chỉ kiểm tra hình dạng chứ không
+kiểm tra catalog có entry với ID đó hay không. Runtime hoặc tier bạn không ghi
+sẽ giữ default catalog tích hợp của adapter tương ứng. Xem
+[Chọn model cho subagent](../../../../guides/choosing-subagent-models#các-key-cấu-hình) để biết thứ tự
+ưu tiên, alias role của OMP và `ak agents model`, lệnh ghi cùng các key này.
 
 ```bash
 ak config prefs set hooks.simplify-gate false
@@ -69,6 +69,7 @@ ak config prefs set journal.auto false
 ak config prefs set worktree.root /Volumes/Portable/agentkit-worktrees
 ak config prefs set worktree.root ../my-app-worktrees --scope project
 ak config prefs set agent_models.cursor.sonnet claude-sonnet-4-6
+ak config prefs set agent_models.claude-code.agents.kongming.model opus
 ak config prefs set semantic_decision.provider typesafe --scope user
 ak config prefs set semantic_decision.enabled true --scope user
 ak config prefs set skill_routing.cloud_discovery true
@@ -77,12 +78,13 @@ ak config prefs set agent_models.codex.agents.kongming.reasoning_effort low --sc
 
 Key như `keys.anthropic`, `api.token`, `telemetry.enabled`, `hooks.Bad-Name`,
 `hooks.a.b`, mọi `journal.<other>`, mọi `worktree.<other>`, mọi
-`agent_models.<runtime>` ngoài tập runtime ở trên, mọi
-`agent_models.<runtime>.<tier>` hoặc field theo agent không được nhận diện, và mọi leaf
+`agent_models.<runtime>` nằm ngoài tập runtime ở trên, mọi tier, field Agent
+hoặc role OMP không được nhận diện, và mọi leaf
 `semantic_decision` không có trong danh sách trên (như
 `semantic_decision.api_key`) bị từ chối
 trước khi ghi preference. Allowlist này ngăn lệnh trở thành editor config
-hoặc secret tổng quát.
+hoặc secret tổng quát. Runtime capability-gated, `grok` hoặc `dsh`, bị từ chối
+kèm lý do; chạy với `--verbose` hoặc `--json` để xem lý do đó.
 
 Với Hook toggle, `false` cho phép Hook có đọc preference này exit sớm ở lần
 chạy tiếp theo; `true` ghi preference ngược lại. Harness registration không
