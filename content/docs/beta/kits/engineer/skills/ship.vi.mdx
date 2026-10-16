@@ -64,7 +64,7 @@ Trước khi bắt đầu:
 | `beta`, `dev` hoặc `next` | Chuẩn hóa thành beta và nhắm tới branch đầu tiên tìm thấy trong `dev`, `beta` hoặc `develop` | Tự động bỏ giai đoạn docs update |
 | `--both` | Chạy beta stage trước, sau đó là stable stage có gate | Thay thế positional mode; stable stage không bao giờ bỏ qua branch protection |
 | `--advice` | Chạy ship-to-PR path dưới sự giám sát chỉ tư vấn của `kongming` | Lời khuyên không thay thế test, review hay security gate |
-| `--merge` | Sau khi tạo PR, chạy `ak:review-pr <PR> --fix --reply --merge` | Cần review được approve, merge hoàn tất và post-merge CI xanh trước khi hoàn tất |
+| `--merge` | Sau khi tạo PR, chạy `ak:review-pr <PR> --fix --reply --merge` | Cần review được approve, merge hoàn tất và post-merge CI xanh trước khi hoàn tất; ở repository batch-landing, việc merge được giao cho landing owner |
 | `--skip-tests` | Bỏ test gate | Chỉ dùng khi đã có bằng chứng tương đương và ghi bằng chứng đó trong PR |
 | `--skip-review` | Bỏ pre-landing review | Giữ rủi ro review rõ ràng; không hàm ý đã approve |
 | `--skip-journal` | Bỏ technical journal chạy nền cùng toàn bộ social step | Không soạn draft, render dry-run hay publish social; code và PR evidence gate không đổi |
@@ -148,6 +148,24 @@ phép tạo issue mới không.
     merge đó đã xanh. Repository dùng promotion có thể thay vào đó báo stable
     stage đang chờ beta merge.
 
+## Land qua batch-landing owner
+
+Một số repository land pull request qua batch-landing owner riêng (merge train,
+landing bot hoặc scheduled routine) thay vì CI theo từng PR và author tự merge.
+`ak:ship` chỉ coi repository là batch-landing khi chính hướng dẫn của repository
+(`CLAUDE.md`, `AGENTS.md`, hoặc tài liệu contributing/workflow) khai báo owner đó;
+Skill không suy ra từ tên branch hay việc thiếu CI. Khi có khai báo:
+
+- Skill chạy local verification mà hướng dẫn đó yêu cầu và đưa bằng chứng được
+  nêu tên (ví dụ dòng verification receipt) vào PR body.
+- Skill tạo PR ở trạng thái ready for review, và chỉ giữ draft khi thiếu bằng
+  chứng đó.
+- Skill dừng sau khi tạo PR và liên kết với plan, kể cả với `--merge`: không chạy `ak:review-pr`,
+  không bật auto-merge, không update branch, không merge và không chờ PR check.
+  Skill báo `Merge=delegated` kèm landing owner và `CI=n/a`.
+- Social publishing chờ landing owner merge, nên `--social` báo là chưa đủ điều
+  kiện.
+
 ## Hiểu ranh giới write
 
 <Callout type="warn" title="Thay đổi chưa commit được tự động bao gồm">
@@ -195,7 +213,7 @@ Kết quả hoàn chỉnh nên có:
 - Kết quả version change, changelog, journal, docs và plan khi phù hợp.
 - Final commit SHA, remote branch đã push và từng PR URL đã validate.
 - Trạng thái advice checkpoint khi yêu cầu `--advice`, cùng review verdict,
-  merge status và CI status khi yêu cầu `--merge`.
+  merge status và CI status khi yêu cầu `--merge`. Merge status là `merged`, `delegated` (kèm landing owner, ở repository batch-landing), `blocked` kèm lý do, hoặc không được yêu cầu.
 - PR body giàu bằng chứng với marker `None`, `Not run` hoặc `Unavailable` trung
   thực thay vì hoạt động được bịa ra.
 - Mọi human action, rủi ro critical đã chấp nhận, screenshot thiếu, CI pending
