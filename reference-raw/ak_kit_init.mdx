@@ -10,7 +10,7 @@ Install or build a kit
 
 ### Synopsis
 
-Load a kit (e.g. engineer, marketing) and emit its content via target adapters. INSTALL writes runtime-native project content by default; --switch-to-plugin selects plugin delivery; --build-only writes output without installing. --fresh resets one selected target to kit-only output.
+Load a kit (e.g. engineer, marketing) and emit its content via target adapters. INSTALL writes runtime-native project content by default; --switch-to-plugin selects plugin delivery; --build-only writes output without installing. --fresh resets one selected target to kit-only output. With AGENTKIT_SKILL_STORE=1, a skill alias preflight runs before any change and exits 6 with skill.alias_collision (owners of one alias in one skills root disagree; every such alias is reported, and install order, --force and --fresh never choose a winner), ownership.modified (a recorded skill file was edited or has no recorded hash; only an explicit --force overwrites it after a snapshot, never --fresh or refresh) or target.link_refused (a link below a skills root). claude-code and codex plan projections; other runtimes that write skills must not share their skills root or aliases with another owner, because they cannot be checked yet, and their legacy ownership records take part as owners.
 
 Effects:
   Project-native mode merges resources into ./.claude and stores lifecycle metadata under ./.agentkit. --force authorizes tracked overwrite after a snapshot. --fresh previews, confirms (scripted runs need --yes, plus --accept-risks &lt;token&gt; when the plan lists safety risks), takes and verifies a recovery snapshot, emits the kit, then removes everything else inside that kit's own lifecycle root plus this kit's stale recorded files; shared runtime roots, sibling kits, and the other project/global install are not reset.
@@ -22,7 +22,7 @@ Exit status:
   3   --fresh reset not run: it needs confirmation or acceptance of listed risks; the JSON plan carries the exact command
   4   another AgentKit operation holds the kit lifecycle lock; retry
   5   kit not found in registry or source
-  6   drifted files detected without --force, or the project directory resolves to the user-level install (use --global)
+  6   drifted files detected without --force, the project directory resolves to the user-level install (use --global), or with AGENTKIT_SKILL_STORE=1 the skill alias preflight refused the change (skill.alias_collision, ownership.modified or target.link_refused)
 
 ```
 ak kit init <kit-name> [flags]
@@ -40,32 +40,33 @@ ak kit init <kit-name> [flags]
 ### Options
 
 ```
-      --accept-risks string     With --fresh: accept exactly the safety risks a previous run listed, by the token it printed (--yes alone never accepts a risk)
-      --beta                    Shorthand for --channel beta
-      --build-only              Build plugin to a local directory instead of installing
-      --channel string          Remote registry channel (beta requires explicit opt-in) (default "stable")
-      --exclude-skills string   Comma-separated skill names to skip while installing the rest of the kit
-      --force                   Overwrite existing output directory
-      --fresh                   Reset one selected installed target to kit-only output after a verified snapshot (Tier 2: confirm, or --yes plus any --accept-risks token when scripted; not with --force/--no-backup/--build-only)
-  -g, --global                  Install into the adapter user directory instead of the current project
-  -h, --help                    help for init
-      --json                    Emit machine-readable JSON (implies --no-interactive)
-      --kits-dir string         Explicit local kits directory for --local or local build development
-      --local                   Install from an explicit --kits-dir or AGENTKIT_KITS_DIR source instead of the remote registry (dev/CI)
-      --no-backup               Skip pre-install recovery snapshots; on native-global Claude installs, also skip ClaudeKit takeover (power users only)
-      --no-interactive          Disable interactive prompts (CI-safe)
-      --out string              Output root directory (requires --build-only for production targets; export-only targets like portable need only --out)
-  -q, --quiet                   Suppress non-error output on stderr
-      --registry-url string     AgentKit registry base URL (default: $AGENTKIT_REGISTRY_URL, then dev/staging https://staging.agentkit.best or release https://agentkit.best)
-      --remote                  Install from the authenticated remote registry (default; explicit use will be deprecated soon) (default true)
-      --select-skills           Interactively choose kit skills before install
-      --skills string           Comma-separated skill names to install from the kit
-      --switch-to-plugin        Explicitly select Claude Code plugin delivery at the chosen project or user/global scope
-      --target string           Emitter target ID or comma-separated IDs (e.g. claude-code,codex,grok) (default "claude-code")
-  -V, --verbose                 Extra diagnostic output on stderr (loses to --quiet)
-      --version string          Remote kit version (defaults to channel latest)
-  -y, --yes                     Assume yes for all prompts
-      --zip                     Also export each portable skill as a ZIP containing SKILL.md, optional README.md, references/, and scripts/ (requires --target portable)
+      --accept-risks string           With --fresh: accept exactly the safety risks a previous run listed, by the token it printed (--yes alone never accepts a risk)
+      --beta                          Shorthand for --channel beta
+      --build-only                    Build plugin to a local directory instead of installing
+      --channel string                Remote registry channel (beta requires explicit opt-in) (default "stable")
+      --exclude-skills string         Comma-separated skill names to skip while installing the rest of the kit
+      --force                         Overwrite existing output directory
+      --fresh                         Reset one selected installed target to kit-only output after a verified snapshot (Tier 2: confirm, or --yes plus any --accept-risks token when scripted; not with --force/--no-backup/--build-only)
+  -g, --global                        Install into the adapter user directory instead of the current project
+  -h, --help                          help for init
+      --json                          Emit machine-readable JSON (implies --no-interactive)
+      --kits-dir string               Explicit local kits directory for --local or local build development
+      --local                         Install from an explicit --kits-dir or AGENTKIT_KITS_DIR source instead of the remote registry (dev/CI)
+      --neutral-package stringArray   Install from a local runtime-neutral kit archive (kit.tar.gz plus its .sha256 sidecar), projected for the selected target; repeat once per component to compose the bundle (dev/CI; implies --local)
+      --no-backup                     Skip pre-install recovery snapshots; on native-global Claude installs, also skip ClaudeKit takeover (power users only)
+      --no-interactive                Disable interactive prompts (CI-safe)
+      --out string                    Output root directory (requires --build-only for production targets; export-only targets like portable need only --out)
+  -q, --quiet                         Suppress non-error output on stderr
+      --registry-url string           AgentKit registry base URL (default: $AGENTKIT_REGISTRY_URL, then dev/staging https://staging.agentkit.best or release https://agentkit.best)
+      --remote                        Install from the authenticated remote registry (default; explicit use will be deprecated soon) (default true)
+      --select-skills                 Interactively choose kit skills before install
+      --skills string                 Comma-separated skill names to install from the kit
+      --switch-to-plugin              Explicitly select Claude Code plugin delivery at the chosen project or user/global scope
+      --target string                 Emitter target ID or comma-separated IDs (e.g. claude-code,codex,grok) (default "claude-code")
+  -V, --verbose                       Extra diagnostic output on stderr (loses to --quiet)
+      --version string                Remote kit version (defaults to channel latest)
+  -y, --yes                           Assume yes for all prompts
+      --zip                           Also export each portable skill as a ZIP containing SKILL.md, optional README.md, references/, and scripts/ (requires --target portable)
 ```
 
 ### SEE ALSO
