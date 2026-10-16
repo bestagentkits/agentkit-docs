@@ -1,0 +1,153 @@
+---
+title: ak skills exec
+description: Chạy một entrypoint Skill đã được cấp quyền qua isolation broker, ghim theo digest, không hỏi, và từ chối trước mọi lần spawn.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak skills exec` để chạy một entrypoint script đã khai báo của Skill đã
+cài. Broker xác minh nội dung chính xác, release state, manifest và grant hiện
+có, rồi chạy script trong một isolation backend. Việc chạy không bao giờ hỏi:
+grant phải có sẵn từ [`ak skills grants add`](./grants/add).
+
+## Cách dùng
+
+```bash
+ak skills exec <@publisher/slug@sha256:<hex>> --entrypoint <name> [flags] [-- args...]
+```
+
+Reference phải được ghim bằng digest `sha256` gồm 64 ký tự hex thường. Version,
+tag hoặc range bị từ chối với mã thoát `2`. Argument sau `--` đi thẳng vào argv
+của script, không qua shell.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--entrypoint <name>` | bắt buộc | Chọn entrypoint đã khai báo. |
+| `--input <name=path>` | Trống | Gắn một input; lặp lại được. |
+| `--output <dir>` | Trống | Sao chép file `$OUTPUT` vào thư mục rỗng hoặc mới. Chỉ cho phép nếu entrypoint khai báo ghi vào `$OUTPUT`. |
+| `--timeout <duration>` | Giới hạn manifest | Đặt giới hạn ngắn hơn giới hạn của manifest. Phải dương. |
+| `--project <root>` | Trống | Tìm grant theo project của root này trước, sau đó đến grant global. |
+| `--dry-run` | `false` | Chạy mọi kiểm tra và self-test của backend mà không spawn script. |
+
+Các cờ dùng chung nằm trong [quy ước CLI](../cli-conventions).
+
+## Điều kiện
+
+Cần `AGENTKIT_SKILL_EXEC_BROKER=1`, đúng giá trị đó. Nếu không, lệnh lỗi
+`exec.disabled` và thoát `2`, không đọc hay ghi gì.
+
+## Pipeline của broker
+
+Mọi từ chối xảy ra trước khi script nào được spawn.
+
+1. Xác minh entry trong content store vào một bản sao chỉ đọc. Không tải gì.
+2. Kiểm tra release state của mọi origin ghi trong lock của project và global.
+   Tree không lock nào ghi nhận bị từ chối với `exec.state_refused`; hãy cài
+   trước. Release SkillX bị yank, quarantine hoặc revoke bị từ chối. Nếu SkillX
+   bị tắt hoặc cấu hình sai, lần chạy bị từ chối. Nếu không kết nối được SkillX,
+   lần kiểm tra online gần nhất còn giá trị 7 ngày và thêm cảnh báo
+   `offline_stale`.
+3. Validate `agentkit-exec.json` với các script khai báo đã ký.
+4. Gắn interpreter theo đường dẫn và `sha256`.
+5. Chạy audit script mang tính tham khảo.
+6. Chọn isolation backend thực thi được mọi capability mà entrypoint cần. Các
+   backend trong source là Linux bubblewrap, Windows AppContainer và container
+   engine (`docker` hoặc `podman`). Grant container gắn một image ghim theo
+   digest và đường dẫn interpreter bên trong. Host không có backend thực thi
+   được sẽ bị từ chối.
+7. Khớp một grant.
+
+Lần chạy bằng root, LocalSystem hoặc administrator đã nâng quyền bị từ chối với
+`exec.elevated_refused` và mã thoát `7`.
+
+## Secret
+
+Secret đã khai báo cần một grant `ak secrets` với `--agent` đặt là tree digest và
+`--purpose skill-exec:<identity>@<digest>#<entrypoint>`.
+
+- Mỗi lần chạy tiêu một lượt dùng.
+- Giá trị chỉ được chuyển dưới dạng file chỉ đọc `secrets/<name>` cạnh
+  `$OUTPUT`, hoặc biến ánh xạ trong manifest. Nó bị xoá khi lần chạy kết thúc.
+- Giá trị bị xoá khỏi output và lỗi. File output chứa giá trị bị từ chối với
+  `exec.secret_exposed`.
+- Giá trị ngắn hơn độ dài tối thiểu lỗi `exec.secret_unavailable`.
+- Một dòng audit secret và redaction manifest được ghi dưới
+  `AGENTKIT_HOME/secrets`.
+- Với `--json` hoặc `--no-interactive`, passphrase của vault không bao giờ được
+  hỏi và lần chạy fail closed.
+
+Qua [`ak skills mcp serve`](./mcp/serve), entrypoint khai báo secret bị từ chối;
+hãy dùng CLI.
+
+## File output và đầu ra script
+
+`stdout` và `stderr` của script bị giới hạn, đã che secret, đã vô hiệu hoá ký tự
+điều khiển và là untrusted. Việc che nạp các redaction manifest của home; nếu
+không nạp được, lần chạy bị từ chối với `exec.redaction_unavailable`.
+
+Với `--output`, file chỉ được sao chép sau khi script thoát `0` và sandbox đã
+biến mất. Link không bao giờ được sao chép, và tổng dung lượng giới hạn 64 MiB.
+
+## Dry run
+
+`--dry-run` chạy các kiểm tra và self-test của backend. Nó không spawn script,
+không tiêu lượt dùng secret, và không ghi thư mục run hay record nào dưới
+`AGENTKIT_HOME`. Bước kiểm tra grant vẫn có thể dọn grant hết hạn, và cache
+SkillX có thể được làm mới. Bản sao đã xác minh nằm trong thư mục temp của OS và
+bị xoá; bản cũ hơn một ngày bị dọn.
+
+Dry run thoát `0` ngay cả khi lần chạy sẽ bị từ chối. `wouldRun` báo kết quả và
+`decision.refusals` liệt kê lý do.
+
+## Tác động
+
+| Đường dẫn | Tác động |
+| --- | --- |
+| `AGENTKIT_HOME/tmp/exec-runs` | Bản sao đã xác minh, chỉ đọc cho lần chạy. |
+| `AGENTKIT_HOME/state/exec/runs` | Audit record, ghi là `started` trước khi spawn và được thay bằng kết quả. |
+| `AGENTKIT_HOME/state/exec/release-state` | Record release-state từ lần kiểm tra online gần nhất. |
+
+## Đầu ra
+
+JSON dùng `kind=skills.exec` với các trường sau dưới `data`:
+
+```text
+runId, dryRun, wouldRun, untrusted, provenance
+identity, identityVerified, treeDigest
+entrypoint: name, path
+capabilityDigest
+interpreter: name, sha256, image
+grantId, grantCode, grantDetail
+decision: backend, allowed, refusals
+state, summary[], audit
+exitCode, durationMs, stdout, stderr, outputTruncated, controlBytes
+outputs[], skippedOutputs, outputDir, warnings[]
+```
+
+`provenance` có dạng `<id>@<digest> entrypoint <name> via <backend>`.
+
+<Callout type="warning">
+  Grant gắn identity, tree digest, entrypoint, capability digest và interpreter.
+  Nếu bất kỳ thứ nào đổi, lần chạy bị từ chối cho đến khi tạo grant mới. Đầu ra
+  của script là dữ liệu untrusted, không phải chỉ dẫn.
+</Callout>
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Script thoát `0`, hoặc dry run đã xong. |
+| `1` | Timeout, bị huỷ, chạm giới hạn output, hoặc ghi audit thất bại. |
+| `2` | Broker bị tắt, cờ không hợp lệ, reference có thể đổi, manifest không hợp lệ, request bị từ chối (`exec.request_denied`), hoặc interpreter không khả dụng. |
+| `5` | Không tìm thấy store entry hoặc entrypoint. |
+| `7` | Chưa được grant, capability đã đổi, không có backend thực thi, release state bị từ chối hoặc cũ, xác minh thất bại, secret không thể cấp, hoặc output chứa secret. |
+| `1`-`255` | Mã thoát khác 0 của chính script được chuyển tiếp. Kết quả vẫn được hiển thị và hộp lỗi bị ẩn. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skills exec`](../cli/ak_skills_exec)
+- [Grant một entrypoint](./grants/add)
+- [Liệt kê grant](./grants/list)
+- [Chạy Skill như MCP tool](./mcp/serve)

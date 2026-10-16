@@ -1,0 +1,113 @@
+---
+title: ak skills route
+description: Chọn Skill cục bộ khớp với một intent, hoặc xác nhận Skill bạn nêu tên, kèm bước gợi ý cloud ẩn danh tuỳ chọn.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak skills route` để tìm Skill đã cài phù hợp với một intent. Lệnh đọc các
+skill root cục bộ, chấm điểm và báo một kết quả. Lệnh chỉ đọc và idempotent.
+
+## Cách dùng
+
+```bash
+ak skills route [intent...] [--explicit <name>]
+```
+
+Các từ được ghép thành một intent. Intent dài tối đa 8 KiB UTF-8 hợp lệ.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--explicit <name>` | Trống | Nêu tên Skill trực tiếp. Nhận identity, alias, `/ak:name`, `$ak:name` hoặc `kit/alias`. `kit/alias` chọn bản của Kit đó. |
+
+Tên xuất hiện bên trong nội dung intent không bao giờ được coi là explicit. Các
+cờ dùng chung nằm trong [quy ước CLI](../cli-conventions).
+
+## Skill root
+
+Các root được đọc theo thứ tự ưu tiên sau. Thư mục trùng bị loại.
+
+| Root | Vị trí | Layout |
+| --- | --- | --- |
+| User | `<claude home>/skills` | Phẳng |
+| Project | `<cwd>/.claude/skills` | Phẳng |
+| Plugin | Plugins root của Claude | Kit |
+| Kits | `AGENTKIT_KITS_DIR` hoặc `./kits` | Kit; Skill được báo là available |
+
+Root được đọc qua `os.Root`, không theo symlink, và mỗi lần đọc `SKILL.md` bị
+giới hạn 256 KiB.
+
+## Kết quả
+
+| Kết quả | Ý nghĩa |
+| --- | --- |
+| `NONE` | Không Skill nào vượt ngưỡng điểm. |
+| `selected` | Một Skill được chọn. Độ tin cậy là `exact`, `high`, `medium` hoặc `low`. |
+| `clarify` | Hai hoặc ba candidate sát nhau; candidate thứ hai đạt ít nhất 90% điểm của candidate đầu. |
+| `error` | Không route được request. Xem `errors[]`. |
+
+Chỉ Skill có exposure `AUTO` mới được suy ra từ intent. Skill `EXPLICIT` chỉ do
+người dùng gọi, và Skill `INTERNAL` trả `route.not_invocable`.
+
+## Đầu ra
+
+JSON dùng `kind=skills.route` và schema `agentkit.skill-route/v1`:
+
+```text
+outcome, explicit
+candidates[]: identity, alias, intent, exposure, reasons, confidence, score,
+              permissions{sideEffectClass, executable},
+              source{provider, kit, runtime, location, root},
+              cacheState, states
+roster: entries, scored, bytes, estimatedTokens
+warnings[], errors[], cloud?
+```
+
+Các mã cảnh báo gồm `catalog.shadowed`, `catalog.root_unreadable`,
+`catalog.entry_skipped`, `catalog.empty`, `skill.exposure_unreadable`,
+`store.unavailable` và `cloud.policy_invalid`. Khi `AGENTKIT_SKILL_STORE=1`,
+`store.unavailable` báo rằng các lock entry dựa trên store chưa có trong bản
+build này.
+
+## Cloud discovery
+
+Mặc định lệnh không gửi request mạng nào. Một lần tìm kiếm SkillX ẩn danh chỉ
+được gửi khi cả bốn điều kiện đều đúng:
+
+1. Đặt `AGENTKIT_SKILLX=1`.
+2. `config.yaml` của người dùng dưới `AGENTKIT_HOME` đặt
+   `skill_routing: cloud_discovery: true`. Chỉ config người dùng mới cấp được
+   quyền này. `.agentkit/config.yaml` của project chỉ có thể tắt bằng cách đặt
+   khoá thành `false`. Policy không hợp lệ cho `cloud.policy_invalid` và không
+   gửi gì.
+3. Không có giới hạn nào từ project.
+4. Kết quả cục bộ đủ điều kiện: route được suy ra, không phải explicit, không có
+   lỗi, và kết quả là `NONE` hoặc `clarify` không có candidate đã cài.
+
+<Callout type="warning">
+  Lần tìm kiếm không mang credential. Query chỉ gồm từ khoá, tối đa 128 byte,
+  đã che code, secret, URL, email, đường dẫn, số và địa chỉ. Khối `cloud` ghi
+  lại `sentQuery` và các `redactions` đã áp dụng.
+</Callout>
+
+Kết quả cloud tối đa 5 gợi ý. Chúng là untrusted, không bao giờ cài được từ kết
+quả route, và không đổi outcome hay candidate cục bộ. `nextSteps` trỏ tới
+`ak skills inspect` và `ak skills install <id> --dry-run`. `cloud.status` là
+`searched`, `skipped` hoặc `failed`.
+
+## Tác động và mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Route hoàn tất không có lỗi, kể cả `NONE`. Root hoặc Kit không đọc được chỉ là cảnh báo. |
+| `1` | `errors[]` không rỗng: `skill.alias_collision`, `route.not_found` cho tên không biết, `route.not_invocable` hoặc `catalog.unavailable`. |
+| `2` | `route.invalid_request` (thiếu intent, runtime hoặc limit sai) hoặc `identity.invalid` cho `--explicit` sai định dạng. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skills route`](../cli/ak_skills_route)
+- [Inspect một release SkillX](./inspect)
+- [Cài một Skill](./install)
+- [Liệt kê local skill](./list)

@@ -1,0 +1,71 @@
+---
+title: ak skills grants
+description: Record, list, and revoke the permission that lets one skill entrypoint run through the exec broker.
+---
+
+Use `ak skills grants` to manage exec grants. A grant is the only way to allow
+[`ak skills exec`](../exec) to run an entrypoint, because execution itself never
+prompts. Running the group command prints help and exits `0`.
+
+## Usage
+
+```bash
+ak skills grants <command>
+```
+
+The group accepts no positional arguments and has no flags of its own.
+
+## Requirements
+
+All grants subcommands need `AGENTKIT_SKILL_EXEC_BROKER=1`, with exactly that
+value. With it off they fail with `exec.disabled` and exit `2`, and read or
+write nothing.
+
+## What a grant is
+
+The grants file is `AGENTKIT_HOME/state/exec/grants.json`, schema
+`agentkit.skill-exec-grants/v1`. It is written atomically and is owner-only.
+The store lock waits 5 seconds; a busy store exits `1`.
+
+- A grant never expires and holds no secret.
+- It binds the identity, tree digest, entrypoint name and path, capability
+  digest, interpreter, and scope. The interpreter is a host binary path and
+  `sha256`, or a container image and path. If any of these changes, the old
+  grant no longer applies and a new one is needed. A capability that grows past
+  an earlier grant fails with `exec.capability_changed`.
+- The scope is global by default, or one project (a root path and identity)
+  with `--project`. A project-scoped run also matches a global grant.
+- The grant id is `eg-<16 hex>`, derived from the key. Granting the same key
+  again is a no-op that prints `Already granted as <id>`.
+- A label is at most 128 printable characters.
+
+## Subcommands
+
+| Command | Outcome | Disk effect |
+| --- | --- | --- |
+| `ak skills grants add <ref> --entrypoint <name>` | Verify the entrypoint and record a grant. | Writes the grants file. |
+| `ak skills grants list` | List recorded grants. | Read-only. |
+| `ak skills grants revoke <grant-id> \| --all` | Remove one grant or all grants. | Writes the grants file. |
+
+Shared flags are described in [CLI conventions](../../cli-conventions).
+
+## Output and exits
+
+Each subcommand writes human output or one JSON envelope. JSON kinds are
+`skills.grants.add`, `skills.grants.list`, and `skills.grants.revoke`.
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Success. |
+| `1` | Command failure, such as a busy grants store. |
+| `2` | The broker is disabled, flags or arguments are invalid, the manifest is invalid, or the interpreter is unavailable. |
+| `5` | The store entry, entrypoint, or grant was not found. |
+| `7` | The store entry failed verification, or the grants file is invalid (`exec.grants_invalid`, `exec.snapshot_refused`). |
+
+## Related commands
+
+- [Complete `ak skills grants` command facts](../cli/ak_skills_grants)
+- [Run a granted entrypoint](../exec)
+- [Add a grant](./add)
+- [List grants](./list)
+- [Revoke grants](./revoke)
