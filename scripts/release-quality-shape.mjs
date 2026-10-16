@@ -18,9 +18,10 @@ export const RELEASE_SHAPE_BASELINE = Object.freeze({
   // The approved Stable docs exception adds guides/pi-extensions in both locales.
   // Beta adds the bilingual guides/semantic-decision-experiments and
   // reference/cli/describe routes, plus the kits/marketing/skills/filmmaking
-  // guide, ahead of promotion.
-  sourceRoutesPerLocaleChannel: { stable: 490, beta: 493 },
-  routesPerLocaleChannel: { stable: 489, beta: 492 },
+  // guide, ahead of promotion. The bilingual guides/jev-clef adds an Agent-first entry, and
+  // guides/choosing-ui-testing-skills adds a Beta-only guide.
+  sourceRoutesPerLocaleChannel: { stable: 490, beta: 495 },
+  routesPerLocaleChannel: { stable: 489, beta: 494 },
   reviewedSourceOnlyRoutes: [
     {
       route: 'changelog',
