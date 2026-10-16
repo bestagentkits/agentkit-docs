@@ -1,0 +1,105 @@
+---
+title: ak license devices
+description: List the devices activated against your AgentKit App license, including which one is the current device.
+---
+
+Use `ak license devices` to see every device bound to your AgentKit App
+license, for example before you free a slot with
+[`ak license devices deactivate`](./deactivate). The command is read-only.
+
+## Usage
+
+```bash
+ak license devices [flags]
+```
+
+The command takes no positional arguments.
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--registry-url <url>` | Environment or release default | Override the AgentKit registry base URL. |
+
+Shared flags such as `--json` are described in
+[CLI conventions](../../cli-conventions). The command never prompts, so
+`--yes` and `--no-interactive` do not change it.
+
+## Before you run
+
+You need a license-key session from `ak login --license-key`; see
+[`ak login`](../../login). The command reads `~/.agentkit/auth/session.json`
+(under `AGENTKIT_HOME` when set) and uses the stored device session token. It
+writes nothing locally.
+
+It then calls `GET /api/agentkit/licenses/devices` on the registry with that
+token as a bearer credential, reading pages of up to 100 devices until the
+reported total is reached (at most 50 pages). Each request times out after 15
+seconds. A response whose `status` is not `active` is an error.
+
+## Output
+
+Human output lists a count and one line per device: id, name, platform, first
+seen, and last seen. The current device ends with `(this device)`, and an empty
+name prints as `(unnamed device)`.
+
+```text
+[i] Devices (1)
+dev_abc123  Work laptop  darwin-arm64  first seen 2026-01-01T00:00:00.000Z  last seen 2026-09-24T00:00:00.000Z  (this device)
+```
+
+With no devices it prints `No devices found.`
+
+`--json` writes the shared envelope with kind `license.devices`:
+
+```json
+{
+  "schema_version": 1,
+  "kind": "license.devices",
+  "data": {
+    "devices": [
+      {
+        "id": "dev_abc123",
+        "deviceName": "Work laptop",
+        "platform": "darwin-arm64",
+        "appVersion": "1.2.3",
+        "firstSeenAt": "2026-01-01T00:00:00.000Z",
+        "lastSeenAt": "2026-09-24T00:00:00.000Z",
+        "isCurrentDevice": true
+      }
+    ],
+    "total": 1,
+    "unsupported": false
+  }
+}
+```
+
+`appVersion` appears in JSON only. Use `id` as the `<device-id>` for
+`deactivate`.
+
+### License server without device support
+
+If the registry answers the device route with a bare `404`, `405` or `501` and
+no error code, the command treats it as not supported yet. It prints
+`Device list not available yet: the license server does not offer it. Your devices stay active.`
+and exits `0`. In JSON mode, `devices` is `[]`, `total` is `0`, and
+`unsupported` is `true`. Check `unsupported` before treating an empty list as
+"no devices".
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | The list was printed, including an empty list or the unsupported notice. | Read `data.devices` and `data.unsupported`. |
+| `1` | No license-key session, registry mismatch, session store failure, or a registry or network error. | Run `ak login --license-key` against the intended registry, then retry. |
+| `2` | A flag could not be parsed. | Correct the invocation. |
+
+With `--json`, errors use the shared JSON error envelope on stderr.
+
+## Related commands
+
+- [`ak license devices deactivate`](./deactivate)
+- [`ak license`](../index)
+- [`ak login`](../../login)
+- [Complete `ak license devices` command facts](../../cli/ak_license_devices)
+- [CLI conventions](../../cli-conventions)

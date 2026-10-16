@@ -1,0 +1,114 @@
+---
+title: ak license devices deactivate
+description: Huỷ kích hoạt một thiết bị trên license AgentKit App của bạn, kèm quy tắc xác nhận và điều xảy ra khi huỷ thiết bị hiện tại.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak license devices deactivate` để gỡ một thiết bị khỏi license AgentKit
+App của bạn. Registry thu hồi session của thiết bị đó, nên thiết bị không còn
+validate hay dùng được AgentKit Desktop.
+
+## Cách dùng
+
+```bash
+ak license devices deactivate <device-id> [flags]
+```
+
+Truyền đúng một `<device-id>`: `id` hiển thị bởi
+[`ak license devices`](./index). Khoảng trắng hai đầu được cắt bỏ. Id phải dài
+1 đến 128 ký tự gồm chữ cái, chữ số, `_` và `-`; mọi giá trị khác, kể cả `.` và
+`..`, bị từ chối trước khi gửi bất kỳ request nào.
+
+## Tuỳ chọn của lệnh
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--registry-url <url>` | Biến môi trường hoặc mặc định của bản phát hành | Ghi đè base URL của registry AgentKit. |
+| `-y, --yes` | `false` | Bỏ qua bước hỏi xác nhận. |
+
+Các cờ dùng chung khác được mô tả trong [quy ước CLI](../../cli-conventions).
+Lệnh không có `--dry-run`.
+
+## Xác nhận
+
+Mặc định lệnh hỏi trên stderr và đọc câu trả lời từ stdin:
+
+```text
+Deactivate device dev_abc123? This signs it out of AgentKit Desktop. [y/N]:
+```
+
+Chỉ `y`, `Y`, `yes`, `YES` hoặc `Yes` mới tiếp tục. Mọi câu trả lời khác, kể cả
+để trống, in `[i] cancelled`, không gửi request và thoát `3`.
+
+Với `--no-interactive` hoặc `--json`, bắt buộc có `--yes`. Nếu thiếu, lệnh thoát
+`2` trước khi gửi request, nên script phải nói rõ ý định:
+
+```bash
+ak license devices deactivate dev_abc123 --yes
+ak license devices deactivate dev_abc123 --yes --json
+```
+
+## Lệnh làm gì
+
+1. Validate id, rồi áp dụng quy tắc xác nhận ở trên.
+2. Nạp session license-key từ `~/.agentkit/auth/session.json` (dưới
+   `AGENTKIT_HOME` nếu được đặt), do [`ak login --license-key`](../../login) tạo.
+3. Gửi `POST /api/agentkit/licenses/devices/<device-id>/deactivate` với device
+   session token của bạn làm bearer credential.
+4. Nếu `<device-id>` là thiết bị hiện tại, xoá license session cục bộ để máy này
+   bị đăng xuất khỏi Desktop ngay. Slot chỉ bị xoá khi vẫn giữ cùng token, nên
+   lần đăng nhập mới hơn không bị xoá nhầm.
+
+Huỷ kích hoạt thiết bị khác sẽ đăng xuất máy đó từ xa và không đụng tới session
+cục bộ của bạn. Thao tác này idempotent.
+
+<Callout type="warning">
+  Huỷ kích hoạt thiết bị hiện tại sẽ xoá license session cục bộ. Hãy chạy lại
+  `ak login --license-key` để kích hoạt lại máy này.
+</Callout>
+
+## Đầu ra
+
+Đầu ra dành cho người dùng khi thành công:
+
+```text
+[ok] Device deactivated: dev_abc123
+[i] This was the current device; its local license session was cleared.
+```
+
+Dòng thứ hai chỉ xuất hiện với thiết bị hiện tại. `--json` ghi kind
+`license.devices.deactivate`:
+
+```json
+{
+  "schema_version": 1,
+  "kind": "license.devices.deactivate",
+  "data": {
+    "status": "deactivated",
+    "deviceId": "dev_abc123",
+    "signedOut": false
+  }
+}
+```
+
+`signedOut` là `true` khi thiết bị bị huỷ chính là thiết bị hiện tại.
+
+## Hành vi thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Thiết bị đã được huỷ kích hoạt. | Chạy [`ak license devices`](./index) để xác nhận. |
+| `1` | Không có session license-key, registry mismatch, lỗi registry hoặc mạng, license server chưa hỗ trợ quản lý thiết bị, hoặc thiết bị đã bị huỷ nhưng việc xoá session cục bộ thất bại. | Khắc phục nguyên nhân rồi thử lại; thao tác này idempotent. |
+| `2` | Device id không hợp lệ, thiếu `--yes` ở chế độ không tương tác hoặc JSON, hoặc parse cờ thất bại. | Sửa cách gọi. |
+| `3` | Bạn từ chối bước xác nhận. | Chạy lại và trả lời `y`, hoặc truyền `--yes`. |
+
+Với `--json`, lỗi dùng error envelope JSON dùng chung trên stderr.
+
+## Lệnh liên quan
+
+- [`ak license devices`](./index)
+- [`ak license`](../index)
+- [`ak login`](../../login)
+- [Thông tin đầy đủ của lệnh `ak license devices deactivate`](../../cli/ak_license_devices_deactivate)
+- [Quy ước CLI](../../cli-conventions)
