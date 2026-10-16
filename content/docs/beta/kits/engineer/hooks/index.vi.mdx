@@ -45,7 +45,8 @@ commit, merge, deploy hay phát hành công việc thay bạn.
 
 ## Context firewall và agent behavior linter
 
-Hook `context-firewall` chạy trước các lệnh `Bash`, `Read`, `Grep` và `Glob`,
+Hook `context-firewall` chạy trước các lệnh `Bash`, `PowerShell`, `Read`, `Grep`
+và `Glob`,
 rồi ước tính lượng nội dung mà lệnh đó có thể trả về. Hook cho phép lệnh thông
 thường, cảnh báo mà không chặn, hoặc chặn lệnh và nêu một cách thay thế có giới
 hạn:
@@ -54,7 +55,7 @@ hạn:
 | --- | --- | --- |
 | Đọc toàn bộ tệp mà không có `offset`, `limit` hay khoảng trang | Tệp từ 256 KB trở lên | Tệp từ 2 MB trở lên |
 | Search ở output mode `content` mà không có `head_limit` từ 100 trở xuống | Mọi pattern khác | Pattern mà check scout đã xem là quá rộng |
-| Lệnh shell in toàn bộ một tệp, ví dụ `cat` | Tệp từ 128 KB trở lên | Tệp từ 512 KB trở lên |
+| Lệnh shell in toàn bộ một tệp, ví dụ `cat` hoặc `Get-Content` | Tệp từ 128 KB trở lên | Tệp từ 512 KB trở lên |
 | Stream log không giới hạn, search hoặc duyệt cây thư mục đệ quy, hay toàn bộ lịch sử hoặc diff Git | Luôn luôn | — |
 
 Khi cùng một thao tác đã bị cảnh báo chạm tới lần can thiệp thứ ba trong một
@@ -78,12 +79,20 @@ Hook](../../../guides/managing-hook-preferences).
 
 ## Phê duyệt truy cập tệp nhạy cảm
 
-Hook `privacy-block` chạy trước các lệnh gọi `Read`, `Write`, `Edit` và `Bash`,
+Hook `privacy-block` chạy trước các lệnh gọi `Read`, `Write`, `Edit`, `Bash` và
+`PowerShell`,
 bảo vệ các tệp dotenv như `.env` và `.env.local`, tệp credentials,
 `secrets.yaml` hoặc `secret.yml`, tệp `.pem` và `.key`, cùng SSH private key.
 Lần truy cập đầu tiên vào một path như vậy bị từ chối trên mọi runtime và mọi
 đường công cụ, kể cả path nằm trong lệnh shell và các chỉnh sửa Codex
-`apply_patch` đi qua matcher `Edit` và `Write`. Các tệp mẫu như `.env.example`,
+`apply_patch` đi qua matcher `Edit` và `Write`. Việc kiểm tra lệnh shell cũng
+bao gồm những gì một shell đọc stdin (`sh`, `bash -s`, `iex`) chạy từ một đoạn
+pipeline phía trước, đoạn script truyền vào `[scriptblock]::Create` hoặc
+`InvokeScript`, lệnh chạy qua `Start-Process` hoặc `xargs`, và các wrapper có
+option nhận giá trị như `sudo -u`, `wsl -d` hoặc `timeout -s`. Tên tệp dotenv
+được ghép bằng phép nối chuỗi PowerShell, khớp qua glob bắt đầu bằng dấu chấm,
+hoặc viết dưới dạng NTFS alternate data stream hay tên ngắn 8.3 của Windows cũng
+được nhận diện. Các tệp mẫu như `.env.example`,
 `.env.sample` và `.env.template` vẫn được phép, và một biểu thức mã nguồn như
 `process.env.API_KEY` không bị coi là path tệp.
 
@@ -124,24 +133,28 @@ Hook](../../../guides/managing-hook-preferences).
 
 ## Tham chiếu secret trong lệnh gọi công cụ
 
-Hook `secrets-inject` chạy trước các lệnh gọi `Bash` và `WebFetch`. Khi một
-lệnh shell hoặc URL fetch chứa tham chiếu `${secret:NAME}`, Hook hỏi
+Hook `secrets-inject` chạy trước các lệnh gọi `Bash`, `PowerShell` và
+`WebFetch`. Khi một lệnh shell hoặc URL fetch chứa tham chiếu `${secret:NAME}`,
+Hook hỏi
 `ak secrets resolve` để lấy giá trị đã lưu và thay thế trong bộ nhớ, nhờ đó
-model có thể soạn lệnh gọi mà không nhìn thấy credential. Chỉ `Bash.command` và
-`WebFetch.url` được quét; nội dung tệp và prompt được giữ nguyên. Grant
+model có thể soạn lệnh gọi mà không nhìn thấy credential. Chỉ `Bash.command`,
+`PowerShell.command` và `WebFetch.url` được quét; nội dung tệp và prompt được giữ nguyên. Grant
 [`ak secrets`](../../../reference/cli/secrets) cho binary agent đang gọi quyết định giá trị có được
 giải phóng hay không, và grant bị giới hạn bằng `--allow-host` còn kiểm tra đích
 fetch.
 
 Mọi lỗi đều chặn lệnh gọi công cụ thay vì chuyển nguyên văn tham chiếu đi,
 bao gồm thiếu grant, tên không hợp lệ hoặc giá trị có ký tự đặc biệt của shell
-khi đi vào một lệnh `Bash`. Hook không ghi bản sao nào của giá trị, nhưng input
+khi đi vào một lệnh `Bash` hoặc `PowerShell`. Riêng với lệnh `PowerShell`, giá
+trị chứa `,`, `@` hoặc dấu nháy typographic cũng bị từ chối, vì PowerShell sẽ
+đọc chúng thành dấu tách mảng, splat hoặc dấu nháy; hãy truyền giá trị như vậy
+qua biến môi trường. Hook không ghi bản sao nào của giá trị, nhưng input
 đã thay thế vẫn tới process của công cụ và mọi thứ runtime ghi lại cho một lệnh
 gọi đã thực thi, chẳng hạn transcript. Hãy coi giá trị đã giải phóng là có mặt
 trên host và rotate khi cần.
 
-Claude Code và Grok đăng ký Hook cho `Bash|WebFetch`, còn Codex thu hẹp thành
-`Bash`. Hỗ trợ Cursor cho Hook này chưa được xác lập trong bản phát hành này.
+Claude Code và Grok đăng ký Hook cho `Bash|PowerShell|WebFetch`, còn Codex thu
+hẹp thành `Bash`. Hỗ trợ Cursor cho Hook này chưa được xác lập trong bản phát hành này.
 
 ## Liveness cho cập nhật nền tự động
 
@@ -195,16 +208,18 @@ một group bị drop hoàn toàn và bốn matcher bị thu hẹp:
 - Matcher `PostToolUse` `Agent|Task|TodoWrite|TodoRead` với handler
   `session-state.cjs` bị drop hoàn toàn. Các đăng ký `Stop` và `SubagentStop`
   riêng vẫn còn.
-- `Read|Write|Edit|Bash` trở thành `Write|Edit|Bash`, bỏ `Read` nhưng giữ
+- `Read|Write|Edit|Bash|PowerShell` trở thành `Write|Edit|Bash`, bỏ `Read` và
+  `PowerShell` nhưng giữ
   `privacy-block.cjs` hoạt động cho các atom được hỗ trợ. Các thao tác đọc trên
   Codex qua MCP và local function tool không được bảo vệ; xem [Phê duyệt truy
   cập tệp nhạy cảm](#phê-duyệt-truy-cập-tệp-nhạy-cảm).
-- `Bash|Read` trở thành `Bash`, bỏ `Read` nhưng giữ `scout-block.cjs` hoạt động
-  cho Bash.
-- `Bash|Read|Grep|Glob` trở thành `Bash`, bỏ `Read`, `Grep` và `Glob` nhưng giữ
+- `Bash|PowerShell|Read` trở thành `Bash`, bỏ `PowerShell` và `Read` nhưng giữ
+  `scout-block.cjs` hoạt động cho Bash.
+- `Bash|PowerShell|Read|Grep|Glob` trở thành `Bash`, bỏ `PowerShell`, `Read`,
+  `Grep` và `Glob` nhưng giữ
   `context-firewall.cjs` hoạt động cho Bash.
-- `Bash|WebFetch` trở thành `Bash`, bỏ `WebFetch` nhưng giữ `secrets-inject.cjs`
-  hoạt động cho Bash.
+- `Bash|PowerShell|WebFetch` trở thành `Bash`, bỏ `PowerShell` và `WebFetch`
+  nhưng giữ `secrets-inject.cjs` hoạt động cho Bash.
 
 Các đăng ký `agent-behavior-linter.cjs` trên `PostToolUse`, `PreCompact` và
 `Stop` được projection mà không bị thu hẹp.

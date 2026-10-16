@@ -44,8 +44,8 @@ commit, merge, deploy, or release work for you.
 
 ## Context firewall and agent behavior linter
 
-The `context-firewall` Hook runs before `Bash`, `Read`, `Grep`, and `Glob`
-calls and estimates how much content the call can return. It allows ordinary
+The `context-firewall` Hook runs before `Bash`, `PowerShell`, `Read`, `Grep`,
+and `Glob` calls and estimates how much content the call can return. It allows ordinary
 calls, warns without blocking, or blocks the call and names a bounded
 alternative:
 
@@ -53,7 +53,7 @@ alternative:
 | --- | --- | --- |
 | Whole-file read with no `offset`, `limit`, or page range | File of 256 KB or more | File of 2 MB or more |
 | Search in `content` output mode with no `head_limit` of 100 or fewer | Any other pattern | A pattern the scout check already treats as broad |
-| Shell command that prints a whole file, such as `cat` | File of 128 KB or more | File of 512 KB or more |
+| Shell command that prints a whole file, such as `cat` or `Get-Content` | File of 128 KB or more | File of 512 KB or more |
 | Unbounded log stream, recursive search or tree walk, or full Git history or diff | Always | — |
 
 When the same warned operation reaches its third intervention in one session,
@@ -76,12 +76,19 @@ preferences](../../../guides/managing-hook-preferences).
 
 ## Sensitive-file approval
 
-The `privacy-block` Hook runs before `Read`, `Write`, `Edit`, and `Bash` calls
-and guards dotenv files such as `.env` and `.env.local`, credentials files,
+The `privacy-block` Hook runs before `Read`, `Write`, `Edit`, `Bash`, and
+`PowerShell` calls and guards dotenv files such as `.env` and `.env.local`, credentials files,
 `secrets.yaml` or `secret.yml`, `.pem` and `.key` files, and SSH private keys.
 The first access to one of these paths is denied on every runtime and every
 tool path, including paths named inside shell commands and Codex `apply_patch`
-edits that arrive through the `Edit` and `Write` matchers. Template files such
+edits that arrive through the `Edit` and `Write` matchers. Shell inspection
+also covers what a stdin shell (`sh`, `bash -s`, `iex`) runs from an earlier
+pipeline segment, script text passed to `[scriptblock]::Create` or
+`InvokeScript`, commands launched through `Start-Process` or `xargs`, and
+wrappers that take an option value such as `sudo -u`, `wsl -d`, or
+`timeout -s`. A dotenv name built by PowerShell string concatenation, matched
+by a dot-leading glob, or spelled as an NTFS alternate data stream or Windows
+8.3 short name is recognised too. Template files such
 as `.env.example`, `.env.sample`, and `.env.template` stay allowed, and a
 source expression such as `process.env.API_KEY` is not treated as a file path.
 
@@ -122,24 +129,28 @@ preferences](../../../guides/managing-hook-preferences).
 
 ## Secret references in tool calls
 
-The `secrets-inject` Hook runs before `Bash` and `WebFetch` calls. When a shell
-command or fetch URL contains a `${secret:NAME}` reference, the Hook asks
-`ak secrets resolve` for the stored value and substitutes it in memory, so the
-model can compose the call without seeing the credential. Only `Bash.command`
-and `WebFetch.url` are scanned; file contents and prompts are left untouched.
+The `secrets-inject` Hook runs before `Bash`, `PowerShell`, and `WebFetch`
+calls. When a shell command or fetch URL contains a `${secret:NAME}` reference,
+the Hook asks `ak secrets resolve` for the stored value and substitutes it in
+memory, so the model can compose the call without seeing the credential. Only
+`Bash.command`, `PowerShell.command`, and `WebFetch.url` are scanned; file contents and prompts are left untouched.
 An [`ak secrets`](../../../reference/cli/secrets) grant for the calling agent binary decides whether a
 value is released, and a grant restricted with `--allow-host` also checks the
 fetch destination.
 
 Every failure blocks the tool call rather than passing the literal reference
 through, including a missing grant, an invalid name, or a value with
-shell-special characters bound for a `Bash` command. The Hook writes no copy of
+shell-special characters bound for a `Bash` or `PowerShell` command. For a
+`PowerShell` command only, a value that contains `,`, `@`, or a typographic
+quote is also refused, because PowerShell would read it as an array separator,
+a splat, or a quote; pass such a value through an environment variable instead.
+The Hook writes no copy of
 the value, but the substituted input still reaches the tool process and
 whatever the runtime records for an executed call, such as its transcript.
 Treat a released value as present on the host and rotate it when needed.
 
-Claude Code and Grok register the Hook for `Bash|WebFetch`, and Codex narrows it
-to `Bash`. Cursor support for this Hook is not established in this release.
+Claude Code and Grok register the Hook for `Bash|PowerShell|WebFetch`, and Codex
+narrows it to `Bash`. Cursor support for this Hook is not established in this release.
 
 ## Background auto-update liveness
 
@@ -194,15 +205,17 @@ one fully dropped group and four narrowed matchers:
 - `PostToolUse` matcher `Agent|Task|TodoWrite|TodoRead`, handler
   `session-state.cjs`, is fully dropped. Separate `Stop` and `SubagentStop`
   registrations remain.
-- `Read|Write|Edit|Bash` becomes `Write|Edit|Bash`, dropping `Read` while keeping
+- `Read|Write|Edit|Bash|PowerShell` becomes `Write|Edit|Bash`, dropping `Read`
+  and `PowerShell` while keeping
   `privacy-block.cjs` active for the supported atoms. Codex reads through MCP
   and local function tools are not guarded; see [Sensitive-file
   approval](#sensitive-file-approval).
-- `Bash|Read` becomes `Bash`, dropping `Read` while keeping `scout-block.cjs`
-  active for Bash.
-- `Bash|Read|Grep|Glob` becomes `Bash`, dropping `Read`, `Grep`, and `Glob`
-  while keeping `context-firewall.cjs` active for Bash.
-- `Bash|WebFetch` becomes `Bash`, dropping `WebFetch` while keeping
+- `Bash|PowerShell|Read` becomes `Bash`, dropping `PowerShell` and `Read` while
+  keeping `scout-block.cjs` active for Bash.
+- `Bash|PowerShell|Read|Grep|Glob` becomes `Bash`, dropping `PowerShell`,
+  `Read`, `Grep`, and `Glob` while keeping `context-firewall.cjs` active for Bash.
+- `Bash|PowerShell|WebFetch` becomes `Bash`, dropping `PowerShell` and
+  `WebFetch` while keeping
   `secrets-inject.cjs` active for Bash.
 
 The `agent-behavior-linter.cjs` registrations on `PostToolUse`, `PreCompact`,

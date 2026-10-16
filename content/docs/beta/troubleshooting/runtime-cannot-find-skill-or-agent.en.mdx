@@ -166,20 +166,34 @@ ak codex-agent-runtime serve --list-only
 
 Registration idempotently updates `${CODEX_HOME:-~/.codex}/config.toml` and
 preserves other MCP server entries. The list-only command is read-only and must
-name the expected Agents before you continue. For project-scope Agents, run
-the check from the project root and point the Codex home at the project:
+name the expected Agents before you continue.
 
-```bash
-ak codex-agent-runtime serve --list-only --codex-home .codex
-```
+For project-scope Agents, run the check from the project directory, where Codex
+launches the runtime. No extra flag is needed: the runtime serves the nearest
+`<dir>/.codex/agents/` at or above its working directory. The search stops at
+the repository root (the first directory with `.git`), before your home
+directory, and at the filesystem root.
 
-This override verifies `<project>/.codex/agents/`; it does not move those
-Agents into user scope or rewrite the registered server. Known limitation:
-`--plugin-root .` does not discover project-scope Codex Agents, because it reads
-only plugin-staged Kit folders. Use `--codex-home .codex` for this check. If only the overridden
-check finds them, resolve the scope mismatch instead of copying TOML files.
-After registration or scope correction, close and start a fresh Codex session
-so it reloads MCP configuration.
+The runtime serves project Agents only when your Codex config marks that
+project, or the repository root that contains it, as trusted, the same rule
+Codex uses to load a project `.codex` layer. AgentKit does not write that
+trust. List-only output shows the result on a `project agents:` line:
+
+- `project agents: <dir>` means the directory is served. Its Agents are listed
+  with a `(project)` suffix.
+- `project agents: skipped (<reason>)` means a directory was found but not
+  served. For an untrusted or unrecorded project, the reason explains how to
+  trust it: start Codex in that project and accept the trust prompt, or change
+  that project's `trust_level` to `"trusted"` in your Codex config.
+
+A project Agent replaces a user Agent from `~/.codex/agents/` with the same
+name, and user Agents still win over plugin-staged Kit Agents. A `.codex` or
+`.codex/agents` directory that is a symlink or Windows junction is reported as
+a link and skipped, and linked TOML files inside the project directory are
+ignored. If the expected Agents still do not appear, resolve the scope or trust
+mismatch instead of copying TOML files. After registration, trust, or scope
+correction, close and start a fresh Codex session so it reloads MCP
+configuration.
 
 ## If Codex cannot find ak:team
 

@@ -20,8 +20,8 @@ Tùy event và runtime, những hành vi này có thể thêm hướng dẫn ho�
 để review. Đây là guardrail cho workflow, không phải ranh giới bảo mật tổng quát
 hay cơ chế thay thế permission control của runtime.
 
-Hook `context-firewall` được dùng lại chạy trước các lệnh `Bash`, `Read`, `Grep`
-và `Glob`. Hook cảnh báo khi đọc toàn bộ một tệp từ 256 KB trở lên, khi lệnh
+Hook `context-firewall` được dùng lại chạy trước các lệnh `Bash`, `PowerShell`,
+`Read`, `Grep` và `Glob`. Hook cảnh báo khi đọc toàn bộ một tệp từ 256 KB trở lên, khi lệnh
 shell in toàn bộ tệp từ 128 KB trở lên, khi search ở mode `content` không có giới
 hạn kết quả, và khi output log, lịch sử hoặc shell đệ quy không có giới hạn.
 Hook chặn khi đọc toàn bộ một tệp từ 2 MB trở lên, khi lệnh shell in toàn bộ tệp
@@ -35,7 +35,7 @@ fail-open; đặt `hooks.context-firewall` thành `false` để tắt, như mô 
 
 Hook `privacy-block` được dùng lại sẽ từ chối lần đọc, ghi hoặc chỉnh sửa đầu
 tiên vào tệp dotenv, tệp credentials, tệp YAML chứa secret hoặc private key
-trên mọi đường công cụ, kể cả lệnh shell. Sau đó agent hỏi bạn qua khả năng
+trên mọi đường công cụ, kể cả lệnh `Bash` và `PowerShell`. Sau đó agent hỏi bạn qua khả năng
 ask-user của runtime. Khi bạn phê duyệt, agent thử lại đúng lệnh gọi đó một lần
 với path có tiền tố `APPROVED:`; phê duyệt này gắn với session, path và thao
 tác, và hết hạn sau 15 phút. Lần thử lại không có lần từ chối trước đó, lần thử
@@ -51,24 +51,28 @@ luồng; đây là cùng một Hook trong cả hai Kit.
 
 ## Tham chiếu secret trong lệnh gọi công cụ
 
-Hook `secrets-inject` chạy trước các lệnh gọi `Bash` và `WebFetch`. Khi một
-lệnh shell hoặc URL fetch chứa tham chiếu `${secret:NAME}`, Hook hỏi
+Hook `secrets-inject` chạy trước các lệnh gọi `Bash`, `PowerShell` và
+`WebFetch`. Khi một lệnh shell hoặc URL fetch chứa tham chiếu `${secret:NAME}`,
+Hook hỏi
 `ak secrets resolve` để lấy giá trị đã lưu và thay thế trong bộ nhớ, nhờ đó
-model có thể soạn lệnh gọi mà không nhìn thấy credential. Chỉ `Bash.command` và
-`WebFetch.url` được quét; nội dung tệp và prompt được giữ nguyên. Grant
+model có thể soạn lệnh gọi mà không nhìn thấy credential. Chỉ `Bash.command`,
+`PowerShell.command` và `WebFetch.url` được quét; nội dung tệp và prompt được giữ nguyên. Grant
 [`ak secrets`](../../../reference/cli/secrets) cho binary agent đang gọi quyết định giá trị có được
 giải phóng hay không, và grant bị giới hạn bằng `--allow-host` còn kiểm tra đích
 fetch.
 
 Mọi lỗi đều chặn lệnh gọi công cụ thay vì chuyển nguyên văn tham chiếu đi,
 bao gồm thiếu grant, tên không hợp lệ hoặc giá trị có ký tự đặc biệt của shell
-khi đi vào một lệnh `Bash`. Hook không ghi bản sao nào của giá trị, nhưng input
+khi đi vào một lệnh `Bash` hoặc `PowerShell`. Riêng với lệnh `PowerShell`, giá
+trị chứa `,`, `@` hoặc dấu nháy typographic cũng bị từ chối, vì PowerShell sẽ
+đọc chúng thành dấu tách mảng, splat hoặc dấu nháy; hãy truyền giá trị như vậy
+qua biến môi trường. Hook không ghi bản sao nào của giá trị, nhưng input
 đã thay thế vẫn tới process của công cụ và mọi thứ runtime ghi lại cho một lệnh
 gọi đã thực thi, chẳng hạn transcript. Hãy coi giá trị đã giải phóng là có mặt
 trên host và rotate khi cần.
 
-Claude Code và Grok đăng ký Hook cho `Bash|WebFetch`, còn Codex thu hẹp thành
-`Bash`. Hỗ trợ Cursor cho Hook này chưa được xác lập trong bản phát hành này.
+Claude Code và Grok đăng ký Hook cho `Bash|PowerShell|WebFetch`, còn Codex thu
+hẹp thành `Bash`. Hỗ trợ Cursor cho Hook này chưa được xác lập trong bản phát hành này.
 
 ## Liveness cho cập nhật nền tự động
 
@@ -107,7 +111,7 @@ Discord. Các nhánh lỗi của utility không chặn workflow.
 
 ## Hành vi Codex trong bản phát hành này
 
-- Marketing không projection Codex group nào bị drop hoàn toàn và có năm matcher bị thu hẹp. Shared `Read|Write|Edit|Bash` trở thành `Write|Edit|Bash`; shared `Bash|Read` trở thành `Bash`; shared `Bash|Read|Grep|Glob` trở thành `Bash`; shared `Bash|WebFetch` trở thành `Bash`; matcher Marketing `Edit|Write|MultiEdit` trở thành `Edit|Write`. Handler ban đầu vẫn hoạt động cho các atom được hỗ trợ.
+- Marketing không projection Codex group nào bị drop hoàn toàn và có năm matcher bị thu hẹp. Shared `Read|Write|Edit|Bash|PowerShell` trở thành `Write|Edit|Bash`; shared `Bash|PowerShell|Read` trở thành `Bash`; shared `Bash|PowerShell|Read|Grep|Glob` trở thành `Bash`; shared `Bash|PowerShell|WebFetch` trở thành `Bash`; matcher Marketing `Edit|Write|MultiEdit` trở thành `Edit|Write`. Handler ban đầu vẫn hoạt động cho các atom được hỗ trợ.
 - Output cho người dùng báo narrowing dưới **Hook matchers narrowed (some tool matches unsupported on this target)**. Output máy có thể đọc dùng `hookMatchersNarrowed` và `narrowedHookSummaries` tùy chọn; các field full drop không xuất hiện cho projection này.
 - Trên Windows, Hook `.cjs` đủ điều kiện bên dưới Codex home có thể dùng shim `.cmd` do AgentKit quản lý khi đường dẫn thông thường chứa khoảng trắng. Đường dẫn `.cjs` có khoảng trắng bên ngoài home đó vẫn không có shim. Đường dẫn chứa metacharacter của `cmd.exe`, basename shim không phải ASCII và baked argument không an toàn hoặc không phải ASCII cũng bị từ chối, vì vậy đây không phải bảo đảm tương thích bao quát.
 - Codex home do wrapper quản lý chỉ được alias leaf `hooks` cuối cùng tới `~/.codex/hooks` canonical, bằng symlink POSIX hoặc directory junction trên Windows; thao tác ghi, command đã translate, rollback và ownership dùng identity canonical đó. Parent có link và target khác đều bị từ chối.

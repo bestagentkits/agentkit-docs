@@ -166,19 +166,32 @@ ak codex-agent-runtime serve --list-only
 
 Registration cập nhật `${CODEX_HOME:-~/.codex}/config.toml` theo cách
 idempotent và giữ các MCP server entry khác. Lệnh list-only chỉ đọc và phải liệt
-kê các Agent mong đợi trước khi tiếp tục. Với Agent ở scope project, chạy check
-từ project root và trỏ Codex home tới project:
+kê các Agent mong đợi trước khi tiếp tục.
 
-```bash
-ak codex-agent-runtime serve --list-only --codex-home .codex
-```
+Với Agent ở scope project, chạy check từ thư mục project, nơi Codex khởi chạy
+runtime. Không cần thêm flag: runtime phục vụ `<dir>/.codex/agents/` gần nhất tại
+hoặc phía trên thư mục làm việc của nó. Việc tìm kiếm dừng ở repository root
+(thư mục đầu tiên có `.git`), trước thư mục home của bạn và ở gốc filesystem.
 
-Override này xác minh `<project>/.codex/agents/`; nó không chuyển Agent sang
-user scope hoặc viết lại server đã đăng ký. Giới hạn đã biết: `--plugin-root .`
-không phát hiện Codex Agent ở scope project, vì nó chỉ đọc các thư mục Kit được
-stage theo plugin. Dùng `--codex-home .codex` cho check này. Nếu chỉ check có override tìm
-thấy Agent, hãy xử lý scope mismatch thay vì sao chép file TOML. Sau khi đăng ký
-hoặc sửa scope, đóng và mở session Codex mới để tải lại cấu hình MCP.
+Runtime chỉ phục vụ Agent của project khi cấu hình Codex của bạn đánh dấu
+project đó, hoặc repository root chứa nó, là trusted, cùng quy tắc Codex dùng để
+tải layer `.codex` của project. AgentKit không ghi trust này. Output list-only
+hiển thị kết quả trên dòng `project agents:`:
+
+- `project agents: <dir>` nghĩa là thư mục được phục vụ. Các Agent của nó được
+  liệt kê với hậu tố `(project)`.
+- `project agents: skipped (<reason>)` nghĩa là đã tìm thấy thư mục nhưng không
+  phục vụ. Với project untrusted hoặc chưa được ghi nhận, lý do sẽ hướng dẫn
+  cách trust: khởi động Codex trong project đó và chấp nhận trust prompt, hoặc
+  đổi `trust_level` của project đó thành `"trusted"` trong cấu hình Codex.
+
+Agent của project thay thế Agent người dùng cùng tên trong `~/.codex/agents/`,
+còn Agent người dùng vẫn thắng Agent Kit được stage theo plugin. Thư mục `.codex`
+hoặc `.codex/agents` là symlink hoặc Windows junction được báo là link và bị bỏ
+qua, còn file TOML dạng link bên trong thư mục project bị bỏ qua. Nếu vẫn không
+thấy Agent mong đợi, hãy xử lý scope hoặc trust mismatch thay vì sao chép file
+TOML. Sau khi đăng ký, trust hoặc sửa scope, đóng và mở session Codex mới để tải
+lại cấu hình MCP.
 
 ## Nếu Codex không tìm thấy ak:team
 

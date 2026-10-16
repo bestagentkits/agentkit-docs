@@ -77,12 +77,14 @@ delivery mode kết hợp thành một tuyến cài đặt:
 | Codex cho người dùng | Global | Native | `~/.agents/skills` và các bề mặt `~/.codex` tương ứng |
 | Grok Build trong project | Project | Native | `<project>/.grok` cùng `<project>/.agentkit/adapters/grok/<kit>` |
 | Grok Build cho người dùng | Global | Native | `${GROK_HOME:-~/.grok}` cùng `${AGENTKIT_HOME:-~/.agentkit}/adapters/grok/<kit>` |
+| DeepSeek Harness trong project | Project | Native | `<project>/.dsh` cùng `<project>/.agentkit/adapters/dsh/<kit>` |
+| DeepSeek Harness cho người dùng | Global | Native | `$DSH_HOME` hoặc `~/.dsh`; hãy xác nhận đích trong install summary |
 | Pi trong project | Project | Native spike | `<project>/.pi/{skills,agents,rules,extensions}` cùng metadata vòng đời của Pi |
 | Pi cho người dùng | Global | Native spike | Profile Pi coding-agent đang hoạt động (`PI_CODING_AGENT_DIR` hoặc `~/.pi/agent`) không có đoạn `.pi/` bổ sung |
 | Oh My Pi trong project | Project | Native | `<project>/.omp/{skills,agents,rules}`, `<project>/AGENTS.md` và `<project>/.agentkit/adapters/omp/<kit>` |
 | Oh My Pi cho người dùng | Global | Native | `{skills,agents,rules}` và `AGENTS.md` dưới root OMP đã phân giải, cùng metadata vòng đời ở user scope |
 
-Cursor, Grok và AGY dùng bề mặt riêng của target, còn `portable` là export và
+Cursor và AGY dùng bề mặt riêng của target, còn `portable` là export và
 không tạo trạng thái vòng đời đã cài. Đích hiển thị trong preview là nguồn chính
 xác khi môi trường ghi đè runtime root thông thường.
 
@@ -144,6 +146,14 @@ vẫn được giữ. Cài đặt, refresh hoặc gỡ cài đặt ở project k
 `<project>/.codex/config.toml` và `hooks.json`. Cài đặt project chạy từ thư mục
 home, nơi `.codex` của project chính là Codex home của người dùng, bị từ chối
 với mã thoát `6` trước mọi thay đổi; hãy dùng `--global` trong trường hợp đó.
+
+Gỡ cài đặt cũng xoá khối rules được quản lý của Kit này khỏi `AGENTS.md` trong
+thư mục runtime Codex, đồng thời giữ nguyên văn bản của bạn và khối của các Kit
+khác. Gỡ cài đặt project còn xoá mục của Kit này khỏi
+`<project>/.agents/plugins/marketplace.json` và giữ các mục khác. `AGENTS.md`
+của repository không bao giờ bị thay đổi. Codex không đọc `AGENTS.md` trong thư
+mục `.codex` của project, nên cài đặt project sẽ cảnh báo rằng rules ghi ở đó
+được giữ lại nhưng không có hiệu lực.
 
 Codex chỉ nạp `<project>/.codex` cho project đã được trust. Sau khi cài project,
 AgentKit in thư mục runtime, đường dẫn `hooks.json` và trạng thái trust của
@@ -394,13 +404,22 @@ vì nhận mọi thứ đang tồn tại ở đích làm nội dung được qu�
 | Dùng chung | Nhiều Kit đã cài cùng sở hữu một đường dẫn khớp | Được giữ đến khi mọi owner đều nhả đường dẫn |
 
 Symlink, chuyển tiếp đường dẫn không an toàn và trạng thái filesystem mơ hồ khác
-thường fail closed hoặc được giữ lại. Exception có giới hạn là leaf `hooks` của
-Codex trỏ chính xác tới `~/.codex/hooks` canonical của user đã resolve, qua
-symlink POSIX hoặc directory junction trên Windows; AgentKit dùng identity
-canonical đó cho toàn bộ lifecycle Hook. Parent có link và target khác vẫn fail
-closed.
-Bằng chứng ownership giới hạn cleanup; nó không bao giờ có nghĩa xóa toàn bộ
-`.claude`, `.codex`, `.grok` hoặc thư mục runtime của người dùng.
+thường fail closed hoặc được giữ lại. Codex có hai exception liên kết riêng biệt,
+có giới hạn:
+
+- Leaf thư mục `hooks` có thể trỏ chính xác tới `~/.codex/hooks` canonical của
+  user đã resolve, qua symlink POSIX hoặc directory junction trên Windows.
+  AgentKit dùng identity canonical đó cho toàn bộ lifecycle Hook; target thư mục
+  Hook khác vẫn fail closed.
+- Leaf cuối `config.toml` có thể là symlink tới tệp thông thường. Thao tác ghi
+  được quản lý đi xuyên qua link tới target; nếu apply thất bại, rollback khôi
+  phục bytes trước đó của target và giữ nguyên link. Target không phải tệp
+  thông thường bị từ chối.
+
+Parent có link vẫn bị từ chối trong cả hai trường hợp; các exception này không
+cho phép đường dẫn có link tùy ý. Bằng chứng ownership giới hạn cleanup; nó không
+bao giờ có nghĩa xóa toàn bộ `.claude`, `.codex`, `.grok` hoặc thư mục runtime
+của người dùng.
 
 ## Làm mới Kit đã cài
 
