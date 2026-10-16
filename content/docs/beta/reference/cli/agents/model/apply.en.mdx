@@ -1,0 +1,87 @@
+---
+title: ak agents model apply
+description: Write the model config resolves to into pending installed Agent files, replacing runtime-side edits only with confirmation.
+---
+
+Use `ak agents model apply` to bring installed Agent files in line with config
+without waiting for the next kit refresh.
+
+## Usage
+
+```bash
+ak agents model apply [agent] [--runtime <runtime>] [--project <dir>] [--yes]
+```
+
+At most one Agent name is accepted; omit it to apply every Agent. The command
+has no `--scope`, because it only reads config.
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--runtime <runtime>` | all runtimes | Limit to one of `claude-code`, `codex`, `cursor`, `omp`, `pi`. |
+| `--project <dir>` | nearest project config, else the current directory | Project whose installs and config apply. |
+| `--yes` | off | Confirm replacing drifted files without asking. |
+
+## What it writes
+
+The command rewrites the model fields of every `pending` file (config changed
+since AgentKit wrote it). A `drift` file (edited in the runtime) is replaced
+only with confirmation, and its previous content is backed up first under the
+AgentKit `agent-models` backups. Files already `in-sync` are untouched.
+
+Before writing, it proves AgentKit owns every target file. If any file fails
+the proof, nothing is written and the command exits `1`.
+
+## Confirmation
+
+If drifted files are present and `--yes` is absent:
+
+- On an interactive terminal, the command lists each file as
+  `path: current -> desired` and asks `[y/N]`. `--no-interactive` disables the
+  prompt. The lock is released while it waits, and the confirmed run applies
+  only the files that were shown. If the drifted set changed meanwhile,
+  nothing is written and the command exits `3`.
+- Otherwise nothing is written and the command exits `3`. With `--json`, the
+  result is printed on stdout under `need_confirmation` beside the error
+  envelope.
+
+Declining the prompt exits `3` with `cancelled; nothing was written`. To keep a
+runtime edit instead of replacing it, run [`adopt`](./adopt).
+
+## Side effects
+
+Takes the kit lifecycle lock. Claude Code plugin files take effect after
+`ak kit refresh` re-activates the plugin; a warning says so. If a write fails
+part way, the error names the files already updated and the backups taken.
+
+## Output
+
+Human stdout prints `updated <path>` and `backup <path>` lines, or `Every
+installed agent file already carries its configured model.` when nothing
+changed.
+
+JSON success uses:
+
+```text
+schema_version: 1
+kind: agents.model.apply
+data.applied[]
+data.backup_paths?
+data.need_confirmation?   (drifted files awaiting confirmation)
+data.agents[], data.warnings?
+```
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Files were updated or none needed changes. |
+| `1` | Command failure, including an installed file AgentKit cannot prove it still owns. |
+| `2` | Invalid Agent name or flags, an unsupported runtime, or a missing `--project` directory. |
+| `3` | Drifted files need confirmation and none was given, or the answer was no. |
+| `4` | Another AgentKit operation holds the kit lifecycle lock. |
+
+## Related commands
+
+- [Complete `ak agents model apply` command facts](../cli/ak_agents_model_apply)
+- [Keep a runtime edit](./adopt)
+- [Explain a file's status](./explain)
