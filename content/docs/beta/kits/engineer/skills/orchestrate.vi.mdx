@@ -52,7 +52,7 @@ Trước khi bắt đầu:
 | --- | --- | --- |
 | Claude Code | `/ak:orchestrate ...` | Skill khởi chạy session Claude Code độc lập cùng headless CLI đã xác minh của chính nó. Route và control chính xác được khám phá trong lần chạy này. |
 | Cursor | `/ak:orchestrate ...` | Slash invocation theo cách gọi Engineer Skill do người dùng xác minh. Session chỉ đủ điều kiện khi surface Cursor hiện tại chứng minh dispatch cùng control cần thiết. |
-| Codex | `$ak:orchestrate ...` | Native Skill discovery được hỗ trợ. Session cần surface cung cấp khả năng tạo session; nếu không, dùng verified Codex CLI route hoặc trả kết quả blocked. |
+| Codex | `$ak:orchestrate ...` | Native Skill discovery được hỗ trợ. Session cần surface cung cấp khả năng tạo session; nếu không, dùng verified Codex CLI route, runtime đã opt-in, hoặc trả kết quả blocked. |
 
 Mặc định, candidate là session của runtime gọi Skill cùng headless CLI được giám
 sát của chính runtime đó. Runtime khác chỉ được xét qua các opt-in trong
@@ -147,8 +147,9 @@ subagent không phải worker.
 - **Permission fallback là route subagent duy nhất.** Khi runtime từ chối khởi
   chạy session vì coordinator thiếu quyền (standing policy hoặc permission mode,
   không phải prompt bạn đã từ chối), job có thể chạy như nested agent. Prompt
-  của nó vẫn do bạn trả lời, writer vẫn có worktree riêng, job external tác động
-  cao vẫn bị block, và job arbiter hay review không bao giờ dùng route này. Report
+  của nó vẫn do bạn trả lời, writer R2 (isolated high-impact) vẫn có worktree riêng, job external hoặc
+  destructive vẫn bị block, và job arbiter hay review, vốn cần độc lập mà subagent
+  không chứng minh được, không bao giờ dùng route này. Report
   ghi `fallback: subagent`, evidence về lần từ chối và các đảm bảo bị giảm: không
   có resume độc lập, dùng chung quota và permission, timeout chỉ là accounting.
   Lỗi quota, budget, resource, thiếu runtime và crash không bao giờ fallback sang
@@ -203,7 +204,7 @@ thay vì âm thầm hạ thấp yêu cầu.
    artifact, error, duration và usage được báo đáng tin vẫn sẵn sàng cho
    diagnosis cùng resume. Process CLI và Pi được giám sát yêu cầu Darwin; trên
    host khác, session job đủ điều kiện tiếp tục qua cùng vòng `prepare`,
-   `advance` và `accept`, như mô tả trong phần Kiểm tra hỗ trợ nền tảng ở trên.
+   `advance` và `accept`, như mô tả trong [Kiểm tra hỗ trợ nền tảng](#kiểm-tra-hỗ-trợ-nền-tảng).
 8. **Skill chạy arbiter.** Một session riêng trên model judgment mạnh nhất đã
    xác minh trực tiếp kiểm tra expected output,
    contradiction, safety gap, failed check, unsupported claim và unresolved
@@ -219,17 +220,18 @@ giữ headroom dưới giới hạn đã báo (runtime chung một upstream acco
 một pool), và kiểm tra CPU, memory, disk của host. Check nặng như full preflight,
 browser suite và build chạy tuần tự; scout nhẹ chạy parallel. Quota hoặc cost
 không rõ không có nghĩa là không giới hạn: Skill admit tuần tự hoặc hỏi policy.
-Khi bị áp lực tài nguyên, Skill ngừng gọi `advance` cho việc mới và settle mọi job
+Khi bị áp lực quota, cost hoặc tài nguyên host, Skill ngừng gọi `advance` cho việc mới và settle mọi job
 đã được giao, không dừng process mà run không khởi chạy. Lý do giảm concurrency
 được ghi trong report.
 
-**Failure class.** Mỗi attempt lỗi hoặc kẹt được phân loại trước khi hành động,
-và class đã map xuất hiện trong receipt của `accept`:
+**Failure class.** Mỗi attempt lỗi hoặc kẹt được phân loại trước khi hành động.
+Coordinator class nằm trong `status.json` và report, còn `error_class` đã map
+của plan engine nằm trong receipt của `accept` (ví dụ `rate_limited` map thành
+`rate-limit`, và lỗi transient map thành `timeout` khi hết bound):
 
 | Class | Ví dụ | Retry |
 | --- | --- | --- |
-| `transient`, `rate_limited` | Mất mạng ngắn, giới hạn provider có thể retry | Chỉ qua policy `retry:` của job |
-| `timeout` | Hết bound | Chỉ qua `retry:`, sau khi xác nhận writer đã dừng |
+| `transient`, `rate_limited` | Mất mạng ngắn, timeout khi writer đã xác nhận dừng, giới hạn provider có thể retry | Chỉ qua policy `retry:` của job |
 | `quota_exhausted`, `budget_exhausted` | Hết usage window, chạm cost ceiling | Không; chờ reset hoặc báo blocker |
 | `runtime_missing`, `auth_unavailable`, `model_unavailable`, `unsupported_capability` | Runtime thiếu hoặc chưa authenticated, model không có trong live set | Không |
 | `host_resource_pressure` | Thiếu memory hoặc disk | Không |
@@ -257,8 +259,8 @@ Không bậc nào nâng permission, bỏ check, ignore pin hay ra ngoài authori
 
 ## Hiểu model của arbiter và review
 
-Job arbiter, advisor, review, audit và security chạy trong session mới, riêng
-biệt, trên model mạnh nhất mà active route thực sự dùng được. Skill bắt đầu từ
+Job arbiter, advisor, review, audit và security resolve model mạnh nhất mà active
+route thực sự dùng được, và arbiter chạy trong session mới, riêng biệt. Skill bắt đầu từ
 các model live runtime liệt kê là selectable cho account của bạn, loại model mà
 bạn, project hoặc tổ chức không cho phép, rồi áp dụng thứ tự ưu tiên: pin rõ
 ràng, rồi model policy, rồi candidate mạnh nhất còn lại theo catalog rank của
@@ -327,7 +329,7 @@ evidence, contradiction được giải quyết và arbiter pass.
 | --- | --- |
 | Agent báo orchestrate cần macOS | Chỉ giám sát CLI bên ngoài mới cần Darwin. Skill route job qua session của runtime hiện tại; job cần CLI có giám sát được báo `blocked`. |
 | Session không khởi chạy được và job `blocked` | Đọc probe evidence. Opt-in runtime khác bằng `--cross-runtime` hoặc chuỗi `fallback_runtime`, hoặc sửa session surface của runtime hiện tại. |
-| Skill in cảnh báo `--internal` is deprecated | Bỏ cờ này. Session của runtime hiện tại đã là mặc định. |
+| Skill in cảnh báo `--internal` đã deprecated | Bỏ cờ này. Session của runtime hiện tại đã là mặc định. |
 | Runtime thiếu hoặc chưa authenticated | Đánh giá fallback đã opt-in trong run directory mới qua cùng live gate, hoặc hoàn tất setup ngoài lần chạy rồi preflight lại. |
 | Model hoặc flag bị reject | Quay lại live help hoặc official documentation hiện tại; không đoán hay mang identifier sang runtime khác. |
 | Permission prompt xuất hiện | Dừng job và giải quyết approval boundary chính xác. Không retry với bypass. |

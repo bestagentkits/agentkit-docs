@@ -52,7 +52,7 @@ Before you start:
 | --- | --- | --- |
 | Claude Code | `/ak:orchestrate ...` | The Skill starts independent Claude Code sessions and its own verified headless CLI. Exact routes and controls are discovered during this run. |
 | Cursor | `/ak:orchestrate ...` | Slash invocation follows the user-verified Engineer Skill spelling. Sessions are eligible only when the current Cursor surface proves the required dispatch and controls. |
-| Codex | `$ak:orchestrate ...` | Native Skill discovery is supported. Sessions require the surface to expose session creation; otherwise a verified Codex CLI route or a blocked result is used. |
+| Codex | `$ak:orchestrate ...` | Native Skill discovery is supported. Sessions require the surface to expose session creation; otherwise a verified Codex CLI route, an opted-in runtime, or a blocked result is used. |
 
 By default the candidates are sessions of the invoking runtime and its own
 supervised headless CLI. Other runtimes are considered only through the
@@ -148,8 +148,9 @@ spec. Nested in-harness subagents are not workers.
 - **Permission fallback is the only subagent route.** When the runtime refuses
   to start a session because the coordinator lacks permission (standing policy
   or permission mode, not a prompt you declined), the job may run as a nested
-  agent. Its own prompts are still answered by you, writers keep their own
-  worktree, high-impact external jobs stay blocked, and arbiter or review jobs
+  agent. Its own prompts are still answered by you, isolated high-impact writers
+  keep their own worktree, external or destructive jobs stay blocked, and
+  arbiter and review jobs, which need independence a subagent cannot prove,
   never use it. The report records `fallback: subagent`, the refusal evidence,
   and the reduced guarantees: no independent resume, shared quota and
   permissions, and an accounting-only timeout. Quota, budget, resource,
@@ -227,12 +228,14 @@ settles every job already handed out, without stopping processes the run did
 not start. The reason for any reduced concurrency is recorded in the report.
 
 **Failure classes.** Each failed or stuck attempt is classified before any
-action, and the mapped class appears in the `accept` receipt:
+action. The coordinator class stays in `status.json` and the report, and the
+plan engine's mapped `error_class` goes in the `accept` receipt (for example
+`rate_limited` maps to `rate-limit`, and a transient failure maps to `timeout`
+when the bound expired):
 
 | Class | Examples | Retry |
 | --- | --- | --- |
-| `transient`, `rate_limited` | Short network loss, retryable provider limit | Only through the job's `retry:` policy |
-| `timeout` | The bound expired | Only through `retry:`, after the writer is confirmed stopped |
+| `transient`, `rate_limited` | Short network loss, timeout with a confirmed stopped writer, retryable provider limit | Only through the job's `retry:` policy |
 | `quota_exhausted`, `budget_exhausted` | Usage window spent, cost ceiling reached | No; wait for the reset or report the blocker |
 | `runtime_missing`, `auth_unavailable`, `model_unavailable`, `unsupported_capability` | Runtime absent or unauthenticated, model not in the live set | No |
 | `host_resource_pressure` | Low memory or disk | No |
@@ -261,8 +264,9 @@ authorized roots.
 
 ## Understand arbiter and review models
 
-Arbiter, advisor, review, audit, and security jobs run in a fresh, separate
-session on the strongest model the active route can actually use. The Skill
+Arbiter, advisor, review, audit, and security jobs resolve the strongest model
+the active route can actually use, and the arbiter runs in a fresh, separate
+session. The Skill
 starts from the models the live runtime lists as selectable for your account,
 drops any that you, the project, or your organization disallow, then applies
 precedence: an explicit pin, then a model policy, then the strongest remaining
