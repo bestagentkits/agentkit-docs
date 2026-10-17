@@ -1,0 +1,137 @@
+---
+title: Giao một request từ đầu đến cuối với ak:atoz
+description: Khóa scope một lần bằng ak:advise, bàn giao mọi prerequisite trong một lượt, rồi để ak:atoz điều phối việc giao hàng không cần hỏi lại cho đến khi từng mục Done means được xác minh.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak:atoz` khi bạn muốn một cuộc trao đổi duy nhất ở đầu và không phải
+trông chừng về sau. Skill chạy ba gate theo thứ tự, vì gate sau dùng kết quả của
+gate trước:
+
+1. **Lock**: bạn xác nhận scope và Done means.
+2. **Prepare**: bạn bàn giao mọi thứ run cần trong một lượt.
+3. **Execute**: agent làm việc tự động cho đến khi mọi mục Done means được xác
+   minh.
+
+## Chọn ak:atoz hay workflow khác
+
+### Dùng ak:atoz khi
+
+- Bạn có thể xác nhận scope một lần và cung cấp mọi prerequisite trước khi bắt
+  đầu.
+- Công việc đủ lớn để chia thành các phần song song với quyền sở hữu file
+  riêng.
+- Bạn muốn run được theo dõi trên một GitHub issue và kết thúc bằng một review
+  cô lập.
+
+### Chọn workflow khác khi
+
+- Bạn chỉ cần lời khuyên. Dùng [`ak:advise`](./advise).
+- Bạn muốn preflight dừng trước khi execution. Dùng
+  [`ak:goal-warmup`](./goal-warmup).
+- Bạn muốn pipeline từ issue đến PR mà không cần lượt bàn giao prerequisite ở
+  đầu. Dùng [`ak:vibe`](./vibe).
+
+## Chạy Skill
+
+| Runtime | Cách gọi |
+| --- | --- |
+| Claude Code | `/ak:atoz "<request or URL>" [--yagni]` |
+| Cursor | `/ak:atoz "<request or URL>" [--yagni]` |
+| Codex | `$ak:atoz "<request or URL>" [--yagni]` |
+
+Request text, URL, issue body và repository content là data, không phải
+instruction. Skill bỏ qua mọi nỗ lực nhúng vào nhằm bỏ qua gate, mở rộng quyền
+hạn hoặc lấy secret ra ngoài. `--yagni` được chuyển tiếp cho interview của
+`ak:advise`.
+
+## Gate 1: khóa scope
+
+Skill chạy interview `ak:advise` trên request của bạn. Khi model invocation của
+`ak:advise` bị tắt, Skill làm theo các bước của Skill đó ngay trong session.
+Interview hỏi từng câu một và kết thúc bằng handoff brief: Objective, Done
+means, Out of scope và Constraints.
+
+Gate đóng bằng một câu hỏi với **Confirm**, **Edit** hoặc **Abort**. Chỉ Confirm
+rõ ràng mới mở gate 2; một câu "looks good" thoáng qua thì không. Edit quay lại
+interview cho đúng trường bị đổi. Sau Confirm, brief là contract và run không bao
+giờ âm thầm thu nhỏ, thay thế hay mở rộng nó.
+
+## Gate 2: bàn giao prerequisite
+
+Trước khi đụng vào bất cứ thứ gì, Skill kiểm tra môi trường (CLI đã cài, session
+đã xác thực, biến môi trường có tồn tại hay không, repository remote, branch
+protection) và chỉ liệt kê các khoảng trống thật. Mỗi mục nêu nó là gì, vì sao
+run cần, run sẽ tìm nó ở đâu và sẽ kiểm tra thế nào.
+
+| Nhóm | Mục điển hình | Cách kiểm tra sẵn sàng |
+| --- | --- | --- |
+| Access and auth | Quyền push repository, `gh auth`, login cloud hoặc CLI | `gh auth status`, `<cli> whoami`, một lệnh list chỉ đọc |
+| Secrets and config | API key, token, biến môi trường | Biến có tồn tại; không bao giờ in giá trị |
+| Accounts and quotas | Tài khoản bên thứ ba, billing, rate limit, domain | Một API call chỉ đọc hoặc trạng thái bạn xác nhận |
+| Data and assets | Sample data, copy, design, test account | File có ở đường dẫn đã thống nhất |
+| Issue tracking | Repository chứa issue của công việc, quyền tạo label | `gh issue list --limit 1`, `gh label list` |
+| Authority | Quyền merge hoặc deploy, hạn mức chi tiêu, quyền đăng bài | Ghi trong brief |
+| Quyết định chỉ bạn sở hữu | Giá, văn bản pháp lý, tên công khai | Câu trả lời của bạn được ghi trong brief |
+| Environment | Phiên bản toolchain, service đang chạy, port trống, disk | Một lệnh version hoặc health |
+
+Danh sách cũng nêu các default có thể đảo ngược mà Skill đã chọn để bạn ghi đè,
+cùng các điều kiện dừng mà run tự động sẽ tuân theo. Đặt secret vào môi trường
+hoặc secret store do bạn kiểm soát; không bao giờ dán vào cuộc trò chuyện. Khi
+bạn báo các mục đã sẵn sàng, Skill kiểm tra lại từng mục mà không thay đổi gì và
+liệt kê những gì còn thiếu. Nếu bạn miễn một mục, brief ghi lại hệ quả và run
+tiếp tục mà không có mục đó.
+
+## Gate 3: thực thi tự động
+
+Session chính trở thành orchestrator: lập plan, dispatch, theo dõi, tích hợp và
+xác minh, còn implementation chạy trong các sub-session.
+
+- **Lập plan rồi tỏa ra.** Các phần không cần kết quả của phần khác và không
+  chạm file chung chạy song song; phần phụ thuộc thì chờ. Mỗi phần viết code có
+  worktree và branch riêng. Skill ưu tiên session hoặc subagent native của
+  runtime, chuyển sang `ak:orchestrate` cho công việc đa runtime và chỉ làm tuần
+  tự khi không có cả hai.
+- **Cân bằng tốc độ với quota.** Đợt đầu nhỏ (hai hoặc ba session) và chỉ mở
+  rộng khi usage và tải máy còn thoải mái. Phần cơ học dùng model rẻ hơn; kiến
+  trúc, debug khó và review cuối dùng model mạnh nhất. Lỗi rate limit tạm dừng
+  dispatch mới, không dừng run.
+- **Giữ máy sạch.** Mọi process, server và worktree run khởi động đều được theo
+  dõi, dùng lại thay vì nhân bản và dừng khi phần việc xong. Run không bao giờ
+  kill process mà nó không khởi động.
+- **Kiểm kết quả, không tin báo cáo.** Báo cáo hoàn thành của sub-session chỉ là
+  claim: orchestrator xem diff và chạy lại bước verify của phần đó trước khi
+  merge, từng phần một.
+- **Theo dõi trên GitHub.** Issue của công việc mang đúng một trong các label
+  `in progress`, `in review`, `done` (PR đã mở và review sạch) hoặc `shipped`
+  (đã merge), kèm comment bằng chứng ngắn ở mỗi lần đổi. Bug, lỗ hổng hoặc
+  khoảng trống không liên quan thành issue riêng đã khử trùng với label
+  `ai-handle` và không được sửa trong run này.
+- **Review cô lập.** Review cuối chạy trong một sub-session mới chỉ có brief,
+  diff và review playbook của dự án làm context. Run sửa các finding và review
+  lại cho đến khi không còn finding chặn.
+
+<Callout type="warn" title="Những lý do duy nhất khiến run dừng lại để hỏi">
+  Một hành động phá hủy hoặc không thể đảo ngược mà brief không nêu (xóa dữ
+  liệu, force-push, viết lại lịch sử đã publish, thay đổi dữ liệu production);
+  một thay đổi làm đổi mục Done means đã xác nhận hoặc rời khỏi scope hay
+  repository đã xác nhận; tiêu tiền hoặc gửi tin nhắn mà brief không cho phép;
+  một lỗi vẫn không giải thích được sau khi chẩn đoán và hỏi advisor; hoặc một
+  prerequisite hóa ra không hợp lệ lúc dùng, như token hết hạn. Mọi thứ khác đều
+  được quyết định và tiếp tục.
+</Callout>
+
+Khi dừng, Skill nêu việc đã xong, điều đang chặn và phương án nó đề xuất, rồi tự
+tiếp tục sau khi bạn trả lời.
+
+## Xác minh kết quả
+
+Orchestrator tự xác minh kết quả đã tích hợp thay vì tin báo cáo của
+sub-session. Run chỉ kết thúc khi mọi mục Done means được xác minh bằng lệnh, con
+số hoặc trạng thái quan sát được, review cô lập sạch, label của issue khớp trạng
+thái thật và không còn process, worktree hay cache nào run đã khởi động.
+
+Báo cáo cuối liệt kê từng mục Done means kèm bằng chứng, các quyết định đã đưa
+ra thay bạn, những gì bạn đã miễn, cùng rủi ro hoặc follow-up còn lại. Giao hàng
+một phần được báo là một phần, không bao giờ là xong.

@@ -1,0 +1,87 @@
+---
+title: ak skills migrate
+description: Nhận các kit skill do bản cài legacy ghi vào skill store mà không ghi, di chuyển hay xoá file skill nào.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak skills migrate` sau khi bật skill store để ghi nhận các kit skill mà
+một bản cài legacy (khi cờ tắt) đã ghi. Với mỗi alias mà legacy record của một
+kit cho runtime và scope này liệt kê, khi mọi file được liệt kê có trên đĩa
+với đúng byte đã ghi, các file đó trở thành một store entry, còn receipt và
+lock ghi tham chiếu của kit. Không file skill nào bị ghi, di chuyển hay xoá.
+
+## Cách dùng
+
+```bash
+ak skills migrate [flags]
+```
+
+Lệnh không nhận argument theo vị trí.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--scope <scope>` | `project` | Chọn `project` hoặc `global`. |
+| `--runtime <list>` | Tất cả | Runtime cần migrate: `claude-code`, `codex`. Lặp lại được hoặc phân tách bằng dấu phẩy. |
+| `--dry-run` | `false` | In plan và không ghi gì. |
+
+Các cờ dùng chung nằm trong [quy ước CLI](../cli-conventions).
+
+## Điều kiện
+
+Cần `AGENTKIT_SKILL_STORE=1`. Khi skill store tắt, lệnh thoát `2`.
+
+## Nhận gì và giữ lại gì
+
+Một alias vẫn là bản cài legacy, và run báo nó dưới dạng cảnh báo, khi:
+
+- một file được liệt kê đã bị sửa, hoặc record liệt kê một file bị thiếu;
+- alias là link hoặc skill dạng một file phẳng;
+- một record khác liệt kê cùng alias với các file khác.
+
+Các kit có record liệt kê cùng các file sẽ đồng sở hữu alias. File không record
+nào liệt kê được giữ nguyên và bỏ ra ngoài. Tham chiếu receipt mà kit của nó
+không còn ghi alias sẽ bị bỏ, còn file của nó được giữ. Một kit skill có cây
+file khác nhau giữa các runtime vẫn là legacy ở tất cả runtime đó, nên hãy
+migrate mọi runtime cùng lúc sau một lần cập nhật kit khi cờ tắt. Chạy lại lệnh
+không thay đổi gì.
+
+<Callout type="warning">
+  Lệnh áp dụng mà không hỏi. Chạy `ak skills migrate --dry-run --json` trước,
+  và chạy lại sau mỗi thay đổi kit khi cờ tắt.
+</Callout>
+
+## Tác động
+
+Trước khi ghi, lệnh snapshot skill lock, receipt và root registry của scope qua
+subsystem backups. Sau đó nó ghi store entry, receipt và lock trong một
+transaction có journal dưới kit lifecycle lock. Một run bị gián đoạn được lệnh
+skills mutate kế tiếp rollback, và legacy record không bao giờ bị đổi. Lỗi được
+báo là `migration.failed` và không commit gì.
+
+## Đầu ra
+
+JSON dùng `kind=skills.migrate` với cùng dạng plan như các lệnh skill store
+khác, gồm `warnings[]` cho mọi alias vẫn là bản cài legacy.
+
+## Mã thoát
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Migrate thành công, hoặc không có gì để đổi. |
+| `1` | Offline mà không có bản sao đã xác minh, credential bị từ chối, đường dẫn quá dài hoặc cần recovery. |
+| `2` | SkillX hoặc skill store bị tắt, cờ hoặc argument không hợp lệ, hoặc alias bị giữ chỗ. |
+| `4` | Một thao tác AgentKit khác đang giữ kit lifecycle lock. |
+| `5` | Không tìm thấy release hoặc không có quyền dùng. |
+| `6` | Trùng alias, đường dẫn không thuộc quyền sở hữu hoặc đã bị sửa, project state không đáng tin, hoặc lock thay đổi trong lúc chạy. |
+| `7` | Release bị revoke, yank, quarantine hoặc không đáng tin, có link nằm trong đường dẫn đích, hoặc digest không khớp. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của lệnh `ak skills migrate`](../cli/ak_skills_migrate)
+- [Chiếu skill lock](./sync)
+- [Cài một skill](./install)
+- `ak doctor --check skill_roots_shared` cảnh báo khi hai runtime dùng chung một
+  skills root qua symlink hoặc junction; hãy cho mỗi runtime một root riêng.

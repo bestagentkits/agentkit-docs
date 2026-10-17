@@ -1,0 +1,90 @@
+---
+title: ak skills migrate
+description: Adopt the kit skills a legacy install wrote into the skill store without writing, moving, or removing a skill file.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak skills migrate` after turning on the skill store to record the kit
+skills a legacy (flag-off) install already wrote. For each alias that a kit's
+legacy record of this runtime and scope lists, when every listed file is on
+disk with its recorded bytes, the files become a store entry and the receipt
+and lock record the kit's reference. No skill file is written, moved, or
+removed.
+
+## Usage
+
+```bash
+ak skills migrate [flags]
+```
+
+The command accepts no positional arguments.
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--scope <scope>` | `project` | Select `project` or `global`. |
+| `--runtime <list>` | All | Runtimes to migrate: `claude-code`, `codex`. Repeatable or comma-separated. |
+| `--dry-run` | `false` | Print the plan and write nothing. |
+
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+## Requirements
+
+`AGENTKIT_SKILL_STORE=1` is required. With the skill store off, the command
+exits `2`.
+
+## What it adopts and what it keeps
+
+An alias stays a legacy install, and the run reports it as a warning, when:
+
+- a listed file was modified, or the record lists a file that is missing;
+- the alias is a link or a flat-file skill;
+- another record lists the same alias with different files.
+
+Kits whose records list the same files co-own the alias. A file no record lists
+is preserved and left out. A receipt reference whose kit no longer records the
+alias is dropped, and its files are kept. A kit skill whose runtimes hold
+different trees stays legacy in all of them, so migrate every runtime together
+after a flag-off kit update. Running the command again changes nothing.
+
+<Callout type="warning">
+  The command applies without a prompt. Run `ak skills migrate --dry-run --json`
+  first, and rerun it after any flag-off kit change.
+</Callout>
+
+## Effects
+
+Before writing, the command snapshots the scope's skill lock, receipts, and
+root registry through the backups subsystem. It then writes the store entries,
+receipts, and lock in one journaled transaction under the kit lifecycle lock.
+An interrupted run is rolled back by the next mutating skills command, and
+legacy records are never changed. A failure reports `migration.failed` and
+commits nothing.
+
+## Output
+
+JSON uses `kind=skills.migrate` with the same plan shape as the other skill
+store commands, including `warnings[]` for every alias that stays a legacy
+install.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The migration succeeded, or there was nothing to change. |
+| `1` | Offline without a verified copy, a credential was refused, a path was too long, or recovery is required. |
+| `2` | SkillX or the skill store is disabled, flags or arguments are invalid, or an alias is reserved. |
+| `4` | Another AgentKit operation holds the kit lifecycle lock. |
+| `5` | A release was not found or not entitled. |
+| `6` | Alias collision, an unowned or modified path, untrusted project state, or the lock changed during the run. |
+| `7` | A release is revoked, yanked, quarantined, or untrusted, a link sits in a target path, or a digest mismatched. |
+
+## Related commands
+
+- [Complete `ak skills migrate` command facts](../cli/ak_skills_migrate)
+- [Project the skill lock](./sync)
+- [Install a skill](./install)
+- `ak doctor --check skill_roots_shared` warns when two runtimes reach one
+  skills root through a symlink or junction; give each runtime its own root.
