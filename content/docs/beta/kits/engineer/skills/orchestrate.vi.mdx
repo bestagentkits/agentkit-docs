@@ -7,7 +7,9 @@ import { Callout } from 'fumadocs-ui/components/callout';
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
 Dùng `ak:orchestrate` khi một outcome hưởng lợi từ staged dependency, parallel
-work, runtime diversity hoặc arbiter độc lập. Skill xác minh từng runtime cùng
+work, runtime diversity hoặc arbiter độc lập. Mỗi worker là một session độc lập,
+có thể resume, của runtime bạn đang dùng; runtime khác chỉ tham gia khi bạn
+opt-in. Skill xác minh từng runtime cùng
 control tại thời điểm chạy, isolate writer rủi ro, capture evidence có giới hạn
 và từ chối đánh dấu công việc chưa được xác minh là hoàn tất. Skill sở hữu
 routing và judgment; `ak orchestrate` sở hữu plan state xác định, giám sát
@@ -48,11 +50,13 @@ Trước khi bắt đầu:
 
 | Runtime | Cách gọi | Ranh giới khả dụng |
 | --- | --- | --- |
-| Claude Code | `/ak:orchestrate ...` | Skill có thể xét in-session subagent đang hoạt động cùng headless CLI đã xác minh. Route và control chính xác được khám phá trong lần chạy này. |
-| Cursor | `/ak:orchestrate ...` | Slash invocation theo cách gọi Engineer Skill do người dùng xác minh. Internal routing chỉ đủ điều kiện khi surface Cursor hiện tại chứng minh dispatch cùng control cần thiết. |
-| Codex | `$ak:orchestrate ...` | Native Skill discovery được hỗ trợ. In-session routing cần multi-agent capability được cung cấp; nếu không, dùng verified CLI route hoặc trả kết quả blocked. |
+| Claude Code | `/ak:orchestrate ...` | Skill khởi chạy session Claude Code độc lập cùng headless CLI đã xác minh của chính nó. Route và control chính xác được khám phá trong lần chạy này. |
+| Cursor | `/ak:orchestrate ...` | Slash invocation theo cách gọi Engineer Skill do người dùng xác minh. Session chỉ đủ điều kiện khi surface Cursor hiện tại chứng minh dispatch cùng control cần thiết. |
+| Codex | `$ak:orchestrate ...` | Native Skill discovery được hỗ trợ. Session cần surface cung cấp khả năng tạo session; nếu không, dùng verified Codex CLI route hoặc trả kết quả blocked. |
 
-Runtime gọi Skill không tự động là runtime được chọn cho mọi job.
+Mặc định, candidate là session của runtime gọi Skill cùng headless CLI được giám
+sát của chính runtime đó. Runtime khác chỉ được xét qua các opt-in trong
+[Dispatch session trước](#dispatch-session-trước).
 
 ## Kiểm tra hỗ trợ nền tảng
 
@@ -63,20 +67,20 @@ bởi `ak orchestrate` mới yêu cầu Darwin.
 | --- | --- | --- |
 | `probe`, `prepare`, `advance`, `accept`, `plan-status` | Có | Có |
 | `events`, `output`, `diagnose` | Có | Có, nhưng chỉ cho run được ghi trên host có giám sát |
-| Job `runtime: internal` (in-session subagent) | Có, khi live harness đủ điều kiện | Có, khi live harness đủ điều kiện |
+| Job `runtime: internal` (session của runtime hiện tại) | Có, khi live runtime khởi chạy được session | Có, khi live runtime khởi chạy được session |
 | Job CLI và Pi được `ak orchestrate` giám sát | Có | Không: `advance` chuyển job sang `blocked` với error class `unsupported_platform` và thoát với mã `1`; job internal trong cùng run vẫn được dispatch |
 | Check `verification:` thực thi được trong job spec | Có | Không: `accept` chuyển job sang `blocked` với error class `unsupported_platform`; hãy chuẩn bị run mới không có verification dạng lệnh |
 | `start`, `status`, `resume`, `stop` cho supervisor run | Có | Không: help của từng lệnh nêu exit code cho nền tảng không được hỗ trợ |
 
 Trên host không phải Darwin, Skill route job đủ điều kiện qua
-`runtime: internal`. Job cần process CLI hoặc Pi được giám sát được giữ ngoài
+session `runtime: internal`. Job cần process CLI hoặc Pi được giám sát được giữ ngoài
 spec đã prepare và được báo blocked kèm lý do nền tảng. `verification:` do bạn
 hoặc spec được cung cấp khai báo là acceptance constraint: job đó bị block, không
 bao giờ được chuyển đổi. Chỉ trong spec do Skill tự soạn, Skill mới liệt kê check
 command trong `checks:`, chạy chúng trong harness và ghi nhận là
 harness-attested. Skill không bao giờ bypass supervision gate, launch process
 không được giám sát để thay thế, hay advance lại job đã bị kẹt ở gate đó. Khi
-cũng không có in-session Agent nào đủ điều kiện, lần chạy block và nêu lý do.
+cũng không có session nào của runtime hiện tại đủ điều kiện, lần chạy block và nêu lý do.
 
 ## Chạy Skill
 
@@ -117,9 +121,43 @@ argv và environment.
 | --- | --- | --- |
 | Free-form task | Chuyển accepted outcome thành durable job graph trước dispatch | Graph được tạo vẫn phải qua validation cùng safety gate |
 | Đường dẫn job spec | Dùng job, dependency, timeout, ownership, check và expected output rõ | Runtime, model, Agent cùng control pin vẫn chưa được xác minh đến live preflight |
-| `--internal` | Ưu tiên in-session subagent đủ điều kiện cho job chưa pin | Đây là preference, không phải hard mode hay permission bypass |
+| `--cross-runtime` | Cho phép runtime khác đã cài vượt qua live probe, authentication, control, quota và cost check | Chỉ khi opt-in; runtime được nêu tên mà thiếu hoặc chưa authenticated sẽ chạy onboarding như một bước setup hiển thị |
+| `--internal` | Deprecated: được chấp nhận như "ưu tiên session của runtime hiện tại", vốn đã là mặc định | Skill in một dòng nhắc bạn bỏ cờ này; không bao giờ chọn nested subagent |
 | `--yes` | Chỉ mang approval cho đúng destructive hoặc external scope đã mô tả | Không cấp quyền rộng hơn cho credential, file, release hay deployment |
 | `--resume <run-dir>` | Dùng lại successful output và redispatch interrupted work thành attempt mới | Route, authentication, control và approval được xác minh lại |
+
+## Dispatch session trước
+
+Mỗi worker chạy ngoài lượt của coordinator, dưới dạng session có native handle,
+context, model và lifecycle riêng, hoặc process headless được giám sát. Session
+của runtime hiện tại là `runtime: internal` trong job spec. Nested in-harness
+subagent không phải worker.
+
+- **Scope mặc định là runtime hiện tại.** Candidate là session của runtime bạn
+  gọi Skill và CLI được giám sát của chính runtime đó.
+- **Runtime khác cần opt-in.** Truyền `--cross-runtime`, cho job một chuỗi
+  `fallback_runtime` trong spec, pin `runtime:`, hoặc nêu tên runtime trong yêu
+  cầu (ví dụ "as pi sessions"). Mỗi cách là một opt-in tương đương cho runtime
+  đó. Runtime được nêu tên mà thiếu hoặc chưa authenticated sẽ chạy onboarding
+  như một bước setup hiển thị, rồi được probe lại.
+- **Không khả dụng thì hiển thị rõ.** Khi runtime hiện tại không khởi chạy được
+  session đủ điều kiện và không có candidate đã opt-in nào đủ điều kiện, job
+  được báo `blocked` kèm probe evidence. Skill không bao giờ âm thầm mở rộng
+  scope hay ghi đè pin runtime, model hoặc role-profile rõ ràng.
+- **Permission fallback là route subagent duy nhất.** Khi runtime từ chối khởi
+  chạy session vì coordinator thiếu quyền (standing policy hoặc permission mode,
+  không phải prompt bạn đã từ chối), job có thể chạy như nested agent. Prompt
+  của nó vẫn do bạn trả lời, writer vẫn có worktree riêng, job external tác động
+  cao vẫn bị block, và job arbiter hay review không bao giờ dùng route này. Report
+  ghi `fallback: subagent`, evidence về lần từ chối và các đảm bảo bị giảm: không
+  có resume độc lập, dùng chung quota và permission, timeout chỉ là accounting.
+  Lỗi quota, budget, resource, thiếu runtime và crash không bao giờ fallback sang
+  subagent.
+
+Cache của `ak orchestrate probe` nằm ở `AGENTKIT_HOME/cache/orchestrate/probe`.
+Lệnh được phân loại là read-only: chỉ chạy probe version và help, không bao giờ
+cài hay authenticate runtime, và chỉ cập nhật cache đó. Xem
+[`ak orchestrate probe`](../../../reference/cli/orchestrate/probe).
 
 ## Mô tả job rõ ràng
 
@@ -147,8 +185,8 @@ thay vì âm thầm hạ thấp yêu cầu.
 2. **Skill xây và validate graph.** Skill reject duplicate ID, dependency
    cycle, working directory không an toàn, bound còn thiếu và parallel write
    overlap.
-3. **Skill kiểm kê live candidate.** Skill xác minh executable hoặc Agent
-   availability, authentication readiness, command shape hiện tại, selectable
+3. **Skill kiểm kê live candidate.** Skill bắt đầu từ runtime hiện tại, thêm
+   runtime đã opt-in, và xác minh executable hoặc session availability, authentication readiness, command shape hiện tại, selectable
    route, permission, isolation, timeout, capture, resume behavior và host
    limitation.
 4. **Skill phân loại capability và risk.** Read-only extraction,
@@ -158,18 +196,79 @@ thay vì âm thầm hạ thấp yêu cầu.
    credentialed cùng external effect khác cần approval chính xác và recovery
    plan.
 6. **Skill dispatch theo stage.** Independent job chỉ chạy cùng nhau trong
-   concurrency limit. Parallel writer dùng worktree riêng và ownership không
-   chồng lấn.
+   `concurrency:` mà Skill cho phép dựa trên quota và host headroom (xem
+   [Định cỡ parallelism và phục hồi lỗi](#định-cỡ-parallelism-và-phục-hồi-lỗi)).
+   Parallel writer dùng worktree riêng và ownership không chồng lấn.
 7. **Skill capture durable evidence.** State transition, bounded output,
    artifact, error, duration và usage được báo đáng tin vẫn sẵn sàng cho
    diagnosis cùng resume. Process CLI và Pi được giám sát yêu cầu Darwin; trên
-   host khác, internal job đủ điều kiện tiếp tục qua cùng vòng `prepare`,
+   host khác, session job đủ điều kiện tiếp tục qua cùng vòng `prepare`,
    `advance` và `accept`, như mô tả trong phần Kiểm tra hỗ trợ nền tảng ở trên.
-8. **Skill chạy arbiter.** Judgment route riêng kiểm tra expected output,
+8. **Skill chạy arbiter.** Một session riêng trên model judgment mạnh nhất đã
+   xác minh trực tiếp kiểm tra expected output,
    contradiction, safety gap, failed check, unsupported claim và unresolved
    question.
 9. **Skill report mà không tự integration.** Worktree diff vẫn chờ review;
    merge hoặc cherry-pick là action riêng.
+
+## Định cỡ parallelism và phục hồi lỗi
+
+**Admission.** Skill định cỡ `concurrency:` của spec từ evidence, không dùng số
+worker cố định. Skill đọc usage window do provider báo bằng `ak usage limits`,
+giữ headroom dưới giới hạn đã báo (runtime chung một upstream account dùng chung
+một pool), và kiểm tra CPU, memory, disk của host. Check nặng như full preflight,
+browser suite và build chạy tuần tự; scout nhẹ chạy parallel. Quota hoặc cost
+không rõ không có nghĩa là không giới hạn: Skill admit tuần tự hoặc hỏi policy.
+Khi bị áp lực tài nguyên, Skill ngừng gọi `advance` cho việc mới và settle mọi job
+đã được giao, không dừng process mà run không khởi chạy. Lý do giảm concurrency
+được ghi trong report.
+
+**Failure class.** Mỗi attempt lỗi hoặc kẹt được phân loại trước khi hành động,
+và class đã map xuất hiện trong receipt của `accept`:
+
+| Class | Ví dụ | Retry |
+| --- | --- | --- |
+| `transient`, `rate_limited` | Mất mạng ngắn, giới hạn provider có thể retry | Chỉ qua policy `retry:` của job |
+| `timeout` | Hết bound | Chỉ qua `retry:`, sau khi xác nhận writer đã dừng |
+| `quota_exhausted`, `budget_exhausted` | Hết usage window, chạm cost ceiling | Không; chờ reset hoặc báo blocker |
+| `runtime_missing`, `auth_unavailable`, `model_unavailable`, `unsupported_capability` | Runtime thiếu hoặc chưa authenticated, model không có trong live set | Không |
+| `host_resource_pressure` | Thiếu memory hoặc disk | Không |
+| `process_crash`, `lost_handle`, `message_unavailable` | Worker chết hoặc không resolve được session | Không, đến khi chứng minh writer cũ đã dừng |
+| `verification_failure`, `merge_conflict`, `task_spec_error` | Check fail, worktree xung đột | Không |
+| `permission_denied`, `security_risk`, `external_effect_requires_approval` | Action bị từ chối, input không an toàn, effect chưa approval | Không; dừng và báo approval boundary |
+
+**Fallback ladder.** Skill chỉ leo đến bậc cần thiết, trong giới hạn thời gian và
+cost của run. Run đã prepare cố định runtime, model và invocation của từng job,
+nên job lỗi không bao giờ bị re-route trong cùng run.
+
+1. Reattach vào attempt hoặc session gốc khi handle và ownership đã được chứng
+   minh.
+2. Retry trên cùng route qua policy `retry:` của job, sau khi writer trước đã
+   settle.
+3. Thích nghi trong runtime hiện tại: giảm `concurrency:` hoặc chờ usage window
+   với job chưa dispatch, hoặc prepare run directory mới với model hay effort
+   live khác.
+4. Cross-runtime, chỉ khi đã opt-in, bằng cách prepare run directory mới route
+   job tới candidate vừa probe. Model identifier và flag không bao giờ được mang
+   giữa các runtime.
+5. Pause, replan hoặc block kèm blocker hay yêu cầu approval có thể hành động.
+
+Không bậc nào nâng permission, bỏ check, ignore pin hay ra ngoài authorized root.
+
+## Hiểu model của arbiter và review
+
+Job arbiter, advisor, review, audit và security chạy trong session mới, riêng
+biệt, trên model mạnh nhất mà active route thực sự dùng được. Skill bắt đầu từ
+các model live runtime liệt kê là selectable cho account của bạn, loại model mà
+bạn, project hoặc tổ chức không cho phép, rồi áp dụng thứ tự ưu tiên: pin rõ
+ràng, rồi model policy, rồi candidate mạnh nhất còn lại theo catalog rank của
+runtime. Metric của các run trước không bao giờ đổi thứ hạng này. Khi route không
+chọn được model, model mặc định được dùng và report nêu rõ không có override.
+
+Report công bố runtime và model thực sự phục vụ từng judgment job, cùng lý do
+chọn và lý do fallback nếu có. Reviewer khác model family được ưu tiên khi live
+evidence chứng minh được; fallback cùng family được công bố. Arbiter Pi chỉ được
+tính là độc lập khi model family đã resolve khác.
 
 ## So sánh shadow tùy chọn
 
@@ -195,7 +294,7 @@ khi có bất đồng hoặc provider gặp lỗi.
   control đáp ứng risk tier.
 </Callout>
 
-Mỗi CLI process có timeout do coordinator sở hữu. In-session timeout chỉ là
+Mỗi CLI process có timeout do coordinator sở hữu. Session timeout chỉ là
 accounting limit trừ khi live harness chứng minh cancellation; Skill không được
 launch writer khác vào cùng ownership khi timed-out Agent có thể vẫn chạy.
 
@@ -226,8 +325,10 @@ evidence, contradiction được giải quyết và arbiter pass.
 
 | Triệu chứng | Bước tiếp theo an toàn |
 | --- | --- |
-| Agent báo orchestrate cần macOS | Chỉ giám sát CLI bên ngoài mới cần Darwin. Yêu cầu Skill route job qua Agent trong session (`--internal`); job cần CLI có giám sát được báo `blocked`. |
-| Runtime thiếu hoặc chưa authenticated | Đánh giá fallback đã khai báo qua cùng live gate, hoặc hoàn tất setup ngoài lần chạy rồi preflight lại. |
+| Agent báo orchestrate cần macOS | Chỉ giám sát CLI bên ngoài mới cần Darwin. Skill route job qua session của runtime hiện tại; job cần CLI có giám sát được báo `blocked`. |
+| Session không khởi chạy được và job `blocked` | Đọc probe evidence. Opt-in runtime khác bằng `--cross-runtime` hoặc chuỗi `fallback_runtime`, hoặc sửa session surface của runtime hiện tại. |
+| Skill in cảnh báo `--internal` is deprecated | Bỏ cờ này. Session của runtime hiện tại đã là mặc định. |
+| Runtime thiếu hoặc chưa authenticated | Đánh giá fallback đã opt-in trong run directory mới qua cùng live gate, hoặc hoàn tất setup ngoài lần chạy rồi preflight lại. |
 | Model hoặc flag bị reject | Quay lại live help hoặc official documentation hiện tại; không đoán hay mang identifier sang runtime khác. |
 | Permission prompt xuất hiện | Dừng job và giải quyết approval boundary chính xác. Không retry với bypass. |
 | Job timeout | Giữ bounded partial evidence, đánh dấu job failed và block dependent đến khi có recovery decision. |
@@ -244,8 +345,11 @@ So sánh `ak:team` cho live multi-session collaboration, hoặc tiếp tục v�
 
 - Runtime cùng model catalog, authentication, flag và safety control thay đổi;
   mỗi lần chạy phải xác minh trực tiếp.
-- In-session Agent có thể không cung cấp force cancellation, per-job sandboxing
-  hay selectable model.
+- Session job có thể thiếu force cancellation, per-job sandboxing hoặc chọn
+  model; mỗi khả năng được probe theo từng run. Subagent permission-fallback còn
+  thiếu resume độc lập và dùng chung quota cùng permission của coordinator.
+- Quota và resource admission là đánh giá của coordinator trên evidence quan sát
+  được, không phải reservation được cưỡng chế.
 - Job không chia sẻ implicit memory; dependency phải truyền explicit artifact.
 - Worktree cần Git cùng disk headroom, và integration vẫn là action được review
   riêng.
@@ -254,4 +358,4 @@ So sánh `ak:team` cho live multi-session collaboration, hoặc tiếp tục v�
   pool hay provider adapter.
 - Job CLI và Pi được giám sát, check `verification:` thực thi được và các lệnh
   supervisor `start`, `status`, `resume`, `stop` yêu cầu Darwin. Host khác chạy
-  job `runtime: internal` đủ điều kiện và block phần còn lại.
+  session job `runtime: internal` đủ điều kiện và block phần còn lại.
