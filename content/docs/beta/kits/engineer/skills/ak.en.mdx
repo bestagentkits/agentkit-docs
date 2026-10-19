@@ -130,8 +130,9 @@ itself*.
   `recovery accept-rollback|add|init|remove` are classified as mutating.
   No `ak secrets` command starts the background update runner.
 - **Runtime orchestration** — inspect installed `ak orchestrate --help` first.
-  `probe` runs bounded version/help checks and writes an owned metadata cache;
-  it does not prove authentication or invoke inference. `prepare`, `advance`,
+  `probe` is read-only: it runs bounded version/help checks and writes only a
+  disposable metadata cache under `AGENTKIT_HOME/cache`; it does not prove
+  authentication or invoke inference. `prepare`, `advance`,
   and `accept` persist resolved job, attempt, and artifact evidence. `events`,
   `output`, and `diagnose` inspect recorded evidence; `plan-status` and
   lifecycle `status`/`resume` may persist reclassification. External process
@@ -160,6 +161,21 @@ itself*.
   `ak update <dir> --yes` also refreshes every installed project runtime
   (`--target a,b` narrows them). Never turn on a schedule or opt in a
   project without an explicit user request.
+- **Update windows** — `error_code: renewal_required` (exit `15`) means the
+  kit's update window does not cover the requested release. Installed
+  versions keep working. Do not retry or downgrade on your own; report the
+  error's `updates.renew_url` and `updates.latest_entitled_version` to the
+  user. `ak licenses --json` shows each kit's window under
+  `licenses[].updates`. An unpinned `ak update` instead installs the latest
+  covered version when it is newer, or reports a `skipped` row with
+  `reason: "up_to_date"` (the installed version already is the latest
+  covered one) or `reason: "renewal_required"`. It never moves a kit
+  backwards: `reason: "installed_version_newer"` means nothing changed; pass
+  `--version` only when the user asks for that older release. A version the
+  registry does not publish is "not found", not a renewal case. Suggest
+  renewing only when a window is `expiring` or `expired`, or
+  `renewalRequired` is true. Update-window hints arrive in the JSON
+  result's `notices` fields, not on stderr.
 
 ## Route Skills before loading them
 
