@@ -28,18 +28,21 @@ The command has no prompt, preview, dry-run, or force mode. `--yes` and
 
 ## Effects
 
-AgentKit atomically takes the CLI slot from
-`~/.agentkit/auth/session.json` and removes the sibling stored API-key file.
-`AGENTKIT_HOME` changes the base directory. A missing CLI session is treated as
-success, so the command is safe to repeat.
+Under one lock, AgentKit takes the CLI slot and the sign-in kept for secrets
+sync from `~/.agentkit/auth/session.json` and removes the sibling stored
+API-key file. `AGENTKIT_HOME` changes the base directory. A missing CLI
+session is treated as success, so the command is safe to repeat.
 
-For an email OTP session, AgentKit attempts remote session revocation only
-after local secrets are removed. If the access token is expired, it can use the
+For each removed session that is renewable (an email OTP session, or an
+API-key sign-in enrolled with a device session) and holds a refresh
+credential, AgentKit attempts remote session revocation only after local
+secrets are removed. If revoking the access token fails, it can use the
 rotating refresh credential once and retry revocation. Registry failure is
 best-effort and does not restore the local login.
 
-API-key and license-key logins do not use this remote email-session revocation
-path. The App slot created by license-key activation remains on disk.
+A plain API-key login and license-key activation have no renewable session
+to revoke remotely. The App slot created by license-key activation remains on
+disk.
 
 ## Output and streams
 
@@ -65,7 +68,7 @@ envelope (`error_code: validation_failed`, exit `2`). Human mode, including
 
 | Exit | Meaning | Safe next step |
 | --- | --- | --- |
-| `0` | The CLI slot is absent after the command, including when it was already absent; remote email-session revocation may still have failed. | Run `ak whoami` to confirm the locally resolved state. |
+| `0` | The CLI slot is absent after the command, including when it was already absent; remote session revocation may still have failed. | Run `ak whoami` to confirm the locally resolved state. |
 | `1` | The auth store could not be read, locked, rewritten, or cleared. | Retry once, then inspect permissions with `ak doctor`; do not delete the whole AgentKit home. |
 | `2` | A flag could not be parsed. | Correct the invocation. |
 

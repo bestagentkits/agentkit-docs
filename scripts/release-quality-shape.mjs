@@ -21,8 +21,8 @@ export const RELEASE_SHAPE_BASELINE = Object.freeze({
   // guide, ahead of promotion. The bilingual guides/jev-clef adds an Agent-first entry,
   // guides/choosing-ui-testing-skills adds a Beta-only guide, and
   // guides/choosing-subagent-models adds the subagent model guide.
-  sourceRoutesPerLocaleChannel: { stable: 490, beta: 520 },
-  routesPerLocaleChannel: { stable: 489, beta: 519 },
+  sourceRoutesPerLocaleChannel: { stable: 490, beta: 524 },
+  routesPerLocaleChannel: { stable: 489, beta: 523 },
   reviewedSourceOnlyRoutes: [
     {
       route: 'changelog',

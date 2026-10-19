@@ -59,10 +59,15 @@ và envelope `--json` là chuẩn.
   [Định tuyến Skill trước khi nạp](#định-tuyến-skill-trước-khi-nạp).
   Một số bề mặt `ak skills` là opt-in qua biến môi trường và không khả dụng nếu chưa đặt cờ: `AGENTKIT_SKILLX=1` xác minh và đọc release SkillX
   (`resolve|inspect|read`), kèm `AGENTKIT_SKILL_STORE=1` thì cài được chúng;
+  kèm `AGENTKIT_SKILL_STORE=1`, `ak skills migrate` nhận các kit skill do bản
+  cài legacy ghi vào store mà không ghi, di chuyển hay xóa file skill nào (chạy
+  `--dry-run --json` trước);
   `AGENTKIT_SKILL_OVERLAYS=1` thêm personal kit (`ak skills kit …`);
   `AGENTKIT_SKILL_EXEC_BROKER=1` thêm `ak skills grants` và `ak skills exec`;
-  `AGENTKIT_SKILL_EVOLVE=1` thêm bản xem trước bằng chứng chỉ đọc
-  `ak skills improve --dry-run`. Xem trước bằng `--dry-run` khi lệnh có hỗ trợ (`--dry-run --json` cho `ak skills install`), và không bao giờ thay người dùng phê duyệt plan token, quyết định resolve, publish hay chạy script; hiển thị bản tóm tắt quyền trước mọi grant.
+  `AGENTKIT_SKILL_EVOLVE=1` thêm `ak skills improve`, trong đó bản xem trước
+  bằng chứng `--dry-run` và brief soạn thảo `--brief --json` chỉ đọc, còn bước
+  `--candidate <draft-dir>` ghi một candidate đã qua gate mà không áp dụng nó,
+  cùng `ak skills evolution list|show` chỉ đọc. Xem trước bằng `--dry-run` khi lệnh có hỗ trợ (`--dry-run --json` cho `ak skills install`), và không bao giờ thay người dùng phê duyệt plan token, quyết định resolve, publish hay chạy script; hiển thị bản tóm tắt quyền trước mọi grant.
 - **Model của agent** — `ak agents model list|get|explain` chỉ đọc.
   `set|inherit|reset|adopt` ghi config và cập nhật các file AgentKit vẫn sở
   hữu. Chỉnh model phía runtime (drift) vẫn tồn tại qua refresh; `apply` chỉ
@@ -119,14 +124,16 @@ và envelope `--json` là chuẩn.
   manifest. [`ak test benchmark`](../../../reference/cli/test/benchmark) là lệnh mutate vì nó thực
   thi regression corpus đáng tin cậy trong workspace tạm thời cô lập;
   `--semantic-replay` vẫn chạy offline.
-- **Secrets** — [`ak secrets`](../../../reference/cli/secrets) `list`, `get`, `export` và
-  `recovery list` chỉ đọc. `set`, `delete`, `rotate`, `import-env`, `approve`,
+- **Secrets** — [`ak secrets`](../../../reference/cli/secrets) `list`, `get`, `search`, `export` và
+  `recovery list` chỉ đọc. `set`, `annotate`, `delete`, `rotate`, `import-env`,
+  `approve`,
   `audit`, `grant`, `grants`, `revoke`, `trust` và
   `recovery accept-rollback|add|init|remove` được xếp vào nhóm mutate.
   Không lệnh `ak secrets` nào khởi động trình chạy cập nhật nền.
 - **Điều phối runtime** — đọc `ak orchestrate --help` của binary đã cài trước.
-  `probe` chạy version/help bounded và ghi metadata cache thuộc sở hữu; không
-  chứng minh authentication hay gọi inference. `prepare`, `advance` và
+  `probe` chỉ đọc: chạy version/help bounded và chỉ ghi một metadata cache có
+  thể bỏ đi dưới `AGENTKIT_HOME/cache`; không chứng minh authentication hay
+  gọi inference. `prepare`, `advance` và
   `accept` persist evidence job/attempt/artifact đã resolve. `events`,
   `output` và `diagnose` kiểm tra evidence đã ghi. Giám sát process bên ngoài
   yêu cầu Darwin. Bundle chẩn đoán loại argv và environment riêng.
@@ -152,6 +159,21 @@ và envelope `--json` là chuẩn.
   người giám sát sẽ làm mới thêm mọi runtime đã cài trong project
   (`--target a,b` thu hẹp phạm vi). Không bao giờ bật schedule hoặc opt-in
   một project mà không có yêu cầu tường minh của người dùng.
+- **Update window** — `error_code: renewal_required` (exit `15`) nghĩa là
+  update window của Kit không bao phủ bản phát hành được yêu cầu. Các phiên
+  bản đã cài vẫn hoạt động. Không tự retry hay hạ phiên bản; báo cho người
+  dùng các trường `updates.renew_url` và `updates.latest_entitled_version`
+  của lỗi. `ak licenses --json` hiển thị window của từng Kit trong
+  `licenses[].updates`. `ak update` không pin phiên bản thì cài phiên bản
+  mới nhất được bao phủ khi nó mới hơn, hoặc báo một dòng `skipped` với
+  `reason: "up_to_date"` (phiên bản đã cài đã là bản mới nhất được bao phủ)
+  hoặc `reason: "renewal_required"`. Nó không bao giờ đưa Kit lùi phiên bản:
+  `reason: "installed_version_newer"` nghĩa là không có gì thay đổi; chỉ
+  truyền `--version` khi người dùng yêu cầu bản cũ hơn đó. Một phiên bản mà
+  registry không phát hành là "not found", không phải trường hợp gia hạn.
+  Chỉ gợi ý gia hạn khi window ở trạng thái `expiring` hoặc `expired`, hoặc
+  `renewalRequired` là true. Gợi ý về update window nằm trong các trường
+  `notices` của kết quả JSON, không nằm trên stderr.
 
 ## Định tuyến Skill trước khi nạp
 
