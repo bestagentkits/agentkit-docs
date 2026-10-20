@@ -20,8 +20,8 @@ navigation, reading progress, syntax highlighting, and Mermaid diagrams.
 - You want to browse a document directory and follow Markdown links visually.
 - You want headings, a table of contents, code highlighting, theme and font
   controls, reading progress, or plan-specific previous and next navigation.
-- You want browser-rendered Mermaid blocks and can allow the required CDN
-  request.
+- You want Mermaid blocks rendered to inline SVG by the server, which works
+  offline for every diagram the bundled Pele renderer accepts.
 
 ### Choose another workflow when
 
@@ -48,8 +48,10 @@ Before you start:
 - Approve dependency installation separately. Running `npm install` in the Skill
   directory writes dependency artifacts and uses the package registry.
 - Decide whether the browser may reach Google Fonts, cdnjs, and jsDelivr. The
-  rendered page loads fonts, Highlight.js theme CSS, and Mermaid 11 from those
-  public CDNs.
+  rendered page loads fonts from Google Fonts and Highlight.js theme CSS from
+  cdnjs. Mermaid blocks need no diagram library: the server renders them with a
+  vendored Pele. The browser fetches Mermaid 11.4.1 from jsDelivr (pinned and
+  SRI-checked) only when a page contains a block Pele rejects.
 
 | Runtime | Invocation | Availability boundary |
 | --- | --- | --- |
@@ -126,21 +128,29 @@ added when binding to `0.0.0.0` and a local IPv4 address is found.
 6. **The browser loads enhancements.** Local reader JavaScript and shipped
    `assets/styles/` theme modules add theme, font, sidebar, keyboard, mobile,
    and progress behavior. The entry stylesheet must ship with every module it
-   imports. External CDN resources still add fonts, Highlight.js theme CSS, and
-   Mermaid.
+   imports. External CDN resources still add fonts and Highlight.js theme CSS,
+   plus Mermaid 11.4.1 only for a block Pele rejects.
 7. **The run remains active until stopped.** PID files support discovery and
    shutdown; the final report should confirm the process and port are gone.
 
 ## Read Mermaid blocks and plan documents
 
-Fenced `mermaid` blocks are escaped on the server, then rendered in the browser
-with Mermaid 11 from jsDelivr. The diagram follows the light or dark reader
-theme, can expand to the main content width, and is re-rendered after theme
-changes. A render failure is shown inline with the source preview.
+Fenced `mermaid` blocks are rendered on the server to inline SVG with a
+vendored [Pele](https://github.com/obsidianmd/pele) 1.6.0. The page loads no
+diagram library for these blocks, so they render offline. The diagram follows
+the light or dark reader theme and can expand to the main content width.
 
-This is rendering evidence, not a complete validation guarantee. The page must
-reach the CDN, the browser must execute modules, and the source must be valid for
-the fetched Mermaid 11 release. The reader initializes Mermaid with
+Mermaid is only the fallback. When a block contains a diagram Pele rejects, the
+browser loads Mermaid 11.4.1 from jsDelivr (pinned and SRI-checked) and renders
+that block itself. Offline, such a block shows its source with a short notice.
+A render failure is shown inline with the source preview.
+
+If the server cannot load Pele, it prints the reason on stderr and every block
+uses the Mermaid fallback instead.
+
+This is rendering evidence, not a complete validation guarantee. A fallback
+block needs CDN access, a browser that executes modules, and source that is valid
+for Mermaid 11.4.1. The reader initializes the fallback with
 `securityLevel: 'loose'`; do not use untrusted diagram source.
 
 Plan navigation is inferred from recognized plan files and phase tables. When a
@@ -167,9 +177,10 @@ absent. Reader preferences and accordion state are stored in browser
 - Local images are resolved relative to the Markdown file and served through the
   same process. Remote image URLs remain remote and can disclose browser network
   metadata to their hosts.
-- The reader contacts public font and script or stylesheet CDNs unless the
-  browser blocks them. Offline reading can lose fonts, highlight themes, and
-  Mermaid rendering even when plain Markdown still loads.
+- The reader contacts Google Fonts and cdnjs unless the browser blocks them, and
+  jsDelivr only when a block needs the Mermaid fallback. Offline reading can lose
+  fonts, highlight themes, and fallback diagrams even when plain Markdown and
+  Pele-rendered diagrams still load.
 - Browser launch uses the operating system opener. Keep `--no-open` when the
   session should only report a URL or when opening a UI is not authorized.
 - Stopping by `--stop` targets every discovered viewer PID. Inspect active
@@ -186,8 +197,9 @@ A complete result should include:
 - HTTP results for the target page and local assets, plus browser confirmation
   for headings, tables, code, images, navigation, theme, keyboard, and mobile
   behavior requested by the user.
-- Mermaid source and render status for every diagram, with CDN or syntax errors
-  kept distinct from server-rendering failures.
+- Mermaid source and render status for every diagram, noting whether Pele or the
+  Mermaid fallback rendered it, with CDN or syntax errors kept distinct from
+  server-rendering failures.
 - Network requests made to fonts or CDNs, and the exact directories available
   through browse or file routes.
 - Shutdown evidence showing the server process ended, the port closed, and stale
@@ -205,8 +217,8 @@ plan navigation. Those tests were not executed for this documentation batch.
 | The browser opens unexpectedly | Restart with `--no-open`; the implementation default is open even though the Skill option table says false. |
 | Port 3456 is occupied | Use the reported incremented port or choose an approved explicit port; the scanner stops at 3500. |
 | Images do not load | Verify a relative path from the Markdown file, the allowed directory, file existence, and URL encoding. |
-| Mermaid stays as text or reports an error | Check browser network access to jsDelivr, console errors, Mermaid v11 syntax, and source shown by the inline error panel. |
-| Fonts or syntax colors are missing offline | Continue with the local reader layout and bundled theme modules, or approve the documented Google Fonts and cdnjs requests; Highlight.js themes and Mermaid are not bundled. |
+| Mermaid shows its source with a notice or reports an error | Pele rejected the block and the Mermaid fallback could not run. Check browser network access to jsDelivr, console errors, Mermaid 11.4.1 syntax, and the source in the inline panel. Check the server's stderr for a Pele load failure if every block uses the fallback. |
+| Fonts or syntax colors are missing offline | Continue with the local reader layout and bundled theme modules, or approve the documented Google Fonts and cdnjs requests; Highlight.js themes are not bundled. Diagrams that Pele renders still work offline. |
 | A directory exposes more than intended | Stop the server, select a narrower directory or one file, inspect its contents, and restart on localhost. |
 | The process persists after review | Inspect viewer PID files and running instances, then use the packaged stop path only after confirming it will not terminate another task's viewer. |
 | The runtime does not recognize the Skill | Confirm target and scope, restart the runtime session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
