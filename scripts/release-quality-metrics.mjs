@@ -45,8 +45,9 @@ export const RELEASE_QUALITY_BASELINE = Object.freeze({
     // Beta includes the bilingual guides/semantic-decision-experiments and
     // reference/cli/describe pages, plus the kits/marketing/skills/filmmaking
     // guide, guides/jev-clef, guides/choosing-ui-testing-skills and
-    // guides/choosing-subagent-models, ahead of promotion.
-    searchPagesPerLocaleChannel: { stable: 488, beta: 518 },
+    // guides/choosing-subagent-models, guides/secrets-vault-dashboard and
+    // guides/secrets-vault-remote-mcp, ahead of promotion.
+    searchPagesPerLocaleChannel: { stable: 488, beta: 520 },
     // Pages outside every channel (the unlisted `_showcase` visual QA page) are
     // real site routes but never search results: each shard must contain only
     // the pages served under its own locale/channel prefix.
