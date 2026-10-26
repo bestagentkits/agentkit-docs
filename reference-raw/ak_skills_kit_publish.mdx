@@ -1,0 +1,58 @@
+---
+title: "ak skills kit publish"
+description: "Upload a personal kit's delta to SkillX as a private revision"
+generated: true
+---
+
+## ak skills kit publish
+
+Upload a personal kit's delta to SkillX as a private revision
+
+### Synopsis
+
+Resolves the personal kit offline and builds its SkillX revision of @&lt;handle&gt;/&lt;name&gt;: every skill pins its base by package, exact version and tree digest and carries only the user's overlay. A fork @local/&lt;slug&gt; is published as @&lt;handle&gt;/&lt;slug&gt;. SkillX treats ak- skills as shared, so changing one needs a fork; an in-place overlay of one is refused. Revisions are private unless --public is given, and a public revision may only build on free kits (D10). The payload is scanned before anything is sent, with AgentKit's rules and the shared SkillX kit-proposal policy: a secret, an absolute local path, a key that names raw session data (such as a session, prompt or token key), or a store request over 1 MiB plus 64 KiB refuses the upload, even with --dry-run; the reason names the rule and the key path, never the matched text. The upload expects the kit generation this machine last saw (or --expect-generation); a kit changed elsewhere is a conflict, never overwritten. Each store is recorded before it is sent, so a retry after a lost answer resends it and SkillX replays it. An unchanged revision uploads nothing. --handle is needed on the first publish and is remembered; syncing another publisher's kit does not change it. ak skills kit revisions lists the kit's revisions.
+
+Effects:
+  Explicit only: nothing ever publishes automatically. --dry-run builds and scans the revision offline and sends nothing. Otherwise it uploads one skillx.personal-kit/v1 revision holding only the user's delta (overlay envelopes and exact base pins, never foundation files beyond patch context lines) with the configured SkillX API key, activates it under the kit's generation guard, and records it in AGENTKIT_HOME/state/personal-kits/&lt;name&gt;/skillx.json in a journaled transaction. Never writes the personal kit, the foundation kits, a skills root or a lock. Needs SkillX on (after `ak update --ssot`, or AGENTKIT_SKILLX=1); an upload also needs the skill store on (after `ak update --ssot`, or AGENTKIT_SKILL_STORE=1).
+
+Exit status:
+  0   published, unchanged, or a dry run
+  1   command failure: SkillX offline, or the API key missing, scoped or expired
+  2   SkillX, the overlay flag or the skill store disabled, invalid flags, a malformed manifest, or a store request over the SkillX size cap
+  5   personal kit, foundation, version or skill not found
+  6   generation conflict (the kit changed elsewhere), revision conflict, or a shared skill overlaid in place
+  7   a public revision on a paid or private base (D10), a secret or local path in the payload, a key the SkillX kit-proposal policy forbids, or a publisher handle the key does not own
+
+```
+ak skills kit publish <name> [--handle <handle>] [--private | --public] [flags]
+```
+
+### Examples
+
+```
+  ak skills kit publish mine --handle alice --dry-run
+  ak skills kit publish mine --handle alice --private
+  ak skills kit publish mine --json
+  ak skills kit publish mine --expect-generation 4
+```
+
+### Options
+
+```
+      --dry-run                 Build and scan the revision offline; send nothing
+      --expect-generation int   Kit generation to publish over (default: the one this machine last saw)
+      --handle string           SkillX publisher handle the kit is published under (default: the last published one)
+  -h, --help                    help for publish
+      --json                    Emit machine-readable JSON (implies --no-interactive)
+      --kits-dir string         Foundation kits directory (default: $AGENTKIT_KITS_DIR or ./kits)
+      --no-interactive          Disable interactive prompts (CI-safe)
+      --private                 Publish a private revision (the default)
+      --public                  Publish a public revision; only allowed on free foundation kits
+  -q, --quiet                   Suppress non-error output on stderr
+  -V, --verbose                 Extra diagnostic output on stderr (loses to --quiet)
+  -y, --yes                     Assume yes for all prompts
+```
+
+### SEE ALSO
+
+* [ak skills kit](./ak_skills_kit)	 - Preview, apply, rebase and roll back personal kits built on kit skills
