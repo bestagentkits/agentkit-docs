@@ -1,0 +1,131 @@
+---
+title: ak rollback
+description: Return AgentKit to the v2 state captured in a pre-upgrade checkpoint, in recorded and resumable steps.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak rollback --to v2` to undo the v3 upgrade. It restores the newest
+pre-upgrade checkpoint, or the one you name with `--checkpoint`, and freezes
+automatic updates so nothing re-upgrades on its own.
+
+## Usage
+
+```bash
+ak rollback --to v2 [flags]
+```
+
+`--to v2` is required; it is the only supported target. The command accepts no
+positional arguments.
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--to <major>` | Empty | Target major version; only `v2` is accepted. |
+| `--checkpoint <id>` | Newest pre-upgrade checkpoint | Checkpoint ID to roll back to. A malformed ID exits `2`. |
+| `--dry-run` | `false` | Verify the checkpoint and print the rollback plan without changing anything. |
+| `--skip-secrets` | `false` | Restore everything except sealed secret files, for a checkpoint whose key is missing. |
+| `--allow-root <key>` | Empty | Restore this root key into its recorded path although the current environment resolves it elsewhere (repeatable). |
+| `--install-v2` | `false` | Consent to installing the pinned, signature-verified v2 CLI recorded in the checkpoint. |
+| `--with-desktop` | `false` | With `--install-v2`, also install the recorded AgentKit Desktop version where supported. Without `--install-v2` it exits `2`. |
+
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+## What a rollback does
+
+The run follows recorded steps: `freeze-updater`, `pre-rollback-checkpoint`,
+`revert-kits`, `restore`, `refreeze-updater`, `install-v2`, and `verify`.
+
+1. Turn every automatic updater off by writing `auto_update.schedule: off` and
+   `updates.enabled: false` to `config.yaml`.
+2. Capture a pre-rollback checkpoint of every path the rollback overwrites or
+   deletes.
+3. Revert AgentKit-owned kit projections while the v3 CLI still runs.
+4. Restore the AgentKit home exactly. Sign-in state is kept and registry
+   entitlements are never copied. Runtime homes and projects are restored as
+   overlays, and `operational.db` at its captured schema.
+5. Freeze updates again, because the restore rewrote `config.yaml`, and point
+   `updates.registry_url` at the signed manifest of the restored v2 release so a
+   2.x CLI keeps its updates on that release. A non-2.x manifest pin you
+   configured yourself is left alone.
+6. With `--install-v2`, install the pinned, signature-verified v2 CLI, and with
+   `--with-desktop` the recorded Desktop version where supported.
+7. Run `ak doctor`; this step is skipped with a restart notice when the v2
+   binary is staged and needs a restart.
+
+The command refuses while a background update, AgentKit Desktop, or another
+`ak` holds AgentKit state. It takes the kit lifecycle lock and the auto-update
+run lock first; a running background update is never interrupted and exits
+`4`. An interrupted rollback resumes at the first unfinished step when re-run.
+The journal lives at `~/.agentkit/backups/rollback/journal.json`.
+
+<Callout type="warning">
+  The pre-rollback checkpoint is your way back to v3 state. Keep it until the
+  restored installation works, and do not prune checkpoints in between.
+</Callout>
+
+## Confirmation behavior
+
+Without `--yes`, `--no-interactive`, or `--json`, the command prints the plan
+and asks `Roll back to checkpoint <id>? [y/N]:`. Any answer other than `y` or
+`yes` cancels with exit `3`. When the checkpoint key is missing, the prompt says
+so: only roots matching this environment are restored and secrets are skipped.
+
+Explicit consent, meaning `--yes` or an answered prompt, also covers restoring
+a checkpoint whose key is missing and proceeding when free disk space cannot be
+measured; `--no-interactive` alone does not. `--dry-run` never prompts.
+
+```bash
+ak rollback --to v2 --dry-run
+ak rollback --to v2
+ak rollback --to v2 --install-v2 --yes
+ak rollback --to v2 --checkpoint 20261019T080000Z-1a2b3c4d --skip-secrets --json
+```
+
+## Output
+
+A human dry-run prints `Rollback plan (checkpoint <id>, captured <time>):`, the
+target v2 CLI with its install command when known, the numbered steps, and the
+file counts to write, keep, and remove. A completed run prints
+`[OK] rolled back to checkpoint <id>` followed by one line per journal step with
+its status and detail, the file counts, `[!]` warnings, and `next:` lines.
+
+With `--json`, `--dry-run` prints one `rollback.plan` envelope and a run prints
+one `rollback.result` envelope. Both share these fields:
+
+```text
+schema_version: 1
+kind: rollback.plan | rollback.result
+data.dry_run
+data.resumed?
+data.checkpoint            (the checkpoint receipt)
+data.verification?         (id, ok, entries, bytes, databases, secrets, key_status, warnings?)
+data.plan[]
+data.target_cli_version?
+data.install_command?
+data.restore?              (written, unchanged, removed, secrets_skipped, roots[], ...)
+data.journal?              (checkpoint_id, pre_rollback_checkpoint_id, status, steps[], ...)
+data.next_steps[]?
+data.warnings[]?
+```
+
+Failures print the shared error envelope with a `remediation` object whose
+`reason` is a stable code and whose `steps` list what to do.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Rolled back, or the plan was printed. |
+| `1` | A step failed or was refused; re-run to resume. |
+| `2` | Invalid flags or arguments: a missing or unsupported `--to`, a malformed `--checkpoint`, or `--with-desktop` without `--install-v2`. |
+| `3` | The prompt was declined. |
+| `4` | Another checkpoint operation, a kit lifecycle operation, or a running automatic update holds the lock. |
+| `5` | No usable pre-upgrade checkpoint. When `ak update --ssot` committed the skill store on a home with no prior AgentKit state, the error says there is no v2 state to return to and names `ak self-update --version <v2-version>` instead. |
+
+## Related commands
+
+- [Complete `ak rollback` command facts](../cli/ak_rollback)
+- [Capture a checkpoint](../cli/ak_backups_checkpoint)
+- [List snapshots and checkpoints](../cli/ak_backups_list)
+- [Verify a checkpoint](../cli/ak_backups_verify)
+- [Upgrade with `ak update --ssot`](../cli/ak_update)

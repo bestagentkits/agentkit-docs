@@ -1,0 +1,80 @@
+---
+title: ak skills evolution rollback
+description: Hoàn tác lần apply của một candidate bằng cách khôi phục các file personal kit từ rollback record mà apply đã ghi trước.
+---
+
+Dùng `ak skills evolution rollback` để khôi phục mọi file personal kit mà
+[`ak skills evolution apply`](../cli/ak_skills_evolution_apply) đã ghi hoặc xoá cho một candidate. Lệnh
+không đổi runtime projection; hãy chạy lại `ak skills kit apply` sau đó nếu kit
+đã được áp dụng.
+
+## Cách dùng
+
+```bash
+ak skills evolution rollback <candidateId> [--dry-run] [--json]
+```
+
+Phải có đúng một reference candidate.
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--dry-run` | `false` | Xem trước rollback và không ghi gì. |
+
+Các cờ dùng chung nằm trong [quy ước CLI](../cli-conventions).
+
+## Điều kiện
+
+Rollback có ghi cần skill store đang bật (sau `ak update --ssot`, hoặc
+`AGENTKIT_SKILL_STORE=1`). `--dry-run` thì không cần.
+
+## Khôi phục những gì
+
+Rollback đọc record mà apply đã ghi trước và khôi phục từng file về nội dung
+trước khi apply. Lệnh chỉ chạy khi mọi file đó vẫn giữ đúng những gì apply đã
+ghi: file bị sửa kể từ đó sẽ lỗi `evolve.apply_conflict` và không có gì thay
+đổi, nên không bao giờ mất một chỉnh sửa. File đã về nội dung trước apply được
+bỏ qua.
+
+Không có `--dry-run`, dưới kit lifecycle lock, lệnh snapshot personal kit khi
+một file bị ghi đè, khôi phục các file trong một transaction có journal, đánh
+dấu rollback record là đã rollback, và đặt apply slot của candidate thành
+`rolled_back`. Lệnh không chạy script, model hay gọi mạng.
+
+## Đầu ra
+
+Text in `would rollback` hoặc `rolled back` cùng candidate, loại overlay, thư
+mục overlay, identity và personal kit, rồi từng thay đổi file dưới dạng
+`create`, `write` hoặc `remove`, snapshot đã lấy, và một dòng `next:`. Sau khi
+rollback, bước tiếp theo là `ak skills kit apply <name> --dry-run` để chiếu lại
+personal kit nếu nó đã được áp dụng.
+
+JSON dùng `kind=skills.evolution.rollback`:
+
+```text
+schema_version: 1
+kind: skills.evolution.rollback
+data: schema (agentkit.skill-evolution-plan/v1), action (rollback),
+      status (preview | rolled_back), candidateId, personalKit, created,
+      identity, kind, overlayDir, diff[] (rỗng), permissionDelta[] (rỗng),
+      changes[]: path, action
+      backup?, next[], sideEffects
+```
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Thành công, kể cả xem trước. |
+| `1` | Không đọc hoặc ghi được candidate store, personal kit hay skill store, hoặc một record không qua xác minh (`store.corrupt`). |
+| `2` | Cờ hoặc argument không hợp lệ, hoặc skill store đang tắt. |
+| `4` | Một thao tác AgentKit khác đang giữ kit lifecycle lock (`evolve.store_busy`). |
+| `5` | Không có candidate đã ghi nào khớp. |
+| `6` | Personal kit không giữ đúng những gì rollback mong đợi: một file đã đổi kể từ khi apply (`evolve.apply_conflict`). |
+| `7` | Không chuẩn bị được redaction hoặc content gate (`evolve.redaction_failed`). |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skills evolution rollback`](../cli/ak_skills_evolution_rollback)
+- [Áp dụng một candidate](../cli/ak_skills_evolution_apply)
+- [Xem một candidate](../cli/ak_skills_evolution_show)
+- [Personal kit](../cli/ak_skills_kit)

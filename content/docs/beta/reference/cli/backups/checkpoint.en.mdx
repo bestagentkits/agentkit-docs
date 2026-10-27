@@ -1,0 +1,118 @@
+---
+title: ak backups checkpoint
+description: Capture a compressed, verifiable checkpoint of AgentKit and runtime state that ak rollback and ak recover can restore.
+---
+
+Use `ak backups checkpoint` to stream the AgentKit home, every local runtime
+home, and the agent configuration of registered projects into one
+zstd-compressed tar under `~/.agentkit/backups/checkpoints/<id>/`. A
+checkpoint is the rollback source for [`ak rollback --to v2`](../cli/ak_rollback) and
+can also be restored with `ak backups restore` or `ak recover`.
+
+## Usage
+
+```bash
+ak backups checkpoint [flags]
+```
+
+The command accepts no positional arguments and never prompts.
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--backup-sessions` | `false` | Also capture runtime session history, transcripts, telemetry, and caches. |
+| `--label <text>` | Empty | Free-form label stored in the checkpoint manifest. |
+| `--pre-upgrade` | `false` | Mark the checkpoint as a pre-upgrade rollback source. |
+| `--project <dir>` | Empty | Also capture this absolute project directory (repeatable). |
+| `--state-layout <layout>` | Detected from the AgentKit home | `legacy` or `ssot`; any other value exits `2`. `ak rollback --to v2` restores legacy checkpoints. |
+| `--state-version <version>` | The running CLI version | AgentKit CLI version that owns the captured state; a leading `v` is dropped. |
+
+Shared flags are described in [CLI conventions](../cli-conventions). `--yes`
+has one effect here: it accepts a capture whose free disk space cannot be
+measured.
+
+## What is captured
+
+The default lean scope leaves out runtime-owned session history, transcripts,
+telemetry, and caches; `--backup-sessions` includes them. Secret files are
+sealed with an OS-protected key (DPAPI on Windows, an owner-only key file
+elsewhere) and are never stored in plaintext. SQLite databases are captured as
+consistent read-only snapshots.
+
+A disk estimate runs first, and the capture is refused when space is short.
+After a successful capture the command applies checkpoint retention; the newest
+pre-upgrade checkpoint is always kept.
+
+```bash
+ak backups checkpoint
+ak backups checkpoint --backup-sessions --label before-experiment
+ak backups checkpoint --pre-upgrade --json
+ak backups checkpoint --pre-upgrade --state-version 2.9.1
+```
+
+## Output
+
+Human stdout prints the receipt:
+
+```text
+[OK] checkpoint <id> (<purpose>, <scope>)
+     <files> files, <symlinks> symlinks, <databases> databases, <secrets> sealed secrets
+     <source-size> source -> <archive-size> archive at <archive-path>
+     verify: ak backups verify <id>
+```
+
+`<purpose>` is `manual`, or `pre-upgrade` with `--pre-upgrade`; `<scope>` is
+`lean` or `full`. Non-fatal findings follow as `[!]` lines.
+
+JSON success uses:
+
+```text
+schema_version: 1
+kind: backups.checkpoint
+data.id
+data.format
+data.format_version
+data.purpose
+data.scope
+data.created_at
+data.dir
+data.archive_path
+data.archive_sha256
+data.archive_bytes
+data.source_bytes
+data.files
+data.symlinks
+data.databases
+data.secret_files
+data.secrets_protection?
+data.roots[]
+data.excluded_paths[]?
+data.widened_paths[]?
+data.skipped_paths
+data.protected
+data.duration_ms
+data.verify_command
+data.rollback_command
+data.warnings[]?
+```
+
+JSON failures write the shared error envelope to stderr. Lock contention uses
+`error_code` `lock_held`; the `remediation.reason` field carries a stable
+checkpoint code such as `checkpoint.insufficient_disk` or
+`checkpoint.lock_busy`.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The checkpoint was created and verified. |
+| `1` | The capture failed or was refused; read the remediation. |
+| `2` | Invalid flags or arguments, including an unknown `--state-layout`. |
+| `4` | Another checkpoint operation holds the lock. |
+
+## Related commands
+
+- [Complete `ak backups checkpoint` command facts](../cli/ak_backups_checkpoint)
+- [List snapshots and checkpoints](../cli/ak_backups_list)
+- [Verify a checkpoint](../cli/ak_backups_verify)
+- [Restore a checkpoint](../cli/ak_backups_restore)
+- [Return to v2 with `ak rollback`](../cli/ak_rollback)

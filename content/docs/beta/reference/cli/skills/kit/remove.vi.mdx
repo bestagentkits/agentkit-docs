@@ -1,0 +1,74 @@
+---
+title: ak skills kit remove
+description: Gỡ các reference personal:<name> của một Kit cá nhân khỏi skills root và lock của scope, giữ nguyên file của chính Kit.
+---
+
+Dùng `ak skills kit remove` để gỡ các projection của một Kit cá nhân. Lệnh chỉ
+gỡ các reference `personal:<name>` trong scope, cho tất cả runtime của Kit hoặc
+các runtime mà `--runtime` nêu. File của chính Kit cá nhân và các record cài Kit
+không bao giờ bị động đến.
+
+## Cách dùng
+
+```bash
+ak skills kit remove <name> [flags]
+```
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--dry-run` | `false` | In plan, review finding và plan token; không ghi gì. |
+| `--scope <scope>` | `project` | Scope của lock và skills root: `project` hoặc `global`. |
+| `--runtime <list>` | Tất cả runtime của Kit | `claude-code`, `codex`; lặp lại được. Giới hạn việc gỡ trong các runtime này. |
+
+Các cờ dùng chung nằm trong [quy ước CLI](../cli-conventions).
+
+## Điều kiện
+
+Skill store phải bật, sau `ak update --ssot` hoặc với `AGENTKIT_SKILL_STORE=1`,
+kể cả với dry run; khi tắt, lệnh thoát `2`. Cổng store theo `--scope`.
+
+## Lệnh làm gì
+
+Lệnh chạy cùng transaction có journal với [`ak skills kit apply`](./apply),
+dưới kit lifecycle lock, và cập nhật skill lock cùng receipt của scope. Gỡ một
+Kit chưa được apply thì không đổi gì và thoát `0`.
+
+- File mà owner khác vẫn giữ sẽ được giữ lại.
+- File bạn đã sửa sau khi được chiếu sẽ được giữ nguyên và báo bằng
+  `ownership.modified`.
+- Alias mà bản cài Kit kiểu cũ cũng ghi nhận sẽ giữ file của nó, kèm gợi ý chạy
+  `ak kit update <kit>`.
+- Gỡ không kèm `--runtime` cũng xoá conflict report của rebase cho Kit trong
+  scope.
+
+## Đầu ra
+
+Đầu ra text có cùng dạng với [`ak skills kit apply`](./apply).
+
+JSON dùng `kind=skills.kit.remove` với các trường `data` giống
+`skills.kit.apply`:
+
+```text
+personalKit, status, requiredApproval, planToken, findings[],
+revision, previous, plan
+```
+
+## Kết quả và mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Thành công, hoặc không có gì để đổi, kể cả Kit chưa được apply. |
+| `1` | Lệnh thất bại, ví dụ đường dẫn quá dài hoặc cần recovery. |
+| `2` | Skill store bị tắt, hoặc cờ hay argument không hợp lệ. |
+| `4` | Kit lifecycle lock đang bị thao tác AgentKit khác giữ. |
+| `5` | Không tìm thấy Kit cá nhân. |
+| `6` | Cần review, plan token cũ, alias collision (kể cả alias của Kit kiểu cũ), hoặc path không thuộc sở hữu hay đã bị sửa. |
+| `7` | Có link trong target path, hoặc digest không khớp. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skills kit remove`](../cli/ak_skills_kit_remove)
+- [Apply Kit cá nhân](./apply)
+- [Rollback về revision trước](../cli/ak_skills_kit_rollback)

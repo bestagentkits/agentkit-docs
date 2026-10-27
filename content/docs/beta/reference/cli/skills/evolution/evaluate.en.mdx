@@ -1,0 +1,87 @@
+---
+title: ak skills evolution evaluate
+description: Re-run the offline, deterministic evaluation of a recorded candidate and refresh its evaluation slot.
+---
+
+Use `ak skills evolution evaluate` to rebuild a candidate on its base and run
+the same evaluation that [`ak skills improve --candidate`](../cli/ak_skills_improve) ran when
+it recorded the candidate. No model, network, or script runs. A live model
+routing benchmark is a separate, optional check and never gates
+[`apply`](../cli/ak_skills_evolution_apply).
+
+## Usage
+
+```bash
+ak skills evolution evaluate <candidateId> [--kits-dir <dir>] [--dry-run] [--json]
+```
+
+Exactly one candidate reference is required.
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--kits-dir <dir>` | `$AGENTKIT_KITS_DIR` or `./kits` | Foundation kits directory the base is rebuilt from. |
+| `--dry-run` | `false` | Print the evaluation and write nothing. |
+
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+## What it evaluates
+
+The candidate is rebuilt on its base: the foundation skill from `--kits-dir`,
+or the running personal kit composition it stacks on. A base that moved since
+the candidate was recorded fails with `evolve.base_changed`.
+
+The evaluation routes the evidence tasks with no skill, with the base skill,
+and with the candidate through the frozen lexical router, scores failures and
+corrections for the terms the skill text covers, routes the other skills of the
+kits directory as negative controls, and runs the functional and security
+checks. The verdict is `improved`, `inconclusive`, `regressed`, or `blocked`.
+
+## Effects
+
+The command reads the candidate record, the kits directory, and the running
+personal kit records and skill store entries under the AgentKit home. Without
+`--dry-run` it replaces the evaluation slot of
+`AGENTKIT_HOME/state/skill-evolve/candidates/<id>/candidate.json` under the kit
+lifecycle lock. It never changes a skill, a kit, or a personal kit.
+
+## Output
+
+Text prints the candidate ID, the verdict with its method, router, and
+reasons, the task counts, the routing and coverage figures of each variant
+over all tasks and over the held-out tasks, the negative controls, every check
+that is not a plain pass, and each permission change.
+
+JSON uses `kind=skills.evolution.evaluate`:
+
+```text
+schema_version: 1
+kind: skills.evolution.evaluate
+data.dryRun
+data.evaluation: schema, state, verdict, reasons[], method, router,
+                 candidateId, evidenceDigest, baseTreeDigest, compositionDigest,
+                 tasks, variants[], holdout[], gain[],
+                 functional[], security[], permissionDelta[],
+                 negativeControls, sideEffects, digest
+```
+
+Each check has `id`, `candidate`, and optionally `baseline` and `detail`; a
+check status is `pass`, `fail`, or `review`. Variants are `none`, `baseline`,
+and `candidate`.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Success, including a dry run. |
+| `1` | The candidate store, the personal kit, or the skill store could not be read or written, or a record failed verification (`store.corrupt`). |
+| `2` | Invalid flags or arguments. |
+| `4` | Another AgentKit operation holds the kit lifecycle lock (`evolve.store_busy`). |
+| `5` | No recorded candidate matches, or the skill's base cannot be resolved (`evolve.base_unresolved`). |
+| `6` | The base moved since the candidate was recorded (`evolve.base_changed`). |
+| `7` | Redaction or the content gate could not be prepared (`evolve.redaction_failed`). |
+
+## Related commands
+
+- [Complete `ak skills evolution evaluate` command facts](../cli/ak_skills_evolution_evaluate)
+- [Show one candidate](../cli/ak_skills_evolution_show)
+- [Apply a candidate](../cli/ak_skills_evolution_apply)
