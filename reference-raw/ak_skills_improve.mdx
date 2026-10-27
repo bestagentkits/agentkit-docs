@@ -1,0 +1,62 @@
+---
+title: "ak skills improve"
+description: "Preview a skill's session evidence, draft brief or gated candidate overlay"
+generated: true
+---
+
+## ak skills improve
+
+Preview a skill's session evidence, draft brief or gated candidate overlay
+
+### Synopsis
+
+Builds a bounded, redacted evidence preview for one skill from sessions the user selects: --session &lt;id&gt; (repeatable, at most 5) or --session latest for the newest session of the project. The project is --project &lt;name&gt; or the registered project that contains the working directory; sessions of other projects, other users, linked or hard-linked files and transcripts recorded outside the project are refused. Evidence covers the intended outcome, failures, corrections and verified success, each citing a session and line range. Only the user's own words become excerpts; tool output, assistant text and harness-written lines are scanned for signals but not copied. Redaction is best-effort: known credential shapes, long hex or base64 runs, email addresses, absolute paths and code are removed, and the run fails closed when a second pass still finds one, but a secret of an unknown shape can remain, so review the preview before sharing it. An excerpt that reads as an instruction is withheld (a best-effort filter); transcript content never changes what this command does.
+
+AgentKit makes no model call. --brief adds a drafting brief: the target skill, its base tree digest, whether it is shared (a change of a shared skill becomes a local fork under an alias without the ak- prefix), the overlay layout, the redacted evidence marked as untrusted data, and the constraints. The host agent or the user writes a draft from it in the overlay layout (files/, patches/, delete.txt, modes.txt), and --candidate &lt;draft-dir&gt; compiles that draft against the base: the running personal kit composition when one already overlays the skill, else the foundation skill from --kits-dir. The candidate is gated: script, mode, capability, exposure and license changes, frontmatter permission changes, file references missing from the candidate, instruction-like added text and a shared skill each become a review finding; an added secret or absolute local path refuses the candidate, naming the rule only. The content gate is best-effort. The candidate ID pins the evidence, the skill, the base, the prior overlay and the overlay.
+
+Every candidate is evaluated offline and deterministically, with no model call: the evidence tasks are routed through the frozen lexical router with no skill, with the base skill and with the candidate, failures and corrections are scored for the terms the skill text covers, the other skills' own tasks are routed as negative controls, and functional (SKILL.md, frontmatter, description, references) and security (secrets and paths, instruction-like text, permission delta, scripts) checks compare base and candidate. A task the candidate copies is tautological and does not count. The verdict is improved, inconclusive, regressed or blocked. Review recorded candidates with ak skills evolution list and show; apply one into a personal kit with ak skills evolution apply. Recording never applies anything.
+
+Effects:
+  Local only: reads the selected sessions of one registered project under the Claude home, the project registry, and the secrets release manifests under the AgentKit home (to redact released values); with --session latest it also reads the start of newer sessions it skips, only to find their recorded working directory, and reports nothing from them. With --brief or --candidate it also reads the skill's foundation tree from the kits directory and the running personal kit records and skill store entries under the AgentKit home; with --candidate it reads the draft directory and the other skills of the kits directory, which the offline evaluation routes against. A dry run writes nothing. --candidate without --dry-run writes one candidate record (candidate.json with its evaluation, overlay.json and evidence.json, mode 0600) under AGENTKIT_HOME/state/skill-evolve/candidates/&lt;id&gt;/ under the kit lifecycle lock, without a prompt; an identical record is left as it is. It never changes a skill, a kit or a personal kit, runs no script, model or network call, never resolves a path a transcript records, and skips the background update check. Nothing leaves this machine.
+
+Exit status:
+  0   success: an evidence preview, including one with conflicting or insufficient evidence
+  1   a selected session could not be read, the run was cancelled, the candidate store or an existing record failed verification (store.corrupt), or the record could not be written
+  2   invalid flags or arguments, a malformed session selection, --dry-run missing, or a draft that does not compile against its base (evolve.candidate_invalid)
+  4   another AgentKit operation holds the kit lifecycle lock (evolve.store_busy)
+  5   the selected session is not in the project, or the skill's base cannot be resolved (evolve.base_unresolved)
+  7   out of scope, not owned by the current user, redaction could not be verified, or the draft adds a secret or an absolute local path (evolve.candidate_refused)
+
+```
+ak skills improve <skill> [flags]
+```
+
+### Examples
+
+```
+  ak skills improve ak-plan --session latest --dry-run
+  ak skills improve ak-plan --session 7f3c --session 91ab --project my-app --dry-run --json
+  ak skills improve ak-plan --session latest --dry-run --brief --json
+  ak skills improve ak-plan --session latest --candidate ./draft
+```
+
+### Options
+
+```
+      --brief                 Add the drafting brief to the preview (with --dry-run)
+      --candidate string      Overlay draft directory to compile, gate and record as a candidate
+      --dry-run               Preview only and write nothing (required without --candidate)
+  -h, --help                  help for improve
+      --json                  Emit machine-readable JSON (implies --no-interactive)
+      --kits-dir string       Foundation kits directory (default: $AGENTKIT_KITS_DIR or ./kits)
+      --no-interactive        Disable interactive prompts (CI-safe)
+      --project string        Registered project name (default: the project containing the working directory)
+  -q, --quiet                 Suppress non-error output on stderr
+      --session stringArray   Session id to read, or "latest" (repeatable, required)
+  -V, --verbose               Extra diagnostic output on stderr (loses to --quiet)
+  -y, --yes                   Assume yes for all prompts
+```
+
+### SEE ALSO
+
+* [ak skills](./ak_skills)	 - Browse and install kit skills

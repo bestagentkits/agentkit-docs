@@ -1,0 +1,62 @@
+---
+title: "ak rollback"
+description: "Return AgentKit to the v2 state captured before the v3 upgrade"
+generated: true
+---
+
+## ak rollback
+
+Return AgentKit to the v2 state captured before the v3 upgrade
+
+### Synopsis
+
+Roll back to the newest pre-upgrade checkpoint (or --checkpoint &lt;id&gt;) in recorded steps: freeze automatic updates, capture a pre-rollback checkpoint of every path the rollback overwrites or deletes, revert AgentKit-owned kit projections while the v3 CLI still runs, restore the AgentKit home exactly (sign-in state is kept, registry entitlements are never copied), restore runtime homes and projects as overlays and operational.db at its captured schema, re-freeze updates, optionally install the pinned signature-verified v2 CLI (--install-v2), and run `ak doctor` (skipped with a restart notice when the v2 binary is staged). It refuses while a background update, AgentKit Desktop or another ak holds AgentKit state. An interrupted rollback resumes at the first unfinished step when re-run. Automatic updates stay off, so nothing re-upgrades on its own.
+
+Effects:
+  Writes the pre-rollback checkpoint, rewrites the AgentKit home and captured runtime and project files, sets auto_update.schedule: off and updates.enabled: false, and with --install-v2 replaces the ak binary (and Desktop with --with-desktop). Journal: ~/.agentkit/backups/rollback/journal.json.
+
+Output:
+  With --json, --dry-run prints one rollback.plan envelope and a run prints one rollback.result envelope. Failures print the standard error envelope with a remediation &#123;reason, steps&#125; object.
+
+Exit status:
+  0   rolled back (or plan printed)
+  1   a step failed or was refused; re-run to resume
+  2   invalid flags or arguments
+  3   user cancelled
+  4   another checkpoint operation holds the lock
+  5   no usable pre-upgrade checkpoint
+
+```
+ak rollback [flags]
+```
+
+### Examples
+
+```
+  ak rollback --to v2 --dry-run
+  ak rollback --to v2
+  ak rollback --to v2 --install-v2 --yes
+  ak rollback --to v2 --checkpoint 20261019T080000Z-1a2b3c4d --skip-secrets --json
+```
+
+### Options
+
+```
+      --allow-root stringArray   Restore this root key into its recorded path although the current environment resolves it elsewhere (repeatable)
+      --checkpoint string        Checkpoint id to roll back to (default: newest pre-upgrade checkpoint)
+      --dry-run                  Verify the checkpoint and print the rollback plan without changing anything
+  -h, --help                     help for rollback
+      --install-v2               Consent to installing the pinned, signature-verified v2 CLI recorded in the checkpoint
+      --json                     Emit machine-readable JSON (implies --no-interactive)
+      --no-interactive           Disable interactive prompts (CI-safe)
+  -q, --quiet                    Suppress non-error output on stderr
+      --skip-secrets             Restore everything except sealed secret files (when the checkpoint key is missing)
+      --to string                Target major version (only v2 is supported)
+  -V, --verbose                  Extra diagnostic output on stderr (loses to --quiet)
+      --with-desktop             With --install-v2, also install the recorded AgentKit Desktop version where supported
+  -y, --yes                      Assume yes for all prompts
+```
+
+### SEE ALSO
+
+* [ak](./ak)	 - AgentKit CLI

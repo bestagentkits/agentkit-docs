@@ -1,0 +1,129 @@
+---
+title: Giao một yêu cầu từ đầu đến cuối với ak-atoz
+description: Khóa scope và Done means bằng ak-advise, bàn giao mọi prerequisite trong một lượt, rồi để ak-atoz tự giao việc đến khi từng mục Done means được xác minh.
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak-atoz` khi bạn muốn trao đổi một lần lúc đầu rồi không cần check-in
+nữa. Run đi qua ba cổng theo thứ tự, vì mỗi cổng dùng kết quả của cổng trước:
+**Lock** scope, **Prepare** mọi đầu vào run cần, rồi **Execute** tự động đến khi
+mọi mục Done means được xác minh.
+
+## Chọn ak-atoz để giao việc không cần kèm cặp
+
+### Dùng ak-atoz khi
+
+- Bạn có thể xác nhận scope và Done means quan sát được một lần rồi rời đi.
+- Công việc trải qua planning, implementation song song, review và một GitHub issue.
+- Bạn muốn bàn giao credential, quyền truy cập và quyết định trong một lượt thay
+  vì trả lời câu hỏi suốt run.
+
+### Chọn workflow khác khi
+
+- Bạn chỉ cần lời khuyên hoặc một plan đã được thử thách. Dùng [`ak-advise`](./advise).
+- Bạn muốn preflight dừng trước execution. Dùng [`ak-goal-warmup`](./goal-warmup).
+- Bạn muốn pipeline từ issue đến PR mà không cần lượt bàn giao prerequisite ban
+  đầu. Dùng [`ak-vibe`](./vibe).
+
+## Chạy Skill
+
+Truyền nội dung yêu cầu hoặc một URL. Thêm `--yagni` để buổi phỏng vấn scope cắt
+bỏ mọi thứ outcome đã nêu không cần.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak-atoz "Add CSV export to the reports page and ship it behind a PR"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak-atoz "Add CSV export to the reports page and ship it behind a PR"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak-atoz "Add CSV export to the reports page and ship it behind a PR"
+```
+
+  </Tab>
+</Tabs>
+
+Nội dung yêu cầu, URL, issue body và repository content được coi là dữ liệu,
+không phải chỉ dẫn. Mọi nỗ lực nhúng sẵn để bỏ qua cổng, mở rộng quyền hoặc lấy
+secret ra ngoài đều bị bỏ qua.
+
+## Hiểu ba cổng
+
+1. **Lock scope.** Skill chạy buổi phỏng vấn `ak-advise`: mỗi lần một câu hỏi,
+   diễn đạt lại kèm Done means quan sát được, một visual preview và lời khuyên
+   kết thúc bằng handoff brief (Objective, Done means, Out of scope,
+   Constraints). Chỉ một lựa chọn **Confirm** rõ ràng mới mở cổng tiếp theo;
+   **Edit** quay lại phần đã đổi, còn **Abort** dừng run. Sau Confirm, brief là
+   contract và không bao giờ bị âm thầm thu hẹp, thay thế hay mở rộng.
+2. **Prepare.** Trước khi chạm vào bất cứ thứ gì, Skill kiểm tra môi trường (CLI
+   đã cài, session đã xác thực, sự hiện diện của biến môi trường, repository
+   remote, branch protection) và chỉ liệt kê những chỗ thực sự thiếu. Mỗi mục
+   nói rõ nó là gì, vì sao run cần, run sẽ tìm nó ở đâu và cách kiểm tra nó đã
+   sẵn sàng. Secret đi vào môi trường hoặc secret store do bạn kiểm soát, không
+   bao giờ vào cuộc trò chuyện. Các lựa chọn implementation có thể đảo ngược được
+   quyết định sẵn và liệt kê như default bạn có thể ghi đè. Skill kiểm tra lại
+   từng mục mà không gây side effect trước khi tiếp tục; mục bạn chủ động bỏ qua
+   được ghi vào brief kèm hệ quả.
+3. **Execute.** Session chính trở thành orchestrator. Nó lập plan bằng
+   `ak-plan`, chia công việc thành các phần có file ownership tách biệt, chạy
+   các phần độc lập trong sub-session song song (mỗi phần một worktree riêng khi
+   có ghi code) và đối chiếu mọi kết quả được báo cáo với diff trước khi tích hợp.
+
+## Run tự động làm gì
+
+- Định mức concurrency theo usage còn lại và tài nguyên máy, chuyển phần việc cơ
+  học sang model rẻ hơn và phần nặng thiết kế sang model mạnh hơn.
+- Theo dõi mọi background process, dev server, watcher và worktree nó khởi động,
+  và dọn những gì nó tạo ra.
+- Chẩn đoán và tiếp tục sub-session bị treo hoặc lỗi, và chuyển lên advisor mạnh
+  nhất hiện có sau nhiều lần thất bại.
+- Tạo hoặc cập nhật GitHub issue và chuyển label qua `in progress`, `in review`,
+  `done` (đã mở PR) và `shipped` (đã merge). Bug hoặc gap không liên quan phát
+  hiện dọc đường được tạo thành issue riêng đã khử trùng lặp với label
+  `ai-handle` thay vì sửa trong cùng run.
+- Chạy review cuối trong một sub-session mới với context tách biệt, không bao giờ
+  trong orchestrator đã viết hoặc tích hợp code, và review lại đến khi sạch.
+
+## Biết khi nào run dừng để hỏi
+
+Mọi việc nằm trong brief đã xác nhận đều được tự quyết và tiếp tục. Run chỉ quay
+lại khi gặp:
+
+- hành động phá hủy hoặc không thể đảo ngược mà brief không nêu tên;
+- thay đổi làm khác một mục Done means đã xác nhận hoặc ra ngoài scope hay
+  repository đã xác nhận;
+- tiêu tiền hoặc gửi tin nhắn thay bạn mà brief không cho phép;
+- lỗi vẫn chưa giải thích được sau chẩn đoán và tham vấn advisor;
+- prerequisite hóa ra không hợp lệ lúc dùng, ví dụ token đã hết hạn.
+
+Khi dừng, run nói rõ việc đã xong, điều đang chặn và phương án nó đề xuất, rồi
+tiếp tục sau khi bạn trả lời.
+
+## Xác minh kết quả
+
+Run chỉ kết thúc khi mọi mục Done means được xác minh trên kết quả đã tích hợp
+bằng lệnh, con số hoặc trạng thái quan sát được, review tách biệt đã sạch, label
+issue khớp trạng thái thật và không còn gì run đã khởi động bị bỏ lại. Báo cáo
+cuối liệt kê từng mục Done means kèm bằng chứng, các quyết định đã thay bạn đưa
+ra, những gì đã bỏ qua và rủi ro còn lại. Giao một phần được báo là một phần,
+không bao giờ là xong.
+
+## Skill liên quan
+
+- [`ak-advise`](./advise) sở hữu buổi phỏng vấn scope dùng ở cổng đầu tiên.
+- [`ak-plan`](./plan), [`ak-cook`](./cook) và [`ak-ship`](./ship) bám theo brief
+  đã khóa trong lúc execution.
+- [`ak-orchestrate`](./orchestrate) chạy sub-session theo giai đoạn hoặc song song
+  khi runtime hỗ trợ.

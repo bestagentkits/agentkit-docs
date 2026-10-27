@@ -45,8 +45,9 @@ export const RELEASE_QUALITY_BASELINE = Object.freeze({
     // Beta includes the bilingual guides/semantic-decision-experiments and
     // reference/cli/describe pages, plus the kits/marketing/skills/filmmaking
     // guide, guides/jev-clef, guides/choosing-ui-testing-skills and
-    // guides/choosing-subagent-models, ahead of promotion.
-    searchPagesPerLocaleChannel: { stable: 488, beta: 518 },
+    // guides/choosing-subagent-models, ahead of promotion, plus the Engineer
+    // atoz and vault and the Marketing vault Skill pages.
+    searchPagesPerLocaleChannel: { stable: 488, beta: 521 },
     // Pages outside every channel (the unlisted `_showcase` visual QA page) are
     // real site routes but never search results: each shard must contain only
     // the pages served under its own locale/channel prefix.
@@ -81,8 +82,9 @@ export const RELEASE_QUALITY_BASELINE = Object.freeze({
   },
   // Acceptance matrix. Each row is expanded over every channel in
   // `channels` for its named locale, so a row asserts the same intent in
-  // Stable and Beta. `route` is channel-relative; `maxRank` is the reviewed
-  // bound on the page's position among distinct page groups.
+  // Stable and Beta unless the row names its own `channels`. `route` is
+  // channel-relative; `maxRank` is the reviewed bound on the page's position
+  // among distinct page groups.
   fixedQueries: [
     // Documented intent matrix.
     { locale: 'en', query: 'install AgentKit', route: 'getting-started/installation', maxRank: 3 },
@@ -112,7 +114,9 @@ export const RELEASE_QUALITY_BASELINE = Object.freeze({
     { locale: 'vi', query: 'cai dat', route: 'getting-started/installation', maxRank: 3 },
     // Exact Skill and command identities, a reordered phrase and a documented
     // misspelling: none of these may be answered by a generic landing page.
-    { locale: 'en', query: 'ak:xia', route: 'kits/engineer/skills/xia', maxRank: 3 },
+    // Beta Kits name Skills ak-<slug>; Stable keeps ak:<slug> until promotion.
+    { locale: 'en', query: 'ak-xia', route: 'kits/engineer/skills/xia', maxRank: 3, channels: ['beta'] },
+    { locale: 'en', query: 'ak:xia', route: 'kits/engineer/skills/xia', maxRank: 3, channels: ['stable'] },
     { locale: 'en', query: 'ak:update', route: 'reference/cli/update', maxRank: 3 },
     { locale: 'en', query: 'AgentKit install', route: 'getting-started/installation', maxRank: 3 },
     { locale: 'en', query: 'instalation', route: 'getting-started/installation', maxRank: 5 },
@@ -240,7 +244,7 @@ function expandFixedQueries(baseline) {
   const channels = baseline.channels ?? ['beta', 'stable'];
   const expanded = [];
   for (const entry of baseline.fixedQueries ?? []) {
-    for (const channel of channels) {
+    for (const channel of entry.channels ?? channels) {
       expanded.push({
         ...entry,
         channel,
