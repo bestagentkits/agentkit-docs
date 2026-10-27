@@ -120,7 +120,7 @@ Với `--json`, stdout chứa envelope có phiên bản với `kind=kit.uninstal
 ```text
 kit, dryRun, pluginDir, pluginDirs
 snapshotId, snapshotIds, recovery
-removedPaths, preservedPaths, skippedPaths, configPaths
+removedPaths, removedDiagnosticPaths, preservedPaths, skippedPaths, configPaths
 deactivationSteps, warnings, manifestResult
 deleted, preserved, skipped, success
 ```
@@ -152,6 +152,10 @@ hiện tại được build lại:
 - Đường dẫn đã ghi còn khớp byte có thể bị xoá.
 - Đường dẫn đã ghi nhưng do người dùng sửa được giữ lại.
 - Tệp không xác định được giữ lại.
+- Log chẩn đoán Hook của chính Kit (`hooks/.logs/hook-log.jsonl` và tệp lock
+  của nó trong thư mục plugin hoặc extension của Kit) được xoá sau snapshot, vì
+  Hook của Kit đã ghi chúng lúc chạy. Chúng được liệt kê trong
+  `removedDiagnosticPaths`, không phải `removedPaths`.
 - Tệp dùng chung và entry thuộc Kit khác hoặc người dùng được giữ lại.
 - Symlink không an toàn, mutation boundary đã đổi, ownership evidence hỏng và
   trạng thái dùng chung mơ hồ đều fail closed.
@@ -161,6 +165,14 @@ rollback. Cleanup của owner cuối cùng có thể xoá group, event và wrapp
 đã bị AgentKit làm rỗng thay vì để lại cấu trúc owned rỗng. Cấu trúc rỗng có từ
 trước, foreign field, Hook của người dùng và entry thuộc Kit khác vẫn được giữ;
 điều này không cho phép xoá tuỳ ý nội dung Hook dùng chung.
+
+Hook của Kit ghi chẩn đoán vào `hooks/.logs/hook-log.jsonl` và `hook-log.lock`
+cạnh Hook logger mà chúng chạy. Ở bản cài native, thư mục Hooks đó là dùng
+chung, ví dụ `.claude/hooks` hoặc `.codex/hooks`, nên log được giữ khi còn Kit
+khác sở hữu logger dùng chung tại đó. Lần uninstall xoá logger cuối cùng sẽ liệt
+kê hai file log trong `removedPaths`, tạo snapshot, xoá chúng và dọn thư mục
+`.logs` đã rỗng. File khác trong `.logs` và đường dẫn log dạng liên kết được giữ
+nguyên.
 
 Kế hoạch mặc định có thể trải qua nhiều provider ở user scope. Luôn xem
 `removedPaths`, `configPaths` và `preservedPaths` trước khi thêm `--yes`.

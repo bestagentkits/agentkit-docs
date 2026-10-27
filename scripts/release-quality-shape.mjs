@@ -20,9 +20,12 @@ export const RELEASE_SHAPE_BASELINE = Object.freeze({
   // reference/cli/describe routes, plus the kits/marketing/skills/filmmaking
   // guide, ahead of promotion. The bilingual guides/jev-clef adds an Agent-first entry,
   // guides/choosing-ui-testing-skills adds a Beta-only guide, and
-  // guides/choosing-subagent-models adds the subagent model guide.
-  sourceRoutesPerLocaleChannel: { stable: 490, beta: 520 },
-  routesPerLocaleChannel: { stable: 489, beta: 519 },
+  // guides/choosing-subagent-models adds the subagent model guide. The Engineer
+  // atoz and vault and the Marketing vault Skill pages join the Beta catalog.
+  // guides/secrets-vault-dashboard and guides/secrets-vault-remote-mcp add the
+  // staging vault dashboard and remote MCP guides.
+  sourceRoutesPerLocaleChannel: { stable: 490, beta: 525 },
+  routesPerLocaleChannel: { stable: 489, beta: 524 },
   reviewedSourceOnlyRoutes: [
     {
       route: 'changelog',

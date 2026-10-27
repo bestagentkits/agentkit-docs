@@ -42,6 +42,41 @@ Two other names are not setup targets. `agy` and `portable` are export-only
 routes that write files without creating installed lifecycle state, and Cloud
 Harness is a distribution channel rather than a local setup runtime.
 
+## Support tiers: certified and assumed
+
+Support level describes how mature an adapter is. A separate **support tier**
+describes how much evidence exists for one runtime on one operating system.
+Each runtime and OS combination in the table below is one of:
+
+| Tier | Meaning for you |
+| --- | --- |
+| Certified | A measured run passed install, discovery, invocation, and uninstall on that OS. |
+| Assumed | The runtime ships on source and unit tests, but no measured run has certified it on that OS. It is expected to work, but unverified behavior is more likely. |
+
+Current tiers:
+
+| Runtime | macOS | Windows | Linux |
+| --- | --- | --- | --- |
+| Claude Code | Certified | Certified | Certified |
+| Pi | Certified | Certified | Certified |
+| Oh My Pi | Certified | Certified | Certified |
+| DeepSeek Harness | Certified | Certified | Certified |
+| Codex | Certified | Assumed | Certified |
+| Cursor | Assumed | Assumed | Assumed |
+| Antigravity (`agy`) | Assumed | Assumed | Assumed |
+
+Runtimes not listed, such as Grok Build, have no recorded tier yet.
+
+If you hit a problem with an assumed runtime, please
+[report it](https://github.com/bestagentkits/agentkit-support/issues/new) with your
+runtime, OS, and `ak doctor` output. Reports are how an assumed combination
+becomes certified.
+
+To see which of your installed runtimes are assumed on this machine, run
+[`ak doctor --check runtime_support_tier`](../reference/cli/doctor#check-runtime-support-tiers).
+Desktop shows the same tier next to each detected agent during
+[onboarding](../desktop-app/getting-started#complete-onboarding).
+
 ## Project and user scope
 
 Scope answers **where the installation is available**:
@@ -135,7 +170,7 @@ loop.
 A project install with `ak kit init <kit> --target omp` writes portable Skills
 below `.omp/skills/ak-<slug>/`, with top-level `name: ak-<slug>` in each projected
 `SKILL.md`. Agents go to `.omp/agents/<name>.md`, and rules go to
-`.omp/rules/<name>.md`. Body aliases such as `/ak:cook` and `$ak:cook` are not
+`.omp/rules/<name>.md`. Body aliases such as `/ak-cook` and `$ak-cook` are not
 rewritten. AgentKit also adds one Kit-scoped block to the project's
 `AGENTS.md`, delimited by `<!-- AGENTKIT-OMP:START:<kit> -->` and
 `<!-- AGENTKIT-OMP:END:<kit> -->`. Updating or uninstalling that Kit changes only
@@ -155,7 +190,7 @@ runs one resolved Skill through the local OMP CLI without replacing that
 installed inventory or changing the `<kit>/<skill>` selector.
 
 Trusted project OMP also discovers project `.agents/skills`. If canonical forms
-such as `ak:advise` and `ak-advise` collide, a project OMP install in
+such as `ak-advise` and `ak-advise` collide, a project OMP install in
 `.omp/skills` shadows the project `.agents/skills` copy. When you use a global
 OMP install from that trusted project, the project `.agents/skills` copy shadows
 the OMP profile copy. `ak kit init --target omp` warns and continues: it still
@@ -206,6 +241,14 @@ arguments; those cases remain unsupported on Windows and warn. Empty arguments
 are rejected distinctly, identical same-path shims deduplicate, and a conflicting
 same-path shim keeps the first emitted content and warns. Paths that do not need
 a shim continue to use the direct command.
+
+On Windows, Codex runs Hook commands through the session shell, which defaults
+to PowerShell and can turn exit code 2 into 1. Codex treats only exit code 2 as
+a block, so on Codex the AgentKit guard Hooks (privacy, scout, secrets, context
+firewall, and simplify gate) block through the JSON decision Codex honours on
+exit 0 instead: `permissionDecision: "deny"` for `PreToolUse` and
+`decision: "block"` for `UserPromptSubmit`. Blocking therefore works under both
+the PowerShell and `cmd.exe` session shells. Other runtimes keep exit code 2.
 
 A wrapper-managed Codex home may link only its final `hooks` leaf to the
 resolved user's canonical `~/.codex/hooks` directory. The link may be a POSIX

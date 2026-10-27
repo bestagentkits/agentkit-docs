@@ -1,0 +1,63 @@
+---
+title: "ak skills kit resolve"
+description: "Record the user's resolution of a personal kit rebase finding"
+generated: true
+---
+
+## ak skills kit resolve
+
+Record the user's resolution of a personal kit rebase finding
+
+### Synopsis
+
+Answers the review findings a rebase of the personal kit reports at --path (for --skill, or the one identity with findings there) and writes resolution records to AGENTKIT_HOME/kits/personal/&lt;name&gt;/resolutions.json (agentkit.skill-overlay-resolution/v1). Every non-dry-run resolve is the user's decision: a host assistant must ask the user first. The next rebase preview treats a recorded finding as resolved while its identity, path, category, both base contents of the path, both base trees of the skill and the identity's overlay digest (overlayDigestAfter) are unchanged; any other finding still needs review. keep-old keeps the running composition and pins the skill on its old base (a snapshot under pins/) for exactly the new base tree it was decided for, also after the manifest moves to that version; a later base that changes the skill again raises conflict.pinned_base_changed at every changed path. The newest resolve of a skill wins: it removes the skill's older records and pins, except a pin the skill still composes on; a fork removes the original skill's records and pins, so the original follows upstream. keep-old is refused on a fork (exit 6). use-upstream removes the overlay's change of the path (files/, patches/, delete.txt and modes.txt entries) and needs --yes; without it nothing changes. edit-overlay replaces the overlay directory with the draft --from names, so files missing from the draft are removed. use-upstream and edit-overlay are refused (exit 6) when any review finding, content or not (scripts, modes, capabilities, exposure, license), remains at the path; only a clean path is recorded. fork moves the overlay to a fork under @local/&lt;alias&gt; (default: the alias without its ak- or ak: prefix; an ak- alias is refused with identity.reserved_alias), renames a reserved SKILL.md name to the alias, pins the fork on its base and needs --yes; a rebase never re-merges a fork that has such a pin (it is listed as skipped: forked), while a fork of the manifest or a proposal without one is rebased from its source. A fork whose from was edited by hand keeps its decision for the old source, is composed on the new one and warns fork_source_changed; its rebase raises conflict.fork_source_changed at each changed path, which edit-overlay (--from the fork's own overlay directory keeps it) or use-upstream answers path by path; the old decision and its pin go with the last answer. The personal kit is snapshot under AGENTKIT_HOME/backups before any file of it is rewritten or removed; nothing is deleted without that snapshot. --to defaults to the rebase the conflict report names; --plan, when given, must equal that preview's plan token. A finding without a path (a skill the target version adds or no longer ships) cannot be resolved here; answer it with a rebase proposal. A host assistant may draft an edit-overlay directory, but only the user approves a resolution: no model is called and no automated reviewer approves.
+
+Effects:
+  With --dry-run, read-only. Otherwise, under the kit lifecycle lock and after store recovery, writes the resolution records and the choice's edits of the personal kit's files under AGENTKIT_HOME/kits/personal/&lt;name&gt; in one journaled transaction, bound to the bytes it read, after snapshotting the kit directory under AGENTKIT_HOME/backups when files change. Never projects, applies or rebases. Needs the skill store on (after `ak update --ssot`, or AGENTKIT_SKILL_STORE=1).
+
+Exit status:
+  0   success, or nothing to change
+  1   command failure, such as a path too long or a recovery that is required
+  2   the skill store disabled, invalid flags or arguments, or a malformed manifest or proposal
+  4   another AgentKit operation holds the kit lifecycle lock
+  5   personal kit, foundation, version, skill or previous revision not found (removing a kit that is not applied changes nothing and exits 0)
+  6   review required, stale plan token, rebase conflict, alias collision (including a legacy kit alias), or an unowned or modified path
+  7   revoked foundation, a link in a target path, or a digest mismatch
+
+```
+ak skills kit resolve <name> --path <path> --choice keep-old|use-upstream|edit-overlay|fork [flags]
+```
+
+### Examples
+
+```
+  ak skills kit resolve mine --path SKILL.md --choice keep-old --dry-run --json
+  ak skills kit resolve mine --path SKILL.md --choice use-upstream --plan sha256:... --yes
+  ak skills kit resolve mine --path SKILL.md --choice edit-overlay --from ./draft/one
+  ak skills kit resolve mine --path SKILL.md --choice fork --alias my-one --yes
+```
+
+### Options
+
+```
+      --alias string         Alias of a fork (default: the alias without its ak- or ak: prefix)
+      --choice string        keep-old, use-upstream, edit-overlay or fork
+      --dry-run              Print the records and edits; write nothing
+      --from string          Draft overlay directory of an edit-overlay choice
+  -h, --help                 help for resolve
+      --json                 Emit machine-readable JSON (implies --no-interactive)
+      --kits-dir string      Foundation kits directory (default: $AGENTKIT_KITS_DIR or ./kits)
+      --no-interactive       Disable interactive prompts (CI-safe)
+      --path string          Skill-relative path of the finding to resolve
+      --plan string          Rebase plan token the resolution answers (from the preview or conflict report)
+  -q, --quiet                Suppress non-error output on stderr
+      --skill string         Skill identity of the finding (when several have one at --path)
+      --to string            Target foundation as <kit>@<version> (default: the conflict report's)
+      --to-kits-dir string   Kits directory that holds the target version (default: --kits-dir)
+  -V, --verbose              Extra diagnostic output on stderr (loses to --quiet)
+  -y, --yes                  Assume yes for all prompts
+```
+
+### SEE ALSO
+
+* [ak skills kit](./ak_skills_kit)	 - Preview, apply, rebase and roll back personal kits built on kit skills

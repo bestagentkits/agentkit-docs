@@ -58,13 +58,24 @@ const SEARCH_DIALOG_TEXT = {
 const SHORTCUT_LINK_CLASS =
   'rounded-md border border-fd-border bg-fd-secondary/50 px-2 py-1 text-xs font-medium text-fd-muted-foreground transition-colors hover:text-fd-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring';
 
+// The dialog survives navigation inside one scope, and Fumadocs only closes it
+// when a result row is selected. A shortcut that navigates in this tab closes
+// it too; modified clicks open elsewhere and leave the dialog as it was.
 function SearchShortcuts({
   label,
   items,
+  onNavigate,
 }: {
   label: string;
   items: { id: string; label: string; href: string }[];
+  onNavigate: () => void;
 }) {
+  const handleClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (event.defaultPrevented || event.button !== 0) return;
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    onNavigate();
+  };
+
   return (
     <div className="flex flex-col gap-2">
       <p className="font-mono text-[11px] font-medium uppercase tracking-wide text-fd-muted-foreground">
@@ -73,7 +84,7 @@ function SearchShortcuts({
       <ul className="flex flex-wrap gap-2">
         {items.map((item) => (
           <li key={item.id}>
-            <Link href={item.href} className={SHORTCUT_LINK_CLASS}>
+            <Link href={item.href} className={SHORTCUT_LINK_CLASS} onClick={handleClick}>
               {item.label}
             </Link>
           </li>
@@ -134,6 +145,9 @@ function ScopedSearchDialog({
   const shortcuts = useMemo(() => searchShortcutItems({ locale, channel }), [locale, channel]);
   const channelLabel = channelRootTitle(channel) ?? channel;
 
+  const { onOpenChange } = props;
+  const close = useCallback(() => onOpenChange(false), [onOpenChange]);
+
   const retry = useCallback(() => {
     evictSearchShard({ locale, channel });
     setRetryToken((token) => token + 1);
@@ -164,7 +178,7 @@ function ScopedSearchDialog({
         ) : (
           <SearchStatePanel>
             {!hasQuery ? (
-              <SearchShortcuts label={text.shortcutsLabel} items={shortcuts} />
+              <SearchShortcuts label={text.shortcutsLabel} items={shortcuts} onNavigate={close} />
             ) : query.isLoading ? (
               <p>{text.loading}</p>
             ) : query.error ? (
@@ -187,7 +201,7 @@ function ScopedSearchDialog({
                     {text.clear}
                   </button>
                 </div>
-                <SearchShortcuts label={text.shortcutsLabel} items={shortcuts} />
+                <SearchShortcuts label={text.shortcutsLabel} items={shortcuts} onNavigate={close} />
               </>
             ) : (
               <>
@@ -200,7 +214,7 @@ function ScopedSearchDialog({
                 >
                   {text.clear}
                 </button>
-                <SearchShortcuts label={text.shortcutsLabel} items={shortcuts} />
+                <SearchShortcuts label={text.shortcutsLabel} items={shortcuts} onNavigate={close} />
               </>
             )}
           </SearchStatePanel>

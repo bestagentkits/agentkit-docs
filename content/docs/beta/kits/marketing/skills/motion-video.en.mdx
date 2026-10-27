@@ -1,12 +1,12 @@
 ---
-title: Produce beat-synced motion-graphic videos with ak:motion-video
+title: Produce beat-synced motion-graphic videos with ak-motion-video
 description: Build a production-grade 1080p HyperFrames motion graphic with AI voice-over, captions, SFX, and music cut to the beat, in a named style profile or a per-scene mix, with fast 1:1/9:16 editions, while keeping provider spend and publication separately approved.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
-Use `ak:motion-video` to make a 1920×1080, 30 fps motion-graphic video where
+Use `ak-motion-video` to make a 1920×1080, 30 fps motion-graphic video where
 scene cuts land on the music's beats, reveals land on spoken words, and the
 audio mix is measured rather than guessed. The workflow is scripted end to end:
 facts, script, generated audio, forced alignment, beat grid, bar-spliced music,
@@ -16,7 +16,7 @@ encode, and optional 1:1 or 9:16 editions. It renders through HyperFrames (HTML
 
 ## Choose the motion-video workflow
 
-### Use ak:motion-video when
+### Use ak-motion-video when
 
 - You need a launch, release, changelog, feature, or explainer video with
   voice-over, captions, SFX, and music synced to the beat.
@@ -30,14 +30,17 @@ encode, and optional 1:1 or 9:16 editions. It renders through HyperFrames (HTML
 
 ### Choose another workflow when
 
-- You need generative text-to-video footage. Use [`ak:video`](./video).
+- You need generative text-to-video footage. Use [`ak-video`](./video).
 - The composition is a React or Remotion project. Use
-  [`ak:remotion`](./remotion).
+  [`ak-remotion`](./remotion).
 - You have a general HyperFrames question or want a plain HTML composition
-  without the beat-sync pipeline. Use [`ak:hyperframes`](./hyperframes).
-- You need talking-head editing. This Skill does not cover it.
+  without the beat-sync pipeline. Use [`ak-hyperframes`](./hyperframes).
+- You need plain talking-head editing (cuts, color, b-roll) without motion
+  graphics. This Skill does not cover it. A recording-driven motion-graphic
+  video, where your own recording is the voice and the motion graphics carry
+  the screen, is covered by [`--from-recording`](#make-a-video-from-your-own-recording).
 - You want a router across every installed motion or video Skill. Use
-  [`ak:motion-graphics`](./motion-graphics).
+  [`ak-motion-graphics`](./motion-graphics).
 
 ## Meet the production bar
 
@@ -85,9 +88,9 @@ The full route also needs:
 
 | Runtime | Invocation | Availability boundary |
 | --- | --- | --- |
-| Claude Code | `/ak:motion-video ...` | Native delivery is the default; explicit plugin delivery is also supported. Full production still depends on multix, provider access, Node, Python, and FFmpeg in the session environment. |
-| Cursor | `/ak:motion-video ...` | Slash invocation is user-verified. Browser, preview, and supporting tool behavior can vary by setup. |
-| Codex | `$ak:motion-video ...` | The Skill uses native Codex discovery. Hook projection is partial; provider, render, and FFmpeg requirements are unchanged. |
+| Claude Code | `/ak-motion-video ...` | Native delivery is the default; explicit plugin delivery is also supported. Full production still depends on multix, provider access, Node, Python, and FFmpeg in the session environment. |
+| Cursor | `/ak-motion-video ...` | Slash invocation is user-verified. Browser, preview, and supporting tool behavior can vary by setup. |
+| Codex | `$ak-motion-video ...` | The Skill uses native Codex discovery. Hook projection is partial; provider, render, and FFmpeg requirements are unchanged. |
 
 Read [Runtime adapters](../../../concepts/runtime-adapters) before assuming the
 same production surface everywhere.
@@ -98,27 +101,69 @@ same production surface everywhere.
   <Tab value="Claude Code">
 
 ```text
-/ak:motion-video "Make a 60-second release video for our v3.4 notes in the glass-keynote style. Use only facts from CHANGELOG.md, English voice-over with Vietnamese captions, and stop after the master render; do not publish"
+/ak-motion-video "Make a 60-second release video for our v3.4 notes in the glass-keynote style. Use only facts from CHANGELOG.md, English voice-over with Vietnamese captions, and stop after the master render; do not publish"
 ```
 
   </Tab>
   <Tab value="Cursor">
 
 ```text
-/ak:motion-video "Make a 60-second release video for our v3.4 notes in the glass-keynote style. Use only facts from CHANGELOG.md, English voice-over with Vietnamese captions, and stop after the master render; do not publish"
+/ak-motion-video "Make a 60-second release video for our v3.4 notes in the glass-keynote style. Use only facts from CHANGELOG.md, English voice-over with Vietnamese captions, and stop after the master render; do not publish"
 ```
 
   </Tab>
   <Tab value="Codex">
 
 ```text
-$ak:motion-video "Make a 60-second release video for our v3.4 notes in the glass-keynote style. Use only facts from CHANGELOG.md, English voice-over with Vietnamese captions, and stop after the master render; do not publish"
+$ak-motion-video "Make a 60-second release video for our v3.4 notes in the glass-keynote style. Use only facts from CHANGELOG.md, English voice-over with Vietnamese captions, and stop after the master render; do not publish"
 ```
 
   </Tab>
 </Tabs>
 
-Add `--poor` to the same request for the lean, single-session mode.
+Add `--poor` to the same request for the lean, single-session mode, or
+`--from-recording` when the voice is your own recording.
+
+### Run the preflight first
+
+Every run starts with `scripts/doctor.py`. It checks the shell, the Python
+modules, `ffmpeg` and `ffprobe`, Node.js, the pinned HyperFrames version, and
+whether the console can print UTF-8 text such as Vietnamese captions. It
+writes `data/env.json` and one brief line that every worker receives, so a
+Windows machine with a broken Git Bash profile or a cp1252 console fails once,
+up front, instead of in every worker. The doctor reports a broken shell
+profile and which file to fix; it never edits your profile.
+
+### Make a video from your own recording
+
+With `--from-recording`, the voice is your own talking-head or screen-share
+recording instead of a generated voice-over. The motion graphics are the main
+picture and your webcam appears as a small circular picture-in-picture. Every
+step runs from scripts bundled with the Skill, so the project holds data, not
+pipeline code:
+
+1. **Transcribe** the takes in `raw/` with ElevenLabs Scribe through
+   `multix elevenlabs transcribe` (word timestamps). A local Whisper JSON can be
+   imported instead for offline work.
+2. **Segment and cut.** The transcript is split into numbered sentence
+   segments. The edit decision list (`data/edl.json`) keeps segment ranges and
+   can speed up speech with pitch preserved. `apply-edl.py` cuts audio and
+   webcam video to the same whole-frame lengths, and `check-edl.py` verifies
+   they cannot drift apart.
+3. **Plan scenes, parts, and shorts.** Each scene is a range of kept segments.
+   Long videos render in parts, and short candidates are picked from the
+   transcript while planning.
+4. **Captions, timeline, and mix.** Edited Vietnamese captions per segment,
+   the same TIMING contract as the voice-over mode, and a ducked music bed
+   normalized to −14 LUFS.
+5. **Build, render, and finish.** Scene builders fill one fragment file per
+   scene and fast-check small ranges; each part renders, and `finish.py`
+   composites the webcam picture-in-picture with the untouched mix.
+6. **Shorts, after you approve the master.** Each short is a 9:16 scene-range
+   clip with its own title, a 1.2-second music tail, and a fade.
+
+Transcription sends your recording's audio to ElevenLabs through multix, so it
+follows the same spend and approval boundary as voice generation.
 
 ### Pick or mix a style
 
@@ -203,7 +248,7 @@ baked to transparent PNG layers under `assets/images/`, and animated with GSAP.
 The Skill reviews every image before animating it and records how each asset
 was made in `data/art.json` so a re-roll reproduces the look. No video model is
 involved; AI text-to-video or image-to-video footage still belongs to
-[`ak:video`](./video).
+[`ak-video`](./video).
 
 - **Text stays live HTML.** Headlines are never baked into generated images,
   so type stays crisp and every fact stays editable.
@@ -241,13 +286,20 @@ involved; AI text-to-video or image-to-video footage still belongs to
    layers are baked first. `index.html` follows the composition contract, the
    resolved style, and each scene's planned shot, then passes
    `hyperframes lint`, `check`, and scene `snapshot` review, plus the
-   director's pass on every scene.
+   director's pass on every scene. Scene builders write one fragment file per
+   scene, query timing with `tl.py`, and fast-check a few scenes at a time with
+   `assemble.py` and `validate.py`, so layout and contrast errors are fixed
+   while the scene is still in context.
 8. **Render, remux, and encode.** HyperFrames renders the video, the measured mix
    is remuxed back in, and an optional social encode produces a smaller file.
-9. **Add a square or vertical edition, when requested.** A re-layout edition
+9. **Add a square or vertical edition, when requested.** A full-video edition
    (`scripts/reframe.py --ratio 1x1|9x16`) reuses the master's voice-over,
-   music, and mix and adds only ratio-specific CSS and its own render; a quick
-   ffmpeg fit or crop is a faster, lower-fidelity alternative for previews.
+   music, and mix and adds only ratio-specific CSS and its own render. Shorts
+   are 9:16 clips cut from the master by scene range, with their own title and
+   music tail. Ratio overrides are written while the master is built, checked
+   with `audit-ratio-scope.py` so the master never regresses, and measured
+   against the safe areas with `check-bounds.mjs`. A quick ffmpeg fit or crop
+   is a faster, lower-fidelity alternative for previews.
 
 ## Keep generation, spend, and publishing gated
 
@@ -308,11 +360,15 @@ The Skill reports measured numbers, not impressions. It is done only when:
 
 | Symptom | Safe next step |
 | --- | --- |
-| Runtime cannot find `ak:motion-video` | Confirm target and scope, start a fresh session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+| Runtime cannot find `ak-motion-video` | Confirm target and scope, start a fresh session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
 | `multix` is missing or a provider call fails | Stop before generation, keep the script and data files, and fix multix or its own credential config. Do not copy keys into the project. |
 | Alignment warns that aligned words and script tokens differ | Fix the scene's `en` or `say` text, or regenerate that scene's voice-over, then realign. |
 | `verify-arrangement.py` reports drift | Re-fit the beat grid, adjust the arrangement, and re-run the arrangement and timeline steps. |
-| `lint` or `check` fails | Fix the composition against the composition contract before rendering. |
+| `lint` or `check` fails | Fix the composition against the composition contract and its known pitfalls (for example `ease: "none"` must be a string, and a build directory holds exactly one root HTML file) before rendering. |
+| `doctor.py` reports a broken shell or a cp1252 console | Use the shell it recorded and call Python as `python -X utf8`; fix the named shell profile yourself if you want Git Bash back. |
+| `doctor.py` warns `fonts missing` or `validate` reports a font 404 | The skill ships no font files. Download the TTF the page names (for example from Google Fonts) into the project's `assets/fonts/`, or point `@font-face` at a local font of the same class. |
+| `check-edl.py` reports drift | Re-run `apply-edl.py` after fixing the EDL entry it names; never build the timeline on a drifting cut. |
+| A 9:16 short shows text outside the frame or an unfinished ending | Run `check-bounds.mjs` on the short's build, fix the scene's `html[data-ratio="9x16"]` override in the master, audit it with `audit-ratio-scope.py`, and rebuild the short. |
 | The Codex image route fails (not signed in or a driver error) | The Skill falls back to the Gemini image route for the whole video and notes it in the plan. Sign in to `codex` before the next video if you want the OpenAI route. |
 | Only visuals changed | Re-run `lint`, `check`, `render`, and the remux; audio does not need regeneration. |
 | A 1:1 or 9:16 edition still shows 1920/1080-sized layout | Read `reframe.py`'s warnings for the affected lines, add the missing `data-ratio` override, and regenerate the edition; never hand-edit the generated edition directory. |

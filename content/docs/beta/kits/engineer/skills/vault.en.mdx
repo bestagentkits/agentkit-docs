@@ -1,0 +1,120 @@
+---
+title: Handle secrets safely with ak-vault
+description: Store, find, sync, rotate, and use credentials through ak secrets without any value entering the conversation, while honoring a recorded choice of .env files or another secret manager.
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak-vault` when a task stores, finds, rotates, syncs, imports, or uses a
+credential, or meets a `.env.*` file. The Skill handles secrets the way you
+chose, and no value ever enters the conversation. `ak secrets` is the
+recommended store, not a mandatory one: if you keep `.env.*` files or use
+another secret manager, the Skill follows that choice instead of pushing the
+vault.
+
+## Choose ak-vault for credential work
+
+### Use ak-vault when
+
+- A deploy, API call, or script needs a key, token, or `.env` value.
+- You want to store or import secrets and find them again later by project,
+  environment, or provider.
+- You need to tell whether a stored ref holds the expected credential without
+  revealing it.
+
+### Choose another path when
+
+- You are configuring the vault itself or reading command details. Use the
+  [secrets vault guide](../../../guides/secrets-vault) and the
+  [`ak secrets` reference](../../../reference/cli/secrets).
+- The task does not touch a credential or a `.env.*` file.
+
+## Run the Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak-vault import .env.production
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak-vault import .env.production
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak-vault import .env.production
+```
+
+  </Tab>
+</Tabs>
+
+The optional first argument names the operation (`store`, `find`, `sync`, `use`,
+`rotate`, or `import`); the second names a ref or a `.env` path.
+
+## Understand the recorded store choice
+
+Before anything else, the Skill reads `secretStore.choice` from
+`ak config prefs resolve --json`.
+
+| Choice | Behavior |
+| --- | --- |
+| `ak-vault` | Uses `ak secrets` to store, find, sync, and use credentials. |
+| `env-file` | Works with the project's `.env.*` files and does not suggest the vault. Warns once, without blocking, when a secrets file is not ignored by Git. |
+| `external:<name>` | Follows that manager's own documented workflow and does not suggest the vault. |
+| Unset | Recommends the vault once, then records your answer. |
+
+The recommendation is asked only while the task actually involves a credential
+or a `.env.*` file, and only in an interactive session. The same question asks
+whether the answer covers this project or every project, and the Skill records
+it right away with `ak config prefs set secret_store.choice <choice>` at project
+or user scope. A brushed-off question still counts as an answer: the Skill
+records what the project already does. In `--json`, CI, or any non-interactive
+run, it never asks.
+
+## Know the safety rules
+
+- No secret value is printed, echoed, logged, or pasted. The Skill reports refs,
+  counts, exit codes, and `[redacted]` only, and never asks you to paste a value.
+- Values move only through stdin (`--value=-`) or a file (`--value-file`) from a
+  script that does not echo them. A literal `--value=<secret>` is rejected by
+  the CLI.
+- A `.env*` file's name is enough to detect it. The Skill reads its contents only
+  inside a non-echoing script that moves a value you asked to move.
+- To check whether a stored ref holds the expected credential, the Skill reads
+  the ref's `hint` from `list --json`, `get --json`, or `search --json`, then
+  confirms with `ak secrets compare`, which answers `match` or `differs` and
+  prints neither value. It does not loop `compare` to guess a value.
+- Before saying anything about the cloud vault, it reads
+  `ak secrets sync status --json`.
+- Commands that refuse to run under an agent by design are handed to you as the
+  exact command to run, rather than worked around.
+
+## Store and find secrets
+
+Each ref needs a project and an environment so it can be found later. The Skill
+infers them from evidence: the environment from the file name (for example
+`.env.production`) or deploy target, the project from the repository or deploy
+configuration, and the provider from the variable prefix. When a field is still
+ambiguous, such as a bare `.env` or a monorepo with several apps, it asks one
+question before writing. In a non-interactive run it stops without writing and
+names the missing fields.
+
+Ref names stay findable on every device: `<PROJECT>_<NAME>` for a
+project-specific secret (with `_<ENV>` when the project keeps several
+environments), and the provider's conventional name, such as
+`CLOUDFLARE_API_TOKEN`, for a credential shared across projects. Before writing,
+the Skill searches for an existing ref; an existing ref for the same purpose is
+updated with `ak secrets rotate` (new value) or `ak secrets annotate` (metadata
+only) instead of being re-created.
+
+## Related pages
+
+- [Secrets vault guide](../../../guides/secrets-vault)
+- [`ak secrets` reference](../../../reference/cli/secrets)
