@@ -22,8 +22,10 @@ export const RELEASE_SHAPE_BASELINE = Object.freeze({
   // guides/choosing-ui-testing-skills adds a Beta-only guide, and
   // guides/choosing-subagent-models adds the subagent model guide. The Engineer
   // atoz and vault and the Marketing vault Skill pages join the Beta catalog.
-  sourceRoutesPerLocaleChannel: { stable: 490, beta: 523 },
-  routesPerLocaleChannel: { stable: 489, beta: 522 },
+  // guides/secrets-vault-dashboard and guides/secrets-vault-remote-mcp add the
+  // staging vault dashboard and remote MCP guides.
+  sourceRoutesPerLocaleChannel: { stable: 490, beta: 525 },
+  routesPerLocaleChannel: { stable: 489, beta: 524 },
   reviewedSourceOnlyRoutes: [
     {
       route: 'changelog',
