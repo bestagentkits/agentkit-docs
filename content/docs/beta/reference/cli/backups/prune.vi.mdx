@@ -23,9 +23,28 @@ Lệnh không nhận argument theo vị trí.
 | `--older-than <duration>` | Trống | Xoá snapshot cũ hơn Go duration như `168h`, hoặc hậu tố ngày như `30d`. |
 | `--keep-last <n>` | `0` | Giữ lại `n` snapshot mới nhất. |
 | `--dry-run` | `false` | In cùng deletion plan nhưng không xoá snapshot. |
+| `--checkpoints` | `false` | Prune checkpoint nén thay cho snapshot; checkpoint pre-upgrade mới nhất được giữ. |
+| `--release-rollback-source` | `false` | Cùng `--checkpoints`, giải phóng checkpoint pre-upgrade mới nhất để có thể prune nó. |
 
 Các cờ đầu ra dùng chung nằm trong [quy ước CLI](../cli-conventions). Lệnh không
 có `--apply` hay `--force`: bỏ `--dry-run` nghĩa là áp dụng plan.
+
+## Prune checkpoint
+
+`--checkpoints` chuyển lệnh sang kho checkpoint dưới
+`~/.agentkit/backups/checkpoints/`. Ở đó chỉ `--keep-last` có tác dụng; giá
+trị dưới `1` được xem là `1`, còn `--older-than` thoát `2`. Checkpoint
+pre-upgrade mới nhất là nguồn rollback cho `ak rollback --to v2` và không bao
+giờ bị chọn trừ khi bạn truyền `--release-rollback-source`; cờ này thoát `2`
+nếu thiếu `--checkpoints`. Lần chạy thật giải phóng nguồn đó trước khi tính
+plan; dry-run chỉ báo những gì sẽ bị xoá.
+
+```bash
+ak backups prune --checkpoints --keep-last 3 --dry-run
+ak backups prune --checkpoints --release-rollback-source --keep-last 1
+```
+
+Đầu ra và JSON envelope giống như với snapshot.
 
 ## Hiểu retention policy
 
@@ -107,7 +126,7 @@ stderr (`error_code: validation_failed`, mã thoát `2`). Chế độ human, k�
 | --- | --- | --- |
 | `0` | Plan hoàn tất, kể cả no-op hoặc dry-run. | Xem lại đầu ra; với dry-run, chỉ bỏ `--dry-run` khi tập Remove chính xác. |
 | `1` | Liệt kê, reconcile, đổi tên hoặc xoá thất bại; Cobra cũng dùng nhánh này cho argument theo vị trí ngoài dự kiến. Một số ứng viên có thể đã mất. | Liệt kê snapshot lại và kiểm tra kho trước khi thử lại. |
-| `2` | Không parse được cờ hoặc `--older-than` không phải duration hợp lệ. | Sửa cách gọi; thêm đơn vị duration rõ ràng. |
+| `2` | Không parse được cờ, `--older-than` không phải duration hợp lệ, `--older-than` đi cùng `--checkpoints`, hoặc `--release-rollback-source` thiếu `--checkpoints`. | Sửa cách gọi; thêm đơn vị duration rõ ràng. |
 | `4` | Một thao tác prune hoặc vòng đời backup khác đang giữ khoá liên quan. Với `--json`, error envelope ghi `error_code` `lock_held`. | Đợi thao tác hoàn tất, liệt kê snapshot rồi thử lại. |
 
 Mỗi ứng viên được thử xoá độc lập, nên mã `1` có thể đi kèm một lần prune chỉ

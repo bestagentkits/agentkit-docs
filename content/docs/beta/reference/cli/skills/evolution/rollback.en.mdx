@@ -1,0 +1,80 @@
+---
+title: ak skills evolution rollback
+description: Undo the apply of a candidate by restoring the personal kit files from the rollback record the apply wrote first.
+---
+
+Use `ak skills evolution rollback` to restore every personal kit file that
+[`ak skills evolution apply`](../cli/ak_skills_evolution_apply) wrote or removed for a candidate. It
+does not change a runtime projection; re-run `ak skills kit apply` afterwards
+if the kit was applied.
+
+## Usage
+
+```bash
+ak skills evolution rollback <candidateId> [--dry-run] [--json]
+```
+
+Exactly one candidate reference is required.
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--dry-run` | `false` | Preview the rollback and write nothing. |
+
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+## Requirements
+
+A rollback that writes needs the skill store on (after `ak update --ssot`, or
+`AGENTKIT_SKILL_STORE=1`). A `--dry-run` does not.
+
+## What it restores
+
+The rollback reads the record the apply wrote first and restores each file to
+what it held before the apply. It runs only while every one of those files
+still holds what the apply wrote: a file edited since fails with
+`evolve.apply_conflict` and nothing is changed, so an edit is never lost. A
+file already back at its pre-apply content is skipped.
+
+Without `--dry-run`, under the kit lifecycle lock, the command snapshots the
+personal kit when a file is rewritten, restores the files in one journaled
+transaction, marks the rollback record rolled back, and sets the candidate's
+apply slot to `rolled_back`. It runs no script, model, or network call.
+
+## Output
+
+Text prints `would rollback` or `rolled back` with the candidate, overlay
+kind, overlay directory, identity, and personal kit, then each file change as
+`create`, `write`, or `remove`, the snapshot taken, and a `next:` line. After
+a rollback the next step is `ak skills kit apply <name> --dry-run` to
+re-project the personal kit if it was applied.
+
+JSON uses `kind=skills.evolution.rollback`:
+
+```text
+schema_version: 1
+kind: skills.evolution.rollback
+data: schema (agentkit.skill-evolution-plan/v1), action (rollback),
+      status (preview | rolled_back), candidateId, personalKit, created,
+      identity, kind, overlayDir, diff[] (empty), permissionDelta[] (empty),
+      changes[]: path, action
+      backup?, next[], sideEffects
+```
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Success, including a preview. |
+| `1` | The candidate store, the personal kit, or the skill store could not be read or written, or a record failed verification (`store.corrupt`). |
+| `2` | Invalid flags or arguments, or the skill store is off. |
+| `4` | Another AgentKit operation holds the kit lifecycle lock (`evolve.store_busy`). |
+| `5` | No recorded candidate matches. |
+| `6` | The personal kit does not hold what the rollback expects: a file changed since the apply (`evolve.apply_conflict`). |
+| `7` | Redaction or the content gate could not be prepared (`evolve.redaction_failed`). |
+
+## Related commands
+
+- [Complete `ak skills evolution rollback` command facts](../cli/ak_skills_evolution_rollback)
+- [Apply a candidate](../cli/ak_skills_evolution_apply)
+- [Show one candidate](../cli/ak_skills_evolution_show)
+- [Personal kits](../cli/ak_skills_kit)

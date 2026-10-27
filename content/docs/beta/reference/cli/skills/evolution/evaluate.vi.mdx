@@ -1,0 +1,87 @@
+---
+title: ak skills evolution evaluate
+description: Chạy lại đánh giá offline, tất định của một candidate đã ghi và làm mới evaluation slot của nó.
+---
+
+Dùng `ak skills evolution evaluate` để dựng lại một candidate trên base của nó
+và chạy đúng đánh giá mà [`ak skills improve --candidate`](../cli/ak_skills_improve) đã chạy
+khi ghi candidate. Không có model, mạng hay script nào chạy. Benchmark routing
+bằng model thật là một kiểm tra riêng, tuỳ chọn, và không bao giờ chặn
+[`apply`](../cli/ak_skills_evolution_apply).
+
+## Cách dùng
+
+```bash
+ak skills evolution evaluate <candidateId> [--kits-dir <dir>] [--dry-run] [--json]
+```
+
+Phải có đúng một reference candidate.
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--kits-dir <dir>` | `$AGENTKIT_KITS_DIR` hoặc `./kits` | Thư mục foundation kit để dựng lại base. |
+| `--dry-run` | `false` | In đánh giá và không ghi gì. |
+
+Các cờ dùng chung nằm trong [quy ước CLI](../cli-conventions).
+
+## Đánh giá những gì
+
+Candidate được dựng lại trên base của nó: foundation Skill từ `--kits-dir`, hoặc
+personal kit composition đang chạy mà nó xếp chồng lên. Base đã đổi kể từ khi
+ghi candidate sẽ lỗi `evolve.base_changed`.
+
+Đánh giá route các task evidence khi không có Skill, với base Skill và với
+candidate qua lexical router đã đóng băng, chấm điểm failure và correction theo
+các thuật ngữ mà nội dung Skill bao phủ, route các Skill khác trong thư mục kit
+làm negative control, và chạy các kiểm tra functional và security. Verdict là
+`improved`, `inconclusive`, `regressed` hoặc `blocked`.
+
+## Tác động
+
+Lệnh đọc candidate record, thư mục kit, cùng các personal kit record đang chạy
+và entry trong skill store dưới AgentKit home. Không có `--dry-run`, lệnh thay
+evaluation slot của `AGENTKIT_HOME/state/skill-evolve/candidates/<id>/candidate.json`
+dưới kit lifecycle lock. Lệnh không bao giờ đổi một Skill, một Kit hay một
+personal kit.
+
+## Đầu ra
+
+Text in ID candidate, verdict cùng method, router và lý do, số lượng task, số
+liệu routing và coverage của từng variant trên toàn bộ task và trên các task
+held-out, negative control, mọi kiểm tra không phải pass thuần, và từng thay đổi
+permission.
+
+JSON dùng `kind=skills.evolution.evaluate`:
+
+```text
+schema_version: 1
+kind: skills.evolution.evaluate
+data.dryRun
+data.evaluation: schema, state, verdict, reasons[], method, router,
+                 candidateId, evidenceDigest, baseTreeDigest, compositionDigest,
+                 tasks, variants[], holdout[], gain[],
+                 functional[], security[], permissionDelta[],
+                 negativeControls, sideEffects, digest
+```
+
+Mỗi kiểm tra có `id`, `candidate`, và tuỳ chọn `baseline` cùng `detail`; trạng
+thái kiểm tra là `pass`, `fail` hoặc `review`. Các variant là `none`,
+`baseline` và `candidate`.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Thành công, kể cả dry run. |
+| `1` | Không đọc hoặc ghi được candidate store, personal kit hay skill store, hoặc một record không qua xác minh (`store.corrupt`). |
+| `2` | Cờ hoặc argument không hợp lệ. |
+| `4` | Một thao tác AgentKit khác đang giữ kit lifecycle lock (`evolve.store_busy`). |
+| `5` | Không có candidate đã ghi nào khớp, hoặc không resolve được base của Skill (`evolve.base_unresolved`). |
+| `6` | Base đã đổi kể từ khi ghi candidate (`evolve.base_changed`). |
+| `7` | Không chuẩn bị được redaction hoặc content gate (`evolve.redaction_failed`). |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skills evolution evaluate`](../cli/ak_skills_evolution_evaluate)
+- [Xem một candidate](../cli/ak_skills_evolution_show)
+- [Áp dụng một candidate](../cli/ak_skills_evolution_apply)

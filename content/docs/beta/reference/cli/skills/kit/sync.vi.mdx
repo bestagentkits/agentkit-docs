@@ -1,0 +1,105 @@
+---
+title: ak skills kit sync
+description: Chiếu đúng một revision SkillX đã ghim của Kit cá nhân, giống hệt từng byte trên mọi máy, không bao giờ theo revision mới hơn.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak skills kit sync --locked` để chiếu revision SkillX mà link record của
+Kit cá nhân ghi (lần publish hoặc sync gần nhất), hoặc revision mà `--kit`,
+`--revision` và `--digest` nêu. Document của revision phải hash đúng digest đã
+ghim, và mỗi Skill được dựng lại từ base và overlay đã ghim rồi kiểm tra với
+composition digest, nên cùng một revision chiếu ra tree giống hệt từng byte
+trên mọi máy. Không bao giờ theo revision mới hơn.
+
+## Cách dùng
+
+```bash
+ak skills kit sync <name> --locked [--kit @<handle>/<name> --revision <id> --digest sha256:<hex>] [flags]
+```
+
+`--locked` là bắt buộc; thiếu nó lệnh thoát `2`.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--locked` | `false` | Bắt buộc. Chỉ chiếu đúng revision đã ghim. |
+| `--kit @<handle>/<name>` | Kit đã liên kết | Kit cá nhân trên SkillX. |
+| `--revision <id>` | Revision đã liên kết | Id revision SkillX cần chiếu. |
+| `--digest sha256:<hex>` | Digest đã liên kết | Digest mà document của revision phải hash đúng. |
+| `--allow-downgrade` | `false` | Replay revision ghim foundation cũ hơn bản đang chạy; cần review. |
+| `--plan <token>` | Trống | Plan token từ `--dry-run`; bắt buộc khi plan cần review. |
+| `--scope <scope>` | `project` | Scope của lock và skills root: `project` hoặc `global`. |
+| `--runtime <list>` | Các runtime của revision | `claude-code`, `codex`; lặp lại được. Runtime của revision đang chạy luôn được gộp vào. |
+| `--kits-dir <dir>` | `$AGENTKIT_KITS_DIR` hoặc `./kits` | Thư mục foundation Kit. |
+| `--dry-run` | `false` | In plan, review finding và plan token; không ghi gì. |
+
+Các cờ dùng chung nằm trong [quy ước CLI](../cli-conventions). Kit cá nhân chưa
+có link SkillX cần đủ cả ba `--kit`, `--revision` và `--digest`.
+
+## Điều kiện
+
+Cả hai cổng phải bật, sau `ak update --ssot` hoặc với `AGENTKIT_SKILLX=1` và
+`AGENTKIT_SKILL_STORE=1`, kể cả với dry run; tắt một trong hai thì lệnh thoát
+`2`. Cổng store theo `--scope`.
+
+## Lệnh làm gì
+
+Lệnh đọc lock và document của đúng revision đó bằng SkillX API key đã cấu hình,
+và các base của nó từ thư mục foundation Kit hoặc, khi thiếu, từ các release
+trên SkillX (đã xác minh, dàn vào một thư mục tạm rồi xoá). Sau đó, như
+[`ak skills kit apply`](./apply), trong một transaction có journal dưới kit
+lifecycle lock, nó ghi các tree đã compose vào skill store, các file được chiếu
+vào skills root gốc của mỗi runtime (mode `0644`, không bao giờ executable),
+skill lock và receipt của scope, thuộc sở hữu `personal:<name>`, và
+`AGENTKIT_HOME/state/personal-kits/<name>/skillx.json`.
+
+- Review finding và plan token hoạt động như trong `ak skills kit apply`.
+- Khi SkillX offline và scope đã chạy đúng revision đã ghim, sync giữ nguyên
+  kèm cảnh báo offline và thoát `0`; ngoài ra không đổi gì.
+- Revision ghim foundation cũ hơn bản đang chạy bị từ chối với
+  `personal_kit.pin_behind`. `--allow-downgrade` replay nó kèm cảnh báo và một
+  review finding `review.foundation_downgrade` mà plan token sẽ duyệt.
+
+<Callout type="info">
+  Lệnh không bao giờ upload, không bao giờ theo revision mới hơn, không bao giờ
+  ghi đè Kit cá nhân, và không bao giờ chạy script.
+</Callout>
+
+## Đầu ra
+
+Đầu ra text mở đầu bằng Kit trên SkillX, revision id và digest. Khi offline mà
+revision đã ghim đang chạy, nó in `unchanged`; ngoài ra nó tiếp tục với đầu ra
+của [`ak skills kit apply`](./apply).
+
+JSON dùng `kind=skills.kit.sync` với các trường sau dưới `data`:
+
+```text
+skillx: kit, revisionId, revisionDigest
+offline
+personalKit, status, requiredApproval, planToken, findings[],
+revision, previous, plan
+```
+
+Các trường sau `offline` là của `skills.kit.apply`.
+
+## Kết quả và mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Đã sync, không có gì để đổi, hoặc SkillX offline khi scope đã chạy đúng revision đã ghim. |
+| `1` | Lệnh thất bại: SkillX offline, API key thiếu, bị giới hạn scope hay hết hạn, hoặc cần recovery. |
+| `2` | SkillX, cờ overlay hoặc skill store bị tắt, thiếu `--locked`, hoặc pin, cờ hay argument không hợp lệ. |
+| `4` | Kit lifecycle lock đang bị thao tác AgentKit khác giữ. |
+| `5` | Không tìm thấy Kit trên SkillX, revision, foundation, phiên bản hoặc Skill. |
+| `6` | Cần review, plan token cũ, downgrade foundation mà không có `--allow-downgrade`, alias collision, hoặc path không thuộc sở hữu hay đã bị sửa. |
+| `7` | Document của revision không khớp pin, chứa path hay key không an toàn, foundation bị revoke, hoặc có link trong target path. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skills kit sync`](../cli/ak_skills_kit_sync)
+- [Publish lên SkillX](./publish)
+- [Liệt kê revision SkillX](./revisions)
+- [Apply Kit cá nhân](./apply)
+- [Chiếu skill lock](../sync)

@@ -1,0 +1,91 @@
+---
+title: ak skills kit
+description: Xem trước, apply, rebase, rollback, publish và sync các Kit cá nhân mở rộng đúng phiên bản Kit bằng overlay và fork.
+---
+
+Dùng `ak skills kit` để làm việc với Kit cá nhân. Một Kit cá nhân `local/<name>`
+mở rộng các phiên bản Kit chính xác bằng overlay và fork; manifest của nó nằm ở
+`AGENTKIT_HOME/kits/personal/<name>/personal-kit.yaml`. Các lệnh chiếu
+(project) composition đã resolve vào skills root gốc của runtime, thuộc sở hữu
+`personal:<name>`, trong một transaction có journal. Chạy riêng lệnh nhóm sẽ in
+help và thoát `0`.
+
+## Cách dùng
+
+```bash
+ak skills kit <command>
+```
+
+Nhóm lệnh không nhận argument theo vị trí và không có cờ riêng. Các cờ dùng
+chung nằm trong [quy ước CLI](../cli-conventions).
+
+## Điều kiện
+
+Nhóm lệnh được đăng ký mặc định; `AGENTKIT_SKILL_OVERLAYS` đặt khác `1` sẽ ẩn
+nó. Mỗi lệnh con cần gì:
+
+| Cần | Lệnh |
+| --- | --- |
+| Không cần gì: chạy offline, cho mọi người dùng | `status`, `inspect`, và `--dry-run` của `init`, `resolve` và `rebase` |
+| Skill store | `apply`, `rollback`, `remove` và `sync` (kể cả dry run), cùng `init` và `resolve` |
+| SkillX | `publish`, `revisions` và `sync` |
+
+Skill store và SkillX đều bật sau `ak update --ssot`, hoặc với
+`AGENTKIT_SKILL_STORE=1` và `AGENTKIT_SKILLX=1`. `init`, `resolve`, `publish` và
+`revisions` chỉ chạm vào `AGENTKIT_HOME` và theo scope global của nó từ bất kỳ
+thư mục nào; một lần chiếu theo `--scope`. Upload cần một SkillX API key không
+giới hạn scope trong `ak secrets` (`SKILLX_TOKEN`).
+
+## Lệnh con
+
+| Lệnh | Kết quả | Tác động lên disk |
+| --- | --- | --- |
+| `ak skills kit status [name]` | Cho biết Kit cá nhân có resolve được trên foundation không. | Chỉ đọc. |
+| `ak skills kit inspect <name>` | Hiển thị composition plan đã resolve. | Chỉ đọc. |
+| `ak skills kit init <name> --extends <kit>@<version>` | Tạo manifest Kit cá nhân. | Ghi manifest. |
+| `ak skills kit apply <name>` | Chiếu composition vào các skills root. | Ghi skill store, skills root, lock và receipt. |
+| `ak skills kit rebase <name> --to <kit>@<version>` | Xem trước hoặc apply việc chuyển sang phiên bản foundation mới. | Dry run chỉ đọc; apply thì chiếu, rebase bị dừng ghi conflict report. |
+| `ak skills kit resolve <name> --path <path> --choice <choice>` | Ghi quyết định của người dùng cho một finding của rebase. | Ghi resolution record và file của chính Kit. |
+| `ak skills kit rollback <name>` | Chiếu lại revision trước đó. | Cùng transaction với apply. |
+| `ak skills kit remove <name>` | Gỡ các projection của Kit. | Cùng transaction với apply. |
+| `ak skills kit publish <name>` | Upload delta của Kit lên SkillX thành một revision. | Ghi link record SkillX. |
+| `ak skills kit revisions <name>` | Liệt kê các revision SkillX của Kit. | Chỉ đọc. |
+| `ak skills kit sync <name> --locked` | Chiếu đúng một revision SkillX. | Cùng transaction với apply, cộng link record. |
+
+Plan cần review chỉ được apply với plan token người dùng đã duyệt. Các lệnh
+chiếu không bao giờ ghi đè Kit cá nhân hay các foundation Kit, và không bao giờ
+chạy script.
+
+## Đầu ra và mã thoát
+
+Mỗi lệnh con ghi đầu ra cho người đọc hoặc một JSON envelope. Các JSON kind là
+`skills.kit.status`, `skills.kit.inspect`, `skills.kit.init`,
+`skills.kit.apply`, `skills.kit.rebase` (dry run), `skills.kit.rebase-apply`,
+`skills.kit.resolve`, `skills.kit.rollback`, `skills.kit.remove`,
+`skills.kit.publish`, `skills.kit.revisions` và `skills.kit.sync`. Mỗi page liệt
+kê mã thoát riêng; các lệnh chỉ đọc và lệnh chiếu dùng chung các mã sau:
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Thành công, hoặc không có gì để đổi. |
+| `1` | Lệnh thất bại; với `status` và `inspect` còn là overlay conflict, shared alias, alias collision hoặc proposal cũ. |
+| `2` | Skill store bị tắt, cờ hoặc argument không hợp lệ, hoặc manifest, overlay hay proposal sai định dạng. |
+| `4` | Kit lifecycle lock đang bị thao tác AgentKit khác giữ (lệnh chiếu). |
+| `5` | Không tìm thấy Kit cá nhân, foundation, phiên bản, Skill hoặc revision trước. |
+| `6` | Cần review, plan token cũ, rebase conflict, alias collision, hoặc path không thuộc sở hữu hay đã bị sửa (lệnh chiếu). |
+| `7` | Foundation bị revoke, có link trong target path, hoặc digest không khớp. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skills kit`](../cli/ak_skills_kit)
+- [Kiểm tra Kit cá nhân có resolve được](./status)
+- [Xem composition plan](./inspect)
+- [Tạo Kit cá nhân](../cli/ak_skills_kit_init)
+- [Apply Kit cá nhân](./apply)
+- [Rebase lên phiên bản foundation mới](./rebase)
+- [Resolve một finding của rebase](./resolve)
+- [Rollback về revision trước](../cli/ak_skills_kit_rollback)
+- [Gỡ các projection](./remove)
+- [Publish lên SkillX](./publish)
+- [Liệt kê revision SkillX](./revisions)
+- [Sync một revision SkillX](./sync)
