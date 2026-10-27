@@ -33,8 +33,8 @@ export const RELEASE_QUALITY_BASELINE = Object.freeze({
   locales: ['en', 'vi'],
   deterministic: {
     outputBytes: 3_047_146_912,
-    // Preserve the previous per-route allowance as coverage grows 411 -> 449 -> 456 -> 481 -> 482 -> 485 -> 517 -> 541.
-    outputBudgetBytes: 3_778_301_367,
+    // Preserve the previous per-route allowance as coverage grows 411 -> 449 -> 456 -> 481 -> 482 -> 485 -> 517 -> 541 -> 546.
+    outputBudgetBytes: 3_813_220_972,
     fileCount: 23_584,
     fileCountBudget: 27_484,
     // Aggregate across the four locale/channel shards.
