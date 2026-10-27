@@ -7,11 +7,14 @@
 //   node scripts/sync-release.mjs --bundle path/to/docs-bundle.tar.gz
 //   node scripts/sync-release.mjs --tag v0.42.0-beta.7          # CI: gh download
 //
-// After the bundle applies, Layer A of the Desktop three-layer refresh runs
-// automatically: ak-gui asset metadata is fetched from the release page and
-// content/docs/<channel>/desktop-app/**.mdx are rewritten in place. Pass
-// --skip-desktop to opt out (rare — a release with no ak-gui assets), or
-// --desktop-assets <path> to load asset metadata from a local JSON file
+// Layer A of the Desktop three-layer refresh runs automatically: ak-gui asset
+// metadata is fetched from the release page and validated before the bundle
+// touches the repo, then recorded under release-evidence/desktop/ once the
+// bundle applies. The build reads that evidence for the channels.json tag, so
+// a failed fetch must leave channels.json on the previous tag; otherwise a
+// retry of the same bundle would see no tag change and skip Desktop. Pass
+// --skipDesktop to opt out (rare — a release with no ak-gui assets), or
+// --desktopAssets <path> to load asset metadata from a local JSON file
 // (test fixtures).
 import { parseArgs } from 'node:util';
 import { execFileSync } from 'node:child_process';
@@ -19,7 +22,8 @@ import { mkdtemp, readFile, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { syncBetaRelease } from './lib/sync.mjs';
-import { syncDesktopAssets } from './lib/desktop-assets.mjs';
+import { parseManifest } from './lib/manifest.mjs';
+import { assertDesktopAssets, syncDesktopAssets } from './lib/desktop-assets.mjs';
 import { repoRoot } from './lib/paths.mjs';
 
 async function isDir(p) {
@@ -106,15 +110,22 @@ async function main() {
   }
   const bundleDir = await resolveBundleDir(values);
   const fromTag = await readPreviousTag({ repoRoot: values.repoRoot, channel: 'beta' });
+  const { tag: toTag } = parseManifest(
+    await readFile(join(bundleDir, 'manifest.json'), 'utf8'),
+    { expectedChannel: 'beta' },
+  );
+
+  // Fetch and validate before syncBetaRelease moves channels.json to toTag.
+  let assets = null;
+  if (!values.skipDesktop && fromTag && fromTag !== toTag) {
+    assets = await loadDesktopAssets({ tag: toTag, repo: values.repo, desktopAssets: values.desktopAssets });
+    assertDesktopAssets(assets, toTag);
+  }
+
   const summary = await syncBetaRelease({ repoRoot: values.repoRoot, bundleDir });
 
   let desktop = { skipped: true };
-  if (!values.skipDesktop && fromTag && fromTag !== summary.tag) {
-    const assets = await loadDesktopAssets({
-      tag: summary.tag,
-      repo: values.repo,
-      desktopAssets: values.desktopAssets,
-    });
+  if (assets) {
     const result = await syncDesktopAssets({
       repoRoot: values.repoRoot,
       channel: 'beta',
