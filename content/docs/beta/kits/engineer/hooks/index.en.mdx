@@ -220,7 +220,9 @@ whatever the runtime records for an executed call, such as its transcript.
 Treat a released value as present on the host and rotate it when needed.
 
 Claude Code and Grok register the Hook for `Bash|PowerShell|WebFetch`, and Codex
-narrows it to `Bash`. Cursor support for this Hook is not established in this release.
+narrows it to `Bash`. Codex cannot ask before a call, so there the Hook denies a
+reference until `AGENTKIT_SECRETS_INJECT_AUTO_ALLOW=1` is set in the environment
+that starts Codex. Cursor support for this Hook is not established in this release.
 
 ## Background auto-update liveness
 
@@ -302,6 +304,16 @@ The plan reminder is exported only on wildcard `Stop`, not `SubagentStop`. With
 no active plan it exits `0` with empty stdout. When relevant it emits JSON with
 only allowed success fields, shaped as
 `{"continue":true,"systemMessage":"..."}`, and remains fail-open.
+
+### Blocking decisions on Codex
+
+On Codex, a guard Hook that blocks (privacy, scout, context firewall, secret
+references, and the simplify gate's hard block) returns its decision as JSON on
+stdout and exits `0`: a `PreToolUse` `permissionDecision` of `deny`, or a
+`UserPromptSubmit` `decision` of `block`, each with the reason. Claude Code
+keeps exit code `2` with the reason on stderr. On Windows, Codex runs Hooks
+through PowerShell by default, which turns exit code `2` into `1`, and Codex
+does not block on a failed Hook. The JSON decision blocks under every shell.
 
 ### Windows Hook launch support
 
