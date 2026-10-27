@@ -189,6 +189,13 @@ updater skips it; an unacknowledged result prints once at the next
 See the [`ak update` reference](../reference/cli/update) and the
 `auto_update` [`ak doctor`](../reference/cli/doctor) check for details.
 
+`AK_NO_AUTO_UPDATE=1` also stops `ak kit init`, `ak kit refresh` and a scoped
+`ak update` from replacing `ak` to meet a kit's minimum CLI version: a release
+build below that minimum stops before any kit change and names
+`ak self-update --yes` and the command to re-run. A build without a release
+version (`dev`, or a local stamp such as `cert-dev`) is never replaced
+automatically; `ak kit init` prints one notice on stderr and continues with it.
+
 The background run uses the release channel from `updates.channel`; the
 `auto_update:` key holds only the schedule and opted-in projects. A project that
 has uncommitted changes or a live agent session is not updated; it stays pending
@@ -285,6 +292,39 @@ stale generated and owned paths only while ownership evidence still matches,
 and preserves the previous selected-skill subset. Modified, unsafe, linked, and
 shared paths remain in place. Review the confirmation preview; avoid
 `--no-backup`.
+
+## Update windows and renewal
+
+You own the kit versions you license, and you can use them indefinitely. Updates
+are covered for 12 months, and renewing extends that window. After the window ends:
+
+- Installed kits, the CLI, and the Desktop app keep working. An ended window
+  never disables or uninstalls anything, online or offline.
+- You can still install patches of the last covered minor version, and reinstall
+  any version the window covered.
+- Releases published after the window require a renewal.
+
+The registry decides which versions your account may resolve, not your local
+clock. Check where you stand with `ak licenses`, which shows each kit's window,
+the patch line, the latest covered version, the source of the coverage, and the
+renewal link. See [`ak licenses`](../reference/cli/licenses).
+
+How each command behaves when a version is outside the window:
+
+| Command | Result |
+| --- | --- |
+| `ak update` (no `--version`) | Updates to the newest covered version. If the registry refuses the kit, the row is `skipped` with `reason: "renewal_required"`, the installed version stays, and the exit code is `0`. |
+| `ak update --version X` | The row is `failed` with `reason: "renewal_required"`. A batch whose only failures are renewals exits `15`. |
+| `ak kit init --version X` / `ak kit refresh --version X` | Nothing is written and the command exits `15`. With `--json`, the error has `error_code: "renewal_required"` and an `updates` object with `kit_id`, `latest_entitled_version`, `updates_through`, and `renew_url`. |
+| `ak kit init` / `ak kit refresh` (no `--version`) | Installs the newest covered version and prints one `ak: notice:` line on stderr when a newer release needs renewal. |
+
+None of these commands prompt, so scripts and CI behave the same way. `ak
+self-update` and the Desktop updater use the signed binary release channel,
+which update windows do not gate. Offline, AgentKit reuses only a version it
+already verified for the exact kit, runtime, and version; a cached copy never
+makes a newer release available. To continue, open the renewal link from
+`ak licenses` or from the error, renew, then rerun the command. See
+[Renewal required](../troubleshooting/updates#renewal-required-when-an-update-is-refused).
 
 ## Verify the update
 
