@@ -53,7 +53,9 @@ const GITHUB_ASSET_FIELDS = ['kind', 'name', 'sha256', 'size'];
 const HEX_64 = /^[a-f0-9]{64}$/;
 const COMMIT = /^[a-f0-9]{40}$/;
 const IDENTITY = /^ak-[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const INVOCATION = /^ak:[a-z0-9]+(?:-[a-z0-9]+)*$/;
+// Kits through v3.0.0-beta.34 declare the legacy ak:<slug> name; later kits
+// declare the portable ak-<slug> name. Either form binds the same storage slug.
+const INVOCATION = /^ak[:-][a-z0-9]+(?:-[a-z0-9]+)*$/;
 const VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 const EVIDENCE_PREFIX = 'release-evidence/kit-catalog';
 
@@ -230,7 +232,7 @@ function validateIdentities(snapshot, digest, errors) {
     }
 
     const sourceSlug = typeof entry.sourceIdentity === 'string' ? entry.sourceIdentity.replace(/^ak-/, '') : '';
-    const invocationSlug = typeof entry.declaredInvocation === 'string' ? entry.declaredInvocation.replace(/^ak:/, '') : '';
+    const invocationSlug = typeof entry.declaredInvocation === 'string' ? entry.declaredInvocation.replace(/^ak[:-]/, '') : '';
     if (entry.classification !== 'alias' && entry.classification !== 'collision-blocked' && sourceSlug !== invocationSlug) {
       errors.push(`${entryLabel}: invocation ${entry.declaredInvocation} does not match storage identity ${entry.sourceIdentity}`);
     }

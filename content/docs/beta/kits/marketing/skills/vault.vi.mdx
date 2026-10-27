@@ -1,0 +1,115 @@
+---
+title: Xử lý secret an toàn với ak-vault
+description: Lưu, tìm, đồng bộ, xoay vòng và dùng credential qua ak secrets mà không giá trị nào lọt vào cuộc trò chuyện, đồng thời tôn trọng lựa chọn đã ghi lại là file .env hoặc secret manager khác.
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak-vault` khi một task lưu, tìm, xoay vòng, đồng bộ, import hoặc dùng
+credential, hoặc gặp file `.env.*`. Skill xử lý secret theo cách bạn đã chọn, và
+không giá trị nào lọt vào cuộc trò chuyện. `ak secrets` là store được khuyến
+nghị, không bắt buộc: nếu bạn giữ file `.env.*` hoặc dùng secret manager khác,
+Skill đi theo lựa chọn đó thay vì đẩy bạn sang vault.
+
+## Chọn ak-vault cho công việc với credential
+
+### Dùng ak-vault khi
+
+- Một lần deploy, API call hoặc script cần key, token hay giá trị `.env`.
+- Bạn muốn lưu hoặc import secret và tìm lại sau theo project, environment hoặc
+  provider.
+- Bạn cần biết một ref đã lưu có giữ đúng credential mong đợi hay không mà không
+  để lộ giá trị.
+
+### Chọn hướng khác khi
+
+- Bạn đang cấu hình chính vault hoặc tra chi tiết lệnh. Dùng
+  [hướng dẫn secrets vault](../../../guides/secrets-vault) và
+  [reference `ak secrets`](../../../reference/cli/secrets).
+- Task không đụng đến credential hay file `.env.*`.
+
+## Chạy Skill
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak-vault import .env.production
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak-vault import .env.production
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak-vault import .env.production
+```
+
+  </Tab>
+</Tabs>
+
+Đối số đầu tiên (không bắt buộc) chọn thao tác (`store`, `find`, `sync`, `use`,
+`rotate` hoặc `import`); đối số thứ hai là một ref hoặc đường dẫn `.env`.
+
+## Hiểu lựa chọn store đã ghi lại
+
+Trước mọi việc khác, Skill đọc `secretStore.choice` từ
+`ak config prefs resolve --json`.
+
+| Lựa chọn | Hành vi |
+| --- | --- |
+| `ak-vault` | Dùng `ak secrets` để lưu, tìm, đồng bộ và dùng credential. |
+| `env-file` | Làm việc với các file `.env.*` của project và không gợi ý vault. Cảnh báo một lần, không chặn, khi file secret chưa được Git ignore. |
+| `external:<name>` | Theo workflow có tài liệu của chính manager đó và không gợi ý vault. |
+| Chưa đặt | Khuyến nghị vault một lần, rồi ghi lại câu trả lời của bạn. |
+
+Lời khuyến nghị chỉ được hỏi khi task thực sự liên quan đến credential hoặc file
+`.env.*`, và chỉ trong session tương tác. Cùng câu hỏi đó hỏi luôn câu trả lời
+áp dụng cho project này hay mọi project, và Skill ghi lại ngay bằng
+`ak config prefs set secret_store.choice <choice>` ở project hoặc user scope.
+Câu hỏi bị gạt đi vẫn tính là đã trả lời: Skill ghi lại cách project đang làm.
+Trong `--json`, CI hoặc bất kỳ run không tương tác nào, Skill không bao giờ hỏi.
+
+## Nắm các quy tắc an toàn
+
+- Không giá trị secret nào bị in, echo, ghi log hay dán ra. Skill chỉ báo ref, số
+  lượng, exit code và `[redacted]`, và không bao giờ yêu cầu bạn dán giá trị.
+- Giá trị chỉ đi qua stdin (`--value=-`) hoặc file (`--value-file`) từ một script
+  không echo. CLI từ chối `--value=<secret>` dạng literal.
+- Tên file `.env*` là đủ để nhận ra nó. Skill chỉ đọc nội dung bên trong một
+  script không echo, khi chuyển một giá trị bạn yêu cầu.
+- Để kiểm tra một ref đã lưu có giữ đúng credential mong đợi hay không, Skill đọc
+  `hint` của ref từ `list --json`, `get --json` hoặc `search --json`, rồi xác nhận
+  bằng `ak secrets compare`, lệnh trả lời `match` hoặc `differs` và không in giá
+  trị nào. Skill không lặp `compare` để đoán giá trị.
+- Trước khi nói bất cứ điều gì về cloud vault, Skill đọc
+  `ak secrets sync status --json`.
+- Các lệnh được thiết kế để từ chối chạy dưới agent sẽ được giao lại cho bạn dưới
+  dạng lệnh chính xác cần chạy, thay vì tìm cách lách.
+
+## Lưu và tìm secret
+
+Mỗi ref cần một project và một environment để tìm lại sau này. Skill suy ra chúng
+từ bằng chứng: environment từ tên file (ví dụ `.env.production`) hoặc deploy
+target, project từ repository hoặc cấu hình deploy, và provider từ tiền tố biến.
+Khi một trường vẫn mơ hồ, như một file `.env` trần hoặc monorepo có nhiều app,
+Skill hỏi một câu trước khi ghi. Trong run không tương tác, Skill dừng mà không
+ghi và nêu tên các trường còn thiếu.
+
+Tên ref luôn tìm được trên mọi thiết bị: `<PROJECT>_<NAME>` cho secret riêng của
+project (thêm `_<ENV>` khi project giữ nhiều environment), và tên quen thuộc của
+provider, như `CLOUDFLARE_API_TOKEN`, cho credential dùng chung giữa các project.
+Trước khi ghi, Skill tìm ref sẵn có; ref sẵn có cho cùng mục đích được cập nhật
+bằng `ak secrets rotate` (giá trị mới) hoặc `ak secrets annotate` (chỉ metadata)
+thay vì tạo lại.
+
+## Trang liên quan
+
+- [Hướng dẫn secrets vault](../../../guides/secrets-vault)
+- [Reference `ak secrets`](../../../reference/cli/secrets)
