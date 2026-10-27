@@ -365,6 +365,18 @@ test('validates invocation, storage route, aliases, internal identities, collisi
     const fixture = await makeFixture({ betaIdentities: [identity('ak-alpha', 'public', { declaredInvocation: 'ak:beta' })] });
     await expectFailure(fixture, /invocation ak:beta does not match storage identity ak-alpha/);
   });
+  await t.test('dash invocation accepted', async () => {
+    const fixture = await makeFixture({ betaIdentities: [identity('ak-alpha', 'public', { declaredInvocation: 'ak-alpha' })] });
+    await assert.doesNotReject(() => checkKitCatalog(fixture));
+  });
+  await t.test('dash invocation mismatch', async () => {
+    const fixture = await makeFixture({ betaIdentities: [identity('ak-alpha', 'public', { declaredInvocation: 'ak-beta' })] });
+    await expectFailure(fixture, /invocation ak-beta does not match storage identity ak-alpha/);
+  });
+  await t.test('invocation outside the ak namespace', async () => {
+    const fixture = await makeFixture({ betaIdentities: [identity('ak-alpha', 'public', { declaredInvocation: 'ck:alpha' })] });
+    await expectFailure(fixture, /declaredInvocation: invalid invocation identity/);
+  });
   await t.test('storage route mismatch', async () => {
     const fixture = await makeFixture({ betaIdentities: [identity('ak-alpha', 'public', { canonicalRoute: 'kits/test/skills/beta' })] });
     await expectFailure(fixture, /canonicalRoute: expected kits\/test\/skills\/alpha/);
