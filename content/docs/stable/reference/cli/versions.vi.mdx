@@ -1,11 +1,11 @@
 ---
 title: ak versions
-description: Kiểm tra inventory ak, Kit và Skill trong Claude plugin cục bộ, đồng thời diễn giải chính xác dữ liệu phiên bản mới nhất từ cache và phạm vi nguồn.
+description: Kiểm tra binary ak, mọi destination Kit đã cài và Skill trong Claude plugin, kèm provenance và check state theo từng destination.
 ---
 
-Dùng `ak versions` để kiểm tra build CLI đang chạy, thư mục nguồn Kit và Skill
-được tìm thấy dưới install root của Claude plugin. Đây là lệnh inventory, không
-phải trình cập nhật.
+Dùng `ak versions` để kiểm tra build CLI đang chạy, mọi destination Kit đã cài
+và Skill được tìm thấy dưới install root của Claude plugin. Đây là lệnh
+inventory, không phải trình cập nhật.
 
 ## Cách dùng
 
@@ -20,8 +20,8 @@ Lệnh không nhận argument theo vị trí.
 | Cờ | Mặc định | Mô tả |
 | --- | --- | --- |
 | `--cache-ttl <duration>` | `1h0m0s` | Quyết định khi nào dữ liệu registry cache hiện có bị xem là stale. Giá trị không dương trở về một giờ. |
-| `--local-only` | `false` | Liệt kê dữ liệu cục bộ mà không đọc registry cache hay thử fetch registry. |
-| `--remote-only` | `false` | Bỏ qua việc liệt kê Kit và Skill cục bộ; live versions endpoint chưa được cấu hình trong bản phát hành này. |
+| `--local-only` | `false` | Chỉ dùng bằng chứng cài đặt cục bộ. Không gửi request mạng và không ghi cache. |
+| `--remote-only` | `false` | Bỏ qua việc liệt kê Kit và Skill cục bộ. Dành cho versions registry endpoint được cấu hình. |
 
 `--local-only` và `--remote-only` loại trừ nhau. Các cờ đầu ra dùng chung được
 mô tả trong [quy ước CLI](../cli-conventions). Lệnh không bao giờ hỏi và
@@ -32,21 +32,23 @@ mô tả trong [quy ước CLI](../cli-conventions). Lệnh không bao giờ h�
 Quá trình liệt kê cục bộ đọc:
 
 - binary version, commit và build date được compile vào `ak`;
-- thư mục Kit dưới `AGENTKIT_KITS_DIR`, mặc định là `./kits`;
+- install receipt của mọi destination Kit trong project hiện tại và scope
+  global, cho một bản ghi theo mỗi runtime, scope và delivery mode;
 - manifest Skill dưới `AGENTKIT_PLUGIN_DIR/<kit>/skills/`, mặc định là
   `~/.claude/plugins/<kit>/skills/`.
 
-Phạm vi này không bao gồm mọi route native của runtime. Cụ thể, Skill native
-của Codex và bản cài Claude project-native nằm ngoài collector Skill của lệnh.
+Cây cache và cây nguồn không phải Kit đã cài, nên không xuất hiện thành dòng.
 
-Live latest-version endpoint bị tắt trong lệnh đã phát hành. Chế độ mặc định có
-thể đọc `~/.agentkit/cache/registry/index.json`; cache fresh được dùng, còn cache
-stale được giữ làm fallback offline. Cache thiếu, hỏng hoặc không đọc được được
-xem là cache miss. `--local-only` bỏ qua cache.
+Ở chế độ mặc định, lệnh kiểm tra metadata bản phát hành binary đã ký và resolve
+phiên bản Kit mới nhất từ manifest registry có xác thực (chỉ metadata, không tải
+hay cài gì). Kết quả được cache trong `~/.agentkit/cache/registry/index.json`
+(dưới `AGENTKIT_HOME` khi được đặt). Mục cache fresh được dùng lại; mục stale
+được giữ làm fallback offline và báo check state `stale`. Cache thiếu, hỏng hoặc
+không đọc được được xem là cache miss.
 
-`--remote-only` hiện chỉ trả binary identity, mảng `kits` và `skills` rỗng, cùng
-giá trị `latest` của binary từ cache nếu dùng được. Cờ này không gửi live remote
-request trong bản phát hành này.
+`--local-only` không gửi request mạng nào và không ghi cache; khi đó mọi dòng
+báo check state `not_checked`. `--remote-only` trả binary identity cùng mảng
+`kits` và `skills` rỗng.
 
 ## Ví dụ
 
@@ -59,38 +61,47 @@ ak versions --cache-ttl 30m
 
 ## Đầu ra và luồng
 
-Stdout dành cho người dùng là bảng gồm `TYPE`, `NAME`, `CURRENT`, `LATEST` và
-`STATUS`. Khi không có dữ liệu latest, nhãn trạng thái thông tin không chứng
-minh item đã cài là development build.
+Stdout dành cho người dùng là bảng có một dòng cho mỗi destination. Terminal
+rộng hiển thị `TYPE`, `NAME`, `SOURCE`, `INSTALLED`, `AVAILABLE`, `HEALTH` và
+`STATUS`, nên phiên bản nguồn, bản phát hành registry đã ghi nhận và bản phát
+hành registry đang có được gắn nhãn riêng. Mỗi dòng Kit cũng liệt kê destination
+và, khi biết, channel cùng nguồn của channel. Giá trị tuỳ chọn bị thiếu in là
+`unknown`.
 
-JSON thành công dùng envelope ngoài `kind=versions`. `data` có
-`schema_version` riêng của inventory:
+JSON thành công dùng envelope ngoài `kind=versions` (envelope `schema_version`
+1). `data` có `schema_version` riêng của inventory, nay là `2`:
 
 ```text
-schema_version: 1
-kind: versions
-data.schema_version: 1
-data.binary: version, commit, date, latest
-data.kits[]: name, version, latest
+data.schema_version: 2
+data.binary: version, commit, date, latest, check_state, version_state
+data.kits[]: kit, runtime, scope, delivery_mode, destination,
+  source_version, registry_version, available_version, origin, channel,
+  channel_source, required_cli_version, emitted_by_cli, receipt_recorded,
+  health, last_emit, check_state, version_state, compatibility
 data.skills[]: kit, name, version
-data.registry: cached_at, stale, optional stale_age
+data.registry: cached_at, stale, optional stale_age, check_state, optional reason
 ```
 
-Các mảng luôn có mặt dù rỗng; trường version không có dữ liệu là chuỗi rỗng.
-Lỗi dùng stderr và error envelope JSON dùng chung. Lỗi parse cờ có thể vẫn là
-plain text.
+`check_state` là `not_checked`, `checked`, `offline`, `failed` hoặc `stale`.
+`version_state` là `unknown`, `dev`, `current`, `update_available` hoặc `ahead`.
+`compatibility` là `satisfied`, `requires_upgrade` hoặc `unknown`, còn `health`
+là `ok`, `modified`, `incomplete` hoặc `unknown`. Các mảng luôn có mặt dù rỗng,
+và trường Kit tuỳ chọn bị thiếu là `null`. Tên trường của phiên bản 1 như
+`data.kits[].name` và `version` không còn, nên hãy cập nhật parser đang đọc
+chúng. Lỗi trong chế độ JSON, kể cả lỗi phân tích cờ (mã thoát `2`), kết thúc
+stderr bằng [error envelope](../cli-conventions#output-json) dùng chung.
 
 ## Kết quả và mã thoát
 
 | Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
 | --- | --- | --- |
-| `0` | Inventory hoàn tất. Cache miss, cache hỏng, cache stale hoặc remote lookup bị tắt đều không phải lỗi. | Đọc phạm vi và `registry.stale` trước khi diễn giải `latest`. |
+| `0` | Inventory hoàn tất. Cache miss, cache hỏng, cache stale hoặc lookup offline hay thất bại đều không phải lỗi. | Đọc `check_state` của từng dòng và `registry.stale` trước khi diễn giải phiên bản đang có. |
 | `1` | Không thể liệt kê Kit hoặc install root cục bộ, chẳng hạn thư mục không đọc được. | Sửa quyền truy cập root được báo hoặc dùng biến nguồn phù hợp. |
 | `2` | Cờ không hợp lệ, duration không parse được, đặt cả hai cờ nguồn hoặc truyền argument. | Sửa cách gọi. |
 
-Lệnh không apply, thay thế hay xoá gì. Khi live endpoint bị tắt như trong bản
-phát hành này, lệnh cũng không ghi cache. Chỉ dùng lệnh cập nhật sau khi xem lại
-vòng đời liên quan.
+Lệnh không apply, thay thế hay xoá gì. Chế độ mặc định có thể cập nhật registry
+cache; `--local-only` thì không. Chỉ dùng lệnh cập nhật sau khi xem lại vòng đời
+liên quan.
 
 ## Lệnh liên quan và giới hạn
 

@@ -4,7 +4,8 @@ description: List committed rollback snapshots newest first and understand which
 ---
 
 Use `ak backups list` to discover committed rollback snapshot IDs before you
-inspect, verify, prune, or restore one. Results are ordered newest first.
+inspect, verify, prune, or restore one. Results are ordered newest first,
+followed by compressed checkpoints with the rollback source marked.
 
 ## Syntax
 
@@ -74,10 +75,29 @@ JSON success uses the shared envelope on stdout:
 }
 ```
 
-The JSON entry intentionally omits the human table's byte size and verification
+Compressed checkpoints follow the snapshots. In the human table their `KIND`
+column is `checkpoint:<purpose>`, with ` (rollback source)` appended to the
+newest pre-upgrade checkpoint that `ak rollback --to v2` would restore. In JSON
+they form a separate `data.checkpoints[]` array, omitted when there are none:
+
+```json
+{
+  "id": "20261019T080000Z-1a2b3c4d",
+  "created_at": "<rfc3339-time>",
+  "label": "<label>",
+  "purpose": "pre-upgrade",
+  "scope": "lean",
+  "files": 1200,
+  "archive_bytes": 52428800,
+  "rollback_source": true
+}
+```
+
+The JSON snapshot entry intentionally omits the human table's byte size and verification
 status. An empty result is `"backups": []`. Runtime errors in JSON mode use a
-structured error envelope on stderr. Flag-parse errors can remain plain-text
-usage.
+structured error envelope on stderr. With `--json` enabled, unknown or invalid
+flags use the shared JSON stderr error envelope (`error_code: validation_failed`,
+exit `2`). Human mode, including `--json=false`, prints `Usage`.
 
 ## Exit status
 

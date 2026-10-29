@@ -1,0 +1,105 @@
+---
+title: ak license devices
+description: Liệt kê các thiết bị đã kích hoạt với license AgentKit App của bạn, kèm thiết bị hiện tại.
+---
+
+Dùng `ak license devices` để xem mọi thiết bị gắn với license AgentKit App của
+bạn, ví dụ trước khi giải phóng một slot bằng
+[`ak license devices deactivate`](./deactivate). Lệnh chỉ đọc.
+
+## Cách dùng
+
+```bash
+ak license devices [flags]
+```
+
+Lệnh không nhận argument theo vị trí.
+
+## Tuỳ chọn của lệnh
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--registry-url <url>` | Biến môi trường hoặc mặc định của bản phát hành | Ghi đè base URL của registry AgentKit. |
+
+Các cờ dùng chung như `--json` được mô tả trong
+[quy ước CLI](../cli-conventions). Lệnh không bao giờ hỏi, nên `--yes` và
+`--no-interactive` không thay đổi hành vi.
+
+## Trước khi chạy
+
+Bạn cần session license-key từ `ak login --license-key`; xem
+[`ak login`](../../login). Lệnh đọc `~/.agentkit/auth/session.json` (dưới
+`AGENTKIT_HOME` nếu được đặt) và dùng device session token đã lưu. Lệnh không
+ghi gì cục bộ.
+
+Sau đó lệnh gọi `GET /api/agentkit/licenses/devices` trên registry, dùng token
+đó làm bearer credential, đọc từng trang tối đa 100 thiết bị cho tới khi đủ
+tổng số được báo (tối đa 50 trang). Mỗi request hết hạn sau 15 giây. Response
+có `status` khác `active` được xem là lỗi.
+
+## Đầu ra
+
+Đầu ra dành cho người dùng gồm số lượng và một dòng cho mỗi thiết bị: id, tên,
+platform, lần thấy đầu và lần thấy cuối. Thiết bị hiện tại kết thúc bằng
+`(this device)`, và tên trống được in là `(unnamed device)`.
+
+```text
+[i] Devices (1)
+dev_abc123  Work laptop  darwin-arm64  first seen 2026-01-01T00:00:00.000Z  last seen 2026-09-24T00:00:00.000Z  (this device)
+```
+
+Khi không có thiết bị, lệnh in `No devices found.`
+
+`--json` ghi envelope dùng chung với kind `license.devices`:
+
+```json
+{
+  "schema_version": 1,
+  "kind": "license.devices",
+  "data": {
+    "devices": [
+      {
+        "id": "dev_abc123",
+        "deviceName": "Work laptop",
+        "platform": "darwin-arm64",
+        "appVersion": "1.2.3",
+        "firstSeenAt": "2026-01-01T00:00:00.000Z",
+        "lastSeenAt": "2026-09-24T00:00:00.000Z",
+        "isCurrentDevice": true
+      }
+    ],
+    "total": 1,
+    "unsupported": false
+  }
+}
+```
+
+`appVersion` chỉ xuất hiện trong JSON. Dùng `id` làm `<device-id>` cho
+`deactivate`.
+
+### License server chưa hỗ trợ thiết bị
+
+Nếu registry trả lời route thiết bị bằng `404`, `405` hoặc `501` trần, không
+kèm error code, lệnh coi là chưa được hỗ trợ. Lệnh in
+`Device list not available yet: the license server does not offer it. Your devices stay active.`
+và thoát `0`. Ở chế độ JSON, `devices` là `[]`, `total` là `0` và
+`unsupported` là `true`. Hãy kiểm tra `unsupported` trước khi coi danh sách
+rỗng là "không có thiết bị".
+
+## Hành vi thoát
+
+| Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
+| --- | --- | --- |
+| `0` | Danh sách đã được in, kể cả danh sách rỗng hoặc thông báo chưa hỗ trợ. | Đọc `data.devices` và `data.unsupported`. |
+| `1` | Không có session license-key, registry mismatch, lỗi session store, hoặc lỗi registry hay mạng. | Chạy `ak login --license-key` với registry đúng, rồi thử lại. |
+| `2` | Parse cờ thất bại. | Sửa cách gọi. |
+
+Với `--json`, lỗi dùng error envelope JSON dùng chung trên stderr.
+
+## Lệnh liên quan
+
+- [`ak license devices deactivate`](./deactivate)
+- [`ak license`](../index)
+- [`ak login`](../../login)
+- [Thông tin đầy đủ của lệnh `ak license devices`](../../cli/ak_license_devices)
+- [Quy ước CLI](../cli-conventions)

@@ -1,0 +1,157 @@
+---
+title: ak skills exec
+description: Run one granted skill entrypoint through the isolation broker, pinned by digest, with no prompts and refusals before any spawn.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak skills exec` to run one declared script entrypoint of an installed
+skill. The broker verifies the exact content, the release state, the manifest,
+and an existing grant, then runs the script in an isolation backend. Execution
+never prompts: a grant must already exist from
+[`ak skills grants add`](./grants/add).
+
+## Usage
+
+```bash
+ak skills exec <@publisher/slug@sha256:<hex>> --entrypoint <name> [flags] [-- args...]
+```
+
+The reference must be pinned by a `sha256` digest of 64 lowercase hex
+characters. A version, tag, or range is refused with exit `2`. Arguments after
+`--` reach the script argv directly, with no shell.
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--entrypoint <name>` | required | Select the declared entrypoint. |
+| `--input <name=path>` | Empty | Bind an input; repeatable. |
+| `--output <dir>` | Empty | Copy `$OUTPUT` files into an empty or new directory. Allowed only if the entrypoint declares `$OUTPUT` writes. |
+| `--timeout <duration>` | Manifest limit | Set a limit shorter than the manifest limit. Must be positive. |
+| `--project <root>` | Empty | Look up a project-scoped grant for this root first, then the global grant. |
+| `--dry-run` | `false` | Run every check and the backend self-test without spawning the script. |
+
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+## Requirements
+
+`AGENTKIT_SKILL_EXEC_BROKER=1` is required, with exactly that value. Otherwise
+the command fails with `exec.disabled` and exit `2`, and reads or writes
+nothing.
+
+## Broker pipeline
+
+Every refusal happens before any script is spawned.
+
+1. Verify the content-store entry into a read-only copy. Nothing is fetched.
+2. Check the release state of every origin recorded in the project and global
+   locks. A tree that no lock records is refused with `exec.state_refused`;
+   install it first. A yanked, quarantined, or revoked SkillX release is
+   refused. If SkillX is disabled or misconfigured, the run is refused. If
+   SkillX is unreachable, the last online check stands for 7 days and an
+   `exec.offline_stale` warning is added.
+3. Validate `agentkit-exec.json` against the signed declared scripts.
+4. Bind the interpreter by path and `sha256`.
+5. Run an advisory script audit.
+6. Select an isolation backend that enforces every capability the entrypoint
+   needs: bubblewrap on Linux, AppContainer on Windows 10 1607 (build 14393) or
+   later, or a local Docker engine running Linux containers (Podman on Linux
+   only). macOS has no native backend, so there only Docker can run a script.
+   A container grant binds an image pinned by digest and an interpreter path
+   inside it. A host where no backend enforces every needed capability
+   refuses the run.
+7. Match a grant.
+
+Runs as root, LocalSystem, or an elevated administrator are refused with
+`exec.elevated_refused` and exit `7`.
+
+## Secrets
+
+A declared secret needs an `ak secrets` grant with `--agent` set to the tree
+digest and `--purpose skill-exec:<identity>@<digest>#<entrypoint>`.
+
+- Each run spends one use.
+- The value is delivered only as the read-only file `secrets/<name>` beside
+  `$OUTPUT`, or as a manifest-mapped variable. It is removed when the run ends.
+- The value is struck from output and errors. An output file holding it is
+  refused with `exec.secret_exposed`.
+- A value shorter than the minimum length fails with `exec.secret_unavailable`.
+- A secrets audit row and a redaction manifest are written under
+  `AGENTKIT_HOME/secrets`.
+- With `--json` or `--no-interactive`, a vault passphrase is never prompted for
+  and the run fails closed.
+
+Over [`ak skills mcp serve`](./mcp/serve), entrypoints that declare secrets are
+refused; use the CLI.
+
+## Output files and script output
+
+Script `stdout` and `stderr` are bounded, secret-redacted, neutralized, and
+untrusted. Redaction loads the home's redaction manifests; if they cannot load,
+the run is refused with `exec.redaction_unavailable`.
+
+With `--output`, files are copied only after the script exits `0` and the
+sandbox is gone. Links are never copied, and the total is capped at 64 MiB.
+
+## Dry run
+
+`--dry-run` runs the checks and the backend self-test. It spawns no script,
+spends no secret use, and writes no run directory or record under
+`AGENTKIT_HOME`. The grant check may still prune expired grants, and the
+SkillX cache may refresh. The verified copy lives in the OS temp directory and
+is removed; stale copies older than a day are swept.
+
+A dry run exits `0` even when the run would be refused. `wouldRun` reports the
+outcome and `decision.refusals` lists the reasons.
+
+## Effects
+
+| Path | Effect |
+| --- | --- |
+| `AGENTKIT_HOME/tmp/exec-runs` | Read-only verified copy for the run. |
+| `AGENTKIT_HOME/state/exec/runs` | Audit record, written as `started` before the spawn and replaced by the outcome. |
+| `AGENTKIT_HOME/state/exec/release-state` | Release-state record from the last online check. |
+
+## Output
+
+JSON uses `kind=skills.exec` with these fields under `data`:
+
+```text
+runId, dryRun, wouldRun, untrusted, provenance
+identity, identityVerified, treeDigest
+entrypoint: name, path
+capabilityDigest
+interpreter: name, sha256, image
+grantId, grantCode, grantDetail
+decision: backend, allowed, refusals
+state, summary[], audit
+exitCode, durationMs, stdout, stderr, outputTruncated, controlBytes
+outputs[], skippedOutputs, outputDir, warnings[]
+```
+
+`provenance` reads `<id>@<digest> entrypoint <name> via <backend>`.
+
+<Callout type="warning">
+  A grant binds the identity, tree digest, entrypoint, capability digest, and
+  interpreter. If any of them changes, the run is refused until a new grant is
+  made. Script output is untrusted data, not instructions.
+</Callout>
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The script exited `0`, or a dry run finished. |
+| `1` | Timeout, cancellation, output limit, or an audit write failure. |
+| `2` | The broker is disabled, flags are invalid, the reference is mutable, the manifest is invalid, the request was denied (`exec.request_denied`), or the interpreter is unavailable. |
+| `5` | The store entry or entrypoint was not found. |
+| `7` | Not granted, the capability changed, no enforcing backend, a refused or stale release state, a failed verification, a secret that cannot be released, or an output holding a secret. |
+| `1`-`255` | A script's own non-zero exit passes through. The result is still rendered, and the error box is suppressed. |
+
+## Related commands
+
+- [Complete `ak skills exec` command facts](../cli/ak_skills_exec)
+- [Grant an entrypoint](./grants/add)
+- [List grants](./grants/list)
+- [Run skills as MCP tools](./mcp/serve)

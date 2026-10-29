@@ -81,11 +81,18 @@ ak update --status --json
 Đợi nó hoàn tất rồi retry. Để tắt hẳn cập nhật nền, chạy
 `ak update --schedule off` hoặc đặt `AK_NO_AUTO_UPDATE=1` cho một lần gọi.
 
-Trên Windows, trạng thái `deferred (spawn_in_job)` nghĩa là trigger không thể
-spawn runner tách rời vì process gọi nằm trong một Windows Job Object cấm
-breakaway. Interval kế tiếp sẽ thử lại, nhưng process gọi luôn cấm breakaway
-thì lần nào cũng bị defer; hãy tự chạy `ak update`, hoặc chạy `ak` từ một shell
-nằm ngoài job đó.
+Trên Windows, trạng thái `deferred (spawn_in_job)` nghĩa là process gọi nằm
+trong một Windows Job Object vừa cấm breakaway vừa là kill-on-close, nên runner
+nền khởi động ở đó sẽ kết thúc cùng lệnh. Job cấm breakaway nhưng không phải kill-on-close thì không bị
+defer: runner khởi động bên trong job đó. Interval kế tiếp sẽ thử lại, nhưng
+process gọi luôn chạy trong job kill-on-close như vậy thì lần nào cũng bị defer;
+hãy chạy `ak update` từ một terminal thông thường.
+
+Trạng thái `deferred (rollback_hold)` nghĩa là home đã được rollback về v2 và
+trạng thái giữ vẫn còn, nên lần chạy nền không cài gì.
+`deferred (rollback_state_unreadable)` nghĩa là lần chạy không đọc được journal
+của rollback, nên cũng hoãn lại. Để quay lại v3, làm theo
+[Quay lại v3](../guides/rolling-back-to-v2#quay-lại-v3).
 
 ## Workaround khi một runtime global lỗi trên Windows
 
@@ -182,6 +189,30 @@ Hãy thay `<channel>` bằng kênh đang chọn trên header tài liệu. Lần 
 sau chỉ quét helper, candidate, backup và tệp readiness không còn hoạt động mà
 updater nhận diện được. Pending state đang hoạt động và tệp không liên quan có
 tên gần giống vẫn được giữ.
+
+## Cần gia hạn khi cập nhật bị từ chối
+
+Nếu cập nhật bị từ chối với `renewal_required` (exit `15` với `ak kit init --version`,
+`ak kit refresh --version`, hoặc một batch `ak update --version` mà mọi lỗi đều
+là gia hạn), phiên bản bạn yêu cầu được phát hành sau khi cửa sổ
+cập nhật của bạn kết thúc. Không có gì được ghi và các Kit đã cài vẫn hoạt động.
+
+```bash
+ak licenses
+ak licenses --json
+```
+
+1. Đọc ngày `updatesThrough`, `latestEntitledVersion` của Kit và liên kết gia
+   hạn.
+2. Để ở lại phiên bản còn được bao phủ, chạy lại không có `--version`, hoặc ghim
+   phiên bản mới nhất còn được bao phủ.
+3. Để có bản phát hành mới hơn, gia hạn qua liên kết rồi chạy lại lệnh.
+4. Trong script, rẽ nhánh theo `error_code: "renewal_required"` và
+   `updates.renew_url` thay vì nội dung thông báo.
+
+`ak update` không ghim phiên bản sẽ không lỗi: nó bỏ qua Kit với
+`reason: "renewal_required"` và thoát `0`. Xem
+[Cửa sổ cập nhật và gia hạn](../guides/updating#cửa-sổ-cập-nhật-và-gia-hạn).
 
 ## Kiểm tra kết quả
 

@@ -1,0 +1,75 @@
+---
+title: ak skills kit inspect
+description: Resolve a personal kit offline and show its lock-ready composition plan without writing anything.
+---
+
+Use `ak skills kit inspect` to see what a personal kit composes: its
+foundations and every skill with its kind (foundation, overlay or fork), base,
+overlay and composition digests, exposure, trust and scripts. Runtime
+projections are not previewed; the plan shows the composition, not the files a
+runtime adapter would write.
+
+## Usage
+
+```bash
+ak skills kit inspect <name> [flags]
+```
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--kits-dir <dir>` | `$AGENTKIT_KITS_DIR` or `./kits` | Foundation kits directory. |
+| `--runtime <runtime>` | Empty | Runtime to inspect the plan for. A runtime the manifest does not list is a usage error. |
+
+Shared flags are described in [CLI conventions](../cli-conventions). The
+command works offline for every user: it needs neither the skill store nor
+SkillX.
+
+## What it reads
+
+The command is read-only. It reads the personal kit under
+`AGENTKIT_HOME/kits/personal/<name>` and the foundation kits directory, and
+never writes, installs, applies a plan, or calls a network or model. AgentKit
+user overrides are reported, never applied.
+
+## Output
+
+The text output starts with the kit and its owner, then one `foundation` line
+per foundation (kit, version, tier, trust), one block per skill (kind, identity,
+alias, `from` for a fork, exposure and its source, composition digest, declared
+scripts), the inputs digest, resolver warnings, and the note
+`projection_preview_unavailable`.
+
+JSON uses `kind=skills.kit.inspect` with these fields under `data`:
+
+```text
+plan: schema, personalKit, name, owner, manifestDigest,
+      foundations[]: kit, version, tier, origin, trust
+      packages[]: identity, alias, kind, from, foundation, ownerKit, providers[],
+                  baseTreeDigest, overlayDigest, compositionDigest, owner,
+                  exposure, exposureSource, trust, origin, scripts[], overlayDir,
+                  resolutionDigest, pinnedBy
+      runtimes[], warnings[], inputsDigest
+runtime
+warnings[]
+```
+
+Resolving the same inputs gives byte-identical plan JSON.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Success. |
+| `1` | Command failure, or an overlay conflict, shared alias, alias collision or stale proposal (JSON `error_code` `conflict`). |
+| `2` | Invalid flags or arguments, or a malformed manifest, overlay or proposal. |
+| `5` | Personal kit, foundation kit, version or skill not found. |
+| `7` | Revoked foundation. |
+
+## Related commands
+
+- [Complete `ak skills kit inspect` command facts](../cli/ak_skills_kit_inspect)
+- [Check that personal kits resolve](./status)
+- [Apply a personal kit](./apply)
+- [Preview a rebase](./rebase)

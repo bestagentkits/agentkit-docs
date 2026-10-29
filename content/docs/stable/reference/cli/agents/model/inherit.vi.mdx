@@ -1,0 +1,71 @@
+---
+title: ak agents model inherit
+description: Cho Agent chạy trên model của session cha bằng cách đặt inherit trong một config scope và xóa reasoning effort đã ghim.
+---
+
+Dùng `ak agents model inherit` khi một Agent nên theo model mà session cha đang
+dùng thay vì model đã ghim hoặc model theo tier.
+
+## Cách dùng
+
+```bash
+ak agents model inherit <agent> --runtime <runtime> [--scope user|project] [--project <dir>]
+```
+
+Phải có đúng một tên Agent.
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--runtime <runtime>` | bắt buộc | Một trong `claude-code`, `codex`, `cursor`, `omp`, `pi`. |
+| `--scope user\|project` | `user` | Config cần ghi: AgentKit home, hoặc `.agentkit/config.yaml` trong project. |
+| `--project <dir>` | config project gần nhất, nếu không có thì thư mục hiện tại | Project có bản cài và config được áp dụng. |
+
+## Lệnh ghi gì
+
+Lệnh đặt `model` của Agent thành `inherit` trong scope đã chọn. Trên `codex` và
+`omp`, vốn có reasoning effort riêng, lệnh còn xóa `reasoning_effort` đã ghim vì
+effort không bao giờ có tác dụng khi thiếu model.
+
+Trong các tệp đã cài, Codex, OMP và Pi bỏ dòng model. Các runtime khác ghi
+`model: inherit`.
+
+## Tác động phụ
+
+Tác động phụ giống [`set`](./set): lệnh lấy kit lifecycle lock, sao lưu rồi ghi
+lại `config.yaml` của scope khi tệp tồn tại (project scope tạo sẵn tệp trước),
+sau đó ghi lại mọi tệp đã cài của Agent mà AgentKit vẫn sở hữu model. Tệp drift
+hoặc tệp chưa chứng minh được quyền sở hữu được để nguyên kèm cảnh báo. Khi
+chưa có tệp đã cài, config vẫn được ghi và cảnh báo nói rằng giá trị sẽ áp dụng
+lúc cài.
+
+## Đầu ra
+
+Stdout cho người dùng báo `inherit <runtime> agent <agent> in <config path>`
+(hoặc config không có gì để đổi), một dòng `updated <path>` cho mỗi tệp được ghi
+lại, rồi đến bảng trạng thái.
+
+JSON thành công dùng:
+
+```text
+schema_version: 1
+kind: agents.model.inherit
+data.action, data.runtime, data.agent, data.scope
+data.config_path, data.config_changed
+data.backup_paths?, data.applied?
+data.agents[], data.warnings?
+```
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Config đã được ghi hoặc đã khớp sẵn. |
+| `1` | Lệnh thất bại, ví dụ lỗi ghi config. |
+| `2` | Tên Agent, scope hoặc cờ không hợp lệ, runtime không được hỗ trợ, project scope mà không có thư mục project, hoặc thư mục `--project` không tồn tại. |
+| `4` | Một thao tác AgentKit khác đang giữ kit lifecycle lock. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak agents model inherit`](../cli/ak_agents_model_inherit)
+- [Ghim một model](./set)
+- [Xóa một override](./reset)

@@ -1,0 +1,61 @@
+---
+title: ak skills evolution show
+description: Show one recorded skill evolution candidate with its base, per-file diff, findings, blast radius, and slots.
+---
+
+Use `ak skills evolution show` to read one candidate record before you
+evaluate or apply it.
+
+## Usage
+
+```bash
+ak skills evolution show <candidateId> [--json]
+```
+
+Exactly one reference is required: the full candidate ID, its hex part, or a
+unique prefix of at least 8 hex characters. The command is read-only: it reads
+the candidate records under `AGENTKIT_HOME/state/skill-evolve/candidates/`,
+verifies the record against its ID, takes no lock, runs no script, model, or
+network call, and skips the background update check.
+
+## Output
+
+Text prints the candidate ID with the status `recorded`, the skill and its
+base and overlay digests, the prior overlay it stacks on when there is one,
+the classification, confidence, and blast radius, each finding, the diff per
+file, the evaluation when the slot is filled, and both slot states. Diff text
+is neutralized before it is printed; a binary or oversized file shows a marker
+instead of a diff.
+
+JSON uses `kind=skills.evolution.show` with the candidate record under `data`:
+
+```text
+schema, candidateId, recordDigest, evidenceDigest
+skill: ref, identity, alias, kit, version, shared, fork?
+base: foundationTreeDigest, treeDigest, priorOverlayDigest?, priorPersonalKit?
+overlay: schema, overlayDigest, compositionDigest, ops
+diff[]: path, op, mode?, diff?, binary?, linesAdded, linesRemoved
+findings[]
+blastRadius: filesChanged, linesAdded, linesRemoved, forkNeeded, aliasesAffected
+classification, confidence
+evaluation, apply
+```
+
+`evaluation` and `apply` are slot objects whose `state` is `not_evaluated` or
+`evaluated`, and `not_applied`, `applied`, or `rolled_back`.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The candidate was shown. |
+| `1` | The candidate store could not be read, or the record failed verification (`store.corrupt`). |
+| `2` | Invalid flags or arguments, or a reference that is not an ID or a prefix of at least 8 hex characters. |
+| `5` | No recorded candidate matches the reference, or a prefix matches more than one (`evolve.candidate_not_found`). |
+
+## Related commands
+
+- [Complete `ak skills evolution show` command facts](../cli/ak_skills_evolution_show)
+- [List candidates](../cli/ak_skills_evolution_list)
+- [Re-run the evaluation](../cli/ak_skills_evolution_evaluate)
+- [Apply a candidate](../cli/ak_skills_evolution_apply)

@@ -1,0 +1,118 @@
+---
+title: ak backups checkpoint
+description: Chụp một checkpoint nén, có thể xác minh của trạng thái AgentKit và runtime để ak rollback và ak recover khôi phục.
+---
+
+Dùng `ak backups checkpoint` để gom AgentKit home, mọi runtime home cục bộ và
+cấu hình agent của các project đã đăng ký vào một tar nén zstd dưới
+`~/.agentkit/backups/checkpoints/<id>/`. Checkpoint là nguồn rollback cho
+[`ak rollback --to v2`](../cli/ak_rollback) và cũng có thể khôi phục bằng
+`ak backups restore` hoặc `ak recover`.
+
+## Cách dùng
+
+```bash
+ak backups checkpoint [flags]
+```
+
+Lệnh không nhận argument theo vị trí và không bao giờ hỏi xác nhận.
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--backup-sessions` | `false` | Chụp thêm lịch sử session, transcript, telemetry và cache của runtime. |
+| `--label <text>` | Trống | Nhãn tự do được lưu trong manifest của checkpoint. |
+| `--pre-upgrade` | `false` | Đánh dấu checkpoint là nguồn rollback trước khi nâng cấp. |
+| `--project <dir>` | Trống | Chụp thêm thư mục project tuyệt đối này (lặp lại được). |
+| `--state-layout <layout>` | Phát hiện từ AgentKit home | `legacy` hoặc `ssot`; giá trị khác thoát `2`. `ak rollback --to v2` khôi phục checkpoint legacy. |
+| `--state-version <version>` | Phiên bản CLI đang chạy | Phiên bản AgentKit CLI sở hữu trạng thái được chụp; tiền tố `v` bị bỏ. |
+
+Các cờ dùng chung được mô tả trong [quy ước CLI](../cli-conventions). `--yes`
+chỉ có một tác dụng ở đây: chấp nhận chụp khi không đo được dung lượng đĩa
+trống.
+
+## Những gì được chụp
+
+Scope lean mặc định bỏ qua lịch sử session, transcript, telemetry và cache do
+runtime sở hữu; `--backup-sessions` đưa chúng vào. Tệp secret được niêm phong
+bằng khoá do hệ điều hành bảo vệ (DPAPI trên Windows, tệp khoá chỉ chủ sở hữu
+đọc được ở nơi khác) và không bao giờ lưu ở dạng plaintext. Database SQLite
+được chụp dưới dạng snapshot chỉ đọc nhất quán.
+
+Lệnh ước lượng dung lượng đĩa trước và từ chối chụp khi thiếu chỗ. Sau khi chụp
+thành công, lệnh áp dụng retention cho checkpoint; checkpoint pre-upgrade mới
+nhất luôn được giữ.
+
+```bash
+ak backups checkpoint
+ak backups checkpoint --backup-sessions --label before-experiment
+ak backups checkpoint --pre-upgrade --json
+ak backups checkpoint --pre-upgrade --state-version 2.9.1
+```
+
+## Đầu ra
+
+Stdout cho người dùng in biên nhận:
+
+```text
+[OK] checkpoint <id> (<purpose>, <scope>)
+     <files> files, <symlinks> symlinks, <databases> databases, <secrets> sealed secrets
+     <source-size> source -> <archive-size> archive at <archive-path>
+     verify: ak backups verify <id>
+```
+
+`<purpose>` là `manual`, hoặc `pre-upgrade` khi có `--pre-upgrade`; `<scope>`
+là `lean` hoặc `full`. Các phát hiện không nghiêm trọng in tiếp theo dưới dạng
+dòng `[!]`.
+
+JSON thành công dùng:
+
+```text
+schema_version: 1
+kind: backups.checkpoint
+data.id
+data.format
+data.format_version
+data.purpose
+data.scope
+data.created_at
+data.dir
+data.archive_path
+data.archive_sha256
+data.archive_bytes
+data.source_bytes
+data.files
+data.symlinks
+data.databases
+data.secret_files
+data.secrets_protection?
+data.roots[]
+data.excluded_paths[]?
+data.widened_paths[]?
+data.skipped_paths
+data.protected
+data.duration_ms
+data.verify_command
+data.rollback_command
+data.warnings[]?
+```
+
+Lỗi ở chế độ JSON ghi error envelope chung lên stderr. Tranh chấp khoá dùng
+`error_code` `lock_held`; trường `remediation.reason` mang mã checkpoint ổn
+định như `checkpoint.insufficient_disk` hoặc `checkpoint.lock_busy`.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Checkpoint đã được tạo và xác minh. |
+| `1` | Chụp thất bại hoặc bị từ chối; đọc phần remediation. |
+| `2` | Cờ hoặc argument không hợp lệ, kể cả `--state-layout` không nhận diện được. |
+| `4` | Một thao tác checkpoint khác đang giữ khoá. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak backups checkpoint`](../cli/ak_backups_checkpoint)
+- [Liệt kê snapshot và checkpoint](../cli/ak_backups_list)
+- [Xác minh checkpoint](../cli/ak_backups_verify)
+- [Khôi phục checkpoint](../cli/ak_backups_restore)
+- [Quay về v2 bằng `ak rollback`](../cli/ak_rollback)

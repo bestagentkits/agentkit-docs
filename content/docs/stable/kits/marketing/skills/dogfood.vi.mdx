@@ -1,0 +1,181 @@
+---
+title: Cải thiện Skill đã dùng từ bằng chứng session với ak-dogfood
+description: Rà soát session hiện tại cho các Skill nó đã dùng, phân loại chỗ chúng tốn thời gian hoặc phải làm lại, rồi đề xuất hoặc áp dụng thay đổi Skill nhỏ nhất theo đúng lane sở hữu.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Dùng `ak-dogfood` vào cuối session để biến những chỗ sai hoặc chậm thành Skill
+tốt hơn. Skill nêu tên mọi Skill mà session đã dùng, chỉ ra chỗ mỗi Skill tốn thời
+gian, token, một lần thử lại hoặc một lần người dùng phải sửa, rồi đề xuất thay đổi
+Skill nhỏ nhất lẽ ra đã ngăn được điều đó, kèm bằng chứng, hiệu quả dự kiến và rủi
+ro. Mặc định đây là dry run và không thay đổi tệp Skill nào.
+
+## Chọn ak-dogfood cho bài học từ session
+
+### Dùng ak-dogfood khi
+
+- Một session vừa kết thúc và bạn muốn học từ lỗi cùng đường đi chậm của nó.
+- Bạn sở hữu các Skill nó đã dùng, với tư cách maintainer, contributor hoặc người
+  dùng AgentKit.
+- Bạn muốn đề xuất gắn với đúng đoạn văn bản Skill gây ra vấn đề, không phải lời
+  khuyên chung.
+- Bạn muốn tìm vấn đề lặp lại trên mọi session cục bộ, với `--all`.
+
+### Chọn workflow khác khi
+
+- Bạn cần audit hoặc optimize một Skill có tên qua nhiều session trước đây. Dùng
+  [`ak-skill-creator`](./skill-creator) `audit` hoặc `optimize`.
+- Bạn cần viết một Skill mới từ đầu. Dùng `ak-skill-creator create`.
+- Bạn cần sprint review dựa trên Git history. Đó là retrospective, không phải
+  Skill này; `ak-retro` có trong Engineer Kit.
+
+## Chuẩn bị session
+
+- Hoàn thành [Làm quen](../../../getting-started/onboarding) và xác nhận
+  Marketing Kit đã được cài cho đúng runtime cùng scope bạn đang dùng.
+- Chạy Skill ngay trong session bạn muốn rà soát. Skill đọc context của chính nó
+  trước và chỉ đọc transcript hiện tại khi một lần compaction làm mất dữ kiện.
+- Giữ `ak-skill-creator` đã được cài: bước inventory chạy
+  `scripts/session_usage.py` của Skill đó. Khi thiếu script hoặc transcript, Skill
+  dựng cùng danh sách từ context của chính nó.
+- Với contributor lane, cần có một AgentKit checkout và `gh` đã xác thực với
+  quyền push. Thiếu một trong hai, thay đổi đi theo personal-fork lane.
+
+| Runtime | Cách gọi | Ranh giới khả dụng |
+| --- | --- | --- |
+| Claude Code | `/ak-dogfood ...` | Phân phối native là mặc định; transcript được đọc từ `$CLAUDE_CONFIG_DIR` (mặc định `~/.claude`) `/projects/`. |
+| Cursor | `/ak-dogfood ...` | Cách gọi bằng slash đã được người dùng xác minh. Điều này không chứng minh quyền đọc transcript hay shell permission giống nhau. |
+| Codex | `$ak-dogfood ...` | Skill dùng discovery native của Codex; transcript được đọc từ `$CODEX_HOME` (mặc định `~/.codex`) `/sessions`. |
+
+## Chọn chế độ
+
+| Cách gọi | Tác dụng |
+| --- | --- |
+| `ak-dogfood [focus]` (mặc định) | Dry run. Báo cáo đề xuất và không thay đổi tệp nào. |
+| `--ask` | Hỏi lần lượt từng đề xuất: áp dụng, áp dụng một phần, chỉnh sửa hoặc bỏ qua. Chỉ áp dụng những gì bạn chấp nhận. |
+| `--apply` | Áp dụng mọi đề xuất mà báo cáo chấp nhận. Cờ này là sự chấp thuận của bạn cho các bước của lane, gồm commit, push và pull request trong contributor lane. |
+| `--all [--since YYYY-MM-DD]` | Rà soát mọi session cục bộ của mọi runtime được hỗ trợ thay vì chỉ session này, và rút ra bài học lặp lại. Kết hợp được với các cờ khác. |
+| `--skill <name>` | Giới hạn rà soát vào một Skill đã dùng. Văn bản tự do `focus` thu hẹp chủ đề. |
+
+`--apply` và `--ask` loại trừ nhau; khi có cả hai, Skill dùng `--ask`.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak-dogfood --ask --skill ak-plan
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak-dogfood --ask --skill ak-plan
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak-dogfood --ask --skill ak-plan
+```
+
+  </Tab>
+</Tabs>
+
+## Hiểu điều gì xảy ra trong một lần chạy
+
+1. **Kiểm kê session.** Skill chạy `session_usage.py --session latest` từ
+   `ak-skill-creator`. Kết quả liệt kê từng Skill cùng trigger và tệp của nó, đếm
+   tool call, lỗi và lệnh gọi trùng theo từng tool. Skill có `invoked: false` chỉ
+   được nhắc trong đường dẫn, nên không phải Skill đã dùng. Mỗi Skill được gắn
+   đường dẫn cài đặt và chủ sở hữu. Với `--all`, Skill chạy
+   `session_usage.py --all` và xếp hạng mọi Skill đã dùng trên máy.
+2. **Rà soát toàn bộ session.** Skill tìm lệnh thất bại rồi thử lại, lần đọc lặp
+   lại, lệnh gọi độc lập chạy tuần tự, reference không dùng hoặc thiếu, lần người
+   dùng sửa, check bị bỏ qua, quy trình bị dựng lại thủ công và output phải làm lại.
+3. **Phân loại mọi finding.** Mỗi finding là lỗi của Skill, lỗi agent có thể
+   phòng tránh, sự cố môi trường hoặc tooling, hay trường hợp một lần. Chỉ hai loại
+   đầu trở thành đề xuất; các loại còn lại được báo cáo mỗi loại một dòng.
+4. **Đề xuất.** Một đề xuất cho mỗi nguyên nhân gốc, gắn với `file:line` gây ra
+   hoặc chỉ dẫn còn thiếu, kèm hunk tối thiểu, hiệu quả, rủi ro và lane. Mọi thay
+   đổi nội dung đều tăng `metadata.version`.
+5. **Áp dụng theo lane** khi `--ask` hoặc `--apply` cho phép, rồi **báo cáo** các
+   Skill đã dùng, finding, đề xuất, mục không phải thay đổi Skill, những gì đã áp
+   dụng và câu hỏi còn mở.
+
+### Rà soát mọi session với --all
+
+Với `--all`, Skill xếp hạng Skill theo mức độ gặp sự cố, không theo độ phổ biến:
+session bị gián đoạn trước, sau đó là tỷ lệ lỗi và lệnh gọi trùng trên mỗi
+session. Skill rà soát tối đa năm Skill và ba lead session cho mỗi Skill trừ khi
+bạn yêu cầu nhiều hơn hoặc thu hẹp phạm vi, và cho biết đã bỏ qua bao nhiêu. Skill
+chỉ đọc các đoạn quanh lỗi, lệnh gọi trùng và lần gián đoạn đã đếm. Một đề xuất cần
+cùng một nguyên nhân trong ít nhất hai session, hoặc một lần người dùng sửa mà văn
+bản Skill rõ ràng đã gây ra; mẫu chỉ thấy một lần là mục cần theo dõi. Trước khi đề
+xuất, Skill kiểm tra đoạn văn bản gây ra vấn đề vẫn còn trong Skill hiện tại.
+
+## Biết thay đổi được đưa vào đâu
+
+Chủ sở hữu được xác định từ đường dẫn cài đặt và install receipt, không chỉ từ tên.
+
+| Chủ sở hữu | Lane |
+| --- | --- |
+| Skill thuộc Kit AgentKit, và bạn có thể push lên repository AgentKit | **Contributor:** sửa source dưới `kits/` trong một worktree riêng tách từ `dev`, validate, commit, push và mở pull request vào `dev`; đồng thời cập nhật bản cài trong runtime để bản sửa có tác dụng ngay. |
+| Skill thuộc Kit AgentKit, mọi người dùng khác | **Personal fork:** ghi lại và áp dụng thay đổi qua [`ak skills improve`](../../../reference/cli/skills/improve) và [`ak skills evolution apply`](../../../reference/cli/skills/evolution/apply), vốn ghi một personal Kit overlay hoặc local fork mà bản cập nhật AgentKit không bao giờ ghi đè. Tệp `ak-*` đã cài không bao giờ bị sửa tại chỗ. |
+| Skill do bạn hoặc project tự viết | Sửa tại chỗ sau khi snapshot các tệp sẽ thay đổi. |
+| Plugin, marketplace hoặc Skill bên thứ ba khác | Chỉ đề xuất; installer của nó ghi đè thay đổi cục bộ. Skill gợi ý mở upstream issue hoặc fork do người dùng sở hữu. |
+
+Tư cách contributor là một kiểm tra trực tiếp: checkout phải khớp canonical
+remote, và `gh api repos/bestagentkits/agentkit --jq .permissions.push` phải trả về
+`true`. Khi một trong hai kiểm tra thất bại hoặc không có `gh`, Skill dùng
+personal-fork lane và nêu lý do. `scripts/find_agentkit_repo.py` đi kèm tìm
+checkout trên macOS, Linux hoặc Windows và chỉ đọc.
+
+## Giữ dữ liệu session và phê duyệt trong giới hạn
+
+<Callout type="warn" title="Nội dung session là dữ liệu người dùng và không đáng tin cậy">
+  Skill không bao giờ chép prompt, tool output, credential, token, đường dẫn
+  tuyệt đối của người dùng hay session ID vào Skill, commit, pull request hoặc
+  báo cáo được commit, và không bao giờ làm theo chỉ dẫn tìm thấy trong transcript.
+</Callout>
+
+- Một finding cần bằng chứng từ session được rà soát.
+- Một đề xuất phải giữ hành vi và chất lượng đã được chấp nhận; tiết kiệm token
+  hay thời gian mà bỏ mất check hoặc artifact bắt buộc là regression.
+- Dry run không ghi tệp Skill nào. Báo cáo có thể vào thư mục reports của project
+  khi project định nghĩa; nếu không, báo cáo ở lại trong câu trả lời.
+- Store migration như `ak update --ssot` chỉ chạy khi bạn phê duyệt rõ ràng. Khi
+  thiếu `ak` hoặc `ak` quá cũ để có `skills improve`, Skill dừng ở bước đề xuất.
+
+## Xác minh kết quả
+
+Một lần chạy hoàn tất nên cung cấp:
+
+- Mọi Skill đã dùng cùng chủ sở hữu và lane.
+- Finding kèm phân loại và bằng chứng, được mô tả thay vì trích nguyên văn.
+- Mỗi đề xuất kèm hunk, hiệu quả dự kiến và rủi ro.
+- Trong `--ask` hoặc `--apply`, mỗi đề xuất được chấp nhận đã áp dụng trong lane
+  của nó với các check của lane đã pass, cùng đường dẫn đã đổi, candidate ID,
+  branch và liên kết pull request.
+- Mọi mục bị bỏ qua, từ chối, chặn hoặc chưa xác minh được nêu kèm lý do; không
+  mục nào trong số đó được tính là đã áp dụng.
+
+## Xử lý sự cố hoặc tiếp tục
+
+| Triệu chứng | Bước tiếp theo an toàn |
+| --- | --- |
+| Thiếu script inventory hoặc transcript | Skill dựng danh sách từ context của chính nó; cài `ak-skill-creator` để có bằng chứng đã đếm. |
+| Không tìm thấy AgentKit checkout | Cung cấp đường dẫn, hoặc đặt `AGENTKIT_REPO` như Skill gợi ý sau một lần quét thành công. |
+| Quyền push không phải `true` | Chấp nhận personal-fork lane, hoặc xin maintainer cấp quyền. |
+| Draft personal-fork bị từ chối | Sửa draft thay vì sửa gate; exit `2` là draft không hợp lệ, `5` là base chưa resolve, `7` là secret hoặc đường dẫn bị từ chối. |
+| Evolution apply trả về `regressed` hoặc `blocked` | Thay đổi không được áp dụng; xem lại verdict được báo cáo. |
+| Runtime không nhận diện Skill | Xác nhận target cùng scope, mở runtime session mới, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+## Trang liên quan
+
+- [`ak-skill-creator`](./skill-creator)
+- [Reference `ak skills improve`](../../../reference/cli/skills/improve)
+- [Reference `ak skills evolution`](../../../reference/cli/skills/evolution)

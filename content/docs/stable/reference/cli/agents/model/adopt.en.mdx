@@ -1,0 +1,84 @@
+---
+title: ak agents model adopt
+description: Keep a model edited in the runtime by recording it in config as AgentKit's choice, so refreshes stop reporting drift.
+---
+
+Use `ak agents model adopt` after you edited an Agent's model directly in a
+runtime file and want AgentKit to keep it.
+
+## Usage
+
+```bash
+ak agents model adopt <agent> --runtime <runtime> [--scope user|project] [--project <dir>]
+```
+
+Exactly one Agent name is required.
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--runtime <runtime>` | required | One of `claude-code`, `codex`, `cursor`, `omp`, `pi`. |
+| `--scope user\|project` | `user` | Config to write: the AgentKit home, or `.agentkit/config.yaml` in the project. |
+| `--project <dir>` | nearest project config, else the current directory | Project whose installs and config apply. |
+
+## What it does
+
+The command reads the model the Agent's installed file carries now, writes it
+to the selected scope's config, and records it as AgentKit's choice. A file
+with no model is adopted as `inherit`. On `codex` and `omp` the file's
+reasoning effort is adopted too, and a pinned effort is removed when the file
+has none. The value must pass the same checks as [`set`](./set), or the command
+exits `2`.
+
+It does not rewrite the Agent file's model. It updates the file's ownership
+hash so a refresh keeps the file and an uninstall still removes it.
+
+Every installed file of the Agent that is readable must carry the same model.
+If they differ, the command fails with exit `1` and tells you to use `set`.
+
+## Scope rules
+
+A file is adopted only when config, once written, resolves to its current
+model. Other files keep their record and are named in a warning:
+
+- A global install reads user config only, so `--scope project` does not reach it.
+- When project config pins the Agent, it outranks user config, so use `--scope project`.
+
+If the scope reaches none of the Agent's files, the command exits `2` and
+leaves config unchanged.
+
+## Side effects
+
+The command takes the kit lifecycle lock and backs up and rewrites the scope's
+`config.yaml` when it exists (project scope scaffolds it first). It proves
+AgentKit still owns every file it will record before changing config. A file
+AgentKit cannot prove it owns makes the command exit `1` with nothing written.
+
+## Output
+
+Human stdout reports `adopt <runtime> agent <agent> in <config path>`, then the
+status table. JSON success uses:
+
+```text
+schema_version: 1
+kind: agents.model.adopt
+data.action, data.runtime, data.agent, data.scope
+data.config_path, data.config_changed
+data.backup_paths?, data.applied?
+data.agents[], data.warnings?
+```
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The edit was recorded. |
+| `1` | Command failure, including files with different models or a file AgentKit cannot prove it owns. |
+| `2` | Invalid Agent name, scope, flags, or adopted value, an unsupported runtime, a scope that adopts no file, or a missing `--project` directory. |
+| `4` | Another AgentKit operation holds the kit lifecycle lock. |
+| `5` | No readable installed file of the Agent exists in the runtime. |
+
+## Related commands
+
+- [Complete `ak agents model adopt` command facts](../cli/ak_agents_model_adopt)
+- [Explain a drifted file](./explain)
+- [Replace the edit instead](./apply)

@@ -1,19 +1,19 @@
 ---
-title: Improve a mechanical metric with ak:loop
+title: Improve a mechanical metric with ak-loop
 description: Run sequential, Git-tracked experiments against one numeric metric with guards, rollback evidence, and hard stop conditions.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
-Use `ak:loop` to improve one mechanical repository metric through bounded,
+Use `ak-loop` to improve one mechanical repository metric through bounded,
 sequential experiments. Each iteration makes one attributable change, commits a
 rollback point, measures the result, runs a regression guard, and keeps or
 reverts the change according to the declared contract.
 
-## Choose ak:loop for measurable optimization
+## Choose ak-loop for measurable optimization
 
-### Use ak:loop when
+### Use ak-loop when
 
 - A command can emit one number for coverage, errors, bytes, latency, accuracy,
   or another objective metric.
@@ -23,11 +23,11 @@ reverts the change according to the declared contract.
 
 ### Choose another workflow when
 
-- The goal is subjective, such as “make this cleaner.” Use `ak:cook` with
+- The goal is subjective, such as “make this cleaner.” Use `ak-cook` with
   acceptance criteria.
-- You know a bug and need root-cause work. Use `ak:fix` or `ak:debug`.
-- You only need one change. Use `ak:cook`.
-- You need external model benchmarking. Use `ak:deep-swe`.
+- You know a bug and need root-cause work. Use `ak-fix` or `ak-debug`.
+- You only need one change. Use `ak-cook`.
+- You need external model benchmarking. Use `ak-deep-swe`.
 - The intended files cannot be isolated from guard-owned files. Redesign the
   scope manually before running a loop.
 
@@ -43,16 +43,16 @@ Before you start:
   print one numeric result.
 - Add a `Guard` that detects regressions without depending on files the loop may
   edit.
-- Choose `Iterations`, `Direction`, `Noise`, `Min-Delta`, a target, and a
-  wall-clock or resource stop condition.
+- Choose `Iterations`, `Direction`, `Noise`, `Min-Delta`, `Timeout`, a target,
+  and a wall-clock or resource stop condition.
 - Review every repeated command for destructive behavior, network writes,
   credentials, elevated privileges, and expected run time.
 
 | Runtime | Invocation | Availability boundary |
 | --- | --- | --- |
-| Claude Code | `/ak:loop ...` | Runs as an installed Engineer Skill and uses the project’s Git and shell tools. |
-| Cursor | `/ak:loop ...` | Uses the user-verified slash spelling for Engineer Skills; broader runtime parity is not established. |
-| Codex | `$ak:loop ...` | Uses native Codex Skill discovery; command approval and Hook behavior depend on the live host. |
+| Claude Code | `/ak-loop ...` | Runs as an installed Engineer Skill and uses the project’s Git and shell tools. |
+| Cursor | `/ak-loop ...` | Uses the user-verified slash spelling for Engineer Skills; broader runtime parity is not established. |
+| Codex | `$ak-loop ...` | Uses native Codex Skill discovery; command approval and Hook behavior depend on the live host. |
 
 ## Run the Skill with an explicit contract
 
@@ -60,7 +60,7 @@ Before you start:
   <Tab value="Claude Code">
 
 ```text
-/ak:loop
+/ak-loop
 Goal: Reduce TypeScript errors in src/api to zero
 Scope: src/api/**/*.ts
 Verify: npx tsc --noEmit 2>&1 | grep -c '^src/api/.*error TS' || true
@@ -75,7 +75,7 @@ Min-Delta: 1
   <Tab value="Cursor">
 
 ```text
-/ak:loop
+/ak-loop
 Goal: Reduce TypeScript errors in src/api to zero
 Scope: src/api/**/*.ts
 Verify: npx tsc --noEmit 2>&1 | grep -c '^src/api/.*error TS' || true
@@ -90,7 +90,7 @@ Min-Delta: 1
   <Tab value="Codex">
 
 ```text
-$ak:loop
+$ak-loop
 Goal: Reduce TypeScript errors in src/api to zero
 Scope: src/api/**/*.ts
 Verify: npx tsc --noEmit 2>&1 | grep -c '^src/api/.*error TS' || true
@@ -119,6 +119,7 @@ the Skill should collect all missing fields together before any dry run.
 | `Noise` | `medium` | `low`, `medium`, or `high` measurement treatment |
 | `Min-Delta` | `0` | Minimum change that counts as progress |
 | `Direction` | `higher` | Whether a larger or smaller metric is better |
+| `Timeout` | `30s` | Deadline for each `Verify` run; set a longer explicit value when the measured workload justifies it |
 
 For noisy measurements, define repeat count and aggregation deliberately. The
 bundled guidance recommends a worse-of-two result for medium noise and a median
@@ -147,13 +148,15 @@ state, and competing processes—remains your responsibility.
 
 After five consecutive discards, the workflow should analyze the pattern and
 shift strategy. At ten consecutive discards, it stops and returns the evidence.
-A verification timeout over the source-defined 30-second limit also aborts the
-loop rather than grinding indefinitely.
+When a `Verify` run exceeds `Timeout`, the Skill stops the processes it
+started, logs `error:timeout` with the duration, safely reverts that iteration,
+and treats it as a discard. The loop then continues within the remaining
+iteration budget rather than leaving an unbounded process running.
 
 ## Keep Git and command authority with you
 
 <Callout type="warn" title="The loop creates commits">
-  Starting `ak:loop` authorizes repeated scoped edits and iteration commits on
+  Starting `ak-loop` authorizes repeated scoped edits and iteration commits on
   the current branch only. It does not authorize push, merge, publication,
   deployment, secret access, destructive recovery, or changes outside `Scope`.
 </Callout>
@@ -183,7 +186,10 @@ A complete run should provide:
   approval.
 
 Treat a higher score or lower number as meaningful only if the metric actually
-represents the intended outcome and the guard covers relevant regressions.
+represents the intended outcome and the guard covers relevant regressions. A
+coverage gain from weakened tests is a regression, and unknown cost is not zero
+cost. When the metric should generalize, record a baseline before edits and
+reserve representative held-out cases.
 
 ## Troubleshoot or stop
 
@@ -196,17 +202,17 @@ represents the intended outcome and the guard covers relevant regressions.
 | A revert conflicts | Stop, preserve the conflict evidence, and request a recovery decision. |
 | Five consecutive trials are discarded | Shift file or technique based on the log without widening declared scope. |
 | Ten consecutive trials are discarded | Stop and report the plateau for manual review. |
-| Verification exceeds 30 seconds | Abort or redesign a faster sampled metric before another loop. |
+| Iterations keep timing out | Set a longer explicit `Timeout` when the measured workload justifies it, or use a faster representative metric. |
 | The runtime cannot find the Skill | Confirm installation and follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
 
-Use `ak:autoresearch` when you still need route selection, or continue with
-`ak:test` and `ak:code-review` for independent verification.
+Use `ak-autoresearch` when you still need route selection, or continue with
+`ak-test` and `ak-code-review` for independent verification.
 
 ## Know the current limits
 
-- `ak:loop` cannot optimize a subjective goal or guarantee improvement.
+- `ak-loop` cannot optimize a subjective goal or guarantee improvement.
 - Iterations are sequential; the workflow does not parallelize experiments.
 - The loop cannot control system noise, external services, or background load.
 - Guard quality and metric validity determine the strength of the result.
-- The source-defined 30-second verification limit makes expensive evaluations a
-  poor fit unless reduced to a representative fast sample.
+- Every `Verify` run is bounded by `Timeout`. Expensive evaluations need an
+  explicit longer value or a representative fast sample.

@@ -4,7 +4,8 @@ description: Liệt kê recovery snapshot đã commit theo thứ tự mới nh�
 ---
 
 Dùng `ak backups list` để tìm ID của recovery snapshot đã commit trước khi kiểm
-tra, xác minh, prune hoặc khôi phục. Kết quả được xếp mới nhất trước.
+tra, xác minh, prune hoặc khôi phục. Kết quả được xếp mới nhất trước, tiếp theo
+là các checkpoint nén với nguồn rollback được đánh dấu.
 
 ## Cú pháp
 
@@ -74,10 +75,29 @@ JSON thành công dùng envelope chung trên stdout:
 }
 ```
 
-Entry JSON chủ động không chứa kích thước byte và trạng thái xác minh có trong
+Các checkpoint nén đi sau snapshot. Trong bảng cho người dùng, cột `KIND` của
+chúng là `checkpoint:<purpose>`, có thêm ` (rollback source)` ở checkpoint
+pre-upgrade mới nhất mà `ak rollback --to v2` sẽ khôi phục. Trong JSON, chúng
+tạo thành mảng `data.checkpoints[]` riêng, bị bỏ qua khi không có checkpoint:
+
+```json
+{
+  "id": "20261019T080000Z-1a2b3c4d",
+  "created_at": "<rfc3339-time>",
+  "label": "<label>",
+  "purpose": "pre-upgrade",
+  "scope": "lean",
+  "files": 1200,
+  "archive_bytes": 52428800,
+  "rollback_source": true
+}
+```
+
+Entry JSON của snapshot chủ động không chứa kích thước byte và trạng thái xác minh có trong
 bảng cho người dùng. Kết quả trống là `"backups": []`. Lỗi runtime trong chế
-độ JSON dùng error envelope có cấu trúc trên stderr. Lỗi phân tích cờ có thể vẫn
-là hướng dẫn dùng dạng plain text.
+độ JSON dùng error envelope có cấu trúc trên stderr. Khi bật `--json`, cờ không xác
+định hoặc không hợp lệ dùng JSON error envelope chung trên stderr
+(`error_code: validation_failed`, mã thoát `2`). Chế độ human, kể cả `--json=false`, in `Usage`.
 
 ## Mã thoát
 

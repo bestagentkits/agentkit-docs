@@ -1,0 +1,71 @@
+---
+title: ak agents model inherit
+description: Make an Agent run on the parent session's model by setting inherit in one config scope and clearing any pinned reasoning effort.
+---
+
+Use `ak agents model inherit` when an Agent should follow whatever model the
+parent session uses instead of a pinned or tier-mapped one.
+
+## Usage
+
+```bash
+ak agents model inherit <agent> --runtime <runtime> [--scope user|project] [--project <dir>]
+```
+
+Exactly one Agent name is required.
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--runtime <runtime>` | required | One of `claude-code`, `codex`, `cursor`, `omp`, `pi`. |
+| `--scope user\|project` | `user` | Config to write: the AgentKit home, or `.agentkit/config.yaml` in the project. |
+| `--project <dir>` | nearest project config, else the current directory | Project whose installs and config apply. |
+
+## What it writes
+
+The command sets the Agent's `model` to `inherit` in the selected scope. On
+`codex` and `omp`, which have a separate reasoning effort, it also removes any
+pinned `reasoning_effort`, because an effort never applies without a model.
+
+In the installed files, Codex, OMP, and Pi omit the model line. Other runtimes
+write `model: inherit`.
+
+## Side effects
+
+The side effects match [`set`](./set): the command takes the kit lifecycle
+lock, backs up and rewrites the scope's `config.yaml` when it exists (project
+scope scaffolds it first), then rewrites every installed file of the Agent
+whose model AgentKit still owns. Drifted or unproven files are left alone with
+a warning. With no installed file, config is still written and a warning says
+the value applies at install time.
+
+## Output
+
+Human stdout reports `inherit <runtime> agent <agent> in <config path>` (or
+that the config had nothing to change), one `updated <path>` line per
+rewritten file, then the status table.
+
+JSON success uses:
+
+```text
+schema_version: 1
+kind: agents.model.inherit
+data.action, data.runtime, data.agent, data.scope
+data.config_path, data.config_changed
+data.backup_paths?, data.applied?
+data.agents[], data.warnings?
+```
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Config was written or already matched. |
+| `1` | Command failure, such as a config write error. |
+| `2` | Invalid Agent name, scope, or flags, an unsupported runtime, project scope with no project directory, or a missing `--project` directory. |
+| `4` | Another AgentKit operation holds the kit lifecycle lock. |
+
+## Related commands
+
+- [Complete `ak agents model inherit` command facts](../cli/ak_agents_model_inherit)
+- [Pin a model](./set)
+- [Remove an override](./reset)

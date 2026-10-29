@@ -18,7 +18,8 @@ AgentKit phát hành qua hai kênh `stable` và `beta`:
   đổi về tương thích.
 
 Các lệnh Kit mặc định dùng `stable`; `beta` cần được chọn rõ ràng. Lệnh
-`ak self-update` có thể kế thừa kênh đã lưu, vì vậy hãy truyền `--channel stable`
+`ak self-update` dùng `--channel`, rồi `updates.channel` đã lưu, rồi kênh của
+binary phát hành đang chạy, rồi `stable`, vì vậy hãy truyền `--channel stable`
 hoặc `--channel beta` khi lựa chọn này quan trọng. Giữ CLI và Kit trên cùng kênh
 bạn đã chọn.
 
@@ -111,6 +112,24 @@ hoạch đã review bằng:
 ak update . --kits engineer --channel stable --yes
 ```
 
+Sau cây `kits/` được theo dõi, cập nhật project khi áp dụng còn refresh mọi
+runtime đã cài của từng Kit trong project (`.claude`, `.codex` và adapter root),
+mỗi lượt cho một cặp Kit và runtime. Project chỉ có bản cài runtime từ
+`ak kit init` sẽ được refresh các bản cài đó. Bản xem trước và `--dry-run` liệt
+kê các refresh runtime dự kiến mà không ghi gì. Một lượt thất bại không dừng các
+lượt khác, và lệnh trả mã thoát `1` ở cuối. Thu hẹp runtime bằng `--target`:
+
+```bash
+ak update . --target claude-code,codex --yes
+```
+
+Runtime được yêu cầu nhưng chưa có bản cài trong project được báo trong
+`skipped_targets`. Thư mục project trỏ tới bản cài cấp người dùng, như thư mục
+home, sẽ bỏ qua refresh runtime và hướng dẫn chạy `ak update --global`. `--force`
+ở project không lưu trữ các Skill Codex cũ của ClaudeKit; việc đó vẫn thuộc
+`ak update --global --force` hoặc `ak migrate --from ck`. Xem
+[Refresh runtime của dự án](../reference/cli/update#refresh-runtime-của-dự-án).
+
 Theo mặc định, cập nhật project áp dụng chỉ snapshot đúng những tệp nó ghi
 hoặc prune — một bundle có thể restore, và kết quả gồm cả lệnh restore.
 `--force`, `--backup`, hoặc `backups.enabled: true` trong
@@ -140,12 +159,17 @@ mới thông thường.
   liệu trước khi dùng.
 </Callout>
 
+Để biết khi nào mỗi lệnh lifecycle tự động snapshot và cách `backups.scope` giới
+hạn phần capture `~/.claude/`, xem [`ak backups`](../reference/cli/backups).
+
 ## Cập nhật nền tự động (opt-in)
 
 `ak update --schedule daily|weekly` bật cập nhật nền tách rời, khởi động ở
 lệnh `ak` thông thường đầu tiên sau khoảng thời gian đã chọn, refresh CLI và
 kit global cộng thêm mọi project đã opt-in bằng `--project <dir>` (đã đăng ký
-qua `ak projects add`) có git tree sạch và không có agent session đang chạy:
+qua `ak projects add`) có git tree sạch và không có agent session đang chạy. Cập nhật nền cho project chỉ refresh cây
+`kits/` được theo dõi; nó không bao giờ refresh bản cài runtime và ghi một thông
+báo hướng dẫn chạy `ak update <dir> --yes`:
 
 ```bash
 ak update --schedule daily --project .
@@ -164,6 +188,52 @@ qua; kết quả chưa xem in một lần ở `SessionStart` tiếp theo và có
 bằng `ak update --status --ack --json`. Xem
 [tham chiếu `ak update`](../reference/cli/update) và check `auto_update` của
 [`ak doctor`](../reference/cli/doctor) để biết chi tiết.
+
+`AK_NO_AUTO_UPDATE=1` cũng ngăn `ak kit init`, `ak kit refresh` và `ak update`
+theo phạm vi thay thế `ak` để đáp ứng phiên bản CLI tối thiểu của kit: một bản
+release thấp hơn mức đó sẽ dừng trước mọi thay đổi kit và chỉ ra
+`ak self-update --yes` cùng lệnh cần chạy lại. Bản build không có phiên bản
+release (`dev`, hoặc stamp cục bộ như `cert-dev`) không bao giờ bị thay tự động;
+`ak kit init` in một thông báo trên stderr rồi tiếp tục với bản đó.
+
+Lần chạy nền dùng release channel từ `updates.channel`; khoá `auto_update:` chỉ
+chứa lịch chạy và các project đã opt-in. Project có thay đổi chưa commit hoặc có
+agent session đang chạy sẽ không được cập nhật; nó ở trạng thái chờ và được thử
+lại ở lần chạy đến hạn tiếp theo. Project không phải git repository sẽ bị bỏ
+qua. Kit global vẫn được cập nhật bất kể có agent
+session đang chạy hay không, giống như khi chạy `ak update --global` tương tác.
+
+Mỗi kết quả chạy nền chỉ hiển thị một lần: dưới dạng tóm tắt một dòng trên stderr
+của lệnh `ak` tương tác tiếp theo, hoặc qua thông báo lúc session bắt đầu, tuỳ
+cái nào đến trước. `ak update --status` vẫn tiếp tục hiển thị kết quả, và check
+**Auto-update** của `ak doctor` báo lịch chạy, kết quả gần nhất, lần chạy bị kẹt
+hoặc quá hạn, và các project đã opt-in nhưng không còn cập nhật được.
+
+Việc phát hiện session phụ thuộc vào các event mà runtime gửi tới Hook
+`session-heartbeat.cjs`:
+
+- Codex không có event `SessionEnd`, nên marker session của nó chỉ hết hạn sau
+  thời gian sống (TTL).
+- Pi chạy Hook khi session bắt đầu, khi gửi prompt và khi dừng, nhưng hoãn
+  `SessionEnd`; marker của nó cũng hết hạn theo TTL.
+
+Kiểm tra git tree sạch vẫn bảo vệ thay đổi chưa commit khi một session không được
+phát hiện.
+
+Trên Windows, lần chạy nền yêu cầu tách khỏi job object của process gọi. Khi job
+đó cấm breakaway nhưng không kill process khi đóng, như ở một số desktop agent
+host, AgentKit khởi động lần chạy bên trong job, nơi nó tiếp tục chạy sau khi
+lệnh kết thúc. Chỉ khi job vừa cấm breakaway vừa là kill-on-close, AgentKit mới
+bỏ qua lần chạy, vì nó sẽ kết thúc cùng lệnh; AgentKit ghi nhận lần chạy là
+`deferred (spawn_in_job)` và thử lại sau. Lần chạy bên trong job vẫn có thể bị
+dừng nếu host đóng một job kill-on-close bên ngoài hoặc terminate job, giống như
+một lần `ak update` bạn khởi động từ host đó.
+
+Sau `ak rollback --to v2`, lần chạy nền không cài gì trong lúc trạng thái giữ
+rollback còn hiệu lực và ghi `deferred (rollback_hold)`; nó ghi
+`deferred (rollback_state_unreadable)` khi không đọc được journal của rollback.
+Đặt lại lịch không tự áp dụng gì. Xem
+[Rollback về v2](./rolling-back-to-v2#những-gì-bị-giữ-lại-sau-rollback).
 
 ## Xem trước cập nhật Kit global
 
@@ -184,8 +254,8 @@ ak update --global --kits engineer --local --kits-dir ./kits --target grok --yes
 ```
 
 Cập nhật global luôn giữ file do người dùng sửa. Tính hợp lệ của target phụ
-thuộc cả scope và nguồn: cập nhật project từ remote chấp nhận chính xác một
-trong `claude-code`, `codex`, `cursor`, `dsh`, `grok`, `omp` hoặc `pi`; cập nhật
+thuộc cả scope và nguồn: cập nhật project từ remote chấp nhận bất kỳ runtime
+nào trong `claude-code`, `codex`, `cursor`, `dsh`, `grok`, `omp` hoặc `pi`; cập nhật
 global từ remote chấp nhận `claude-code`, `codex`, `cursor`, `dsh`, `grok` hoặc
 `omp`; cập nhật global từ local cũng chấp nhận tập đó. Dùng `--target` hoặc alias
 `--runtime`, nhưng chỉ truyền một tên flag. Target tường minh không áp dụng cho
@@ -227,6 +297,40 @@ Refresh tạo snapshot khôi phục, ghi lại output AgentKit hiện tại, và
 vẫn khớp. Lệnh giữ tập Skill được chọn trước đó và giữ nguyên đường dẫn đã sửa,
 không an toàn, là liên kết hoặc được dùng chung. Hãy xem lại màn hình xác nhận và
 tránh dùng `--no-backup`.
+
+## Cửa sổ cập nhật và gia hạn
+
+Bạn sở hữu các phiên bản Kit mình được cấp license và dùng được vĩnh viễn. Cập
+nhật được bao phủ trong 12 tháng, và gia hạn sẽ kéo dài cửa sổ đó. Sau khi cửa
+sổ kết thúc:
+
+- Kit đã cài, CLI và ứng dụng Desktop vẫn hoạt động. Cửa sổ đã kết thúc không
+  bao giờ vô hiệu hóa hay gỡ cài đặt thứ gì, dù online hay offline.
+- Bạn vẫn cài được các bản vá của minor cuối cùng còn được bao phủ, và cài lại
+  bất kỳ phiên bản nào cửa sổ đã bao phủ.
+- Các bản phát hành sau khi cửa sổ kết thúc cần gia hạn.
+
+Registry quyết định tài khoản của bạn được resolve những phiên bản nào, không
+phải đồng hồ máy bạn. Dùng `ak licenses` để xem tình trạng: cửa sổ của từng Kit,
+patch line, phiên bản mới nhất còn được bao phủ, nguồn của quyền cập nhật và
+liên kết gia hạn. Xem [`ak licenses`](../reference/cli/licenses).
+
+Cách mỗi lệnh hoạt động khi phiên bản nằm ngoài cửa sổ:
+
+| Lệnh | Kết quả |
+| --- | --- |
+| `ak update` (không có `--version`) | Cập nhật lên phiên bản mới nhất còn được bao phủ. Nếu registry từ chối Kit, dòng kết quả là `skipped` với `reason: "renewal_required"`, phiên bản đã cài được giữ nguyên và mã thoát là `0`. |
+| `ak update --version X` | Dòng kết quả là `failed` với `reason: "renewal_required"`. Một batch mà mọi lỗi đều là gia hạn thoát `15`. |
+| `ak kit init --version X` / `ak kit refresh --version X` | Không ghi gì và lệnh thoát `15`. Với `--json`, lỗi có `error_code: "renewal_required"` và đối tượng `updates` gồm `kit_id`, `latest_entitled_version`, `updates_through`, `renew_url`. |
+| `ak kit init` / `ak kit refresh` (không có `--version`) | Cài phiên bản mới nhất còn được bao phủ và in một dòng `ak: notice:` trên stderr khi có bản mới hơn cần gia hạn. |
+
+Không lệnh nào hỏi lại, nên script và CI hoạt động giống nhau. `ak self-update`
+và trình cập nhật Desktop dùng kênh phát hành binary có chữ ký, mà cửa sổ cập
+nhật không chặn. Khi offline, AgentKit chỉ dùng lại phiên bản đã xác minh cho
+đúng Kit, runtime và phiên bản; bản sao đã cache không bao giờ làm bản phát hành
+mới hơn khả dụng. Để tiếp tục, mở liên kết gia hạn từ `ak licenses` hoặc từ lỗi,
+gia hạn rồi chạy lại lệnh. Xem
+[Cần gia hạn](../troubleshooting/updates#cần-gia-hạn-khi-cập-nhật-bị-từ-chối).
 
 ## Xác minh cập nhật
 
@@ -310,3 +414,5 @@ hiểu trạng thái hiện tại. Từ chối restore trả mã `3`, backup loc
 ## Xem thêm
 
 - [Cài đặt Kit](./installing-kits)
+- [Nâng cấp từ v2 lên v3](./upgrading-to-v3)
+- [Rollback về v2](./rolling-back-to-v2)

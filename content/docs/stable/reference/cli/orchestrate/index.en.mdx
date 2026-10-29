@@ -1,6 +1,6 @@
 ---
 title: ak orchestrate
-description: Coordinate and inspect agent jobs. External process supervision is Darwin-only; observation and runtime discovery do not claim process-control support.
+description: Coordinate and inspect agent jobs. Only external process supervision is Darwin-only; plan commands and current-runtime session (internal) jobs work on every platform.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
@@ -9,17 +9,21 @@ Use `ak orchestrate` to start, resume, check, and stop a graph of external CLI
 jobs, and to inspect durable events, redacted output, and installed runtimes.
 The worker owns each job's process group, persists durable run state under
 `AGENTKIT_HOME`, and survives the launching client or coordinator exiting.
-This is the process-lifecycle and observation layer that the `/ak:orchestrate`
+This is the process-lifecycle and observation layer that the `/ak-orchestrate`
 skill delegates to when supervising CLI job graphs.
 
 <Callout type="warning">
-  External process supervision in `ak orchestrate` v1 supports **Darwin only**
-  (macOS). `start`, `resume`, and `stop` return exit code `6` on every other
-  GOOS. Plan commands that spawn CLI jobs require Darwin for that dispatch;
-  failures from those commands map to exit code `1`, not `6`. Historical
-  observation (`events`, `output`, `diagnose`) and runtime discovery (`probe`)
-  do not claim process-control support. Callers on Linux or Windows should not
-  treat those read paths as proof that jobs can be supervised on that host.
+  Only external process supervision in `ak orchestrate` requires **Darwin**
+  (macOS). `probe`, `prepare`, `advance`, `accept`, and `plan-status` work on
+  every platform, and so do `runtime: internal` jobs, which run in the current
+  runtime's session. Off Darwin,
+  `start`, `status`, `resume`, and `stop` return the unsupported-platform exit
+  code; `advance` reports an unsupported platform for a supervised CLI or Pi
+  job, settles it `blocked` with error class `unsupported_platform`, and exits
+  `1` after dispatching any internal jobs; and `accept` blocks a job whose
+  executable `verification:` checks need the supervisor the same way.
+  `events`, `output`, and `diagnose` read only runs recorded on a supervising
+  host, so they are not proof that jobs can be supervised on the current host.
 </Callout>
 
 ## Usage
@@ -66,7 +70,7 @@ with exit code `1` rather than silently continuing under a different graph.
 
 The graph file is a JSON document listing jobs by `id`, `command`, `args`,
 `work_dir`, `env`, and `depends_on`. Full schema and validation rules live
-under the `/ak:orchestrate` skill's job specification; this reference page
+under the `/ak-orchestrate` skill's job specification; this reference page
 covers only the `ak orchestrate` binary's process-lifecycle semantics.
 
 ## Output modes

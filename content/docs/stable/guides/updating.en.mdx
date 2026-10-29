@@ -18,7 +18,8 @@ AgentKit publishes `stable` and `beta` release channels:
   compatibility changes.
 
 Kit commands default to `stable`; `beta` requires an explicit opt-in. The CLI
-self-updater can inherit a saved channel, so pass `--channel stable` or
+self-updater uses `--channel`, then the saved `updates.channel`, then the channel
+of the running release binary, then `stable`, so pass `--channel stable` or
 `--channel beta` when the choice matters. Keep the CLI and kits on the same
 intended channel.
 
@@ -111,6 +112,24 @@ reviewed plan with:
 ak update . --kits engineer --channel stable --yes
 ```
 
+After the tracked `kits/` tree, an applied project update also refreshes every
+installed runtime of each project kit (`.claude`, `.codex`, and adapter roots),
+one pass per kit and runtime. A project with only `ak kit init` runtime installs
+refreshes those. Preview and `--dry-run` list the planned runtime refreshes
+without writing. A failed pass does not stop the others, and the command exits
+`1` at the end. Narrow the runtimes with `--target`:
+
+```bash
+ak update . --target claude-code,codex --yes
+```
+
+A requested runtime with no project install is reported under
+`skipped_targets`. A project directory that resolves to the user-level install,
+such as the home directory, skips its runtime refresh and points to
+`ak update --global`. Project `--force` does not archive legacy ClaudeKit Codex
+skills; that stays `ak update --global --force` or `ak migrate --from ck`. See
+[Project runtime refresh](../reference/cli/update#project-runtime-refresh).
+
 By default, an applied project update snapshots only the exact files it writes
 or prunes — a restorable bundle, whose result includes the restore command.
 `--force`, `--backup`, or `backups.enabled: true` in `~/.agentkit/config.yaml`
@@ -139,13 +158,18 @@ that the snapshot is sufficient recovery; it is not a routine refresh flag.
   warning before using it.
 </Callout>
 
+For when each lifecycle command snapshots automatically and how `backups.scope`
+limits a `~/.claude/` capture, see [`ak backups`](../reference/cli/backups).
+
 ## Background auto-update (opt-in)
 
 `ak update --schedule daily|weekly` enables a detached background update that
 starts on the first ordinary `ak` command after the interval, refreshing the
 CLI and global kits plus any project opted in with `--project <dir>`
 (registered via `ak projects add`) whose git tree is clean and has no live
-agent session:
+agent session. A background project update refreshes only the tracked `kits/`
+tree; it never refreshes runtime installs and records a notice to run
+`ak update <dir> --yes` instead:
 
 ```bash
 ak update --schedule daily --project .
@@ -164,6 +188,52 @@ updater skips it; an unacknowledged result prints once at the next
 `SessionStart` and can be acknowledged with `ak update --status --ack --json`.
 See the [`ak update` reference](../reference/cli/update) and the
 `auto_update` [`ak doctor`](../reference/cli/doctor) check for details.
+
+`AK_NO_AUTO_UPDATE=1` also stops `ak kit init`, `ak kit refresh` and a scoped
+`ak update` from replacing `ak` to meet a kit's minimum CLI version: a release
+build below that minimum stops before any kit change and names
+`ak self-update --yes` and the command to re-run. A build without a release
+version (`dev`, or a local stamp such as `cert-dev`) is never replaced
+automatically; `ak kit init` prints one notice on stderr and continues with it.
+
+The background run uses the release channel from `updates.channel`; the
+`auto_update:` key holds only the schedule and opted-in projects. A project that
+has uncommitted changes or a live agent session is not updated; it stays pending
+and is retried on the next due run. A project that is not a git repository is
+skipped. Global Kits update whether or not agent
+sessions are live, just as an interactive `ak update --global` would.
+
+Each background result is shown once: as a one-line summary on the stderr of the
+next interactive `ak` command, or through the session-start notice, whichever
+comes first. `ak update --status` keeps showing it, and the `ak doctor`
+**Auto-update** check reports the schedule, the last result, a stuck or
+overdue run, and opted-in projects that can no longer be updated.
+
+Session detection depends on which events a runtime delivers to the
+`session-heartbeat.cjs` Hook:
+
+- Codex has no `SessionEnd` event, so its session markers expire only after
+  their time-to-live.
+- Pi runs the Hook on session start, prompt submit, and stop, but defers
+  `SessionEnd`; its markers also expire by time-to-live.
+
+The clean git tree check still protects uncommitted work when a session goes
+undetected.
+
+On Windows, the background run asks to leave the caller's job object. When that
+job forbids breakaway but does not kill its processes on close, as with some
+desktop agent hosts, AgentKit starts the run inside the job, where it keeps
+running after the command exits. Only when the job forbids breakaway and is
+also kill-on-close does AgentKit skip the run, because it would end with the
+command; it records the run as `deferred (spawn_in_job)` and retries later. A
+run inside a job can still be ended if the host closes an outer kill-on-close
+job or terminates the job, the same as an `ak update` you start from that host.
+
+After `ak rollback --to v2`, the background run installs nothing while the
+rollback hold lasts and records `deferred (rollback_hold)`; it records
+`deferred (rollback_state_unreadable)` when it cannot read the rollback journal.
+Setting the schedule again applies nothing by itself. See
+[Rolling back to v2](./rolling-back-to-v2#what-stays-held-after-a-rollback).
 
 ## Preview global kit updates
 
@@ -184,7 +254,7 @@ ak update --global --kits engineer --local --kits-dir ./kits --target grok --yes
 ```
 
 Global update is preserve-only for user-modified files. Target validity depends
-on both scope and source: remote project updates accept exactly one of
+on both scope and source: remote project updates accept any of
 `claude-code`, `codex`, `cursor`, `dsh`, `grok`, `omp`, or `pi`; remote global
 updates accept `claude-code`, `codex`, `cursor`, `dsh`, `grok`, or `omp`; local
 global updates accept the same set. Use `--target` or its `--runtime` alias, but
@@ -228,6 +298,39 @@ stale generated and owned paths only while ownership evidence still matches,
 and preserves the previous selected-skill subset. Modified, unsafe, linked, and
 shared paths remain in place. Review the confirmation preview; avoid
 `--no-backup`.
+
+## Update windows and renewal
+
+You own the kit versions you license, and you can use them indefinitely. Updates
+are covered for 12 months, and renewing extends that window. After the window ends:
+
+- Installed kits, the CLI, and the Desktop app keep working. An ended window
+  never disables or uninstalls anything, online or offline.
+- You can still install patches of the last covered minor version, and reinstall
+  any version the window covered.
+- Releases published after the window require a renewal.
+
+The registry decides which versions your account may resolve, not your local
+clock. Check where you stand with `ak licenses`, which shows each kit's window,
+the patch line, the latest covered version, the source of the coverage, and the
+renewal link. See [`ak licenses`](../reference/cli/licenses).
+
+How each command behaves when a version is outside the window:
+
+| Command | Result |
+| --- | --- |
+| `ak update` (no `--version`) | Updates to the newest covered version. If the registry refuses the kit, the row is `skipped` with `reason: "renewal_required"`, the installed version stays, and the exit code is `0`. |
+| `ak update --version X` | The row is `failed` with `reason: "renewal_required"`. A batch whose only failures are renewals exits `15`. |
+| `ak kit init --version X` / `ak kit refresh --version X` | Nothing is written and the command exits `15`. With `--json`, the error has `error_code: "renewal_required"` and an `updates` object with `kit_id`, `latest_entitled_version`, `updates_through`, and `renew_url`. |
+| `ak kit init` / `ak kit refresh` (no `--version`) | Installs the newest covered version and prints one `ak: notice:` line on stderr when a newer release needs renewal. |
+
+None of these commands prompt, so scripts and CI behave the same way. `ak
+self-update` and the Desktop updater use the signed binary release channel,
+which update windows do not gate. Offline, AgentKit reuses only a version it
+already verified for the exact kit, runtime, and version; a cached copy never
+makes a newer release available. To continue, open the renewal link from
+`ak licenses` or from the error, renew, then rerun the command. See
+[Renewal required](../troubleshooting/updates#renewal-required-when-an-update-is-refused).
 
 ## Verify the update
 
@@ -312,3 +415,5 @@ exits `4`, an invalid or missing snapshot exits `5`, and other failures exit
 ## See also
 
 - [Installing kits](./installing-kits)
+- [Upgrading from v2 to v3](./upgrading-to-v3)
+- [Rolling back to v2](./rolling-back-to-v2)

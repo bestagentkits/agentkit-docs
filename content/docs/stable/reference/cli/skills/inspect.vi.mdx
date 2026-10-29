@@ -1,0 +1,76 @@
+---
+title: ak skills inspect
+description: Xem metadata, provenance, danh sách file và script khai báo của release SkillX đã xác minh mà không đọc file thực thi.
+---
+
+Dùng `ak skills inspect` để xem xét một release SkillX trước khi quyết định bước
+tiếp theo: ai publish, nguồn gốc từ đâu, gồm những file nào và khai báo script
+nào. Lệnh chỉ đọc frontmatter của `SKILL.md`. Nó không bao giờ yêu cầu file
+thực thi hoặc file script khai báo.
+
+## Cách dùng
+
+```bash
+ak skills inspect <@publisher/slug[@version][@sha256:<hex>]> [flags]
+```
+
+Cung cấp đúng một reference. Nếu không có version, release stable mới nhất đã
+publish sẽ được chọn. Provider từ chối digest không kèm version.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--source <provider>` | `skillx` | Chọn nguồn Skill. Hiện chỉ hỗ trợ `skillx`. |
+
+Các cờ dùng chung nằm trong [quy ước CLI](../cli-conventions).
+
+## Điều kiện
+
+SkillX phải đang bật: sau `ak update --ssot`, hoặc với `AGENTKIT_SKILLX=1`.
+Nếu không, lệnh lỗi `source skillx is disabled`, nêu bước để bật SkillX và
+thoát `2`. Xác thực, ref
+`ak secrets` `SKILLX_TOKEN`, các override phát triển chỉ dành cho loopback và
+hành vi cache giống như [`ak skills resolve`](./resolve).
+
+## Đầu ra
+
+Đầu ra text liệt kê release rồi đến từng file. File không đọc được được đánh
+dấu `[declared script, not readable]` hoặc `[executable, not readable]`.
+
+JSON dùng `kind=skills.inspect` với các trường của `resolve` cùng các trường
+sau dưới `data`:
+
+```text
+kind, channel, createdAt, name, description
+publisher: handle, verifiedBy
+sourceProvenance: repo, commit, path
+files[]: path, mode, size, sha256, readable
+declaredScripts, exposure
+compatibility: declared, verified ("unknown")
+license: declared, entitlement ("readable")
+frontmatter
+```
+
+Kết quả là untrusted: `compatibility.verified` luôn là `unknown`, và inspect
+không phê duyệt Skill để cài hay chạy. Khi không kết nối được SkillX, dữ liệu
+cache đã xác minh được trả cùng cảnh báo `offline_stale`.
+
+## Tác động và mã thoát
+
+Lệnh chỉ đọc, ngoại trừ cache SkillX dùng một lần tại
+`AGENTKIT_HOME/cache/skillx`.
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Release đã được inspect. |
+| `1` | SkillX offline và không có cache đã xác minh, hoặc credential bị từ chối. |
+| `2` | SkillX bị tắt, cờ hoặc argument không hợp lệ, hoặc request không được hỗ trợ. |
+| `5` | Không tìm thấy release. |
+| `7` | Release untrusted, bị revoke, yank hoặc quarantine, hoặc kiểm tra identity hay tree thất bại. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skills inspect`](../cli/ak_skills_inspect)
+- [Resolve một reference](./resolve)
+- [Đọc một file của release](./read)

@@ -1,0 +1,322 @@
+# AgentKit v3.0.0
+
+## Breaking changes
+
+- **cli:** Expose destination provenance and request-scoped update channels
+- **cli:** Make ak agent-native with enforced JSON/exit contracts and ak describe
+- **secrets:** Name the operational store state and remedy when the audit ledger fails
+
+## Features
+
+- **skills:** Thin skill guidance, evaluation harness, and three marketing migrations
+- **test:** Make skill verification contract-led and evidence-bound
+- **docs:** Add opt-in product philosophy interviews
+- **skills:** Lead the debug description with the requests that should load it
+- **desktop:** Add actionable overview and evidence-backed improvement work
+- **marketing:** Adopt thin core for onboarding-cro skill
+- **cli:** Add cloudflare clef semantic decision provider
+- **skills:** Add opt-in AK Render HTML route behind a measured gate
+- **marketing:** Add v4-aware voice directing to elevenlabs skill
+- **marketing:** Add long-form filmmaking skill
+- **skill-creator:** Codify production skill standard and catalog evidence
+- **update:** Refresh every installed runtime in project ak update
+- **kits:** Add a snapshot-backed --fresh reset to kit init
+- **doctor:** Report semantic decision status offline
+- **hooks:** Add .akignore allowlist for the privacy guard
+- **kits:** Adopt vox-director story, shot and collage craft in motion-video
+- **skills:** Add the canonical skill tree digest
+- **skills:** Add content-addressed skill store with crash-safe journal
+- **skills:** Add the SkillX read provider core
+- **skills:** Add read-only SkillX resolve, inspect and read commands
+- **secrets:** Add the sync keystore, store groundwork, HTTP transport and state store
+- **agent-models:** Persist subagent model overrides for Codex and Claude Code
+- **skills:** Add verified SkillX release fetch into the skill store
+- **skills:** Fail divergent skill alias projections before mutation
+- **skills:** Add local-first skill router and ak skills route
+- **desktop:** List and deactivate devices bound to the account license
+- **preflight:** Verified-commit receipts and the beta train routine runbook
+- **skills:** Serve read-only skill tools over local stdio MCP
+- **secrets:** Add the secrets sync engine
+- **skills:** Plan skill projections for every native emitter
+- **secrets:** Add hidden sync commands for enable, status, now, settle and disable
+- **secrets:** Append encrypted audit events with per-epoch keys
+- **agent-models:** Reconcile subagent model edits and add ak agents model commands
+- **secrets:** Add device management and vault recovery to sync
+- **skills:** Add the skill exec broker foundation behind a flag
+- **skills:** Add the Linux bubblewrap sandbox backend for the exec broker
+- **skills:** Add opt-in redacted cloud discovery to skill routing
+- **skills:** Add personal kit overlays and three-way foundation rebase
+- **skills:** Install SkillX packages and sync locked releases
+- **skills:** Apply, rebase, roll back and remove personal kits
+- **agent-models:** Reconcile OMP and Pi agent model edits and rate the seven agent runtimes
+- **gui:** Manage subagent models from the Desktop Subagents -&gt; Models page
+- **skills:** Run granted skill scripts through the exec broker
+- **skills:** Run exec broker scripts in a Windows AppContainer
+- **skills:** Add personal kit init and resolve with resolution records
+- **skills:** Add a docker and podman fallback backend for skill exec
+- **skills:** Run granted skill scripts over MCP with skills&#95;execute
+- **skills:** Add a broker egress proxy for skill exec host allowlists
+- **skills:** Inject granted secrets into skill exec runs
+- **skills:** Let bubblewrap runs reach allowlisted hosts through the egress proxy
+- **skills:** Install pinned skill exec dependencies inside the sandbox
+- **skills:** Publish personal kits to SkillX and sync locked revisions
+- **skills:** Allow a loopback SkillX host for local acceptance
+- **skills:** Adopt the shared SkillX kit-proposal policy and vectors
+- **skills:** Preview redacted session evidence for skill improvement
+- **skills:** Apply the shared SkillX kit-proposal policy to kit publish
+- **skills:** Derive the SkillX shared-alias list from kit composition
+- **secrets:** Sign and verify the removal fence change-log head
+- **cli:** Install a kit from a local runtime-neutral package
+- **cli:** Compose the bundle from runtime-neutral component packages
+- **secrets:** Flag secrets a removed device could read until rotated
+- **update:** Resolve the macOS desktop cohort from a signed desktop pointer
+- **skills:** Build a gated candidate overlay from session evidence
+- **skills:** Add the linked-root doctor check and legacy skill migration
+- **secrets:** Step up an API-key login to an email sign-in for sync
+- **skills:** Add ak:atoz scope-lock to autonomous delivery skill
+- **secrets:** Add searchable secret profiles and ak secrets search
+- **secrets:** Import a project directory's dotenv files as one plan
+- **gui:** Search secrets from the desktop with the CLI matcher
+- **kit:** Report lock.busy for a busy kit lifecycle lock with the skill store on
+- **secrets:** Enroll API-key sign-ins for sync with a device session
+- **secretsync:** Open sync state read-only for release-path readers
+- **runner:** Cap shared-workstation Windows runner resource use
+- **cli:** Honor registry update windows without disabling owned kits
+- **motion-video:** Orchestrate production through parallel sub-sessions
+- **evals:** Measure the DSH skill listing limit by its published rule
+- **ak-orchestrate:** Dispatch workers as independent sessions
+- **train:** Make the intent gate block unresolved conflicts
+- **evals:** Live routing eval harness and baseline of the current catalog
+- **release:** Ship a reviewed preamble with stable release notes
+- **kits:** Compact skill descriptors to fit runtime listing budgets
+- **ak-motion-video:** Recording-driven mode, preflight and leaner builders
+- **skills:** Teach proportionate extensibility in docs, advise, brainstorm and plan
+- **skills:** Add ak:vault with a remembered secret store choice
+- **release:** Add RC acceptance harness and manifest verify mode
+- **cli:** Read the ak login API key from stdin or AGENTKIT&#95;API&#95;KEY
+- **secrets:** Add request and the exec grant scope
+- **update:** One-command opt-in ak update --ssot upgrade
+- **skills:** Evaluate, apply and roll back skill evolution candidates
+- **secrets:** Run a program with granted secrets in its environment
+- **secrets:** Enforce the synced vault policy on every grant release
+- **secrets:** Show a value hint and add a constant-time compare
+- **skills:** Turn personal kits and SkillX on after ak update --ssot
+- **train:** Require SSH-signed owner approvals in the intent gate
+- **evals:** Compare Marketing descriptors live on held-out prompts
+- **desktop:** Show every secret profile field and its provenance
+- **desktop:** List exec-scoped secret requests and grants
+- **secrets:** Sync profiles, drain sealed remote writes and join browser devices
+- **secrets:** Answer remote MCP calls over the vault relay
+- **secrets:** Add alias and follow it in resolve and run
+- **skills:** Add ak-dogfood to turn a session into skill improvements
+- **secrets:** Audit member additions, role changes and member removals
+- **desktop:** Show vault sync state read-only on the secrets page
+- **secrets:** Add owner-device member commands for shared vaults
+- **runtime:** Certify macOS cells and expose support tiers
+- **cli:** Signal install vs inspect intent on registry resolve
+- **claude-directory:** Add public AgentKit Engineer plugin and export audit
+
+## Fixes and security
+
+- **feedback:** Bound report enrichment, canonical issue links, private skill names on builder card
+- **ci:** Resolve merge-train head repo on gh releases without nameWithOwner
+- **cli:** Show failure reason by default in update and kit init
+- **ci:** Set up Node for Go modules lane and use keyword YAML safe&#95;load
+- **kits:** Make plan activation fail loudly and stop home-root project resolution
+- Stop the secrets ledger and Windows feedback-report races that keep CI red
+- **secrets:** Read same-millisecond audit rows back in write order
+- **kits:** Replace dead skill references and validate skill names
+- **hooks:** Deny first sensitive shell access and bind approval retries
+- **kits:** Ship every wired hook in Cursor packages and gate unexported wiring
+- **kitcmd:** Follow hook require closures and reject directory hook exports
+- **migrate:** Require exact legacy hook evidence before cleaning config
+- **codex:** Restore quoted agent key decoding and skip multi-line inline tables
+- **codex:** Stop config.toml agent-table scans at managed fences
+- **codex:** Remove only agent tables bound to the codex root
+- **desktop:** Resolve Control Center kits from verified cache
+- **codex:** Install project runtime into &lt;project&gt;/.codex
+- **cli:** Restore cmdtree help and raw JSON guards on dev
+- **kitcmd:** Prune empty project Claude surface directories on uninstall
+- **kitcmd:** Journal symlinks as metadata so snapshots need no symlink privilege
+- **kits:** Grant PowerShell alongside Bash to shell-capable agents
+- **kitcmd:** Snapshot file mutation leaves on global uninstall
+- **pi:** Exclude duplicate global AgentKit skills from Pi discovery
+- **kits:** Refresh each detected runtime in its own remote pass
+- **kitcmd:** Drop an uninstalled kit's orphaned codex start fence
+- **pi:** Keep symlinked owned-name leaves out of global mutation paths
+- **codex:** Name the fence BOM constant for the ASCII lint
+- **hooks:** Register one deduplicated merged hook manifest locally and in packages
+- **cli:** Keep --registry-url across the self-update continuation
+- **cli:** Verify native skill snapshots before --force removes directories
+- **ci:** Slurp gh api pages with jq for self-hosted runners
+- **kit:** Refuse project routes that land on the global install
+- **kit:** Refuse project uninstall that lands on the global install
+- **cli:** Require --force for ak uninstall at the home directory
+- **cli:** Drop and mask userinfo in AgentKit registry URLs
+- **tools:** Uninstall write-smoke project by path in isolated homes
+- **codex:** Journal a linked config.toml by its target
+- **adapters:** Journal links as metadata in lifecycle snapshots
+- **planfile:** Write plan files through the shared atomic writer
+- **claude-code:** Retry a failed ownership link restore
+- **hooks:** Cover the PowerShell tool in kit shell guards
+- **fsutil:** Stage each atomic write in its own scratch file
+- **backups:** Keep an uninstall run's own snapshots from its auto-prune
+- **release:** Retry transient gh and HTTP reads in release verification
+- **cli:** Close the agent contract gaps left after ak describe
+- **codex:** Discover project-scope agents in codex-agent-runtime serve
+- **codex:** Clean project shared files on uninstall and report rule status
+- **claude-code:** Stage rooted activation writes in per-write scratch files
+- **kitcmd:** Stage each exact-file rollback restore in its own scratch file
+- **backups:** Keep earlier run snapshots through fresh and force auto-prune
+- **codex:** Keep unknown marketplace fields when a project install registers a kit
+- **codex:** Strip the kit rules block from CODEX&#95;HOME/AGENTS.md on global uninstall
+- **update:** Report hook runtime collisions with a source-pinned recovery
+- **hooks:** Inspect piped, wrapped and script-text shell commands for dotenv reads
+- **kit:** Drop registry userinfo from refresh retry and continuation args
+- **ui:** Use the on-accent token for every accent-filled control
+- **migrate:** Clean portable ClaudeKit hooks from markerless Codex hooks
+- **kit:** Reject a drive-relative --out path on Windows
+- **pi:** Skip the hook bridge for kits below the security floor
+- **analytics:** Keep usage-limits reads flat with a year of history
+- **runtime:** Keep every run of a restarted Codex token total
+- **ui:** Darken the light accent hover so on-accent text stays readable
+- **claude-code:** Keep the prior hash when the tree walk records a manifest
+- **hooks:** Honor CLAUDE&#95;CONFIG&#95;DIR for statusline quota
+- **orchestrate:** Report a departed pid as gone in the macOS identity probe
+- **runtime:** Retry Windows sharing violations on the remaining file replaces
+- **usagelimits:** Read the keychain item of the CLAUDE&#95;CONFIG&#95;DIR profile
+- **fsutil:** Name both paths, take long paths and fail fast on Windows replaces
+- **orchestrate:** Sweep a stopped job's group after its leader exits
+- **plan:** Resolve and index a plan folder name in ak plan update
+- **autoupdate:** Start the runner inside a Windows job that keeps it alive
+- **auth:** Point device guidance at the devices page and explain sign-outs
+- **orchestrate:** Keep unprepared run dirs absent on plan commands
+- **preflight:** Run the kit prompt-cruft gate before push
+- **secrets:** Refuse bidi and line-separator characters in secret refs
+- **secrets:** Keep secret names out of store and backend errors
+- **cli:** Keep ak secrets off the network with sync off and add a resolve latency rig
+- **pi:** Discover agents from a global Pi profile runner
+- **secrets:** Keep the ref out of resolve, substitute and export errors
+- **pi:** Let the registered agent runner see project and global agents
+- **dashboard:** Answer not-ready instead of live-scanning on a cold analytics index
+- **secrets:** Commit the index intent before the backend write
+- **orchestrate:** Clarify platform matrix and block unsupervisable jobs off Darwin
+- **migrate:** Surface install warnings from legacy kit migration
+- **test:** Remove host dependencies from full local go test
+- **skills:** Resume an interrupted dsh/grok/omp refresh without --force
+- **secrets:** Unseal the file vault key before taking the vault lock
+- **secretsync:** Audit device, rekey and recovery flows
+- **skills:** Refuse AppContainer subprocess runs whose TMP exceeds MAX&#95;PATH
+- **skills:** Recover hand-moved forks and free the original after a fork
+- **skills:** Honor a cancel before the container starts
+- **ci:** Refresh stale UI entrypoints and list kitpackage as a hook package
+- **kit:** Keep skill store projections in the force orphan cleanup
+- **skills:** State the real isolation backends in exec and sync help
+- **secrets:** Accept a dash-prefixed device ID after -- in devices remove
+- **secrets:** Refuse every invisible format character in a ref
+- **secretsync:** Refuse a restored log regrown past the last kept head
+- **secrets:** Key release manifest digests with a per-home secret
+- **parity:** Allowlist ak secrets annotate as a terminal-only command
+- **skills:** Co-own a kit skill several kits record with the same files
+- **fsutil,skilltree:** Spare other writers' scratch names and refuse alternate data streams
+- **cursor:** Hand off shared hooks and MCP servers between co-owning kits
+- **fsutil:** Check only the name an atomic write creates
+- **skills:** Treat nested skills as resources of their parent skill
+- **skills:** Hand off co-owned shared native files between kits
+- **ci:** Register the stale-sibling-claim cursor test in the kitcmd-25 split
+- **skills:** Trust only install roots for sibling skill ownership
+- **marketing:** Make brand and content-hub asset scripts work together
+- **release:** Drop dead source-repository links from stable notes
+- **skills:** Recover skill-store journals on every mutating command
+- **secrets:** Keep value writes working when the manifest key is unusable
+- **ak-diagram:** Harden Pele fallback paths and correct render notes
+- **hooks:** Keep session-init exports stable and append-only across a long session
+- **cursor:** Resolve legacy event-name hook claims on uninstall
+- **doctor:** Diagnose blocked AgentKit hosts on office networks
+- **cli:** Show attention item details on kit refresh --verbose
+- **kitcmd:** Resolve symlinked project paths in cursor uninstall and legacy Codex migration
+- **preflight:** Lint with the runner-pinned golangci-lint and warn on version mismatch
+- **dsh:** Remove the ownership index when uninstall has no rules block to keep
+- **cli:** Never auto-replace non-semver builds or ignore AK&#95;NO&#95;AUTO&#95;UPDATE
+- **ci:** Restore the contracts lane for the release full-suite
+- **kit:** Prune emptied directories after refresh and retire stale cursor files
+- **kit:** Prune directories an interrupted refresh emptied but did not remove
+- **kit:** Remove the kit's hook diagnostic logs on uninstall
+- **kit:** Remove shared hook logs when the last kit's logger leaves
+- **omp,matrix:** Refuse global AGENTS.md owner root; harden certification validator
+- **backups:** Keep the unfinished ssot upgrade record out of checkpoints and restores
+- **release:** Make the docs-bundle builder and its test byte-exact on Windows
+- **ci:** Pin the beta-train Go toolchain to go.work when local Go is newer
+- **rollback:** Pin the reinstalled v2 CLI's binary updates to its release
+- **skills:** Release the rollback record of an evolution apply that wrote nothing
+- **evals:** Harden thin-skills live harness token and temp handling
+- **migrate:** Default Claude Code project transitions to native
+- **parity:** Allowlist ak secrets request and run as terminal-only
+- **skills:** Rename legacy ak:vault reference to ak-vault
+- **hooks:** Block through stdout JSON on Codex so guards survive PowerShell
+- **ci:** Sort the Windows shard manifest and stop flagging dot-prefixed home segments
+- **dashboard:** Refresh the tracked dashboard bundle entrypoint
+- **codex:** Quote spaced Windows hook paths instead of a bare .cmd shim
+- **hooks:** Keep Codex hook output ASCII and off stderr under PowerShell
+- **cursor:** Prune emptied kit directories on uninstall
+- **runtimeprobe:** Probe Windows .cmd and .bat shims without a shell
+- **update:** Close the rollback-hold race and surface the hold in Settings
+- **skillx:** Refuse to prefetch or stage a kit base mirror
+- **dashboard:** Honour the rollback hold in the web updater
+- **skillx:** Refuse a kit base mirror on the install store path
+- **desktop:** Explain a running rollback in the update banner
+- **secrets:** Unseal the file vault key once per synced release
+- **rollback:** Complete the v3 to v2 to v3 round trip
+- **secrets:** Let API-key sessions enable sync without sealing a recovery bundle
+- **secrets:** Report when a pulled synced secret shadows a local alias
+- **dashboard:** Report a running rollback in the web update check
+- **ui:** Refresh the tracked UI bundle entrypoints
+- **skills:** Bound SkillX connects and stalled bodies, report request progress
+- **secrets:** Namespace keychain values per AgentKit home
+- **secrets:** Step over Windows Terminal in caller walk and refuse on unexpected check failures
+- **secrets:** Keep a recovery kit sent to --recovery-kit-out off the terminal
+- **cli:** Point hints at commands that exist
+- **secrets:** Align sealed drain and relay on unpushed creates and pending rekeys
+- **secretsync:** Answer written when a deleted name is set again
+- **secrets:** Match secret names by Unicode NFC form
+- **ci:** Run the UI bundle freshness check in preflight when ui&#95;bundle fires
+- **windows-runner:** Fail job start when the workspace cannot be emptied
+- **skills:** Unseal the file vault once per personal kit command
+- **secrets:** Read vault state with shared delete so Windows replaces never fail
+- **skills:** Name a missing legacy file as its record spells it
+- **kits:** Declare proprietary skill licenses and ship upstream notices
+- **rc-acceptance:** Check the source package for projection targets
+- **secrets:** Show the agent-ancestor refusal without --verbose
+- **release:** Pipe the RC acceptance registry key to ak login --api-key-stdin
+- **windows:** Close the product causes behind the v3.0.0 RC native matrix reds
+- **conformance:** Rename runtime status to adapter&#95;stage and derive support from cells
+
+## Documentation
+
+- **secrets:** Point ak secrets audit at the desktop Audit log page
+- **orchestrate:** State per-platform support and the non-Darwin internal route
+- **skills:** Define the v3 skill lifecycle contract
+- **skills:** Record co-refresh and linked-root decisions
+- **skills:** Specify collision preflight force, adoption and runtime rules
+- **skills:** Specify the SkillX source consumer contract
+- **agents:** Add CI minutes rules
+- **release:** Recover a producer leg that no runner can schedule
+- **skills:** Refresh the skill lifecycle ledger and guard its merge wording
+- **train:** Add the intent gate, the owner digest and release-time native evidence
+- **skills:** Name the exec isolation backends in the ak:ak guidance
+- **secrets:** Record that production sync runs under owner waivers
+- **skills:** Note the idle-host requirement for the G0 leak check
+- **release:** Document withdrawing a registered kit release
+- **release:** Add v3 upgrade guide, v2 rollback runbook and v3.0.0 notes
+- **skillx:** Mirror foundations as @agentkit on SkillX
+- **skills:** Record the descriptor-compaction exposure capture
+- **runtime:** Record agy as a projection format outside the release contract
+- **release:** Map the M0 definition of done onto the RC acceptance ledger
+
+## Release provenance
+
+- Previous stable tag: `v2.19.0`
+- Previous promoted source: `d7b9bf22563a2c75dba726f9f0681988d884e89b`
+- Promoted source: `086aa72cddca795f39778a1d116ea221bf8814c5`
+- Stable snapshot commit: `9fe4699777a954987bb859bf839dacab1aff14ec`
+- Artifact checksums: `release-provenance.json` release asset

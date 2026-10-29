@@ -1,0 +1,77 @@
+---
+title: ak skills kit rollback
+description: Re-activate the previous revision the scope's skill lock records for a personal kit, from the skill store, offline.
+---
+
+Use `ak skills kit rollback` to project a personal kit's previous revision
+again. The command reads that revision from the skill store through the same
+transaction as [`ak skills kit apply`](./apply); it needs no network and no
+foundation kits. The running revision becomes the previous one, so a second
+rollback returns to it.
+
+## Usage
+
+```bash
+ak skills kit rollback <name> [flags]
+```
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--dry-run` | `false` | Print the plan, its review findings and plan token; write nothing. |
+| `--scope <scope>` | `project` | Lock and skills root scope: `project` or `global`. |
+| `--runtime <list>` | The running revision's runtimes | `claude-code`, `codex`; repeatable. The running revision's runtimes are always included. |
+
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+## Requirements
+
+The skill store must be on, after `ak update --ssot` or with
+`AGENTKIT_SKILL_STORE=1`, for dry runs too; with it off the command exits `2`.
+The store gate follows `--scope`.
+
+## What it does
+
+The command applies without prompting unless the plan needs review. In one
+journaled transaction under the kit lifecycle lock it writes the composed trees
+into the skill store under `AGENTKIT_HOME`, the projected files into each
+runtime's native skills root (mode `0644`, never executable), and the scope's
+skill lock and receipts, owned by `personal:<name>`. It never rewrites the
+personal kit or the foundation kits, and never runs a script.
+
+Being offline, it does not re-check whether a foundation version was revoked
+since; `ak doctor` reports yanked and revoked releases. A file you changed
+after it was projected is preserved and reported with `ownership.modified`.
+
+## Output
+
+The text output has the shape of the [`ak skills kit apply`](./apply) output:
+the kit with its status and required approval, review findings, the new and
+previous revision, the plan token and the transaction plan.
+
+JSON uses `kind=skills.kit.rollback` with the same `data` fields as
+`skills.kit.apply`:
+
+```text
+personalKit, status, requiredApproval, planToken, findings[],
+revision, previous, plan
+```
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Success, or nothing to change. |
+| `1` | Command failure, such as a path too long or a recovery that is required. |
+| `2` | The skill store disabled, or invalid flags or arguments. |
+| `4` | Another AgentKit operation holds the kit lifecycle lock. |
+| `5` | Personal kit or previous revision not found. |
+| `6` | Review required, stale plan token, alias collision (including a legacy kit alias), or an unowned or modified path. |
+| `7` | A link in a target path, or a digest mismatch. |
+
+## Related commands
+
+- [Complete `ak skills kit rollback` command facts](../cli/ak_skills_kit_rollback)
+- [Apply a personal kit](./apply)
+- [Remove the projections](./remove)

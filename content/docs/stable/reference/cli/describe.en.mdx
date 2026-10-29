@@ -1,0 +1,70 @@
+---
+title: ak describe
+description: Print any ak command's structured contract, including flags, exit codes, and the agent contract, for scripts and coding agents.
+---
+
+Use `ak describe` to read a command's contract as data instead of scraping help
+text. It prints the same help metadata as `--help` (summary, details, examples,
+effects, output behavior, declared exit codes, flags, and subcommands) plus a
+typed agent contract that says whether the command mutates state, how risky it
+is, and how its output is framed.
+
+## Usage
+
+```bash
+ak describe [command...] [flags]
+```
+
+Pass the command path as separate words, for example `ak describe kit install`.
+With no arguments, it describes the root `ak` command. Shared flags are
+described in [CLI conventions](../cli-conventions).
+
+## Examples
+
+```bash
+ak describe --json
+ak describe kit install --json
+ak describe migrate rollback
+```
+
+## Effects
+
+Read-only and offline. The command reads only the command tree built into the
+running binary, so the same binary always gives the same answer. Describe the
+binary you will actually run; a different version can declare a different
+contract.
+
+## Output
+
+With `--json`, stdout carries one envelope with `kind` `command.describe`. Its
+`data` holds the command `path`, `name`, `use`, `aliases`, `summary`, `node`,
+`runnable`, `hidden`, `details`, `examples`, `effects`, `output`, `exit_codes`,
+`flags` (local and inherited, hidden flags excluded), `subcommands`, and
+`agent`.
+
+The `agent` object carries `status`, `mutates`, `risk_tier`, `idempotent`,
+`preview`, `confirmation`, `snapshot`, `network`, `auth`, `long_running`,
+`input_framing`, `output_framing`, `output_framing_source`, `output_kinds`, and
+`protocol`.
+
+- A field the command has not declared reads `unspecified`. Treat it as unknown,
+  never as a safe default.
+- Read `output_framing` instead of assuming an envelope: `json-envelope`,
+  `ndjson`, `protocol`, or `json-legacy`. Do not infer framing from the presence
+  of `--json`.
+- Confirmation `prompt` means the command asks on stdin unless `--yes`,
+  `--no-interactive`, or `--json` is passed.
+- The contract does not cover the opt-in background auto-update that a
+  human-mode run of some commands may start; that check never runs under
+  `--json`.
+
+See [Describe a command contract](../cli-conventions#describe-a-command-contract)
+for how the contract fits the shared JSON and exit-code conventions.
+
+## Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| `5` | No command matches the given path |
+
+Codes `0`, `1`, and `2` follow [CLI conventions](../cli-conventions#exit-codes).

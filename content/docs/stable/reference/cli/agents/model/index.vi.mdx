@@ -1,0 +1,83 @@
+---
+title: ak agents model
+description: Xem và thay đổi model mà mỗi Agent runtime đã cài đang dùng, theo từng lớp, thông qua config của AgentKit.
+---
+
+Dùng `ak agents model` để xem mỗi Agent đã cài chạy trên model nào, vì sao, và
+để thay đổi model đó. Thay đổi được ghi vào config của AgentKit rồi áp dụng vào
+các tệp Agent đã cài, nên vẫn giữ nguyên sau refresh. Chạy riêng lệnh nhóm sẽ
+in help và thoát với mã `0`.
+
+## Cách dùng
+
+```bash
+ak agents model <command>
+```
+
+Lệnh nhóm không nhận argument theo vị trí và không có cờ riêng.
+
+## Các lớp và trạng thái
+
+Mỗi tệp Agent đã cài được báo theo từng lớp: kit default, adapter default,
+config user và project, và model mà tệp runtime đang mang. Thứ tự ưu tiên, từ
+cao xuống thấp, là project agent, user agent, project tier, user tier, adapter
+default. Bản cài global không bao giờ đọc config project.
+
+Mỗi tệp đã cài có đúng một trạng thái:
+
+| Trạng thái | Ý nghĩa |
+| --- | --- |
+| `in-sync` | Tệp mang model mà config đang resolve ra. |
+| `pending` | Tệp mang lựa chọn gần nhất của AgentKit nhưng config đã đổi. `apply` hoặc lần kit refresh kế tiếp cập nhật tệp mà không hỏi. |
+| `drift` | Tệp bị sửa trong runtime. Refresh giữ nguyên bản sửa; `adopt` ghi nó vào config và `apply --yes` thay thế nó. |
+| `not-materialized` | Tệp bị thiếu hoặc không có model mà AgentKit đọc được. Kit refresh tạo lại tệp. |
+
+## Lệnh con
+
+| Lệnh | Kết quả | Tác động lên đĩa |
+| --- | --- | --- |
+| `ak agents model list` | Liệt kê Agent đã cài cùng model và trạng thái. | Chỉ đọc. |
+| `ak agents model get <agent>` | Xem model của một Agent theo từng lớp. | Chỉ đọc. |
+| `ak agents model explain <agent>` | Cho biết lớp nào quyết định model và nên làm gì với trạng thái đó. | Chỉ đọc. |
+| `ak agents model set <agent>` | Ghim model hoặc reasoning effort trong config. | Ghi lại config và các tệp Agent do AgentKit sở hữu. |
+| `ak agents model inherit <agent>` | Chạy trên model của session cha. | Ghi lại config và các tệp Agent do AgentKit sở hữu. |
+| `ak agents model reset <agent>` | Xóa override khỏi một config scope. | Ghi lại config và các tệp Agent do AgentKit sở hữu. |
+| `ak agents model adopt <agent>` | Ghi model đã sửa trong runtime vào config. | Chỉ ghi lại config. |
+| `ak agents model apply [agent]` | Ghi model đã cấu hình vào các tệp pending. | Ghi lại tệp Agent; sao lưu tệp drift. |
+
+## Cờ dùng chung
+
+| Cờ | Áp dụng cho | Mô tả |
+| --- | --- | --- |
+| `--runtime <runtime>` | Mọi lệnh con | Một trong `claude-code`, `codex`, `cursor`, `omp`, `pi`. Bắt buộc với mọi lệnh con trừ `list` và `apply`, nơi giá trị rỗng bao phủ mọi runtime. |
+| `--project <dir>` | Mọi lệnh con | Thư mục project có bản cài và `.agentkit/config.yaml` được áp dụng. Mặc định là thư mục tổ tiên gần nhất của thư mục hiện tại có config project, hoặc chính thư mục hiện tại. |
+| `--scope user\|project` | `set`, `inherit`, `reset`, `adopt` | Config cần ghi: `user` (AgentKit home, mặc định) hoặc `project` (`.agentkit/config.yaml`). |
+
+Thư mục `--project` không tồn tại sẽ thoát với mã `2`. Tên Agent dùng kebab-case.
+
+## Đầu ra và mã thoát
+
+Thành công ghi đầu ra cho người dùng hoặc một JSON envelope ra stdout. Cảnh báo
+đi ra stderr dưới dạng dòng `warning: ...` ở chế độ cho người dùng, và nằm trong
+`data.warnings` khi dùng `--json`. Các JSON kind là `agents.model.list`,
+`.get`, `.explain`, `.set`, `.inherit`, `.reset`, `.adopt` và `.apply`; xem từng
+trang để biết các trường.
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Thành công. |
+| `1` | Lệnh thất bại, gồm cả tệp Agent đã cài mà AgentKit không chứng minh được vẫn do mình sở hữu. |
+| `2` | Cờ hoặc argument không hợp lệ, runtime không được hỗ trợ, hoặc trường mà runtime không quản lý. |
+| `3` | Chỉ `apply`: tệp drift cần xác nhận mà không có xác nhận nào. |
+| `4` | Một thao tác AgentKit khác đang giữ kit lifecycle lock; thử lại khi nó xong. |
+| `5` | Agent không được cài trong runtime. |
+
+Các lệnh con có ghi chạy dưới kit lifecycle lock. Đừng chạy chúng trên một home
+không phải của bạn; hãy dùng `AGENTKIT_HOME` tạm để thử nghiệm.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak agents model`](../cli/ak_agents_model)
+- [Chọn model cho subagent](../../../../guides/choosing-subagent-models)
+- [`ak agents`](../cli/ak_agents)
+- [Quy ước CLI](../cli-conventions)

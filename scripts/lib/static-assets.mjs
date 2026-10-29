@@ -5,9 +5,9 @@ import { SEARCH_SCOPES, searchShardPath } from '../../lib/search-scopes.mjs';
 export const MEBIBYTE = 1024 * 1024;
 export const MAX_ASSET_BYTES = 25 * MEBIBYTE;
 // Aggregate budget for all search shards together. Each shard is a partition of
-// the same discovery corpus, so this stays one shared 22 MiB allowance rather
+// the same discovery corpus, so this stays one shared 24 MiB allowance rather
 // than four independent ones.
-export const SEARCH_ASSET_BUDGET_BYTES = 22 * MEBIBYTE;
+export const SEARCH_ASSET_BUDGET_BYTES = 24 * MEBIBYTE;
 export const MAX_STATIC_ASSET_FILES = 100_000;
 
 // The pre-sharding combined endpoint. It must not ship: it would double the

@@ -1,11 +1,12 @@
 ---
 title: ak data status
-description: Read the seven compiled derived-data retention defaults without opening the operational database.
+description: Read the operational store's health and schema, the safe remedy when it is not ready, and the compiled derived-data retention defaults.
 ---
 
-Use `ak data status` to inspect the compiled default posture for every known
-derived data class. It is a policy inventory, not live database status or disk
-usage.
+Use `ak data status` to see whether the local operational store is ready, which
+schema it carries next to the schema this build reads, and what to do when it is
+not ready. It then lists the compiled default posture for every known derived
+data class. It is a read-only inspection, not disk usage.
 
 ## Usage
 
@@ -17,9 +18,24 @@ The command has no command-specific flags and accepts no documented positional
 arguments. It does not prompt, read stdin, contact the network, or require
 authentication or entitlement.
 
+## Store health
+
+The first line names the operational store's health: `ready`, `missing`,
+`busy`, `incompatible`, `corrupt`, `permission`, `recovering`,
+`foreign-database`, or `newer-schema`. When the file could be read, the line
+also shows its on-disk schema and the schema this build reads. For every state
+other than `ready` and `missing`, a `remedy:` line tells you the safe next
+step; for example, an older schema is migrated in place by the next command
+that records state, while a newer schema asks you to upgrade with
+`ak self-update` or move the operational directory aside.
+
+The inspection never creates, opens for writing, migrates, or repairs the
+store. With `--verbose`, the underlying inspection error is also printed on
+stderr.
+
 ## Default posture
 
-The command always reports these seven classes:
+The command always reports these eight classes:
 
 ```text
 session_metrics
@@ -29,47 +45,58 @@ ingestion_failures
 change_log
 outbox
 content_shard
+secrets_audit
 ```
 
 Each resolves to `mode=forever`, meaning no automatic deletion until an
 explicit positive fixed policy is evaluated. This command does not read stored
-policy rows, count records, inspect content shards, or verify that
-`operational.db` exists.
+policy rows, count records, or inspect content shards.
 
 ## Output
 
 Human stdout is:
 
 ```text
-classes=7 default=forever
+operational store: <health> (schema v<store>, this build reads v<binary>)
+  path: <operational.db path>
+  remedy: <remedy, when the store is not ready>
+classes=8 default=forever
 ```
 
-JSON stdout is a raw array with one object per class:
+The schema, `path`, and `remedy` parts appear only when known. JSON stdout is
+the shared envelope with `kind: data.status`:
 
 ```text
-dataClass: exact class token
-mode: forever
-forecast.oneMonthBytes: 0
-forecast.threeMonthBytes: 0
-forecast.twelveMonthBytes: 0
-forecast.assumptions: linear-extrapolation caveat
-forecast.confidence: low
-forecast.policyMode: forever
-note: default is forever until an explicit fixed policy is set
+schema_version: 1
+kind: data.status
+data.operationalStore.health
+data.operationalStore.path
+data.operationalStore.storeSchema
+data.operationalStore.binarySchema
+data.operationalStore.remedy
+data.classes[].dataClass
+data.classes[].mode: forever
+data.classes[].forever: true
+data.classes[].forecast.oneMonthBytes: 0
+data.classes[].forecast.threeMonthBytes: 0
+data.classes[].forecast.twelveMonthBytes: 0
+data.classes[].forecast.assumptions
+data.classes[].forecast.confidence: low
+data.classes[].forecast.policyMode: forever
 ```
 
 The zero forecast comes from zero synthetic growth inputs, not measured disk
-usage. JSON is not wrapped in a versioned envelope and is not NDJSON.
+usage.
 
 ## Disk and exit behavior
 
-The command computes its result in memory. It does not create, open, migrate, or
-write `operational.db`, and it does not inspect or change the plaintext
-content-search directory.
+The command reads the operational store file to classify it and computes the
+rest in memory. It does not create, migrate, or write `operational.db`, and it
+does not inspect or change the plaintext content-search directory.
 
 | Exit | Meaning |
 | --- | --- |
-| `0` | All seven compiled class defaults were emitted. |
+| `0` | The store line and all eight compiled class defaults were emitted, whatever the store's health. |
 | `1` | An internal policy-resolution or output-write error occurred. |
 | `2` | A shared flag value could not be parsed. |
 

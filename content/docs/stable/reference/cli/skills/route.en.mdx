@@ -1,0 +1,117 @@
+---
+title: ak skills route
+description: Pick the local skill that matches an intent, or confirm one you name, with an optional anonymous cloud suggestion step.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak skills route` to find which installed skill fits an intent. The command
+reads local skill roots, scores them, and reports one outcome. It is read-only
+and idempotent.
+
+## Usage
+
+```bash
+ak skills route [intent...] [--explicit <name>]
+```
+
+The words are joined into one intent. The intent is at most 8 KiB of valid
+UTF-8.
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--explicit <name>` | Empty | Name the skill directly. Accepts an identity, an alias, `/ak-name`, `$ak-name`, the legacy `/ak:name` or `$ak:name` spelling, or `kit/alias`. `kit/alias` selects that kit's copy. |
+
+Names that appear inside the intent text are never treated as explicit.
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+## Skill roots
+
+Roots are read in this order of precedence. Duplicate directories are dropped.
+
+| Root | Location | Layout |
+| --- | --- | --- |
+| User | `<claude home>/skills` | Flat |
+| Project | `<cwd>/.claude/skills` | Flat |
+| Plugin | The Claude plugins root | Kit |
+| Kits | `AGENTKIT_KITS_DIR` or `./kits` | Kit; skills are reported as available |
+
+Roots are read through `os.Root`, symlinks are not followed, and each
+`SKILL.md` read is capped at 256 KiB.
+
+## Outcomes
+
+| Outcome | Meaning |
+| --- | --- |
+| `NONE` | No skill scored above the threshold. |
+| `selected` | One skill was chosen. Confidence is `exact`, `high`, `medium`, or `low`. |
+| `clarify` | Two or three candidates are close; the runner-up scored at least 90% of the leader. |
+| `error` | The request could not be routed. See `errors[]`. |
+
+Only skills with `AUTO` exposure are inferred from an intent. `EXPLICIT` skills
+are user-invocable only, and an `INTERNAL` skill returns `route.not_invocable`.
+
+## Output
+
+JSON uses `kind=skills.route` and schema `agentkit.skill-route/v1`:
+
+```text
+outcome, explicit
+candidates[]: identity, alias, intent, exposure, reasons, confidence, score,
+              permissions{sideEffectClass, executable},
+              source{provider, kit, runtime, location, root},
+              cacheState, states
+roster: entries, scored, bytes, estimatedTokens
+warnings[], errors[], cloud?
+```
+
+Warning codes are `catalog.shadowed`, `catalog.root_unreadable`,
+`catalog.entry_skipped`, `catalog.empty`, `skill.exposure_unreadable`,
+`store.unavailable`, and `cloud.policy_invalid`. With
+`AGENTKIT_SKILL_STORE=1`, `store.unavailable` reports that store-backed lock
+entries are not available in this build.
+
+## Cloud discovery
+
+By default the command makes no network request. A single anonymous SkillX
+search is sent only when all four conditions hold:
+
+1. `AGENTKIT_SKILLX=1` is set.
+2. The user `config.yaml` under `AGENTKIT_HOME` sets
+   `skill_routing: cloud_discovery: true`. Only the user config can grant this.
+   A project `.agentkit/config.yaml` can only turn it off by setting the key to
+   `false`. An invalid policy yields `cloud.policy_invalid` and nothing is sent.
+3. No project restriction applies.
+4. The local result qualifies: the route was inferred, not explicit, there are
+   no errors, and the outcome is `NONE` or a `clarify` with no installed
+   candidate.
+
+<Callout type="warning">
+  The search carries no credential. The query is keywords only, at most 128
+  bytes, with code, secrets, URLs, emails, paths, numbers, and addresses
+  redacted. The `cloud` block records the `sentQuery` and the `redactions`
+  applied.
+</Callout>
+
+Cloud results are at most 5 suggestions. They are untrusted, are never
+installable from the route result, and never change the local outcome or
+candidates. `nextSteps` point to `ak skills inspect` and
+`ak skills install <id> --dry-run`. The `cloud.status` is `searched`,
+`skipped`, or `failed`.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The route completed with no errors, including `NONE`. Unreadable roots or kits are warnings only. |
+| `1` | `errors[]` is not empty: `skill.alias_collision`, `route.not_found` for an unknown name, `route.not_invocable`, or `catalog.unavailable`. |
+| `2` | `route.invalid_request` (no intent, or a bad runtime or limit) or `identity.invalid` for a malformed `--explicit`. |
+
+## Related commands
+
+- [Complete `ak skills route` command facts](../cli/ak_skills_route)
+- [Inspect a SkillX release](./inspect)
+- [Install a skill](./install)
+- [List local skills](./list)

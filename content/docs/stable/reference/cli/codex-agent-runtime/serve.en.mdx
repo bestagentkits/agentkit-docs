@@ -21,7 +21,7 @@ The command accepts no positional arguments.
 
 | Flag | Default | Description |
 | --- | --- | --- |
-| `--codex-home <dir>` | `CODEX_HOME` or `~/.codex` | Select user agents under `<dir>/agents`. |
+| `--codex-home <dir>` | `CODEX_HOME` or `~/.codex` | Select user agents under `<dir>/agents` and the Codex config that records project trust. |
 | `--plugin-root <dir>` | `AGENTKIT_PLUGIN_DIR` or `~/.claude/plugins` | Select staged Kit agent discovery. |
 | `--list-only` | `false` | Print discovery and exit without opening MCP transport. |
 
@@ -36,12 +36,33 @@ ak codex-agent-runtime serve --list-only
 ```
 
 List-only output is plain text on stdout even with `--json`. It prints the
-resolved Codex home, plugin root, count, agent slugs, and owning Kit when known.
-Those paths and names may be sensitive in support output.
+resolved Codex home, plugin root, a `project agents:` line when a project agent
+directory was found, count, agent slugs, and the origin when known: the owning
+Kit, or `(project)` for a project agent. Those paths and names may be sensitive
+in support output.
 
-Discovery scans valid `*.toml` filenames. User agents take precedence over
-same-slug staged agents; staged Kit conflicts resolve by lexicographic Kit
-order. Missing roots are accepted as empty. An unreadable root fails exit `1`.
+Discovery reads three sources:
+
+1. **Project agents.** The nearest `<dir>/.codex/agents/` at or above the
+   working directory, where Codex launches the runtime. The search stops at the
+   repository root (the first directory with `.git`), before the user home
+   directory, and at the filesystem root. The directory is served only when the
+   Codex config under the selected Codex home marks that project, or its
+   enclosing repository root, as trusted. AgentKit does not write that trust.
+2. **User agents** under `<codex-home>/agents/`.
+3. **Staged Kit agents** under `<plugin-root>/<kit>/.codex/agents/`.
+
+`project agents: <dir>` means the project directory is served.
+`project agents: skipped (<reason>)` means it was found but not served, for
+example because the project is untrusted or not yet recorded, the `.codex` or
+`agents` directory is a symlink or Windows junction, or the directory cannot be
+read; the server writes the same reason to stderr at startup. Linked TOML files
+inside the project directory are ignored.
+
+Discovery scans valid `*.toml` filenames. A project agent replaces a same-slug
+user agent, and the server notes the replacement on stderr. User agents take
+precedence over same-slug staged agents; staged Kit conflicts resolve by
+lexicographic Kit order. Missing roots are accepted as empty. An unreadable root fails exit `1`.
 Unreadable individual agent files are still listed with an empty, permissive
 parsed policy.
 
