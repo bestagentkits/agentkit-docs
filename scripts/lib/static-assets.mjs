@@ -1,5 +1,5 @@
 import { lstat, readdir } from 'node:fs/promises';
-import { join, relative } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { SEARCH_SCOPES, searchShardPath } from '../../lib/search-scopes.mjs';
 
 export const MEBIBYTE = 1024 * 1024;
@@ -12,7 +12,7 @@ export const MAX_STATIC_ASSET_FILES = 100_000;
 
 // The pre-sharding combined endpoint. It must not ship: it would double the
 // search payload and the client never requests it.
-export const LEGACY_SEARCH_ASSET_PATH = join('api', 'search');
+export const LEGACY_SEARCH_ASSET_PATH = 'api/search';
 
 async function collectFiles(directory, root = directory, files = []) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -24,7 +24,7 @@ async function collectFiles(directory, root = directory, files = []) {
 
     const stats = await lstat(filepath);
     if (stats.isFile()) {
-      files.push({ path: relative(root, filepath), size: stats.size });
+      files.push({ path: relative(root, filepath).split(sep).join('/'), size: stats.size });
     }
   }
 
