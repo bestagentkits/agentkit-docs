@@ -33,26 +33,19 @@ export const RELEASE_QUALITY_BASELINE = Object.freeze({
   locales: ['en', 'vi'],
   deterministic: {
     outputBytes: 3_047_146_912,
-    // Preserve the previous per-route allowance as coverage grows 411 -> 449 -> 456 -> 481 -> 482 -> 485 -> 517 -> 541 -> 546 -> 578 -> 582.
-    outputBudgetBytes: 4_064_642_135,
+    // Preserve the previous per-route allowance as coverage grows 411 -> 449 -> 456 -> 481 -> 482 -> 485 -> 517 -> 541 -> 546 -> 578 -> 582 -> 653.
+    outputBudgetBytes: 4_560_500_540,
     fileCount: 23_584,
     // Grows with the same per-route file allowance as the 485 -> 517 step.
-    fileCountBudget: 27_709,
+    fileCountBudget: 31_696,
     // Aggregate across the four locale/channel shards.
     searchBytes: 20_067_964,
     searchBudgetBytes: SEARCH_ASSET_BUDGET_BYTES,
     // Counts follow each channel's reviewed route inventory. Equal Kit artifact
-    // snapshots require equal Kit route coverage across Stable and Beta.
-    // Beta includes the bilingual guides/semantic-decision-experiments and
-    // reference/cli/describe pages, plus the kits/marketing/skills/filmmaking
-    // guide, guides/jev-clef, guides/choosing-ui-testing-skills and
-    // guides/choosing-subagent-models, guides/secrets-vault-dashboard and
-    // guides/secrets-vault-remote-mcp, ahead of promotion, plus the Engineer
-    // atoz and vault and the Marketing vault Skill pages, plus the 32 CLI
-    // reference pages for commands new in v3.0.0-beta.36, plus the Engineer and
-    // Marketing dogfood Skill pages and guides/upgrading-to-v3 and
-    // guides/rolling-back-to-v2.
-    searchPagesPerLocaleChannel: { stable: 488, beta: 559 },
+    // snapshots require equal Kit route coverage across Stable and Beta. The
+    // v3.0.0 promotion whole-copied Beta into Stable, so both shards index the
+    // same pages until Beta authors pages ahead of the next promotion.
+    searchPagesPerLocaleChannel: { stable: 559, beta: 559 },
     // Pages outside every channel (the unlisted `_showcase` visual QA page) are
     // real site routes but never search results: each shard must contain only
     // the pages served under its own locale/channel prefix.
@@ -119,9 +112,7 @@ export const RELEASE_QUALITY_BASELINE = Object.freeze({
     { locale: 'vi', query: 'cai dat', route: 'getting-started/installation', maxRank: 3 },
     // Exact Skill and command identities, a reordered phrase and a documented
     // misspelling: none of these may be answered by a generic landing page.
-    // Beta Kits name Skills ak-<slug>; Stable keeps ak:<slug> until promotion.
-    { locale: 'en', query: 'ak-xia', route: 'kits/engineer/skills/xia', maxRank: 3, channels: ['beta'] },
-    { locale: 'en', query: 'ak:xia', route: 'kits/engineer/skills/xia', maxRank: 3, channels: ['stable'] },
+    { locale: 'en', query: 'ak-xia', route: 'kits/engineer/skills/xia', maxRank: 3 },
     { locale: 'en', query: 'ak:update', route: 'reference/cli/update', maxRank: 3 },
     { locale: 'en', query: 'AgentKit install', route: 'getting-started/installation', maxRank: 3 },
     { locale: 'en', query: 'instalation', route: 'getting-started/installation', maxRank: 5 },

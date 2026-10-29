@@ -15,20 +15,10 @@ export const RELEASE_SHAPE_BASELINE = Object.freeze({
   // Per-channel route counts follow each channel's immutable evidence. The
   // shape guard still requires Beta to contain every Stable route; the Kit
   // catalog guard separately enforces each channel's exact inventory snapshot.
-  // The approved Stable docs exception adds guides/pi-extensions in both locales.
-  // Beta adds the bilingual guides/semantic-decision-experiments and
-  // reference/cli/describe routes, plus the kits/marketing/skills/filmmaking
-  // guide, ahead of promotion. The bilingual guides/jev-clef adds an Agent-first entry,
-  // guides/choosing-ui-testing-skills adds a Beta-only guide, and
-  // guides/choosing-subagent-models adds the subagent model guide. The Engineer
-  // atoz and vault and the Marketing vault Skill pages join the Beta catalog.
-  // guides/secrets-vault-dashboard and guides/secrets-vault-remote-mcp add the
-  // staging vault dashboard and remote MCP guides. The 32 CLI reference
-  // pages for commands new in v3.0.0-beta.36 are Beta-only until promotion.
-  // The Engineer and Marketing dogfood Skill pages join the Beta catalog, and
-  // guides/upgrading-to-v3 and guides/rolling-back-to-v2 add the v3 move guides.
-  sourceRoutesPerLocaleChannel: { stable: 490, beta: 561 },
-  routesPerLocaleChannel: { stable: 489, beta: 560 },
+  // The v3.0.0 promotion whole-copied Beta into Stable, so both channels carry
+  // the same route set until Beta authors routes ahead of the next promotion.
+  sourceRoutesPerLocaleChannel: { stable: 561, beta: 561 },
+  routesPerLocaleChannel: { stable: 560, beta: 560 },
   reviewedSourceOnlyRoutes: [
     {
       route: 'changelog',
