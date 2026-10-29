@@ -13,7 +13,7 @@ import { createReleaseLedger } from './lib/docs-release-ledger.mjs';
 import { digest, stableJson } from './lib/docs-release-normalize.mjs';
 import {
   assertV0WriteScope,
-  normalizeRepoPath,
+  relativeRepoPath,
   v1WriteViolations,
   validateOwnerDirectedActions,
   validateOwnerDirectedPaths,
@@ -119,7 +119,7 @@ async function readRepoArtifact(path, repoRoot, label, digestMode = 'bytes') {
   const root = await realpath(resolve(repoRoot));
   const candidate = isAbsolute(path) ? path : resolve(root, path);
   const absolute = await realpath(candidate);
-  const repoPath = normalizeRepoPath(relative(root, absolute));
+  const repoPath = relativeRepoPath(root, absolute);
   const bytes = await readFile(absolute);
   let value;
   try {

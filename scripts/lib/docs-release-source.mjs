@@ -5,7 +5,7 @@ import { basename, join, relative, resolve } from 'node:path';
 import { parseManifest } from './manifest.mjs';
 import { compareText, digest, stableValue } from './docs-release-normalize.mjs';
 import { SOURCE_SCHEMA, validateImmutableRef, validateReleaseSource } from './docs-release-schema.mjs';
-import { normalizeRepoPath } from './docs-release-paths.mjs';
+import { relativeRepoPath } from './docs-release-paths.mjs';
 import { readTarGzipEntries } from './docs-release-tar.mjs';
 
 const execFileAsync = promisify(execFile);
@@ -19,7 +19,7 @@ async function filesUnder(root, current = root) {
     if (entry.isDirectory() && IGNORED_DIRS.has(entry.name)) continue;
     const full = join(current, entry.name);
     if (entry.isDirectory()) files.push(...await filesUnder(root, full));
-    else if (entry.isFile()) files.push(normalizeRepoPath(relative(root, full)));
+    else if (entry.isFile()) files.push(relativeRepoPath(root, full));
   }
   return files;
 }

@@ -111,7 +111,7 @@ test('reports the Cloudflare per-asset limit breach and largest shard', async (t
 test('rejects an unexpected search asset and counts it in the aggregate budget', async (t) => {
   const directory = await fixture();
   t.after(() => rm(directory, { recursive: true, force: true }));
-  const foreignPath = join('api', 'search', 'fr', 'stable');
+  const foreignPath = 'api/search/fr/stable';
   await mkdir(join(directory, 'api', 'search', 'fr'), { recursive: true });
   await writeFile(join(directory, foreignPath), '{"type":"advanced"}');
 

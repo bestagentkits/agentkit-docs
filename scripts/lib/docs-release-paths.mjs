@@ -7,6 +7,11 @@ export class ReleasePathError extends Error {}
 const ENCODED_SEPARATOR_OR_DOT = /%(?:2e|2f|5c)/i;
 const TARGET = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
+// Filesystem-relative paths use `\\` on Windows; repo paths are always POSIX.
+export function relativeRepoPath(from, to) {
+  return normalizeRepoPath(relative(from, to).split(sep).join('/'));
+}
+
 export function normalizeRepoPath(input) {
   if (typeof input !== 'string' || input.length === 0 || input.includes('\0')) {
     throw new ReleasePathError('path must be a non-empty string without NUL bytes');
