@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Drift guard for the AgentKit setup-target claims in the docs.
 //
-// The fixture records the seven setup targets, their support level, the
+// The fixture records the seven setup targets, their adapter stage, the
 // export-only and distribution-only names that are not setup targets, and the
 // restricted lists that intentionally show fewer runtimes. This script checks:
 //   1. the fixture against the released Kit catalog (release-bound packages),
@@ -24,7 +24,7 @@ export function checkFixtureShape(fixture) {
   const ids = fixture.setupTargets.map((t) => t.id);
   if (new Set(ids).size !== ids.length) errors.push('fixture setupTargets contain duplicate ids');
   for (const t of fixture.setupTargets) {
-    if (!['production', 'spike'].includes(t.support)) errors.push(`${t.id}: support must be production or spike`);
+    if (!['production', 'spike'].includes(t.adapterStage)) errors.push(`${t.id}: adapterStage must be production or spike`);
   }
   for (const id of [...fixture.exportOnly, ...fixture.distributionOnly]) {
     if (ids.includes(id)) errors.push(`${id} is export-only or distribution-only and must not be a setup target`);
@@ -70,8 +70,9 @@ export function parseMatrix(yaml) {
     if (/^\S/.test(line)) break;
     const key = line.match(/^ {2}([a-z][a-z0-9-]*):\s*$/);
     if (key) { current = key[1]; runtimes[current] = {}; continue; }
-    const field = line.match(/^ {4}(status|dispatch):\s*(\S+)/);
-    if (field && current) runtimes[current][field[1]] = field[2];
+    // Matrices before the adapter_stage rename spell the same field `status`.
+    const field = line.match(/^ {4}(adapter_stage|status|dispatch):\s*(\S+)/);
+    if (field && current) runtimes[current][field[1] === 'status' ? 'adapter_stage' : field[1]] = field[2];
   }
   return runtimes;
 }
@@ -81,7 +82,7 @@ export function checkSourceMatrix(fixture, matrix) {
   for (const t of fixture.setupTargets) {
     const row = matrix[t.id];
     if (!row) { errors.push(`source matrix has no row for ${t.id}`); continue; }
-    if (row.status !== t.support) errors.push(`${t.id}: source status ${row.status} != fixture ${t.support}`);
+    if (row.adapter_stage !== t.adapterStage) errors.push(`${t.id}: source adapter_stage ${row.adapter_stage} != fixture ${t.adapterStage}`);
     if (t.runDispatch !== (row.dispatch !== 'none')) errors.push(`${t.id}: fixture runDispatch ${t.runDispatch} disagrees with source dispatch ${row.dispatch}`);
   }
   for (const id of fixture.exportOnly) {
@@ -128,9 +129,9 @@ export function checkProse(fixture, root = ROOT) {
     }
     if (adapters !== null) {
       for (const t of fixture.setupTargets) {
-        const level = t.support === 'production' ? 'Production' : 'Spike';
+        const level = t.adapterStage === 'production' ? 'Production' : 'Spike';
         if (!new RegExp(`\\|\\s*${t.name}\\s*\\|\\s*\`${t.id}\`\\s*\\|\\s*${level}\\s*\\|`).test(adapters)) {
-          errors.push(`runtime adapters (${locale}): ${t.name} must be listed as \`${t.id}\` with support level ${level}`);
+          errors.push(`runtime adapters (${locale}): ${t.name} must be listed as \`${t.id}\` with adapter stage ${level}`);
         }
       }
       for (const id of [...fixture.exportOnly, ...fixture.distributionOnly]) {

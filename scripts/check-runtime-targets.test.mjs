@@ -29,7 +29,7 @@ test('fixture lists seven setup targets and keeps export-only names out', () => 
 
 test('fixture rejects an export-only name promoted to a setup target', () => {
   const bad = clone(fixture);
-  bad.setupTargets[6] = { id: 'agy', name: 'Pi', support: 'spike', runDispatch: false };
+  bad.setupTargets[6] = { id: 'agy', name: 'Pi', adapterStage: 'spike', runDispatch: false };
   assert.match(checkFixtureShape(bad).join('\n'), /agy is export-only/);
 });
 
@@ -44,18 +44,23 @@ test('catalog check rejects an export-only runtime in released packages', () => 
   assert.match(checkCatalog(fixture, released(['agy'])).join('\n'), /export-only agy/);
 });
 
-test('source matrix check compares support level and pi dispatch', () => {
+test('source matrix check compares adapter stage and pi dispatch', () => {
   const yaml = fixture.setupTargets
-    .map((t) => `  ${t.id}:\n    dispatch: ${t.runDispatch ? 'native' : 'none'}\n    status: ${t.support}`)
-    .concat(fixture.exportOnly.map((id) => `  ${id}:\n    dispatch: none\n    status: spike`))
+    .map((t) => `  ${t.id}:\n    dispatch: ${t.runDispatch ? 'native' : 'none'}\n    adapter_stage: ${t.adapterStage}`)
+    .concat(fixture.exportOnly.map((id) => `  ${id}:\n    dispatch: none\n    adapter_stage: spike`))
     .join('\n');
   const matrix = parseMatrix(`schema_version: 1\nruntimes:\n${yaml}\n`);
   assert.deepEqual(checkSourceMatrix(fixture, matrix), []);
-  matrix.grok.status = 'production';
+  matrix.grok.adapter_stage = 'production';
   matrix.pi.dispatch = 'native';
   const errors = checkSourceMatrix(fixture, matrix).join('\n');
-  assert.match(errors, /grok: source status production != fixture spike/);
+  assert.match(errors, /grok: source adapter_stage production != fixture spike/);
   assert.match(errors, /pi: fixture runDispatch false disagrees/);
+});
+
+test('source matrix parser reads a pre-rename runtime status as the adapter stage', () => {
+  const matrix = parseMatrix('schema_version: 1\nruntimes:\n  grok:\n    dispatch: native\n    status: spike\n');
+  assert.equal(matrix.grok.adapter_stage, 'spike');
 });
 
 test('Beta prose matches the fixture in both locales', () => {
