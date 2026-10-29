@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { readFile, realpath } from 'node:fs/promises';
-import { isAbsolute, relative, resolve } from 'node:path';
+import { isAbsolute, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { validateApprovalBinding, validateApprovalRequest } from './lib/docs-release-approval.mjs';
 import { createCoverageGapAudit, verifyCoverageV1Physical } from './lib/docs-release-coverage.mjs';

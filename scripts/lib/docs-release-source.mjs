@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { readFile, readdir, stat } from 'node:fs/promises';
-import { basename, join, relative, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { parseManifest } from './manifest.mjs';
 import { compareText, digest, stableValue } from './docs-release-normalize.mjs';
 import { SOURCE_SCHEMA, validateImmutableRef, validateReleaseSource } from './docs-release-schema.mjs';
