@@ -1,0 +1,110 @@
+---
+title: ak skills kit rebase
+description: Xem trước hoặc apply việc chuyển các overlay của một Kit cá nhân từ phiên bản foundation đã ghim sang phiên bản mới bằng three-way merge.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak skills kit rebase` để chuyển một Kit cá nhân sang phiên bản foundation
+mới. Lệnh three-way merge mọi overlay từ phiên bản foundation đã ghim lên
+`--to`. Các sửa đổi không chồng nhau sẽ được merge; mọi thay đổi khác được báo
+thành review finding kèm diff chính xác. File của chính Kit cá nhân không bao
+giờ bị ghi đè.
+
+## Cách dùng
+
+```bash
+ak skills kit rebase <name> --to <kit>@<version> (--dry-run | --plan <token>) [flags]
+```
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--to <kit>@<version>` | bắt buộc | Foundation đích. |
+| `--to-kits-dir <dir>` | `--kits-dir` | Thư mục Kit chứa phiên bản đích. |
+| `--kits-dir <dir>` | `$AGENTKIT_KITS_DIR` hoặc `./kits` | Thư mục foundation Kit. |
+| `--dry-run` | `false` | Chỉ xem trước; không ghi gì. |
+| `--plan <token>` | Trống | Apply token từ `--dry-run` cho phép apply rebase. Với `--proposal`, là approval token của nó. |
+| `--proposal <file>` | Trống | File đề xuất resolution (`agentkit.skill-overlay-proposal/v1`) để kiểm tra, xem trước hoặc apply. Tối đa 64 MiB. |
+| `--scope <scope>` | `project` | Scope của lock và skills root khi apply: `project` hoặc `global`. |
+| `--runtime <list>` | Các runtime trong manifest | Runtime khi apply: `claude-code`, `codex`; lặp lại được. |
+| `--yes` | `false` | Bắt buộc để apply proposal lấy nội dung upstream (`use-upstream` hoặc `fork`). |
+
+Các cờ dùng chung nằm trong [quy ước CLI](../cli-conventions).
+
+## Điều kiện
+
+`--dry-run` chạy offline cho mọi người dùng: nó đọc Kit cá nhân, các foundation
+Kit và file proposal, không ghi gì. Khi skill store bật, nó còn hiển thị
+transaction mà một lần apply với cùng `--scope` và `--runtime` sẽ chạy (các root
+và alias nó thay đổi) cùng apply token.
+
+Apply cần skill store, sau `ak update --ssot` hoặc với
+`AGENTKIT_SKILL_STORE=1`; khi tắt, lệnh thoát `2`.
+
+## Apply làm gì
+
+Không có `--dry-run`, rebase chỉ được apply với `--plan` bằng apply token; token
+này gắn với bản xem trước, transaction, lock generation và, với `--proposal`,
+đúng file proposal đó. Token được kiểm tra lại dưới kit lifecycle lock.
+
+- Rebase sạch chiếu composition đã merge như [`ak skills kit apply`](./apply),
+  giữ revision trước cho [`ak skills kit rollback`](../cli/ak_skills_kit_rollback).
+- Rebase vẫn cần review sẽ dừng, giữ phiên bản đang chạy, và chỉ ghi
+  `AGENTKIT_HOME/state/personal-kits/<name>/conflict-report.json`
+  (`agentkit.personal-kit-conflict-report/v1`). Trả lời các finding của nó bằng
+  [`ak skills kit resolve`](./resolve) hoặc một file proposal.
+- Proposal lấy nội dung upstream (`use-upstream` hoặc `fork`) còn cần `--yes`.
+
+<Callout type="warning">
+  Sau khi rebase được apply, manifest của Kit cá nhân vẫn ghim phiên bản cũ.
+  Hãy cập nhật phiên bản nó mở rộng trong `personal-kit.yaml` (và các overlay);
+  trước đó, `ak skills kit apply` sẽ bị từ chối với `personal_kit.pin_behind`.
+  Lệnh in nhắc nhở này dưới dạng cảnh báo.
+</Callout>
+
+## Đầu ra
+
+Dry run in Kit, bước chuyển (`<kit> <from> -> <to>`), status và approval cần có,
+mỗi Skill cùng status và diff, mỗi finding, plan token, tóm tắt proposal nếu có
+kiểm tra (`not applied`), và, khi skill store bật, apply token cùng transaction
+plan, hoặc lý do một lần apply sẽ bị từ chối.
+
+JSON của dry run dùng `kind=skills.kit.rebase` với các trường sau dưới `data`:
+
+```text
+dryRun
+rebase: schema, personalKit, kit, fromVersion, toVersion,
+        status (clean | needs-review), requiredApproval (none | review),
+        inputsDigest, candidateDigest,
+        packages[]: identity, kind, status, baseFrom, baseTo, overlayDigest,
+                    candidateDigest, compositionDigest, skipped,
+                    diffs[]: side, path, change, oldMode, newMode, diff, binary
+        findings[], planToken, resolved[], staleResolutions[]
+proposal
+transaction, applyToken, transactionRefusal
+```
+
+`transaction` và `applyToken` vắng mặt khi skill store tắt và khi rebase vẫn
+cần review. Rebase đã apply dùng `kind=skills.kit.rebase-apply` với các trường
+`data` của `skills.kit.apply`.
+
+## Kết quả và mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Thành công, kể cả bản xem trước cần review, hoặc không có gì để đổi. |
+| `1` | Lệnh thất bại, ví dụ đường dẫn quá dài hoặc cần recovery. |
+| `2` | Skill store bị tắt, cờ hoặc argument không hợp lệ, hoặc manifest hay proposal sai định dạng. |
+| `4` | Kit lifecycle lock đang bị thao tác AgentKit khác giữ. |
+| `5` | Không tìm thấy Kit cá nhân, foundation, phiên bản hoặc Skill. |
+| `6` | Cần review, plan token cũ, rebase conflict, alias collision (kể cả alias của Kit kiểu cũ), hoặc path không thuộc sở hữu hay đã bị sửa. |
+| `7` | Foundation bị revoke, có link trong target path, hoặc digest không khớp. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skills kit rebase`](../cli/ak_skills_kit_rebase)
+- [Resolve một finding của rebase](./resolve)
+- [Apply Kit cá nhân](./apply)
+- [Rollback về revision trước](../cli/ak_skills_kit_rollback)

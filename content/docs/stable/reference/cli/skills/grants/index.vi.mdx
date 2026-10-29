@@ -1,0 +1,70 @@
+---
+title: ak skills grants
+description: Ghi, liệt kê và thu hồi quyền cho phép một entrypoint Skill chạy qua exec broker.
+---
+
+Dùng `ak skills grants` để quản lý exec grant. Grant là cách duy nhất cho phép
+[`ak skills exec`](../exec) chạy một entrypoint, vì bản thân việc chạy không bao
+giờ hỏi. Chạy riêng lệnh nhóm sẽ in help và thoát `0`.
+
+## Cách dùng
+
+```bash
+ak skills grants <command>
+```
+
+Nhóm lệnh không nhận argument theo vị trí và không có cờ riêng.
+
+## Điều kiện
+
+Mọi lệnh con của grants cần `AGENTKIT_SKILL_EXEC_BROKER=1`, đúng giá trị đó. Khi
+tắt, chúng lỗi `exec.disabled`, thoát `2` và không đọc hay ghi gì.
+
+## Grant là gì
+
+File grants là `AGENTKIT_HOME/state/exec/grants.json`, schema
+`agentkit.skill-exec-grants/v1`. File được ghi atomic và chỉ owner truy cập
+được. Store lock chờ 5 giây; store bận thì thoát `1`.
+
+- Grant không bao giờ hết hạn và không chứa secret.
+- Grant gắn identity, tree digest, tên và đường dẫn entrypoint, capability
+  digest, interpreter và scope. Interpreter là đường dẫn binary của host cùng
+  `sha256`, hoặc image container cùng đường dẫn. Nếu bất kỳ thứ nào đổi, grant
+  cũ không còn áp dụng và cần grant mới. Capability tăng vượt grant trước đó lỗi
+  `exec.capability_changed`.
+- Scope mặc định là global, hoặc một project (root path và identity) với
+  `--project`. Lần chạy theo project cũng khớp grant global.
+- Grant id là `eg-<16 hex>`, suy ra từ key. Grant lại cùng key là no-op và in
+  `Already granted as <id>`.
+- Label dài tối đa 128 ký tự in được.
+
+## Lệnh con
+
+| Lệnh | Kết quả | Tác động lên disk |
+| --- | --- | --- |
+| `ak skills grants add <ref> --entrypoint <name>` | Xác minh entrypoint và ghi một grant. | Ghi file grants. |
+| `ak skills grants list` | Liệt kê các grant đã ghi. | Chỉ đọc. |
+| `ak skills grants revoke <grant-id> \| --all` | Gỡ một grant hoặc tất cả grant. | Ghi file grants. |
+
+Các cờ dùng chung nằm trong [quy ước CLI](../cli-conventions).
+
+## Đầu ra và mã thoát
+
+Mỗi lệnh con ghi đầu ra cho người đọc hoặc một JSON envelope. Các JSON kind là
+`skills.grants.add`, `skills.grants.list` và `skills.grants.revoke`.
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Thành công. |
+| `1` | Lệnh thất bại, ví dụ grants store đang bận. |
+| `2` | Broker bị tắt, cờ hoặc argument không hợp lệ, manifest không hợp lệ, hoặc interpreter không khả dụng. |
+| `5` | Không tìm thấy store entry, entrypoint hoặc grant. |
+| `7` | Store entry xác minh thất bại, hoặc file grants không hợp lệ (`exec.grants_invalid`, `exec.snapshot_refused`). |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skills grants`](../cli/ak_skills_grants)
+- [Chạy entrypoint đã được grant](../exec)
+- [Thêm grant](./add)
+- [Liệt kê grant](./list)
+- [Thu hồi grant](./revoke)

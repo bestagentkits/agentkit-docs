@@ -1,0 +1,111 @@
+---
+title: ak skills mcp serve
+description: Run the ak-skills MCP server over stdio with read-only tools, and opt in to install, sync, or exec tools.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak skills mcp serve` to let an MCP client search, route, resolve, inspect,
+read, and plan skill changes. Start it from the client's MCP configuration; it
+speaks JSON-RPC over stdio. The server is named `ak-skills`, version `v0.2.0`.
+
+## Usage
+
+```bash
+ak skills mcp serve [--allow-install] [--allow-exec]
+```
+
+The command accepts no positional arguments. At startup it writes a notice to
+stderr: `[i] ak-skills v0.2.0: serving N <mode> over stdio`. It exits cleanly
+when the client disconnects or cancels, and it never prompts for a vault
+passphrase.
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--allow-install` | `false` | Add `skills_install_apply` and `skills_sync_apply`. Needs SkillX and the skill store on, as after `ak update --ssot`, or `AGENTKIT_SKILLX=1` and `AGENTKIT_SKILL_STORE=1`. |
+| `--allow-exec` | `false` | Add `skills_execute`. Needs `AGENTKIT_SKILL_EXEC_BROKER=1`. |
+
+The gates are read once at startup. If a gate is missing, the flag warns on
+stderr, for example `--allow-install has no effect: ...`, and the tools are not
+added. Shared flags are described in [CLI conventions](../cli-conventions).
+
+## Default tools
+
+All eight tools are read-only. Each answers with the same JSON envelope as the
+matching `--json` command.
+
+| Tool | Purpose |
+| --- | --- |
+| `skills_search` | Search skills. A `skillx` source is refused because it has no search endpoint. |
+| `skills_route` | Route an intent to a local skill. |
+| `skills_resolve` | Resolve a SkillX reference. |
+| `skills_inspect` | Inspect a SkillX release. |
+| `skills_read` | Read one file, capped at 256 KiB. |
+| `skills_diagnose` | Report what is not offered and why (`skills.mcp.diagnose`). |
+| `skills_install_plan` | Plan an install, like `--dry-run`. |
+| `skills_sync_plan` | Plan a locked sync, like `--dry-run`. |
+
+SkillX tools connect only with SkillX on (after `ak update --ssot`, or
+`AGENTKIT_SKILLX=1`); otherwise they answer `source disabled`. Skill data is labelled untrusted through `_meta`
+`agentkit.best/untrusted`, with provenance under `agentkit.best/provenance`.
+
+Input and answer caps: arguments 64 KiB, query 1 KiB, reference 512 B, path
+1 KiB, and answer 1 MiB. A larger answer is replaced by an error envelope.
+Lifecycle arguments allow a scope of 64 B and up to 8 runtimes of 64 B each.
+
+## Install and sync tools
+
+With `--allow-install`, the apply tools write what
+`ak skills install --source skillx` or `ak skills sync --locked` writes. They
+never run a script.
+
+Each apply needs the single-use confirm token returned by the matching plan
+call, shown in the text block and in `_meta` `agentkit.best/confirm`. The token
+is bound to the session and to the same arguments, and is valid for 5 minutes.
+Apply re-plans under the kit lifecycle lock. If the plan changed, it refuses
+with `confirm.plan_changed` (exit `6`) and writes nothing. A missing token gives
+`confirm.missing`.
+
+## Exec tool
+
+With `--allow-exec`, `skills_execute` runs a granted entrypoint through the
+broker described on [`ak skills exec`](../exec).
+
+| Argument | Limit |
+| --- | --- |
+| `ref` | Digest-pinned reference. |
+| `entrypoint` | At most 128 B. |
+| `args` | At most 64 entries. |
+| `dryRun` | Boolean. |
+| `timeoutSeconds` | 0 to 1800. |
+
+<Callout type="warning">
+  The entrypoint must opt in with `capabilities.mcp.exec` in its manifest, and
+  you must have granted it with [`ak skills grants add`](../grants/add). The tool
+  never grants, binds no input, output directory, or project, cannot pick the
+  backend or widen capabilities, and refuses entrypoints that declare secrets.
+</Callout>
+
+One run at a time is allowed; a concurrent call gets `mcp.exec_busy`. `stdout`
+and `stderr` are redacted, capped at 128 KiB each, and untrusted. The run record
+shows origin `mcp`. Cancelling the call or disconnecting stops the run. The
+answer is the `skills.exec` envelope.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The client disconnected or cancelled cleanly. |
+| `1` | The server failed to start or run. |
+| `2` | Invalid flags or arguments. |
+
+These are the base exit codes shared by every command; the command defines no others.
+
+## Related commands
+
+- [Complete `ak skills mcp serve` command facts](../cli/ak_skills_mcp_serve)
+- [Run a granted entrypoint](../exec)
+- [Add a grant](../grants/add)
+- [Sync locked skills](../sync)

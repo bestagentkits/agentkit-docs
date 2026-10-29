@@ -1,11 +1,12 @@
 ---
 title: ak kit list-kits
-description: Kiểm tra Kit có thể cài từ nguồn authoring cục bộ mà không truy cập registry hoặc thay đổi đĩa.
+description: Liệt kê Kit có sẵn từ catalog từ xa, hoặc kiểm tra một nguồn authoring cục bộ tường minh, mà không thay đổi đĩa hay trạng thái cài đặt.
 ---
 
-Dùng `ak kit list-kits` để kiểm tra metadata và số lượng export của Kit trong
-một thư mục Kits cục bộ. Lệnh này phục vụ authoring, development và discovery
-trong CI; nó không truy vấn release registry.
+Dùng `ak kit list-kits` để xem Kit nào đang có sẵn. Mặc định lệnh đọc catalog từ
+xa cho tài khoản đã đăng nhập. Khi có nguồn cục bộ tường minh, lệnh đọc metadata
+và số lượng export của Kit từ thư mục đó, phục vụ authoring, development và
+discovery trong CI.
 
 ## Cú pháp
 
@@ -19,18 +20,22 @@ Lệnh không nhận argument theo vị trí.
 
 Nguồn được resolve theo thứ tự:
 
-1. `--kits-dir <dir>`
-2. `AGENTKIT_KITS_DIR`
-3. `./kits`
+1. `--kits-dir <dir>` chọn thư mục Kits cục bộ.
+2. `AGENTKIT_KITS_DIR` chọn thư mục Kits cục bộ.
+3. Nếu không có, dùng catalog từ xa.
 
-Thư mục đã chọn phải đọc được như một nguồn Kit cục bộ. Lệnh không dùng xác
-thực, entitlement, mạng, verified cache, project scope, user scope hoặc runtime
+Không có `./kits` ngầm định: thư mục `kits` trong thư mục hiện tại không được
+đọc trừ khi bạn chỉ định, và không bao giờ được xem là đã cài.
+
+Catalog từ xa cần phiên đăng nhập cho registry đã cấu hình (`ak login`). Lệnh
+chỉ resolve metadata, không tải hay cài gì. Nguồn cục bộ phải là thư mục đọc
+được; nó không dùng xác thực, mạng, project scope, user scope hay runtime
 delivery mode.
 
 ## Đối số
 
-Lệnh không nhận đối số vị trí. Chọn nguồn bằng `--kits-dir` hoặc cơ chế resolve
-từ biến môi trường/giá trị mặc định đã mô tả.
+Lệnh không nhận đối số vị trí. Chọn nguồn cục bộ bằng `--kits-dir` hoặc
+`AGENTKIT_KITS_DIR`; nếu không, lệnh dùng catalog từ xa.
 
 Lệnh không có alias.
 
@@ -38,7 +43,7 @@ Lệnh không có alias.
 
 | Tuỳ chọn | Mặc định | Tác động |
 | --- | --- | --- |
-| `--kits-dir <dir>` | `AGENTKIT_KITS_DIR` hoặc `./kits` | Chọn thư mục Kits cục bộ. |
+| `--kits-dir <dir>` | `AGENTKIT_KITS_DIR`, nếu không thì catalog từ xa | Chọn thư mục Kits cục bộ. Ưu tiên hơn `AGENTKIT_KITS_DIR`. |
 
 Xem các cờ dùng chung tại [quy ước CLI](../cli-conventions). `--yes` và
 `--no-interactive` không thay đổi thao tác read-only này.
@@ -46,14 +51,14 @@ Xem các cờ dùng chung tại [quy ước CLI](../cli-conventions). `--yes` v�
 ## Ví dụ
 
 ```bash
-# Đọc ./kits.
+# Liệt kê Kit từ catalog từ xa.
 ak kit list-kits
 
 # Đọc authoring tree cục bộ tường minh.
-ak kit list-kits --kits-dir ./fixtures/kits
+ak kit list-kits --kits-dir ./kits
 
 # Đọc versioned JSON envelope.
-ak kit list-kits --kits-dir ./kits --json | jq '.data.kits'
+ak kit list-kits --json | jq '.data.kits'
 ```
 
 ## Đầu ra và stream
@@ -61,11 +66,11 @@ ak kit list-kits --kits-dir ./kits --json | jq '.data.kits'
 Đầu ra dành cho người dùng trên stdout là bảng đã sắp xếp với các cột:
 
 ```text
-NAME VERSION TIER EXTENDS AGENTS SKILLS COMMANDS HOOKS RULES OUTPUT-STYLES SCRIPTS
+NAME VERSION REGISTRY TIER EXTENDS AGENTS SKILLS COMMANDS HOOKS RULES OUTPUT-STYLES SCRIPTS
 ```
 
-Kit composition nội bộ bị loại khỏi danh sách công khai. Nếu nguồn đã chọn
-rỗng, human mode ghi `No kits found` lên stderr rồi thoát `0`.
+Kit composition nội bộ bị loại khỏi danh sách. Nếu nguồn đã chọn rỗng, human
+mode ghi `No kits found` lên stderr rồi thoát `0`.
 
 Với `--json`, stdout chứa:
 
@@ -73,38 +78,43 @@ Với `--json`, stdout chứa:
 schema_version: 1
 kind: kit.list
 data.kits: array
+data.warnings: mảng tuỳ chọn
 ```
 
-Mỗi object Kit có `name`, `version`, `extends`, `tier` và `counts`. Object
+Mỗi object Kit có `name`, `version`, `extends`, `tier`, `counts`,
+`registry_version` và `source_metadata_known`. Số lượng export và `version` của
+nguồn chỉ được đo khi `source_metadata_known` là `true`, tức là với nguồn cục
+bộ. Dòng từ catalog từ xa có `registry_version` và `tier`, có
+`source_metadata_known: false` và in `unknown` cho phiên bản nguồn. Object
 `counts` có `agents`, `skills`, `commands`, `hooks`, `rules`, `output_styles`
 và `scripts`. Nguồn rỗng tạo `data.kits=[]`.
 
-Nếu một Kit được tìm thấy nhưng load thất bại, lệnh ghi cảnh báo cho Kit đó lên
-stderr, bỏ qua nó rồi tiếp tục. Vì vậy JSON có thể hợp lệ và thoát `0` trong khi
-thiếu Kit bị lỗi; hãy kiểm tra stderr trong CI.
+Kit cục bộ load thất bại sẽ bị bỏ qua kèm cảnh báo trên stderr. Với catalog từ
+xa, Kit không xác minh được sẽ bị bỏ qua và kết quả thêm cảnh báo
+`Remote catalog is incomplete`. Trong cả hai trường hợp, JSON có thể hợp lệ và
+thoát `0` dù thiếu Kit, nên hãy kiểm tra stderr và `data.warnings` trong CI.
 
 ## Mã thoát
 
 | Mã | Ý nghĩa |
 | --- | --- |
-| `0` | Nguồn cục bộ đã được liệt kê, kể cả nguồn rỗng hoặc nguồn có từng lỗi load bị bỏ qua. |
-| `1` | Không thể mở hoặc liệt kê nguồn đã chọn, hoặc xảy ra lỗi đọc runtime khác. |
-| `2` | Cobra từ chối cờ hoặc argument theo vị trí. |
+| `0` | Nguồn đã được liệt kê, kể cả nguồn rỗng hoặc có Kit bị bỏ qua. |
+| `1` | Không thể mở hoặc liệt kê nguồn, chưa đăng nhập khi dùng catalog từ xa, hoặc không resolve được Kit từ xa nào. |
+| `2` | Cờ hoặc argument theo vị trí không hợp lệ. |
 
-Phần help dành mã `5` cho thư mục Kits không tồn tại, nhưng implementation hiện
-trả lỗi nguồn chưa phân loại nên process thoát `1`. Đừng rẽ nhánh theo `5` cho
-lệnh này cho đến khi runtime thay đổi cách phân loại.
+Phần help dành mã `5` cho thư mục Kits cục bộ tường minh không tồn tại, nhưng
+implementation hiện trả lỗi nguồn chưa phân loại nên process thoát `1`. Đừng rẽ
+nhánh theo `5` cho lệnh này cho đến khi runtime thay đổi cách phân loại.
 
 ## Tác động, an toàn và giới hạn
 
-Lệnh đọc directory entry, tệp `kit.yaml`, metadata Kit kế thừa và export được
-tham chiếu để tính số lượng. Nó không ghi tệp, spawn runtime, liên hệ provider
-hoặc thay đổi trạng thái xác thực hay cache.
+Nguồn cục bộ đọc directory entry, tệp `kit.yaml`, metadata Kit kế thừa và export
+được tham chiếu để tính số lượng. Catalog từ xa đọc metadata registry. Cả hai
+đều không ghi tệp, spawn runtime hay thay đổi trạng thái xác thực hoặc cache.
 
-Đây không phải catalog từ xa theo license. Kit không có trong thư mục cục bộ đã
-chọn sẽ không có trong kết quả dù tài khoản của bạn có thể cài Kit đó từ
-registry. Ngược lại, thấy Kit cục bộ không chứng minh entitlement trên registry
-hoặc quá trình cài cho target runtime sẽ thành công.
+Có sẵn không có nghĩa là có quyền. Kit xuất hiện trong catalog từ xa hoặc trong
+thư mục cục bộ không chứng minh tài khoản của bạn cài được nó hay quá trình cài
+cho target runtime sẽ thành công.
 
 ## Lệnh liên quan
 

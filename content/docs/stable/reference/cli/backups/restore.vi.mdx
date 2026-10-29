@@ -48,12 +48,42 @@ Lệnh nhận tối đa một ID. ID và `--latest` loại trừ lẫn nhau.
 
 | Tuỳ chọn | Mặc định | Tác động |
 | --- | --- | --- |
-| `--allow-root <absolute-root>` | Trống | Thêm một project bundle root rõ ràng. Lặp lại đến khi tập canonical khớp chính xác `bundle_roots` đã lưu. |
+| `--allow-root <absolute-root>` | Trống | Thêm một project bundle root rõ ràng. Lặp lại đến khi tập canonical khớp chính xác `bundle_roots` đã lưu. Với checkpoint, chỉ định một root key có đường dẫn đã ghi khác đường dẫn hiện tại. |
 | `--dry-run` | `false` | Chạy preflight integrity, topology, quyền và destination; in kế hoạch mà không live mutation. |
 | `--latest` | `false` | Chọn snapshot có thể đọc được tạo gần nhất thay cho ID. |
+| `--skip-secrets` | `false` | Với checkpoint bị thiếu khoá, khôi phục mọi thứ trừ tệp secret đã niêm phong. Dùng với ID snapshot thì thoát `2`. |
 
 Các cờ dùng chung được mô tả trong [quy ước CLI](../cli-conventions). Lệnh
 không có `--force` hoặc `--apply`.
+
+## Khôi phục checkpoint
+
+Khi `<id>` là checkpoint do `ak backups checkpoint` ghi, lệnh dùng checkpoint
+engine thay cho kế hoạch snapshot ở trên. Dry-run xác minh archive và in, cho
+từng root key, restore mode cùng số tệp sẽ ghi, giữ nguyên và xoá; việc xoá chỉ
+áp dụng cho root ở exact mode. Lần chạy thật trước tiên chụp một checkpoint
+pre-restore gắn nhãn `before recover <id>`, để mọi tệp bị ghi đè hoặc xoá đều
+có thể lấy lại, rồi khôi phục và kết thúc bằng:
+
+```text
+[OK] restored checkpoint <id>; undo with `ak recover <pre-restore-id>`
+```
+
+Trên TTY, prompt là `Restore checkpoint <id>? This writes <n> file(s) and
+removes <m> file(s) not in the checkpoint from exact roots; a pre-restore
+checkpoint is taken first. [y/N]:`. Khi khoá của checkpoint bị thiếu, prompt
+nói rõ manifest không thể xác thực và chỉ các root khớp môi trường này được
+khôi phục. Sự đồng ý rõ ràng, nghĩa là `--yes` hoặc trả lời prompt, cũng chấp
+nhận khoá bị thiếu và dung lượng đĩa trống không đo được; riêng
+`--no-interactive` thì không.
+
+Với `--json`, envelope của dry-run là `backups.checkpoint_restore_plan` và của
+lần chạy thật là `backups.checkpoint_restore`; cả hai mang `data.id`,
+`data.dry_run`, `data.roots[]`, `data.written`, `data.unchanged`,
+`data.removed`, `data.databases`, `data.secrets_skipped`,
+`data.skipped_secret_paths[]?`, `data.symlinks_refused` và `data.warnings[]?`.
+Envelope của lần chạy thật có thêm `data.pre_restore_checkpoint`. ID checkpoint
+không tồn tại thoát `5`, và khoá checkpoint đang bị giữ thoát `4`.
 
 ## Hành vi xác nhận
 
@@ -98,15 +128,27 @@ data.plan.RemoveTrees
 data.plan.AuthorizedRoots
 ```
 
-Tên trường trong plan phân biệt chữ hoa chữ thường. Applied success là ngoại
-lệ: ngay cả với `--json`, stdout trống và stderr có dòng plain text:
+Tên trường trong plan phân biệt chữ hoa chữ thường. Restore đã áp dụng với
+`--json` ghi một success envelope trên stdout:
+
+```text
+schema_version: 1
+kind: backups.restore
+data.id
+data.restored
+data.plan
+```
+
+`data.plan` dùng cùng các trường phân biệt chữ hoa chữ thường như plan của
+dry-run. Khi không có `--json`, restore đã áp dụng ghi một dòng hoàn tất dạng
+plain text lên stderr, và `--quiet` không ẩn dòng này:
 
 ```text
 [OK] restored <id>
 ```
 
-`--quiet` không ẩn dòng hoàn tất trực tiếp này. Lỗi thực thi JSON dùng error
-envelope có cấu trúc trên stderr; lỗi phân tích cờ có thể vẫn là plain text.
+Lỗi trong chế độ JSON, kể cả lỗi phân tích cờ (mã thoát `2`), ghi error
+envelope có cấu trúc lên stderr.
 
 ## Mã thoát
 
@@ -116,7 +158,7 @@ envelope có cấu trúc trên stderr; lỗi phân tích cờ có thể vẫn l�
 | `1` | Lỗi integrity, topology, quyền, destination, I/O hoặc restore một phần. |
 | `2` | ID thiếu hoặc sai dạng, quá nhiều argument, cờ sai hoặc dùng ID cùng `--latest`. |
 | `3` | Xác nhận qua stdin bị từ chối hoặc gặp end-of-file. |
-| `4` | Backup mutation khác đang giữ registry lock lúc apply. |
+| `4` | Backup mutation khác đang giữ registry lock lúc apply. Với `--json`, error envelope ghi `error_code` `lock_held`. |
 | `5` | ID đúng dạng không tồn tại hoặc `--latest` không tìm thấy snapshot. |
 
 Mã `1` sau live mutation có thể nghĩa là các tệp trước đó đã được restore.

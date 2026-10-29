@@ -55,14 +55,17 @@ Lệnh không có alias.
 
 | Tuỳ chọn | Mặc định | Tác động |
 | --- | --- | --- |
+| `--accept-risks <token>` | Trống | Cùng `--fresh`, chấp nhận đúng các rủi ro an toàn mà kế hoạch trước đã liệt kê, bằng token đã in ra. |
 | `--beta` | `false` | Viết tắt của `--channel beta`. |
 | `--build-only` | `false` | Build vào thư mục đầu ra cục bộ thay vì cài. |
 | `--channel <channel>` | `stable` | Chọn remote kit channel. |
 | `--exclude-skills <names>` | Trống | Cài mọi Skill ngoại trừ tập phân tách bằng dấu phẩy. |
 | `--force` | `false` | Cho phép ghi đè có giới hạn lên target đã có dữ liệu. |
+| `--fresh` | `false` | Đặt lại một install target đã chọn về chỉ còn đầu ra của Kit sau khi xác nhận và có snapshot đã xác minh. Không dùng cùng `--force`, `--no-backup`, `--build-only` hoặc `--out`. |
 | `-g, --global` | `false` | Dùng user scope của runtime thay cho project hiện tại. |
 | `--kits-dir <dir>` | Trống | Chọn nguồn Kit cục bộ rõ ràng. |
 | `--local` | `false` | Dùng nguồn cục bộ rõ ràng thay cho registry. |
+| `--neutral-package <archive>` | Trống | Cài từ archive Kit trung lập runtime cục bộ (`kit.tar.gz` kèm sidecar `.sha256`), được chiếu cho target đã chọn. Lặp lại một lần cho mỗi component. Dùng cho development và CI; ngầm bật `--local`. |
 | `--no-backup` | `false` | Bỏ qua snapshot trước khi cài và bảo vệ takeover khi áp dụng. |
 | `--out <dir>` | Trống | Đặt thư mục gốc cho build hoặc export. |
 | `--registry-url <url>` | Biến môi trường hoặc mặc định bản phát hành | Ghi đè URL gốc của registry. |
@@ -96,6 +99,14 @@ như `portable` ngầm bật build mode khi có `--out`. Xem các cờ dùng chu
 | AGY của user | `--target agy --global` | Skill Gemini/AGY global cùng Agent tùy chọn dưới `~/.gemini/config/agents/<name>/agent.md`, projection từ package remote `claude-code` đã ký với frontmatter tương thích runtime. |
 | Build hoặc export | `--build-only --out <dir>` hoặc `--target portable --out <dir>` | Thư mục đầu ra đã chọn. |
 
+Bản cài project từ chối route trỏ vào bản cài cấp người dùng, chẳng hạn thư mục
+project chính là thư mục home của bạn, `.agentkit` của project chính là AgentKit
+home, hoặc `.claude`, `.codex` hay Pi extension của project trùng với root cấp
+người dùng tương ứng. Bước kiểm tra áp dụng cho mọi target đã chọn, chạy trước
+mọi bộ chọn Skill, preview, lock, snapshot hay thao tác ghi, và thoát `6`. Chạy
+lại với `--global` để quản lý bản cài cấp người dùng, hoặc chạy từ một thư mục
+project khác. Route build và export không bị kiểm tra.
+
 Bản cài trong project và user có thể cùng tồn tại. Claude native và plugin là
 hai delivery mode riêng trong một scope; chuyển mode là thao tác rõ ràng, có
 snapshot bảo vệ.
@@ -115,7 +126,7 @@ global và không phải peer trong lifecycle refresh.
 
 Vì `install` dùng implementation của init, hành vi OMP là tương đương. Thư mục
 Skill đã projection và tên top-level trong `SKILL.md` dùng `ak-<slug>`, còn alias
-trong body như `/ak:cook`, `$ak:cook` và selector `ak run
+trong body như `/ak-cook`, `$ak-cook` và selector `ak run
 <kit>/<skill> --target omp` được giữ nguyên. OMP trong project đã trust cũng
 discover `.agents/skills` của project: `.omp/skills` của project che bản
 `.agents/skills` xung đột với bản cài project, còn `.agents/skills` của project
@@ -154,7 +165,8 @@ Trên TTY tương tác, install mode preview destination rồi hỏi
 <Callout type="warning">
   `--json`, `--no-interactive` và stdin không phải TTY sẽ bỏ qua prompt và có
   thể ghi dữ liệu khi thiếu `--yes`. Trong tự động hoá, hãy dùng `--yes` để thể
-  hiện rõ chủ đích thay đổi.
+  hiện rõ chủ đích thay đổi. `--fresh` là ngoại lệ: lần chạy bằng script thiếu
+  `--yes` sẽ dừng với mã `3`.
 </Callout>
 
 Từ chối trên TTY hiện thoát với mã `1`. Route build và export không hiển thị
@@ -173,9 +185,14 @@ ghi và `complete` sau khi thành công.
 
 Dữ liệu thành công gồm `kit`, `target`, `targets` tuỳ chọn, `mode`,
 `installMode`, `scope`, `outDir`, `filesWritten`, `success` cùng các trường Skill,
-Hook, warning, transition, configuration và recovery tuỳ chọn. Lỗi thực thi JSON
-dùng `schema_version`, `error`, `error_code` và `exit_code` trên stderr. Lỗi parse
-cờ có thể vẫn là hướng dẫn dùng plain text.
+Hook, warning, transition, configuration và recovery tuỳ chọn. Lỗi trong chế độ
+JSON, kể cả lỗi phân tích cờ (mã thoát `2`), kết thúc stderr bằng
+[error envelope](../cli-conventions#output-json) dùng chung: `schema_version`,
+`error`, `error_code` và `exit_code`.
+
+Lỗi thực thi dành cho người dùng và JSON hiển thị lý do cần để khôi phục theo
+mặc định, che các dạng bí mật đã biết và query string của URL, nhưng giữ đường
+dẫn. `--verbose` có thể lộ lỗi gốc thô; hãy kiểm tra trước khi chia sẻ.
 
 Dữ liệu projection Hook còn có thể chứa `hooksDropped`, `droppedHookSummaries`,
 `hookMatchersNarrowed` và `narrowedHookSummaries` tùy chọn. Output cho người dùng
@@ -191,12 +208,15 @@ quá trình cài thất bại.
 | `0` | Install, build hoặc export đã chọn hoàn tất. |
 | `1` | Lỗi validation, nguồn, xác thực, entitlement, destination, emission, ghi dữ liệu hoặc từ chối trên TTY. Runtime hiện cũng dùng `1` khi không tìm thấy Kit cục bộ hoặc target đã có dữ liệu. |
 | `2` | Cobra từ chối cờ, argument hoặc tổ hợp cờ. |
-| `3` | Đường huỷ hoặc interrupt dùng chung trả về trạng thái huỷ. |
+| `3` | Đường huỷ hoặc interrupt dùng chung trả về trạng thái huỷ, hoặc lần đặt lại `--fresh` không chạy vì cần xác nhận hoặc cần chấp nhận các rủi ro đã liệt kê. |
 | `4` | Một thao tác vòng đời Kit khác đang giữ khoá. |
+| `6` | Route project trỏ vào bản cài cấp người dùng; chạy lại với `--global` hoặc từ thư mục project khác. Khi bật `AGENTKIT_SKILL_STORE=1`, bước preflight alias skill cũng có thể từ chối thay đổi trước khi ghi bất cứ thứ gì, với `skill.alias_collision`, `ownership.modified` hoặc `target.link_refused`. |
+| `15` | Registry từ chối một bản phát hành Kit mà cửa sổ cập nhật không bao phủ (`renewal_required`). Không ghi gì và các phiên bản đã cài vẫn hoạt động. Với `--json`, lỗi nêu phiên bản mới nhất được bao phủ và liên kết gia hạn. |
 
 Phần help dành mã `5` cho Kit cục bộ không tồn tại và `6` cho target đã có dữ
-liệu, nhưng hai lỗi install này hiện rơi về mã `1`. Đừng rẽ nhánh theo `5` hoặc
-`6` cho lệnh này cho đến khi runtime thay đổi cách phân loại.
+liệu, nhưng hai lỗi install này hiện rơi về mã `1`. Chỉ lỗi từ chối route cấp
+người dùng và lỗi từ chối của preflight alias skill được phân loại là `6`; đừng rẽ nhánh theo `5` hoặc `6` cho các trường
+hợp khác cho đến khi runtime thay đổi cách phân loại.
 
 ## Tác động, an toàn và khôi phục
 
@@ -216,6 +236,13 @@ ak backups show <id>
 ak backups verify <id>
 ```
 
+`--fresh` đặt lại một target đã chọn về chỉ còn đầu ra của Kit: lệnh xoá tệp tuỳ
+chỉnh và tệp chưa ghi nhận trong lifecycle root riêng của Kit sau một lần xác
+nhận và một snapshot đã xác minh, khác với `--force` vốn giữ lại các tệp đó. Kế
+hoạch, cách đồng ý, risk token, các trường hợp bị từ chối và đầu ra khôi phục
+giống như
+[`ak kit init --fresh`](./kit-init#đặt-lại-một-target-với---fresh).
+
 Hãy làm theo lệnh khôi phục hoặc đường dẫn thủ công được báo. Không xoá toàn bộ
 runtime home hoặc giả định mọi snapshot là backup toàn phần hay có tính giao dịch.
 
@@ -225,10 +252,12 @@ Codex không thể chiếu mọi Claude command, Hook matcher hoặc status-line
 Hãy xem cảnh báo sau một lần cài thành công. Engineer projection một group
 task-state `PostToolUse` bị drop hoàn toàn và hai shared matcher bị narrow;
 Marketing có ba narrow và không có full drop. Matcher atom được hỗ trợ vẫn hoạt
-động. Trên Windows, Hook Codex `.cjs` đủ điều kiện nằm trong Codex home có
-thể dùng `.cmd` shim thuộc ownership của AgentKit cho đường dẫn có khoảng trắng;
-đường dẫn bên ngoài, có metacharacter hoặc non-ASCII không an toàn vẫn bị giới
-hạn và được báo rõ.
+động. Trên Windows, Codex chạy Hook qua PowerShell hoặc `cmd.exe`, và
+AgentKit đặt đường dẫn Hook trong dấu nháy kép khi cần, nên profile như
+`C:\Users\Hello World` vẫn chạy được. Hãy cài lại để thay registration từ phiên
+bản cũ; `ak doctor --adapter codex` báo các entry vẫn chưa chạy được. Đường dẫn
+chứa `%`, `$`, backtick hoặc dấu nháy không chạy được trên cả hai shell và được
+báo khi cài.
 
 Codex home do wrapper quản lý chỉ được alias leaf `hooks` cuối cùng tới
 `~/.codex/hooks` canonical, bằng symlink POSIX hoặc directory junction trên

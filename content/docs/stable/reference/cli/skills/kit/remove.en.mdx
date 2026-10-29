@@ -1,0 +1,76 @@
+---
+title: ak skills kit remove
+description: Drop the personal:<name> references of a personal kit from a scope's skills roots and lock, keeping the kit's own files.
+---
+
+Use `ak skills kit remove` to drop a personal kit's projections. The command
+removes only the `personal:<name>` references in the scope, for all of the
+kit's runtimes or the ones `--runtime` names. The personal kit's own files and
+kit install records are never touched.
+
+## Usage
+
+```bash
+ak skills kit remove <name> [flags]
+```
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--dry-run` | `false` | Print the plan, its review findings and plan token; write nothing. |
+| `--scope <scope>` | `project` | Lock and skills root scope: `project` or `global`. |
+| `--runtime <list>` | All of the kit's runtimes | `claude-code`, `codex`; repeatable. Limits the removal to these runtimes. |
+
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+## Requirements
+
+The skill store must be on, after `ak update --ssot` or with
+`AGENTKIT_SKILL_STORE=1`, for dry runs too; with it off the command exits `2`.
+The store gate follows `--scope`.
+
+## What it does
+
+The command runs the same journaled transaction as
+[`ak skills kit apply`](./apply), under the kit lifecycle lock, and updates the
+scope's skill lock and receipts. Removing a kit that is not applied changes
+nothing and exits `0`.
+
+- A file another owner still holds stays.
+- A file you changed after it was projected is preserved and reported with
+  `ownership.modified`.
+- An alias a legacy kit install also records keeps its files, with a hint to
+  run `ak kit refresh <kit>`.
+- A removal without `--runtime` also drops the scope's rebase conflict report
+  for the kit.
+
+## Output
+
+The text output has the shape of the [`ak skills kit apply`](./apply) output.
+
+JSON uses `kind=skills.kit.remove` with the same `data` fields as
+`skills.kit.apply`:
+
+```text
+personalKit, status, requiredApproval, planToken, findings[],
+revision, previous, plan
+```
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Success, or nothing to change, including a kit that is not applied. |
+| `1` | Command failure, such as a path too long or a recovery that is required. |
+| `2` | The skill store disabled, or invalid flags or arguments. |
+| `4` | Another AgentKit operation holds the kit lifecycle lock. |
+| `5` | Personal kit not found. |
+| `6` | Review required, stale plan token, alias collision (including a legacy kit alias), or an unowned or modified path. |
+| `7` | A link in a target path, or a digest mismatch. |
+
+## Related commands
+
+- [Complete `ak skills kit remove` command facts](../cli/ak_skills_kit_remove)
+- [Apply a personal kit](./apply)
+- [Roll back to the previous revision](../cli/ak_skills_kit_rollback)

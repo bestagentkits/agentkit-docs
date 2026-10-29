@@ -1,0 +1,109 @@
+---
+title: ak skills sync
+description: Chiếu mọi Skill được ghim trong skill lock đúng theo locked digest, không nâng cấp và không đổi các pin.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak skills sync --locked` để làm cho các Skill đã cài khớp với skill lock
+của một scope. Mỗi package trong lock được chiếu đúng theo locked digest. Lệnh
+không bao giờ nâng cấp Skill và không đổi những gì lock ghim.
+
+## Cách dùng
+
+```bash
+ak skills sync --locked [flags]
+```
+
+Lệnh không nhận argument theo vị trí. `--locked` là bắt buộc; thiếu cờ này lệnh
+thoát `2` với lỗi cách dùng.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--locked` | `false` | Bắt buộc. Xác nhận sync theo lock và không bao giờ nâng cấp. |
+| `--scope <scope>` | `project` | Chọn `project` hoặc `global`. |
+| `--runtime <list>` | Runtime có receipt ghi user owner, nếu không thì `claude-code` | Lặp lại được hoặc phân tách bằng dấu phẩy, như `claude-code,codex`. |
+| `--dry-run` | `false` | Lập kế hoạch thay đổi và báo cáo mà không ghi. |
+
+Các cờ dùng chung nằm trong [quy ước CLI](../cli-conventions).
+
+## Điều kiện
+
+Cả SkillX lẫn skill store phải đang bật: sau `ak update --ssot`, hoặc đặt từng
+biến đúng bằng `1`.
+
+| Thiết lập | Tác dụng |
+| --- | --- |
+| `AGENTKIT_SKILLX=1` | Bật kiểm tra release-state của SkillX. |
+| `AGENTKIT_SKILL_STORE=1` | Bật content store mà các package được chiếu từ đó. |
+
+Nếu một trong hai tắt, lệnh thoát `2`.
+
+## Đọc và ghi gì
+
+| Mục | Vị trí |
+| --- | --- |
+| Lock của project | `.agentkit/skill-state/skill-lock.json` |
+| Lock global | `AGENTKIT_HOME/state/skill-lock.json` |
+| Skill Claude Code của project | `<project>/.claude/skills` |
+| Skill Claude Code global | `<claude home>/skills` |
+| Skill Codex | Do Codex adapter xác định |
+
+Lệnh áp dụng mà không hỏi. Nó đọc skill lock của scope và không bao giờ ghi
+lock: không locked digest nào thay đổi. Nó ghi release đã xác minh vào skill
+store, ghi file được chiếu vào skills root của từng runtime và xoá file cũ không
+còn dùng, ghi receipt của scope, và với project, ghi project root registry dưới
+`AGENTKIT_HOME/state` cùng `.gitignore` của project skill state. Nó không bao
+giờ chạy script khai báo, `npm`, `npx` hay trình cài SkillX. File được chiếu có
+mode `0644` và không bao giờ executable.
+
+- Package nguyên vẹn đã được chiếu không cần mạng.
+- Khi offline, package có bản store đã xác minh vẫn được cài, kèm cảnh báo
+  `offline_stale`. Package không có bản sao sẽ lỗi `source.offline` và không có
+  gì thay đổi.
+- Digest không khớp với lock lỗi `store.digest_mismatch`.
+
+<Callout type="warning">
+  Sync là một transaction có journal dưới kit lifecycle lock, lock này chờ 10
+  giây trước khi báo bận. Lệnh từ chối lock bị đổi trong lúc chạy, và từ chối
+  project state không được ghi trong root registry, coi đó là untrusted. Hãy
+  xem trước bằng `--dry-run` với project bạn không tạo.
+</Callout>
+
+## Đầu ra
+
+JSON dùng `kind=skills.sync` với các trường sau dưới `data`:
+
+```text
+operation, scope, dryRun, applied, changed, planDigest
+lockPath, lockGeneration
+packages[]: identity, version, releaseDigest, trust, exposure, alias, host,
+            keyId, manifestDigest, declaredScripts, executable (false), fromStore
+targets[]: runtime, root, rootIdentity, alias, action, projectionDigest,
+           writes, removes, preserved
+warnings[]
+```
+
+`action` của target là `create`, `replace`, `co-own`, `repair`, `unchanged`,
+`remove` hoặc `release`.
+
+## Tác động và mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Sync thành công hoặc không có gì để đổi. |
+| `1` | Offline mà không có bản đã xác minh, credential bị từ chối, đường dẫn quá dài, hoặc cần recovery. |
+| `2` | SkillX hoặc store bị tắt, cờ hay argument không hợp lệ, hoặc alias bị dành riêng. |
+| `4` | Kit lifecycle lock đang bị thao tác khác giữ. |
+| `5` | Không tìm thấy release hoặc không được cấp quyền. |
+| `6` | Alias collision, path không thuộc sở hữu hoặc đã bị sửa, project state untrusted, hoặc lock đổi trong lúc chạy. |
+| `7` | Release bị revoke, yank, quarantine hoặc untrusted, có link trong target path, hoặc digest không khớp. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skills sync`](../cli/ak_skills_sync)
+- [Cài một Skill](./install)
+- [Gỡ một Skill](./remove)
+- [Resolve một reference SkillX](./resolve)

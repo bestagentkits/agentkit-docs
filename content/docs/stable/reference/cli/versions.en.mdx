@@ -1,11 +1,11 @@
 ---
 title: ak versions
-description: Inspect the local ak, kit, and Claude-plugin skill inventory while treating cached latest-version data and source coverage precisely.
+description: Inspect the ak binary, every installed kit destination, and Claude-plugin skills, with per-destination provenance and check states.
 ---
 
-Use `ak versions` to inspect the running CLI build, kit source directories, and
-skills discovered under the Claude plugin install root. It is an inventory
-command, not an updater.
+Use `ak versions` to inspect the running CLI build, every installed kit
+destination, and the skills discovered under the Claude plugin install root. It
+is an inventory command, not an updater.
 
 ## Usage
 
@@ -20,8 +20,8 @@ The command accepts no positional arguments.
 | Flag | Default | Description |
 | --- | --- | --- |
 | `--cache-ttl <duration>` | `1h0m0s` | Decide when existing registry cache data is stale. Nonpositive values reset to one hour. |
-| `--local-only` | `false` | Enumerate local data without reading registry cache or attempting a registry fetch. |
-| `--remote-only` | `false` | Skip local kit and skill enumeration; the live versions endpoint is not configured in this release. |
+| `--local-only` | `false` | Use only local install evidence. Makes no network requests and writes no cache. |
+| `--remote-only` | `false` | Skip local kit and skill enumeration. Reserved for a configured versions registry endpoint. |
 
 `--local-only` and `--remote-only` are mutually exclusive. Shared output flags
 are described in [CLI conventions](../cli-conventions). The command never
@@ -32,22 +32,24 @@ prompts, and `--yes` has no effect.
 Local enumeration reads:
 
 - binary version, commit, and build date compiled into `ak`;
-- kit directories under `AGENTKIT_KITS_DIR`, or `./kits` by default;
+- the install receipts of every kit destination for the current project and
+  the global scope, giving one record per runtime, scope, and delivery mode;
 - skill manifests under `AGENTKIT_PLUGIN_DIR/<kit>/skills/`, or
   `~/.claude/plugins/<kit>/skills/` by default.
 
-This does not enumerate every runtime-native route. In particular, Codex-native
-skills and project-native Claude installs are outside the skill collector used
-by this command.
+Cache and source trees are not installed kits, so they do not appear as rows.
 
-The live latest-version endpoint is disabled in the shipped command. Default
-mode can read `~/.agentkit/cache/registry/index.json`; a fresh cache is used,
-and a stale cache is retained as an offline fallback. Missing, corrupt, or
-unreadable cache data is treated as a miss. `--local-only` skips the cache.
+In default mode, the command checks the signed binary release metadata and
+resolves the latest kit versions from the authenticated registry manifest
+(metadata only, nothing is downloaded or installed). Results are cached in
+`~/.agentkit/cache/registry/index.json` (under `AGENTKIT_HOME` when set). A
+fresh cache entry is reused; a stale one is kept as an offline fallback and
+reported with check state `stale`. Missing, corrupt, or unreadable cache data
+is treated as a miss.
 
-`--remote-only` currently returns binary identity, empty `kits` and `skills`
-arrays, and any usable cached binary `latest` value. It does not make a live
-remote request in this release.
+`--local-only` makes zero network requests and writes no cache; every row then
+reports check state `not_checked`. `--remote-only` returns binary identity and
+empty `kits` and `skills` arrays.
 
 ## Examples
 
@@ -60,38 +62,47 @@ ak versions --cache-ttl 30m
 
 ## Output and streams
 
-Human stdout is a table with `TYPE`, `NAME`, `CURRENT`, `LATEST`, and `STATUS`.
-When latest data is unavailable, the informational status label is not proof
-that an installed item is a development build.
+Human stdout is a table with one row per destination. Wide terminals show
+`TYPE`, `NAME`, `SOURCE`, `INSTALLED`, `AVAILABLE`, `HEALTH`, and `STATUS`, so
+the source version, the recorded registry release, and the available registry
+release are labeled separately. Each kit row also lists its destination and,
+when known, its channel and channel source. Missing optional values print as
+`unknown`.
 
-JSON success uses an outer `kind=versions` envelope. `data` contains its own
-inventory `schema_version`:
+JSON success uses an outer `kind=versions` envelope (envelope `schema_version`
+1). `data` has its own inventory `schema_version`, which is now `2`:
 
 ```text
-schema_version: 1
-kind: versions
-data.schema_version: 1
-data.binary: version, commit, date, latest
-data.kits[]: name, version, latest
+data.schema_version: 2
+data.binary: version, commit, date, latest, check_state, version_state
+data.kits[]: kit, runtime, scope, delivery_mode, destination,
+  source_version, registry_version, available_version, origin, channel,
+  channel_source, required_cli_version, emitted_by_cli, receipt_recorded,
+  health, last_emit, check_state, version_state, compatibility
 data.skills[]: kit, name, version
-data.registry: cached_at, stale, optional stale_age
+data.registry: cached_at, stale, optional stale_age, check_state, optional reason
 ```
 
-The arrays are present even when empty, and unavailable version fields are
-empty strings. Errors use stderr and the shared JSON error envelope. Flag-parse
-errors can remain plain text.
+`check_state` is `not_checked`, `checked`, `offline`, `failed`, or `stale`.
+`version_state` is `unknown`, `dev`, `current`, `update_available`, or `ahead`.
+`compatibility` is `satisfied`, `requires_upgrade`, or `unknown`, and `health`
+is `ok`, `modified`, `incomplete`, or `unknown`. The arrays are present even
+when empty, and missing optional kit fields are `null`. Version 1 field names
+such as `data.kits[].name` and `version` are gone, so update parsers that read
+them. JSON-mode failures, including flag-parse errors (exit `2`), end stderr
+with the shared [error envelope](../cli-conventions#json-output).
 
 ## Exit status
 
 | Exit | Meaning | Safe next step |
 | --- | --- | --- |
-| `0` | Inventory completed. Cache miss, corruption, staleness, or disabled remote lookup is nonfatal. | Read coverage and `registry.stale` before interpreting `latest`. |
+| `0` | Inventory completed. Cache miss, corruption, staleness, or an offline or failed lookup is nonfatal. | Read each row's `check_state` and `registry.stale` before interpreting available versions. |
 | `1` | Local kit or install-root enumeration failed, such as an unreadable directory. | Fix access to the reported root or use the appropriate source override. |
 | `2` | Flags were invalid, durations could not be parsed, both source flags were set, or an argument was supplied. | Correct the invocation. |
 
-The command does not apply, replace, or remove anything. With the shipped live
-endpoint disabled, it does not write the cache either. Use an update command
-only after reviewing the relevant lifecycle.
+The command does not apply, replace, or remove anything. Default mode can
+update the registry cache; `--local-only` does not. Use an update command only
+after reviewing the relevant lifecycle.
 
 ## Related commands and limitations
 

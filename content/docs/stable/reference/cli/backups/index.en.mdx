@@ -30,9 +30,16 @@ confirmation, output, and exit contract.
 | Restore the newest snapshot | `ak backups restore --latest` | Same restore engine and safety rules. |
 | Delete snapshots by retention policy | `ak backups prune` | Deletes by default; add `--dry-run` to preview. |
 | Stage a consistent operational database copy | `ak backups create` | Replaces the operational staging directory and writes a verified `operational.db` copy. |
+| Capture a compressed, verifiable checkpoint | `ak backups checkpoint` | Writes one checkpoint directory and its key under `~/.agentkit/backups/checkpoints/` and applies checkpoint retention. |
 
 The top-level `ak recover [id]` command is another entry point to the restore
 engine. It is not a Cobra alias of `ak backups restore`.
+
+Checkpoints are a second store beside snapshots. `list` shows them after the
+snapshots and marks the rollback source; `show`, `verify`, and `restore` accept a
+checkpoint ID and switch to the checkpoint engine; `prune --checkpoints` prunes
+them instead of snapshots. The top-level [`ak rollback --to v2`](../cli/ak_rollback)
+restores the newest pre-upgrade checkpoint.
 
 ## Understand snapshot boundaries
 
@@ -60,6 +67,35 @@ ak backups restore <id> --dry-run
 `ak backups create` is separate from the ID-based rollback store. The current
 implementation stages and verifies `operational.db` in the system temporary
 directory; it does not mint an ID that appears in `ak backups list`.
+
+## Know when snapshots are taken
+
+Routine runs keep snapshots small:
+
+- An applied [`ak update`](../update) without `--force` snapshots only the exact
+  files it writes or prunes.
+- [`ak init`](../init) takes no snapshot by default.
+
+Opt in to a wider capture per run with `--backup`, or for every run with
+`backups.enabled: true` in `~/.agentkit/config.yaml`. Then `ak update` captures
+the whole project, and `ak init` captures `~/.claude/` and the project state.
+
+`--force` and other destructive operations, such as a takeover, a delivery mode
+switch, an uninstall, or a migration, still snapshot automatically. On commands
+that offer it, `--no-backup` skips those snapshots; it cannot be combined with
+`--backup`.
+
+`backups.scope` in `~/.agentkit/config.yaml` controls how much of `~/.claude/` a
+snapshot captures. When unset it is `lean`, which skips Claude Code runtime-state
+directories that AgentKit never writes, such as `projects/`, `telemetry/`,
+`todos/`, `shell-snapshots/`, `file-history/`, `backups/`, and
+`plugins/cache/`. Set `backups.scope: full` to capture everything; an
+unrecognized value falls back to `full` with a warning.
+
+Automatic retention preserves every snapshot created during one command
+invocation through that invocation's later auto-prune, even if this temporarily
+exceeds `keep_last`. A later invocation applies normal retention again. This
+does not change manual `ak backups prune` selection.
 
 ## Apply the command-specific safety rules
 
@@ -93,4 +129,5 @@ filesystem backup if one exists.
 - [Complete `ak backups` command facts](../cli/ak_backups)
 - [Complete `ak backups restore` command facts](../cli/ak_backups_restore)
 - [Complete `ak backups verify` command facts](../cli/ak_backups_verify)
+- [Complete `ak backups checkpoint` command facts](../cli/ak_backups_checkpoint)
 - [Complete `ak recover` command facts](../cli/ak_recover)

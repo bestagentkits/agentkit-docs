@@ -1,0 +1,253 @@
+---
+title: Upgrading from v2 to v3
+description: What changes when a v1 or v2 owner moves to AgentKit v3, what happens on its own, and the steps to upgrade the CLI and kits.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+This guide is for owners of AgentKit v1 or v2 kits who move to v3. It lists
+what changes, what happens on its own, and what you do. To go back to v2, see
+[Rolling back to v2](./rolling-back-to-v2).
+
+Two kinds of behavior change, and they ship separately:
+
+- **The `ak` CLI and the Desktop app.** These ship in the v3 binaries.
+- **Registry policy.** The update window, renewal, and the retired GitHub
+  invites belong to the AgentKit registry. They apply once the registry runs
+  its v3 release. Until then the CLI understands an update window, but none is
+  enforced. Check `ak licenses` instead of assuming either state.
+
+## At a glance
+
+| Change | Happens automatically | What you do |
+| --- | --- | --- |
+| [Update window](#update-window) | Installed kits, the CLI, and the Desktop app keep working forever. Updates stop at the newest release your window covers, and `ak update` never moves a kit backwards. | Run `ak licenses` to see your window. Renew from the link it prints if you want releases published after the window. |
+| [Opt-in skill store](#opt-in-skill-store) | Nothing. Legacy install behavior stays the default. | Optional: opt in with `ak update --ssot`. |
+| [Shared skills across kits](#shared-skills-across-kits) | When two kits ship the same Skill, Agent, rule, Hook, or MCP entry, they hand the file off instead of blocking each other's updates. | Nothing. Read the notice if a kit reports that it deferred a file. |
+| [Windows filename rules](#windows-filename-rules) | AgentKit refuses names Windows cannot handle safely, and refuses alternate data streams other than `Zone.Identifier` in skill trees. | Only if a command refuses a file: rename it, or remove the stream. |
+| [One Skill name: `ak-<slug>`](#one-skill-name-ak-slug) | Refreshed kits name every Skill `ak-<slug>`. The `ak` CLI and saved preferences still accept `ak:<slug>`. `ak-ak` is merged into `ak-agentkit`. | Type `/ak-cook` (Claude Code) or `$ak-cook` (Codex) instead of `/ak:cook`. Delete a leftover `ak-ak` folder if one remains. |
+| [GitHub invites retired](#github-repository-invites-retired) | With the v3 registry, kits come only from the AgentKit registry. Existing repository collaborators keep their access. | Install and update with `ak`, not from a GitHub clone. |
+
+## Upgrade steps
+
+1. Update the CLI. The second command also updates the Desktop app; without it,
+   the Desktop app follows its own updater:
+
+   ```bash
+   ak self-update --channel stable --yes
+   ak self-update --channel stable --include-desktop --yes
+   ```
+
+2. Refresh your kits. A project refresh updates the tracked `kits/` tree and
+   every installed runtime of each project kit:
+
+   ```bash
+   ak update /path/to/project --yes
+   ```
+
+   Refresh global kits too. With no global kits installed, this command exits
+   `2`:
+
+   ```bash
+   ak update --global --yes
+   ```
+
+3. Check the result:
+
+   ```bash
+   ak versions
+   ak licenses
+   ak doctor --json
+   ```
+
+Each kit update snapshots the files it writes before it writes them, so
+`ak backups list` shows a restore point for every run.
+
+<Callout type="info">
+  Before a larger change, you can take a checkpoint you can roll back to with
+  `ak backups checkpoint --pre-upgrade`. `ak update --ssot` takes one for you.
+  See [`ak backups checkpoint`](../reference/cli/backups/checkpoint).
+</Callout>
+
+## Update window
+
+A kit purchase is a perpetual license plus a window of updates. The registry
+decides which releases your account can download; the CLI never compares dates
+against your local clock.
+
+- **Ownership is perpetual.** When a window ends, nothing is disabled, blocked,
+  or uninstalled, online or offline. You can always reinstall any version your
+  window covers.
+- **v1 and v2 owners** get 12 months of updates from the v3.0.0 release date.
+  Until the registry records that date, every owned kit's window stays open. A
+  new purchase covers 12 months from the purchase.
+- **Covered releases.** After the window ends, you can still install every
+  release published inside it, and the patch releases of the last minor line
+  whose first release was published inside it. A newer minor or major release
+  needs a renewal.
+- **No downgrade.** An unpinned request never installs an older version than
+  your install receipts record. Only an explicit `--version` moves a kit
+  backwards.
+
+`ak licenses` and the Desktop License screen show each kit's window, the patch
+line, the newest covered version, and the renewal link when renewal is needed.
+The CLI opens the link; it never runs a checkout itself. `ak self-update` and
+the Desktop updater are not gated by update windows. For each command's exact
+result and exit code, see
+[Update windows and renewal](./updating#update-windows-and-renewal).
+
+## Opt-in skill store
+
+v3 adds a content-addressed skill store with crash-safe journals, install
+receipts, and an alias-collision preflight. It is **off by default**: plain
+`ak update` keeps legacy install behavior.
+
+### One-command upgrade: `ak update --ssot`
+
+`ak update --ssot` moves the kit Skills you already have into the store in one
+guided, reversible run, and keeps the store for later updates. Plain
+`ak update` never starts this upgrade; an applying `ak update --yes` only
+resumes one that an earlier `ak update --ssot` left unfinished.
+
+```bash
+ak update --ssot --dry-run        # plan and readiness; writes nothing, no network
+ak update --ssot                  # preview, then confirm in a terminal
+ak update --ssot --yes            # apply without a prompt
+ak update --ssot --yes --all-projects
+```
+
+It covers the global scope and the current project. `--global` limits it to the
+global scope; `--all-projects` adds every registered project. An apply runs in
+this order:
+
+1. **Preflight.** Blockers stop the run before any write, for example an
+   unsupported operating system, an unreadable AgentKit home, a store journal
+   that needs manual recovery, or a rollback to v2 still in progress. Each
+   blocker has a stable `code`, its impact, the fix, and the retry or rollback
+   command, also in the `--json` error remediation.
+2. **Checkpoint.** A protected pre-upgrade checkpoint of the AgentKit home, the
+   runtime homes, and the project agent configuration. `--backup-sessions` adds
+   session history. If the checkpoint fails, nothing else happens.
+3. **Adoption.** Each scope's `ak skills migrate` plan runs under the kit
+   lifecycle lock in one journaled transaction. Files are adopted where they are
+   and never rewritten, so every Skill alias, including its `ak:<slug>` form,
+   keeps working. A modified, unlisted, linked, or divergent Skill stays a
+   legacy install and is reported as skipped with its reason.
+4. **Verification.** A second plan must show no remaining change.
+5. **Receipt and commit.** A receipt under `<agentkit-home>/state/upgrades/`
+   records the checkpoint ID and the changed, unchanged, and skipped Skills.
+   Only then is the store mode committed for those scopes.
+
+After that, each scope keeps its own mode. The committed global scope covers
+global operations only. A project uses the store only when that project itself
+was upgraded. A directory inside an upgraded project, whether you run a command
+from it or point at it with `--project-dir`, keeps legacy installs until you run
+`ak update --ssot` there too. Plain `ak update`, the background auto-update, the
+Desktop app, and the dashboard follow the same per-scope rule. Runtimes the
+store does not project yet and plugin-delivered kits are reported, not
+migrated; they keep working as legacy installs.
+
+If the run is interrupted, the next `ak update --ssot` (or an applying
+`ak update --yes`) resumes it with the same checkpoint and its original scopes.
+Scope flags that select other scopes during a resume exit `2`. A second run on
+a finished home changes nothing. `ak doctor` reports the committed scopes and
+any unfinished upgrade under **SSOT upgrade**. To undo the upgrade, see
+[Rolling back to v2](./rolling-back-to-v2).
+
+Upgrade every scope in one run when you can (`--all-projects`). Each run takes
+its own checkpoint, and a later run captures a home that already uses the store,
+which a rollback to v2 cannot use as its source.
+
+On a home with no prior AgentKit state there is nothing to capture: the run
+takes no checkpoint, reports `checkpoint.no_prior_state`, and still commits the
+store mode.
+
+With the store on, `ak kit init` and `ak kit refresh` run a preflight before any
+change. They exit `6` with `skill.alias_collision`, `ownership.modified`, or
+`target.link_refused` instead of writing. See [`ak update`](../reference/cli/update)
+and [`ak skills migrate`](../reference/cli/skills/migrate).
+
+## Shared skills across kits
+
+Several kits can ship the same Skill, Agent, rule, Hook, or MCP entry; Engineer
+and Marketing, for example, share core Skills. Before v3, each kit refused to
+update a file the other kit recorded, which blocked updates of a shared Skill.
+Now ownership hands off between kits:
+
+- A kit whose recorded hash still matches the bytes on disk rewrites them.
+- A kit that finds different bytes that a sibling kit records leaves the file
+  alone, drops its own claim, and reports a notice.
+- Files you edited and untracked files stay preserved.
+- Uninstall and force refresh protect a path while a sibling kit still records
+  it. Removing a path a stale sibling lists prints a warning, and that sibling's
+  next refresh restores the file.
+- A Claude Code Hook runtime file that a sibling records still fails closed,
+  because Hook registration depends on it.
+
+After a hand-off, a shared file carries the bytes of the kit that updated last
+until the other kit refreshes.
+
+## Windows filename rules
+
+On Windows, AgentKit refuses a path component that Windows would not resolve to
+a plain file of that name:
+
+- a name containing `:`, which names an alternate data stream or a drive;
+- a name ending in a dot or a space, because Windows strips them; and
+- a reserved device name, with or without an extension: `CON`, `PRN`, `AUX`,
+  `NUL`, `CONIN$`, `CONOUT$`, `COM0`–`COM9`, `LPT0`–`LPT9`, and the
+  superscript-digit `COM` and `LPT` forms.
+
+An existing folder named like a device, such as `AUX`, still works as a parent.
+
+The skill tree walk, used by the skill store, `ak skills migrate`, SkillX, and
+personal kits, refuses any file or directory that carries a named NTFS data
+stream (`tree.unsafe_path`). The one exemption is `Zone.Identifier`, the
+Mark-of-the-Web stream Windows adds to downloaded files; it is never read or
+copied. When a command refuses a stream, list and remove it in PowerShell:
+
+```powershell
+Get-Item -LiteralPath <file> -Stream *
+Remove-Item -LiteralPath <file> -Stream <stream-name>
+```
+
+## One Skill name: `ak-<slug>`
+
+Every AgentKit Skill now has one name in every runtime: `ak-<slug>`. After you
+refresh your kits:
+
+- Runtime commands use the dash form. In Claude Code, `/ak-cook` replaces
+  `/ak:cook`; in Codex, use `$ak-cook`. Runtimes register commands from the
+  installed Skill name, so the colon form does not come back.
+- The `ak` CLI still accepts the colon form as a legacy alias, for example
+  `ak skills install ak:scout`, and saved preference keys written as
+  `ak:<slug>` keep matching the renamed Skill.
+- The `ak-ak` Skill is merged into `ak-agentkit`, which now carries the ak CLI
+  guide and command reference.
+- `ak-advise`, `ak-ask`, `ak-coding-level`, and `ak-loop` can now be invoked by
+  the model. `ak-coding-level` and `ak-loop` still say they run only when you
+  ask for them.
+
+`ak update --global` and `ak kit refresh <kit>` remove the stale `ak-ak` files.
+A project-scope `ak update <dir>` does not prune, and a refresh keeps folders
+that still hold files it does not own, so an `ak-ak` folder can remain. Delete
+it by hand; nothing reads it.
+
+## GitHub repository invites retired
+
+With the v3 registry, kits are delivered only through the AgentKit registry. A
+purchase, a team seat, an admin grant, or a retry no longer sends a GitHub
+repository invitation. Existing collaborators and pending invitations are left
+untouched, so they keep repository access. A refund still removes that
+license's access.
+
+Install and update kits with `ak kit init`, `ak kit refresh`, and `ak update`.
+A GitHub checkout is not an install source for released kits.
+
+## See also
+
+- [Rolling back to v2](./rolling-back-to-v2)
+- [Updating AgentKit and kits](./updating)
+- [`ak update`](../reference/cli/update)
+- [`ak licenses`](../reference/cli/licenses)
+- [`ak backups checkpoint`](../reference/cli/backups/checkpoint)

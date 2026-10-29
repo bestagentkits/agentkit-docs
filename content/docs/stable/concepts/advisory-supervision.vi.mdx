@@ -15,7 +15,7 @@ và quyết định cuối cùng.
   steer hoặc interrupt main agent.
 - Subagent thông thường là worker cô lập có thể chạy task loop riêng.
 - AgentKit `kongming` là Agent tư vấn one-shot dùng tại checkpoint của workflow.
-- AgentKit `advisor` là Agent phỏng vấn phía sau `/ak:advise --agent`.
+- AgentKit `advisor` là Agent phỏng vấn phía sau `/ak-advise --agent`.
 
 Chúng đều hữu ích, nhưng khác nhau về context, lifecycle và ranh giới authority.
 
@@ -24,7 +24,7 @@ Chúng đều hữu ích, nhưng khác nhau về context, lifecycle và ranh gi�
 Dùng built-in advisor của Claude Code khi bạn muốn session Claude Code hiện tại
 consult một adviser native trong lúc tự sinh phản hồi. Dùng `kongming` khi một
 workflow AgentKit tới checkpoint khó và cần counsel được đóng gói rõ bằng chứng
-từ một Agent tư vấn mới. Dùng `/ak:advise` khi chính problem cần được reframe
+từ một Agent tư vấn mới. Dùng `/ak-advise` khi chính problem cần được reframe
 qua interview với người dùng. Dùng subagent thông thường khi bạn muốn giao việc,
 không chỉ xin counsel.
 
@@ -147,7 +147,7 @@ một worker subagent thông thường:
 | Input kỳ vọng | Task, evidence, approach đã thử và câu hỏi chính xác |
 | Output kỳ vọng | Advice có cấu trúc, assumption, risk, checklist và success metric |
 
-Các Skill của AgentKit như `ak:plan`, `ak:cook`, `ak:fix` và `ak:vibe` dùng
+Các Skill của AgentKit như `ak-plan`, `ak-cook`, `ak-fix` và `ak-vibe` dùng
 `--advice` để thêm giám sát bằng `kongming` tại checkpoint. Checkpoint thường
 gồm:
 
@@ -295,15 +295,15 @@ native OMP advisor bên trong mỗi spawned `kongming` session. Nếu
 `kongming` chưa được override sẽ không resolve được model; explicit model trong
 roster và explicit override cho `kongming` không phụ thuộc role này.
 
-## ak:advise inline và ak:advise --agent
+## ak-advise inline và ak-advise --agent
 
 AgentKit `advisor` khác với `kongming`.
 
-`/ak:advise` là Skill có interview. Skill phân tích prompt hoặc URL, scout khi
+`/ak-advise` là Skill có interview. Skill phân tích prompt hoặc URL, scout khi
 project evidence quan trọng, hỏi từng câu, xác nhận problem đã reframe, rồi đưa
 advice thẳng thắn.
 
-Khi không có `--agent`, Claude Code chạy `/ak:advise` inline trong main session.
+Khi không có `--agent`, Claude Code chạy `/ak-advise` inline trong main session.
 Cùng workflow Skill vẫn áp dụng: main session phân tích input, scout khi hữu
 ích, hỏi các interview question trực tiếp, xác nhận reframing và trả advice hoặc
 report artifact đã yêu cầu. Không có AgentKit `advisor` Agent riêng được spawn.
@@ -323,7 +323,7 @@ sequenceDiagram
   participant Main as Main session
   participant Advisor as advisor Agent
 
-  User->>Main: /ak:advise ... --agent
+  User->>Main: /ak-advise ... --agent
   Main->>Advisor: Input, flags, state path, report path
   Advisor-->>Main: NEEDS_USER_INPUT với một câu hỏi
   Main-->>User: Hỏi câu đó
@@ -343,36 +343,36 @@ Runtime không hỗ trợ giống hệt nhau.
 
 | Runtime | Điều cần biết về advisory |
 | --- | --- |
-| Claude Code | `/ak:advise` không có `--agent` chạy inline trong main session. `/ak:advise --agent` giao interview cho AgentKit `advisor` Agent. AgentKit đánh dấu `kongming` và `advisor` bằng model tier `fable`. Claude Code cũng có built-in advisor riêng, tách biệt với các Agent của AgentKit. |
-| Codex | AgentKit map `kongming` sang frontier model override của Codex với reasoning effort theo Kit. Frontmatter `fable` dùng chung vẫn portable, nhưng model ID riêng của Codex chỉ do adapter Codex emit. `/ak:advise --agent` không đồng nghĩa có relay path của Claude Code; dùng inline `ak:advise` trừ khi runtime đã cài báo hỗ trợ. |
+| Claude Code | `/ak-advise` không có `--agent` chạy inline trong main session. `/ak-advise --agent` giao interview cho AgentKit `advisor` Agent. AgentKit đánh dấu `kongming` và `advisor` bằng model tier `fable`. Claude Code cũng có built-in advisor riêng, tách biệt với các Agent của AgentKit. |
+| Codex | AgentKit map `kongming` sang frontier model override của Codex với reasoning effort theo Kit. Frontmatter `fable` dùng chung vẫn portable, nhưng model ID riêng của Codex chỉ do adapter Codex emit. `/ak-advise --agent` không đồng nghĩa có relay path của Claude Code; dùng inline `ak-advise` trừ khi runtime đã cài báo hỗ trợ. |
 | Cursor | AgentKit có thể project Agents và Skills, nhưng đừng suy ra behavior của Claude Code advisor hoặc parity của relay `advisor` trong AgentKit chỉ từ việc file tồn tại. Kiểm tra output của runtime adapter và trang Skill để biết surface đang active. |
 | Oh My Pi | AgentKit project Skill và Agent vào native discovery surface của OMP. `--advice` cần live Agent delegation cùng model resolve được cho `kongming`; native OMP advisor là background-review subsystem riêng. Hai cơ chế có thể chạy cùng nhau, nhưng chỉ có tệp không chứng minh review nào đã hoàn tất. |
 
 ### Claude Code
 
-Claude Code có hai shape cho AgentKit `ak:advise`:
+Claude Code có hai shape cho AgentKit `ak-advise`:
 
-- **Inline `/ak:advise`** giữ interview trong main session hiện tại. Dùng khi
+- **Inline `/ak-advise`** giữ interview trong main session hiện tại. Dùng khi
   bạn muốn flow Skill thông thường, conversation state hiển thị rõ và không cần
   adviser context riêng của AgentKit.
-- **`/ak:advise --agent`** biến main session thành orchestrator cho AgentKit
+- **`/ak-advise --agent`** biến main session thành orchestrator cho AgentKit
   `advisor` Agent. Dùng khi bạn muốn interview dài và advice generation được cô
   lập trong adviser context trên tier mạnh nhất đã cấu hình.
 
 Cả hai mode đều khác built-in `/advisor` của Claude Code. Built-in advisor là
-consultation tool native của runtime; AgentKit `ak:advise` là Skill workflow,
+consultation tool native của runtime; AgentKit `ak-advise` là Skill workflow,
 có thể tùy chọn delegate sang AgentKit `advisor` Agent.
 
 ### Codex
 
-Codex dùng native Skill discovery cho các Skill của AgentKit, nên `ak:advise`
+Codex dùng native Skill discovery cho các Skill của AgentKit, nên `ak-advise`
 chạy như một Skill trong session Codex hiện tại. Relay `advisor` chỉ dành cho
-Claude Code phía sau `/ak:advise --agent` không phải contract của Codex; ngoài
+Claude Code phía sau `/ak-advise --agent` không phải contract của Codex; ngoài
 Claude Code, hãy dùng inline interview trừ khi runtime đã cài báo rõ có adviser
 relay surface.
 
 Với workflow supervision, Codex có hỗ trợ Agent delegation. Khi một Skill như
-`ak:plan`, `ak:cook`, `ak:fix` hoặc `ak:vibe` chạy với `--advice`, workflow có
+`ak-plan`, `ak-cook`, `ak-fix` hoặc `ak-vibe` chạy với `--advice`, workflow có
 thể consult `kongming` qua capability delegation của Codex khi session cho phép
 delegation. AgentKit emit `kongming` với frontier model override riêng của Codex
 và reasoning effort theo Kit, trong khi vẫn giữ source chung `model: fable` portable.
@@ -389,10 +389,10 @@ Cursor có projection native của AgentKit cho Skills và Agents:
 - Command file của AgentKit được giữ như sidecar content vì Cursor không có cùng
   command-file surface.
 
-Trong thực tế, `ak:advise` là đường an toàn trên Cursor: chạy Skill inline và để
+Trong thực tế, `ak-advise` là đường an toàn trên Cursor: chạy Skill inline và để
 Skill hỏi các interview question trong session hiện tại. Không nên coi `--agent`
 tương đương adviser relay của Claude Code. Agent `advisor` của AgentKit có thể
-được project, nhưng relay protocol được document cho `/ak:advise --agent` chỉ
+được project, nhưng relay protocol được document cho `/ak-advise --agent` chỉ
 dành cho Claude Code.
 
 Với `--advice`, Cursor có native subagent capability và có thể project
@@ -427,7 +427,7 @@ người dùng chạy được model đó.
 Nếu runtime từ chối model, hãy coi advisory step là chưa hoàn tất. Fallback an
 toàn phải rõ ràng:
 
-- Chạy advice inline trong main session khi task là `/ak:advise` và không cần
+- Chạy advice inline trong main session khi task là `/ak-advise` và không cần
   isolation.
 - Cấu hình lại Agent đã cài hoặc runtime model sang model account dùng được, rồi
   chạy lại advisory step.
@@ -455,7 +455,7 @@ workflow tiếp tục mà không có checkpoint đó.
 | Continuous severity-aware review qua các turn của Oh My Pi | Native advisor của Oh My Pi |
 | Strategic checkpoint one-shot trong workflow AgentKit | `kongming`, thường qua `--advice` |
 | Continuous OMP review cộng checkpoint rõ của workflow | Oh My Pi advisor cùng AgentKit `--advice`, sau khi xác minh cả hai model path |
-| Reframing có interview trước khi quyết định làm gì | `/ak:advise`, hoặc `/ak:advise --agent` trên Claude Code |
+| Reframing có interview trước khi quyết định làm gì | `/ak-advise`, hoặc `/ak-advise --agent` trên Claude Code |
 | Research, testing, review hoặc implementation cô lập | Subagent thông thường với task có ranh giới |
 | Điều phối parallel hoặc nhiều session | Agent team hoặc workflow support, không chỉ advisory supervision |
 

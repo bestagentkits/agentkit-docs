@@ -1,0 +1,86 @@
+---
+title: ak skills migrate
+description: Ghi nhận các Skill trong Kit mà bản cài legacy đã ghi vào skill store, không ghi, di chuyển hay xoá bất kỳ file Skill nào.
+---
+
+Dùng `ak skills migrate` để tiếp nhận các bản cài Skill của Kit có trước skill
+store. Với mỗi alias mà legacy record của một Kit cho một runtime và scope liệt
+kê, khi mọi file được liệt kê còn trên đĩa với đúng byte đã ghi, các file đó trở
+thành một store entry và receipt cùng lock ghi reference của Kit. Chạy lại không
+đổi gì.
+
+## Cách dùng
+
+```bash
+ak skills migrate [--scope project|global] [--runtime <runtime>] [--dry-run] [--json]
+```
+
+Lệnh không nhận argument theo vị trí và áp dụng mà không hỏi.
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--scope <scope>` | `project` | Scope cần migrate: `project` hoặc `global`. |
+| `--runtime <runtime>` | tất cả | Runtime cần migrate: `claude-code`, `codex`. Lặp lại được. |
+| `--dry-run` | `false` | In kế hoạch và không ghi gì. |
+
+Các cờ dùng chung nằm trong [quy ước CLI](../cli-conventions).
+
+## Điều kiện
+
+Skill store phải đang bật cho scope đó: sau `ak update --ssot`, hoặc với
+`AGENTKIT_SKILL_STORE=1`. Nếu không, lệnh thoát `2` và nêu bước để bật.
+
+## Những gì được tiếp nhận và những gì vẫn là legacy
+
+Không có file Skill nào được ghi, di chuyển hay xoá. Alias vẫn là bản cài legacy
+và được báo cáo khi có file bị sửa, file được record liệt kê nhưng không còn,
+link, Skill dạng file đơn, hoặc một record khác liệt kê nó với các file khác.
+Các Kit có record liệt kê cùng bộ file sẽ cùng sở hữu alias. File không được
+record nào liệt kê được giữ nguyên và không đưa vào. Reference trong receipt mà
+Kit của nó không còn ghi alias sẽ bị bỏ và các file được giữ lại.
+
+## Tác động
+
+Trước khi ghi, lệnh snapshot skill lock, receipt và root registry của scope qua
+hệ thống backups. Sau đó lệnh ghi store entry, receipt và lock trong một
+transaction có journal dưới kit lifecycle lock. Lần chạy bị gián đoạn được
+rollback bởi lệnh skills có ghi tiếp theo, và legacy record không bao giờ bị
+đổi. Migration thất bại báo `migration.failed`, không commit gì, và nêu tên bản
+backup giữ trạng thái trước đó.
+
+## Đầu ra
+
+JSON dùng `kind=skills.migrate` với cùng các trường kế hoạch như
+[`ak skills sync`](../cli/ak_skills_sync) dưới `data`:
+
+```text
+operation (migrate), scope, dryRun, applied, changed, planDigest
+lockPath, lockGeneration
+packages[]
+targets[]: runtime, root, rootIdentity, alias, action, projectionDigest,
+           writes, removes, preserved
+warnings[]
+snapshot?
+```
+
+`action` của target là `adopt`, `readopt`, `co-own`, `release` hoặc
+`unchanged`. `snapshot` nêu tên bản backup lấy trước một migration đã áp dụng.
+Alias vẫn là legacy xuất hiện kèm một cảnh báo nêu lý do.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Thành công, hoặc không có gì để đổi. |
+| `1` | Offline mà không có bản đã xác minh, credential bị từ chối, đường dẫn quá dài, hoặc cần recovery. |
+| `2` | Skill store bị tắt, cờ hay argument không hợp lệ, hoặc alias bị dành riêng. |
+| `4` | Một thao tác AgentKit khác đang giữ kit lifecycle lock. |
+| `5` | Không tìm thấy release hoặc không được cấp quyền. |
+| `6` | Alias collision, path không thuộc sở hữu hoặc đã bị sửa, project state untrusted, hoặc lock đổi trong lúc chạy. |
+| `7` | Release bị revoke, yank, quarantine hoặc untrusted, có link trong target path, hoặc digest không khớp. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skills migrate`](../cli/ak_skills_migrate)
+- [Sync Skill theo lock](../cli/ak_skills_sync)
+- [Cài một SkillX release](../cli/ak_skills_install)

@@ -23,13 +23,24 @@ ignores extra positional tokens, so do not use that behavior in scripts.
 Choose one method:
 
 ```bash
-ak login --api-key ak_live_... --no-interactive
+printf '%s' "$AK_KEY" | ak login --api-key-stdin
+AGENTKIT_API_KEY=ak_live_... ak login
 ak login --email you@example.com
 ak login --license-key ak_license_... --no-interactive
 ```
 
 Use placeholders in saved scripts and support output. A successful result never
 prints the API key, license key, OTP, access token, or refresh credential.
+
+For scripted login, pipe the API key to `--api-key-stdin` or set
+`AGENTKIT_API_KEY`; both keep the key out of the process argument list.
+`--api-key` still works but exposes the key to other local users and process
+monitors, so it prints a warning on stderr (`warning: --api-key puts the key in
+the process argument list ...`); with `--json` the warning is carried in
+`data.warnings[]` instead. `AGENTKIT_API_KEY` is read only when no sign-in
+flag is given. `--api-key-stdin` reads a piped key, not terminal input: a TTY
+on stdin, an empty key, a key containing whitespace, or an oversized input
+exits `2` before contacting the registry.
 
 <Callout type="info" title="API key vs. license key">
   `--api-key` is for Kit owners: it authenticates the CLI with a user API key
@@ -42,24 +53,28 @@ prints the API key, license key, OTP, access token, or refresh credential.
 </Callout>
 
 <Callout type="warning">
-  Email login always reads the OTP from stdin after printing `Enter OTP code:`
-  to stdout. `--json` and `--no-interactive` do not suppress that prompt. The
-  prompt therefore precedes the JSON object on stdout in email JSON mode.
+  Email login is interactive-only. It needs a terminal on both stdin and
+  stdout, and it refuses to start with `--yes`, `--json`, `--no-interactive`,
+  or `--quiet`. In those cases it exits `2` before contacting the registry and
+  points you to `--api-key-stdin` or `AGENTKIT_API_KEY`, the methods for
+  scripts and CI.
 </Callout>
 
 ## Options
 
 | Flag | Default | Description |
 | --- | --- | --- |
-| `--api-key <key>` | Empty | Authenticate with a user API key from your web profile. |
+| `--api-key <key>` | Empty | Authenticate with a user API key from your web profile. The key is visible in the process list; prefer `--api-key-stdin` or `AGENTKIT_API_KEY`. |
+| `--api-key-stdin` | `false` | Read the user API key from standard input. |
 | `--device-name <name>` | Hostname | Name the device created by `--license-key`. |
-| `--email <address>` | Empty | Start email OTP login, then read the code from stdin. |
+| `--email <address>` | Empty | Start email OTP login in an interactive terminal, then read the code from stdin. |
 | `--license-key <key>` | Empty | Activate a license-key App device session. |
 | `--registry-url <url>` | Environment or release default | Override the registry used for authentication and later session checks. |
 
 Shared flags are described in [CLI conventions](../cli-conventions). `--yes`
 has no effect on this command. If several method flags are supplied, the
 current precedence is license key, then API key, then email; pass exactly one.
+`--api-key-stdin` combined with `--api-key` or `--license-key` exits `2`.
 
 ## Credential storage
 
@@ -90,8 +105,12 @@ JSON success is one versioned envelope on stdout:
 {"schema_version":1,"kind":"auth.login","data":{"email":"you@example.com","authMethod":"api_key","success":true}}
 ```
 
-Runtime and authentication errors use stderr; JSON mode emits the shared error
-envelope. Flag-parse errors happen earlier and can remain plain-text usage.
+`data.warnings[]` appears only when there is an attention item, such as the
+`--api-key` exposure warning.
+
+Runtime and authentication errors use stderr. JSON-mode failures, including
+flag-parse errors (exit `2`), end stderr with the shared
+[error envelope](../cli-conventions#json-output).
 
 ## Exit status
 
@@ -99,7 +118,7 @@ envelope. Flag-parse errors happen earlier and can remain plain-text usage.
 | --- | --- | --- |
 | `0` | Registry authentication succeeded and the selected local slot was saved. | Run `ak whoami` and `ak licenses`. |
 | `1` | No method was selected, OTP input ended, the registry rejected the request, the response was incomplete, or private storage failed. | Correct the method or credential, then retry; do not publish the secret in logs. |
-| `2` | A flag could not be parsed. | Correct the invocation. |
+| `2` | A flag could not be parsed, email login was started without an interactive terminal or with `--yes`, `--json`, `--no-interactive`, or `--quiet`, `--api-key-stdin` was combined with `--api-key` or `--license-key`, or the stdin key was read from a TTY, empty, malformed, or too large. | Correct the invocation; pipe the key to `--api-key-stdin` or set `AGENTKIT_API_KEY` for scripted login. |
 
 There is no preview, dry-run, confirmation, or decline path. Storage occurs
 only after the remote login response validates. Re-running login replaces the

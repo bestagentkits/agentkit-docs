@@ -1,0 +1,72 @@
+---
+title: ak skills kit init
+description: Tạo manifest Kit cá nhân mở rộng đúng một phiên bản Kit và chưa khai báo overlay hay fork nào.
+---
+
+Dùng `ak skills kit init` để tạo Kit cá nhân `local/<name>` dưới
+`AGENTKIT_HOME/kits/personal/<name>`. File `personal-kit.yaml` mới mở rộng một
+phiên bản Kit và chưa khai báo overlay hay fork nào. Thêm overlay và fork bằng
+cách sửa manifest, rồi xem trước với [`ak skills kit inspect`](./inspect). Lệnh
+không bao giờ chiếu hay apply.
+
+## Cách dùng
+
+```bash
+ak skills kit init <name> --extends <kit>@<version> [flags]
+```
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--extends <kit>@<version>` | bắt buộc | Phiên bản Kit cần mở rộng. Nó phải resolve được offline từ `--kits-dir`. |
+| `--kits-dir <dir>` | `$AGENTKIT_KITS_DIR` hoặc `./kits` | Thư mục foundation Kit. |
+| `--dry-run` | `false` | In manifest và không ghi gì. |
+
+Các cờ dùng chung nằm trong [quy ước CLI](../cli-conventions).
+
+## Điều kiện
+
+Không có `--dry-run`, skill store phải bật, sau `ak update --ssot` hoặc với
+`AGENTKIT_SKILL_STORE=1`; khi tắt, lệnh thoát `2`. Lệnh chỉ chạm vào
+`AGENTKIT_HOME` và theo scope global của nó từ bất kỳ thư mục nào. `--dry-run`
+chạy offline cho mọi người dùng.
+
+## Lệnh ghi gì
+
+Dưới kit lifecycle lock và sau khi recovery store, lệnh ghi
+`AGENTKIT_HOME/kits/personal/<name>/personal-kit.yaml` (mode `0644`) trong một
+transaction có journal yêu cầu file chưa tồn tại. Thư mục trùng tên đã có sẽ bị
+từ chối, bất kể nó chứa gì, và không có gì bị ghi đè.
+
+## Đầu ra
+
+Đầu ra text là một dòng: `created` (hoặc `would create` khi dry run), Kit, phiên
+bản nó mở rộng, số Skill và đường dẫn manifest.
+
+JSON dùng `kind=skills.kit.init` với các trường sau dưới `data`:
+
+```text
+dryRun, personalKit, kit, version, path, manifest, skills
+```
+
+`manifest` là nội dung YAML của manifest mới và `skills` là số Skill mà Kit
+compose.
+
+## Kết quả và mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Manifest đã được ghi, hoặc dry run đã xong. |
+| `1` | Lệnh thất bại, ví dụ đường dẫn quá dài hoặc cần recovery. |
+| `2` | Skill store bị tắt, cờ hoặc argument không hợp lệ, hoặc manifest sai định dạng. |
+| `4` | Kit lifecycle lock đang bị thao tác AgentKit khác giữ. |
+| `5` | Không tìm thấy phiên bản Kit hoặc một Skill nó cung cấp. |
+| `6` | Thư mục trùng tên đã tồn tại. |
+| `7` | Foundation bị revoke. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skills kit init`](../cli/ak_skills_kit_init)
+- [Xem composition plan](./inspect)
+- [Apply Kit cá nhân](./apply)

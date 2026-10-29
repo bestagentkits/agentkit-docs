@@ -1,0 +1,254 @@
+---
+title: Rolling back to v2
+description: Undo a v3 upgrade on one machine, from a pre-upgrade checkpoint with one command or by hand, and return to v3 later.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use this guide when a v3 upgrade has to be undone on one machine. The last v2
+release is `2.19.0`; substitute another v2 version where you need one. A v2
+release published inside your update window stays installable, so a v1 or v2
+owner never needs a renewal to roll back.
+
+Choose the path that matches your machine:
+
+- **You have a pre-upgrade checkpoint.** `ak backups list` marks it as the
+  rollback source. `ak update --ssot` takes one automatically, and
+  `ak backups checkpoint --pre-upgrade` takes one by hand. Use
+  [one-command rollback](#roll-back-from-a-pre-upgrade-checkpoint).
+- **You have no checkpoint.** Follow the [manual rollback](#roll-back-by-hand).
+
+## Roll back from a pre-upgrade checkpoint
+
+While the v3 CLI is still installed, verify the checkpoint and preview the
+rollback. Nothing changes:
+
+```bash
+ak backups verify <id>
+ak rollback --to v2 --dry-run
+```
+
+If it refuses with `rollback.source_not_v2`, a newer pre-upgrade checkpoint
+captured a home that already used the skill store; the message lists those
+checkpoints. Rolling back further discards everything since the legacy
+checkpoint, so check `ak backups list` and name it explicitly:
+
+```bash
+ak rollback --to v2 --checkpoint <id> --dry-run
+```
+
+Then run it. `--install-v2` lets it install the pinned, signature-verified v2
+CLI recorded in the checkpoint. That release is older than the running CLI, and
+this consent is what lets it replace it; `ak self-update` alone never moves
+backwards. Without `--install-v2`, the result lists the
+[installer step](#4-downgrade-the-cli) instead:
+
+```bash
+ak rollback --to v2 --install-v2 --yes
+```
+
+When Homebrew or Scoop manages `ak`, `--install-v2` stops with an error that
+names that manager and the installer command to run instead; afterwards make
+sure the `ak` it installs comes first on `PATH`.
+
+The command runs these steps in order, while the v3 CLI still runs:
+
+1. Freeze automatic updates. It refuses while a background update is running or
+   while AgentKit Desktop or another `ak` holds the operational store; close
+   them and retry.
+2. Take a pre-rollback checkpoint of every path the next steps overwrite or
+   delete. If any such path is missing from it, the rollback stops before
+   changing anything.
+3. Revert AgentKit-owned kit projections to the checkpoint.
+4. Restore the AgentKit home, runtime homes, project agent configuration, and
+   `operational.db` at its captured schema, then freeze updates again and pin
+   binary updates to the restored v2 release.
+5. Optionally install v2, then run `ak doctor`. When the v2 binary is staged
+   and needs a restart (Windows), restart, then run `ak doctor` and
+   `ak version` yourself.
+
+An interrupted run resumes at the first unfinished step when you run it again.
+A finished rollback does not run again (`rollback.already_done`); when it
+finished without installing v2, that refusal names the installer command. To
+undo the rollback, restore the pre-rollback checkpoint it printed with
+`ak recover <id>`.
+
+<Callout type="warning">
+  Until v2 is installed, do not run other v3 commands; a v3 binary may migrate
+  the restored store forward again. Remove kits that exist only in v3 with
+  `ak kit uninstall` before the rollback, while the v3 CLI still runs.
+</Callout>
+
+Edge cases:
+
+- **Missing checkpoint key.** The manifest cannot be authenticated, so the run
+  asks for confirmation (or `--yes`) and needs `--skip-secrets`. It restores
+  only roots that match this environment, so `--allow-root` is refused; sign in
+  again afterwards. Sealed files keep their v3 contents and are listed in the
+  output (`skipped_secret_paths` in `--json`): credentials, `~/.claude.json`,
+  Claude `settings.json` with its Hooks, and Codex `config.toml`. After
+  installing v2, run `ak kit refresh <kit> --yes` for each kit (add `--global`
+  for global installs) to project its v2 Hooks and config again.
+- **A moved root**, such as a renamed home directory: `--allow-root <key>`
+  restores into the recorded path.
+- **Overlays.** Runtime homes and projects are overlays: other files v3 added
+  there are reported, not removed. Project Skill state under
+  `.agentkit/skill-state` is the exception; the files v3 added there are
+  removed so a later `ak update --ssot` can run again.
+- **Files written to the AgentKit home** after the pre-rollback checkpoint are
+  kept and listed in a warning.
+- **An unfinished `ak update --ssot`.** The rollback abandons it with a warning,
+  and the next `ak update --ssot` starts a new upgrade instead of resuming.
+  `ak recover <id>` leaves an unfinished upgrade as it is.
+- **The Desktop app** is reverted only with `--with-desktop` where the platform
+  supports it; otherwise follow [step 5](#5-downgrade-the-desktop-app).
+
+### What stays held after a rollback
+
+A rollback holds the home on v2:
+
+- Plain `ak update`, `ak self-update`, and the background auto-update install no
+  v3 release. `ak self-update --check` and `--dry-run` report `rollback-hold`.
+  The background auto-update records `deferred (rollback_hold)`, or
+  `deferred (rollback_state_unreadable)` when it cannot read the rollback
+  journal. Every command ignores the committed skill-store mode.
+- Because a 2.x CLI does not read that hold, the rollback also sets
+  `updates.registry_url` in `config.yaml` to the signed manifest of the restored
+  release, for example
+  `https://releases.agentkit.best/binaries/2.19.0/binary-update.json`. The
+  reinstalled 2.x CLI, its `ak update`, `ak self-update`, auto-update, and the
+  Desktop and dashboard updaters stay on exactly that release. A
+  `registry_url` you set yourself to another manifest is left alone.
+- A v3 Desktop app reads the hold: its update banner and Settings update panel
+  say the home was rolled back to v2, and turning automatic updates back on
+  applies nothing by itself. While `ak rollback --to v2` is still running, the
+  banner says so, names that command, and offers no update.
+
+## Return to v3
+
+From the v2 CLI, install the v3 version explicitly with a one-off root (the
+rollback result prints the exact command), then run `ak update --ssot`, which
+restores your previous `registry_url` and releases the hold:
+
+```bash
+ak self-update --registry-url https://releases.agentkit.best --version 3.0.0 --yes
+ak update --ssot
+```
+
+An update you start from the v3 Desktop banner also releases the hold and the
+pin once it installs or stages a v3 release.
+
+## Roll back by hand
+
+Without a checkpoint, run these steps in order: kits first, while the v3 CLI is
+still installed, then the CLI, then the Desktop app.
+
+### 1. Record the state and stop re-upgrades
+
+The background auto-update and the Desktop updater follow the release channel
+and would bring v3 back:
+
+```bash
+ak versions --local-only
+ak backups list
+ak doctor --json
+ak update --schedule off
+ak self-update --disable-auto-update
+```
+
+### 2. Check for skill-store journals
+
+If you ever set `AGENTKIT_SKILL_STORE=1`, make sure no store journal is left
+before you downgrade; a v2 CLI ignores v3 journals and never recovers them. The
+directory must hold no `*.json` file:
+
+```bash
+ls <agentkit-home>/state/journals/
+```
+
+If a journal is there, finish recovery with the v3 CLI while the flag is still
+on. Run it from the project directory, or with `--scope global` for global
+installs:
+
+```bash
+AGENTKIT_SKILL_STORE=1 ak skills migrate
+```
+
+Then unset the flag. Legacy records stayed written while it was on, so v2 reads
+the install as before.
+
+### 3. Move each kit back to v2
+
+An unpinned request never moves a kit below its install receipt; an explicit
+`--version` is the deliberate downgrade. For a project, `ak update` rolls back
+the tracked `kits/` tree and every installed runtime of that kit; for a global
+install, refresh the kit:
+
+```bash
+ak update /path/to/project --kits engineer --version 2.19.0 --yes
+ak kit refresh engineer --global --version 2.19.0 --yes
+```
+
+Repeat for every installed kit. Each run writes its own snapshot first. To
+return to the exact pre-upgrade bytes instead, including a file you modified
+that a `--force` update overwrote, restore the snapshot the v3 update printed:
+
+```bash
+ak backups show <id>
+ak recover <id> --dry-run
+ak recover <id> --yes
+```
+
+### 4. Downgrade the CLI
+
+`ak self-update` only moves forward: asked for an older version it reports
+`already current` and changes nothing. Use the official installer with an exact
+version, which authenticates the signed manifest for that version:
+
+```bash
+curl -fsSL https://agentkit.best/install.sh | AK_VERSION=2.19.0 sh
+```
+
+```powershell
+$env:AK_VERSION = "2.19.0"
+irm https://agentkit.best/install.ps1 | iex
+```
+
+Confirm with `ak --version` and `ak doctor --json`. The installer writes to
+`$HOME/.local/bin` on macOS and Linux; if `ak --version` still reports v3,
+another `ak` earlier on `PATH`, such as a Homebrew install, shadows it.
+
+### 5. Downgrade the Desktop app
+
+The Desktop updater never installs a version older than the one installed or
+the installed CLI. Take the v2 Desktop artifact from the public release
+manifest for that version:
+
+```bash
+curl -fsSL https://releases.agentkit.best/binaries/2.19.0/binary-update.json
+```
+
+Its `artifacts` entries with `"kind": "gui"` give the `url`, `sha256`, and
+`size` for each `os` and `arch`. Download the one for your platform, check that
+its SHA-256 digest and size match the manifest, then replace the app.
+
+### 6. Move a newer operational store aside
+
+If v2 reports the local operational store as `newer-schema`, v3 has migrated it
+forward, and v2 never replaces such a store. Close every AgentKit process, then
+move `<agentkit-home>/operational/operational.db` and its `-wal` and `-shm`
+files aside as one set; do not delete them. v2 creates a fresh store on its
+next write. Before returning to v3, move the v2 set aside as well, then move the
+v3 set back.
+
+A later unpinned `ak update` or `ak kit refresh` offers v3 again, because the
+v2 receipts are older than the newest release. Stay on v2 by not running
+unpinned updates and by keeping the background schedule off.
+
+## See also
+
+- [Upgrading from v2 to v3](./upgrading-to-v3)
+- [`ak rollback`](../reference/cli/rollback)
+- [`ak backups checkpoint`](../reference/cli/backups/checkpoint)
+- [`ak recover`](../reference/cli/recover)
+- [Updating AgentKit and kits](./updating)

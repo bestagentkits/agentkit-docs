@@ -30,9 +30,16 @@ nhận, đầu ra và mã thoát riêng.
 | Khôi phục snapshot mới nhất | `ak backups restore --latest` | Dùng cùng restore engine và quy tắc an toàn. |
 | Xoá snapshot theo retention policy | `ak backups prune` | Mặc định sẽ xoá; thêm `--dry-run` để preview. |
 | Stage bản sao database vận hành nhất quán | `ak backups create` | Thay thế thư mục staging vận hành và ghi bản sao `operational.db` đã xác minh. |
+| Chụp checkpoint nén, có thể xác minh | `ak backups checkpoint` | Ghi một thư mục checkpoint cùng khoá của nó dưới `~/.agentkit/backups/checkpoints/` và áp dụng retention cho checkpoint. |
 
 Lệnh cấp cao nhất `ak recover [id]` là một entry point khác vào restore engine.
 Đây không phải Cobra alias của `ak backups restore`.
+
+Checkpoint là kho thứ hai bên cạnh snapshot. `list` hiển thị chúng sau các
+snapshot và đánh dấu nguồn rollback; `show`, `verify` và `restore` nhận ID
+checkpoint và chuyển sang checkpoint engine; `prune --checkpoints` prune
+checkpoint thay cho snapshot. Lệnh cấp cao nhất
+[`ak rollback --to v2`](../cli/ak_rollback) khôi phục checkpoint pre-upgrade mới nhất.
 
 ## Hiểu giới hạn của snapshot
 
@@ -60,6 +67,35 @@ ak backups restore <id> --dry-run
 `ak backups create` tách biệt với kho rollback dùng ID. Implementation hiện tại
 stage và xác minh `operational.db` trong thư mục tạm của hệ thống; lệnh không tạo
 ID xuất hiện trong `ak backups list`.
+
+## Biết khi nào snapshot được tạo
+
+Các lần chạy thường ngày giữ snapshot ở mức nhỏ:
+
+- [`ak update`](../update) được áp dụng mà không có `--force` chỉ snapshot đúng
+  những tệp nó ghi hoặc prune.
+- [`ak init`](../init) mặc định không tạo snapshot.
+
+Bật capture rộng hơn cho từng lần chạy bằng `--backup`, hoặc cho mọi lần chạy
+bằng `backups.enabled: true` trong `~/.agentkit/config.yaml`. Khi đó `ak update`
+capture toàn bộ project, còn `ak init` capture `~/.claude/` và trạng thái
+project.
+
+`--force` và các thao tác phá huỷ khác, như takeover, chuyển delivery mode, gỡ
+cài đặt hoặc migration, vẫn tự động snapshot. Trên các lệnh có cờ này,
+`--no-backup` bỏ qua các snapshot đó; không thể dùng chung với `--backup`.
+
+`backups.scope` trong `~/.agentkit/config.yaml` quyết định snapshot capture bao
+nhiêu phần của `~/.claude/`. Khi không đặt, giá trị là `lean`, bỏ qua các thư
+mục trạng thái runtime của Claude Code mà AgentKit không bao giờ ghi, như
+`projects/`, `telemetry/`, `todos/`, `shell-snapshots/`, `file-history/`,
+`backups/` và `plugins/cache/`. Đặt `backups.scope: full` để capture toàn bộ;
+giá trị không nhận diện được sẽ dùng `full` kèm cảnh báo.
+
+Retention tự động giữ mọi snapshot được tạo trong một lần gọi lệnh qua các lần
+auto-prune sau đó của cùng lần gọi, ngay cả khi tạm thời vượt `keep_last`. Lần
+gọi lệnh sau áp dụng retention bình thường trở lại. Điều này không thay đổi
+cách chọn snapshot của `ak backups prune` thủ công.
 
 ## Áp dụng quy tắc an toàn riêng của từng lệnh
 
@@ -93,4 +129,5 @@ lập nếu có.
 - [Thông tin đầy đủ của `ak backups`](../cli/ak_backups)
 - [Thông tin đầy đủ của `ak backups restore`](../cli/ak_backups_restore)
 - [Thông tin đầy đủ của `ak backups verify`](../cli/ak_backups_verify)
+- [Thông tin đầy đủ của `ak backups checkpoint`](../cli/ak_backups_checkpoint)
 - [Thông tin đầy đủ của `ak recover`](../cli/ak_recover)

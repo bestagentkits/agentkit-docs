@@ -17,6 +17,7 @@ ak uninstall [path] [options]
 - In a TTY, apply mode asks for confirmation unless `--yes` is set. Decline or end-of-input exits `3`.
 - JSON, quiet, and non-interactive execution do not prompt. Without `--yes`, they refuse mutation and exit `3`.
 - `--force` permits deletion of modified owned files, but still requires confirmation. It never deletes orphan files.
+- A project rooted at your home directory holds user-level configuration, such as `~/.claude/skills` adopted by a home-level `ak init`. Without `--force`, the command lists the files it would remove and exits `6`, even with `--dry-run`. Review that list before you re-run with `--force`, or use `ak kit uninstall <kit> --global` to remove a user-level Kit.
 
 ## Arguments
 
@@ -27,7 +28,7 @@ ak uninstall [path] [options]
 | Option | Default | Purpose |
 | --- | --- | --- |
 | `--dry-run` | `false` | Preview classified file actions. |
-| `--force` | `false` | Permit deletion of modified owned files. |
+| `--force` | `false` | Permit deletion of modified owned files and removal of a home-directory project. |
 | `--keep-registry` | `false` | Keep the global project registry entry. |
 | `--project-dir <path>` | Empty | Select the project directory. |
 
@@ -53,9 +54,9 @@ ak uninstall . --force --yes
 
 ## Output and streams
 
-Human output lists clean, modified, orphan, and missing files. With `--json`, stdout uses the shared envelope with `"kind": "uninstall"`. Its `data` object contains `project_dir`, `dry_run`, `files`, `deleted`, `skipped`, and `orphans`, plus `snapshot_id` when created.
+Human output lists clean, modified, orphan, and missing files. With `--json`, stdout uses the shared envelope with `"kind": "uninstall"`. Its `data` object contains `project_dir`, `dry_run`, `files`, `deleted`, `skipped`, and `orphans`, plus `snapshot_id` when created. An applied removal also reports `files_snapshot_id` and `files_restore_command` for the snapshot of the deleted project files.
 
-Items in `files` currently use the exact keys `RelPath`, `Class`, `WillDelete`, `Deleted`, and `Skipped`. `Class` is numeric: `0` clean, `1` modified, `2` orphan, and `3` missing. Errors go to stderr. A modified-file refusal can include a human summary before the structured JSON error unless quiet mode is used.
+Items in `files` currently use the exact keys `RelPath`, `Class`, `WillDelete`, `Deleted`, and `Skipped`. `Class` is numeric: `0` clean, `1` modified, `2` orphan, and `3` missing. Errors go to stderr. A modified-file or home-directory refusal can include a human summary before the structured JSON error unless quiet mode is used.
 
 ## Exit status
 
@@ -65,14 +66,14 @@ Items in `files` currently use the exact keys `RelPath`, `Class`, `WillDelete`, 
 | `1` | Project discovery, snapshot, filesystem, or partial deletion failed. |
 | `2` | Flags or path arguments are invalid. |
 | `3` | Dry-run completed, confirmation was declined, or non-interactive apply lacked `--yes`. |
-| `6` | Modified owned files require `--force`. |
+| `6` | Modified owned files, or a project rooted at your home directory, require `--force`. |
 
 ## Effects, safety, and recovery
 
-The command classifies files twice before deletion. Clean owned files are deleted; modified files require `--force`; missing files are skipped; orphan files remain untouched. It removes the ownership manifest and lock, then removes `.agentkit` only when empty. Other files in that directory remain.
+The command classifies files twice before deletion. Clean owned files are deleted; modified files require `--force`; missing files are skipped; orphan files remain untouched. For a project rooted at your home directory, the command skips the orphan scan instead of walking the home tree, so it reports no orphans. It removes the ownership manifest and lock, then removes `.agentkit` only when empty. Other files in that directory remain.
 
-Apply mode takes a bounded pre-uninstall AgentKit snapshot before deleting sequentially. A failure can therefore leave partial removal. Use the reported snapshot and inspect the filesystem before retrying. Project-registry removal is best effort and can be disabled with `--keep-registry`. The command performs no network, authentication, entitlement, cache, or child-process work.
+Apply mode takes a bounded pre-uninstall AgentKit snapshot, then a second snapshot of the exact project files it will delete plus the ownership manifest, before deleting sequentially. If the second snapshot fails, nothing is deleted. Human output prints that snapshot ID with its restore command, `ak backups restore <id> --allow-root <project>`. A failure during deletion can leave partial removal; the error then includes the same restore command. Inspect the filesystem before retrying. Project-registry removal is best effort and can be disabled with `--keep-registry`. The command performs no network, authentication, entitlement, cache, or child-process work.
 
 ## Related commands and limitations
 
-Use [`ak init`](./init) to recreate project metadata and [`ak doctor`](./doctor) to inspect recovery state. The snapshot is not a full-project backup.
+Use [`ak init`](./init) to recreate project metadata and [`ak doctor`](./doctor) to inspect recovery state. The snapshots cover AgentKit state and the deleted files only; they are not a full-project backup.

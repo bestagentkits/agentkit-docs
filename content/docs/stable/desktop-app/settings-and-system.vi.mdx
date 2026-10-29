@@ -1,11 +1,12 @@
 ---
 title: Cài đặt và hệ thống
-description: Cấu hình ứng dụng AgentKit Desktop, quản lý index analytics cục bộ, xem giới hạn sử dụng và insight cục bộ, thiết kế status line, gửi feedback và migrate provider.
+description: Cấu hình ứng dụng AgentKit Desktop, quản lý các thiết bị gắn với license, quản lý index analytics cục bộ, xem giới hạn sử dụng và insight cục bộ, thiết kế status line, gửi feedback và migrate provider.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
-Nhóm System chứa cấu hình mức ứng dụng và bảo trì: gửi feedback, chỉnh settings,
+Nhóm System chứa cấu hình mức ứng dụng và bảo trì: quản lý các thiết bị gắn với
+license, gửi feedback, chỉnh settings,
 quản lý index analytics cục bộ, thiết kế status line, và migrate provider. Sau trang
 này bạn sẽ biết mỗi bề mặt thay đổi gì và điều gì vẫn nằm cục bộ.
 
@@ -15,6 +16,49 @@ này bạn sẽ biết mỗi bề mặt thay đổi gì và điều gì vẫn n�
   lập với các ảnh đó. Ảnh chưa được chụp lại hoặc xác minh trực quan trên bản
   Desktop hiện tại, nên label và bố cục có thể khác.
 </Callout>
+
+## Quản lý thiết bị của license
+
+**Hệ thống → Thiết bị** liệt kê các máy mà license App của bạn đang được kích
+hoạt. Trang này cần một session license App trong Desktop; nếu chưa có, trang
+hiển thị **Chưa kết nối giấy phép**. **Xem giấy phép** mở trang **Giấy phép**.
+Mỗi dòng hiển thị:
+
+- tên thiết bị (**Thiết bị chưa đặt tên** khi máy không báo tên) và phiên bản
+  AgentKit của máy đó, nếu có báo;
+- nền tảng (platform);
+- **Lần đầu thấy** và **Lần cuối thấy**, theo định dạng thời gian cục bộ của bạn;
+- nhãn **thiết bị này** trên máy bạn đang dùng.
+
+**Hủy kích hoạt** yêu cầu xác nhận, sau đó thu hồi lượt kích hoạt của thiết bị
+đó trên registry AgentKit và giải phóng seat của nó:
+
+- **Thiết bị khác** bị đăng xuất từ xa. Máy đó bị khoá ở lần kiểm tra license
+  tiếp theo với registry, và phải kích hoạt lại bằng license key để tham gia
+  lại. Không thể hoàn tác thao tác này từ máy bạn đã dùng.
+- **Thiết bị này** bị đăng xuất ngay lập tức: Desktop xoá session license cục
+  bộ và ứng dụng đăng xuất. Hãy kích hoạt lại bằng license key để tiếp tục sử
+  dụng.
+
+Nếu không kết nối được registry, trang hiển thị **Hiện chưa xác định được thiết
+bị** thay vì một danh sách rỗng; các thiết bị đã gắn vẫn hoạt động bình thường,
+nên hãy thử lại sau.
+
+CLI cung cấp cùng các thao tác này cho session license key (`ak login
+--license-key`):
+
+```bash
+ak license devices                          # list devices and their ids
+ak license devices deactivate <device-id>   # deactivate one device
+```
+
+Khi chạy trong terminal, lệnh hủy kích hoạt sẽ hỏi xác nhận. Với `--json` hoặc
+`--no-interactive`, bạn phải truyền `--yes`, nếu không lệnh sẽ thoát mà không
+hủy kích hoạt thiết bị nào. Chạy `ak license devices --help` và `ak license
+devices deactivate --help` để xem chính xác các flag và exit code.
+
+Về việc chuyển seat khi kích hoạt và giới hạn số lần một license được chuyển,
+xem [Desktop vẫn ở màn hình license](./troubleshooting#desktop-vẫn-ở-màn-hình-license).
 
 ## Gửi feedback an toàn
 
@@ -29,8 +73,11 @@ license key, session file hay giá trị cấu hình chưa che.
 
 **Your reports** liệt kê các report đã gửi từ máy này, kể cả report gửi bằng
 [`ak feedback`](../reference/cli/feedback). Mỗi dòng hiển thị trạng thái hiện tại
-của issue, được đọc không cần xác thực từ GitHub API công khai; khi lần tra cứu
-đó thất bại, dòng hiển thị `status unavailable`.
+của issue (open hoặc closed) và số bình luận, được đọc không cần xác thực từ GitHub API công khai. Chỉ 25 report gần
+nhất được tra cứu, và các lần tra cứu dùng chung giới hạn 8 giây; report cũ hơn,
+hoặc lần tra cứu thất bại hay vượt giới hạn đó, hiển thị `status unavailable`.
+Report có link đã ghi không phải link issue GitHub hợp lệ sẽ hiển thị tiêu đề
+không kèm link.
 
 ## Chỉnh settings ứng dụng
 
@@ -51,7 +98,9 @@ tab database. Tuỳ chọn App gồm giao diện, theme và độ rộng sidebar
   nếu không thì dùng tiếng Anh.
 
 Các thay đổi này áp dụng ngay cho máy này và được ghi nhớ trên máy đó. Desktop
-và browser dashboard dùng chung giao diện đã dịch. Ngôn ngữ agent dùng để viết
+và browser dashboard dùng chung giao diện đã dịch. Chỉ bản thân giao diện được
+dịch: thông báo lỗi từ CLI hoặc backend, nội dung file và tên Kit vẫn giữ nguyên
+như khi được tạo ra. Ngôn ngữ agent dùng để viết
 plan và journal là một cài đặt riêng trong config editor. Runtime mặc định và
 chế độ phân phối Claude Code vẫn được đánh dấu là sẽ có sau.
 
@@ -132,7 +181,7 @@ cầu, làm mới hay ghi token.
 
 | Provider | Endpoint | Thứ tự tìm token |
 | --- | --- | --- |
-| Claude Code | `GET https://api.anthropic.com/api/oauth/usage` | `ANTHROPIC_OAUTH_TOKEN`, rồi `.credentials.json` trong `CLAUDE_CONFIG_DIR` hoặc `~/.claude`, rồi mục `Claude Code-credentials` trong macOS keychain |
+| Claude Code | `GET https://api.anthropic.com/api/oauth/usage` | `ANTHROPIC_OAUTH_TOKEN`, rồi `.credentials.json` trong `CLAUDE_CONFIG_DIR` hoặc `~/.claude`, rồi mục `Claude Code-credentials` trong macOS keychain (với profile `CLAUDE_CONFIG_DIR`, là mục đó thêm hậu tố `-` và 8 chữ số hex đầu của SHA-256 của thư mục) |
 | Codex | `GET https://chatgpt.com/backend-api/wham/usage` | `OPENAI_SESSION_TOKEN`, rồi `auth.json` trong `CODEX_HOME`, `~/.codex`, hoặc (ngoài Windows) `codex` dưới `XDG_CONFIG_HOME` hoặc `~/.config` |
 | Cursor | `POST https://api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage` (cửa sổ monthly) | `CURSOR_ACCESS_TOKEN`, rồi một bản sao riêng của `state.vscdb` của Cursor, rồi mục trong macOS keychain |
 | Grok | `GET https://cli-chat-proxy.grok.com/v1/billing` (cửa sổ week) | `GROK_ACCESS_TOKEN`, rồi `~/.grok/auth.json` |
@@ -171,6 +220,16 @@ xem bằng chứng phía sau một bản ghi. Đồng thuận cho việc thu th�
 tường minh và tách khỏi bằng chứng cục bộ, và phần đóng góp theo tháng được
 đóng băng cùng lọc riêng tư ngay trên máy này để bạn xem payload trước khi gửi.
 Để đồng thuận ở trạng thái chưa đặt thì mọi insight vẫn nằm cục bộ.
+
+Một đề xuất có bằng chứng có thể trở thành công việc cải thiện có phạm vi. Từ một
+đề xuất, bạn có thể tạo kế hoạch cải thiện trong một project đích, hoãn, bỏ qua,
+đánh dấu sẵn sàng để xác minh, và xác minh kết quả dựa trên bằng chứng baseline
+và candidate đã ghi. Mỗi đề xuất hiển thị một trạng thái: Proposed, Deferred,
+Dismissed, Planned, Awaiting verification, Insufficient evidence, Improved hoặc
+Not improved. Các thao tác này chỉ ghi disposition cục bộ và một kế hoạch có phạm
+vi; chúng không gọi provider hay model. Cùng vòng đời này có trong CLI dưới dạng
+`ak insights work`, trong đó `list` chỉ đọc và `verify` chỉ dùng bằng chứng
+benchmark cục bộ.
 
 ## Thiết kế status line
 

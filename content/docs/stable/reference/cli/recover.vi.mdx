@@ -46,12 +46,18 @@ Không thể dùng ID cùng `--latest`. Nhiều hơn một ID là không hợp l
 
 | Tuỳ chọn | Mặc định | Tác động |
 | --- | --- | --- |
-| `--allow-root <absolute-root>` | Trống | Cấp quyền rõ ràng cho một project bundle root đã lưu; lặp lại cho toàn bộ tập. |
+| `--allow-root <absolute-root>` | Trống | Cấp quyền rõ ràng cho một project bundle root đã lưu; lặp lại cho toàn bộ tập. Với checkpoint, chỉ định một root key có đường dẫn đã ghi khác đường dẫn hiện tại. |
 | `--dry-run` | `false` | Chạy toàn bộ preflight và in tác động mà không live mutation. |
 | `--latest` | `false` | Chọn snapshot có thể đọc được mới nhất. |
+| `--skip-secrets` | `false` | Với checkpoint bị thiếu khoá, khôi phục mọi thứ trừ tệp secret đã niêm phong. Dùng với ID snapshot thì thoát `2`. |
 
 Lệnh không có `--force` hoặc `--apply`. Các cờ dùng chung được mô tả trong
 [quy ước CLI](../cli-conventions).
+
+ID checkpoint do `ak backups checkpoint` ghi chuyển `ak recover` sang
+checkpoint engine, với cùng checkpoint pre-restore, prompt, quy tắc đồng ý và
+các envelope `backups.checkpoint_restore_plan`, `backups.checkpoint_restore`
+như [`ak backups restore`](../cli/ak_backups_restore#khôi-phục-checkpoint).
 
 ## Hành vi xác nhận
 
@@ -81,15 +87,17 @@ remove, keep, skip và authorized root riêng. Prompt nằm trên stderr.
 dưới `data.plan`: `BackupID`, `Restore`, `Keep`, `Skip`, `Remove`,
 `RemoveTrees` và `AuthorizedRoots`.
 
-Applied success không ghi JSON success envelope. Stdout trống và stderr là:
+Restore đã áp dụng với `--json` ghi một success envelope `backups.restore`
+trên stdout, gồm `data.id`, `data.restored` và `data.plan` đã áp dụng. Khi
+không có `--json`, restore đã áp dụng ghi dòng này lên stderr, và `--quiet`
+không ẩn dòng này:
 
 ```text
 [OK] restored <id>
 ```
 
-Dòng này vẫn là plain text với `--json` và vẫn hiện với `--quiet`. Lỗi thực thi
-trong chế độ JSON dùng error envelope có cấu trúc trên stderr; lỗi phân tích cờ
-có thể vẫn là hướng dẫn dùng dạng plain text.
+Lỗi trong chế độ JSON, kể cả lỗi phân tích cờ (mã thoát `2`), ghi error
+envelope có cấu trúc lên stderr.
 
 ## Mã thoát
 
@@ -99,7 +107,7 @@ có thể vẫn là hướng dẫn dùng dạng plain text.
 | `1` | Lỗi integrity, quyền, destination, I/O hoặc restore một phần. |
 | `2` | ID thiếu hoặc sai dạng, argument dư, cờ sai hoặc ID dùng cùng `--latest`. |
 | `3` | Xác nhận bị từ chối hoặc gặp end-of-file. |
-| `4` | Backup mutation khác đang giữ apply lock. |
+| `4` | Backup mutation khác đang giữ apply lock. Với `--json`, error envelope ghi `error_code` `lock_held`. |
 | `5` | ID đúng dạng không tồn tại hoặc không có latest snapshot. |
 
 ## Tác động, an toàn và khôi phục

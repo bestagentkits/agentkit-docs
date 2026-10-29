@@ -1,12 +1,12 @@
 ---
-title: Create marketing delivery plans with ak:plan
-description: Use the Marketing-owned ak:plan workflow to create, compare, validate, or archive implementation and CRO plans without implementing them.
+title: Create marketing delivery plans with ak-plan
+description: Use the Marketing-owned ak-plan workflow to create, compare, validate, or archive implementation and CRO plans without implementing them.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
-Use `ak:plan` to turn a defined marketing or technical requirement into durable
+Use `ak-plan` to turn a defined marketing or technical requirement into durable
 plan files for review. The Marketing-owned variant can create fast, researched,
 parallel, two-approach, CI-repair, and conversion-rate-optimization plans. It
 can also validate a plan or change its index visibility after confirmation. It
@@ -15,9 +15,9 @@ does not implement the plan.
 This Skill is not the Engineer Kit's same-named planning workflow. Its own
 source, subcommands, file shape, CRO route, and dependency limits apply.
 
-## Choose ak:plan for a durable handoff
+## Choose ak-plan for a durable handoff
 
-### Use ak:plan when
+### Use ak-plan when
 
 - A marketing site, analytics, automation, content system, or campaign-support
   change needs phased implementation instructions.
@@ -31,11 +31,11 @@ source, subcommands, file shape, CRO route, and dependency limits apply.
 
 ### Choose another workflow when
 
-- The outcome or direction is not settled. Use [`ak:brainstorm`](./brainstorm).
-- You only need technical advice. Use [`ak:ask`](./ask).
-- You want to execute an accepted technical plan. Use [`ak:cook`](./cook).
+- The outcome or direction is not settled. Use [`ak-brainstorm`](./brainstorm).
+- You only need technical advice. Use [`ak-ask`](./ask).
+- You want to execute an accepted technical plan. Use [`ak-cook`](./cook).
 - You have a concrete defect and need diagnosis plus correction. Use
-  [`ak:fix`](./fix).
+  [`ak-fix`](./fix).
 - You need a broad marketing strategy rather than an implementation or CRO
   plan. Use the relevant domain planning Skill from the
   [Marketing Kit](../../marketing).
@@ -58,9 +58,9 @@ Before invoking the Skill:
 
 | Runtime | Invocation | Availability boundary |
 | --- | --- | --- |
-| Claude Code | `/ak:plan ...` | Native and explicit plugin delivery are supported. Internal routed planning surfaces must also be available. |
-| Cursor | `/ak:plan ...` | Slash invocation is user-verified; availability of every routed dependency is not established. |
-| Codex | `$ak:plan ...` | Uses native Codex Skill discovery; routed SlashCommands and helper Skills may not map identically. |
+| Claude Code | `/ak-plan ...` | Native and explicit plugin delivery are supported. Internal routed planning surfaces must also be available. |
+| Cursor | `/ak-plan ...` | Slash invocation is user-verified; availability of every routed dependency is not established. |
+| Codex | `$ak-plan ...` | Uses native Codex Skill discovery; routed SlashCommands and helper Skills may not map identically. |
 
 ## Run the Skill
 
@@ -70,21 +70,21 @@ Create a bounded CRO plan without authorizing live changes:
   <Tab value="Claude Code">
 
 ```text
-/ak:plan cro "Plan improvements for the supplied signup-page evidence. Keep consent language unchanged, define one-variable experiments, and do not edit, publish, or launch the page"
+/ak-plan cro "Plan improvements for the supplied signup-page evidence. Keep consent language unchanged, define one-variable experiments, and do not edit, publish, or launch the page"
 ```
 
   </Tab>
   <Tab value="Cursor">
 
 ```text
-/ak:plan cro "Plan improvements for the supplied signup-page evidence. Keep consent language unchanged, define one-variable experiments, and do not edit, publish, or launch the page"
+/ak-plan cro "Plan improvements for the supplied signup-page evidence. Keep consent language unchanged, define one-variable experiments, and do not edit, publish, or launch the page"
 ```
 
   </Tab>
   <Tab value="Codex">
 
 ```text
-$ak:plan cro "Plan improvements for the supplied signup-page evidence. Keep consent language unchanged, define one-variable experiments, and do not edit, publish, or launch the page"
+$ak-plan cro "Plan improvements for the supplied signup-page evidence. Keep consent language unchanged, define one-variable experiments, and do not edit, publish, or launch the page"
 ```
 
   </Tab>
@@ -107,12 +107,35 @@ $ak:plan cro "Plan improvements for the supplied signup-page evidence. Keep cons
 The canonical argument shape is
 `[archive|ci|cro|fast|hard|parallel|two|validate] [task]`.
 
+## Opt in to the AK Render HTML route
+
+`--ak-render` implies `--html` and compiles `plan.html` from a Page Spec. Instead of hand-writing the page,
+the Skill writes `plan.page.yaml` beside `plan.html` and compiles it with the pinned
+`npx -y @bestagentkits/render@0.2.0` compiler, which needs Node 20.11 or later.
+A project that has an `.ak-render/` directory of AK Render theme presets selects
+this route automatically, without a per-run opt-out.
+
+- The hand-written HTML route stays the default. AK Render remains opt-in because
+  a measured comparison with the default route did not pass its quality gate.
+- The page keeps the same required sections as the default route.
+- Phase details become expandable items instead of modals, local images are referenced by relative path instead of data URIs, and the editorial visual switches apply to the default route only.
+- The compiled page opens over `file://` with zero network requests. The first
+  `npx` run downloads the pinned package from the npm registry; later runs use
+  the cache.
+- To change the page, edit the spec and recompile. Do not patch the compiled
+  HTML.
+- Marketing Kit does not include `ak-diagram`, so a diagram panel renders a structured text fallback and the Skill also shows the flow as steps or a timeline.
+- If Node, `npx`, or the package is unavailable, or the spec is still invalid
+  after three repairs, the Skill uses the default route and states the reason in
+  its report.
+
 ## Understand plan creation stages
 
 1. **Resolve plan context.** If an active or branch-suggested plan exists, the
    Skill asks whether to use or activate it instead of silently replacing it.
-   When `fast` or `hard` creates a new plan, it marks the new directory active
-   using the support available in the current runtime.
+   When `fast` or `hard` creates a new plan, it attempts session activation
+   through the helper available in the current runtime, rather than treating
+   plan creation itself as proof of activation.
 2. **Clarify the task.** It asks only for details needed to create a useful plan.
 3. **Load the selected route.** The first argument selects its matching
    reference workflow; otherwise the Skill chooses fast or hard based on
@@ -132,10 +155,22 @@ todo items, success criteria, risks, security considerations, and next steps.
 On the `hard` route, a risk based on a breakable assumption also records the
 observable signal that it failed and whether to adjust or stop and replan.
 
+Where `set-active-plan.cjs` is available, activation requires a bound
+`CK_SESSION_ID` and an existing plan directory. Exit `0` confirms the session
+pointer was persisted and read back. A nonzero exit means activation is not
+confirmed; it does not guarantee that no write occurred. Continue planning if
+activation fails or the helper is unavailable, and pass the explicit plan path
+to subagents. Relative paths resolve from the immutable session launch root,
+not the current directory after a directory change; use an absolute path when
+needed.
+
+`set-active-plan.cjs --clear` clears the session pointer, not the distinct
+worktree-scoped current-plan pointer managed by `ak plan use`.
+
 ## Keep planning separate from external action
 
 <Callout type="warn" title="A plan is not approval to act">
-  `ak:plan` may write local planning artifacts, update a validation summary, or
+  `ak-plan` may write local planning artifacts, update a validation summary, or
   change plan index visibility through `archive`. It does not authorize code or
   content edits, publishing, campaign launch, provider-account changes,
   audience contact, spend, commit, push, or deployment.
@@ -166,7 +201,7 @@ A useful result should provide:
 - For `validate`, confirmed decisions and plan-revision items.
 - Unresolved questions listed last.
 
-Before handing the plan to `ak:cook`, verify that paths and contracts match the
+Before handing the plan to `ak-cook`, verify that paths and contracts match the
 current project, success criteria are observable, external effects are called
 out as approvals, and no private data or unsupported performance claim appears.
 
@@ -174,9 +209,10 @@ out as approvals, and no private data or unsupported performance claim appears.
 
 | Symptom | Safe next step |
 | --- | --- |
-| The runtime cannot find `ak:plan` | Confirm target and scope, restart the runtime, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+| The runtime cannot find `ak-plan` | Confirm target and scope, restart the runtime, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
 | The Skill reports an active or suggested plan | Review the exact path and choose whether to continue, activate it, or create a new plan. |
-| A routed `/plan:fast` or `/plan:hard` surface is unavailable | Stop and report the missing dependency. Marketing Kit exports no command catalog, so installation of `ak:plan` alone does not prove every internal SlashCommand can execute on every runtime. |
+| Session activation returns nonzero | Keep the plan, treat activation as unconfirmed, and pass its explicit path to subagents; check the bound session and existing directory without assuming no state was written. |
+| A routed `/plan:fast` or `/plan:hard` surface is unavailable | Stop and report the missing dependency. Marketing Kit exports no command catalog, so installation of `ak-plan` alone does not prove every internal SlashCommand can execute on every runtime. |
 | `ci` cannot read the run | Verify the URL or run ID, `gh` installation, authorization, repository access, and network availability. Do not invent a diagnosis from missing logs. |
 | CRO evidence is incomplete | Mark assumptions and data gaps, or gather approved screenshots, content, URL evidence, or metrics before finalizing the plan. |
 | Plan files were written to an unexpected location | Stop, inspect the configured Plan Context and naming path, and do not move or delete unrelated files. |
@@ -185,7 +221,7 @@ out as approvals, and no private data or unsupported performance claim appears.
 ## Know the current limits
 
 - Several routes rely on injected Plan Context, a `planning` Skill, routed
-  SlashCommands, Agents, or tools. Projection of `ak:plan` does not guarantee
+  SlashCommands, Agents, or tools. Projection of `ak-plan` does not guarantee
   identical availability of those dependencies across runtimes.
 - The package exports no Marketing command catalog; references to `/plan:*` are
   internal workflow dependencies, not additional public Marketing commands.
@@ -194,5 +230,5 @@ out as approvals, and no private data or unsupported performance claim appears.
 - A plan cannot guarantee conversion, revenue, performance, implementation
   quality, provider behavior, or delivery dates.
 
-Continue with [`ak:cook`](./cook) only after approving a technical plan, or
+Continue with [`ak-cook`](./cook) only after approving a technical plan, or
 return to the [Marketing Kit overview](../../marketing) for domain workflows.

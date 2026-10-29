@@ -20,8 +20,11 @@ The command accepts no positional arguments.
 
 Without `--yes`, the command checks availability and does not download an
 artifact. It never asks an interactive question, regardless of TTY or stdin.
-The default binary channel is the persisted update channel, or `beta` when no
-preference exists; select `--channel stable` when that is your intended track.
+The binary channel resolves in this order: `--channel` (or `--beta`), the saved
+`updates.channel`, the channel of the running release binary, then `stable`.
+Development builds without a saved preference resolve `stable`. An explicit
+`--channel` is saved only when you also pass `--enable-auto-update` or
+`--disable-auto-update`.
 
 AgentKit first detects ownership of the running executable. A verified Homebrew
 or Scoop install is not replaced in place; the result reports `brew upgrade ak`
@@ -34,7 +37,7 @@ fails closed.
 | --- | --- | --- |
 | `--beta` | `false` | Shorthand for `--channel beta`; conflicts with an explicit non-beta channel. |
 | `--changelog` | `false` | Print the verified release changelog without checking or applying an update. |
-| `--channel <channel>` | Config or `beta` | Select `dev`, `beta`, or `stable`. |
+| `--channel <channel>` | `updates.channel`, running binary channel, then `stable` | Select `dev`, `beta`, or `stable`. Other values exit `2`. |
 | `--check` | `false` | Check signed metadata without downloading artifacts. |
 | `--disable-auto-update` | `false` | Set Desktop auto-update checks and staged apply to disabled. |
 | `--dry-run` | `false` | Download and verify selected artifacts in a temporary directory without replacing the install. |
@@ -116,17 +119,19 @@ Human results are written to stdout. Normal JSON success uses
 
 ```text
 available, status, reason, current_version, latest_version,
-auto_update, channel, applied, restart_required, message,
+auto_update, channel, channel_source, applied, restart_required, message,
 updated_paths, pending_path, staging_dir, install_manager, upgrade_command
 ```
 
-Optional fields are omitted when empty. Changelog JSON instead uses
-`kind=self_update.changelog`.
+`channel_source` names the input that selected the channel: `flag`,
+`preference`, `binary`, or `default`. Human output prints the same source next
+to the channel. Optional fields are omitted when empty. Changelog JSON instead
+uses `kind=self_update.changelog`.
 
-Command-level validation and apply failures return before the success renderer;
-do not require a structured error envelope in `--json` mode. Flag-parse errors
-remain plain text. Treat process status as the failure signal and capture stderr
-for human mode.
+Command-level validation and apply failures return before the success renderer.
+In `--json` mode they, and flag-parse errors (exit `2`), end stderr with the
+shared [error envelope](../cli-conventions#json-output). Treat process status as
+the failure signal and capture stderr for human mode.
 
 ## Exit status
 
@@ -134,7 +139,7 @@ for human mode.
 | --- | --- | --- |
 | `0` | Check, managed-install report, settings change plus check, verified dry-run, changelog, or apply completed. `status=unknown` is also exit `0`. | Inspect `status`, `reason`, `applied`, and `restart_required`. |
 | `1` | Config, manager detection, network apply, signature/digest, compatibility, artifact, staging, replacement, or changelog availability failed. | Do not bypass verification; use the reported manager command or retry the signed flow. |
-| `2` | Arguments, flags, channel combinations, or changelog filters were invalid. | Correct the invocation. |
+| `2` | Arguments, flags, an unsupported channel, channel combinations, or changelog filters were invalid. | Correct the invocation. |
 
 There is no decline exit because the command never prompts.
 

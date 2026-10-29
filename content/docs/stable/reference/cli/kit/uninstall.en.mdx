@@ -68,6 +68,13 @@ Shared flags are documented in [CLI conventions](../cli-conventions).
 independent; a project-plugin uninstall does not authorize user-plugin or native
 cleanup.
 
+A project route is refused with exit `6` when it resolves to the user-level
+install, for example `--project-dir` set to your home directory, or a project
+`.claude` that is your user Claude Code home. Native project uninstall checks
+every project runtime, and project plugin mode checks Claude Code. The check runs
+before any plan, lock, snapshot, or removal, so `--dry-run` is refused too. Use
+`--global` to remove the user-level install.
+
 `uninstall` has no `--target` flag. A recorded Grok native route is selected
 through the same project or user lifecycle roots: use `--project-dir <dir>` for
 a project route or `--global` for registered user/global native roots.
@@ -114,15 +121,14 @@ With `--json`, stdout contains a versioned envelope with
 ```text
 kit, dryRun, pluginDir, pluginDirs
 snapshotId, snapshotIds, recovery
-removedPaths, preservedPaths, skippedPaths, configPaths
+removedPaths, removedDiagnosticPaths, preservedPaths, skippedPaths, configPaths
 deactivationSteps, warnings, manifestResult
 deleted, preserved, skipped, success
 ```
 
 A successful preview has `data.success=true` and `data.dryRun=true`, then the
 process exits `3`. Mutation failures in JSON mode write an error envelope to
-stderr with optional `recovery.snapshots`. Flag-parse errors can remain
-plain-text usage.
+stderr with optional `recovery.snapshots`. Flag-parse errors (exit `2`) also get the envelope.
 
 ## Exit status
 
@@ -133,6 +139,7 @@ plain-text usage.
 | `2` | Cobra rejected flags or arguments. |
 | `3` | Preview completed because `--yes` was absent or `--dry-run` was set. |
 | `4` | Another Kit lifecycle mutation holds the lock. |
+| `6` | The project route resolves to the user-level install; use `--global`. |
 
 ## Effects and ownership safety
 
@@ -147,6 +154,10 @@ current Kit source:
 - A recorded path whose bytes still match can be removed.
 - A recorded path changed by the user is preserved.
 - Unknown files are preserved.
+- The Kit's own Hook diagnostic logs (`hooks/.logs/hook-log.jsonl` and its
+  lock file inside the Kit's plugin or extension directory) are removed after
+  the snapshot, because the Kit's Hooks wrote them at runtime. They are
+  listed in `removedDiagnosticPaths`, not `removedPaths`.
 - Shared files and entries owned by another Kit or the user are preserved.
 - Unsafe symlinks, changed mutation boundaries, corrupt ownership evidence, and
   ambiguous shared state fail closed.
@@ -156,6 +167,14 @@ in rollback. Last-owner cleanup can remove AgentKit-emptied groups, events, and
 the outer `hooks` wrapper instead of leaving empty owned structures. Pre-existing
 empty structures, foreign fields, user Hooks, and sibling-owned entries remain
 preserved; this does not authorize deleting arbitrary shared Hook content.
+
+Kit Hooks write diagnostics to `hooks/.logs/hook-log.jsonl` and `hook-log.lock`
+beside the Hook logger they run from. In a native install that Hooks directory
+is shared, for example `.claude/hooks` or `.codex/hooks`, so the logs stay while
+any other Kit still owns the shared logger there. The uninstall that removes the
+last logger lists the two log files in `removedPaths`, snapshots them, removes
+them, and prunes the emptied `.logs` directory. Other files in `.logs` and
+linked log paths are preserved.
 
 The default plan can span several user-scope providers. Always inspect
 `removedPaths`, `configPaths`, and `preservedPaths` before adding `--yes`.

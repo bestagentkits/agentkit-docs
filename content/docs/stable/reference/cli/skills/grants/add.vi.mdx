@@ -1,0 +1,76 @@
+---
+title: ak skills grants add
+description: Xác minh một entrypoint Skill đã cài, hiển thị quyền và audit, rồi ghi grant cho phép exec chạy nó.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak skills grants add` để cho phép một entrypoint của Skill đã cài chạy qua
+[`ak skills exec`](../exec). Việc chạy không bao giờ hỏi, nên đây là cách duy
+nhất để grant. Lệnh không bao giờ chạy script hay interpreter.
+
+## Cách dùng
+
+```bash
+ak skills grants add <@publisher/slug@sha256:<hex>> --entrypoint <name> [flags]
+```
+
+Cung cấp đúng một reference được ghim bằng digest `sha256`.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--entrypoint <name>` | bắt buộc | Chọn entrypoint đã khai báo để grant. |
+| `--project <root>` | Scope global | Giới hạn grant trong một project root. |
+| `--label <text>` | Trống | Gắn label dài tối đa 128 ký tự in được. |
+| `--container-image <name@sha256:hex>` | Trống | Gắn image container ghim theo digest. Dùng cùng `--container-interpreter`. |
+| `--container-interpreter <path>` | Trống | Đường dẫn tuyệt đối của interpreter trong image. Dùng cùng `--container-image`. |
+| `--dry-run` | `false` | Hiển thị sẽ grant gì mà không ghi. |
+
+AgentKit không bao giờ pull image container. Các cờ dùng chung nằm trong
+[quy ước CLI](../cli-conventions). Cần `AGENTKIT_SKILL_EXEC_BROKER=1`.
+
+## Lệnh làm gì
+
+1. Xác minh entry trong content store.
+2. Đọc manifest từ bản sao chỉ đọc và gắn interpreter.
+3. In bản tóm tắt quyền và audit script mang tính tham khảo.
+4. Ghi grant vào `AGENTKIT_HOME/state/exec/grants.json`.
+
+Đầu ra nêu `identity unverified: the store proves only the tree digest, not who
+published it`. Khi audit tìm thấy phát hiện rủi ro, một cảnh báo cũng được ghi ra
+stderr.
+
+<Callout type="warning">
+  Hãy xem bản tóm tắt quyền và audit trước khi grant. Grant gắn đúng tree,
+  entrypoint, capability và interpreter, không bao giờ hết hạn và không chứa
+  secret. Thu hồi bằng [`ak skills grants revoke`](./revoke).
+</Callout>
+
+Grant giống hệt là no-op và in `Already granted as <id>`.
+
+## Đầu ra
+
+JSON dùng `kind=skills.grants.add` với các trường sau dưới `data`:
+
+```text
+grant, key, created, dryRun, identityVerified, summary[], audit
+```
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Grant đã được ghi, đã tồn tại, hoặc dry run đã xong. |
+| `1` | Lệnh thất bại, ví dụ grants store đang bận. |
+| `2` | Broker bị tắt, cờ không hợp lệ, manifest không hợp lệ, hoặc interpreter không khả dụng. |
+| `5` | Không tìm thấy store entry hoặc entrypoint. |
+| `7` | Store entry xác minh thất bại, hoặc file grants không hợp lệ. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skills grants add`](../cli/ak_skills_grants_add)
+- [Liệt kê grant](./list)
+- [Thu hồi grant](./revoke)
+- [Chạy entrypoint đã được grant](../exec)
