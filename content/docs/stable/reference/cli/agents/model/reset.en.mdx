@@ -1,0 +1,68 @@
+---
+title: ak agents model reset
+description: Remove an Agent's model and reasoning effort override from one config scope so the next layer decides.
+---
+
+Use `ak agents model reset` to undo a [`set`](./set), [`inherit`](./inherit),
+or [`adopt`](./adopt) in one scope and fall back to the next layer.
+
+## Usage
+
+```bash
+ak agents model reset <agent> --runtime <runtime> [--scope user|project] [--project <dir>]
+```
+
+Exactly one Agent name is required.
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--runtime <runtime>` | required | One of `claude-code`, `codex`, `cursor`, `omp`, `pi`. |
+| `--scope user\|project` | `user` | Config to edit: the AgentKit home, or `.agentkit/config.yaml` in the project. |
+| `--project <dir>` | nearest project config, else the current directory | Project whose installs and config apply. |
+
+## What it writes
+
+The command deletes the Agent's `model` and, on `codex` and `omp`,
+`reasoning_effort` from the selected scope only. The next layer then decides:
+the other scope's Agent override, a tier mapping, or the adapter default. A
+reset on a scope with no override reports that it had nothing to change.
+
+## Side effects
+
+The command takes the kit lifecycle lock, backs up and rewrites the scope's
+`config.yaml` when it exists, then rewrites every installed file of the Agent
+whose model AgentKit still owns so it carries the newly resolved model.
+Drifted or unproven files are left alone with a warning. Project scope does
+not scaffold a config file, since a reset only deletes values.
+
+## Output
+
+Human stdout reports `reset <runtime> agent <agent> in <config path>` (or that
+the config had nothing to change), one `updated <path>` line per rewritten
+file, then the status table.
+
+JSON success uses:
+
+```text
+schema_version: 1
+kind: agents.model.reset
+data.action, data.runtime, data.agent, data.scope
+data.config_path, data.config_changed
+data.backup_paths?, data.applied?
+data.agents[], data.warnings?
+```
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The override was removed or was already absent. |
+| `1` | Command failure, such as a config write error. |
+| `2` | Invalid Agent name, scope, or flags, an unsupported runtime, project scope with no project directory, or a missing `--project` directory. |
+| `4` | Another AgentKit operation holds the kit lifecycle lock. |
+
+## Related commands
+
+- [Complete `ak agents model reset` command facts](../cli/ak_agents_model_reset)
+- [Explain the deciding layer](./explain)
+- [Pin a model](./set)

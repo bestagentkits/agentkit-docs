@@ -20,9 +20,11 @@ Lệnh không nhận argument theo vị trí.
 ## Trước khi chạy
 
 Khi thiếu `--yes`, lệnh chỉ kiểm tra khả dụng và không tải artifact. Lệnh không
-bao giờ hỏi tương tác, bất kể TTY hay stdin. Binary channel mặc định là channel
-cập nhật đã lưu, hoặc `beta` khi chưa có tuỳ chọn; hãy chọn `--channel stable`
-nếu đó là track bạn muốn.
+bao giờ hỏi tương tác, bất kể TTY hay stdin. Binary channel được resolve theo
+thứ tự: `--channel` (hoặc `--beta`), `updates.channel` đã lưu, channel của binary
+phát hành đang chạy, rồi `stable`. Bản build development chưa có tuỳ chọn đã lưu
+resolve `stable`. `--channel` tường minh chỉ được lưu khi bạn truyền kèm
+`--enable-auto-update` hoặc `--disable-auto-update`.
 
 AgentKit phát hiện ownership của executable đang chạy trước. Bản cài Homebrew
 hoặc Scoop đã xác minh không bị thay tại chỗ; kết quả báo `brew upgrade ak` hoặc
@@ -35,7 +37,7 @@ không chắc chắn sẽ bị từ chối an toàn.
 | --- | --- | --- |
 | `--beta` | `false` | Viết tắt của `--channel beta`; xung đột với channel không phải beta được đặt rõ. |
 | `--changelog` | `false` | In changelog bản phát hành đã xác minh mà không kiểm tra hay áp dụng cập nhật. |
-| `--channel <channel>` | Config hoặc `beta` | Chọn `dev`, `beta` hoặc `stable`. |
+| `--channel <channel>` | `updates.channel`, channel của binary đang chạy, rồi `stable` | Chọn `dev`, `beta` hoặc `stable`. Giá trị khác thoát `2`. |
 | `--check` | `false` | Kiểm tra metadata có chữ ký mà không tải artifact. |
 | `--disable-auto-update` | `false` | Tắt kiểm tra auto-update Desktop và staged apply. |
 | `--dry-run` | `false` | Tải và xác minh artifact đã chọn trong thư mục tạm mà không thay bản cài. |
@@ -114,16 +116,18 @@ dùng `kind=self_update` với các trường `data`:
 
 ```text
 available, status, reason, current_version, latest_version,
-auto_update, channel, applied, restart_required, message,
+auto_update, channel, channel_source, applied, restart_required, message,
 updated_paths, pending_path, staging_dir, install_manager, upgrade_command
 ```
 
+`channel_source` cho biết đầu vào đã chọn channel: `flag`, `preference`,
+`binary` hoặc `default`. Đầu ra cho người dùng in cùng nguồn này cạnh channel.
 Trường tuỳ chọn bị lược bỏ khi rỗng. JSON changelog dùng
 `kind=self_update.changelog`.
 
-Lỗi validation ở cấp lệnh và lỗi apply trả về trước success renderer; đừng yêu
-cầu error envelope có cấu trúc trong chế độ `--json`. Lỗi parse cờ vẫn là plain
-text. Hãy dùng trạng thái process làm tín hiệu lỗi và capture stderr ở chế độ
+Lỗi validation ở cấp lệnh và lỗi apply trả về trước success renderer. Trong chế
+độ `--json`, các lỗi này và lỗi phân tích cờ (mã thoát `2`) kết thúc stderr bằng
+[error envelope](../cli-conventions#output-json) dùng chung. Hãy dùng trạng thái process làm tín hiệu lỗi và capture stderr ở chế độ
 dành cho người dùng.
 
 ## Kết quả và mã thoát
@@ -132,7 +136,7 @@ dành cho người dùng.
 | --- | --- | --- |
 | `0` | Check, báo managed install, đổi settings rồi check, dry-run đã xác minh, changelog hoặc apply đã hoàn tất. `status=unknown` cũng thoát `0`. | Kiểm tra `status`, `reason`, `applied` và `restart_required`. |
 | `1` | Config, phát hiện manager, network apply, chữ ký/digest, compatibility, artifact, staging, replacement hoặc changelog availability thất bại. | Không bỏ qua xác minh; dùng lệnh manager được báo hoặc thử lại signed flow. |
-| `2` | Argument, cờ, tổ hợp channel hoặc bộ lọc changelog không hợp lệ. | Sửa cách gọi. |
+| `2` | Argument, cờ, channel không được hỗ trợ, tổ hợp channel hoặc bộ lọc changelog không hợp lệ. | Sửa cách gọi. |
 
 Không có mã thoát từ chối vì lệnh không bao giờ hỏi.
 

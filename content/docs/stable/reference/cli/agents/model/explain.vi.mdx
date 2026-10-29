@@ -1,0 +1,69 @@
+---
+title: ak agents model explain
+description: Đi qua chuỗi ưu tiên của model một Agent, đánh dấu lớp quyết định và nêu cần làm gì với tệp pending hoặc drift.
+---
+
+Dùng `ak agents model explain` khi cần biết vì sao một Agent chạy trên một
+model nhất định, hoặc cần làm gì với tệp không in-sync.
+
+## Cách dùng
+
+```bash
+ak agents model explain <agent> --runtime <runtime> [--project <dir>]
+```
+
+Phải có đúng một tên Agent. Lệnh chỉ đọc, không prompt và không thực hiện công
+việc mạng.
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--runtime <runtime>` | bắt buộc | Một trong `claude-code`, `codex`, `cursor`, `omp`, `pi`. |
+| `--project <dir>` | config project gần nhất, nếu không có thì thư mục hiện tại | Project có bản cài và `.agentkit/config.yaml` được áp dụng. |
+
+## Chuỗi ưu tiên
+
+Với mỗi tệp đã cài, lệnh liệt kê từ cao xuống thấp: project agent, user agent,
+project tier, user tier và adapter default. Với Agent OMP có model resolve ra
+alias `@role`, các role binding của project và user được thêm vào trước adapter
+default. Bản cài global không bao giờ đọc config project nên các lớp project bị
+bỏ. Lớp quyết định model được đánh dấu.
+
+## Đầu ra
+
+Stdout cho người dùng in, cho mỗi tệp, install scope, kit, path, trạng thái,
+model tệp đang mang và model config resolve ra. Tiếp theo là các lớp, mỗi lớp
+một dòng, với `*` ở lớp được dùng, `(unset)` cho lớp chưa đặt và config key
+trong ngoặc vuông. Các dòng `note:` đưa ra hướng dẫn:
+
+- `pending`: `ak agents model apply` hoặc kit refresh cập nhật tệp.
+- `drift`: `ak agents model adopt` ghi bản sửa vào config; `ak agents model apply --yes` thay thế nó.
+- `not-materialized`: kit refresh tạo lại tệp.
+- Tệp không có model nghĩa là runtime tự chọn, thường là model của session cha.
+- Giới hạn của runtime (OMP, Pi) và việc OMP resolve role cũng được ghi chú.
+
+JSON thành công dùng:
+
+```text
+schema_version: 1
+kind: agents.model.explain
+data.agents[]   (các trường status cùng layers[] và notes?)
+data.warnings?
+```
+
+Mỗi phần tử `layers[]` có `layer`, `key?`, `value`, `set` và `used`.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Đã giải thích ít nhất một tệp đã cài của Agent. |
+| `1` | Có lỗi runtime cục bộ. |
+| `2` | Sai số lượng argument, cờ không hợp lệ, runtime không được hỗ trợ, hoặc thư mục `--project` không tồn tại. |
+| `5` | Agent không được cài trong runtime. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak agents model explain`](../cli/ak_agents_model_explain)
+- [Xem các lớp dưới dạng dữ liệu](./get)
+- [Giữ bản sửa trong runtime](./adopt)
+- [Thay thế bản sửa trong runtime](./apply)

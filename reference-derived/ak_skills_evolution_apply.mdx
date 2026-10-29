@@ -1,0 +1,44 @@
+---
+title: "ak skills evolution apply"
+description: "Preview or apply a recorded candidate into a personal kit"
+generated: true
+---
+
+Without --yes, previews the apply and writes nothing: the re-run evaluation, the diff, the permission delta, the personal kit files it would write and the approval it needs. With --yes it applies the candidate as a personal overlay: into the personal kit that already overlays the skill, else --into &lt;name&gt; (default mine, created on first apply extending the skill's kit version). A shared skill is never overlaid; it lands as a local fork under an alias without the ak- prefix. The foundation kit is never modified.
+
+A regressed or blocked verdict refuses the apply. An improved candidate applies with --yes alone only when its gain on the held-out evidence tasks includes routing, it has no findings, no security check needs review, its evidence neither conflicts nor has low confidence, and the personal kit holds no overlay of the skill written by hand. Otherwise the preview lists the reasons and the apply also needs --plan &lt;token&gt; from the preview, which binds the approval to the candidate, its evaluation and the personal kit as it was previewed. The apply writes a rollback record first, snapshots the personal kit before rewriting a file, and changes the files in one journaled transaction; an earlier apply of the candidate that is not rolled back, even one interrupted, refuses a new one. It does not project the personal kit into a runtime and never publishes it.
+
+**Effects:** Without --yes or with --dry-run, read-only. With --yes, under the kit lifecycle lock: writes AGENTKIT_HOME/state/skill-evolve/candidates/&lt;id&gt;/rollback.json, snapshots the personal kit when a file is rewritten, writes the manifest and overlay files under AGENTKIT_HOME/kits/personal/&lt;name&gt;/ in one journaled transaction, and updates the candidate's evaluation and apply slots. Requires AGENTKIT_SKILL_STORE=1. Runs no script, model or network call; never projects or publishes.
+
+### Usage
+
+```bash
+ak skills evolution apply <candidateId> [flags]
+```
+
+Global flags, output modes, and the base exit codes (`0`–`2`) are shared by every command — see [CLI conventions](../cli-conventions). The sections below list only what is specific to this command.
+
+### Flags
+
+| Flag | Description |
+| --- | --- |
+| `--dry-run` | Preview only; write nothing (the default without --yes) |
+| `--into string` | Personal kit to apply into (default: the kit already overlaying the skill, else mine) |
+| `--kits-dir string` | Foundation kits directory (default: $AGENTKIT_KITS_DIR or ./kits) |
+| `--plan string` | Plan token of the reviewed preview (required when the change needs review) |
+
+### Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| `0` | success, including a preview |
+| `1` | the candidate store, the personal kit or the skill store could not be read or written, or a record failed verification (store.corrupt) |
+| `2` | invalid flags or arguments, or an apply without the approval it needs (evolve.approval_required) |
+| `4` | another AgentKit operation holds the kit lifecycle lock (evolve.store_busy) |
+| `5` | no recorded candidate matches, or the skill's base cannot be resolved (evolve.base_unresolved) |
+| `6` | the base moved since the candidate was recorded (evolve.base_changed), the evaluation refuses the apply (evolve.apply_refused), or the personal kit does not hold what the apply or rollback expects (evolve.apply_conflict) |
+| `7` | redaction or the content gate could not be prepared (evolve.redaction_failed) |
+
+### Related commands
+
+- [`ak skills evolution`](./ak_skills_evolution) — Review, evaluate, apply and roll back recorded skill evolution candidates

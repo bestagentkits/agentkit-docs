@@ -15,12 +15,10 @@ export const RELEASE_SHAPE_BASELINE = Object.freeze({
   // Per-channel route counts follow each channel's immutable evidence. The
   // shape guard still requires Beta to contain every Stable route; the Kit
   // catalog guard separately enforces each channel's exact inventory snapshot.
-  // The approved Stable docs exception adds guides/pi-extensions in both locales.
-  // Beta adds the bilingual guides/semantic-decision-experiments and
-  // reference/cli/describe routes, plus the kits/marketing/skills/filmmaking
-  // guide, ahead of promotion. The bilingual guides/jev-clef adds an Agent-first entry.
-  sourceRoutesPerLocaleChannel: { stable: 490, beta: 494 },
-  routesPerLocaleChannel: { stable: 489, beta: 493 },
+  // The v3.0.0 promotion whole-copied Beta into Stable, so both channels carry
+  // the same route set until Beta authors routes ahead of the next promotion.
+  sourceRoutesPerLocaleChannel: { stable: 561, beta: 561 },
+  routesPerLocaleChannel: { stable: 560, beta: 560 },
   reviewedSourceOnlyRoutes: [
     {
       route: 'changelog',

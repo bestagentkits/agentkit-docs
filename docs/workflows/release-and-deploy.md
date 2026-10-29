@@ -111,16 +111,20 @@ The executable gate is:
 ```bash
 pnpm check:catalog
 pnpm check:kit-docs
-pnpm check:kit-docs:history
+# reconciliation PRs only, right after --apply (exact like check:kit-docs:current):
 node scripts/reconcile-kit-docs.mjs --check-diff <base-sha>
 ```
 
-`check:kit-docs` requires the recorded reconciliation postimages in the current
-Stable tree. `check:kit-docs:history` instead revalidates the immutable manifest,
-embedded catalog triads, historical source/preimages, closure, and claim ledger
-without binding later Stable promotions to those old postimages. CI uses that
-historical check only when Stable is unchanged. Stable reconciliation diffs use
-the exact `--check-diff` allowlist; ordinary promotions use the promotion receipt
+`check:kit-docs` (alias `check:kit-docs:history`) revalidates the immutable
+manifest, embedded catalog triads, historical source/preimages, closure, and
+claim ledger without binding later Stable promotions to those old postimages, so
+it stays green on `dev` after every promotion. `check:kit-docs:current` requires
+the recorded reconciliation postimages in the current Stable tree; run it only
+right after `--apply`, because any later promotion legitimately adds or changes
+Stable paths and makes it fail. CI uses the historical check only when Stable is
+unchanged. Stable reconciliation diffs use
+the exact `--check-diff` allowlist, which also requires the exact postimage tree and so
+holds only for a reconciliation transaction; ordinary promotions use the promotion receipt
 validator described below.
 
 Committed manifest/sidecar evidence lives in `release-evidence/kit-catalog/`;

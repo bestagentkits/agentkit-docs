@@ -48,12 +48,43 @@ At most one ID is accepted. An ID and `--latest` are mutually exclusive.
 
 | Option | Default | Effect |
 | --- | --- | --- |
-| `--allow-root <absolute-root>` | Empty | Adds one explicit project bundle root. Repeat it until the canonical set exactly matches the persisted `bundle_roots`. |
+| `--allow-root <absolute-root>` | Empty | Adds one explicit project bundle root. Repeat it until the canonical set exactly matches the persisted `bundle_roots`. For a checkpoint, names one root key whose recorded path differs from the current one. |
 | `--dry-run` | `false` | Runs integrity, topology, authority, and destination preflight; prints the plan without live mutation. |
 | `--latest` | `false` | Selects the most recently created readable snapshot instead of an ID. |
+| `--skip-secrets` | `false` | For a checkpoint whose key is missing, restore everything except sealed secret files. With a snapshot ID it exits `2`. |
 
 Shared flags are described in [CLI conventions](../cli-conventions). There is
 no `--force` or `--apply` flag.
+
+## Restore a checkpoint
+
+When `<id>` names a checkpoint written by `ak backups checkpoint`, the command
+uses the checkpoint engine instead of the snapshot plan above. A dry-run
+verifies the archive and prints, per root key, its restore mode and the counts
+to write, keep unchanged, and remove; removals apply only to exact-mode roots.
+An applied run first captures a pre-restore checkpoint labeled
+`before recover <id>`, so every file it overwrites or removes stays
+recoverable, then restores and ends with:
+
+```text
+[OK] restored checkpoint <id>; undo with `ak recover <pre-restore-id>`
+```
+
+On a TTY the prompt reads `Restore checkpoint <id>? This writes <n> file(s)
+and removes <m> file(s) not in the checkpoint from exact roots; a pre-restore
+checkpoint is taken first. [y/N]:`. When the checkpoint key is missing, the
+prompt says that the manifest cannot be authenticated and only roots matching
+this environment are restored. Explicit consent, meaning `--yes` or an answered
+prompt, also accepts a missing key and unmeasurable free disk space;
+`--no-interactive` alone does not.
+
+With `--json`, the dry-run envelope is `backups.checkpoint_restore_plan` and the
+applied envelope is `backups.checkpoint_restore`; both carry `data.id`,
+`data.dry_run`, `data.roots[]`, `data.written`, `data.unchanged`,
+`data.removed`, `data.databases`, `data.secrets_skipped`,
+`data.skipped_secret_paths[]?`, `data.symlinks_refused`, and `data.warnings[]?`.
+The applied envelope adds `data.pre_restore_checkpoint`. A checkpoint ID that
+does not exist exits `5`, and a held checkpoint lock exits `4`.
 
 ## Confirmation behavior
 
@@ -98,16 +129,27 @@ data.plan.RemoveTrees
 data.plan.AuthorizedRoots
 ```
 
-The plan field names are case-sensitive. Applied success has a deliberate
-exception: even with `--json`, stdout is empty and stderr contains a plain line:
+The plan field names are case-sensitive. An applied restore with `--json`
+writes one success envelope on stdout:
+
+```text
+schema_version: 1
+kind: backups.restore
+data.id
+data.restored
+data.plan
+```
+
+`data.plan` uses the same case-sensitive fields as the dry-run plan. Without
+`--json`, an applied restore writes a plain completion line to stderr, and
+`--quiet` does not suppress it:
 
 ```text
 [OK] restored <id>
 ```
 
-`--quiet` does not suppress that direct completion line. JSON execution errors
-use a structured error envelope on stderr; flag-parse errors can remain
-plain-text usage.
+JSON-mode failures, including flag-parse errors (exit `2`), write a structured
+error envelope to stderr.
 
 ## Exit status
 
@@ -117,7 +159,7 @@ plain-text usage.
 | `1` | Integrity, topology, authority, destination, I/O, or partial-restore failure. |
 | `2` | Missing or malformed ID, too many arguments, invalid flags, or ID combined with `--latest`. |
 | `3` | The stdin confirmation was declined or reached end-of-file. |
-| `4` | Another backup mutation holds the registry lock at apply time. |
+| `4` | Another backup mutation holds the registry lock at apply time. With `--json`, the error envelope names `error_code` `lock_held`. |
 | `5` | A valid-shaped ID was not found, or `--latest` found no snapshot. |
 
 An exit `1` after live mutation may mean earlier files were already restored.

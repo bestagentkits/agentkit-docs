@@ -1,0 +1,82 @@
+---
+title: ak agents model
+description: Read and change the model each installed runtime agent runs on, layer by layer, through AgentKit config.
+---
+
+Use `ak agents model` to see which model each installed Agent runs on, why, and
+to change it. Changes are written to AgentKit config and then applied to the
+installed Agent files, so they survive refreshes. Running the group command
+itself prints help and exits `0`.
+
+## Usage
+
+```bash
+ak agents model <command>
+```
+
+The group accepts no positional arguments and has no flags of its own.
+
+## Layers and status
+
+Each installed Agent file is reported layer by layer: kit default, adapter
+default, user and project config, and the model the runtime file carries now.
+The precedence chain, highest first, is project agent, user agent, project
+tier, user tier, adapter default. A global install never reads project config.
+
+Every installed file has one status:
+
+| Status | Meaning |
+| --- | --- |
+| `in-sync` | The file carries the model config resolves to. |
+| `pending` | The file carries AgentKit's last choice, but config changed since. `apply` or the next kit refresh updates it without asking. |
+| `drift` | The file was edited in the runtime. Refreshes keep the edit; `adopt` records it in config and `apply --yes` replaces it. |
+| `not-materialized` | The file is missing or has no model AgentKit can read. A kit refresh recreates it. |
+
+## Subcommands
+
+| Command | Outcome | Disk effect |
+| --- | --- | --- |
+| `ak agents model list` | List installed Agents with model and status. | Read-only. |
+| `ak agents model get <agent>` | Show one Agent's model layer by layer. | Read-only. |
+| `ak agents model explain <agent>` | Show which layer decides the model and what to do about its status. | Read-only. |
+| `ak agents model set <agent>` | Pin a model or reasoning effort in config. | Rewrites config and owned Agent files. |
+| `ak agents model inherit <agent>` | Run on the parent session's model. | Rewrites config and owned Agent files. |
+| `ak agents model reset <agent>` | Remove the override from one config scope. | Rewrites config and owned Agent files. |
+| `ak agents model adopt <agent>` | Record a model edited in the runtime into config. | Rewrites config only. |
+| `ak agents model apply [agent]` | Write the configured model into pending files. | Rewrites Agent files; backs up drifted ones. |
+
+## Shared flags
+
+| Flag | Applies to | Description |
+| --- | --- | --- |
+| `--runtime <runtime>` | All subcommands | One of `claude-code`, `codex`, `cursor`, `omp`, `pi`. Required for every subcommand except `list` and `apply`, where an empty value covers all runtimes. |
+| `--project <dir>` | All subcommands | Project directory whose installs and `.agentkit/config.yaml` apply. Defaults to the nearest ancestor of the current directory that holds project config, or the current directory. |
+| `--scope user\|project` | `set`, `inherit`, `reset`, `adopt` | Which config to write: `user` (the AgentKit home, default) or `project` (`.agentkit/config.yaml`). |
+
+A missing `--project` directory exits `2`. Agent names are kebab-case.
+
+## Output and exits
+
+Success writes human output or one JSON envelope to stdout. Warnings go to
+stderr as `warning: ...` lines in human mode and into `data.warnings` with
+`--json`. JSON kinds are `agents.model.list`, `.get`, `.explain`, `.set`,
+`.inherit`, `.reset`, `.adopt`, and `.apply`; see each page for its fields.
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Success. |
+| `1` | Command failure, including an installed Agent file AgentKit cannot prove it still owns. |
+| `2` | Invalid flags or arguments, an unsupported runtime, or a field the runtime does not manage. |
+| `3` | `apply` only: drifted files need confirmation and none was given. |
+| `4` | Another AgentKit operation holds the kit lifecycle lock; retry when it finishes. |
+| `5` | The Agent is not installed in the runtime. |
+
+Mutating subcommands run under the kit lifecycle lock. Never run them against
+a home you do not own; use a temporary `AGENTKIT_HOME` for experiments.
+
+## Related commands
+
+- [Complete `ak agents model` command facts](../cli/ak_agents_model)
+- [Choosing subagent models](../../../../guides/choosing-subagent-models)
+- [`ak agents`](../cli/ak_agents)
+- [CLI conventions](../cli-conventions)

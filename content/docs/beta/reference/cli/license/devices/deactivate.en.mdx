@@ -1,0 +1,114 @@
+---
+title: ak license devices deactivate
+description: Deactivate one device on your AgentKit App license, with confirmation rules and what happens when you deactivate the current device.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak license devices deactivate` to remove one device from your AgentKit App
+license. The registry revokes that device's session, so it can no longer
+validate or use AgentKit Desktop.
+
+## Usage
+
+```bash
+ak license devices deactivate <device-id> [flags]
+```
+
+Pass exactly one `<device-id>`: the `id` shown by
+[`ak license devices`](./index). Surrounding whitespace is trimmed. The id must be
+1 to 128 characters from letters, digits, `_` and `-`; anything else, including
+`.` and `..`, is rejected before any request is made.
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--registry-url <url>` | Environment or release default | Override the AgentKit registry base URL. |
+| `-y, --yes` | `false` | Skip the confirmation prompt. |
+
+Other shared flags are described in [CLI conventions](../cli-conventions).
+The command has no `--dry-run`.
+
+## Confirmation
+
+By default the command asks on stderr and reads your answer from stdin:
+
+```text
+Deactivate device dev_abc123? This signs it out of AgentKit Desktop. [y/N]:
+```
+
+Only `y`, `Y`, `yes`, `YES` or `Yes` continues. Anything else, including
+empty input, prints `[i] cancelled`, sends no request, and exits `3`.
+
+With `--no-interactive` or `--json`, `--yes` is required. Without it the
+command exits `2` before any request, so scripts must state intent:
+
+```bash
+ak license devices deactivate dev_abc123 --yes
+ak license devices deactivate dev_abc123 --yes --json
+```
+
+## What it does
+
+1. Validates the id, then the confirmation rules above.
+2. Loads the license-key session from `~/.agentkit/auth/session.json` (under
+   `AGENTKIT_HOME` when set), created by [`ak login --license-key`](../../login).
+3. Sends `POST /api/agentkit/licenses/devices/<device-id>/deactivate` with your
+   device session token as a bearer credential.
+4. If `<device-id>` is the current device, clears the local license session so
+   this machine is signed out of Desktop immediately. The slot is cleared only
+   while it still holds the same token, so a newer login is not wiped.
+
+Deactivating another device signs that machine out remotely and leaves your
+local session untouched. The operation is idempotent.
+
+<Callout type="warning">
+  Deactivating the current device removes your local license session. Run
+  `ak login --license-key` again to reactivate this machine.
+</Callout>
+
+## Output
+
+Human output on success:
+
+```text
+[ok] Device deactivated: dev_abc123
+[i] This was the current device; its local license session was cleared.
+```
+
+The second line appears only for the current device. `--json` writes kind
+`license.devices.deactivate`:
+
+```json
+{
+  "schema_version": 1,
+  "kind": "license.devices.deactivate",
+  "data": {
+    "status": "deactivated",
+    "deviceId": "dev_abc123",
+    "signedOut": false
+  }
+}
+```
+
+`signedOut` is `true` when the deactivated device was the current one.
+
+## Exit behavior
+
+| Exit | Meaning | Safe next step |
+| --- | --- | --- |
+| `0` | Device deactivated. | Run [`ak license devices`](./index) to confirm. |
+| `1` | No license-key session, registry mismatch, a registry or network error, a license server without device support, or the device was deactivated but clearing the local session failed. | Fix the cause, then retry; the operation is idempotent. |
+| `2` | Invalid device id, `--yes` missing in non-interactive or JSON mode, or a flag could not be parsed. | Correct the invocation. |
+| `3` | You declined the confirmation. | Re-run and answer `y`, or pass `--yes`. |
+
+With `--json`, errors use the shared JSON error envelope on stderr.
+
+## Related commands
+
+- [`ak license devices`](./index)
+- [`ak license`](../index)
+- [`ak login`](../../login)
+- [Complete `ak license devices deactivate` command facts](../../cli/ak_license_devices_deactivate)
+- [CLI conventions](../cli-conventions)

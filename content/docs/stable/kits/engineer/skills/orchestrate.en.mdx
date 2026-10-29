@@ -1,21 +1,23 @@
 ---
-title: Coordinate verified agent jobs with ak:orchestrate
+title: Coordinate verified agent jobs with ak-orchestrate
 description: Route staged or parallel jobs through live-verified runtimes, isolate writers, capture evidence, resume interrupted work, and require independent arbitration.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
-Use `ak:orchestrate` when one outcome benefits from staged dependencies,
-parallel work, runtime diversity, or an independent arbiter. The Skill verifies
-every runtime and control at execution time, isolates risky writers, captures
+Use `ak-orchestrate` when one outcome benefits from staged dependencies,
+parallel work, runtime diversity, or an independent arbiter. Every worker is an
+independent, resumable session of the runtime you are already using; other
+runtimes join only when you opt in. The Skill verifies every runtime and
+control at execution time, isolates risky writers, captures
 bounded evidence, and refuses to call unverified work complete. The Skill owns
 routing and judgment; `ak orchestrate` owns deterministic plan state, process
 supervision, and observable evidence.
 
-## Choose ak:orchestrate for a job graph
+## Choose ak-orchestrate for a job graph
 
-### Use ak:orchestrate when
+### Use ak-orchestrate when
 
 - Several independent jobs can run in parallel with distinct ownership.
 - Later jobs depend on explicit artifacts or checks from earlier jobs.
@@ -28,9 +30,9 @@ supervision, and observable evidence.
 
 - One agent can complete the task without useful fan-out or arbitration.
 - Teammates need ongoing direct discussion and shared multi-session state. Use
-  `ak:team` when the live runtime supports it.
-- You only need a fast read-only code map. Use `ak:scout`.
-- You have one accepted implementation plan. Use `ak:cook` unless routing
+  `ak-team` when the live runtime supports it.
+- You only need a fast read-only code map. Use `ak-scout`.
+- You have one accepted implementation plan. Use `ak-cook` unless routing
   diversity or isolation is material.
 
 ## Prepare the workspace and runtimes
@@ -48,12 +50,38 @@ Before you start:
 
 | Runtime | Invocation | Availability boundary |
 | --- | --- | --- |
-| Claude Code | `/ak:orchestrate ...` | The Skill can consider live in-session subagents and verified headless CLIs. Exact routes and controls are discovered during this run. |
-| Cursor | `/ak:orchestrate ...` | Slash invocation follows the user-verified Engineer Skill spelling. Internal routing is eligible only when the current Cursor surface proves the required dispatch and controls. |
-| Codex | `$ak:orchestrate ...` | Native Skill discovery is supported. In-session routing requires exposed multi-agent capability; otherwise a verified CLI route or a blocked result is used. |
+| Claude Code | `/ak-orchestrate ...` | The Skill starts independent Claude Code sessions and its own verified headless CLI. Exact routes and controls are discovered during this run. |
+| Cursor | `/ak-orchestrate ...` | Slash invocation follows the user-verified Engineer Skill spelling. Sessions are eligible only when the current Cursor surface proves the required dispatch and controls. |
+| Codex | `$ak-orchestrate ...` | Native Skill discovery is supported. Sessions require the surface to expose session creation; otherwise a verified Codex CLI route, an opted-in runtime, or a blocked result is used. |
 
-The runtime that invokes the Skill is not automatically the runtime selected
-for every job.
+By default the candidates are sessions of the invoking runtime and its own
+supervised headless CLI. Other runtimes are considered only through the
+opt-ins in [Dispatch sessions first](#dispatch-sessions-first).
+
+## Check platform support
+
+`ak-orchestrate` is not macOS-only. Only external process supervision by
+`ak orchestrate` requires Darwin.
+
+| Capability | Darwin | Linux, Windows, other |
+| --- | --- | --- |
+| `probe`, `prepare`, `advance`, `accept`, `plan-status` | Yes | Yes |
+| `events`, `output`, `diagnose` | Yes | Yes, but only for runs recorded on a supervising host |
+| `runtime: internal` jobs (current-runtime sessions) | Yes, when the live runtime can start a session | Yes, when the live runtime can start a session |
+| CLI and Pi jobs supervised by `ak orchestrate` | Yes | No: `advance` settles the job `blocked` with error class `unsupported_platform` and exits `1`; internal jobs in the same run are still dispatched |
+| Executable `verification:` checks in a job spec | Yes | No: `accept` settles the job `blocked` with error class `unsupported_platform`; prepare a new run without executable verification |
+| `start`, `status`, `resume`, `stop` for supervisor runs | Yes | No: each command's help lists its unsupported-platform exit code |
+
+On a non-Darwin host, the Skill routes qualified jobs through
+`runtime: internal` sessions. A job that needs a supervised CLI or Pi process stays out
+of the prepared spec and is reported blocked with the platform reason. A
+`verification:` that you declare, or that a supplied spec declares, is an
+acceptance constraint: that job is blocked, never converted. Only in a spec the
+Skill authors does it list check commands under `checks:`, run them in the
+harness, and record them as harness-attested. The Skill never bypasses the
+supervision gate, launches an unsupervised process instead, or re-advances a
+job already stuck on it. When no current-runtime session qualifies either, the run
+blocks and says why.
 
 ## Run the Skill
 
@@ -61,21 +89,21 @@ for every job.
   <Tab value="Claude Code">
 
 ```text
-/ak:orchestrate "Map the session boundary, propose two designs, implement the accepted low-risk change in isolated ownership, then run an independent review"
+/ak-orchestrate "Map the session boundary, propose two designs, implement the accepted low-risk change in isolated ownership, then run an independent review"
 ```
 
   </Tab>
   <Tab value="Cursor">
 
 ```text
-/ak:orchestrate "Map the session boundary, propose two designs, implement the accepted low-risk change in isolated ownership, then run an independent review"
+/ak-orchestrate "Map the session boundary, propose two designs, implement the accepted low-risk change in isolated ownership, then run an independent review"
 ```
 
   </Tab>
   <Tab value="Codex">
 
 ```text
-$ak:orchestrate "Map the session boundary, propose two designs, implement the accepted low-risk change in isolated ownership, then run an independent review"
+$ak-orchestrate "Map the session boundary, propose two designs, implement the accepted low-risk change in isolated ownership, then run an independent review"
 ```
 
   </Tab>
@@ -94,9 +122,44 @@ observation bundle; never export private `graph.json` or job specs.
 | --- | --- | --- |
 | Free-form task | Converts the accepted outcome into a durable job graph before dispatch | The generated graph must still pass validation and safety gates |
 | Job-spec path | Uses explicit jobs, dependencies, timeouts, ownership, checks, and expected outputs | Runtime, model, Agent, and control pins remain unverified until live preflight |
-| `--internal` | Prefers qualified in-session subagents for unpinned jobs | It is a preference, not a hard mode or permission bypass |
+| `--cross-runtime` | Admits other installed runtimes that pass live probes, authentication, controls, quota, and cost checks | Opt-in only; a missing or unauthenticated named runtime runs its onboarding as a visible setup step |
+| `--internal` | Deprecated: accepted as "prefer current-runtime sessions", which is already the default | The Skill prints one line asking you to drop it; it never selects a nested subagent |
 | `--yes` | Carries approval only for the exact destructive or external scope already described | It does not authorize broader credentials, files, release, or deployment |
 | `--resume <run-dir>` | Reuses successful outputs and redispatches interrupted work as new attempts | Routes, authentication, controls, and approvals are revalidated |
+
+## Dispatch sessions first
+
+Every worker runs outside the coordinator's turn, as a session with its own
+native handle, context, model, and lifecycle, or as a supervised headless
+process. A session of the current runtime is `runtime: internal` in a job
+spec. Nested in-harness subagents are not workers.
+
+- **Scope defaults to the current runtime.** The candidates are sessions of the
+  runtime you invoke the Skill from and that runtime's own supervised CLI.
+- **Other runtimes need an opt-in.** Pass `--cross-runtime`, give a job a
+  `fallback_runtime` chain in the spec, pin a `runtime:`, or name the runtime
+  in the request (for example "as pi sessions"). Each is an equivalent opt-in
+  for that runtime. A named runtime that is missing or unauthenticated runs
+  its onboarding as a visible setup step, then is probed again.
+- **Unavailable is visible.** When the current runtime cannot start a
+  qualifying session and no opted-in candidate qualifies, the job is reported
+  `blocked` with the probe evidence. The Skill never widens scope silently or
+  overrides an explicit runtime, model, or role-profile pin.
+- **Permission fallback is the only subagent route.** When the runtime refuses
+  to start a session because the coordinator lacks permission (standing policy
+  or permission mode, not a prompt you declined), the job may run as a nested
+  agent. Its own prompts are still answered by you, isolated high-impact writers
+  keep their own worktree, external or destructive jobs stay blocked, and
+  arbiter and review jobs, which need independence a subagent cannot prove,
+  never use it. The report records `fallback: subagent`, the refusal evidence,
+  and the reduced guarantees: no independent resume, shared quota and
+  permissions, and an accounting-only timeout. Quota, budget, resource,
+  missing-runtime, and crash failures never fall back to a subagent.
+
+`ak orchestrate probe` caches its capability metadata under
+`AGENTKIT_HOME/cache/orchestrate/probe`. The command is classified read-only:
+it runs version and help probes, never installs or authenticates a runtime, and
+only updates that cache. See [`ak orchestrate probe`](../../../reference/cli/orchestrate/probe).
 
 ## Describe the jobs clearly
 
@@ -125,7 +188,8 @@ floors, the job blocks rather than silently weakening them.
 2. **The Skill builds and validates the graph.** It rejects duplicate IDs,
    dependency cycles, unsafe working directories, missing bounds, and parallel
    write overlap.
-3. **The Skill inventories live candidates.** It verifies executable or Agent
+3. **The Skill inventories live candidates.** It starts with the current
+   runtime, adds opted-in runtimes, and verifies executable or session
    availability, authentication readiness, current command shape, selectable
    routes, permissions, isolation, timeouts, capture, resume behavior, and host
    limitations.
@@ -136,18 +200,84 @@ floors, the job blocks rather than silently weakening them.
    deletion, credentialed, and other external effects require exact approval
    and a recovery plan.
 6. **The Skill dispatches by stage.** Independent jobs run together only within
-   the concurrency limit. Parallel writers use separate worktrees and disjoint
+   the `concurrency:` the Skill admits from quota and host headroom (see
+   [Size parallelism and recover from failures](#size-parallelism-and-recover-from-failures)). Parallel writers use separate worktrees and disjoint
    ownership.
 7. **The Skill captures durable evidence.** State transitions, bounded output,
    artifacts, errors, duration, and reliably reported usage remain available
-   for diagnosis and resume. Supervisor process control requires Darwin;
-   discovery and historical observation do not imply equivalent lifecycle
-   support on other hosts.
-8. **The Skill runs an arbiter.** A separate judgment route checks expected
-   outputs, contradictions, safety gaps, failed checks, unsupported claims, and
+   for diagnosis and resume. Supervised CLI and Pi processes require Darwin;
+   on other hosts, qualified session jobs continue through the same
+   `prepare`, `advance`, and `accept` loop, as described in
+   [Check platform support](#check-platform-support).
+8. **The Skill runs an arbiter.** A separate session on the strongest
+   live-verified judgment model checks expected outputs, contradictions, safety gaps, failed checks, unsupported claims, and
    unresolved questions.
 9. **The Skill reports without integrating silently.** Worktree diffs remain
    awaiting review; merge or cherry-pick is a separate action.
+
+## Size parallelism and recover from failures
+
+**Admission.** The Skill sizes the spec's `concurrency:` from evidence, not a
+fixed worker count. It reads provider usage windows with `ak usage limits`,
+keeps headroom below the reported limits (runtimes on one upstream account
+share one pool), and checks host CPU, memory, and disk. Heavy checks such as
+full preflights, browser suites, and builds run serially; cheap scouts run in
+parallel. Unknown quota or cost is not unlimited: the Skill admits serially or
+asks for a policy. Under pressure it stops calling `advance` for new work and
+settles every job already handed out, without stopping processes the run did
+not start. The reason for any reduced concurrency is recorded in the report.
+
+**Failure classes.** Each failed or stuck attempt is classified before any
+action. The coordinator class stays in `status.json` and the report, and the
+plan engine's mapped `error_class` goes in the `accept` receipt (for example
+`rate_limited` maps to `rate-limit`, and a transient failure maps to `timeout`
+when the bound expired):
+
+| Class | Examples | Retry |
+| --- | --- | --- |
+| `transient`, `rate_limited` | Short network loss, timeout with a confirmed stopped writer, retryable provider limit | Only through the job's `retry:` policy |
+| `quota_exhausted`, `budget_exhausted` | Usage window spent, cost ceiling reached | No; wait for the reset or report the blocker |
+| `runtime_missing`, `auth_unavailable`, `model_unavailable`, `unsupported_capability` | Runtime absent or unauthenticated, model not in the live set | No |
+| `host_resource_pressure` | Low memory or disk | No |
+| `process_crash`, `lost_handle`, `message_unavailable` | Worker died or its session cannot be resolved | No, until the old writer is proven stopped |
+| `verification_failure`, `merge_conflict`, `task_spec_error` | Checks fail, worktrees conflict | No |
+| `permission_denied`, `security_risk`, `external_effect_requires_approval` | Refused action, unsafe input, effect without approval | No; stop and report the approval boundary |
+
+**Fallback ladder.** The Skill climbs only as far as needed, within the run's
+time and cost limits. A prepared run fixes each job's runtime, model, and
+invocation, so a failed job is never re-routed inside the same run.
+
+1. Reattach to the original attempt or session when its handle and ownership
+   are proven.
+2. Retry on the same route through the job's `retry:` policy, after the
+   previous writer has settled.
+3. Adapt within the current runtime: lower `concurrency:` or wait for a usage
+   window for jobs not yet dispatched, or prepare a new run directory with
+   another live model or effort.
+4. Cross runtimes, only when opted in, by preparing a new run directory that
+   routes the job to a freshly probed candidate. Model identifiers and flags
+   are never carried between runtimes.
+5. Pause, replan, or block with an actionable blocker or approval request.
+
+No step raises permissions, skips checks, ignores a pin, or leaves the
+authorized roots.
+
+## Understand arbiter and review models
+
+Arbiter, advisor, review, audit, and security jobs resolve the strongest model
+the active route can actually use, and the arbiter runs in a fresh, separate
+session. The Skill
+starts from the models the live runtime lists as selectable for your account,
+drops any that you, the project, or your organization disallow, then applies
+precedence: an explicit pin, then a model policy, then the strongest remaining
+candidate by the runtime's catalog rank. Earlier run metrics never reorder that
+ranking. When the route cannot select a model, its default is used and the
+report says no override happened.
+
+The report discloses the runtime and model that actually served each judgment
+job, plus the selection and any fallback reason. A different-family reviewer is
+preferred when live evidence proves it; a same-family fallback is disclosed. A
+Pi arbiter counts as independent only when its resolved model family differs.
 
 ## Optional shadow comparison
 
@@ -173,7 +303,7 @@ routing result on every disagreement or provider failure.
   still needs runtime controls that meet its risk tier.
 </Callout>
 
-Every CLI process receives a coordinator-owned timeout. In-session timeouts are
+Every CLI process receives a coordinator-owned timeout. Session timeouts are
 only accounting limits unless the live harness proves cancellation; the Skill
 must not launch another writer into the same ownership while a timed-out Agent
 may still be running.
@@ -205,7 +335,10 @@ claims have evidence, contradictions are resolved, and the arbiter passes.
 
 | Symptom | Safe next step |
 | --- | --- |
-| A runtime is missing or unauthenticated | Evaluate declared fallbacks through the same live gate, or complete setup outside the run and preflight again. |
+| The agent says orchestrate needs macOS | Only external CLI supervision needs Darwin. The Skill routes the jobs through current-runtime sessions; jobs that need a supervised CLI are reported `blocked`. |
+| A session cannot start and the job is `blocked` | Read the probe evidence. Opt in another runtime with `--cross-runtime` or a `fallback_runtime` chain, or fix the current runtime's session surface. |
+| The Skill prints that `--internal` is deprecated | Drop the flag. Current-runtime sessions are already the default. |
+| A runtime is missing or unauthenticated | Evaluate opted-in fallbacks in a new run directory through the same live gate, or complete setup outside the run and preflight again. |
 | A model or flag is rejected | Return to live help or current official documentation; do not guess or carry identifiers across runtimes. |
 | A permission prompt appears | Stop the job and resolve the exact approval boundary. Do not retry with a bypass. |
 | A job times out | Preserve bounded partial evidence, mark the job failed, and block dependents until a recovery decision. |
@@ -214,7 +347,7 @@ claims have evidence, contradictions are resolved, and the arbiter passes.
 | The arbiter fails | Address missing artifacts, failed checks, contradictions, or unsupported claims before integration. |
 | The runtime does not recognize the Skill | Confirm target and scope, restart the runtime session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
 
-Compare `ak:team` for live multi-session collaboration, or continue with the
+Compare `ak-team` for live multi-session collaboration, or continue with the
 [Engineer Kit overview](../../engineer) and
 [Runtime adapters](../../../concepts/runtime-adapters).
 
@@ -222,12 +355,17 @@ Compare `ak:team` for live multi-session collaboration, or continue with the
 
 - Runtime and model catalogs, authentication, flags, and safety controls drift;
   every run must verify them live.
-- In-session Agents may not provide force cancellation, per-job sandboxing, or
-  selectable models.
+- Session jobs may lack force cancellation, per-job sandboxing, or model
+  selection; each is probed per run. A permission-fallback subagent also lacks
+  independent resume and shares the coordinator's quota and permissions.
+- Quota and resource admission is coordinator judgment over observed evidence,
+  not an enforced reservation.
 - Jobs share no implicit memory; dependencies must pass explicit artifacts.
 - Worktrees require Git and disk headroom, and integration remains a separate
   reviewed action.
 - Usage and cost appear only when the selected harness reports them reliably.
 - The Skill coordinates existing runtimes; it does not create a daemon,
-  dashboard, account pool, or provider adapter. `ak orchestrate` process
-  supervision requires Darwin.
+  dashboard, account pool, or provider adapter.
+- Supervised CLI and Pi jobs, executable `verification:` checks, and the
+  `start`, `status`, `resume`, and `stop` supervisor commands require Darwin.
+  Other hosts run qualified `runtime: internal` session jobs and block the rest.

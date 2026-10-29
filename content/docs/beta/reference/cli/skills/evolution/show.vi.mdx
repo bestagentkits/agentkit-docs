@@ -1,0 +1,61 @@
+---
+title: ak skills evolution show
+description: Xem một candidate tiến hoá Skill đã ghi cùng base, diff theo file, finding, blast radius và các slot.
+---
+
+Dùng `ak skills evolution show` để đọc một candidate record trước khi đánh giá
+hoặc áp dụng nó.
+
+## Cách dùng
+
+```bash
+ak skills evolution show <candidateId> [--json]
+```
+
+Phải có đúng một reference: ID candidate đầy đủ, phần hex của nó, hoặc một prefix
+duy nhất có ít nhất 8 ký tự hex. Lệnh chỉ đọc: đọc các candidate record dưới
+`AGENTKIT_HOME/state/skill-evolve/candidates/`, xác minh record theo ID, không
+lấy lock, không chạy script, model hay gọi mạng, và bỏ qua kiểm tra cập nhật
+nền.
+
+## Đầu ra
+
+Text in ID candidate với trạng thái `recorded`, Skill cùng digest của base và
+overlay, overlay trước đó mà nó xếp chồng lên nếu có, phân loại, độ tin cậy và
+blast radius, từng finding, diff theo file, đánh giá khi slot đã có, và trạng
+thái của cả hai slot. Nội dung diff được vô hiệu hoá ký tự điều khiển trước khi
+in; file nhị phân hoặc quá lớn hiển thị một dấu hiệu thay cho diff.
+
+JSON dùng `kind=skills.evolution.show` với candidate record dưới `data`:
+
+```text
+schema, candidateId, recordDigest, evidenceDigest
+skill: ref, identity, alias, kit, version, shared, fork?
+base: foundationTreeDigest, treeDigest, priorOverlayDigest?, priorPersonalKit?
+overlay: schema, overlayDigest, compositionDigest, ops
+diff[]: path, op, mode?, diff?, binary?, linesAdded, linesRemoved
+findings[]
+blastRadius: filesChanged, linesAdded, linesRemoved, forkNeeded, aliasesAffected
+classification, confidence
+evaluation, apply
+```
+
+`evaluation` và `apply` là các slot object có `state` lần lượt là
+`not_evaluated` hoặc `evaluated`, và `not_applied`, `applied` hoặc
+`rolled_back`.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Candidate đã được hiển thị. |
+| `1` | Không đọc được candidate store, hoặc record không qua xác minh (`store.corrupt`). |
+| `2` | Cờ hoặc argument không hợp lệ, hoặc reference không phải ID hay prefix có ít nhất 8 ký tự hex. |
+| `5` | Không có candidate đã ghi nào khớp reference, hoặc prefix khớp nhiều hơn một (`evolve.candidate_not_found`). |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skills evolution show`](../cli/ak_skills_evolution_show)
+- [Liệt kê candidate](../cli/ak_skills_evolution_list)
+- [Chạy lại đánh giá](../cli/ak_skills_evolution_evaluate)
+- [Áp dụng một candidate](../cli/ak_skills_evolution_apply)

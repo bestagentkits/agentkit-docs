@@ -1,0 +1,86 @@
+---
+title: ak agents model apply
+description: Ghi model mà config resolve ra vào các tệp Agent đã cài đang pending, chỉ thay bản sửa trong runtime khi có xác nhận.
+---
+
+Dùng `ak agents model apply` để đưa các tệp Agent đã cài khớp với config mà
+không cần chờ lần kit refresh kế tiếp.
+
+## Cách dùng
+
+```bash
+ak agents model apply [agent] [--runtime <runtime>] [--project <dir>] [--yes]
+```
+
+Nhận tối đa một tên Agent; bỏ trống để áp dụng cho mọi Agent. Lệnh không có
+`--scope` vì chỉ đọc config.
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--runtime <runtime>` | mọi runtime | Giới hạn ở một trong `claude-code`, `codex`, `cursor`, `omp`, `pi`. |
+| `--project <dir>` | config project gần nhất, nếu không có thì thư mục hiện tại | Project có bản cài và config được áp dụng. |
+| `--yes` | tắt | Xác nhận thay các tệp drift mà không hỏi. |
+
+## Lệnh ghi gì
+
+Lệnh ghi lại các trường model của mọi tệp `pending` (config đã đổi kể từ lần
+AgentKit ghi). Tệp `drift` (bị sửa trong runtime) chỉ bị thay khi có xác nhận,
+và nội dung cũ được sao lưu trước trong backups `agent-models` của AgentKit. Tệp
+đã `in-sync` không bị đụng tới.
+
+Trước khi ghi, lệnh chứng minh AgentKit sở hữu mọi tệp mục tiêu. Nếu có tệp
+không qua được bước này, không ghi gì và lệnh thoát với mã `1`.
+
+## Xác nhận
+
+Nếu có tệp drift mà không có `--yes`:
+
+- Trên terminal tương tác, lệnh liệt kê từng tệp dạng `path: current -> desired`
+  và hỏi `[y/N]`. `--no-interactive` tắt prompt. Lock được nhả trong lúc chờ, và
+  lần chạy đã xác nhận chỉ áp dụng các tệp đã hiển thị. Nếu tập tệp drift thay
+  đổi trong lúc đó, không ghi gì và lệnh thoát với mã `3`.
+- Ngược lại, không ghi gì và lệnh thoát với mã `3`. Với `--json`, kết quả được
+  in ra stdout dưới `need_confirmation` bên cạnh error envelope.
+
+Từ chối prompt thoát với mã `3` kèm `cancelled; nothing was written`. Để giữ
+bản sửa trong runtime thay vì thay nó, hãy chạy [`adopt`](./adopt).
+
+## Tác động phụ
+
+Lấy kit lifecycle lock. Tệp plugin của Claude Code có hiệu lực sau khi
+`ak kit refresh` kích hoạt lại plugin; cảnh báo sẽ nói rõ điều này. Nếu một lần
+ghi thất bại giữa chừng, lỗi nêu các tệp đã được cập nhật và các bản sao lưu đã
+tạo.
+
+## Đầu ra
+
+Stdout cho người dùng in các dòng `updated <path>` và `backup <path>`, hoặc
+`Every installed agent file already carries its configured model.` khi không có
+gì thay đổi.
+
+JSON thành công dùng:
+
+```text
+schema_version: 1
+kind: agents.model.apply
+data.applied[]
+data.backup_paths?
+data.need_confirmation?   (tệp drift đang chờ xác nhận)
+data.agents[], data.warnings?
+```
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Các tệp đã được cập nhật hoặc không tệp nào cần đổi. |
+| `1` | Lệnh thất bại, gồm tệp đã cài mà AgentKit không chứng minh được vẫn do mình sở hữu. |
+| `2` | Tên Agent hoặc cờ không hợp lệ, runtime không được hỗ trợ, hoặc thư mục `--project` không tồn tại. |
+| `3` | Tệp drift cần xác nhận mà không có xác nhận nào, hoặc câu trả lời là không. |
+| `4` | Một thao tác AgentKit khác đang giữ kit lifecycle lock. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak agents model apply`](../cli/ak_agents_model_apply)
+- [Giữ bản sửa trong runtime](./adopt)
+- [Giải thích trạng thái của một tệp](./explain)

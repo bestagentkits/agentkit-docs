@@ -23,9 +23,28 @@ The command accepts no positional arguments.
 | `--older-than <duration>` | Empty | Delete snapshots older than a Go duration such as `168h`, or a day suffix such as `30d`. |
 | `--keep-last <n>` | `0` | Retain the `n` newest snapshots. |
 | `--dry-run` | `false` | Print the same deletion plan without removing snapshots. |
+| `--checkpoints` | `false` | Prune compressed checkpoints instead of snapshots; the newest pre-upgrade checkpoint is kept. |
+| `--release-rollback-source` | `false` | With `--checkpoints`, release the newest pre-upgrade checkpoint so it can be pruned. |
 
 Shared output flags are described in [CLI conventions](../cli-conventions).
 There is no `--apply` or `--force` flag: omitting `--dry-run` applies the plan.
+
+## Prune checkpoints
+
+`--checkpoints` switches the command to the checkpoint store under
+`~/.agentkit/backups/checkpoints/`. Only `--keep-last` applies there; a value
+below `1` is treated as `1`, and `--older-than` exits `2`. The newest
+pre-upgrade checkpoint is the rollback source for `ak rollback --to v2` and is
+never selected unless you pass `--release-rollback-source`, which exits `2`
+without `--checkpoints`. An applied run releases that source before the plan
+is computed; a dry-run only reports what would go.
+
+```bash
+ak backups prune --checkpoints --keep-last 3 --dry-run
+ak backups prune --checkpoints --release-rollback-source --keep-last 1
+```
+
+The output and JSON envelope are the same as for snapshots.
 
 ## Understand the retention policy
 
@@ -98,8 +117,10 @@ JSON stdout uses one success envelope:
 During a dry-run, `data.deleted` means “would delete.” The JSON payload omits
 the retained list. `--quiet` suppresses successful human output, while
 `--json` takes precedence over `--quiet`. Runtime JSON errors are written to
-stderr as error envelopes; argument and flag parsing can fail before that
-renderer is active.
+stderr as error envelopes; positional-argument validation can fail before that
+renderer is active. With `--json` enabled, unknown or invalid flags use the shared
+JSON stderr error envelope (`error_code: validation_failed`, exit `2`).
+Human mode, including `--json=false`, prints `Usage`.
 
 ## Exit status
 
@@ -107,8 +128,8 @@ renderer is active.
 | --- | --- | --- |
 | `0` | The plan completed, including a no-op or dry-run. | Review the output; for a dry-run, rerun without `--dry-run` only when the remove set is correct. |
 | `1` | Listing, reconciliation, rename, or deletion failed; Cobra also uses this path for an unexpected positional argument. Some candidates may already be gone. | List snapshots again and inspect the store before retrying. |
-| `2` | A flag could not be parsed or `--older-than` was not a valid duration. | Correct the invocation; include an explicit duration unit. |
-| `4` | Another backup prune or lifecycle operation holds the relevant lock. | Let it finish, then list snapshots and retry. |
+| `2` | A flag could not be parsed, `--older-than` was not a valid duration, `--older-than` was combined with `--checkpoints`, or `--release-rollback-source` was passed without `--checkpoints`. | Correct the invocation; include an explicit duration unit. |
+| `4` | Another backup prune or lifecycle operation holds the relevant lock. With `--json`, the error envelope names `error_code` `lock_held`. | Let it finish, then list snapshots and retry. |
 
 Deletion is attempted independently per candidate, so exit `1` can accompany a
 partial prune. There is no built-in undo after a snapshot directory is removed.

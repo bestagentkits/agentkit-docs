@@ -1,0 +1,251 @@
+---
+title: Rollback về v2
+description: Hoàn tác một lần nâng cấp v3 trên một máy, từ checkpoint trước nâng cấp bằng một lệnh hoặc làm thủ công, và quay lại v3 sau này.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng hướng dẫn này khi cần hoàn tác một lần nâng cấp v3 trên một máy. Bản v2
+cuối cùng là `2.19.0`; hãy thay bằng phiên bản v2 khác nếu bạn cần. Bản v2 phát
+hành trong cửa sổ cập nhật của bạn vẫn cài được, nên chủ sở hữu v1 hoặc v2 không
+bao giờ cần gia hạn để rollback.
+
+Chọn cách phù hợp với máy của bạn:
+
+- **Bạn có checkpoint trước nâng cấp.** `ak backups list` đánh dấu nó là nguồn
+  rollback. `ak update --ssot` tự tạo một checkpoint như vậy, còn
+  `ak backups checkpoint --pre-upgrade` tạo thủ công. Dùng
+  [rollback bằng một lệnh](#rollback-từ-checkpoint-trước-nâng-cấp).
+- **Bạn không có checkpoint.** Làm theo [rollback thủ công](#rollback-thủ-công).
+
+## Rollback từ checkpoint trước nâng cấp
+
+Khi CLI v3 vẫn còn được cài, hãy xác minh checkpoint và xem trước lần rollback.
+Không có gì thay đổi:
+
+```bash
+ak backups verify <id>
+ak rollback --to v2 --dry-run
+```
+
+Nếu lệnh từ chối với `rollback.source_not_v2`, một checkpoint trước nâng cấp mới
+hơn đã chụp một home đang dùng kho Skill; thông báo liệt kê các checkpoint đó.
+Rollback xa hơn sẽ bỏ mọi thứ kể từ checkpoint legacy, nên hãy kiểm tra
+`ak backups list` và chỉ định nó tường minh:
+
+```bash
+ak rollback --to v2 --checkpoint <id> --dry-run
+```
+
+Sau đó chạy thật. `--install-v2` cho phép lệnh cài CLI v2 đã ghim, có xác minh
+chữ ký, được ghi trong checkpoint. Bản đó cũ hơn CLI đang chạy, và sự đồng ý này
+là điều cho phép nó thay thế; riêng `ak self-update` không bao giờ lùi phiên
+bản. Không có `--install-v2`, kết quả sẽ liệt kê
+[bước dùng trình cài đặt](#4-hạ-phiên-bản-cli) để bạn tự làm:
+
+```bash
+ak rollback --to v2 --install-v2 --yes
+```
+
+Khi `ak` do Homebrew hoặc Scoop quản lý, `--install-v2` dừng với một lỗi nêu tên
+trình quản lý đó và lệnh trình cài đặt cần chạy thay thế; sau đó hãy đảm bảo
+`ak` mà lệnh này cài đứng đầu trong `PATH`.
+
+Lệnh chạy các bước sau theo thứ tự, trong khi CLI v3 vẫn đang chạy:
+
+1. Đóng băng cập nhật tự động. Lệnh từ chối khi một bản cập nhật nền đang chạy
+   hoặc khi AgentKit Desktop hay một `ak` khác giữ operational store; hãy đóng
+   chúng rồi thử lại.
+2. Tạo một checkpoint trước rollback cho mọi đường dẫn mà các bước sau sẽ ghi
+   đè hoặc xoá. Nếu thiếu đường dẫn nào trong đó, rollback dừng trước khi thay
+   đổi bất cứ gì.
+3. Hoàn tác các Kit projection do AgentKit sở hữu về checkpoint.
+4. Khôi phục AgentKit home, các runtime home, cấu hình agent của project và
+   `operational.db` ở đúng schema đã chụp, rồi đóng băng cập nhật lần nữa và ghim
+   cập nhật binary vào bản v2 đã khôi phục.
+5. Tuỳ chọn cài v2, rồi chạy `ak doctor`. Khi binary v2 được đặt sẵn và cần khởi
+   động lại (Windows), hãy khởi động lại, rồi tự chạy `ak doctor` và
+   `ak version`.
+
+Một lần chạy bị gián đoạn sẽ tiếp tục ở bước chưa xong đầu tiên khi bạn chạy
+lại. Một lần rollback đã xong không chạy lại (`rollback.already_done`); nếu nó đã
+xong mà không cài v2, lời từ chối đó nêu lệnh trình cài đặt. Để hoàn tác lần rollback, khôi phục checkpoint trước rollback mà lệnh đã in
+bằng `ak recover <id>`.
+
+<Callout type="warning">
+  Cho đến khi cài xong v2, đừng chạy lệnh v3 nào khác; binary v3 có thể chuyển
+  store đã khôi phục lên schema mới lần nữa. Gỡ các Kit chỉ có ở v3 bằng
+  `ak kit uninstall` trước khi rollback, khi CLI v3 vẫn còn chạy.
+</Callout>
+
+Các trường hợp đặc biệt:
+
+- **Thiếu khoá của checkpoint.** Manifest không xác thực được, nên lần chạy hỏi
+  xác nhận (hoặc cần `--yes`) và cần `--skip-secrets`. Lệnh chỉ khôi phục các
+  root khớp với môi trường này, nên `--allow-root` bị từ chối; hãy đăng nhập lại
+  sau đó. Các file được niêm phong giữ nội dung v3 và được liệt kê trong đầu ra
+  (`skipped_secret_paths` trong `--json`): thông tin đăng nhập, `~/.claude.json`,
+  `settings.json` của Claude cùng các Hook trong đó, và `config.toml` của Codex.
+  Sau khi cài v2, chạy `ak kit refresh <kit> --yes` cho từng Kit (thêm `--global`
+  với bản cài global) để projection lại Hook và cấu hình v2.
+- **Root đã di chuyển**, ví dụ thư mục home bị đổi tên: `--allow-root <key>`
+  khôi phục vào đường dẫn đã ghi.
+- **Overlay.** Runtime home và project là overlay: các file khác mà v3 thêm vào
+  đó được báo cáo, không bị xoá. Ngoại lệ là trạng thái Skill của project trong
+  `.agentkit/skill-state`; các file v3 thêm vào đó bị xoá để một lần
+  `ak update --ssot` sau đó có thể chạy lại.
+- **File ghi vào AgentKit home** sau checkpoint trước rollback được giữ lại và
+  liệt kê trong một cảnh báo.
+- **Một lần `ak update --ssot` còn dở.** Rollback bỏ nó kèm cảnh báo, và lần
+  `ak update --ssot` tiếp theo bắt đầu một lần nâng cấp mới thay vì tiếp tục.
+  `ak recover <id>` giữ nguyên lần nâng cấp còn dở.
+- **Ứng dụng Desktop** chỉ được hoàn tác với `--with-desktop` trên nền tảng hỗ
+  trợ; nếu không, làm theo [bước 5](#5-hạ-phiên-bản-ứng-dụng-desktop).
+
+### Những gì bị giữ lại sau rollback
+
+Rollback giữ home ở v2:
+
+- `ak update` thông thường, `ak self-update` và auto-update chạy nền không cài
+  bản v3 nào. `ak self-update --check` và `--dry-run` báo `rollback-hold`.
+  Auto-update chạy nền ghi `deferred (rollback_hold)`, hoặc
+  `deferred (rollback_state_unreadable)` khi nó không đọc được journal của
+  rollback. Mọi lệnh bỏ qua chế độ kho Skill đã commit.
+- Vì CLI 2.x không đọc trạng thái giữ này, rollback còn đặt
+  `updates.registry_url` trong `config.yaml` thành manifest đã ký của bản đã khôi
+  phục, ví dụ
+  `https://releases.agentkit.best/binaries/2.19.0/binary-update.json`. CLI 2.x
+  được cài lại, cùng `ak update`, `ak self-update`, auto-update và trình cập nhật
+  của Desktop và dashboard, ở đúng bản đó. Một `registry_url` bạn tự đặt trỏ tới
+  manifest khác được giữ nguyên.
+- Ứng dụng Desktop v3 đọc trạng thái giữ: banner cập nhật và bảng cập nhật trong
+  Settings cho biết home đã được rollback về v2, và bật lại cập nhật tự động
+  không tự áp dụng gì. Trong lúc `ak rollback --to v2` vẫn đang chạy, banner báo
+  điều đó, nêu lệnh này và không đề xuất bản cập nhật nào.
+
+## Quay lại v3
+
+Từ CLI v2, cài phiên bản v3 một cách tường minh với root dùng một lần (kết quả
+rollback in ra lệnh chính xác), rồi chạy `ak update --ssot`, lệnh này khôi phục
+`registry_url` trước đó và gỡ trạng thái giữ:
+
+```bash
+ak self-update --registry-url https://releases.agentkit.best --version 3.0.0 --yes
+ak update --ssot
+```
+
+Một bản cập nhật bạn bắt đầu từ banner của Desktop v3 cũng gỡ trạng thái giữ và
+ghim khi nó cài hoặc đặt sẵn một bản v3.
+
+## Rollback thủ công
+
+Khi không có checkpoint, chạy các bước sau theo thứ tự: Kit trước, khi CLI v3
+vẫn còn được cài, rồi đến CLI, rồi ứng dụng Desktop.
+
+### 1. Ghi lại trạng thái và chặn tự nâng cấp lại
+
+Auto-update chạy nền và trình cập nhật Desktop theo kênh phát hành và sẽ đưa v3
+quay lại:
+
+```bash
+ak versions --local-only
+ak backups list
+ak doctor --json
+ak update --schedule off
+ak self-update --disable-auto-update
+```
+
+### 2. Kiểm tra journal của kho Skill
+
+Nếu bạn từng đặt `AGENTKIT_SKILL_STORE=1`, hãy chắc rằng không còn journal nào
+của kho trước khi hạ phiên bản; CLI v2 bỏ qua journal của v3 và không bao giờ
+khôi phục chúng. Thư mục này không được chứa file `*.json` nào:
+
+```bash
+ls <agentkit-home>/state/journals/
+```
+
+Nếu còn journal, hãy hoàn tất khôi phục bằng CLI v3 khi cờ vẫn đang bật. Chạy từ
+thư mục project, hoặc với `--scope global` cho bản cài global:
+
+```bash
+AGENTKIT_SKILL_STORE=1 ak skills migrate
+```
+
+Sau đó bỏ cờ. Bản ghi legacy vẫn được ghi trong lúc cờ bật, nên v2 đọc bản cài
+như trước.
+
+### 3. Đưa từng Kit về v2
+
+Một yêu cầu không ghim phiên bản không bao giờ đưa Kit xuống dưới biên nhận cài
+đặt; `--version` tường minh là cách hạ phiên bản có chủ đích. Với project,
+`ak update` rollback cây `kits/` được theo dõi và mọi runtime đã cài của Kit đó;
+với bản cài global, hãy refresh Kit:
+
+```bash
+ak update /path/to/project --kits engineer --version 2.19.0 --yes
+ak kit refresh engineer --global --version 2.19.0 --yes
+```
+
+Lặp lại cho mọi Kit đã cài. Mỗi lần chạy tự ghi snapshot trước. Để quay lại
+đúng nội dung trước nâng cấp, kể cả file bạn đã sửa mà một lần cập nhật
+`--force` đã ghi đè, hãy khôi phục snapshot mà lần cập nhật v3 đã in:
+
+```bash
+ak backups show <id>
+ak recover <id> --dry-run
+ak recover <id> --yes
+```
+
+### 4. Hạ phiên bản CLI
+
+`ak self-update` chỉ tiến lên: khi được yêu cầu bản cũ hơn, lệnh báo
+`already current` và không thay đổi gì. Hãy dùng trình cài đặt chính thức với
+phiên bản chính xác; trình cài đặt xác thực manifest đã ký của phiên bản đó:
+
+```bash
+curl -fsSL https://agentkit.best/install.sh | AK_VERSION=2.19.0 sh
+```
+
+```powershell
+$env:AK_VERSION = "2.19.0"
+irm https://agentkit.best/install.ps1 | iex
+```
+
+Xác nhận bằng `ak --version` và `ak doctor --json`. Trên macOS và Linux, trình
+cài đặt ghi vào `$HOME/.local/bin`; nếu `ak --version` vẫn báo v3, một `ak` khác
+đứng trước trong `PATH`, ví dụ bản cài qua Homebrew, đang che nó.
+
+### 5. Hạ phiên bản ứng dụng Desktop
+
+Trình cập nhật Desktop không bao giờ cài bản cũ hơn bản đang cài hoặc CLI đang
+cài. Lấy artifact Desktop v2 từ manifest phát hành công khai của phiên bản đó:
+
+```bash
+curl -fsSL https://releases.agentkit.best/binaries/2.19.0/binary-update.json
+```
+
+Các mục `artifacts` có `"kind": "gui"` cho biết `url`, `sha256` và `size` theo
+từng `os` và `arch`. Tải bản cho nền tảng của bạn, kiểm tra digest SHA-256 và
+kích thước khớp với manifest, rồi thay ứng dụng.
+
+### 6. Chuyển operational store mới hơn sang chỗ khác
+
+Nếu v2 báo operational store cục bộ là `newer-schema`, v3 đã chuyển nó lên schema
+mới, và v2 không bao giờ thay thế store như vậy. Đóng mọi tiến trình AgentKit,
+rồi chuyển `<agentkit-home>/operational/operational.db` cùng các file `-wal` và
+`-shm` của nó sang chỗ khác như một bộ; đừng xoá chúng. v2 tạo store mới ở lần
+ghi tiếp theo. Trước khi quay lại v3, hãy chuyển bộ của v2 sang chỗ khác, rồi đưa
+bộ của v3 về.
+
+Một lần `ak update` hoặc `ak kit refresh` không ghim phiên bản sau đó sẽ lại đề
+xuất v3, vì biên nhận v2 cũ hơn bản phát hành mới nhất. Để ở lại v2, đừng chạy
+cập nhật không ghim phiên bản và giữ lịch chạy nền ở trạng thái tắt.
+
+## Xem thêm
+
+- [Nâng cấp từ v2 lên v3](./upgrading-to-v3)
+- [`ak rollback`](../reference/cli/rollback)
+- [`ak backups checkpoint`](../reference/cli/backups/checkpoint)
+- [`ak recover`](../reference/cli/recover)
+- [Cập nhật AgentKit và các Kit](./updating)

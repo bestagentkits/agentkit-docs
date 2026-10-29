@@ -12,6 +12,80 @@ Nếu runtime không có thành phần tương đương, AgentKit có thể gi�
 tài liệu hỗ trợ không hoạt động, bỏ qua kèm cảnh báo hoặc báo là không được hỗ
 trợ.
 
+## Target setup và giai đoạn adapter
+
+`ak setup` và onboarding đưa ra bảy runtime ID, và `ak kit init --target` cũng
+chấp nhận chúng (đồng thời chấp nhận `agy` và `portable` là export-only). Giai
+đoạn adapter lấy từ ma trận hỗ trợ runtime của AgentKit và cho biết adapter đã
+được phát triển đến đâu. Giai đoạn không phải là cam kết hỗ trợ: một adapter
+Production vẫn có thể lỗi trên một hệ điều hành, và một adapter Spike có thể đã
+được certified ở mọi nơi. Xem tier hỗ trợ bên dưới để biết điều gì đã được đo.
+
+| Runtime | Target ID | Giai đoạn adapter |
+| --- | --- | --- |
+| Claude Code | `claude-code` | Production |
+| Codex | `codex` | Production |
+| Cursor | `cursor` | Production |
+| DeepSeek Harness | `dsh` | Production |
+| Grok Build | `grok` | Spike |
+| Oh My Pi | `omp` | Spike |
+| Pi | `pi` | Spike |
+
+Ba capability sau là riêng biệt, một target có thể có capability này mà không có
+capability khác:
+
+- **Projection** ghi nội dung Kit vào tệp của runtime. Cả bảy target đều hỗ trợ,
+  nhưng projection tệp không chứng minh hành vi runtime thực tế.
+- **Skill dispatch** chạy một Skill đã phân giải bằng `ak run --target`. Tính năng
+  này nhận `claude-code`, `codex`, `cursor`, `dsh`, `grok` và `omp`. Pi chỉ có
+  projection và không có `ak run --target pi`.
+- **Điều phối agent và session** là capability của runtime hoặc workflow, không
+  phải kết quả của việc cài Kit.
+
+Hai tên khác không phải target setup. `agy` và `portable` là tuyến export-only,
+chỉ ghi tệp mà không tạo trạng thái vòng đời đã cài, còn Cloud Harness là kênh
+phân phối chứ không phải runtime setup cục bộ.
+
+## Tier hỗ trợ: certified và assumed
+
+Giai đoạn adapter cho biết adapter đã được phát triển đến đâu. **Tier hỗ trợ** mới
+là cam kết hỗ trợ: nó cho biết có bao nhiêu bằng chứng cho một runtime trên một
+hệ điều hành. Mỗi tổ hợp runtime và OS trong bảng dưới đây thuộc một trong hai tier:
+
+| Tier | Ý nghĩa với bạn |
+| --- | --- |
+| Certified | Một lần chạy có đo lường đã vượt qua cài đặt, discovery, invocation và gỡ cài đặt trên OS đó. |
+| Assumed | Runtime được phát hành dựa trên source và unit test, nhưng chưa có lần chạy đo lường nào certify trên OS đó. Dự kiến hoạt động, nhưng khả năng gặp hành vi chưa được kiểm chứng cao hơn. |
+
+Tier hiện tại:
+
+| Runtime | macOS | Windows | Linux |
+| --- | --- | --- | --- |
+| Claude Code | Certified | Certified | Certified |
+| Pi | Certified | Certified | Certified |
+| Oh My Pi | Certified | Certified | Certified |
+| DeepSeek Harness | Certified | Certified | Certified |
+| Codex | Certified | Assumed | Certified |
+| Cursor | Assumed | Assumed | Assumed |
+| Antigravity (`agy`) | Assumed | Assumed | Assumed |
+
+Runtime không có trong bảng, như Grok Build, chưa có tier được ghi nhận.
+
+Các cột chỉ bao phủ những máy đã đo: macOS nghĩa là Apple silicon (arm64),
+Windows và Linux nghĩa là x64 (amd64), và Linux nghĩa là Ubuntu chạy dưới WSL2.
+Trên mọi máy khác, như Mac Intel hoặc máy ARM, mọi runtime trong bảng đều được
+báo là assumed.
+
+Nếu gặp sự cố với runtime assumed, hãy
+[báo cáo tại đây](https://github.com/bestagentkits/agentkit-support/issues/new) kèm
+runtime, OS và kết quả `ak doctor`. Các báo cáo giúp một tổ hợp assumed trở
+thành certified.
+
+Để xem runtime nào đã cài trên máy này đang ở tier assumed, chạy
+[`ak doctor --check runtime_support_tier`](../reference/cli/doctor#kiểm-tra-tier-hỗ-trợ-runtime). Desktop hiển
+thị cùng tier cạnh từng agent được phát hiện trong
+[onboarding](../desktop-app/getting-started#hoàn-tất-onboarding).
+
 ## Scope project và người dùng
 
 Scope trả lời câu hỏi **bản cài có hiệu lực ở đâu**:
@@ -104,7 +178,7 @@ phát hành này không có `ak run --target pi` và không wrap agent loop củ
 Bản cài project bằng `ak kit init <kit> --target omp` ghi Skill portable bên
 dưới `.omp/skills/ak-<slug>/`, với `name: ak-<slug>` ở top-level trong mỗi
 `SKILL.md` đã projection. Agent được ghi vào `.omp/agents/<name>.md`, còn rule
-vào `.omp/rules/<name>.md`. Alias trong body như `/ak:cook` và `$ak:cook` không
+vào `.omp/rules/<name>.md`. Alias trong body như `/ak-cook` và `$ak-cook` không
 bị viết lại. AgentKit cũng thêm một block theo Kit vào `AGENTS.md`
 của project, giới hạn bởi `<!-- AGENTKIT-OMP:START:<kit> -->` và
 `<!-- AGENTKIT-OMP:END:<kit> -->`. Khi cập nhật hoặc gỡ Kit đó, AgentKit chỉ thay
@@ -124,7 +198,7 @@ một Skill đã resolve qua OMP CLI cục bộ mà không thay thế inventory 
 thay đổi selector `<kit>/<skill>`.
 
 OMP trong project đã trust cũng discover `.agents/skills` của project. Nếu các
-dạng canonical như `ak:advise` và `ak-advise` xung đột, bản cài OMP project dưới
+dạng canonical như `ak-advise` và `ak-advise` xung đột, bản cài OMP project dưới
 `.omp/skills` che bản trong `.agents/skills` của project. Khi dùng bản cài OMP
 global từ project đã trust đó, bản `.agents/skills` của project che bản trong
 profile OMP. `ak kit init --target omp` cảnh báo rồi tiếp tục: lệnh vẫn emit nội
@@ -176,6 +250,14 @@ ASCII; các trường hợp đó vẫn không được hỗ trợ trên Windows 
 Argument rỗng bị từ chối với cảnh báo riêng, shim cùng path và cùng nội dung được
 deduplicate, còn xung đột cùng path giữ nội dung emit đầu tiên rồi cảnh báo.
 Đường dẫn không cần shim tiếp tục dùng lệnh trực tiếp.
+
+Trên Windows, Codex chạy lệnh Hook qua session shell, mặc định là PowerShell và
+có thể đổi exit code 2 thành 1. Codex chỉ coi exit code 2 là block, nên trên Codex
+các guard Hook của AgentKit (privacy, scout, secrets, context firewall và simplify
+gate) block bằng JSON decision mà Codex chấp nhận khi exit 0:
+`permissionDecision: "deny"` cho `PreToolUse` và `decision: "block"` cho
+`UserPromptSubmit`. Nhờ đó việc block hoạt động với cả session shell PowerShell
+và `cmd.exe`. Các runtime khác vẫn dùng exit code 2.
 
 Codex home do wrapper quản lý chỉ được liên kết leaf `hooks` cuối cùng tới thư
 mục canonical `~/.codex/hooks` của user đã resolve. Link đó có thể là symlink

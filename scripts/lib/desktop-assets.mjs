@@ -43,6 +43,20 @@ export function buildPlatformMap(assets) {
   return map;
 }
 
+/**
+ * Reject asset metadata that syncDesktopAssets would refuse to record, so a
+ * caller can check it before changing any other release state.
+ * @param {Array<{name: string, size: number, sha256: string}>} assets
+ * @param {string} toTag Release tag the assets must belong to.
+ */
+export function assertDesktopAssets(assets, toTag) {
+  if (!/^v\d+\.\d+\.\d+(?:-[\w.-]+)?$/.test(toTag ?? '')) throw new Error('Invalid Desktop evidence tag');
+  const platforms = buildPlatformMap(assets);
+  for (const asset of Object.values(platforms)) {
+    if (!Number.isSafeInteger(asset.size) || asset.size <= 0 || !asset.name.startsWith(`ak-gui_${toTag.slice(1)}_`)) throw new Error('Desktop asset version/size mismatch');
+  }
+}
+
 async function collectMdx(dir) {
   const entries = await readdir(dir, { withFileTypes: true, recursive: true });
   const files = [];
@@ -107,12 +121,7 @@ export function applyDesktopLayerAText(source, fromTag, toTag, assets) {
 export async function syncDesktopAssets({ repoRoot, channel, fromTag, toTag, assets }) {
   if (!fromTag || !toTag) throw new Error('syncDesktopAssets requires fromTag and toTag');
   if (!['beta', 'stable'].includes(channel)) throw new Error('Invalid Desktop channel');
-  const platforms = buildPlatformMap(assets);
-  for (const asset of Object.values(platforms)) {
-    if (!Number.isSafeInteger(asset.size) || asset.size <= 0 || !asset.name.startsWith(`ak-gui_${toTag.slice(1)}_`)) throw new Error('Desktop asset version/size mismatch');
-  }
-
-  if (!/^v\d+\.\d+\.\d+(?:-[\w.-]+)?$/.test(toTag)) throw new Error('Invalid Desktop evidence tag');
+  assertDesktopAssets(assets, toTag);
   const evidenceDir = join(repoRoot, 'release-evidence', 'desktop');
   await mkdir(evidenceDir, { recursive: true });
   const evidencePath = join(evidenceDir, `${toTag}.json`);

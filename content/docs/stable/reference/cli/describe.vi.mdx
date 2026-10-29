@@ -1,0 +1,66 @@
+---
+title: ak describe
+description: In contract có cấu trúc của bất kỳ lệnh ak nào, gồm flag, exit code và agent contract, cho script và coding agent.
+---
+
+Dùng `ak describe` để đọc contract của một lệnh dưới dạng dữ liệu thay vì phân
+tích text của help. Lệnh in cùng metadata với `--help` (summary, details,
+examples, effects, hành vi output, exit code đã khai báo, flag và lệnh con), kèm
+agent contract có kiểu cho biết lệnh có thay đổi trạng thái không, mức rủi ro ra
+sao và output được đóng khung thế nào.
+
+## Cách dùng
+
+```bash
+ak describe [command...] [flags]
+```
+
+Truyền đường dẫn lệnh dưới dạng các từ riêng, ví dụ `ak describe kit install`.
+Không có tham số thì lệnh mô tả root command `ak`. Các flag dùng chung được mô
+tả trong [Quy ước CLI](../cli-conventions).
+
+## Ví dụ
+
+```bash
+ak describe --json
+ak describe kit install --json
+ak describe migrate rollback
+```
+
+## Tác động
+
+Chỉ đọc và chạy offline. Lệnh chỉ đọc cây lệnh được build sẵn trong binary đang
+chạy, nên cùng một binary luôn trả cùng một kết quả. Hãy mô tả đúng binary bạn
+sẽ chạy; phiên bản khác có thể khai báo contract khác.
+
+## Output
+
+Với `--json`, stdout chứa một envelope có `kind` là `command.describe`. `data`
+gồm `path`, `name`, `use`, `aliases`, `summary`, `node`, `runnable`, `hidden`,
+`details`, `examples`, `effects`, `output`, `exit_codes`, `flags` (local và kế
+thừa, không gồm flag ẩn), `subcommands` và `agent`.
+
+Object `agent` gồm `status`, `mutates`, `risk_tier`, `idempotent`, `preview`,
+`confirmation`, `snapshot`, `network`, `auth`, `long_running`, `input_framing`,
+`output_framing`, `output_framing_source`, `output_kinds` và `protocol`.
+
+- Field mà lệnh chưa khai báo sẽ là `unspecified`. Hãy coi đó là chưa biết, không
+  bao giờ là mặc định an toàn.
+- Đọc `output_framing` thay vì giả định có envelope: `json-envelope`, `ndjson`,
+  `protocol` hoặc `json-legacy`. Không suy ra framing từ việc lệnh có `--json`.
+- Confirmation `prompt` nghĩa là lệnh hỏi qua stdin trừ khi truyền `--yes`,
+  `--no-interactive` hoặc `--json`.
+- Contract không bao gồm auto-update chạy nền (opt-in) mà một số lệnh có thể
+  khởi động ở chế độ dành cho người dùng; bước kiểm tra đó không bao giờ chạy với
+  `--json`.
+
+Xem [Mô tả contract của lệnh](../cli-conventions#mô-tả-contract-của-lệnh) để biết
+contract kết hợp với quy ước JSON và exit code dùng chung như thế nào.
+
+## Exit code
+
+| Code | Ý nghĩa |
+| --- | --- |
+| `5` | Không có lệnh nào khớp đường dẫn đã cho |
+
+Code `0`, `1` và `2` theo [Quy ước CLI](../cli-conventions#exit-code).

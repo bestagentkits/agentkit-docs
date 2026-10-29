@@ -1,0 +1,101 @@
+---
+title: ak skills kit apply
+description: Resolve một Kit cá nhân và chiếu mọi Skill trong composition của nó vào skills root gốc của runtime, thuộc sở hữu personal:<name>.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak skills kit apply` để chiếu một Kit cá nhân. Lệnh resolve Kit, so sánh
+mỗi composition với bản đang chạy (với base của foundation ở lần apply đầu) và
+chiếu kết quả. Review finding báo các thay đổi về script, mode, capability,
+exposure hoặc license.
+
+## Cách dùng
+
+```bash
+ak skills kit apply <name> [flags]
+```
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--dry-run` | `false` | In plan, review finding và plan token; không ghi gì. |
+| `--plan <token>` | Trống | Plan token từ `--dry-run`. Bắt buộc khi plan cần review; nếu truyền, phải bằng token hiện tại. |
+| `--scope <scope>` | `project` | Scope của lock và skills root: `project` hoặc `global`. |
+| `--runtime <list>` | Các runtime trong manifest | `claude-code`, `codex`; lặp lại được. Runtime của revision đang chạy luôn được gộp vào. |
+| `--kits-dir <dir>` | `$AGENTKIT_KITS_DIR` hoặc `./kits` | Thư mục foundation Kit. |
+
+Các cờ dùng chung nằm trong [quy ước CLI](../cli-conventions). Runtime trong
+manifest mà lệnh chưa chiếu vào được sẽ bị bỏ qua kèm cảnh báo; manifest không
+nêu runtime nào chiếu được sẽ bị từ chối trừ khi truyền `--runtime`.
+
+## Điều kiện
+
+Skill store phải bật, sau `ak update --ssot` hoặc với `AGENTKIT_SKILL_STORE=1`,
+kể cả với dry run; khi tắt, lệnh thoát `2`. Cổng store theo `--scope`.
+
+## Lệnh làm gì
+
+Plan sạch được apply mà không hỏi. Plan có review finding chỉ được apply với
+`--plan` bằng token mà `--dry-run` hiển thị. Trong một transaction có journal
+dưới kit lifecycle lock, lệnh ghi các tree đã compose vào skill store dưới
+`AGENTKIT_HOME`, các file được chiếu vào skills root gốc của mỗi runtime (mode
+`0644`, không bao giờ executable), cùng skill lock và receipt của scope, thuộc
+sở hữu `personal:<name>`. Session đang chạy có thể thấy file mới ngay khi
+transaction commit.
+
+- Skill mà Kit không còn chiếu sẽ mất reference của Kit; revision trước được
+  giữ cho [`ak skills kit rollback`](../cli/ak_skills_kit_rollback).
+- Alias thuộc sở hữu của bản cài Kit kiểu cũ, owner khác hoặc file bạn tự tạo
+  sẽ bị từ chối và được giữ nguyên.
+- Sau một rebase, apply mà manifest vẫn ghim phiên bản foundation cũ sẽ bị từ
+  chối với `personal_kit.pin_behind` cho đến khi bạn cập nhật phiên bản trong
+  `personal-kit.yaml`.
+- Quyết định có base pin bị thiếu hoặc không đọc được sẽ chặn apply.
+
+<Callout type="info">
+  Lệnh không bao giờ ghi đè Kit cá nhân hay các foundation Kit, và không bao giờ
+  chạy script.
+</Callout>
+
+## Đầu ra
+
+Đầu ra text hiển thị Kit cùng status và approval cần có, từng review finding,
+revision mới và revision trước (inputs digest và các foundation), plan token, và
+transaction plan.
+
+JSON dùng `kind=skills.kit.apply` với các trường sau dưới `data`:
+
+```text
+personalKit, status (clean | needs-review), requiredApproval, planToken,
+findings[]
+revision, previous: inputsDigest, foundations[], runtimes[],
+                    packages[]: identity, alias, kind, foundation,
+                                baseTreeDigest, overlayDigest,
+                                compositionDigest, exposure, trust,
+                                scriptsDeclared, resolutionDigest
+plan: operation, scope, dryRun, applied, changed, planDigest, lockPath,
+      lockGeneration, packages[], targets[], warnings[]
+```
+
+`plan` có cùng dạng với plan của [`ak skills sync`](../sync).
+
+## Kết quả và mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Thành công, hoặc không có gì để đổi. |
+| `1` | Lệnh thất bại, ví dụ đường dẫn quá dài hoặc cần recovery. |
+| `2` | Skill store bị tắt, cờ hoặc argument không hợp lệ, hoặc manifest hay proposal sai định dạng. |
+| `4` | Kit lifecycle lock đang bị thao tác AgentKit khác giữ. |
+| `5` | Không tìm thấy Kit cá nhân, foundation, phiên bản hoặc Skill. |
+| `6` | Cần review, plan token cũ, rebase conflict, alias collision (kể cả alias của Kit kiểu cũ), hoặc path không thuộc sở hữu hay đã bị sửa. |
+| `7` | Foundation bị revoke, có link trong target path, hoặc digest không khớp. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skills kit apply`](../cli/ak_skills_kit_apply)
+- [Xem composition plan](./inspect)
+- [Rollback về revision trước](../cli/ak_skills_kit_rollback)
+- [Gỡ các projection](./remove)

@@ -1,0 +1,116 @@
+---
+title: ak skills evolution apply
+description: Preview a recorded candidate, or apply it as an overlay into a personal kit with a rollback record written first.
+---
+
+Use `ak skills evolution apply` to take a candidate that
+[`ak skills improve --candidate`](../cli/ak_skills_improve) recorded and land it in a
+personal kit. Without `--yes` it previews and writes nothing. The foundation
+kit is never modified, and the personal kit is neither projected into a
+runtime nor published.
+
+## Usage
+
+```bash
+ak skills evolution apply <candidateId> [--into <name>] [--plan <token>] [--kits-dir <dir>] [--yes] [--dry-run] [--json]
+```
+
+Exactly one candidate reference is required.
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--into <name>` | The kit already overlaying the skill, else `mine` | Personal kit to apply into. `mine` is created on first apply, extending the skill's kit version. |
+| `--plan <token>` | Empty | Plan token of the reviewed preview. Required when the change needs review. |
+| `--kits-dir <dir>` | `$AGENTKIT_KITS_DIR` or `./kits` | Foundation kits directory. |
+| `--yes` | `false` | Apply instead of previewing. |
+| `--dry-run` | `false` | Preview only; the default without `--yes`. |
+
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+## Requirements
+
+Applying needs the skill store on (after `ak update --ssot`, or
+`AGENTKIT_SKILL_STORE=1`). A preview does not.
+
+## What an apply writes
+
+The candidate lands as a personal overlay. A shared skill is never overlaid:
+it lands as a local fork under an alias without the `ak-` prefix. The preview
+shows the re-run evaluation, the diff, the permission delta, the personal kit
+files the apply would write, and the approval it still needs.
+
+With `--yes`, under the kit lifecycle lock, the command:
+
+1. Writes `AGENTKIT_HOME/state/skill-evolve/candidates/<id>/rollback.json`
+   first.
+2. Snapshots the personal kit when a file is rewritten.
+3. Writes the manifest and overlay files under
+   `AGENTKIT_HOME/kits/personal/<name>/` in one journaled transaction.
+4. Updates the candidate's evaluation and apply slots.
+
+An earlier apply of the same candidate that is not rolled back, even one that
+was interrupted, refuses a new one. The base must still be the one the
+candidate was recorded on; otherwise the apply fails with
+`evolve.base_changed`. A personal kit whose other overlays, forks, or pins
+would not compose the candidate fails with `evolve.apply_conflict`.
+
+## Approval
+
+A `regressed` or `blocked` verdict refuses the apply with
+`evolve.apply_refused`. An `improved` candidate applies with `--yes` alone only
+when all of these hold:
+
+- its gain on the held-out evidence tasks includes routing;
+- it has no review findings;
+- no security check needs review;
+- its evidence neither conflicts across sessions nor has low confidence;
+- the personal kit holds no overlay of the skill written by hand.
+
+Otherwise the preview lists the reasons and the apply also needs
+`--plan <token>` from that preview. The token binds the approval to the
+candidate, its evaluation, and the personal kit as it was previewed; a `--yes`
+without the matching token exits `2` with `evolve.approval_required`.
+
+## Output
+
+Text prints `would apply` or `applied` with the candidate, overlay kind
+(`overlay` or `fork`), overlay directory, identity, and personal kit, then the
+evaluation, the permission delta, the diff, each file change, and either
+`refused: ...` or the `approve with:` line with any review reasons. After an
+apply it prints the snapshot taken and `next:` lines pointing to
+`ak skills kit apply <name> --dry-run`, `ak skills evolution rollback`, and
+the optional `ak skills kit publish <name> --private`.
+
+JSON uses `kind=skills.evolution.apply`:
+
+```text
+schema_version: 1
+kind: skills.evolution.apply
+data: schema (agentkit.skill-evolution-plan/v1), action (apply),
+      status (preview | applied), candidateId, personalKit, created,
+      identity, kind, overlayDir, evaluation, diff[], permissionDelta[],
+      changes[]: path, action
+      approval?: required[], planToken, refused?, reasons[]
+      backup?, next[], sideEffects
+```
+
+`approval` is present on a preview and absent after an apply.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Success, including a preview. |
+| `1` | The candidate store, the personal kit, or the skill store could not be read or written, or a record failed verification (`store.corrupt`). |
+| `2` | Invalid flags or arguments, the skill store is off, or an apply without the approval it needs (`evolve.approval_required`). |
+| `4` | Another AgentKit operation holds the kit lifecycle lock (`evolve.store_busy`). |
+| `5` | No recorded candidate matches, or the skill's base cannot be resolved (`evolve.base_unresolved`). |
+| `6` | The base moved since the candidate was recorded (`evolve.base_changed`), the evaluation refuses the apply (`evolve.apply_refused`), or the personal kit does not hold what the apply expects (`evolve.apply_conflict`). |
+| `7` | Redaction or the content gate could not be prepared (`evolve.redaction_failed`). |
+
+## Related commands
+
+- [Complete `ak skills evolution apply` command facts](../cli/ak_skills_evolution_apply)
+- [Undo an apply](../cli/ak_skills_evolution_rollback)
+- [Re-run the evaluation](../cli/ak_skills_evolution_evaluate)
+- [Personal kits](../cli/ak_skills_kit)

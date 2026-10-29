@@ -19,12 +19,16 @@ Project install được discover từ project đó. Global install được dis
 user profile của runtime. Mở session runtime mới sau khi cài để nó tải inventory
 hiện tại, rồi dùng bề mặt discovery mà runtime đó hỗ trợ.
 
-Ví dụ, gọi Skill tên `ak:cook` bằng cú pháp riêng của từng runtime:
+Ví dụ, gọi Skill tên `ak-cook` bằng cú pháp riêng của từng runtime:
 
 ```text
-/ak:cook Check this project   # Claude Code
-$ak:cook Check this project   # Codex
+/ak-cook Check this project   # Claude Code
+$ak-cook Check this project   # Codex
 ```
+
+Nếu `/ak:cook` hoặc `$ak:cook` ngừng hoạt động sau khi refresh Kit, hãy dùng
+dạng gạch nối. Kit đã refresh đặt tên mọi Skill là `ak-<slug>`, và runtime đăng
+ký lệnh từ tên đã cài đó, nên cách viết dấu hai chấm không quay lại.
 
 Agent dùng bề mặt khác. Claude Code dispatch subagent đã cài; Codex tải Agent
 được định nghĩa bằng TOML và cung cấp runtime tool `agent_<slug>` tương ứng.
@@ -40,7 +44,7 @@ hành này.
 Với Oh My Pi, hãy phân biệt discovery của bản cài với dispatch trực tiếp. Bản
 cài project cho runtime discover Skill portable dưới `.omp/skills/ak-<slug>/`,
 với `name: ak-<slug>` ở top-level trong mỗi `SKILL.md` đã projection, cùng Agent
-và rule dưới `.omp/`. Alias trong body như `/ak:cook` và `$ak:cook` được giữ
+và rule dưới `.omp/`. Alias trong body như `/ak-cook` và `$ak-cook` được giữ
 nguyên. `ak run <kit>/<skill> --target omp` resolve rồi dispatch riêng một Skill
 mà không thay đổi selector đó. Oh My Pi sở
 hữu backend và credential đã cấu hình, vì vậy chỉ có file chưa chứng minh runtime
@@ -59,7 +63,7 @@ Kiểm tra destination khớp delivery đã chọn:
 | Claude native | `<project>/.claude/` | `~/.claude/` |
 | Claude plugin | `<project>/ak-<kit>/` | `${AGENTKIT_PLUGIN_DIR:-~/.claude/plugins}/ak-<kit>/` |
 | Codex Skill | `<project>/.agents/skills/<name>/` | `~/.agents/skills/<name>/` |
-| Codex Agent, config và hook | `<project>/<kit>/.codex/` | `${CODEX_HOME:-~/.codex}/` |
+| Codex Agent, config và hook | `<project>/.codex/` | `${CODEX_HOME:-~/.codex}/` |
 | Cursor | `<project>/.cursor/` | `~/.cursor/` |
 | DeepSeek Harness | `<project>/.dsh/skills/` cùng `<project>/.agentkit/adapters/dsh/<kit>/` | `${DSH_HOME:-~/.dsh}/skills/` cùng `${AGENTKIT_HOME:-~/.agentkit}/adapters/dsh/<kit>/` |
 | Grok Build | `<project>/.grok/` cùng `.agentkit/adapters/grok/<kit>/` | `${GROK_HOME:-~/.grok}/` cùng `${AGENTKIT_HOME:-~/.agentkit}/adapters/grok/<kit>/` |
@@ -74,7 +78,7 @@ Kiểm tra `skills/<name>/SKILL.md`, `agents/<name>.md`, `rules/<name>.md` và b
 tại của chúng không biến chúng thành bề mặt OMP đang hoạt động.
 
 OMP trong project đã trust cũng discover `.agents/skills` của project. Nếu các
-dạng canonical như `ak:advise` và `ak-advise` xung đột, `.omp/skills` của project
+dạng canonical như `ak-advise` và `ak-advise` xung đột, `.omp/skills` của project
 che bản `.agents/skills` với bản cài OMP project. Khi dùng bản cài OMP global từ
 project đó, `.agents/skills` của project che bản trong profile. Cảnh báo cài đặt
 không bỏ qua emission OMP, xóa hoặc viết lại Skill, thay đổi `.agents` hay setting
@@ -166,33 +170,48 @@ ak codex-agent-runtime serve --list-only
 
 Registration cập nhật `${CODEX_HOME:-~/.codex}/config.toml` theo cách
 idempotent và giữ các MCP server entry khác. Lệnh list-only chỉ đọc và phải liệt
-kê các Agent mong đợi trước khi tiếp tục. Với Agent được stage trong project,
-chạy check từ project root và dùng project làm staging root:
+kê các Agent mong đợi trước khi tiếp tục.
 
-```bash
-ak codex-agent-runtime serve --list-only --plugin-root .
-```
+Với Agent ở scope project, chạy check từ thư mục project, nơi Codex khởi chạy
+runtime. Không cần thêm flag: runtime phục vụ `<dir>/.codex/agents/` gần nhất tại
+hoặc phía trên thư mục làm việc của nó. Việc tìm kiếm dừng ở repository root
+(thư mục đầu tiên có `.git`), trước thư mục home của bạn và ở gốc filesystem.
 
-Override này xác minh `<project>/<kit>/.codex/agents/`; nó không chuyển Agent
-sang user scope hoặc viết lại server đã đăng ký. Nếu chỉ check có override tìm
-thấy Agent, hãy xử lý scope mismatch thay vì sao chép file TOML. Sau khi đăng ký
-hoặc sửa scope, đóng và mở session Codex mới để tải lại cấu hình MCP.
+Runtime chỉ phục vụ Agent của project khi cấu hình Codex của bạn đánh dấu
+project đó, hoặc repository root chứa nó, là trusted, cùng quy tắc Codex dùng để
+tải layer `.codex` của project. AgentKit không ghi trust này. Output list-only
+hiển thị kết quả trên dòng `project agents:`:
 
-## Nếu Codex không tìm thấy ak:team
+- `project agents: <dir>` nghĩa là thư mục được phục vụ. Các Agent của nó được
+  liệt kê với hậu tố `(project)`.
+- `project agents: skipped (<reason>)` nghĩa là đã tìm thấy thư mục nhưng không
+  phục vụ. Với project untrusted hoặc chưa được ghi nhận, lý do sẽ hướng dẫn
+  cách trust: khởi động Codex trong project đó và chấp nhận trust prompt, hoặc
+  đổi `trust_level` của project đó thành `"trusted"` trong cấu hình Codex.
 
-Projection Engineer có `ak:team` dưới dạng Codex Skill tại
+Agent của project thay thế Agent người dùng cùng tên trong `~/.codex/agents/`,
+còn Agent người dùng vẫn thắng Agent Kit được stage theo plugin. Thư mục `.codex`
+hoặc `.codex/agents` là symlink hoặc Windows junction được báo là link và bị bỏ
+qua, còn file TOML dạng link bên trong thư mục project bị bỏ qua. Nếu vẫn không
+thấy Agent mong đợi, hãy xử lý scope hoặc trust mismatch thay vì sao chép file
+TOML. Sau khi đăng ký, trust hoặc sửa scope, đóng và mở session Codex mới để tải
+lại cấu hình MCP.
+
+## Nếu Codex không tìm thấy ak-team
+
+Projection Engineer có `ak-team` dưới dạng Codex Skill tại
 `<project>/.agents/skills/ak-team/` hoặc `~/.agents/skills/ak-team/`. Gọi Skill
 bằng:
 
 ```text
-$ak:team <template> <context> [flags]
+$ak-team <template> <context> [flags]
 ```
 
 Nếu Codex không discover Skill, hãy xác nhận Engineer Skill đã được chọn, kiểm
 tra install path cùng scope rồi mở session Codex mới. Chỉ discover được Skill
 chưa chứng minh runtime hỗ trợ thực thi: workflow cần live team creation, shared
 work, messaging, waiting, graceful shutdown và cleanup. Nếu thiếu hoặc lỗi bất
-kỳ capability bắt buộc nào, `$ak:team` phải hard-stop và báo observed error thay
+kỳ capability bắt buộc nào, `$ak-team` phải hard-stop và báo observed error thay
 vì âm thầm dùng ordinary Codex subagent thay thế.
 
 ## Nếu bản cài báo Hooks bị bỏ

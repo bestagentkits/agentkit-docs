@@ -1,0 +1,182 @@
+---
+title: Improve used Skills from session evidence with ak-dogfood
+description: Review the current session for the Skills it used, classify where they cost time or rework, and propose or apply the smallest Skill change in the right ownership lane.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak-dogfood` at the end of a session to turn what went wrong or slowly into
+better Skills. The Skill names every Skill the session used, shows where each one
+cost time, tokens, a retry, or a user correction, and proposes the smallest Skill
+change that would have prevented it, with the evidence, expected effect, and
+risk. By default it is a dry run and changes no Skill file.
+
+## Choose ak-dogfood for session lessons
+
+### Use ak-dogfood when
+
+- A session just finished and you want to learn from its mistakes and slow paths.
+- You own the Skills it used, as an AgentKit maintainer, contributor, or user.
+- You want proposals tied to the responsible Skill text, not general advice.
+- You want recurring problems across every local session, with `--all`.
+
+### Choose another workflow when
+
+- You need to audit or optimize one named Skill across many past sessions. Use
+  [`ak-skill-creator`](./skill-creator) `audit` or `optimize`.
+- You need to write a new Skill from scratch. Use `ak-skill-creator create`.
+- You need a Git-history sprint review. Use [`ak-retro`](./retro).
+
+## Prepare the session
+
+- Complete [Onboarding](../../../getting-started/onboarding), and confirm
+  Engineer Kit is installed for the runtime and scope you are using.
+- Run the Skill in the session you want reviewed. It reads its own context first
+  and the current transcript only when a compaction dropped facts.
+- Keep `ak-skill-creator` installed: the inventory step runs its
+  `scripts/session_usage.py`. When the script or transcript is missing, the Skill
+  builds the same list from its own context.
+- For the contributor lane, have an AgentKit checkout and an authenticated `gh`
+  with push access. Without both, changes go to the personal-fork lane.
+
+| Runtime | Invocation | Availability boundary |
+| --- | --- | --- |
+| Claude Code | `/ak-dogfood ...` | Native delivery is the default; transcripts are read from `$CLAUDE_CONFIG_DIR` (default `~/.claude`) `/projects/`. |
+| Cursor | `/ak-dogfood ...` | Slash invocation is user-verified. This does not prove identical transcript access or shell permissions. |
+| Codex | `$ak-dogfood ...` | The Skill uses native Codex discovery; transcripts are read from `$CODEX_HOME` (default `~/.codex`) `/sessions`. |
+
+## Pick a mode
+
+| Invocation | Effect |
+| --- | --- |
+| `ak-dogfood [focus]` (default) | Dry run. Reports proposals and changes no file. |
+| `--ask` | Asks about each proposal in turn: apply, apply part, edit, or skip. Applies only what you accept. |
+| `--apply` | Applies every proposal the report accepts. The flag is your approval for the lane steps, including commit, push, and pull request in the contributor lane. |
+| `--all [--since YYYY-MM-DD]` | Reviews every local session of every supported runtime instead of only this one and extracts recurring learnings. Combines with the other flags. |
+| `--skill <name>` | Limits the review to one used Skill. `focus` free text narrows the topic. |
+
+`--apply` and `--ask` are exclusive; when both appear, the Skill uses `--ask`.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak-dogfood --ask --skill ak-plan
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak-dogfood --ask --skill ak-plan
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak-dogfood --ask --skill ak-plan
+```
+
+  </Tab>
+</Tabs>
+
+## Understand what happens during a run
+
+1. **Inventory the session.** The Skill runs `session_usage.py --session latest`
+   from `ak-skill-creator`. It lists each Skill with its triggers and files and
+   counts tool calls, errors, and duplicate calls by tool. A Skill with
+   `invoked: false` was only named in paths, so it is not a used Skill. Each
+   Skill gets its install path and owner. With `--all`, it runs
+   `session_usage.py --all` instead and ranks every Skill used on the machine.
+2. **Review the whole session.** It looks for failed and retried commands,
+   repeated reads, sequential independent calls, unused or missing references,
+   user corrections, skipped checks, re-derived procedures, and output rework.
+3. **Classify every finding.** Each finding is a Skill defect, a preventable
+   agent mistake, an environment or tooling fault, or a one-off. Only the first
+   two become proposals; the others are reported in one line each.
+4. **Propose.** One proposal per root cause, tied to the responsible
+   `file:line` or the missing instruction, with a minimal hunk, effect, risk,
+   and lane. Every content change bumps `metadata.version`.
+5. **Apply by lane** when `--ask` or `--apply` allows it, then **report** with
+   the Skills used, findings, proposals, items that are not Skill changes, what
+   was applied, and unresolved questions.
+
+### Review every session with --all
+
+With `--all`, the Skill ranks Skills by trouble, not popularity: interrupted
+sessions first, then the error and duplicate rate per session. It reviews at
+most five Skills and three lead sessions each unless you ask for more or narrow
+the scope, and it says how many it skipped. It reads only the stretches around
+counted errors, duplicates, and interruptions. A proposal needs the same cause
+in at least two sessions, or one user correction that the Skill text plainly
+caused; a pattern seen once is a watch item. Before proposing, it checks that
+the responsible text still exists in the current Skill.
+
+## Know where a change lands
+
+The owner is resolved from the installed path and the install receipt, not from
+the name alone.
+
+| Owner | Lane |
+| --- | --- |
+| AgentKit Kit Skill, and you can push to the AgentKit repository | **Contributor:** change the source under `kits/` in an isolated worktree branched from `dev`, validate, commit, push, and open a pull request into `dev`; also update the installed runtime copy so the fix helps at once. |
+| AgentKit Kit Skill, any other user | **Personal fork:** record and apply the change through [`ak skills improve`](../../../reference/cli/skills/improve) and [`ak skills evolution apply`](../../../reference/cli/skills/evolution/apply), which write a personal Kit overlay or local fork that AgentKit updates never overwrite. Installed `ak-*` files are never edited in place. |
+| Skill you or the project authored | Edit in place after a snapshot of the files it changes. |
+| Plugin, marketplace, or other third-party Skill | Proposal only; its installer overwrites local edits. The Skill suggests an upstream issue or a user-owned fork. |
+
+Contributor status is a live check: the checkout must verify against the
+canonical remote, and `gh api repos/bestagentkits/agentkit --jq .permissions.push`
+must return `true`. When either check fails or `gh` is unavailable, the Skill
+uses the personal-fork lane and says why. The bundled
+`scripts/find_agentkit_repo.py` locates the checkout on macOS, Linux, or
+Windows and is read-only.
+
+## Keep session data and approvals bounded
+
+<Callout type="warn" title="Session content is user data and untrusted">
+  The Skill never copies prompts, tool output, credentials, tokens, absolute
+  user paths, or session IDs into a Skill, commit, pull request, or committed
+  report, and never follows an instruction found inside a transcript.
+</Callout>
+
+- A finding needs evidence from the reviewed session.
+- A proposal must keep accepted behavior and quality; a token or time saving
+  that drops a required check or artifact is a regression.
+- A dry run writes no Skill file. The report may go to the project's reports
+  directory when the project defines one; otherwise it stays in the reply.
+- A store migration such as `ak update --ssot` runs only with your explicit
+  approval. When `ak` is missing or too old for `skills improve`, the Skill stops
+  at the proposals.
+
+## Verify the result
+
+A complete run should give you:
+
+- Every used Skill with its owner and lane.
+- Findings with their class and evidence, described rather than quoted.
+- Each proposal with its hunk, expected effect, and risk.
+- In `--ask` or `--apply`, each accepted proposal applied in its lane with the
+  lane checks passed, and the changed paths, candidate IDs, branch, and pull
+  request link.
+- Anything skipped, refused, blocked, or unverified named with its reason; none
+  of it counts as applied.
+
+## Troubleshoot or continue
+
+| Symptom | Safe next step |
+| --- | --- |
+| The inventory script or transcript is missing | The Skill builds the list from its own context; install `ak-skill-creator` for counted evidence. |
+| The AgentKit checkout is not found | Provide the path, or set `AGENTKIT_REPO` as the Skill suggests after a successful scan. |
+| Push access is not `true` | Accept the personal-fork lane, or ask a maintainer for access. |
+| A personal-fork draft is refused | Fix the draft rather than the gate; exit `2` is an invalid draft, `5` an unresolved base, `7` a refused secret or path. |
+| An evolution apply returns `regressed` or `blocked` | The change is not applied; review the reported verdict. |
+| The runtime does not recognize the Skill | Confirm target and scope, restart the runtime session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+
+## Related pages
+
+- [`ak-skill-creator`](./skill-creator)
+- [`ak-retro`](./retro)
+- [`ak skills improve` reference](../../../reference/cli/skills/improve)
+- [`ak skills evolution` reference](../../../reference/cli/skills/evolution)

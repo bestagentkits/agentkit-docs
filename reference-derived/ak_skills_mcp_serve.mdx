@@ -1,0 +1,30 @@
+---
+title: "ak skills mcp serve"
+description: "Run the skill tools as a local MCP server over stdio"
+generated: true
+---
+
+**Serves the skill tools over stdio:** skills_search, skills_route, skills_resolve, skills_inspect, skills_read, skills_diagnose, skills_install_plan and skills_sync_plan. Each tool answers with the JSON envelope of the matching ak skills command with --json, labels skill data as untrusted with its provenance in _meta, and caps every request and answer. These tools are read-only; the plan tools answer like --dry-run. The SkillX tools connect only with SkillX on (after `ak update --ssot`, or AGENTKIT_SKILLX=1) and otherwise answer source disabled. With --allow-install, SkillX and the skill store on, the server also offers skills_install_apply and skills_sync_apply: each needs the single-use confirm token of the matching plan call in the same session (5 minutes), re-plans under the kit lifecycle lock and refuses with confirm.plan_changed, writing no skill, root, receipt or lock, when the plan changed. With --allow-exec and AGENTKIT_SKILL_EXEC_BROKER=1, the server also offers skills_execute: it runs one entrypoint of an installed, digest-pinned tree through the same exec broker pipeline as ak skills exec, only when the user granted it with ak skills grants add and the entrypoint opts in to MCP execution (capabilities.mcp.exec). It never grants, binds no input, output directory or project, cannot choose the backend or widen a capability, runs one script at a time and returns redacted, capped output labelled untrusted; its run record says origin mcp. Without --allow-exec no tool executes a skill or script; skills_diagnose reports what is not offered and why.
+
+**Effects:** Runs a long-running MCP stdio server. Without --allow-install and --allow-exec it is read-only for skills, projects and configuration: it installs, executes and starts nothing, and the SkillX tools write only the disposable, size-capped SkillX cache under AGENTKIT_HOME/cache/skillx. With --allow-install, a confirmed apply writes what ak skills install --source skillx or ak skills sync --locked writes, in the same journaled transaction under the kit lifecycle lock; it never runs a declared script. With --allow-exec, a skills_execute call runs a granted entrypoint in the exec broker sandbox and writes its run record under AGENTKIT_HOME/state/exec, as ak skills exec does; it never writes a grant. It never prompts for a vault passphrase.
+
+**Output:** Serves MCP JSON-RPC over stdio until the client disconnects; a startup notice goes to stderr.
+
+### Usage
+
+```bash
+ak skills mcp serve [flags]
+```
+
+Global flags, output modes, and the base exit codes (`0`–`2`) are shared by every command — see [CLI conventions](../cli-conventions). The sections below list only what is specific to this command.
+
+### Flags
+
+| Flag | Description |
+| --- | --- |
+| `--allow-exec` | Also offer skills_execute, which runs a granted, MCP-enabled skill entrypoint through the exec broker (needs AGENTKIT_SKILL_EXEC_BROKER=1) |
+| `--allow-install ak update --ssot` | Also offer the apply tools, which install or sync SkillX skills after a confirmed plan (needs SkillX and the skill store on, as after ak update --ssot) |
+
+### Related commands
+
+- [`ak skills mcp`](./ak_skills_mcp) — Serve the skill tools to MCP clients

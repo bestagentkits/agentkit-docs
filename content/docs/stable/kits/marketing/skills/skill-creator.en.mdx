@@ -1,13 +1,14 @@
 ---
-title: Create, update, audit, and optimize a Skill with ak:skill-creator
+title: Create, update, audit, and optimize a Skill with ak-skill-creator
 description: Run create, update, audit, or optimize on a Skill, including prompt-cruft linting, consumer evaluation, and --long-horizon layout.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
-Use `ak:skill-creator` to create, update, audit, or optimize a reusable Skill.
-`create` scaffolds a new Skill. `update` applies a requested change in place.
+Use `ak-skill-creator` to create, update, audit, or optimize a reusable Skill.
+`create` first checks whether a new routable Skill is necessary before scaffolding.
+`update` applies a requested change in place.
 `audit` reports inventory, provenance, and dated prompt patterns without writing
 Skill files. `optimize` rewrites High and Medium findings and writes only with
 `--apply`. New Skills stay in the current project by default; user-scope
@@ -15,11 +16,12 @@ authoring requires an explicit request. Pass `--long-horizon` when the Skill
 needs a repository for observations, experiments, evals, benchmarks, gates, and
 decisions.
 
-## Choose ak:skill-creator for repeatable workflows
+## Choose ak-skill-creator for repeatable workflows
 
-### Use ak:skill-creator when
+### Use ak-skill-creator when
 
-* You need a new Skill (`create`) or a bounded in-place change (`update`).
+* You need to establish whether a distinct routable Skill is justified (`create`)
+  or make a bounded in-place change (`update`).
 * An existing Skill should be inventoried for dated prompt patterns (`audit`).
 * You want a proposed rewrite applied only after you pass `--apply` (`optimize`).
 * You need a long-horizon Skill repository (`--long-horizon`).
@@ -28,6 +30,9 @@ decisions.
 ### Choose another workflow when
 
 * The need is a one-off prompt, one personal preference, or general model knowledge.
+* An existing owner, reference, script, validator, template, or project context
+  already satisfies the need; extend that surface instead of adding activation.
+* You need to implement a CLI or MCP server rather than author Skill resources.
 * You need a bundle with commands, tools, MCP configuration, Hooks, or apps in
   addition to Skills. Use a plugin workflow.
 * You only want to install an existing Skill. Use the appropriate discovery and
@@ -41,11 +46,28 @@ the output directory before scaffolding. The canonical artifact is `SKILL.md`
 plus only the `scripts/`, `references/`, `agents/`, and `assets/` the workflow
 actually needs.
 
+Before scaffolding, establish why those existing surfaces are insufficient.
+A new Skill needs distinct operational value, authority boundaries, or a
+completion contract that the consumer cannot reliably infer from the task
+alone. A large knowledge library or persona does not by itself justify a new
+activation surface; use a routed reference for missing domain detail, a
+script or validator for deterministic work, a template for repeated output,
+and project context for local conventions.
+
+Keep the common-path `SKILL.md` core explicit: **Outcome**, **Authority**, and
+**Done when**. Add only Skill-specific constraints, known failure modes,
+routing, tools, and completion evidence; load optional frameworks, catalogs,
+examples, and deeper knowledge from references when relevant. Use guardrails,
+not generic step-by-step railroads: protect concrete boundaries and leave
+implementation choices open unless order is needed for a dependency, safety,
+reproducibility, or demonstrated reliability. A wall of generic prohibitions
+is not a substitute for that contract.
+
 | Runtime     | Invocation              | Availability boundary                                                                                                                      |
 | ----------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Claude Code | `/ak:skill-creator ...` | The released workflow and generated conventions are Claude-first, including Claude Skill metadata and plugin distribution references.      |
-| Cursor      | `/ak:skill-creator ...` | Slash invocation can guide authoring, but generated discovery, metadata, and tool assumptions require Cursor-specific verification.        |
-| Codex       | `$ak:skill-creator ...` | Codex can author and inspect the files, but a portable Skill must be tested against Codex discovery and supported capabilities separately. |
+| Claude Code | `/ak-skill-creator ...` | The released workflow and generated conventions are Claude-first, including Claude Skill metadata and plugin distribution references.      |
+| Cursor      | `/ak-skill-creator ...` | Slash invocation can guide authoring, but generated discovery, metadata, and tool assumptions require Cursor-specific verification.        |
+| Codex       | `$ak-skill-creator ...` | Codex can author and inspect the files, but a portable Skill must be tested against Codex discovery and supported capabilities separately. |
 
 ## Run the Skill
 
@@ -58,19 +80,19 @@ packaging checks, or security policy. `optimize` writes files only with
 <Tabs items={['Claude Code', 'Cursor', 'Codex']}>
   <Tab value="Claude Code">
     ```text
-    /ak:skill-creator create "Create a project-scoped release-notes Skill that validates headings and never publishes" --advice
+    /ak-skill-creator create "Create a project-scoped release-notes Skill that validates headings and never publishes" --advice
     ```
   </Tab>
 
   <Tab value="Cursor">
     ```text
-    /ak:skill-creator create "Create a project-scoped release-notes Skill that validates headings and never publishes"
+    /ak-skill-creator create "Create a project-scoped release-notes Skill that validates headings and never publishes"
     ```
   </Tab>
 
   <Tab value="Codex">
     ```text
-    $ak:skill-creator create "Create a project-scoped release-notes Skill that validates headings and never publishes"
+    $ak-skill-creator create "Create a project-scoped release-notes Skill that validates headings and never publishes"
     ```
   </Tab>
 </Tabs>
@@ -94,27 +116,211 @@ activates the Skill.
    a report only. `optimize` writes only with `--apply`.
 2. **Choose the target.** Default is the current project. Kit scope is for the
    AgentKit repository. User scope requires an explicit request.
-3. **`create` captures intent, researches duplicates, scaffolds, writes, then
-   validates.** It refuses to finish while the prompt-cruft linter reports a
-   High finding.
+3. **`create` captures intent and proves the packaging need before scaffolding.**
+   Consolidate overlapping activation into the existing owner; initialize a
+   new Skill only when its distinct contract is justified, then author and
+   validate it. It refuses to finish with unresolved High prompt-cruft findings.
 4. **`update` scouts the existing Skill and its users, applies the requested
    change only, lints every changed line, and bumps `metadata.version`.**
 5. **`audit` inventories provenance and dated patterns, and measures actual
-   local-session usage.** `scripts/session_usage.py` reads local Claude Code
-   and Codex transcripts (never their prompt or output text) for turns,
-   tokens, tool calls, errors, and delegation before the report judges the
-   Skill's text. It can target one Skill, a kit, or `--all`. It does not fail
-   an existing Skill for findings.
+   local-session usage.** See [Read session evidence in an audit](#read-session-evidence-in-an-audit).
+   It can target one Skill, a kit, or `--all`. It does not fail an existing
+   Skill for findings and never edits Skill files.
 6. **`optimize` rewrites High and Medium findings from an audit report or
-   path.** Confirm the diff, then pass `--apply --from-audit <report>` to write.
-7. **Validate.** Run the bundled quick validator and prompt-cruft linter before
-   you treat the Skill as finished.
-8. **Evaluate routing and outcomes.** `create` compares against no Skill;
-   `update` compares against the original and must keep accepted behaviors.
-   Use structured cases with real artifact assertions. Record model, runtime,
-   snapshot hash, quality, and observed cost. Blocked or ungraded is not a
-   pass. `scripts/eval_skill.py` validates cases, grades artifacts, and
-   summarizes observed runs.
+   path.** It rewrites rather than deletes when an instruction still has a
+   purpose, and it keeps the constraints listed under
+   [Review lint findings by purpose](#review-lint-findings-by-purpose).
+   Confirm the diff, then pass `--apply --from-audit <report>` to write.
+7. **Validate.** Run the structural validator and prompt-cruft linter described
+   in [Validate structure and prompt text](#validate-structure-and-prompt-text)
+   before you treat the Skill as finished.
+8. **Evaluate routing and outcomes.** Compare consumer behavior as described in
+   [Evaluate consumer behavior](#evaluate-consumer-behavior). Blocked or
+   ungraded is not a pass.
+
+For knowledge-heavy or refactored Skills, compare the current/full Skill,
+a constraint-oriented thin Skill, and no Skill when practical, with equivalent
+resources, tools, inputs, and settings. An optional direct-context arm supplies
+the same useful reference material without Skill routing. That distinguishes
+the value of the knowledge from the value of packaging and activating it as
+a Skill; withholding necessary information from the baseline does not prove
+Skill value. Compare artifact quality and observed cost, including actual
+reference reads. A shorter core alone does not establish token savings or
+provider behavior.
+
+## Read session evidence in an audit
+
+Before judging a Skill's text, `audit` and `optimize` measure how the Skill
+actually ran in local agent sessions. The bundled `scripts/session_usage.py`
+reads local Claude Code and Codex transcripts and reports metrics such as
+turns, tokens, tool calls, tool errors, repeated calls, tool wait time,
+delegation and subagent usage, and which Skill files were loaded. It is
+read-only and never prints prompt, reply, or tool-output text.
+
+* The audit excludes the session that is running it, because that session is
+  still open.
+* Zero recorded invocations means no evidence, not a clean result. The report
+  states the gap and continues with the static audit.
+* The script's signals are leads, not findings. A signal becomes a finding only
+  after the audit ties a specific session cost to specific Skill text or a
+  missing instruction.
+* The audit report adds a **Session evidence** section before its findings:
+  scope (roots, runtimes, date range, invocation and session counts,
+  exclusions), median and p90 metrics, top tools, and each accepted signal with
+  the responsible `file:line`.
+* Reports contain aggregate numbers only. Transcripts are user data and
+  untrusted content; prompts, outputs, absolute user paths, and credentials are
+  not copied into reports.
+
+The script also has two inventory modes. `--session latest` (or a session ID,
+prefix, or transcript path) lists every Skill one session touched, with its
+triggers, the Skill files named in tool arguments, and `invoked`, which is false
+for a Skill that only appears in paths. `--all [--since YYYY-MM-DD]` inventories
+every local transcript and ranks each invoked Skill by sessions, errors,
+duplicate calls, interruptions, and compactions, with up to five lead sessions
+per Skill. A full scan can take minutes on a machine with many transcripts, so
+narrow it with `--since` or `--runtime` when you can.
+
+`optimize` applies session-based changes one goal at a time and accepts a
+change only when output quality holds; a faster or shorter run that loses a
+required check or artifact is a regression. The installed Skill's
+`references/session-usage-analysis.md` owns the collection options, metric
+definitions, and report contract.
+
+## Validate structure and prompt text
+
+Run the validators from the installed `ak-skill-creator` directory, or call the
+scripts by absolute path:
+
+```bash
+uv run scripts/quick_validate.py <skill-dir>
+uv run --with PyYAML==6.0.3 scripts/lint_cruft.py <skill-dir> --routing
+```
+
+YAML-aware checks depend on PyYAML. `quick_validate.py` declares that
+dependency in inline script metadata, and the `--with` option supplies it to
+the linter, so `uv` resolves it without changing your project environment. A
+Python environment with the Skill's `scripts/requirements.txt` installed can
+run the same scripts directly. Body-only linting without `--routing` needs only
+the standard library.
+
+The structural validator parses frontmatter as typed YAML with a safe loader.
+Duplicate keys, an unfinished initializer placeholder or template marker, and a
+concrete resource path that does not resolve inside the Skill are errors. A
+teaching example that deliberately names a missing file can carry a
+`resource-link-example:` exemption with a reason on that line. The validator
+exits `0` when there are no errors and `1` when there are; warnings never fail
+the run. A missing PyYAML is reported separately as an environment fault with
+exit `3`, not as an invalid Skill.
+
+The authoring contract is `references/production-skill-standard.md` in the
+installed Skill. `quick_validate.py` reports drift from that standard as
+warnings labeled with the rule name, such as `[when-to-use]` or
+`[oversized-file]`. These warnings do not fail the run, but fix each one or
+record why it does not apply. To summarize the same checks across many Skills,
+run `scripts/skill_standard_report.py <root>`. The report is warning-first: it
+exits `0` unless you pass `--strict` and a Skill has validation errors, and it
+accepts `--json` and `--details`.
+
+For a kit Skill, also run the kit validation and contract checks named in the
+installed Skill's kit contract reference. The full checklist is
+`references/validation-checklist.md` in the installed Skill.
+
+### Review lint findings by purpose
+
+The prompt-cruft linter reports patterns to review; a match does not prove that
+an instruction is obsolete. Classify each finding by what the text is for and
+resolve a High finding by rewriting it or by documenting a narrowly scoped
+exemption for a real constraint, not by deleting it on sight. Keep author-only
+context, exact scripts for fragile operations, tool and parameter contracts,
+authorization and safety boundaries, runtime capability checks, explicit user
+limits, budgets, and ownership constraints. The installed Skill's
+`references/prompt-cruft-patterns.md` owns the rule table, opt-out markers, and
+audit and optimize procedures.
+
+Neither validator proves runtime portability or consumer effectiveness.
+
+## Evaluate consumer behavior
+
+Structural validity is not behavioral evidence. Evaluate what an independent
+consumer actually produces. These references in the installed Skill own the
+details:
+
+| Need | Owner |
+| --- | --- |
+| Case format | `assets/eval-cases.example.json` |
+| Comparisons, holdout, and routing evaluation | `references/testing-and-iteration.md` |
+| Commands, assertion kinds, and record format | `references/evaluation-tools.md` |
+| Evaluating a change to the creator itself | `references/creator-consumer-evaluation.md` |
+
+### Compare fresh consumers on fixed cases
+
+* Author cases at `evals/evals.json` in the target Skill. Each case has an id, a
+  `train` or `holdout` split, a realistic prompt, the expected output, optional
+  files, and assertions. Keep holdout prompts out of authoring and rewrite
+  context, and keep the split fixed across iterations.
+* `create` compares the candidate with no Skill. `update` compares it with the
+  original and reruns cases for behavior that must stay unchanged.
+* Use fresh sessions and clean workspaces with identical prompts, tools,
+  fixtures, and settings. The baseline must not discover the candidate, and
+  consumers never receive the expected answers.
+* Record the effective model id the provider reports (a requested alias is not
+  evidence), the runtime and version, the Skill snapshot hash, the run or
+  session id, available tools, and the output location. When a runner or target
+  model is unavailable, record that coverage as blocked.
+* For a change to the creator workflow, an author stage produces Skills and
+  independent consumers run them; the author is not the sole judge of its own
+  output.
+
+### Separate observed routing from forced execution
+
+Routing evidence comes from the real catalog with competing Skills present.
+Routing prompts do not name or force the target Skill; observe actual reads or
+invocations in the runtime trace, and include near-miss negatives that share
+terms with adjacent Skills. Report true and false positives and negatives;
+precision or recall with an empty denominator is unknown. A functional run that
+forces the Skill to load isolates execution quality and is labeled separately;
+it is not activation evidence. Asking a model whether it would use a Skill is a
+diagnostic, not routing evidence.
+
+### Grade and summarize with eval_skill.py
+
+`scripts/eval_skill.py` uses the standard library. It validates case files,
+grades artifacts that already exist, and summarizes records. It never calls a
+provider or executes commands, so you run the consumer yourself first.
+
+```bash
+python3 scripts/eval_skill.py validate /absolute/target-skill/evals/evals.json
+
+python3 scripts/eval_skill.py grade /absolute/target-skill/evals/evals.json \
+  --case-id normalize-valid --outputs /absolute/run/outputs \
+  --run-id unique-session-id --variant candidate \
+  --model effective-model-id --runtime observed-runtime-version \
+  --skill /absolute/skill-snapshot > /absolute/run/record.json
+
+python3 scripts/eval_skill.py summarize /absolute/run-a/record.json \
+  /absolute/run-b/record.json > /absolute/comparison.json
+```
+
+* Assertions are `file-exists`, `json-equals`, `text-contains`, or `rubric`
+  (the default). Artifact paths are relative to the outputs root; escaping paths
+  and symlinks fail. Rubric checks stay ungraded until an independent reviewer
+  fills them with cited evidence.
+* For the no-Skill baseline, pass `--variant without_skill` and omit `--skill`;
+  other variants hash the Skill snapshot into the record.
+* For a run that did not complete, pass `--status blocked` or
+  `--status failed` and keep the reason or provider error beside the record.
+* Optional observed metrics (`--tokens`, `--duration-ms`, `--tool-calls`,
+  `--corrections`) stay `null` when omitted; unknown is never recorded as zero.
+  `--observations` imports a provider-neutral evidence file whose accepted
+  fields are owned by `scripts/eval_contract.py`. It cannot override run
+  identity, Skill hash, status, or check verdicts.
+* `grade` exits `0` when every check passed, `1` when any check failed or the
+  run is blocked, failed, or ungraded, and `2` for invalid input or
+  configuration. Save the record even on exit `1`.
+* `summarize` groups records by variant, model, runtime, split, and Skill hash,
+  rejects duplicate run ids, and lists missing evidence. A summary describes
+  observations; it does not promote a candidate or establish a cause.
 
 ## Keep file writes and distribution deliberate
 
@@ -126,8 +332,13 @@ activates the Skill.
 
 The initializer creates directories and placeholder files. Packaging writes
 `<skill-directory-name>.zip` and can replace an existing archive with that name,
-so inspect the destination first. It excludes `node_modules/`, `venv/`, `.venv/`,
-and `.env`; ship `.env.example` instead. Tests, benchmark models, documentation
+so inspect the destination first. It excludes build and runtime directories such
+as `node_modules/`, `venv/`, and `.venv/`, the root `evals/` directory, and
+`.env`; ship `.env.example` instead. The packager validates the source
+directory only. Inspect the archive members and validate an extracted copy
+yourself; archive containment and atomic replacement are not automated. Package
+only an inspected source tree without symlinks or private configuration, and
+write the archive outside the Skill directory. Tests, benchmark models, documentation
 lookup, ephemeral dependency runners, and package installation can use network
 access, compute, tokens, and provider cost. Never place credentials, personal
 data, private paths, or internal prompts in Skill text, examples, logs, or
@@ -148,9 +359,14 @@ A complete result depends on the subcommand:
 * `--long-horizon`: the extra observations, experiments, evals, benchmarks, and
   gates layout when that flag was requested.
 
-The bundled quick validator checks typed YAML, duplicate keys, placeholders,
-and resource links. The prompt-cruft linter checks dated instruction patterns.
-Neither proves runtime portability; review that before distribution.
+For a new routable Skill, also expect the reason existing owners or resource
+forms were insufficient and actual routing evidence against adjacent owners.
+Retain accepted behavior, authority, and completion constraints when thinning
+an existing Skill; structural validity alone is not consumer effectiveness.
+
+Validator and linter results are structural evidence only; see
+[Validate structure and prompt text](#validate-structure-and-prompt-text).
+Review runtime portability before distribution.
 
 ## Troubleshoot and limits
 
@@ -161,4 +377,6 @@ Neither proves runtime portability; review that before distribution.
 | `optimize` changed nothing | Confirm you passed `--apply` after reviewing the audit report. |
 | Packaging rejects frontmatter | Fix the name or description format, rerun quick validation, then package again. |
 | A Skill works in one runtime only | Isolate the runtime-specific capability, add a safe fallback, and test each claimed runtime. |
-| Evaluation is blocked or ungraded | Do not treat the Skill as finished; expand from the failing cases, then rerun `scripts/eval_skill.py`. |
+| Evaluation is blocked or ungraded | Do not treat the Skill as finished. Record the blocked coverage or complete the rubric review with cited evidence, expand from failing cases, then rerun `scripts/eval_skill.py`. |
+| Validation exits `3` | Install the declared PyYAML dependency or use the documented `uv run` invocation; the Skill content was not judged. |
+| The audit finds no session invocations | Report the missing evidence and continue with the static audit; do not treat it as a clean result. |

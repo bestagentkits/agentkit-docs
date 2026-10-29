@@ -1,0 +1,91 @@
+---
+title: ak skills kit
+description: Preview, apply, rebase, roll back, publish and sync personal kits that extend exact kit versions with overlays and forks.
+---
+
+Use `ak skills kit` to work with personal kits. A personal kit `local/<name>`
+extends exact kit versions with overlays and forks; its manifest is
+`AGENTKIT_HOME/kits/personal/<name>/personal-kit.yaml`. The commands project the
+resolved composition into the native skills roots, owned by `personal:<name>`,
+in one journaled transaction. Running the group command prints help and exits
+`0`.
+
+## Usage
+
+```bash
+ak skills kit <command>
+```
+
+The group accepts no positional arguments and has no flags of its own. Shared
+flags are described in [CLI conventions](../cli-conventions).
+
+## Requirements
+
+The group is registered by default; `AGENTKIT_SKILL_OVERLAYS` set to anything
+but `1` hides it. What each subcommand needs:
+
+| Need | Commands |
+| --- | --- |
+| Nothing: offline, for every user | `status`, `inspect`, and the `--dry-run` of `init`, `resolve` and `rebase` |
+| The skill store | `apply`, `rollback`, `remove` and `sync` (dry runs included), plus `init` and `resolve` |
+| SkillX | `publish`, `revisions` and `sync` |
+
+Both the skill store and SkillX turn on after `ak update --ssot`, or with
+`AGENTKIT_SKILL_STORE=1` and `AGENTKIT_SKILLX=1`. `init`, `resolve`, `publish`
+and `revisions` only touch `AGENTKIT_HOME` and follow its global scope from any
+directory; a projection follows `--scope`. An upload needs an unscoped SkillX
+API key in `ak secrets` (`SKILLX_TOKEN`).
+
+## Subcommands
+
+| Command | Outcome | Disk effect |
+| --- | --- | --- |
+| `ak skills kit status [name]` | Show whether personal kits resolve against their foundations. | Read-only. |
+| `ak skills kit inspect <name>` | Show the resolved composition plan. | Read-only. |
+| `ak skills kit init <name> --extends <kit>@<version>` | Create a personal kit manifest. | Writes the manifest. |
+| `ak skills kit apply <name>` | Project the composition into the skills roots. | Writes the skill store, skills roots, lock and receipts. |
+| `ak skills kit rebase <name> --to <kit>@<version>` | Preview or apply a move to a new foundation version. | Dry run is read-only; an apply projects, a stopped rebase writes its conflict report. |
+| `ak skills kit resolve <name> --path <path> --choice <choice>` | Record the user's resolution of a rebase finding. | Writes resolution records and the kit's own files. |
+| `ak skills kit rollback <name>` | Project the previous revision again. | Same transaction as apply. |
+| `ak skills kit remove <name>` | Drop the kit's projections. | Same transaction as apply. |
+| `ak skills kit publish <name>` | Upload the kit's delta to SkillX as a revision. | Writes the SkillX link record. |
+| `ak skills kit revisions <name>` | List the kit's SkillX revisions. | Read-only. |
+| `ak skills kit sync <name> --locked` | Project one exact SkillX revision. | Same transaction as apply, plus the link record. |
+
+A plan that needs review is applied only with the plan token the user approved.
+The projecting commands never rewrite the personal kit or the foundation kits,
+and never run a script.
+
+## Output and exits
+
+Each subcommand writes human output or one JSON envelope. JSON kinds are
+`skills.kit.status`, `skills.kit.inspect`, `skills.kit.init`,
+`skills.kit.apply`, `skills.kit.rebase` (dry run), `skills.kit.rebase-apply`,
+`skills.kit.resolve`, `skills.kit.rollback`, `skills.kit.remove`,
+`skills.kit.publish`, `skills.kit.revisions` and `skills.kit.sync`. Each page
+lists its exit codes; the read-only and projecting commands share these:
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Success, or nothing to change. |
+| `1` | Command failure; for `status` and `inspect` also an overlay conflict, shared alias, alias collision or stale proposal. |
+| `2` | The skill store disabled, invalid flags or arguments, or a malformed manifest, overlay or proposal. |
+| `4` | Another AgentKit operation holds the kit lifecycle lock (projecting commands). |
+| `5` | Personal kit, foundation, version, skill or previous revision not found. |
+| `6` | Review required, stale plan token, rebase conflict, alias collision, or an unowned or modified path (projecting commands). |
+| `7` | Revoked foundation, a link in a target path, or a digest mismatch. |
+
+## Related commands
+
+- [Complete `ak skills kit` command facts](../cli/ak_skills_kit)
+- [Check that personal kits resolve](./status)
+- [Inspect the composition plan](./inspect)
+- [Create a personal kit](../cli/ak_skills_kit_init)
+- [Apply a personal kit](./apply)
+- [Rebase onto a new foundation version](./rebase)
+- [Resolve a rebase finding](./resolve)
+- [Roll back to the previous revision](../cli/ak_skills_kit_rollback)
+- [Remove the projections](./remove)
+- [Publish to SkillX](./publish)
+- [List SkillX revisions](./revisions)
+- [Sync one SkillX revision](./sync)

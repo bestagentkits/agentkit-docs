@@ -10,17 +10,19 @@ Install a skill
 
 ### Synopsis
 
-Resolve a skill by &lt;kit&gt;/&lt;skill&gt; and install it into the local environment.
+Resolve a skill by &lt;kit&gt;/&lt;skill&gt; and install it into the local environment. With --source skillx (SkillX and the skill store on: after `ak update --ssot`, or AGENTKIT_SKILLX=1 and AGENTKIT_SKILL_STORE=1), install a verified SkillX release instead: the plan shows its identity, digest, trust, targets, projected paths and declared scripts (never executable), and applies without prompting unless --dry-run is set.
 
 Effects:
-  Writes skill files to the local installation directory.
+  Writes skill files to the local installation directory. With --source skillx: Applies without prompting; --dry-run prints the plan and writes nothing. Writes the verified release into the skill store under AGENTKIT_HOME, the projected skill files into each runtime's native skills root (mode 0644, never executable), removing stale ones, the scope's skill lock and receipts and, for a project, the project root registry under AGENTKIT_HOME/state and the project skill state .gitignore, all in one journaled transaction under the kit lifecycle lock. Never runs a declared script, npm, npx or any SkillX installer. Needs SkillX on (after `ak update --ssot`, or AGENTKIT_SKILLX=1) and the skill store on (after `ak update --ssot`, or AGENTKIT_SKILL_STORE=1).
 
 Exit status:
   0   success
   1   command failure
   2   invalid flags or arguments
-  5   skill not found
-  6   already installed (re-run with --force)
+  4   --source skillx: the kit lifecycle lock is held
+  5   skill or release not found
+  6   already installed (re-run with --force); --source skillx: collision, unowned or modified path
+  7   --source skillx: release revoked, yanked or untrusted, a link in a target path, or a digest mismatch
 
 ```
 ak skills install <kit>/<skill> [flags]
@@ -31,18 +33,24 @@ ak skills install <kit>/<skill> [flags]
 ```
   ak skills install engineer/agent-browser
   ak skills install engineer/agent-browser --force
+  ak skills install @publisher/review-guardrails@1.2.0 --source skillx --dry-run --json
+  ak skills install @publisher/review-guardrails@1.2.0 --source skillx --runtime claude-code,codex --scope global
 ```
 
 ### Options
 
 ```
-      --force            Overwrite existing install
-  -h, --help             help for install
-      --json             Emit machine-readable JSON (implies --no-interactive)
-      --no-interactive   Disable interactive prompts (CI-safe)
-  -q, --quiet            Suppress non-error output on stderr
-  -V, --verbose          Extra diagnostic output on stderr (loses to --quiet)
-  -y, --yes              Assume yes for all prompts
+      --dry-run           SkillX: print the plan and write nothing
+      --force             Overwrite existing install
+  -h, --help              help for install
+      --json              Emit machine-readable JSON (implies --no-interactive)
+      --no-interactive    Disable interactive prompts (CI-safe)
+  -q, --quiet             Suppress non-error output on stderr
+      --runtime strings   SkillX: runtimes to project into: claude-code, codex (repeatable; default claude-code)
+      --scope string      SkillX: lock and skills root scope: project (default) or global (default "project")
+      --source string     Skill source: local (default, <kit>/<skill>) or skillx (@publisher/slug) (default "local")
+  -V, --verbose           Extra diagnostic output on stderr (loses to --quiet)
+  -y, --yes               Assume yes for all prompts
 ```
 
 ### SEE ALSO

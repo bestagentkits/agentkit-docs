@@ -1,0 +1,137 @@
+---
+title: ak rollback
+description: Đưa AgentKit về trạng thái v2 đã chụp trong checkpoint pre-upgrade, theo các bước được ghi lại và có thể tiếp tục.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak rollback --to v2` để hoàn tác nâng cấp v3. Lệnh khôi phục checkpoint
+pre-upgrade mới nhất, hoặc checkpoint bạn chỉ định bằng `--checkpoint`, và đóng
+băng cập nhật tự động để không có gì tự nâng cấp lại.
+
+## Cách dùng
+
+```bash
+ak rollback --to v2 [flags]
+```
+
+`--to v2` là bắt buộc; đây là đích duy nhất được hỗ trợ. Lệnh không nhận
+argument theo vị trí.
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--to <major>` | Trống | Phiên bản lớn đích; chỉ chấp nhận `v2`. |
+| `--checkpoint <id>` | Checkpoint pre-upgrade mới nhất | ID checkpoint để rollback về. ID sai dạng thoát `2`. |
+| `--dry-run` | `false` | Xác minh checkpoint và in kế hoạch rollback mà không thay đổi gì. |
+| `--skip-secrets` | `false` | Khôi phục mọi thứ trừ tệp secret đã niêm phong, dành cho checkpoint bị thiếu khoá. |
+| `--allow-root <key>` | Trống | Khôi phục root key này vào đường dẫn đã ghi dù môi trường hiện tại resolve nó ở chỗ khác (lặp lại được). |
+| `--install-v2` | `false` | Đồng ý cài CLI v2 đã ghim, đã xác minh chữ ký, được ghi trong checkpoint. |
+| `--with-desktop` | `false` | Cùng `--install-v2`, cài thêm phiên bản AgentKit Desktop đã ghi ở nơi được hỗ trợ. Thiếu `--install-v2` thì thoát `2`. |
+
+Các cờ dùng chung được mô tả trong [quy ước CLI](../cli-conventions).
+
+## Rollback làm gì
+
+Lần chạy đi theo các bước được ghi lại: `freeze-updater`,
+`pre-rollback-checkpoint`, `revert-kits`, `restore`, `refreeze-updater`,
+`install-v2` và `verify`.
+
+1. Tắt mọi trình cập nhật tự động bằng cách ghi `auto_update.schedule: off` và
+   `updates.enabled: false` vào `config.yaml`.
+2. Chụp một checkpoint pre-rollback của mọi đường dẫn mà rollback sẽ ghi đè
+   hoặc xoá.
+3. Hoàn tác các kit projection do AgentKit sở hữu trong khi CLI v3 vẫn đang
+   chạy.
+4. Khôi phục AgentKit home chính xác. Trạng thái đăng nhập được giữ và
+   entitlement của registry không bao giờ được sao chép. Runtime home và project
+   được khôi phục dưới dạng overlay, còn `operational.db` ở đúng schema đã chụp.
+   Các file khác mà v3 thêm vào overlay được báo cáo, không bị xoá. Ngoại lệ là
+   trạng thái Skill của project trong `.agentkit/skill-state`: bản ghi sở hữu
+   của nó nằm trong AgentKit home, nên các file v3 thêm vào đó bị xoá và một lần
+   `ak update --ssot` sau đó có thể chạy lại.
+5. Đóng băng cập nhật lần nữa, vì bước restore đã ghi lại `config.yaml`, và trỏ
+   `updates.registry_url` tới manifest đã ký của bản v2 vừa khôi phục để CLI
+   2.x giữ cập nhật trên bản đó. Pin manifest không phải 2.x do bạn tự cấu hình
+   được giữ nguyên.
+6. Với `--install-v2`, cài CLI v2 đã ghim và đã xác minh chữ ký; với
+   `--with-desktop`, cài thêm phiên bản Desktop đã ghi ở nơi được hỗ trợ.
+7. Chạy `ak doctor`; bước này bị bỏ qua kèm thông báo cần khởi động lại khi
+   binary v2 đã được stage và cần restart.
+
+Lệnh từ chối chạy khi một bản cập nhật nền, AgentKit Desktop hoặc một `ak`
+khác đang giữ trạng thái AgentKit. Lệnh lấy kit lifecycle lock và auto-update
+run lock trước; bản cập nhật nền đang chạy không bao giờ bị ngắt và lệnh thoát
+`4`. Rollback bị gián đoạn sẽ tiếp tục từ bước chưa hoàn tất đầu tiên khi chạy
+lại. Journal nằm ở `~/.agentkit/backups/rollback/journal.json`.
+
+<Callout type="warning">
+  Checkpoint pre-rollback là đường quay lại trạng thái v3. Hãy giữ nó đến khi
+  bản cài đã khôi phục hoạt động, và đừng prune checkpoint trong lúc đó.
+</Callout>
+
+## Hành vi xác nhận
+
+Khi thiếu `--yes`, `--no-interactive` và `--json`, lệnh in kế hoạch rồi hỏi
+`Roll back to checkpoint <id>? [y/N]:`. Câu trả lời khác `y` hoặc `yes` sẽ huỷ
+với mã `3`. Khi khoá của checkpoint bị thiếu, prompt nói rõ: chỉ các root khớp
+môi trường này được khôi phục và secret bị bỏ qua.
+
+Sự đồng ý rõ ràng, nghĩa là `--yes` hoặc trả lời prompt, cũng bao gồm việc
+khôi phục checkpoint thiếu khoá và tiếp tục khi không đo được dung lượng đĩa
+trống; riêng `--no-interactive` thì không. `--dry-run` không bao giờ hỏi.
+
+```bash
+ak rollback --to v2 --dry-run
+ak rollback --to v2
+ak rollback --to v2 --install-v2 --yes
+ak rollback --to v2 --checkpoint 20261019T080000Z-1a2b3c4d --skip-secrets --json
+```
+
+## Đầu ra
+
+Dry-run cho người dùng in `Rollback plan (checkpoint <id>, captured <time>):`,
+CLI v2 đích cùng lệnh cài khi đã biết, các bước đánh số và số tệp sẽ ghi, giữ
+nguyên và xoá. Lần chạy hoàn tất in `[OK] rolled back to checkpoint <id>`, tiếp
+theo là một dòng cho mỗi bước trong journal với trạng thái và chi tiết, số tệp,
+cảnh báo `[!]` và các dòng `next:`.
+
+Với `--json`, `--dry-run` in một envelope `rollback.plan` và lần chạy in một
+envelope `rollback.result`. Cả hai dùng chung các trường:
+
+```text
+schema_version: 1
+kind: rollback.plan | rollback.result
+data.dry_run
+data.resumed?
+data.checkpoint            (biên nhận checkpoint)
+data.verification?         (id, ok, entries, bytes, databases, secrets, key_status, warnings?)
+data.plan[]
+data.target_cli_version?
+data.install_command?
+data.restore?              (written, unchanged, removed, secrets_skipped, roots[], ...)
+data.journal?              (checkpoint_id, pre_rollback_checkpoint_id, status, steps[], ...)
+data.next_steps[]?
+data.warnings[]?
+```
+
+Lỗi in error envelope chung kèm object `remediation`, trong đó `reason` là mã
+ổn định và `steps` liệt kê việc cần làm.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Đã rollback, hoặc đã in kế hoạch. |
+| `1` | Một bước thất bại hoặc bị từ chối; chạy lại để tiếp tục. |
+| `2` | Cờ hoặc argument không hợp lệ: thiếu hoặc không hỗ trợ `--to`, `--checkpoint` sai dạng, hoặc `--with-desktop` mà không có `--install-v2`. |
+| `3` | Prompt bị từ chối. |
+| `4` | Một thao tác checkpoint khác, một thao tác vòng đời kit hoặc một bản cập nhật tự động đang chạy giữ khoá. |
+| `5` | Không có checkpoint pre-upgrade dùng được. Khi `ak update --ssot` đã commit skill store trên một home không có trạng thái AgentKit trước đó, lỗi nói rằng không có trạng thái v2 để quay về và chỉ sang `ak self-update --version <v2-version>`. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak rollback`](../cli/ak_rollback)
+- [Chụp checkpoint](../cli/ak_backups_checkpoint)
+- [Liệt kê snapshot và checkpoint](../cli/ak_backups_list)
+- [Xác minh checkpoint](../cli/ak_backups_verify)
+- [Nâng cấp bằng `ak update --ssot`](../cli/ak_update)

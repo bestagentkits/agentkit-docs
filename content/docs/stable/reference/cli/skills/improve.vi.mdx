@@ -1,0 +1,128 @@
+---
+title: ak skills improve
+description: Xem trước evidence đã che từ session cho một Skill, thêm brief soạn thảo, hoặc biên dịch bản nháp overlay thành candidate đã qua gate và đánh giá.
+---
+
+Dùng `ak skills improve` để biến các session của chính bạn thành evidence cho
+việc thay đổi một Skill. AgentKit không gọi model: nó trích xuất và che evidence
+cục bộ, trao brief cho host agent hoặc cho bạn, rồi biên dịch bản nháp bạn viết
+thành một candidate mà [`ak skills evolution`](../cli/ak_skills_evolution) có thể áp dụng.
+Không có gì rời khỏi máy này.
+
+## Cách dùng
+
+```bash
+ak skills improve <skill> --session <id|latest> [--session ...] --dry-run [--brief] [--project <name>] [--json]
+ak skills improve <skill> --session <id|latest> --candidate <draft-dir> [--kits-dir <dir>] [--dry-run] [--json]
+```
+
+Phải có đúng một reference Skill, ví dụ `ak-plan`.
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--session <id>` | bắt buộc | Session cần đọc, hoặc `latest` cho session mới nhất của project. Lặp lại được, tối đa 5. |
+| `--project <name>` | Project đã đăng ký chứa thư mục làm việc | Project đã đăng ký mà các session thuộc về. |
+| `--dry-run` | `false` | Chỉ xem trước và không ghi gì. Bắt buộc khi không có `--candidate`. |
+| `--brief` | `false` | Thêm brief soạn thảo vào bản xem trước. Cần `--dry-run`; không dùng cùng `--candidate`. |
+| `--candidate <draft-dir>` | Trống | Thư mục bản nháp overlay để biên dịch, qua gate, đánh giá và ghi lại. |
+| `--kits-dir <dir>` | `$AGENTKIT_KITS_DIR` hoặc `./kits` | Thư mục foundation kit. Chỉ dùng với `--brief` hoặc `--candidate`. |
+
+Các cờ dùng chung nằm trong [quy ước CLI](../cli-conventions). Claude home mà
+session được đọc từ đó là `AGENTKIT_CLAUDE_HOME` hoặc `~/.claude`.
+
+## Xem trước evidence
+
+Evidence gồm kết quả mong muốn, failure, correction và thành công đã xác minh,
+mỗi mục dẫn một session và khoảng dòng. Chỉ lời của chính bạn trở thành trích
+đoạn; tool output, văn bản của assistant và các dòng do harness ghi chỉ được
+quét để tìm tín hiệu, không bao giờ được sao chép. Session của project khác,
+user khác, file link hoặc hard link, và transcript ghi ngoài project đều bị từ
+chối.
+
+Việc che là best-effort: các dạng credential đã biết, chuỗi hex hoặc base64
+dài, địa chỉ email, đường dẫn tuyệt đối và code bị loại bỏ, và lần chạy fail
+closed khi lượt quét thứ hai vẫn còn thấy. Secret có dạng chưa biết có thể còn
+sót, nên hãy xem lại bản xem trước trước khi chia sẻ. Trích đoạn đọc như một
+chỉ dẫn sẽ bị giữ lại, và nội dung transcript không bao giờ đổi hành vi của
+lệnh.
+
+## Brief và candidate
+
+`--brief` thêm brief soạn thảo: Skill đích, base tree digest của nó, Skill có
+dùng chung hay không, bố cục overlay (`files/`, `patches/`, `delete.txt`,
+`modes.txt`), evidence đã che được đánh dấu là dữ liệu untrusted, và các ràng
+buộc. Thay đổi của Skill dùng chung trở thành một fork cục bộ dưới alias không
+có tiền tố `ak-`.
+
+`--candidate <draft-dir>` biên dịch bản nháp so với base của nó: personal kit
+composition đang chạy khi đã có kit overlay Skill đó, nếu không thì foundation
+Skill từ `--kits-dir`. Candidate phải qua gate. Thay đổi về script, mode,
+capability, exposure và license, thay đổi permission trong frontmatter, tham
+chiếu file thiếu trong candidate, văn bản thêm vào đọc như chỉ dẫn, và Skill
+dùng chung, mỗi thứ trở thành một review finding. Secret hoặc đường dẫn cục bộ
+tuyệt đối được thêm vào sẽ từ chối candidate, chỉ nêu tên rule. ID candidate
+ghim evidence, Skill, base, overlay trước đó và overlay.
+
+Mọi candidate được đánh giá offline và tất định: các task evidence được route
+qua lexical router đã đóng băng khi không có Skill, với base và với candidate;
+failure và correction được chấm theo các thuật ngữ mà nội dung Skill bao phủ;
+task riêng của các Skill khác được route làm negative control; và các kiểm tra
+functional và security so sánh base với candidate. Task mà candidate sao chép
+lại là tautological và không được tính. Verdict là `improved`, `inconclusive`,
+`regressed` hoặc `blocked`.
+
+## Tác động
+
+Dry run không ghi gì. `--candidate` không kèm `--dry-run` ghi một candidate
+record (`candidate.json` kèm đánh giá, `overlay.json` và `evidence.json`, mode
+`0600`) dưới `AGENTKIT_HOME/state/skill-evolve/candidates/<id>/` dưới kit
+lifecycle lock, không hỏi; record giống hệt được giữ nguyên. Việc ghi không bao
+giờ áp dụng gì. Lệnh không bao giờ đổi một Skill, một Kit hay một personal kit,
+không chạy script, model hay gọi mạng, không bao giờ resolve đường dẫn mà
+transcript ghi, và bỏ qua kiểm tra cập nhật nền.
+
+Với `--session latest`, lệnh còn đọc phần đầu của các session mới hơn mà nó bỏ
+qua, chỉ để tìm thư mục làm việc được ghi của chúng, và không báo gì từ đó.
+
+## Đầu ra
+
+Text bắt đầu bằng một thông báo nêu rõ điều gì đã không xảy ra, rồi Skill,
+trạng thái và evidence digest, dòng consent (session, project, owner), một
+dòng cho mỗi session, một dòng cho mỗi mục evidence kèm citation, conflict và
+cảnh báo nếu có, brief hoặc candidate khi được yêu cầu, và các giai đoạn tiếp
+theo.
+
+JSON dùng `kind=skills.improve`:
+
+```text
+schema_version: 1
+kind: skills.improve
+data: schema (agentkit.skill-evidence/v1), mode, status, skill, consent,
+      sideEffects, sessions[], evidence[], conflicts[], redaction, bounds,
+      stages, warnings[], evidenceDigest, notice
+      brief?, candidate?, candidateStatus?
+```
+
+`status` là `ready`, `insufficient` hoặc `conflicting`. Mỗi mục `evidence[]` có
+`id`, `kind` (`intended_outcome`, `failure`, `correction`,
+`verified_success`), `basis`, `summary`, `citation` (`session`, `from`, `to`),
+`untrusted` và `flags`. `stages` báo `evidence`, `candidate`, `evaluation`,
+`apply` và `publish` là `not_run`, `not_available` hoặc `ready`. `candidate` có
+các trường mà [`ak skills evolution show`](../cli/ak_skills_evolution_show) in ra.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Thành công: một bản xem trước evidence, kể cả khi evidence mâu thuẫn hay không đủ, hoặc một candidate đã được ghi. |
+| `1` | Không đọc được session đã chọn, lần chạy bị huỷ, candidate store hoặc record hiện có không qua xác minh (`store.corrupt`), hoặc không ghi được record. |
+| `2` | Cờ hoặc argument không hợp lệ, lựa chọn session sai dạng, thiếu `--dry-run`, hoặc bản nháp không biên dịch được so với base (`evolve.candidate_invalid`). |
+| `4` | Một thao tác AgentKit khác đang giữ kit lifecycle lock (`evolve.store_busy`). |
+| `5` | Session đã chọn không thuộc project, hoặc không resolve được base của Skill (`evolve.base_unresolved`). |
+| `7` | Ngoài phạm vi, không thuộc sở hữu của user hiện tại, không xác minh được việc che, hoặc bản nháp thêm secret hay đường dẫn cục bộ tuyệt đối (`evolve.candidate_refused`). |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skills improve`](../cli/ak_skills_improve)
+- [Xem và áp dụng candidate](../cli/ak_skills_evolution)
+- [Personal kit](../cli/ak_skills_kit)

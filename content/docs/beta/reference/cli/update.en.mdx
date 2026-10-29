@@ -10,6 +10,7 @@ description: Preview or apply project and global kit updates with drift-aware ba
 ```bash
 ak update [project-dir] [options]
 ak update --global [options]
+ak update --ssot [--global | --all-projects] [--backup-sessions] [--dry-run | --yes]
 ```
 
 ## Before you run
@@ -95,6 +96,13 @@ These settings flags only write the `auto_update:` section of
 combined with an update flag (`--kits`, `--force`, `--global`, …) or a
 project-dir argument; run them as separate commands.
 
+`AK_NO_AUTO_UPDATE=1` also stops `ak kit init`, `ak kit refresh` and a scoped
+`ak update` from replacing `ak` to meet a kit's minimum CLI version: a release
+build below that minimum stops before any kit change and names
+`ak self-update --yes` and the command to re-run. A build without a release
+version (`dev`, or a local stamp such as `cert-dev`) is never replaced
+automatically; `ak kit init` prints one notice on stderr and continues with it.
+
 A background update never starts when `AK_NO_AUTO_UPDATE=1` or `CI` is set, for
 `--json` invocations, or for lifecycle/interactive top-level commands
 (`update`, `self-update`, `setup`, `onboard`, `kit`, `init`, `migrate`,
@@ -108,12 +116,53 @@ prints as a one-line notice; acknowledge it with `ak update --status --ack --jso
 See [`ak doctor`](./doctor)'s `auto_update` check for schedule, stuck-run, and
 opted-in-project diagnostics.
 
+## SSOT upgrade (opt-in)
+
+`--ssot` moves the kit skills installed in the global scope and in this project
+into the content-addressed skill store of `AGENTKIT_HOME` (`~/.agentkit/store`),
+through the same plan, lifecycle lock, and journaled transaction as
+`ak skills migrate`. `--global` limits it to the global scope; `--all-projects`
+also upgrades every registered project (`ak projects list`).
+
+The upgrade adopts files as they are on disk and never rewrites, moves, or
+removes a skill file. A modified, unlisted, linked, colliding, or divergent
+skill stays a legacy install and is reported as skipped with its reason; skill
+aliases and their `ak:<slug>` invocations are unchanged. Runtimes the store does
+not project yet and plugin-delivered kits are reported, not migrated.
+
+`--dry-run` prints the plan and readiness with no write and no network request.
+Without `--yes` the plan is a preview; an interactive terminal may confirm it,
+while `--json` and non-interactive runs never prompt. An apply:
+
+1. takes a protected pre-upgrade checkpoint first (`--backup-sessions` adds
+   session history) and stops before any change when that fails;
+2. migrates each scope;
+3. re-plans to verify it converged;
+4. writes a receipt under `AGENTKIT_HOME/state/upgrades/`;
+5. only then commits the store mode for those scopes.
+
+Each scope keeps its own mode: the global scope covers global operations only,
+and a project uses the store only when that project was upgraded. An explicit
+`AGENTKIT_SKILL_STORE` wins, and a v2 rollback hold turns the store off. An
+interrupted upgrade is resumed with the same checkpoint and scopes by the next
+`ak update --ssot`, or by an applying `ak update --yes` whose flags are valid
+(its `--json` payload reports `ssot_resume`); scope flags naming other scopes
+exit `2` until it finishes. `--force`, `--no-backup`, and kit-source flags are
+refused with `--ssot`. Undo with [`ak rollback --to v2`](../cli/ak_rollback).
+
+```bash
+ak update --ssot --dry-run --json
+ak update --ssot --yes
+```
+
 ## Options
 
 | Option | Default | Purpose |
 | --- | --- | --- |
 | `--ack` | `false` | With `--status`: mark the last background auto-update result as seen. |
+| `--all-projects` | `false` | With `--ssot`, also upgrade every registered project (`ak projects list`). |
 | `--backup` | `false` | Snapshot the whole project, not only the files the refresh changes; `backups.enabled: true` in `~/.agentkit/config.yaml` makes this the default. |
+| `--backup-sessions` | `false` | With `--ssot`, include runtime session history in the pre-upgrade checkpoint. |
 | `--beta` | `false` | Include beta CLI self-update behavior. |
 | `--channel <channel>` | Receipt channel, then `kit.channel`, then `stable` | Select the kit channel for this request only; the value is not saved. |
 | `--dry-run` | `false` | Preview without project or global installation writes. |
@@ -130,6 +179,7 @@ opted-in-project diagnostics.
 | `--runtime <runtime>` | `claude-code` | Alias of `--target`; select runtime(s) from the scope-and-source matrix above. The default is not an explicit selection. |
 | `--schedule <daily\|weekly\|off>` | Empty | Set or clear the background auto-update schedule (settings only; updates nothing now). |
 | `--show-diff` | `false` | Include file diffs in the plan. |
+| `--ssot` | `false` | Opt in to the skill store: checkpoint, then move installed kit skills of the global scope and this project into `~/.agentkit/store` and keep that mode for later updates (preview unless `--yes`). |
 | `--status` | `false` | Show the background auto-update schedule and last result (read-only). |
 | `--target <target>` | Empty | Comma-separated runtime(s) from the scope-and-source matrix above; unset means all installed runtimes. Pass only one of `--target` or `--runtime`. |
 | `--version <version>` | Empty | Pin a kit version. |
@@ -204,6 +254,12 @@ diagnostics before sharing them.
 | `1` | Runtime, lifecycle, source, snapshot, write, partial global update, or a project runtime refresh pass failed; for the auto-update settings and `--status --ack`, also an I/O failure or a busy state file. |
 | `2` | Flags, scope, source, target, or eligible global installation selection is invalid; at project scope, there is no tracked kit and no runtime install, or `--target` matches no project runtime install; for the auto-update settings, also an invalid `--schedule`, an unregistered `--project`, or a settings flag combined with an update flag or a project-dir argument. |
 | `3` | A non-interactive implicit preview requires `--yes` to apply. |
+| `4` | `--ssot`: the host or file system cannot run the skill store (unsupported OS, no file locks), or another AgentKit operation holds the kit lifecycle lock or the backups lock. |
+| `6` | `--ssot`: a preflight blocker refused the upgrade before any write (the JSON error `remediation` names its code, impact, and fix), the checkpoint did not fit on disk, or the migration met a conflict. |
+| `7` | `--ssot`: the migration refused a link or untrusted path inside a skills root. |
+| `15` | With `--version`, a batch whose only failures are `renewal_required`: the version is outside the kit's update window. |
+
+Without `--version`, a kit the registry refuses for renewal is reported as `skipped` with `reason: "renewal_required"`, keeps its installed version, and does not change the exit code. See [Update windows and renewal](../../guides/updating#update-windows-and-renewal).
 
 ## Effects, safety, and recovery
 

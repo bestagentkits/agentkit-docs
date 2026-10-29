@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { readFile, realpath } from 'node:fs/promises';
-import { dirname, isAbsolute, relative, resolve } from 'node:path';
+import { dirname, isAbsolute, resolve } from 'node:path';
 import {
   COVERAGE_IMPACT_SCHEMA,
   COVERAGE_LEDGER_SCHEMA,
@@ -12,7 +12,7 @@ import {
   validateCoverageLedger,
 } from './docs-release-coverage-schema.mjs';
 import { compareText, digest, sortedUnique } from './docs-release-normalize.mjs';
-import { normalizeRepoPath } from './docs-release-paths.mjs';
+import { normalizeRepoPath, relativeRepoPath } from './docs-release-paths.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -25,7 +25,7 @@ async function repoFile(root, path, label) {
   const realRoot = await realpath(resolve(root));
   const candidate = isAbsolute(path) ? path : resolve(realRoot, path);
   const absolute = await realpath(candidate);
-  const repoPath = normalizeRepoPath(relative(realRoot, absolute));
+  const repoPath = relativeRepoPath(realRoot, absolute);
   if (!isAbsolute(path) && repoPath !== normalizeRepoPath(path)) throw new Error(`${label} resolves outside its declared path`);
   return { absolute, repoPath, bytes: await readFile(absolute) };
 }
@@ -33,7 +33,7 @@ async function repoFile(root, path, label) {
 async function containedFile(root, path, label) {
   const realRoot = await realpath(resolve(root));
   const absolute = await realpath(isAbsolute(path) ? path : resolve(realRoot, path));
-  const repoPath = normalizeRepoPath(relative(realRoot, absolute));
+  const repoPath = relativeRepoPath(realRoot, absolute);
   return { absolute, repoPath, bytes: await readFile(absolute) };
 }
 

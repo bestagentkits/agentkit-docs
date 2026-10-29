@@ -83,11 +83,19 @@ ak update --status --json
 Wait for it to finish, then retry. To stop background updates for good, run
 `ak update --schedule off` or set `AK_NO_AUTO_UPDATE=1` for one invocation.
 
-On Windows, a status of `deferred (spawn_in_job)` means the trigger could not
-spawn the detached runner because the caller's process is inside a Windows Job
-Object that forbids breakaway. The next interval tries again, but a caller
-that always forbids breakaway defers every time; run `ak update` yourself, or
-run `ak` from a shell outside that job.
+On Windows, a status of `deferred (spawn_in_job)` means the caller's process
+is inside a Windows Job Object that forbids breakaway and is kill-on-close, so
+a background runner started there would end with the command. A job that
+forbids breakaway but is not kill-on-close does not defer; the runner starts
+inside it. The next interval tries again, but a caller that always runs in a
+kill-on-close job defers every time; run `ak update` from a plain terminal
+instead.
+
+A status of `deferred (rollback_hold)` means the home was rolled back to v2 and
+the hold is still in place, so the background run installs nothing.
+`deferred (rollback_state_unreadable)` means the run could not read the rollback
+journal, so it waited too. To return to v3, follow
+[Return to v3](../guides/rolling-back-to-v2#return-to-v3).
 
 ## Work around one failed global runtime on Windows
 
@@ -185,6 +193,31 @@ Replace `<channel>` with the channel selected in the docs header. A later
 self-update sweeps only recognized inactive helper, candidate, backup, and
 readiness files. It preserves active pending state and unrelated files with
 similar names.
+
+## Renewal required when an update is refused
+
+If an update is refused with `renewal_required` (exit `15` for `ak kit init --version`,
+`ak kit refresh --version`, or an `ak update --version` batch whose only failures
+are renewals), the version you requested was released after
+your update window ended. Nothing was written and your installed kits still
+work.
+
+```bash
+ak licenses
+ak licenses --json
+```
+
+1. Read the kit's `updatesThrough` date, `latestEntitledVersion`, and the
+   renewal link.
+2. To stay on a covered version, rerun without `--version`, or pin the latest
+   covered version.
+3. To get the newer release, renew at the link, then rerun the command.
+4. In scripts, branch on `error_code: "renewal_required"` and
+   `updates.renew_url` instead of the message text.
+
+An unpinned `ak update` does not fail: it skips the kit with
+`reason: "renewal_required"` and exits `0`. See
+[Update windows and renewal](../guides/updating#update-windows-and-renewal).
 
 ## Check the result
 

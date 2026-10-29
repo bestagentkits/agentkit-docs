@@ -209,10 +209,11 @@ known secret shapes and URL query strings redacted and paths preserved.
 | `2` | Cobra rejected flags, arguments, or a flag combination. |
 | `3` | A shared cancellation or interrupt path returned cancellation. |
 | `4` | Another kit lifecycle mutation holds the lock. |
-| `6` | No installed target could be detected for the selected scope, or the project route resolves to the user-level install. |
+| `6` | No installed target could be detected for the selected scope, or the project route resolves to the user-level install. With `AGENTKIT_SKILL_STORE=1`, the skill alias preflight can also refuse the change before anything is written, with `skill.alias_collision`, `ownership.modified`, or `target.link_refused`. |
+| `15` | The requested `--version` is outside the kit's update window (`renewal_required`). Nothing is written. With `--json`, `error_code` is `renewal_required` and `updates` carries `kit_id`, `latest_entitled_version`, `updates_through`, and `renew_url`. |
 
 Command help reserves `5` for a missing local kit and describes `6` more
-broadly, but only the no-detected-target path and the user-level route refusal
+broadly, but only the no-detected-target path, the user-level route refusal, and the skill alias preflight refusal
 are explicitly classified as `6`;
 do not assume every source or ownership error uses the help-reserved code.
 
@@ -224,9 +225,16 @@ snapshots affected owned
 surfaces unless `--no-backup`, writes current output, updates lifecycle
 manifests, and removes stale paths whose recorded hashes still match disk.
 
-- Clean owned stale paths can be removed.
+- Clean owned stale paths can be removed. After the write commits, Skill
+  directories those removals left empty are removed too; a directory that still
+  holds a preserved or unknown file stays. A Skill directory that an
+  interrupted earlier refresh emptied but did not remove is cleaned up the same
+  way on the next refresh.
 - Current clean owned paths can be replaced.
 - Modified owned paths are preserved and reported.
+- On Pi, when a kept, user-edited `hooks.json` still runs a hook script the new
+  generation dropped, the old hook files (that script and the helpers it loads)
+  are kept and reported, so the extension never runs a missing file.
 - Unknown files are preserved and are not adopted into ownership.
 - Unsafe linked paths and empty intended-output sets fail closed or are skipped
   with warnings instead of triggering broad deletion.

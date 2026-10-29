@@ -1,0 +1,97 @@
+---
+title: ak skills kit publish
+description: Upload a personal kit's delta to SkillX as a revision of @<handle>/<name>, private unless --public is given.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak skills kit publish` to upload a personal kit to SkillX. The command
+resolves the kit offline and builds its revision of `@<handle>/<name>`: every
+skill pins its base by package, exact version and tree digest and carries only
+the user's overlay. A fork `@local/<slug>` is published as `@<handle>/<slug>`.
+Nothing ever publishes automatically.
+
+## Usage
+
+```bash
+ak skills kit publish <name> [--handle <handle>] [--private | --public] [flags]
+```
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--handle <handle>` | The last published one | SkillX publisher handle. Needed on the first publish from this machine and remembered; syncing another publisher's kit does not change it. |
+| `--private` | `true` | Publish a private revision. |
+| `--public` | `false` | Publish a public revision; only allowed on free foundation kits. Excludes `--private`. |
+| `--expect-generation <n>` | The generation this machine last saw | Kit generation to publish over; `0` or more. |
+| `--kits-dir <dir>` | `$AGENTKIT_KITS_DIR` or `./kits` | Foundation kits directory. |
+| `--dry-run` | `false` | Build and scan the revision offline; send nothing. |
+
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+## Requirements
+
+SkillX must be on, after `ak update --ssot` or with `AGENTKIT_SKILLX=1`; an
+upload also needs the skill store on (`AGENTKIT_SKILL_STORE=1`) and an
+unscoped SkillX API key in `ak secrets` (`SKILLX_TOKEN`). The command only
+touches `AGENTKIT_HOME` and follows its global scope from any directory.
+
+## What it does
+
+The payload is scanned before anything is sent, with AgentKit's rules and the
+shared SkillX kit-proposal policy. A secret, an absolute local path, a key that
+names raw session data (such as a session, prompt or token key), or a store
+request over 1 MiB plus 64 KiB refuses the upload, even with `--dry-run`; the
+reason names the rule and the key path, never the matched text.
+
+- SkillX treats `ak-` skills as shared, so changing one needs a fork; an
+  in-place overlay of one is refused.
+- A public revision may only build on free kits (D10).
+- The upload expects the kit generation this machine last saw, or
+  `--expect-generation`; a kit changed elsewhere is a conflict, never
+  overwritten. Check with [`ak skills kit revisions`](./revisions).
+- Each store is recorded before it is sent, so a retry after a lost answer
+  resends it and SkillX replays it. An unchanged revision uploads nothing.
+
+<Callout type="info">
+  The command uploads one `skillx.personal-kit/v1` revision holding only the
+  user's delta (overlay envelopes and exact base pins, never foundation files
+  beyond patch context lines), activates it under the kit's generation guard,
+  and records it in `AGENTKIT_HOME/state/personal-kits/<name>/skillx.json` in a
+  journaled transaction. It never writes the personal kit, the foundation kits,
+  a skills root or a lock.
+</Callout>
+
+## Output
+
+The text output shows the kit, its SkillX name, visibility and status, the
+revision digest and document size, and after an upload the revision id, number,
+host and generation, a ready `ak skills kit sync ... --locked` line to replay it
+elsewhere, and one line per skill with its mode, base and operation count.
+
+JSON uses `kind=skills.kit.publish` with these fields under `data`:
+
+```text
+personalKit, kit, host, visibility, status, dryRun, revisionDigest,
+revisionId, revisionNumber, generation, replayed, documentBytes
+skills[]: identity, mode, base, ops
+warnings[]
+```
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Published, unchanged, or a dry run. |
+| `1` | Command failure: SkillX offline, or the API key missing, scoped or expired. |
+| `2` | SkillX, the overlay flag or the skill store disabled, invalid flags (including `--private` with `--public`, or a missing handle on a first publish), a malformed manifest, or a store request over the SkillX size cap. |
+| `5` | Personal kit, foundation, version or skill not found. |
+| `6` | Generation conflict (the kit changed elsewhere), revision conflict, or a shared skill overlaid in place. |
+| `7` | A public revision on a paid or private base (D10), a secret or local path in the payload, a key the SkillX kit-proposal policy forbids, or a publisher handle the key does not own. |
+
+## Related commands
+
+- [Complete `ak skills kit publish` command facts](../cli/ak_skills_kit_publish)
+- [List SkillX revisions](./revisions)
+- [Sync one SkillX revision](./sync)

@@ -1,0 +1,114 @@
+---
+title: ak skills kit rebase
+description: Preview or apply moving a personal kit's overlays from the pinned foundation version onto a new one by three-way merge.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak skills kit rebase` to move a personal kit to a new foundation version.
+The command three-way merges every overlay from the pinned foundation version
+onto `--to`. Disjoint edits merge; every other change is reported as a review
+finding with exact diffs. The personal kit's own files are never rewritten.
+
+## Usage
+
+```bash
+ak skills kit rebase <name> --to <kit>@<version> (--dry-run | --plan <token>) [flags]
+```
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--to <kit>@<version>` | required | Target foundation. |
+| `--to-kits-dir <dir>` | `--kits-dir` | Kits directory that holds the target version. |
+| `--kits-dir <dir>` | `$AGENTKIT_KITS_DIR` or `./kits` | Foundation kits directory. |
+| `--dry-run` | `false` | Preview only; write nothing. |
+| `--plan <token>` | Empty | Apply token from `--dry-run` that approves applying the rebase. With `--proposal`, its approval token. |
+| `--proposal <file>` | Empty | Proposed resolution file (`agentkit.skill-overlay-proposal/v1`) to check, preview or apply. At most 64 MiB. |
+| `--scope <scope>` | `project` | Lock and skills root scope of an apply: `project` or `global`. |
+| `--runtime <list>` | The manifest's runtimes | Runtimes of an apply: `claude-code`, `codex`; repeatable. |
+| `--yes` | `false` | Required to apply a proposal that takes upstream content (`use-upstream` or `fork`). |
+
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+## Requirements
+
+`--dry-run` works offline for every user: it reads the personal kit, the
+foundation kits and a proposal file, and writes nothing. With the skill store
+on it also shows the transaction an apply with the same `--scope` and
+`--runtime` would run (the roots and aliases it changes) and the apply token.
+
+Applying needs the skill store, after `ak update --ssot` or with
+`AGENTKIT_SKILL_STORE=1`; with it off the command exits `2`.
+
+## What an apply does
+
+Without `--dry-run` the rebase is applied only with `--plan` set to the apply
+token, which binds the preview, the transaction, the lock generation and, with
+`--proposal`, the exact proposal file. The token is re-checked under the kit
+lifecycle lock.
+
+- A clean rebase projects the merged composition like
+  [`ak skills kit apply`](./apply), keeping the previous revision for
+  [`ak skills kit rollback`](../cli/ak_skills_kit_rollback).
+- A rebase that still needs review stops, keeps the running version, and
+  writes only `AGENTKIT_HOME/state/personal-kits/<name>/conflict-report.json`
+  (`agentkit.personal-kit-conflict-report/v1`). Answer its findings with
+  [`ak skills kit resolve`](./resolve) or a proposal file.
+- A proposal that takes upstream content (`use-upstream` or `fork`) also needs
+  `--yes`.
+
+<Callout type="warning">
+  After an applied rebase the personal kit's manifest still pins the old
+  version. Update the version it extends in `personal-kit.yaml` (and its
+  overlays); until then an `ak skills kit apply` is refused with
+  `personal_kit.pin_behind`. The command prints this reminder as a warning.
+</Callout>
+
+## Output
+
+A dry run prints the kit, the move (`<kit> <from> -> <to>`), its status and
+required approval, each skill with its status and diffs, each finding, the plan
+token, the proposal summary when one was checked (`not applied`), and, when the
+skill store is on, the apply token and the transaction plan, or the refusal an
+apply would hit.
+
+JSON for a dry run uses `kind=skills.kit.rebase` with these fields under
+`data`:
+
+```text
+dryRun
+rebase: schema, personalKit, kit, fromVersion, toVersion,
+        status (clean | needs-review), requiredApproval (none | review),
+        inputsDigest, candidateDigest,
+        packages[]: identity, kind, status, baseFrom, baseTo, overlayDigest,
+                    candidateDigest, compositionDigest, skipped,
+                    diffs[]: side, path, change, oldMode, newMode, diff, binary
+        findings[], planToken, resolved[], staleResolutions[]
+proposal
+transaction, applyToken, transactionRefusal
+```
+
+`transaction` and `applyToken` are absent while the skill store is off and when
+the rebase still needs review. An applied rebase uses
+`kind=skills.kit.rebase-apply` with the `data` fields of `skills.kit.apply`.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Success, including a preview that needs review, or nothing to change. |
+| `1` | Command failure, such as a path too long or a recovery that is required. |
+| `2` | The skill store disabled, invalid flags or arguments, or a malformed manifest or proposal. |
+| `4` | Another AgentKit operation holds the kit lifecycle lock. |
+| `5` | Personal kit, foundation, version or skill not found. |
+| `6` | Review required, stale plan token, rebase conflict, alias collision (including a legacy kit alias), or an unowned or modified path. |
+| `7` | Revoked foundation, a link in a target path, or a digest mismatch. |
+
+## Related commands
+
+- [Complete `ak skills kit rebase` command facts](../cli/ak_skills_kit_rebase)
+- [Resolve a rebase finding](./resolve)
+- [Apply a personal kit](./apply)
+- [Roll back to the previous revision](../cli/ak_skills_kit_rollback)

@@ -1,0 +1,123 @@
+---
+title: ak skills kit resolve
+description: Record the user's resolution of one rebase finding of a personal kit, which the next rebase preview consumes.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak skills kit resolve` to answer the review findings a rebase reports at
+one skill-relative path. The command writes resolution records to
+`AGENTKIT_HOME/kits/personal/<name>/resolutions.json`
+(`agentkit.skill-overlay-resolution/v1`) and, for some choices, edits the
+personal kit's own files. It never projects, applies or rebases.
+
+<Callout type="warning">
+  Every non-dry-run resolve is the user's decision: a host assistant must ask
+  the user first. It may draft an `edit-overlay` directory, but no model is
+  called and no automated reviewer approves.
+</Callout>
+
+## Usage
+
+```bash
+ak skills kit resolve <name> --path <path> --choice keep-old|use-upstream|edit-overlay|fork [flags]
+```
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--path <path>` | required | Skill-relative path of the finding to resolve. |
+| `--choice <choice>` | required | `keep-old`, `use-upstream`, `edit-overlay` or `fork`. |
+| `--skill <identity>` | The one identity with findings at `--path` | Skill identity of the finding, when several have one at the path. |
+| `--from <dir>` | Empty | Draft overlay directory of an `edit-overlay` choice. Required with that choice and refused with any other. |
+| `--alias <alias>` | The alias without its `ak-` or `ak:` prefix | Alias of a fork. Only for a `fork` choice. |
+| `--to <kit>@<version>` | The conflict report's | Target foundation. |
+| `--to-kits-dir <dir>` | `--kits-dir` | Kits directory that holds the target version. |
+| `--kits-dir <dir>` | `$AGENTKIT_KITS_DIR` or `./kits` | Foundation kits directory. |
+| `--plan <token>` | Empty | Rebase plan token the resolution answers. When given, it must equal that preview's token. |
+| `--dry-run` | `false` | Print the records and edits; write nothing. |
+| `--yes` | `false` | Required by `use-upstream` and `fork`; without it nothing changes. |
+
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+## Requirements
+
+Without `--dry-run` the skill store must be on, after `ak update --ssot` or
+with `AGENTKIT_SKILL_STORE=1`; with it off the command exits `2`. The command
+only touches `AGENTKIT_HOME` and follows its global scope from any directory.
+`--dry-run` works offline for every user.
+
+## Choices
+
+| Choice | Effect |
+| --- | --- |
+| `keep-old` | Keeps the running composition and pins the skill on its old base (a snapshot under `pins/`) for exactly the new base tree it was decided for. A later base that changes the skill again raises `conflict.pinned_base_changed` at every changed path. Refused on a fork (exit `6`). |
+| `use-upstream` | Removes the overlay's change of the path (`files/`, `patches/`, `delete.txt` and `modes.txt` entries). Needs `--yes`. |
+| `edit-overlay` | Replaces the overlay directory with the draft `--from` names; files missing from the draft are removed. |
+| `fork` | Moves the overlay to a fork under `@local/<alias>`, renames a reserved `SKILL.md` name to the alias and pins the fork on its base. Needs `--yes`. An `ak-` alias is refused with `identity.reserved_alias`. |
+
+- `use-upstream` and `edit-overlay` are refused (exit `6`) while any review
+  finding, content or not (scripts, modes, capabilities, exposure, license),
+  remains at the path; only a clean path is recorded.
+- The newest resolve of a skill wins: it removes the skill's older records and
+  pins, except a pin the skill still composes on. A fork removes the original
+  skill's records and pins, so the original follows upstream.
+- A rebase never re-merges a fork that has such a pin (listed as
+  `skipped: forked`). A fork whose `from` was edited by hand keeps its decision
+  for the old source and warns `fork_source_changed`; its rebase raises
+  `conflict.fork_source_changed` at each changed path, which `edit-overlay` or
+  `use-upstream` answers path by path.
+- A finding without a path (a skill the target version adds or no longer
+  ships) cannot be resolved here; answer it with a rebase proposal.
+
+The next rebase preview treats a recorded finding as resolved while its
+identity, path, category, both base contents of the path, both base trees of
+the skill and the identity's overlay digest (`overlayDigestAfter`) are
+unchanged; any other finding still needs review.
+
+## What it writes
+
+Under the kit lifecycle lock and after store recovery, the command writes the
+resolution records and the choice's edits under
+`AGENTKIT_HOME/kits/personal/<name>` in one journaled transaction bound to the
+bytes it read. When files change, the kit directory is snapshot under
+`AGENTKIT_HOME/backups` first; nothing is deleted without that snapshot.
+
+## Output
+
+The text output shows the kit, the rebase it answers, the identity, path and
+choice, each file change, each record, the backup path when one was taken, and
+the rebase preview after the resolution: its status, unresolved count and next
+plan token.
+
+JSON uses `kind=skills.kit.resolve` with these fields under `data`:
+
+```text
+dryRun, personalKit, kit, fromVersion, toVersion, identity, path, choice,
+planToken, requiresYes
+records[]: identity, path, category, baseFrom, baseTo, baseTreeFrom,
+           baseTreeTo, choice, fork, overlayDigestAfter, kit, fromVersion,
+           toVersion, planToken, approvedBy
+changes[]: path, change
+backup
+status, nextPlanToken, unresolved[]
+```
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The resolution was recorded, or the dry run finished. |
+| `1` | Command failure, such as a path too long or a recovery that is required. |
+| `2` | The skill store disabled, invalid flags or arguments, or a malformed manifest or proposal. |
+| `4` | Another AgentKit operation holds the kit lifecycle lock. |
+| `5` | Personal kit, foundation, version or skill not found. |
+| `6` | A finding still open at the path, a stale plan token, or `keep-old` on a fork. |
+| `7` | Revoked foundation, or a digest mismatch. |
+
+## Related commands
+
+- [Complete `ak skills kit resolve` command facts](../cli/ak_skills_kit_resolve)
+- [Preview a rebase](./rebase)
+- [Apply a personal kit](./apply)

@@ -1,0 +1,98 @@
+---
+title: ak skills kit publish
+description: Upload delta của một Kit cá nhân lên SkillX thành revision của @<handle>/<name>, ở chế độ private trừ khi truyền --public.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak skills kit publish` để upload một Kit cá nhân lên SkillX. Lệnh resolve
+Kit offline và dựng revision của `@<handle>/<name>`: mỗi Skill ghim base theo
+package, phiên bản chính xác và tree digest, và chỉ mang overlay của người
+dùng. Fork `@local/<slug>` được publish thành `@<handle>/<slug>`. Không bao giờ
+có gì tự động publish.
+
+## Cách dùng
+
+```bash
+ak skills kit publish <name> [--handle <handle>] [--private | --public] [flags]
+```
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--handle <handle>` | Handle của lần publish trước | Handle publisher trên SkillX. Cần ở lần publish đầu từ máy này và được ghi nhớ; sync Kit của publisher khác không đổi nó. |
+| `--private` | `true` | Publish revision private. |
+| `--public` | `false` | Publish revision public; chỉ được phép trên foundation Kit miễn phí. Loại trừ `--private`. |
+| `--expect-generation <n>` | Generation máy này thấy lần cuối | Generation của Kit để publish đè lên; từ `0` trở lên. |
+| `--kits-dir <dir>` | `$AGENTKIT_KITS_DIR` hoặc `./kits` | Thư mục foundation Kit. |
+| `--dry-run` | `false` | Dựng và quét revision offline; không gửi gì. |
+
+Các cờ dùng chung nằm trong [quy ước CLI](../cli-conventions).
+
+## Điều kiện
+
+SkillX phải bật, sau `ak update --ssot` hoặc với `AGENTKIT_SKILLX=1`; upload
+còn cần skill store bật (`AGENTKIT_SKILL_STORE=1`) và một SkillX API key không
+giới hạn scope trong `ak secrets` (`SKILLX_TOKEN`). Lệnh chỉ chạm vào
+`AGENTKIT_HOME` và theo scope global của nó từ bất kỳ thư mục nào.
+
+## Lệnh làm gì
+
+Payload được quét trước khi gửi bất cứ thứ gì, theo quy tắc của AgentKit và
+chính sách kit-proposal dùng chung của SkillX. Secret, đường dẫn cục bộ tuyệt
+đối, key đặt tên dữ liệu session thô (như key session, prompt hay token), hoặc
+store request vượt 1 MiB cộng 64 KiB sẽ khiến upload bị từ chối, kể cả với
+`--dry-run`; lý do nêu quy tắc và đường dẫn key, không bao giờ nêu nội dung
+khớp.
+
+- SkillX coi Skill `ak-` là dùng chung, nên muốn đổi phải fork; overlay tại
+  chỗ lên một Skill như vậy bị từ chối.
+- Revision public chỉ được dựng trên Kit miễn phí (D10).
+- Upload kỳ vọng generation của Kit mà máy này thấy lần cuối, hoặc
+  `--expect-generation`; Kit bị đổi ở nơi khác là conflict, không bao giờ bị
+  ghi đè. Kiểm tra bằng [`ak skills kit revisions`](./revisions).
+- Mỗi store được ghi lại trước khi gửi, nên thử lại sau khi mất phản hồi sẽ
+  gửi lại và SkillX replay nó. Revision không đổi thì không upload gì.
+
+<Callout type="info">
+  Lệnh upload một revision `skillx.personal-kit/v1` chỉ chứa delta của người
+  dùng (overlay envelope và base pin chính xác, không bao giờ chứa file
+  foundation ngoài các dòng ngữ cảnh của patch), kích hoạt nó dưới generation
+  guard của Kit, và ghi vào `AGENTKIT_HOME/state/personal-kits/<name>/skillx.json`
+  trong một transaction có journal. Lệnh không bao giờ ghi Kit cá nhân, các
+  foundation Kit, skills root hay lock.
+</Callout>
+
+## Đầu ra
+
+Đầu ra text hiển thị Kit, tên trên SkillX, visibility và status, revision
+digest và kích thước document, và sau khi upload là revision id, số thứ tự,
+host và generation, một dòng `ak skills kit sync ... --locked` sẵn dùng để
+replay ở nơi khác, cùng một dòng cho mỗi Skill với mode, base và số thao tác.
+
+JSON dùng `kind=skills.kit.publish` với các trường sau dưới `data`:
+
+```text
+personalKit, kit, host, visibility, status, dryRun, revisionDigest,
+revisionId, revisionNumber, generation, replayed, documentBytes
+skills[]: identity, mode, base, ops
+warnings[]
+```
+
+## Kết quả và mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Đã publish, không đổi, hoặc dry run. |
+| `1` | Lệnh thất bại: SkillX offline, hoặc API key thiếu, bị giới hạn scope hay hết hạn. |
+| `2` | SkillX, cờ overlay hoặc skill store bị tắt, cờ không hợp lệ (kể cả `--private` cùng `--public`, hoặc thiếu handle ở lần publish đầu), manifest sai định dạng, hoặc store request vượt giới hạn kích thước của SkillX. |
+| `5` | Không tìm thấy Kit cá nhân, foundation, phiên bản hoặc Skill. |
+| `6` | Generation conflict (Kit bị đổi ở nơi khác), revision conflict, hoặc overlay tại chỗ lên Skill dùng chung. |
+| `7` | Revision public trên base trả phí hoặc private (D10), có secret hay đường dẫn cục bộ trong payload, key bị chính sách kit-proposal của SkillX cấm, hoặc handle publisher mà key không sở hữu. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skills kit publish`](../cli/ak_skills_kit_publish)
+- [Liệt kê revision SkillX](./revisions)
+- [Sync một revision SkillX](./sync)

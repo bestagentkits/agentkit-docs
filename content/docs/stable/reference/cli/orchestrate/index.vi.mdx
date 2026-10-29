@@ -1,6 +1,6 @@
 ---
 title: ak orchestrate
-description: Điều phối và kiểm tra job agent. Giám sát process bên ngoài chỉ trên Darwin; quan sát lịch sử và discovery runtime không khẳng định hỗ trợ điều khiển process.
+description: Điều phối và kiểm tra job agent. Chỉ giám sát process bên ngoài mới giới hạn trên Darwin; lệnh plan và job (internal) trong session của runtime hiện tại hoạt động trên mọi nền tảng.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
@@ -9,17 +9,22 @@ Dùng `ak orchestrate` để start, resume, check và stop một graph các job 
 bên ngoài, đồng thời kiểm tra event bền vững, output đã redact, và runtime đã
 cài. Worker sở hữu process group của mỗi job, ghi run state bền vững dưới
 `AGENTKIT_HOME`, và tồn tại qua sự kiện client hay coordinator đã launch thoát.
-Đây là lớp process-lifecycle và quan sát mà skill `/ak:orchestrate` uỷ quyền
+Đây là lớp process-lifecycle và quan sát mà skill `/ak-orchestrate` uỷ quyền
 tới khi giám sát job graph CLI.
 
 <Callout type="warning">
-  Giám sát process bên ngoài trong `ak orchestrate` v1 chỉ hỗ trợ **Darwin**
-  (macOS). `start`, `resume` và `stop` trả về mã thoát `6` trên mọi GOOS khác.
-  Lệnh plan spawn job CLI yêu cầu Darwin cho dispatch đó; lỗi từ các lệnh đó
-  map sang mã thoát `1`, không phải `6`. Quan sát lịch sử (`events`, `output`,
-  `diagnose`) và discovery runtime (`probe`) không khẳng định hỗ trợ điều khiển
-  process. Caller trên Linux hay Windows không được coi các đường đọc đó là
-  bằng chứng job có thể được giám sát trên host đó.
+  Chỉ việc giám sát process bên ngoài trong `ak orchestrate` mới yêu cầu
+  **Darwin** (macOS). `probe`, `prepare`, `advance`, `accept` và `plan-status`
+  hoạt động trên mọi nền tảng, job `runtime: internal` chạy trong session của
+  runtime hiện tại cũng vậy.
+  Ngoài Darwin, `start`, `status`, `resume` và `stop` trả về mã thoát cho nền
+  tảng không được hỗ trợ; `advance` báo nền tảng không được hỗ trợ cho job CLI
+  hoặc Pi cần giám sát, chuyển job sang `blocked` với error class
+  `unsupported_platform` và thoát với mã `1` sau khi dispatch các job internal;
+  `accept` cũng block theo cách đó job có check `verification:` thực thi được
+  cần supervisor. `events`, `output` và `diagnose` chỉ đọc run được ghi trên
+  host có giám sát, nên không phải bằng chứng job có thể được giám sát trên host
+  hiện tại.
 </Callout>
 
 ## Cách dùng
@@ -66,7 +71,7 @@ vì âm thầm chạy tiếp dưới graph khác.
 
 File graph là JSON liệt kê các job qua `id`, `command`, `args`, `work_dir`,
 `env`, `depends_on`. Schema và luật validate đầy đủ nằm trong job
-specification của skill `/ak:orchestrate`; trang tham chiếu này chỉ bao phủ
+specification của skill `/ak-orchestrate`; trang tham chiếu này chỉ bao phủ
 ngữ nghĩa process-lifecycle của binary `ak orchestrate`.
 
 ## Chế độ đầu ra

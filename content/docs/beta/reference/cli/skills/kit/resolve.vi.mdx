@@ -1,0 +1,123 @@
+---
+title: ak skills kit resolve
+description: Ghi quyết định của người dùng cho một finding của rebase trên Kit cá nhân, để lần xem trước rebase tiếp theo dùng.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak skills kit resolve` để trả lời các review finding mà một rebase báo
+tại một path tương đối trong Skill. Lệnh ghi resolution record vào
+`AGENTKIT_HOME/kits/personal/<name>/resolutions.json`
+(`agentkit.skill-overlay-resolution/v1`) và, với một số lựa chọn, sửa file của
+chính Kit cá nhân. Lệnh không bao giờ chiếu, apply hay rebase.
+
+<Callout type="warning">
+  Mọi lần resolve không phải dry run đều là quyết định của người dùng: host
+  assistant phải hỏi người dùng trước. Nó có thể soạn nháp thư mục
+  `edit-overlay`, nhưng không model nào được gọi và không reviewer tự động nào
+  được duyệt.
+</Callout>
+
+## Cách dùng
+
+```bash
+ak skills kit resolve <name> --path <path> --choice keep-old|use-upstream|edit-overlay|fork [flags]
+```
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--path <path>` | bắt buộc | Path tương đối trong Skill của finding cần resolve. |
+| `--choice <choice>` | bắt buộc | `keep-old`, `use-upstream`, `edit-overlay` hoặc `fork`. |
+| `--skill <identity>` | Identity duy nhất có finding tại `--path` | Identity Skill của finding, khi nhiều Skill có finding tại path đó. |
+| `--from <dir>` | Trống | Thư mục overlay nháp của lựa chọn `edit-overlay`. Bắt buộc với lựa chọn đó và bị từ chối với lựa chọn khác. |
+| `--alias <alias>` | Alias bỏ tiền tố `ak-` hoặc `ak:` | Alias của fork. Chỉ cho lựa chọn `fork`. |
+| `--to <kit>@<version>` | Theo conflict report | Foundation đích. |
+| `--to-kits-dir <dir>` | `--kits-dir` | Thư mục Kit chứa phiên bản đích. |
+| `--kits-dir <dir>` | `$AGENTKIT_KITS_DIR` hoặc `./kits` | Thư mục foundation Kit. |
+| `--plan <token>` | Trống | Plan token của rebase mà resolution trả lời. Nếu truyền, phải bằng token của bản xem trước đó. |
+| `--dry-run` | `false` | In các record và sửa đổi; không ghi gì. |
+| `--yes` | `false` | Bắt buộc với `use-upstream` và `fork`; không có thì không đổi gì. |
+
+Các cờ dùng chung nằm trong [quy ước CLI](../cli-conventions).
+
+## Điều kiện
+
+Không có `--dry-run`, skill store phải bật, sau `ak update --ssot` hoặc với
+`AGENTKIT_SKILL_STORE=1`; khi tắt, lệnh thoát `2`. Lệnh chỉ chạm vào
+`AGENTKIT_HOME` và theo scope global của nó từ bất kỳ thư mục nào. `--dry-run`
+chạy offline cho mọi người dùng.
+
+## Các lựa chọn
+
+| Lựa chọn | Tác động |
+| --- | --- |
+| `keep-old` | Giữ composition đang chạy và ghim Skill trên base cũ (một snapshot dưới `pins/`) cho đúng base tree mới mà quyết định nhắm tới. Base sau này lại đổi Skill đó sẽ gây `conflict.pinned_base_changed` tại mọi path thay đổi. Bị từ chối trên fork (thoát `6`). |
+| `use-upstream` | Gỡ thay đổi của overlay tại path (các entry `files/`, `patches/`, `delete.txt` và `modes.txt`). Cần `--yes`. |
+| `edit-overlay` | Thay thư mục overlay bằng bản nháp mà `--from` chỉ tới; file thiếu trong bản nháp sẽ bị gỡ. |
+| `fork` | Chuyển overlay thành fork dưới `@local/<alias>`, đổi tên `SKILL.md` dành riêng thành alias và ghim fork trên base của nó. Cần `--yes`. Alias `ak-` bị từ chối với `identity.reserved_alias`. |
+
+- `use-upstream` và `edit-overlay` bị từ chối (thoát `6`) khi còn bất kỳ
+  review finding nào tại path, dù về nội dung hay không (script, mode,
+  capability, exposure, license); chỉ path sạch mới được ghi.
+- Lần resolve mới nhất của một Skill thắng: nó gỡ các record và pin cũ hơn của
+  Skill, trừ pin mà Skill vẫn compose trên đó. Fork gỡ record và pin của Skill
+  gốc, nên Skill gốc theo upstream.
+- Rebase không bao giờ merge lại fork có pin như vậy (liệt kê là
+  `skipped: forked`). Fork có `from` bị sửa tay giữ quyết định cho source cũ và
+  cảnh báo `fork_source_changed`; rebase của nó gây
+  `conflict.fork_source_changed` tại mỗi path thay đổi, trả lời từng path bằng
+  `edit-overlay` hoặc `use-upstream`.
+- Finding không có path (Skill mà phiên bản đích thêm vào hoặc không còn cung
+  cấp) không resolve được ở đây; trả lời bằng rebase proposal.
+
+Lần xem trước rebase tiếp theo coi finding đã ghi là đã resolve khi identity,
+path, category, nội dung của cả hai base tại path, cả hai base tree của Skill
+và overlay digest của identity (`overlayDigestAfter`) không đổi; finding khác
+vẫn cần review.
+
+## Lệnh ghi gì
+
+Dưới kit lifecycle lock và sau khi recovery store, lệnh ghi resolution record
+và các sửa đổi của lựa chọn dưới `AGENTKIT_HOME/kits/personal/<name>` trong một
+transaction có journal gắn với số byte nó đã đọc. Khi file thay đổi, thư mục
+Kit được snapshot dưới `AGENTKIT_HOME/backups` trước; không gì bị xoá mà không
+có snapshot đó.
+
+## Đầu ra
+
+Đầu ra text hiển thị Kit, rebase nó trả lời, identity, path và lựa chọn, từng
+thay đổi file, từng record, đường dẫn backup nếu có, và bản xem trước rebase
+sau resolution: status, số finding chưa resolve và plan token tiếp theo.
+
+JSON dùng `kind=skills.kit.resolve` với các trường sau dưới `data`:
+
+```text
+dryRun, personalKit, kit, fromVersion, toVersion, identity, path, choice,
+planToken, requiresYes
+records[]: identity, path, category, baseFrom, baseTo, baseTreeFrom,
+           baseTreeTo, choice, fork, overlayDigestAfter, kit, fromVersion,
+           toVersion, planToken, approvedBy
+changes[]: path, change
+backup
+status, nextPlanToken, unresolved[]
+```
+
+## Kết quả và mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Resolution đã được ghi, hoặc dry run đã xong. |
+| `1` | Lệnh thất bại, ví dụ đường dẫn quá dài hoặc cần recovery. |
+| `2` | Skill store bị tắt, cờ hoặc argument không hợp lệ, hoặc manifest hay proposal sai định dạng. |
+| `4` | Kit lifecycle lock đang bị thao tác AgentKit khác giữ. |
+| `5` | Không tìm thấy Kit cá nhân, foundation, phiên bản hoặc Skill. |
+| `6` | Finding còn mở tại path, plan token cũ, hoặc `keep-old` trên fork. |
+| `7` | Foundation bị revoke, hoặc digest không khớp. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skills kit resolve`](../cli/ak_skills_kit_resolve)
+- [Xem trước một rebase](./rebase)
+- [Apply Kit cá nhân](./apply)

@@ -1,11 +1,12 @@
 ---
 title: ak data status
-description: Đọc bảy mặc định retention đã compile của dữ liệu dẫn xuất mà không mở operational database.
+description: Đọc sức khoẻ và schema của operational store, cách khắc phục an toàn khi store chưa sẵn sàng, và các mặc định retention đã compile của dữ liệu dẫn xuất.
 ---
 
-Dùng `ak data status` để kiểm tra tư thế mặc định đã compile cho mọi derived data
-class đã biết. Đây là inventory policy, không phải trạng thái database trực tiếp
-hay mức dùng đĩa.
+Dùng `ak data status` để biết operational store cục bộ đã sẵn sàng chưa, nó
+mang schema nào so với schema mà build này đọc, và cần làm gì khi store chưa
+sẵn sàng. Sau đó lệnh liệt kê tư thế mặc định đã compile cho mọi derived data
+class đã biết. Đây là kiểm tra chỉ đọc, không phải mức dùng đĩa.
 
 ## Cách dùng
 
@@ -16,9 +17,22 @@ ak data status
 Lệnh không có cờ riêng và không nhận đối số theo vị trí trong cú pháp được công
 bố. Nó không prompt, đọc stdin, gọi network hay yêu cầu xác thực/entitlement.
 
+## Sức khoẻ của store
+
+Dòng đầu tiên nêu sức khoẻ của operational store: `ready`, `missing`, `busy`,
+`incompatible`, `corrupt`, `permission`, `recovering`, `foreign-database` hoặc
+`newer-schema`. Khi đọc được tệp, dòng này cũng hiển thị schema trên đĩa và
+schema mà build này đọc. Với mọi trạng thái khác `ready` và `missing`, dòng
+`remedy:` cho biết bước tiếp theo an toàn; ví dụ schema cũ hơn sẽ được lệnh
+ghi trạng thái tiếp theo migrate tại chỗ, còn schema mới hơn yêu cầu nâng cấp
+bằng `ak self-update` hoặc dời thư mục operational sang chỗ khác.
+
+Bước kiểm tra không bao giờ tạo, mở để ghi, migrate hay sửa store. Với
+`--verbose`, lỗi kiểm tra bên dưới cũng được in ra stderr.
+
 ## Tư thế mặc định
 
-Lệnh luôn báo bảy class:
+Lệnh luôn báo tám class:
 
 ```text
 session_metrics
@@ -28,46 +42,58 @@ ingestion_failures
 change_log
 outbox
 content_shard
+secrets_audit
 ```
 
 Mỗi class phân giải thành `mode=forever`, nghĩa là không tự động xoá cho tới khi
-đánh giá một fixed policy dương. Lệnh không đọc policy row đã lưu, đếm record,
-kiểm tra content shard hay xác minh `operational.db` tồn tại.
+đánh giá một fixed policy dương. Lệnh không đọc policy row đã lưu, đếm record
+hay kiểm tra content shard.
 
 ## Đầu ra
 
 Human stdout là:
 
 ```text
-classes=7 default=forever
+operational store: <health> (schema v<store>, this build reads v<binary>)
+  path: <đường dẫn operational.db>
+  remedy: <cách khắc phục, khi store chưa sẵn sàng>
+classes=8 default=forever
 ```
 
-JSON stdout là array thô, mỗi class có một object:
+Phần schema, `path` và `remedy` chỉ xuất hiện khi đã biết. JSON stdout là
+envelope chung với `kind: data.status`:
 
 ```text
-dataClass: token class chính xác
-mode: forever
-forecast.oneMonthBytes: 0
-forecast.threeMonthBytes: 0
-forecast.twelveMonthBytes: 0
-forecast.assumptions: lưu ý linear extrapolation
-forecast.confidence: low
-forecast.policyMode: forever
-note: default is forever until an explicit fixed policy is set
+schema_version: 1
+kind: data.status
+data.operationalStore.health
+data.operationalStore.path
+data.operationalStore.storeSchema
+data.operationalStore.binarySchema
+data.operationalStore.remedy
+data.classes[].dataClass
+data.classes[].mode: forever
+data.classes[].forever: true
+data.classes[].forecast.oneMonthBytes: 0
+data.classes[].forecast.threeMonthBytes: 0
+data.classes[].forecast.twelveMonthBytes: 0
+data.classes[].forecast.assumptions
+data.classes[].forecast.confidence: low
+data.classes[].forecast.policyMode: forever
 ```
 
 Forecast bằng zero đến từ input tăng trưởng giả lập bằng zero, không phải mức
-dùng đĩa đã đo. JSON không có envelope phiên bản và không phải NDJSON.
+dùng đĩa đã đo.
 
 ## Tác động lên đĩa và mã thoát
 
-Lệnh tính kết quả trong bộ nhớ. Nó không tạo, mở, migrate hay ghi
-`operational.db`, cũng không kiểm tra hoặc thay đổi thư mục content-search
-plaintext.
+Lệnh đọc tệp operational store để phân loại nó và tính phần còn lại trong bộ
+nhớ. Nó không tạo, migrate hay ghi `operational.db`, cũng không kiểm tra hoặc
+thay đổi thư mục content-search plaintext.
 
 | Mã | Ý nghĩa |
 | --- | --- |
-| `0` | Mặc định của cả bảy class đã được phát. |
+| `0` | Dòng store và mặc định của cả tám class đã được phát, bất kể sức khoẻ của store. |
 | `1` | Lỗi phân giải policy nội bộ hoặc ghi đầu ra. |
 | `2` | Giá trị cờ dùng chung không phân tích được. |
 

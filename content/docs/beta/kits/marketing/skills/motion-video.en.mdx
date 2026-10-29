@@ -1,12 +1,12 @@
 ---
-title: Produce beat-synced motion-graphic videos with ak:motion-video
+title: Produce beat-synced motion-graphic videos with ak-motion-video
 description: Build a production-grade 1080p HyperFrames motion graphic with AI voice-over, captions, SFX, and music cut to the beat, in a named style profile or a per-scene mix, with fast 1:1/9:16 editions, while keeping provider spend and publication separately approved.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
-Use `ak:motion-video` to make a 1920×1080, 30 fps motion-graphic video where
+Use `ak-motion-video` to make a 1920×1080, 30 fps motion-graphic video where
 scene cuts land on the music's beats, reveals land on spoken words, and the
 audio mix is measured rather than guessed. The workflow is scripted end to end:
 facts, script, generated audio, forced alignment, beat grid, bar-spliced music,
@@ -16,7 +16,7 @@ encode, and optional 1:1 or 9:16 editions. It renders through HyperFrames (HTML
 
 ## Choose the motion-video workflow
 
-### Use ak:motion-video when
+### Use ak-motion-video when
 
 - You need a launch, release, changelog, feature, or explainer video with
   voice-over, captions, SFX, and music synced to the beat.
@@ -30,14 +30,17 @@ encode, and optional 1:1 or 9:16 editions. It renders through HyperFrames (HTML
 
 ### Choose another workflow when
 
-- You need generative text-to-video footage. Use [`ak:video`](./video).
+- You need generative text-to-video footage. Use [`ak-video`](./video).
 - The composition is a React or Remotion project. Use
-  [`ak:remotion`](./remotion).
+  [`ak-remotion`](./remotion).
 - You have a general HyperFrames question or want a plain HTML composition
-  without the beat-sync pipeline. Use [`ak:hyperframes`](./hyperframes).
-- You need talking-head editing. This Skill does not cover it.
+  without the beat-sync pipeline. Use [`ak-hyperframes`](./hyperframes).
+- You need plain talking-head editing (cuts, color, b-roll) without motion
+  graphics. This Skill does not cover it. A recording-driven motion-graphic
+  video, where your own recording is the voice and the motion graphics carry
+  the screen, is covered by [`--from-recording`](#make-a-video-from-your-own-recording).
 - You want a router across every installed motion or video Skill. Use
-  [`ak:motion-graphics`](./motion-graphics).
+  [`ak-motion-graphics`](./motion-graphics).
 
 ## Meet the production bar
 
@@ -59,7 +62,9 @@ verification check.
 Pin the outcome before any file is touched: topic and sources, style, duration,
 voice language, ending, and signature. English voice-over with Vietnamese
 captions is the default. The Skill asks only when the style or the facts source
-is unknown.
+is unknown; when only the style is open, it runs a
+[style bake-off](#compare-styles-with-a-bake-off) instead of asking in the
+abstract.
 
 The full route also needs:
 
@@ -75,12 +80,17 @@ The full route also needs:
   for `scripts/resolve-style.py`.
 - A writable project and enough storage for generated WAV and MP3 audio,
   snapshots, and 1080p MP4 renders.
+- Only for [generated still art](#add-generated-still-art): multix image
+  generation. With a signed-in `codex` CLI on `PATH`, the Skill uses multix's
+  OpenAI image route through the local Codex CLI; otherwise it uses the Gemini
+  image route. Both use multix's own configured credentials; the Skill adds no
+  new API key.
 
 | Runtime | Invocation | Availability boundary |
 | --- | --- | --- |
-| Claude Code | `/ak:motion-video ...` | Native delivery is the default; explicit plugin delivery is also supported. Full production still depends on multix, provider access, Node, Python, and FFmpeg in the session environment. |
-| Cursor | `/ak:motion-video ...` | Slash invocation is user-verified. Browser, preview, and supporting tool behavior can vary by setup. |
-| Codex | `$ak:motion-video ...` | The Skill uses native Codex discovery. Hook projection is partial; provider, render, and FFmpeg requirements are unchanged. |
+| Claude Code | `/ak-motion-video ...` | Native delivery is the default; explicit plugin delivery is also supported. Full production still depends on multix, provider access, Node, Python, and FFmpeg in the session environment. |
+| Cursor | `/ak-motion-video ...` | Slash invocation is user-verified. Browser, preview, and supporting tool behavior can vary by setup. |
+| Codex | `$ak-motion-video ...` | The Skill uses native Codex discovery. Hook projection is partial; provider, render, and FFmpeg requirements are unchanged. |
 
 Read [Runtime adapters](../../../concepts/runtime-adapters) before assuming the
 same production surface everywhere.
@@ -91,34 +101,79 @@ same production surface everywhere.
   <Tab value="Claude Code">
 
 ```text
-/ak:motion-video "Make a 60-second release video for our v3.4 notes in the glass-keynote style. Use only facts from CHANGELOG.md, English voice-over with Vietnamese captions, and stop after the master render; do not publish"
+/ak-motion-video "Make a 60-second release video for our v3.4 notes in the glass-keynote style. Use only facts from CHANGELOG.md, English voice-over with Vietnamese captions, and stop after the master render; do not publish"
 ```
 
   </Tab>
   <Tab value="Cursor">
 
 ```text
-/ak:motion-video "Make a 60-second release video for our v3.4 notes in the glass-keynote style. Use only facts from CHANGELOG.md, English voice-over with Vietnamese captions, and stop after the master render; do not publish"
+/ak-motion-video "Make a 60-second release video for our v3.4 notes in the glass-keynote style. Use only facts from CHANGELOG.md, English voice-over with Vietnamese captions, and stop after the master render; do not publish"
 ```
 
   </Tab>
   <Tab value="Codex">
 
 ```text
-$ak:motion-video "Make a 60-second release video for our v3.4 notes in the glass-keynote style. Use only facts from CHANGELOG.md, English voice-over with Vietnamese captions, and stop after the master render; do not publish"
+$ak-motion-video "Make a 60-second release video for our v3.4 notes in the glass-keynote style. Use only facts from CHANGELOG.md, English voice-over with Vietnamese captions, and stop after the master render; do not publish"
 ```
 
   </Tab>
 </Tabs>
 
-Add `--poor` to the same request for the lean, single-session mode.
+Add `--poor` to the same request for the lean, single-session mode, or
+`--from-recording` when the voice is your own recording.
+
+### Run the preflight first
+
+Every run starts with `scripts/doctor.py`. It checks the shell, the Python
+modules, `ffmpeg` and `ffprobe`, Node.js, the pinned HyperFrames version, and
+whether the console can print UTF-8 text such as Vietnamese captions. It
+writes `data/env.json` and one brief line that every worker receives, so a
+Windows machine with a broken Git Bash profile or a cp1252 console fails once,
+up front, instead of in every worker. The doctor reports a broken shell
+profile and which file to fix; it never edits your profile.
+
+### Make a video from your own recording
+
+With `--from-recording`, the voice is your own talking-head or screen-share
+recording instead of a generated voice-over. The motion graphics are the main
+picture and your webcam appears as a small circular picture-in-picture. Every
+step runs from scripts bundled with the Skill, so the project holds data, not
+pipeline code:
+
+1. **Transcribe** the takes in `raw/` with ElevenLabs Scribe through
+   `multix elevenlabs transcribe` (word timestamps). A local Whisper JSON can be
+   imported instead for offline work.
+2. **Segment and cut.** The transcript is split into numbered sentence
+   segments. The edit decision list (`data/edl.json`) keeps segment ranges and
+   can speed up speech with pitch preserved. `apply-edl.py` cuts audio and
+   webcam video to the same whole-frame lengths, and `check-edl.py` verifies
+   they cannot drift apart.
+3. **Plan scenes, parts, and shorts.** Each scene is a range of kept segments.
+   Long videos render in parts, and short candidates are picked from the
+   transcript while planning.
+4. **Captions, timeline, and mix.** Edited Vietnamese captions per segment,
+   the same TIMING contract as the voice-over mode, and a ducked music bed
+   normalized to −14 LUFS.
+5. **Build, render, and finish.** Scene builders fill one fragment file per
+   scene and fast-check small ranges; each part renders, and `finish.py`
+   composites the webcam picture-in-picture with the untouched mix.
+6. **Shorts, after you approve the master.** Each short is a 9:16 scene-range
+   clip with its own title, a 1.2-second music tail, and a fade.
+
+Transcription sends your recording's audio to ElevenLabs through multix, so it
+follows the same spend and approval boundary as voice generation.
 
 ### Pick or mix a style
 
 Every look is a style profile: a compact motion-design grammar for palette,
 typography, layout, material, texture, camera, transitions, pacing, beat
 response, UI choreography, diagrams, character motion, captions, and sound.
-`references/styles/index.yaml` lists about 60 of them. Brand names such as
+`references/styles/index.yaml` lists about 70 of them. The printed and
+hand-made family includes an editorial collage explainer (Vox-like), mid-century
+retro, punk zine, constructivist poster, WPA screenprint, groovy seventies, ink
+woodblock, newsprint editorial, and art deco luxury. Brand names such as
 Apple, Nike, Linear, or NVIDIA are aliases that lead to a canonical motion
 language (for example, Apple-like leads to `cinematic-product-launch`); the
 output never uses a brand's logos, fonts, or assets.
@@ -133,16 +188,92 @@ Three styles also ship a detailed reference: `comic-multiverse`,
 their demos are not bundled; every new video starts from the Skill's
 composition skeleton plus the resolved style.
 
+### Compare styles with a bake-off
+
+When the brief names no style, or two candidates tie, the Skill picks 3–4
+profiles that fit the topic's era, culture, and tone, builds the same hook
+scene once per candidate from the skeleton, snapshots its busiest moment, and
+shows the stills side by side. Each candidate is built under
+`assets/videos/<slug>/bakeoff/<style-id>/`. You pick by eye, and the pick
+becomes the base style. A bake-off generates no audio, so it runs before any paid audio
+generation.
+
+### Direct the story and shots
+
+The style decides how the video looks; the story and shot plan decides what it
+says, in which order, and how each scene is framed.
+
+- **Narrative arc.** The Skill picks one of 14 arcs for the topic, such as
+  `hook_payoff` (the default for a single idea), `pas`, `how_it_works`,
+  `timeline`, `myth_buster`, `listicle`, or `release_tour` for launch and
+  changelog videos (hook, headline number, features with the strongest first
+  and last, proof, outro).
+- **Hook and ending.** The first spoken line and the first on-screen words
+  carry the promise within 3 seconds, using one named hook pattern such as
+  `surprising_stat` or `direct_question`. The ending is `hard_cut`,
+  `quick_cta`, `loop_close`, or `signature_outro` (the default for releases).
+- **Scene count.** Scenes are sized to the duration: about 6–8 scenes for
+  30 seconds, 10–12 for 60 seconds, and 14–16 for about two and a half minutes.
+- **Shots.** Each scene gets a shot size (`EST_WIDE`, `WIDE`, `MEDIUM`,
+  `CLOSE`, `DETAIL`) and one camera move on its camera group: `static`,
+  `push_in`, `pull_out`, `pan`, `tilt`, `parallax`, or `element`. Bolder moves
+  such as `orbit`, `roll`, `whip`, and `dolly_zoom` are used only when the base
+  style's camera dimension allows them.
+- **Anti-monotony.** Adjacent scenes never repeat a camera move, and `static`
+  is kept for the payoff. Something visibly changes every 3–5 seconds: a scene
+  longer than about 7 seconds gets an internal cut-in from a wide framing to a
+  close on a spoken keyword, so no framing holds past about 8 seconds.
+
+The arc, hook, ending, and per-scene shot are recorded as optional `arc`,
+`hook`, `ending`, and `shot` fields in `data/script.json`.
+
+Before any paid audio is generated, the Skill shows you the beat map once: the
+arc, the hook, and one line per scene. It continues unless you object. It skips
+this review when you supplied the final script or the run is non-interactive.
+
+### Add generated still art
+
+Some printed or hand-made looks, such as collage, woodblock, or poster styles,
+cannot be drawn convincingly with CSS and SVG. For those, the Skill can
+generate still illustration layers through the `multix` CLI, using one image
+route for the whole video:
+
+| Condition | Image route |
+| --- | --- |
+| `codex` CLI on `PATH` | multix's OpenAI image route through the local Codex CLI |
+| otherwise, or if the Codex route fails | multix's Gemini image route |
+
+Pieces are generated on a flat chroma background, cut out locally with FFmpeg,
+baked to transparent PNG layers under `assets/images/`, and animated with GSAP.
+The Skill reviews every image before animating it and records how each asset
+was made in `data/art.json` so a re-roll reproduces the look. No video model is
+involved; AI text-to-video or image-to-video footage still belongs to
+[`ak-video`](./video).
+
+- **Text stays live HTML.** Headlines are never baked into generated images,
+  so type stays crisp and every fact stays editable.
+- **Supplied photos are placed, not redrawn.** A photo of a person or product
+  you supply is placed as a photographic cut-out. The face, product shape, and
+  label stay as in the photo, and the Skill re-checks them in the generated
+  stills before cutting them out.
+- **UI, data, terminal, and diagram scenes stay live HTML.** Generated art is
+  for printed or hand-made imagery only.
+
 ## Follow the production stages
 
 1. **Pin the outcome.** Topic, sources, base style and any layers, duration,
-   voice language, ending, and signature are recorded.
+   voice language, ending, and signature are recorded. If the style is still
+   open, the bake-off settles it here.
 2. **Scaffold the project.** The Skill creates `assets/videos/<slug>/` and a
    plan under `plans/`, then copies the template scripts, example data files,
    `hyperframes.json`, and the composition skeleton. A finished edition is never
    overwritten; a restyle is a new project directory.
 3. **Write facts and script.** Facts come only from primary sources, with a short
-   evidence report before scripting. `data/script.json` holds the scenes and lines.
+   evidence report before scripting. The Skill picks the arc, hook, and
+   ending, sizes the scenes, and plans each scene's shot. `data/script.json`
+   holds the scenes and lines. You review the beat map once here; the Skill
+   continues unless you object, and skips the review when you supplied the
+   final script or the run is non-interactive.
 4. **Generate and align audio.** multix produces the voice-over, SFX, and music;
    ElevenLabs forced alignment maps spoken words to timing.
 5. **Fit the beat and arrange music.** `fit-beat-grid.py` reports BPM and a
@@ -150,28 +281,41 @@ composition skeleton plus the resolved style.
    and `verify-arrangement.py` checks the splice.
 6. **Build the timeline and mix.** `build-timeline` renders the ducked,
    loudness-normalized mix; `measure-mix-balance.py` reports music under speech.
-7. **Build and validate the composition.** `index.html` follows the composition
-   contract and the resolved style, then passes `hyperframes lint`, `check`, and
-   scene `snapshot` review, plus the director's pass on every scene.
+7. **Build and validate the composition.** When the style needs printed or
+   hand-made imagery, or you supplied a photo to place, the generated art
+   layers are baked first. `index.html` follows the composition contract, the
+   resolved style, and each scene's planned shot, then passes
+   `hyperframes lint`, `check`, and scene `snapshot` review, plus the
+   director's pass on every scene. Scene builders write one fragment file per
+   scene, query timing with `tl.py`, and fast-check a few scenes at a time with
+   `assemble.py` and `validate.py`, so layout and contrast errors are fixed
+   while the scene is still in context.
 8. **Render, remux, and encode.** HyperFrames renders the video, the measured mix
    is remuxed back in, and an optional social encode produces a smaller file.
-9. **Add a square or vertical edition, when requested.** A re-layout edition
+9. **Add a square or vertical edition, when requested.** A full-video edition
    (`scripts/reframe.py --ratio 1x1|9x16`) reuses the master's voice-over,
-   music, and mix and adds only ratio-specific CSS and its own render; a quick
-   ffmpeg fit or crop is a faster, lower-fidelity alternative for previews.
+   music, and mix and adds only ratio-specific CSS and its own render. Shorts
+   are 9:16 clips cut from the master by scene range, with their own title and
+   music tail. Ratio overrides are written while the master is built, checked
+   with `audit-ratio-scope.py` so the master never regresses, and measured
+   against the safe areas with `check-bounds.mjs`. A quick ffmpeg fit or crop
+   is a faster, lower-fidelity alternative for previews.
 
 ## Keep generation, spend, and publishing gated
 
 <Callout type="warn" title="A video brief does not authorize provider spend">
   Voice, SFX, music, and alignment requests go through multix to Gemini and
-  ElevenLabs. Regenerating scenes or music creates more provider requests. Approve
-  each generation stage under your provider, quota, and billing policy.
+  ElevenLabs. Regenerating scenes or music creates more provider requests.
+  Generated still art is an extra, optional image-generation request on top of
+  the audio requests, and a bake-off may use one generated backdrop per
+  candidate style. Approve each generation stage under your provider, quota,
+  and billing policy.
 </Callout>
 
 | Work category | Normal boundary |
 | --- | --- |
 | Local mutations | The workflow creates a project directory, plan, data files, generated audio, snapshots, and renders. It does not overwrite a finished edition. |
-| Provider and network effects | multix sends script text and audio to Gemini and ElevenLabs; `npx --yes hyperframes@0.8.77` can fetch the pinned package. |
+| Provider and network effects | multix sends script text and audio to Gemini and ElevenLabs. With generated art, it also sends image prompts and any photo you supplied for placement to OpenAI through the local Codex CLI, or to Gemini. `npx --yes hyperframes@0.8.77` can fetch the pinned package. |
 | Processes | `hyperframes preview` runs as a tracked background process that is reused for this project and stopped when the session ends. |
 | Publishing and account effects | The Skill produces the file and leaves posting to you. It does not upload, schedule, or post to social accounts. |
 
@@ -192,6 +336,9 @@ assets/videos/<slug>/renders/<slug>.mp4
 assets/videos/<slug>/renders/<slug>-social.mp4
 ```
 
+With generated art, the project also holds the baked layers under
+`assets/images/` and their provenance in `data/art.json`.
+
 The Skill reports measured numbers, not impressions. It is done only when:
 
 - `hyperframes lint` and `check` pass and snapshots of every scene were
@@ -206,16 +353,23 @@ The Skill reports measured numbers, not impressions. It is done only when:
 - Each requested 1:1 or 9:16 edition passes the same lint, check, ffprobe,
   loudness, and blackdetect checks as the master.
 - On-screen facts trace to the sources collected at the start.
+- No two adjacent scenes share a camera move, and no framing holds past about
+  8 seconds.
 
 ## Troubleshoot safely
 
 | Symptom | Safe next step |
 | --- | --- |
-| Runtime cannot find `ak:motion-video` | Confirm target and scope, start a fresh session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+| Runtime cannot find `ak-motion-video` | Confirm target and scope, start a fresh session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
 | `multix` is missing or a provider call fails | Stop before generation, keep the script and data files, and fix multix or its own credential config. Do not copy keys into the project. |
 | Alignment warns that aligned words and script tokens differ | Fix the scene's `en` or `say` text, or regenerate that scene's voice-over, then realign. |
 | `verify-arrangement.py` reports drift | Re-fit the beat grid, adjust the arrangement, and re-run the arrangement and timeline steps. |
-| `lint` or `check` fails | Fix the composition against the composition contract before rendering. |
+| `lint` or `check` fails | Fix the composition against the composition contract and its known pitfalls (for example `ease: "none"` must be a string, and a build directory holds exactly one root HTML file) before rendering. |
+| `doctor.py` reports a broken shell or a cp1252 console | Use the shell it recorded and call Python as `python -X utf8`; fix the named shell profile yourself if you want Git Bash back. |
+| `doctor.py` warns `fonts missing` or `validate` reports a font 404 | The skill ships no font files. Download the TTF the page names (for example from Google Fonts) into the project's `assets/fonts/`, or point `@font-face` at a local font of the same class. |
+| `check-edl.py` reports drift | Re-run `apply-edl.py` after fixing the EDL entry it names; never build the timeline on a drifting cut. |
+| A 9:16 short shows text outside the frame or an unfinished ending | Run `check-bounds.mjs` on the short's build, fix the scene's `html[data-ratio="9x16"]` override in the master, audit it with `audit-ratio-scope.py`, and rebuild the short. |
+| The Codex image route fails (not signed in or a driver error) | The Skill falls back to the Gemini image route for the whole video and notes it in the plan. Sign in to `codex` before the next video if you want the OpenAI route. |
 | Only visuals changed | Re-run `lint`, `check`, `render`, and the remux; audio does not need regeneration. |
 | A 1:1 or 9:16 edition still shows 1920/1080-sized layout | Read `reframe.py`'s warnings for the affected lines, add the missing `data-ratio` override, and regenerate the edition; never hand-edit the generated edition directory. |
 

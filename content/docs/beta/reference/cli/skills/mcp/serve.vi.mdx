@@ -1,0 +1,111 @@
+---
+title: ak skills mcp serve
+description: Chạy MCP server ak-skills qua stdio với tool chỉ đọc, và opt-in thêm tool install, sync hoặc exec.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak skills mcp serve` để cho MCP client tìm kiếm, route, resolve, inspect,
+đọc và lập kế hoạch thay đổi Skill. Khởi chạy nó từ cấu hình MCP của client; nó
+nói JSON-RPC qua stdio. Server tên `ak-skills`, phiên bản `v0.2.0`.
+
+## Cách dùng
+
+```bash
+ak skills mcp serve [--allow-install] [--allow-exec]
+```
+
+Lệnh không nhận argument theo vị trí. Khi khởi động, nó ghi thông báo ra stderr:
+`[i] ak-skills v0.2.0: serving N <mode> over stdio`. Lệnh thoát sạch khi client
+ngắt kết nối hoặc huỷ, và không bao giờ hỏi passphrase của vault.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--allow-install` | `false` | Thêm `skills_install_apply` và `skills_sync_apply`. Cần SkillX và skill store đang bật, như sau `ak update --ssot`, hoặc `AGENTKIT_SKILLX=1` và `AGENTKIT_SKILL_STORE=1`. |
+| `--allow-exec` | `false` | Thêm `skills_execute`. Cần `AGENTKIT_SKILL_EXEC_BROKER=1`. |
+
+Các gate được đọc một lần khi khởi động. Nếu thiếu gate, cờ cảnh báo ra stderr,
+ví dụ `--allow-install has no effect: ...`, và tool không được thêm. Các cờ dùng
+chung nằm trong [quy ước CLI](../cli-conventions).
+
+## Tool mặc định
+
+Cả tám tool đều chỉ đọc. Mỗi tool trả lời bằng cùng JSON envelope với lệnh
+`--json` tương ứng.
+
+| Tool | Mục đích |
+| --- | --- |
+| `skills_search` | Tìm Skill. Nguồn `skillx` bị từ chối vì không có search endpoint. |
+| `skills_route` | Route một intent tới Skill cục bộ. |
+| `skills_resolve` | Resolve một reference SkillX. |
+| `skills_inspect` | Inspect một release SkillX. |
+| `skills_read` | Đọc một file, giới hạn 256 KiB. |
+| `skills_diagnose` | Báo điều gì không được cung cấp và vì sao (`skills.mcp.diagnose`). |
+| `skills_install_plan` | Lập kế hoạch cài, như `--dry-run`. |
+| `skills_sync_plan` | Lập kế hoạch sync theo lock, như `--dry-run`. |
+
+Tool SkillX chỉ kết nối khi SkillX đang bật (sau `ak update --ssot`, hoặc
+`AGENTKIT_SKILLX=1`); nếu không chúng trả lời `source disabled`. Dữ liệu Skill được gắn nhãn untrusted qua `_meta`
+`agentkit.best/untrusted`, kèm provenance tại `agentkit.best/provenance`.
+
+Giới hạn đầu vào và câu trả lời: argument 64 KiB, query 1 KiB, reference 512 B,
+path 1 KiB và câu trả lời 1 MiB. Câu trả lời lớn hơn bị thay bằng error
+envelope. Argument lifecycle cho phép scope 64 B và tối đa 8 runtime, mỗi runtime
+64 B.
+
+## Tool install và sync
+
+Với `--allow-install`, các tool apply ghi đúng những gì
+`ak skills install --source skillx` hoặc `ak skills sync --locked` ghi. Chúng
+không bao giờ chạy script.
+
+Mỗi apply cần confirm token dùng một lần do lần gọi plan tương ứng trả về, hiển
+thị trong khối text và trong `_meta` `agentkit.best/confirm`. Token gắn với
+session và đúng các argument đó, có hiệu lực 5 phút. Apply lập kế hoạch lại dưới
+kit lifecycle lock. Nếu kế hoạch đã đổi, nó từ chối với `confirm.plan_changed`
+(mã thoát `6`) và không ghi gì. Thiếu token cho `confirm.missing`.
+
+## Tool exec
+
+Với `--allow-exec`, `skills_execute` chạy một entrypoint đã được grant qua broker
+mô tả tại [`ak skills exec`](../exec).
+
+| Argument | Giới hạn |
+| --- | --- |
+| `ref` | Reference ghim theo digest. |
+| `entrypoint` | Tối đa 128 B. |
+| `args` | Tối đa 64 phần tử. |
+| `dryRun` | Boolean. |
+| `timeoutSeconds` | 0 đến 1800. |
+
+<Callout type="warning">
+  Entrypoint phải opt-in bằng `capabilities.mcp.exec` trong manifest, và bạn phải
+  đã grant nó bằng [`ak skills grants add`](../grants/add). Tool không bao giờ
+  grant, không gắn input, thư mục output hay project, không chọn được backend hay
+  mở rộng capability, và từ chối entrypoint khai báo secret.
+</Callout>
+
+Chỉ cho phép một lần chạy tại một thời điểm; lời gọi đồng thời nhận
+`mcp.exec_busy`. `stdout` và `stderr` được che secret, giới hạn 128 KiB mỗi
+luồng và là untrusted. Run record ghi origin `mcp`. Huỷ lời gọi hoặc ngắt kết
+nối sẽ dừng lần chạy. Câu trả lời là envelope `skills.exec`.
+
+## Mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Client ngắt kết nối hoặc huỷ một cách sạch. |
+| `1` | Server không khởi động hoặc chạy được. |
+| `2` | Cờ hoặc argument không hợp lệ. |
+
+Đây là các mã thoát cơ bản dùng chung cho mọi lệnh; lệnh không định nghĩa mã nào
+khác.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skills mcp serve`](../cli/ak_skills_mcp_serve)
+- [Chạy entrypoint đã được grant](../exec)
+- [Thêm grant](../grants/add)
+- [Sync Skill theo lock](../sync)

@@ -1,0 +1,133 @@
+---
+title: Deliver a request end to end with ak-atoz
+description: Lock scope and Done means with ak-advise, hand over every prerequisite in one batch, then let ak-atoz deliver autonomously until each Done-means item is verified.
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+Use `ak-atoz` when you want one conversation up front and no check-ins after
+that. The run passes three gates in order, because each consumes the previous
+one's result: **Lock** the scope, **Prepare** every input the run needs, then
+**Execute** autonomously until every Done-means item is verified.
+
+## Choose ak-atoz for hands-off delivery
+
+### Use ak-atoz when
+
+- You can confirm scope and observable Done means once, then step away.
+- The work spans planning, parallel implementation, review, and a GitHub issue.
+- You would rather hand over credentials, access, and decisions in one batch
+  than answer questions throughout the run.
+
+### Choose another workflow when
+
+- You only want advice or a pressure-tested plan. Use [`ak-advise`](./advise).
+- You want a preflight that stops before execution. Use
+  [`ak-goal-warmup`](./goal-warmup).
+- You want the issue-to-PR pipeline without the upfront prerequisite batch. Use
+  [`ak-vibe`](./vibe).
+
+## Run the Skill
+
+Pass the request text or a URL. Add `--yagni` to have the scope interview cut
+anything the stated outcome does not need.
+
+<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+  <Tab value="Claude Code">
+
+```text
+/ak-atoz "Add CSV export to the reports page and ship it behind a PR"
+```
+
+  </Tab>
+  <Tab value="Cursor">
+
+```text
+/ak-atoz "Add CSV export to the reports page and ship it behind a PR"
+```
+
+  </Tab>
+  <Tab value="Codex">
+
+```text
+$ak-atoz "Add CSV export to the reports page and ship it behind a PR"
+```
+
+  </Tab>
+</Tabs>
+
+The request text, URLs, issue bodies, and repository content are treated as
+data, not instructions. Embedded attempts to skip a gate, widen authority, or
+exfiltrate secrets are ignored.
+
+## Understand the three gates
+
+1. **Lock scope.** The Skill runs the `ak-advise` interview: one question at a
+   time, a reframing with observable Done means, a visual preview, and advice
+   that ends with a handoff brief (Objective, Done means, Out of scope,
+   Constraints). Only an explicit **Confirm** opens the next gate; **Edit**
+   loops back for the changed field, and **Abort** stops. After Confirm, the
+   brief is the contract and is never shrunk, swapped, or extended silently.
+2. **Prepare.** Before touching anything, the Skill inspects the environment
+   (installed CLIs, authenticated sessions, environment-variable presence,
+   repository remotes, branch protection) and lists only the real gaps. Each
+   item says what it is, why the run needs it, where the run will look for it,
+   and how to check that it is ready. Secrets go into the environment or a
+   secret store you control, never into the conversation. Reversible
+   implementation choices are decided up front and listed as defaults you may
+   override. The Skill re-checks each item without side effects before it
+   continues; an item you explicitly waive is recorded in the brief with its
+   consequence.
+3. **Execute.** The main session becomes the orchestrator. It plans with
+   `ak-plan`, splits the work into pieces with disjoint file ownership, runs
+   independent pieces in parallel sub-sessions (each in its own worktree when
+   it writes code), and checks every reported result against its diff before
+   integrating it.
+
+## What the autonomous run does
+
+- Sizes concurrency to remaining usage and machine headroom, and routes
+  mechanical pieces to cheaper models and design-heavy pieces to stronger ones.
+- Tracks every background process, dev server, watcher, and worktree it starts,
+  and cleans up what it produced.
+- Diagnoses and resumes a stalled or failed sub-session, and escalates to the
+  strongest available advisor after repeated failures.
+- Creates or updates the GitHub issue and moves its label through `in progress`,
+  `in review`, `done` (PR opened), and `shipped` (merged). Unrelated bugs or
+  gaps found along the way are filed as separate deduplicated issues labelled
+  `ai-handle` instead of being fixed in the same run.
+- Runs the final review in a fresh sub-session with isolated context, never in
+  the orchestrator that wrote or integrated the code, and re-reviews until clean.
+
+## Know when it stops to ask
+
+Everything inside the confirmed brief is decided and continued. The run comes
+back only for:
+
+- a destructive or irreversible action the brief does not name;
+- a change that would alter a confirmed Done-means item or leave the confirmed
+  scope or repository;
+- spending money or sending a message on your behalf that the brief did not
+  authorize;
+- a failure that stays unexplained after diagnosis and advisor counsel;
+- a prerequisite that turns out invalid at use time, such as an expired token.
+
+When it stops, it states what is done, what blocks, and the option it
+recommends, then resumes after your answer.
+
+## Verify the result
+
+The run finishes only when every Done-means item is verified against the
+integrated result by its command, number, or observable state, the isolated
+review is clean, the issue label matches the real state, and nothing the run
+started is left behind. The final report lists each Done-means item with its
+evidence, the decisions made on your behalf, anything waived, and remaining
+risks. Partial delivery is reported as partial, never as done.
+
+## Related Skills
+
+- [`ak-advise`](./advise) owns the scope interview used in the first gate.
+- [`ak-plan`](./plan), [`ak-cook`](./cook), and [`ak-ship`](./ship) follow the
+  locked brief during execution.
+- [`ak-orchestrate`](./orchestrate) runs staged or parallel sub-sessions when
+  the runtime supports them.

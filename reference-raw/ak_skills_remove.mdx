@@ -10,13 +10,19 @@ Remove an installed skill
 
 ### Synopsis
 
-Delete an installed skill from the local environment. Idempotent: removing an absent skill exits 0.
+Delete an installed skill from the local environment. Idempotent: removing an absent skill exits 0. With SkillX on, an @publisher/slug argument drops only your reference to that SkillX package: files another owner still holds stay, a file you changed is preserved and reported, and the skill directory is removed only when it is empty.
 
 Effects:
-  Removes skill files from the local installation directory.
+  Removes skill files from the local installation directory. For @publisher/slug, in one journaled transaction under the kit lifecycle lock, with --dry-run to preview.
 
 Exit status:
-  0 success, 1 command failure, 2 invalid flags or arguments
+  0   success, or nothing to change
+  1   command failure: offline without a verified copy, credential refused, path too long, or recovery required
+  2   SkillX or the skill store disabled, invalid flags or arguments, or a reserved alias
+  4   another AgentKit operation holds the kit lifecycle lock
+  5   release not found or not entitled
+  6   alias collision, unowned or modified path, untrusted project state, or the lock changed during the run
+  7   release revoked, yanked, quarantined or untrusted, a link in a target path, or a digest mismatch
 
 ```
 ak skills remove <kit>/<skill> [flags]
@@ -27,17 +33,21 @@ ak skills remove <kit>/<skill> [flags]
 ```
   ak skills remove engineer/agent-browser
   ak skills remove engineer/agent-browser --json
+  ak skills remove @publisher/review-guardrails --scope global
 ```
 
 ### Options
 
 ```
-  -h, --help             help for remove
-      --json             Emit machine-readable JSON (implies --no-interactive)
-      --no-interactive   Disable interactive prompts (CI-safe)
-  -q, --quiet            Suppress non-error output on stderr
-  -V, --verbose          Extra diagnostic output on stderr (loses to --quiet)
-  -y, --yes              Assume yes for all prompts
+      --dry-run           SkillX: print the plan and write nothing
+  -h, --help              help for remove
+      --json              Emit machine-readable JSON (implies --no-interactive)
+      --no-interactive    Disable interactive prompts (CI-safe)
+  -q, --quiet             Suppress non-error output on stderr
+      --runtime strings   SkillX: runtimes to change: claude-code, codex (repeatable; default all with a recorded projection)
+      --scope string      SkillX: lock and skills root scope: project (default) or global (default "project")
+  -V, --verbose           Extra diagnostic output on stderr (loses to --quiet)
+  -y, --yes               Assume yes for all prompts
 ```
 
 ### SEE ALSO

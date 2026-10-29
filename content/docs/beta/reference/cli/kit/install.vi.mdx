@@ -65,6 +65,7 @@ Lệnh không có alias.
 | `-g, --global` | `false` | Dùng user scope của runtime thay cho project hiện tại. |
 | `--kits-dir <dir>` | Trống | Chọn nguồn Kit cục bộ rõ ràng. |
 | `--local` | `false` | Dùng nguồn cục bộ rõ ràng thay cho registry. |
+| `--neutral-package <archive>` | Trống | Cài từ archive Kit trung lập runtime cục bộ (`kit.tar.gz` kèm sidecar `.sha256`), được chiếu cho target đã chọn. Lặp lại một lần cho mỗi component. Dùng cho development và CI; ngầm bật `--local`. |
 | `--no-backup` | `false` | Bỏ qua snapshot trước khi cài và bảo vệ takeover khi áp dụng. |
 | `--out <dir>` | Trống | Đặt thư mục gốc cho build hoặc export. |
 | `--registry-url <url>` | Biến môi trường hoặc mặc định bản phát hành | Ghi đè URL gốc của registry. |
@@ -125,7 +126,7 @@ global và không phải peer trong lifecycle refresh.
 
 Vì `install` dùng implementation của init, hành vi OMP là tương đương. Thư mục
 Skill đã projection và tên top-level trong `SKILL.md` dùng `ak-<slug>`, còn alias
-trong body như `/ak:cook`, `$ak:cook` và selector `ak run
+trong body như `/ak-cook`, `$ak-cook` và selector `ak run
 <kit>/<skill> --target omp` được giữ nguyên. OMP trong project đã trust cũng
 discover `.agents/skills` của project: `.omp/skills` của project che bản
 `.agents/skills` xung đột với bản cài project, còn `.agents/skills` của project
@@ -209,11 +210,12 @@ quá trình cài thất bại.
 | `2` | Cobra từ chối cờ, argument hoặc tổ hợp cờ. |
 | `3` | Đường huỷ hoặc interrupt dùng chung trả về trạng thái huỷ, hoặc lần đặt lại `--fresh` không chạy vì cần xác nhận hoặc cần chấp nhận các rủi ro đã liệt kê. |
 | `4` | Một thao tác vòng đời Kit khác đang giữ khoá. |
-| `6` | Route project trỏ vào bản cài cấp người dùng; chạy lại với `--global` hoặc từ thư mục project khác. |
+| `6` | Route project trỏ vào bản cài cấp người dùng; chạy lại với `--global` hoặc từ thư mục project khác. Khi bật `AGENTKIT_SKILL_STORE=1`, bước preflight alias skill cũng có thể từ chối thay đổi trước khi ghi bất cứ thứ gì, với `skill.alias_collision`, `ownership.modified` hoặc `target.link_refused`. |
+| `15` | Registry từ chối một bản phát hành Kit mà cửa sổ cập nhật không bao phủ (`renewal_required`). Không ghi gì và các phiên bản đã cài vẫn hoạt động. Với `--json`, lỗi nêu phiên bản mới nhất được bao phủ và liên kết gia hạn. |
 
 Phần help dành mã `5` cho Kit cục bộ không tồn tại và `6` cho target đã có dữ
 liệu, nhưng hai lỗi install này hiện rơi về mã `1`. Chỉ lỗi từ chối route cấp
-người dùng được phân loại là `6`; đừng rẽ nhánh theo `5` hoặc `6` cho các trường
+người dùng và lỗi từ chối của preflight alias skill được phân loại là `6`; đừng rẽ nhánh theo `5` hoặc `6` cho các trường
 hợp khác cho đến khi runtime thay đổi cách phân loại.
 
 ## Tác động, an toàn và khôi phục
@@ -250,10 +252,12 @@ Codex không thể chiếu mọi Claude command, Hook matcher hoặc status-line
 Hãy xem cảnh báo sau một lần cài thành công. Engineer projection một group
 task-state `PostToolUse` bị drop hoàn toàn và hai shared matcher bị narrow;
 Marketing có ba narrow và không có full drop. Matcher atom được hỗ trợ vẫn hoạt
-động. Trên Windows, Hook Codex `.cjs` đủ điều kiện nằm trong Codex home có
-thể dùng `.cmd` shim thuộc ownership của AgentKit cho đường dẫn có khoảng trắng;
-đường dẫn bên ngoài, có metacharacter hoặc non-ASCII không an toàn vẫn bị giới
-hạn và được báo rõ.
+động. Trên Windows, Codex chạy Hook qua PowerShell hoặc `cmd.exe`, và
+AgentKit đặt đường dẫn Hook trong dấu nháy kép khi cần, nên profile như
+`C:\Users\Hello World` vẫn chạy được. Hãy cài lại để thay registration từ phiên
+bản cũ; `ak doctor --adapter codex` báo các entry vẫn chưa chạy được. Đường dẫn
+chứa `%`, `$`, backtick hoặc dấu nháy không chạy được trên cả hai shell và được
+báo khi cài.
 
 Codex home do wrapper quản lý chỉ được alias leaf `hooks` cuối cùng tới
 `~/.codex/hooks` canonical, bằng symlink POSIX hoặc directory junction trên

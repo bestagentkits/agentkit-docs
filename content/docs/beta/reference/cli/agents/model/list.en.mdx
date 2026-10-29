@@ -1,0 +1,70 @@
+---
+title: ak agents model list
+description: List every installed Agent AgentKit has recorded, with the model its file carries, the model config resolves to, and their status.
+---
+
+Use `ak agents model list` to see all installed Agents and spot files that are
+pending or have drifted from config.
+
+## Usage
+
+```bash
+ak agents model list [--runtime <runtime>] [--project <dir>]
+```
+
+No positional arguments are accepted. The command is read-only, never prompts,
+and performs no network work. It reads AgentKit's agent model records, config,
+and the installed Agent files.
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--runtime <runtime>` | all runtimes | Limit to one of `claude-code`, `codex`, `cursor`, `omp`, `pi`. |
+| `--project <dir>` | nearest project config, else the current directory | Project whose installs and `.agentkit/config.yaml` apply. |
+
+Global installs are always listed. Project installs are listed for the
+selected project. Rows are sorted by runtime, then Agent.
+
+## Output
+
+Human stdout is a table:
+
+```text
+RUNTIME  AGENT  SCOPE  STATUS  FILE MODEL  DESIRED (FROM)
+```
+
+`FILE MODEL` is `-` when the file is missing or unreadable. `DESIRED (FROM)`
+names the layer that decided the model. With nothing recorded it prints
+`No agent models recorded yet. Install or refresh a kit to record them.`
+
+JSON success uses:
+
+```text
+schema_version: 1
+kind: agents.model.list
+data.agents[]
+data.warnings?
+```
+
+Each `agents[]` entry has `runtime`, `agent`, `kit`, `install_scope`
+(`global` or `project`), `path`, `kit_default?`, `adapter_default`,
+`user_override?`, `project_override?`, `desired`, `desired_source`, `recorded`,
+`materialized?`, `effective` (`value`, `certainty`, `reason?`), and `status`
+(`in-sync`, `pending`, `drift`, or `not-materialized`).
+
+Warnings name unreadable state or config that fell back to defaults. They go
+to stderr as `warning: ...` lines in human mode.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The listing was produced, including an empty one. |
+| `1` | A local runtime error occurred. |
+| `2` | Invalid flags, an unsupported runtime, or a missing `--project` directory. |
+
+## Related commands
+
+- [Complete `ak agents model list` command facts](../cli/ak_agents_model_list)
+- [Inspect one Agent](./get)
+- [Explain the deciding layer](./explain)
+- [Write pending models](./apply)

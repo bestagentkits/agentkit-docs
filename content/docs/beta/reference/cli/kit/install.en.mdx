@@ -66,6 +66,7 @@ The command has no alias.
 | `-g, --global` | `false` | Use the runtime's user scope instead of the current project. |
 | `--kits-dir <dir>` | Empty | Select an explicit local kit source. |
 | `--local` | `false` | Use the explicit local source instead of the registry. |
+| `--neutral-package <archive>` | Empty | Install from a local runtime-neutral kit archive (`kit.tar.gz` plus its `.sha256` sidecar), projected for the selected target. Repeat once per component. For development and CI; implies `--local`. |
 | `--no-backup` | `false` | Skip applicable pre-install snapshots and takeover protection. |
 | `--out <dir>` | Empty | Set the build or export output root. |
 | `--registry-url <url>` | Environment or release default | Override the registry base URL. |
@@ -126,7 +127,7 @@ global-only and is not a refresh lifecycle peer.
 
 Because `install` uses the init implementation, OMP behavior is identical.
 Projected Skill directories and top-level `SKILL.md` names use `ak-<slug>`, while
-body aliases such as `/ak:cook` and `$ak:cook` and the `ak run
+body aliases such as `/ak-cook` and `$ak-cook` and the `ak run
 <kit>/<skill> --target omp` selector stay unchanged. Trusted project OMP also
 discovers project `.agents/skills`: project `.omp/skills` shadows a colliding
 project `.agents/skills` copy for a project install, while project
@@ -210,11 +211,12 @@ drop or narrow does not make the install fail.
 | `2` | Cobra rejected flags, arguments, or a flag combination. |
 | `3` | A shared cancellation or interrupt path returned cancellation, or a `--fresh` reset was not run because it needs confirmation or acceptance of listed risks. |
 | `4` | Another kit lifecycle mutation holds the lock. |
-| `6` | The project route resolves to the user-level install; re-run with `--global` or from another project directory. |
+| `6` | The project route resolves to the user-level install; re-run with `--global` or from another project directory. With `AGENTKIT_SKILL_STORE=1`, the skill alias preflight can also refuse the change before anything is written, with `skill.alias_collision`, `ownership.modified`, or `target.link_refused`. |
+| `15` | The registry refused a kit release the update window does not cover (`renewal_required`). Nothing is written and installed versions keep working. With `--json`, the error names the latest covered version and the renewal link. |
 
 Command help reserves `5` for a missing local kit and `6` for an occupied
 target, but those two install errors currently fall through to exit `1`. Only
-the user-level route refusal is classified as `6`; do not branch on `5` or `6`
+the user-level route refusal and the skill alias preflight refusal are classified as `6`; do not branch on `5` or `6`
 for the other cases until runtime classification changes.
 
 ## Effects, safety, and recovery
@@ -250,9 +252,12 @@ Codex cannot project every Claude command, Hook matcher, or status-line feature.
 Review warnings after a successful install. Engineer projects one fully dropped
 task-state `PostToolUse` group and two shared narrowed matchers; Marketing
 projects three narrows and no full drop. Supported matcher atoms remain active.
-On Windows, eligible Codex `.cjs` Hooks inside the Codex home can use owned
-`.cmd` shims for paths containing spaces; external, metacharacter, or unsafe
-non-ASCII paths remain limited and are reported.
+On Windows, Codex runs Hooks through PowerShell or `cmd.exe`, and AgentKit
+double-quotes any Hook path that needs it, so a profile such as
+`C:\Users\Hello World` works. Reinstall to replace a registration from an earlier
+version; `ak doctor --adapter codex` flags entries that still cannot run. A path
+containing `%`, `$`, a backtick, or a quote cannot run under both shells and is
+reported at install time.
 
 A wrapper-managed Codex home may alias only its final `hooks` leaf to canonical
 `~/.codex/hooks`, using a POSIX symlink or a Windows directory junction; Hook

@@ -1,0 +1,263 @@
+---
+title: Chọn model cho subagent
+description: Ghim, kế thừa, đặt lại, chấp nhận và áp dụng lại model mà từng Agent AgentKit đã cài sử dụng, theo runtime và scope, với lựa chọn được giữ qua các lần cập nhật.
+---
+
+Mỗi Agent trong Kit khai báo một tier năng lực không phụ thuộc runtime (`opus`,
+`haiku`, `fable`, `sonnet` hoặc `inherit`), và adapter của từng runtime ánh xạ
+tier đó sang một model mà runtime hiểu. `ak agents model` cho phép bạn thay lựa
+chọn đó cho một Agent, còn cấu hình `agent_models` cho phép ánh xạ lại cả một
+tier.
+
+Lựa chọn của bạn nằm trong cấu hình AgentKit, không chỉ trong file Agent được
+sinh ra. Mỗi lần cài, `ak update` và `ak kit refresh` đều resolve lại model từ
+cấu hình, nên override được giữ qua các lần cập nhật, refresh và cài lại thay
+vì bị mặc định của Kit ghi đè.
+
+Để xem mapping mặc định của từng Agent trên từng runtime, xem
+[Model của Agent trên từng runtime](./agent-models).
+
+## Tổng quan các lệnh
+
+| Lệnh | Chức năng |
+| --- | --- |
+| `ak agents model list` | Liệt kê các Agent đã cài, kèm model trong file, model mà cấu hình resolve ra và trạng thái |
+| `ak agents model get <agent>` | Hiển thị model của một Agent theo từng lớp: mặc định của Kit, mặc định của adapter, cấu hình user và project, lựa chọn AgentKit đã ghi nhận và file của runtime |
+| `ak agents model explain <agent>` | Duyệt chuỗi ưu tiên, đánh dấu lớp quyết định và cho biết cần làm gì với file đang pending hoặc bị drift |
+| `ak agents model set <agent>` | Ghim model (và reasoning effort trên Codex, OMP) trong cấu hình rồi áp dụng |
+| `ak agents model inherit <agent>` | Cho Agent chạy bằng model của phiên cha |
+| `ak agents model reset <agent>` | Xóa override của Agent khỏi một scope để lớp kế tiếp quyết định |
+| `ak agents model adopt <agent>` | Giữ model đã sửa trực tiếp trong runtime bằng cách ghi nó vào cấu hình |
+| `ak agents model apply [agent]` | Ghi model đã cấu hình vào các file Agent đã cài |
+
+Mọi lệnh con nhận `--runtime` (`claude-code`, `codex`, `cursor`, `omp` hoặc
+`pi`) và `--project <dir>` để chọn project khác thư mục hiện tại. `list` và
+`apply` đọc mọi runtime khi bỏ `--runtime`. `--json` xuất kết quả cho máy đọc.
+Chạy `ak agents model <command> --help` để xem đầy đủ flag và exit code.
+
+### Ví dụ
+
+```bash
+# See every installed Agent and its status.
+ak agents model list
+
+# Put kongming on Opus in Claude Code.
+ak agents model set kongming --runtime claude-code --model opus
+
+# Codex model and reasoning effort, for this project only.
+ak agents model set kongming --runtime codex --model gpt-5.5 --effort high --scope project
+
+# OMP: point an Agent at an OMP role alias.
+ak agents model set planner --runtime omp --model @plan
+
+# Pi: pin a provider/model ID.
+ak agents model set debugger --runtime pi --model anthropic/claude-sonnet-4-5
+
+# Let a Cursor Agent run on the parent session's model.
+ak agents model inherit code-reviewer --runtime cursor
+
+# Drop the project override and fall back to the next layer.
+ak agents model reset kongming --runtime codex --scope project
+
+# Ask which layer decides, and why.
+ak agents model explain kongming --runtime claude-code
+```
+
+`set` cũng nhận `--model inherit`. `ak agents model` thay đổi từng Agent một;
+để ánh xạ lại cả một tier, dùng [các key cấu hình](#các-key-cấu-hình).
+
+`set`, `inherit`, `reset` và `adopt` sao lưu file cấu hình sẽ thay đổi trước khi
+ghi, rồi cập nhật mọi file đã cài của Agent mà AgentKit vẫn sở hữu model. File
+có model đã bị sửa trong runtime được giữ nguyên và được báo lại; xem
+[Trạng thái và drift](#trạng-thái-và-drift).
+
+Đặt model cho Agent chưa được cài vẫn ghi cấu hình, kèm cảnh báo; giá trị sẽ áp
+dụng khi một Kit cài Agent đó.
+
+## Scope
+
+`--scope` chọn file cấu hình mà lệnh ghi vào:
+
+- `user` (mặc định) ghi vào cấu hình trong AgentKit home, thường là
+  `~/.agentkit/config.yaml`.
+- `project` ghi vào `.agentkit/config.yaml` trong project.
+
+Bản cài theo project đọc cả hai file. Bản cài global **chỉ đọc cấu hình user**;
+cấu hình project không bao giờ ảnh hưởng tới bản cài global dùng chung. Nếu
+Agent được cài global, override `--scope project` không thay đổi nó.
+
+## Thứ tự ưu tiên
+
+Từ cao xuống thấp:
+
+1. Override theo Agent ở project
+2. Override theo Agent ở user
+3. Override theo tier ở project
+4. Override theo tier ở user
+5. Frontmatter của Kit và mặc định của adapter
+
+Hai file cấu hình được gộp theo từng field, nên project có thể chỉ đặt
+`reasoning_effort` cho một Agent mà vẫn giữ `model` của user cho Agent đó.
+Trên OMP, khi kết quả là một alias `@role`, giá trị gắn role ở project rồi tới
+giá trị gắn role ở user có thể thay alias đó bằng một model cụ thể; xem
+[Alias role của OMP](#alias-role-của-omp).
+`ak agents model explain <agent>` cho biết lớp nào quyết định từng file đã cài.
+
+## Trạng thái và drift
+
+`list` báo một trạng thái cho mỗi file Agent đã cài:
+
+| Trạng thái | Ý nghĩa |
+| --- | --- |
+| `in-sync` | File mang đúng model mà cấu hình resolve ra |
+| `pending` | Cấu hình đã đổi kể từ lần AgentKit ghi file gần nhất; lần refresh hoặc `apply` kế tiếp cập nhật file mà không hỏi |
+| `drift` | Model đã bị sửa trực tiếp trong file của runtime; các lần refresh giữ nguyên chỉnh sửa đó |
+| `not-materialized` | File không tồn tại hoặc không có model mà AgentKit đọc được |
+
+AgentKit ghi nhận model mà nó đã chọn cho từng file. Khi bạn sửa model trực tiếp
+trong file Agent của runtime, lần refresh sau giữ model bạn đã sửa, vẫn cập
+nhật phần còn lại của file (hướng dẫn, mô tả), cảnh báo và báo file đó là
+drift. Có hai cách xử lý drift:
+
+- **Giữ chỉnh sửa trong runtime:** `ak agents model adopt <agent> --runtime <runtime>`
+  ghi model mà file đang mang vào cấu hình, để các lần refresh không báo nữa.
+  Hãy chọn scope mà bản cài thực sự đọc: bản cài global chỉ đọc cấu hình user,
+  và cấu hình project ghim Agent sẽ thắng một lần adopt ở scope user. Nếu scope
+  đã chọn không áp dụng cho file nào, `adopt` từ chối và giữ nguyên cấu hình.
+- **Thay chỉnh sửa trong runtime:** `ak agents model apply` ghi model đã cấu
+  hình. File pending được cập nhật ngay; file drift chỉ bị thay khi có xác nhận,
+  và mỗi file được sao lưu trước. Trong terminal, `apply` sẽ hỏi. Trong script
+  và CI, truyền `--yes`; nếu không có xác nhận thì không ghi gì và kết quả
+  `--json` liệt kê các file dưới `need_confirmation`.
+
+`adopt` và `apply` kiểm tra trước rằng AgentKit vẫn sở hữu từng file: file
+được truy cập không qua link và khớp với bản ghi sở hữu của AgentKit, ngoại trừ
+phần model. Nếu một file không qua được bước kiểm tra này, lệnh từ chối trước
+khi thay đổi bất cứ thứ gì.
+
+```bash
+ak agents model adopt kongming --runtime codex
+ak agents model apply kongming --runtime codex --yes
+```
+
+Codex ghi lại file role của nó ở mỗi lần refresh: chỉ các field model được giữ
+lại, còn chỉnh sửa khác trong file role của Codex bị thay. Khi AgentKit chưa
+ghi nhận lựa chọn của nó cho một file role Codex, ví dụ ở lần refresh đầu tiên
+sau khi nâng cấp, file đã sửa không có bằng chứng sở hữu, nên model của file bị
+thay kèm cảnh báo nêu giá trị đã bị thay.
+
+Trên Claude Code, Cursor và OMP, file bị sửa ngoài phần model được giữ nguyên.
+Pi thay file như vậy khi refresh; lần cài sẽ từ chối file đó trừ khi bạn truyền
+`--force`.
+
+## Độ chắc chắn của model thực tế
+
+`get` và `explain` báo model thực tế kèm độ chắc chắn:
+
+- `derived`: file của runtime ghi đúng model mà runtime chạy.
+- `unknown`: runtime tự quyết định. Trường hợp này xảy ra khi Agent kế thừa
+  model của phiên cha, khi không có file đọc được, khi runtime có thể ghi đè
+  file qua một thiết lập mà AgentKit không đọc (OMP và Pi), và với Agent của
+  plugin Claude Code vừa được sửa trực tiếp cho tới khi `ak kit refresh` kích
+  hoạt lại plugin, vì Claude Code chạy Agent của plugin từ plugin cache riêng.
+
+Khi độ chắc chắn là `unknown`, hãy kiểm tra model mà Agent đang chạy báo lại.
+
+## Quản lý model từ Desktop
+
+Ứng dụng AgentKit Desktop và web dashboard do `ak config start` phục vụ hiển
+thị cùng dữ liệu tại **Subagents -> Models**. Với mỗi file Agent được quản lý,
+bạn thấy giá trị mặc định của kit, giá trị mong muốn và tầng nguồn, model thực
+tế kèm độ chắc chắn, và trạng thái. Mỗi runtime hiển thị trạng thái hỗ trợ.
+Runtime bị giới hạn năng lực (capability-gated) không có nút chỉnh sửa. Trang
+này gọi cùng service với `ak agents model`, nên kiểm tra quyền sở hữu,
+lifecycle lock và bản sao lưu vẫn áp dụng y nguyên.
+
+- Chọn scope ghi: **User**, hoặc **Project** khi đang mở một project. Tương
+  ứng với `--scope user|project`.
+- **Set**, **Inherit session model**, **Reset** và **Adopt** (hiện khi có
+  drift) tương ứng với `set`, `inherit`, `reset` và `adopt`.
+- **Reapply** tương ứng với `apply`. Khi có file bị sửa bên ngoài AgentKit,
+  trang liệt kê các file đó và hỏi trước khi thay thế. Mỗi file bị thay thế
+  đều được sao lưu trước.
+- **Explain** hiển thị các tầng ưu tiên và tầng nào quyết định, giống
+  `explain`.
+
+## Hỗ trợ theo runtime
+
+| Runtime | Trạng thái | Giới hạn |
+| --- | --- | --- |
+| Claude Code | `supported` | Không có. Nhận alias như `opus` và model ID đầy đủ. |
+| Codex | `supported` | Không có. Override theo tier thay model và giữ reasoning effort đã ghim của Agent; đặt `--effort` nếu model mới không nhận effort đó. |
+| Cursor | `supported` | Không có. Model ID không kèm tiền tố provider. |
+| OMP | `supported-with-limitations` | OMP resolve alias `@role` qua `modelRoles` của chính nó, và các thiết lập `task.agentModelOverrides`, Agent Hub được ưu tiên hơn frontmatter của Agent. AgentKit không ghi cũng không đọc chúng, nên model thực tế là `unknown`. |
+| Pi | `supported-with-limitations` | Chỉ runner agentkit-agent của AgentKit chuyển model trong `.pi/agents` cho tiến trình `pi` con. Nếu extension khác, như pi-subagents, đăng ký tool Agent trước, extension đó quyết định model. Pi không có field reasoning effort. |
+| Grok Build | `capability-gated` | Chưa có field model theo Agent đã được kiểm chứng. Thiết lập subagent của Grok nằm trong `~/.grok/config.toml` do bạn sở hữu, AgentKit không ghi file này. |
+| DSH | `capability-gated` | Không có bề mặt Agent dạng markdown; model của subagent theo cấu hình provider của chính DSH. |
+
+Các runtime không có trong bảng, như Antigravity (`agy`), chưa được đánh giá.
+
+Runtime capability-gated không bao giờ âm thầm bỏ qua: `ak agents model` và
+`ak config prefs set` từ chối nó (chạy với `--verbose` hoặc `--json` để xem lý
+do), còn mỗi lần cài hoặc refresh cảnh báo một lần về các key `agent_models`
+bạn tự viết cho runtime đó. Xóa tất cả cùng lúc, thêm `--scope project` cho cấu
+hình project:
+
+```bash
+ak config prefs unset agent_models.grok
+```
+
+Chỉ section của runtime capability-gated mới xóa được nguyên khối; với các
+runtime khác, hãy unset từng key một.
+
+Codex, Cursor, OMP và Pi không nhận tên tier trần (`opus`, `sonnet`, `haiku`,
+`fable`) làm model ID. Giá trị chỉ được kiểm tra về hình thức, không đối chiếu
+với danh mục model, nên một ID hợp lệ về hình thức nhưng tài khoản của bạn không
+dùng được sẽ do runtime báo lỗi, không phải AgentKit.
+
+## Alias role của OMP
+
+Trên OMP, giá trị model có thể là provider/model ID hoặc alias `@<role>` trong
+tập role của OMP: `@advisor`, `@commit`, `@default`, `@designer`, `@plan`,
+`@slow`, `@smol`, `@task`, `@tiny`, `@vision`. Mặc định AgentKit ánh xạ tier
+của Kit sang role: `sonnet` sang `@task`, `opus` sang `@plan`, `haiku` sang
+`@smol` và `fable` sang `@advisor`.
+
+Khi chưa gắn role, AgentKit ghi alias và OMP resolve nó qua `modelRoles` của
+chính OMP. Để AgentKit ghi một model cụ thể, hãy gắn role trong cấu hình
+AgentKit:
+
+```bash
+# Route the sonnet tier through @smol, then bind @smol to a model.
+ak config prefs set agent_models.omp.sonnet @smol
+ak config prefs set agent_models.omp.roles.smol.model anthropic/claude-haiku-4-5
+ak config prefs set agent_models.omp.roles.smol.reasoning_effort low
+```
+
+Agent có giá trị resolve ra là alias đã gắn sẽ nhận model được gắn, và reasoning
+effort được ghi thành `thinking-level`. Effort theo Agent được ưu tiên hơn
+effort của role. Giá trị gắn cho role phải là model, không phải một alias khác.
+Để cấu hình `modelRoles` của chính OMP, xem
+[Cấu hình role OMP](./agent-models#cấu-hình-role-omp).
+
+## Các key cấu hình
+
+`ak agents model` tự ghi các key này cho bạn. Bạn cũng có thể đặt trực tiếp bằng
+[`ak config prefs set`](../reference/cli/config/prefs/set):
+
+| Key | Phạm vi thay đổi |
+| --- | --- |
+| `agent_models.<runtime>.<tier>` | Ánh xạ lại cả một tier trên một runtime |
+| `agent_models.<runtime>.agents.<agent>.model` | Ghim một Agent |
+| `agent_models.<runtime>.agents.<agent>.reasoning_effort` | Ghim effort của một Agent (Codex và OMP) |
+| `agent_models.omp.roles.<role>.model` và `.reasoning_effort` | Gắn một role OMP |
+
+Key tier của Cursor hiện có vẫn hoạt động:
+
+```bash
+ak config prefs set agent_models.cursor.opus YOUR_CURSOR_MODEL_ID
+```
+
+Key đặt theo cách này có hiệu lực ở lần `ak update` hoặc `ak kit refresh` kế
+tiếp; chạy `ak agents model apply` để ghi ngay vào các file đã cài. Key theo
+Agent không khớp Agent nào đã cài sẽ sinh cảnh báo khi cài, có nêu tên key.

@@ -1,0 +1,130 @@
+---
+title: ak skills improve
+description: Preview redacted session evidence for one skill, add a drafting brief, or compile a draft overlay into a gated, evaluated candidate.
+---
+
+Use `ak skills improve` to turn your own sessions into evidence for changing
+one skill. AgentKit makes no model call: it extracts and redacts evidence
+locally, hands a brief to the host agent or to you, and compiles the draft you
+write into a candidate that [`ak skills evolution`](../cli/ak_skills_evolution) can apply.
+Nothing leaves this machine.
+
+## Usage
+
+```bash
+ak skills improve <skill> --session <id|latest> [--session ...] --dry-run [--brief] [--project <name>] [--json]
+ak skills improve <skill> --session <id|latest> --candidate <draft-dir> [--kits-dir <dir>] [--dry-run] [--json]
+```
+
+Exactly one skill reference is required, for example `ak-plan`.
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--session <id>` | required | Session to read, or `latest` for the newest session of the project. Repeatable, at most 5. |
+| `--project <name>` | The registered project containing the working directory | Registered project the sessions belong to. |
+| `--dry-run` | `false` | Preview only and write nothing. Required without `--candidate`. |
+| `--brief` | `false` | Add the drafting brief to the preview. Needs `--dry-run`; not with `--candidate`. |
+| `--candidate <draft-dir>` | Empty | Overlay draft directory to compile, gate, evaluate, and record. |
+| `--kits-dir <dir>` | `$AGENTKIT_KITS_DIR` or `./kits` | Foundation kits directory. Only with `--brief` or `--candidate`. |
+
+Shared flags are described in [CLI conventions](../cli-conventions). The
+Claude home the sessions are read from is `AGENTKIT_CLAUDE_HOME` or
+`~/.claude`.
+
+## Evidence preview
+
+The evidence covers the intended outcome, failures, corrections, and verified
+success, each citing a session and line range. Only your own words become
+excerpts; tool output, assistant text, and harness-written lines are scanned
+for signals but never copied. Sessions of other projects, other users, linked
+or hard-linked files, and transcripts recorded outside the project are
+refused.
+
+Redaction is best-effort: known credential shapes, long hex or base64 runs,
+email addresses, absolute paths, and code are removed, and the run fails closed
+when a second pass still finds one. A secret of an unknown shape can remain,
+so review the preview before sharing it. An excerpt that reads as an
+instruction is withheld, and transcript content never changes what the command
+does.
+
+## Brief and candidate
+
+`--brief` adds a drafting brief: the target skill, its base tree digest,
+whether it is shared, the overlay layout (`files/`, `patches/`, `delete.txt`,
+`modes.txt`), the redacted evidence marked as untrusted data, and the
+constraints. A change of a shared skill becomes a local fork under an alias
+without the `ak-` prefix.
+
+`--candidate <draft-dir>` compiles the draft against its base: the running
+personal kit composition when one already overlays the skill, else the
+foundation skill from `--kits-dir`. The candidate is gated. Script, mode,
+capability, exposure, and license changes, frontmatter permission changes,
+file references missing from the candidate, instruction-like added text, and a
+shared skill each become a review finding. An added secret or absolute local
+path refuses the candidate, naming the rule only. The candidate ID pins the
+evidence, the skill, the base, the prior overlay, and the overlay.
+
+Every candidate is evaluated offline and deterministically: the evidence tasks
+are routed through the frozen lexical router with no skill, with the base, and
+with the candidate; failures and corrections are scored for the terms the skill
+text covers; the other skills' own tasks are routed as negative controls; and
+functional and security checks compare base and candidate. A task the
+candidate copies is tautological and does not count. The verdict is
+`improved`, `inconclusive`, `regressed`, or `blocked`.
+
+## Effects
+
+A dry run writes nothing. `--candidate` without `--dry-run` writes one
+candidate record (`candidate.json` with its evaluation, `overlay.json`, and
+`evidence.json`, mode `0600`) under
+`AGENTKIT_HOME/state/skill-evolve/candidates/<id>/` under the kit lifecycle
+lock, without a prompt; an identical record is left as it is. Recording never
+applies anything. The command never changes a skill, a kit, or a personal kit,
+runs no script, model, or network call, never resolves a path a transcript
+records, and skips the background update check.
+
+With `--session latest` it also reads the start of newer sessions it skips,
+only to find their recorded working directory, and reports nothing from them.
+
+## Output
+
+Text starts with a notice that states what did not happen, then the skill,
+status, and evidence digest, the consent line (sessions, project, owner), one
+line per session, one line per evidence item with its citation, any conflicts
+and warnings, the brief or the candidate when requested, and the next stages.
+
+JSON uses `kind=skills.improve`:
+
+```text
+schema_version: 1
+kind: skills.improve
+data: schema (agentkit.skill-evidence/v1), mode, status, skill, consent,
+      sideEffects, sessions[], evidence[], conflicts[], redaction, bounds,
+      stages, warnings[], evidenceDigest, notice
+      brief?, candidate?, candidateStatus?
+```
+
+`status` is `ready`, `insufficient`, or `conflicting`. Each `evidence[]` item
+has `id`, `kind` (`intended_outcome`, `failure`, `correction`,
+`verified_success`), `basis`, `summary`, `citation` (`session`, `from`, `to`),
+`untrusted`, and `flags`. `stages` reports `evidence`, `candidate`,
+`evaluation`, `apply`, and `publish` as `not_run`, `not_available`, or
+`ready`. `candidate` has the fields that
+[`ak skills evolution show`](../cli/ak_skills_evolution_show) prints.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Success: an evidence preview, including one with conflicting or insufficient evidence, or a recorded candidate. |
+| `1` | A selected session could not be read, the run was cancelled, the candidate store or an existing record failed verification (`store.corrupt`), or the record could not be written. |
+| `2` | Invalid flags or arguments, a malformed session selection, `--dry-run` missing, or a draft that does not compile against its base (`evolve.candidate_invalid`). |
+| `4` | Another AgentKit operation holds the kit lifecycle lock (`evolve.store_busy`). |
+| `5` | The selected session is not in the project, or the skill's base cannot be resolved (`evolve.base_unresolved`). |
+| `7` | Out of scope, not owned by the current user, redaction could not be verified, or the draft adds a secret or an absolute local path (`evolve.candidate_refused`). |
+
+## Related commands
+
+- [Complete `ak skills improve` command facts](../cli/ak_skills_improve)
+- [Review and apply candidates](../cli/ak_skills_evolution)
+- [Personal kits](../cli/ak_skills_kit)

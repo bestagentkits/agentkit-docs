@@ -66,7 +66,7 @@ at `Stop`, can report patterns it proved from that activity: re-reading an
 unchanged file, re-running a command that fails with the same error, repeated
 broad searches, large tool output with no file changed, and a full test suite
 run after a documentation-only change. Each finding names what was observed,
-what to do instead, and the guiding principle in `ak:context-engineering`. The
+what to do instead, and the guiding principle in `ak-context-engineering`. The
 linter keeps only bounded aggregates in private per-session state, never
 blocks a tool call, and prints no report when it has no findings.
 
@@ -126,6 +126,76 @@ reports this in the install output as part of the narrowed-matcher note. The
 Hook is on by default; set `hooks.privacy-block` to `false` to turn it off, as
 described in [Managing Hook
 preferences](../../../guides/managing-hook-preferences).
+
+### Skip known-safe paths with `.akignore`
+
+A `.akignore` file lists sensitive-looking paths the `privacy-block` Hook skips,
+so you can allow them persistently instead of approving each access or turning
+the whole guard off. The Hook reads up to three files, in this order, and later
+rules win:
+
+1. `<AGENTKIT_HOME>/.akignore` (user scope, `~/.agentkit/.akignore` by default)
+2. `<project>/.akignore`
+3. `<project>/.agentkit/.akignore`
+
+The project is the git root of the session's working directory. Outside a git
+repository nothing is skipped. Rules use
+`.gitignore` syntax and are matched against the path relative to that root,
+after links are resolved. A matching path skips the privacy check, and a `!`
+rule protects a path again. The usual `.gitignore` limit applies: a negation
+cannot re-include a file under a directory that an earlier rule already
+matched.
+
+```text title=".akignore"
+# Local test fixtures that only look like secrets
+fixtures/**/*.pem
+.env.test
+!fixtures/prod/*.pem
+```
+
+User-scope rules apply directly. Project rules arrive with a clone, so they
+skip nothing until you trust that exact content:
+
+1. **The first access is still denied.** On Claude Code and Codex, the approval
+   question names the project `.akignore` files, lists their rules, and offers
+   **Yes, approve and trust**. The trust is offered only when the question can
+   show every rule in full: at most 20 rules, each at most 120 characters.
+   Other runtimes never offer the trust, and neither does a longer rule set, so
+   project rules have no effect there.
+2. **The approved retry records the trust.** AgentKit stores a digest of the
+   project rule files for that project root under the AgentKit home. If the
+   files change between the question and the retry, no trust is recorded.
+3. **Any edit revokes it.** Changing a project `.akignore` file needs a new
+   approval before its rules apply again.
+4. **Every skip is announced.** Each access a trusted project rule opens prints
+   a notice naming the file; on Claude Code it appears as a system message.
+
+A project `!` rule can protect a path that your user rules skip, but project
+rules never skip a path on your behalf without that trust.
+
+Some accesses are never skipped, whatever the rules say:
+
+- a path that resolves outside the project;
+- a path the shell or tool may still rewrite, such as one containing `~`,
+  `$VAR`, `%VAR%`, command substitution, braces, or glob characters;
+- a path with a `..` segment, or with a colon after the drive letter, such as a
+  PowerShell provider path (`FileSystem::.env`) or a stream;
+- a path written with the `APPROVED:` prefix, which keeps the one-time
+  approval flow.
+
+In a shell command, paths are skipped only when the whole command is one
+simple read: `cat`, `head`, `tail`, `less`, `more`, `wc`, `cut`, `bat`, `type`,
+`Get-Content`, or `gc`, followed only by arguments. Operators, pipes,
+redirection, grouping, substitution, comma lists, wildcards, or a `..`
+argument turn the skip off. Any other command, such as `grep -r`, `rg`, `diff`,
+or one that runs after `cd`, keeps the normal approval flow for every
+sensitive path it names. File tools such as Read are matched by their path
+alone.
+
+A `.akignore` that is a symlink, larger than 64 KB, or unreadable adds no
+rules. `.ckignore` is unrelated: it only tunes the scout-block size filter and
+never affects the privacy guard. To turn the whole guard off instead, run
+`ak config prefs set hooks.privacy-block false`.
 
 ## Secret references in tool calls
 

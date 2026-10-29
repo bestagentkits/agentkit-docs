@@ -1,0 +1,253 @@
+---
+title: Nâng cấp từ v2 lên v3
+description: Những gì thay đổi khi chủ sở hữu v1 hoặc v2 chuyển sang AgentKit v3, phần nào tự diễn ra, và các bước nâng cấp CLI cùng các Kit.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Hướng dẫn này dành cho chủ sở hữu Kit AgentKit v1 hoặc v2 khi chuyển sang v3.
+Trang liệt kê những gì thay đổi, phần nào tự diễn ra và phần nào bạn cần làm.
+Để quay lại v2, xem [Rollback về v2](./rolling-back-to-v2).
+
+Có hai loại thay đổi, và chúng được phát hành riêng:
+
+- **CLI `ak` và ứng dụng Desktop.** Có trong các bản binary v3.
+- **Chính sách registry.** Cửa sổ cập nhật, gia hạn và việc ngừng gửi lời mời
+  GitHub thuộc về registry của AgentKit. Chúng có hiệu lực khi registry chạy bản
+  v3. Trước đó CLI hiểu cửa sổ cập nhật nhưng không cửa sổ nào bị áp dụng. Hãy
+  kiểm tra `ak licenses` thay vì đoán trạng thái nào đang áp dụng.
+
+## Tóm tắt
+
+| Thay đổi | Tự diễn ra | Bạn cần làm |
+| --- | --- | --- |
+| [Cửa sổ cập nhật](#cửa-sổ-cập-nhật) | Kit đã cài, CLI và ứng dụng Desktop tiếp tục chạy mãi mãi. Bản cập nhật dừng ở bản mới nhất mà cửa sổ của bạn bao phủ, và `ak update` không bao giờ đưa Kit về bản cũ hơn. | Chạy `ak licenses` để xem cửa sổ của bạn. Gia hạn qua đường dẫn lệnh in ra nếu bạn muốn nhận các bản phát hành sau cửa sổ. |
+| [Kho Skill tuỳ chọn](#kho-skill-tuỳ-chọn) | Không có gì. Cách cài legacy vẫn là mặc định. | Tuỳ chọn: bật bằng `ak update --ssot`. |
+| [Skill dùng chung giữa các Kit](#skill-dùng-chung-giữa-các-kit) | Khi hai Kit cùng phát hành một Skill, Agent, rule, Hook hoặc mục MCP, chúng chuyển giao file cho nhau thay vì chặn bản cập nhật của nhau. | Không cần làm gì. Đọc thông báo nếu một Kit báo đã nhường một file. |
+| [Quy tắc tên file trên Windows](#quy-tắc-tên-file-trên-windows) | AgentKit từ chối những tên Windows không xử lý an toàn được, và từ chối alternate data stream khác `Zone.Identifier` trong cây Skill. | Chỉ khi một lệnh từ chối file: đổi tên file hoặc xoá stream. |
+| [Một tên Skill: `ak-<slug>`](#một-tên-skill-ak-slug) | Kit đã refresh đặt tên mọi Skill là `ak-<slug>`. CLI `ak` và các tuỳ chọn đã lưu vẫn chấp nhận `ak:<slug>`. `ak-ak` được gộp vào `ak-agentkit`. | Gõ `/ak-cook` (Claude Code) hoặc `$ak-cook` (Codex) thay cho `/ak:cook`. Xoá thư mục `ak-ak` còn sót nếu có. |
+| [Ngừng lời mời GitHub](#ngừng-lời-mời-repository-github) | Với registry v3, Kit chỉ đến từ registry của AgentKit. Collaborator hiện có của repository vẫn giữ quyền truy cập. | Cài và cập nhật bằng `ak`, không dùng bản clone GitHub. |
+
+## Các bước nâng cấp
+
+1. Cập nhật CLI. Lệnh thứ hai cập nhật cả ứng dụng Desktop; nếu không có lệnh
+   này, ứng dụng Desktop theo trình cập nhật riêng của nó:
+
+   ```bash
+   ak self-update --channel stable --yes
+   ak self-update --channel stable --include-desktop --yes
+   ```
+
+2. Refresh các Kit. Refresh một project sẽ cập nhật cây `kits/` được theo dõi
+   và mọi runtime đã cài của từng Kit trong project:
+
+   ```bash
+   ak update /path/to/project --yes
+   ```
+
+   Refresh cả các Kit global. Khi không có Kit global nào được cài, lệnh này
+   thoát với mã `2`:
+
+   ```bash
+   ak update --global --yes
+   ```
+
+3. Kiểm tra kết quả:
+
+   ```bash
+   ak versions
+   ak licenses
+   ak doctor --json
+   ```
+
+Mỗi lần cập nhật Kit đều chụp snapshot các file sắp ghi trước khi ghi, nên
+`ak backups list` hiển thị một điểm khôi phục cho mỗi lần chạy.
+
+<Callout type="info">
+  Trước một thay đổi lớn, bạn có thể tạo checkpoint để rollback về bằng
+  `ak backups checkpoint --pre-upgrade`. `ak update --ssot` tự tạo một checkpoint
+  cho bạn. Xem [`ak backups checkpoint`](../reference/cli/backups/checkpoint).
+</Callout>
+
+## Cửa sổ cập nhật
+
+Mua một Kit là có license vĩnh viễn cộng với một cửa sổ cập nhật. Registry quyết
+định tài khoản của bạn được tải những bản phát hành nào; CLI không bao giờ so
+ngày với đồng hồ máy bạn.
+
+- **Quyền sở hữu là vĩnh viễn.** Khi cửa sổ kết thúc, không có gì bị tắt, chặn
+  hay gỡ cài đặt, dù online hay offline. Bạn luôn cài lại được mọi phiên bản mà
+  cửa sổ của bạn bao phủ.
+- **Chủ sở hữu v1 và v2** nhận 12 tháng cập nhật tính từ ngày phát hành v3.0.0.
+  Cho đến khi registry ghi nhận ngày đó, cửa sổ của mọi Kit bạn sở hữu vẫn mở.
+  Một lần mua mới bao phủ 12 tháng kể từ ngày mua.
+- **Bản phát hành được bao phủ.** Sau khi cửa sổ kết thúc, bạn vẫn cài được mọi
+  bản phát hành trong cửa sổ, cùng các bản vá của dòng minor cuối cùng có bản
+  phát hành đầu tiên nằm trong cửa sổ. Bản minor hoặc major mới hơn cần gia hạn.
+- **Không hạ phiên bản.** Một yêu cầu không ghim phiên bản không bao giờ cài bản
+  cũ hơn bản mà biên nhận cài đặt ghi lại. Chỉ `--version` tường minh mới đưa
+  Kit về bản cũ hơn.
+
+`ak licenses` và màn hình License trong Desktop hiển thị cửa sổ của từng Kit,
+dòng bản vá, phiên bản mới nhất được bao phủ, và đường dẫn gia hạn khi cần gia
+hạn. CLI chỉ mở đường dẫn; nó không bao giờ tự thanh toán. `ak self-update` và
+trình cập nhật Desktop không bị cửa sổ cập nhật giới hạn. Để biết kết quả và mã
+thoát chính xác của từng lệnh, xem
+[Cửa sổ cập nhật và gia hạn](./updating#cửa-sổ-cập-nhật-và-gia-hạn).
+
+## Kho Skill tuỳ chọn
+
+v3 thêm một kho Skill định địa chỉ theo nội dung, có journal chịu được sự cố,
+biên nhận cài đặt và bước kiểm tra trước xung đột alias. Kho này **tắt theo mặc
+định**: `ak update` thông thường vẫn giữ cách cài legacy.
+
+### Nâng cấp bằng một lệnh: `ak update --ssot`
+
+`ak update --ssot` chuyển các Skill của Kit bạn đang có vào kho trong một lần
+chạy có hướng dẫn và hoàn tác được, rồi giữ kho cho các lần cập nhật sau.
+`ak update` thông thường không bao giờ bắt đầu lần nâng cấp này; một lệnh
+`ak update --yes` có áp dụng chỉ tiếp tục lần nâng cấp mà `ak update --ssot`
+trước đó bỏ dở.
+
+```bash
+ak update --ssot --dry-run        # kế hoạch và mức sẵn sàng; không ghi gì, không dùng mạng
+ak update --ssot                  # xem trước, rồi xác nhận trong terminal
+ak update --ssot --yes            # áp dụng không cần hỏi
+ak update --ssot --yes --all-projects
+```
+
+Lệnh bao phủ phạm vi global và project hiện tại. `--global` giới hạn ở phạm vi
+global; `--all-projects` thêm mọi project đã đăng ký. Một lần áp dụng chạy theo
+thứ tự:
+
+1. **Kiểm tra trước.** Các điểm chặn dừng lần chạy trước khi ghi bất cứ gì, ví
+   dụ hệ điều hành không được hỗ trợ, AgentKit home không đọc được, journal của
+   kho cần khôi phục thủ công, hoặc một lần rollback về v2 vẫn đang dở. Mỗi điểm
+   chặn có một `code` ổn định, tác động, cách sửa và lệnh thử lại hoặc rollback,
+   cũng có trong phần remediation của lỗi `--json`.
+2. **Checkpoint.** Một checkpoint trước nâng cấp được bảo vệ, gồm AgentKit home,
+   các runtime home và cấu hình agent của project. `--backup-sessions` thêm lịch
+   sử session. Nếu checkpoint thất bại, không có gì khác xảy ra.
+3. **Tiếp nhận.** Kế hoạch `ak skills migrate` của từng phạm vi chạy dưới khoá
+   vòng đời Kit, trong một giao dịch có journal. File được tiếp nhận ngay tại chỗ
+   và không bao giờ bị ghi lại, nên mọi alias của Skill, kể cả dạng `ak:<slug>`,
+   vẫn hoạt động. Một Skill đã sửa, không có trong danh sách, được liên kết hoặc
+   lệch nội dung vẫn là bản cài legacy và được báo là bỏ qua kèm lý do.
+4. **Xác minh.** Một kế hoạch thứ hai phải cho thấy không còn thay đổi nào.
+5. **Biên nhận và commit.** Một biên nhận trong `<agentkit-home>/state/upgrades/`
+   ghi ID checkpoint cùng các Skill đã đổi, không đổi và bị bỏ qua. Chỉ khi đó
+   chế độ kho mới được commit cho các phạm vi ấy.
+
+Sau đó, mỗi phạm vi giữ chế độ riêng. Phạm vi global đã commit chỉ áp dụng cho
+thao tác global. Một project chỉ dùng kho khi chính project đó đã được nâng cấp.
+Một thư mục bên trong project đã nâng cấp, dù bạn chạy lệnh từ đó hay trỏ tới nó
+bằng `--project-dir`, vẫn giữ bản cài legacy cho đến khi bạn chạy
+`ak update --ssot` tại đó. `ak update` thông thường, auto-update chạy nền, ứng
+dụng Desktop và dashboard theo cùng quy tắc theo phạm vi này. Những runtime mà
+kho chưa projection được và các Kit phân phối qua plugin được báo cáo, không
+được chuyển; chúng vẫn chạy như bản cài legacy.
+
+Nếu lần chạy bị gián đoạn, lần `ak update --ssot` tiếp theo (hoặc một lệnh
+`ak update --yes` có áp dụng) sẽ tiếp tục với cùng checkpoint và các phạm vi ban
+đầu. Cờ phạm vi chọn phạm vi khác trong lúc tiếp tục sẽ thoát với mã `2`. Chạy
+lại trên một home đã hoàn tất không thay đổi gì. `ak doctor` báo các phạm vi đã
+commit và lần nâng cấp còn dở trong mục **SSOT upgrade**. Để hoàn tác lần nâng
+cấp, xem [Rollback về v2](./rolling-back-to-v2).
+
+Khi có thể, hãy nâng cấp mọi phạm vi trong một lần chạy (`--all-projects`). Mỗi
+lần chạy tạo checkpoint riêng, và lần chạy sau sẽ chụp một home đã dùng kho, thứ
+mà rollback về v2 không dùng làm nguồn được.
+
+Trên một home chưa từng có trạng thái AgentKit, không có gì để chụp: lần chạy
+không tạo checkpoint, báo `checkpoint.no_prior_state`, và vẫn commit chế độ kho.
+
+Khi kho được bật, `ak kit init` và `ak kit refresh` kiểm tra trước khi thay đổi
+bất cứ gì. Chúng thoát với mã `6` kèm `skill.alias_collision`,
+`ownership.modified` hoặc `target.link_refused` thay vì ghi. Xem
+[`ak update`](../reference/cli/update) và
+[`ak skills migrate`](../reference/cli/skills/migrate).
+
+## Skill dùng chung giữa các Kit
+
+Nhiều Kit có thể cùng phát hành một Skill, Agent, rule, Hook hoặc mục MCP; ví dụ
+Engineer và Marketing dùng chung các Skill lõi. Trước v3, mỗi Kit từ chối cập
+nhật file mà Kit kia ghi nhận, khiến Skill dùng chung bị chặn cập nhật. Giờ đây
+quyền sở hữu được chuyển giao giữa các Kit:
+
+- Kit có hash đã ghi vẫn khớp với nội dung trên đĩa sẽ ghi lại file.
+- Kit thấy nội dung khác mà một Kit anh em ghi nhận sẽ để nguyên file, bỏ quyền
+  của mình và in một thông báo.
+- File bạn đã sửa và file không được theo dõi vẫn được giữ.
+- Gỡ cài đặt và refresh cưỡng bức bảo vệ một đường dẫn khi Kit anh em vẫn ghi
+  nhận nó. Xoá một đường dẫn mà Kit anh em đã cũ còn liệt kê sẽ in cảnh báo, và
+  lần refresh tiếp theo của Kit đó khôi phục file.
+- File runtime Hook của Claude Code mà Kit anh em ghi nhận vẫn bị từ chối an
+  toàn, vì việc đăng ký Hook phụ thuộc vào nó.
+
+Sau khi chuyển giao, file dùng chung mang nội dung của Kit cập nhật sau cùng cho
+đến khi Kit còn lại refresh.
+
+## Quy tắc tên file trên Windows
+
+Trên Windows, AgentKit từ chối một thành phần đường dẫn mà Windows không phân
+giải thành một file thường có đúng tên đó:
+
+- tên chứa `:`, vốn đặt tên cho alternate data stream hoặc ổ đĩa;
+- tên kết thúc bằng dấu chấm hoặc dấu cách, vì Windows tự bỏ chúng; và
+- tên thiết bị dành riêng, có hoặc không có phần mở rộng: `CON`, `PRN`, `AUX`,
+  `NUL`, `CONIN$`, `CONOUT$`, `COM0`–`COM9`, `LPT0`–`LPT9`, cùng các dạng
+  `COM` và `LPT` dùng chữ số mũ.
+
+Một thư mục có sẵn mang tên giống thiết bị, như `AUX`, vẫn dùng làm thư mục cha
+được.
+
+Bước duyệt cây Skill, được kho Skill, `ak skills migrate`, SkillX và personal kit
+dùng, từ chối mọi file hoặc thư mục mang một NTFS data stream có tên
+(`tree.unsafe_path`). Ngoại lệ duy nhất là `Zone.Identifier`, stream
+Mark-of-the-Web mà Windows thêm vào file tải về; nó không bao giờ được đọc hay
+sao chép. Khi một lệnh từ chối stream, hãy liệt kê và xoá nó trong PowerShell:
+
+```powershell
+Get-Item -LiteralPath <file> -Stream *
+Remove-Item -LiteralPath <file> -Stream <stream-name>
+```
+
+## Một tên Skill: `ak-<slug>`
+
+Mỗi Skill của AgentKit giờ có một tên duy nhất trên mọi runtime: `ak-<slug>`. Sau
+khi bạn refresh các Kit:
+
+- Lệnh trong runtime dùng dạng gạch ngang. Trong Claude Code, `/ak-cook` thay cho
+  `/ak:cook`; trong Codex, dùng `$ak-cook`. Runtime đăng ký lệnh từ tên Skill đã
+  cài, nên dạng dấu hai chấm không quay lại.
+- CLI `ak` vẫn chấp nhận dạng dấu hai chấm như alias legacy, ví dụ
+  `ak skills install ak:scout`, và các khoá tuỳ chọn đã lưu dưới dạng
+  `ak:<slug>` vẫn khớp với Skill đã đổi tên.
+- Skill `ak-ak` được gộp vào `ak-agentkit`, nay chứa hướng dẫn và tài liệu tham
+  chiếu lệnh của ak CLI.
+- `ak-advise`, `ak-ask`, `ak-coding-level` và `ak-loop` giờ có thể được model
+  gọi. `ak-coding-level` và `ak-loop` vẫn ghi rõ chúng chỉ chạy khi bạn yêu cầu.
+
+`ak update --global` và `ak kit refresh <kit>` xoá các file `ak-ak` cũ. Lệnh
+`ak update <dir>` ở phạm vi project không dọn dẹp, và refresh giữ lại thư mục
+còn chứa file nó không sở hữu, nên thư mục `ak-ak` có thể còn lại. Hãy xoá thủ
+công; không có gì đọc nó.
+
+## Ngừng lời mời repository GitHub
+
+Với registry v3, Kit chỉ được phân phối qua registry của AgentKit. Một lần mua,
+một seat của team, một quyền admin cấp hoặc một lần thử lại không còn gửi lời
+mời vào repository GitHub. Collaborator hiện có và lời mời đang chờ được giữ
+nguyên, nên họ vẫn có quyền truy cập repository. Hoàn tiền vẫn thu hồi quyền
+truy cập của license đó.
+
+Cài và cập nhật Kit bằng `ak kit init`, `ak kit refresh` và `ak update`. Bản
+checkout GitHub không phải là nguồn cài đặt cho các Kit đã phát hành.
+
+## Xem thêm
+
+- [Rollback về v2](./rolling-back-to-v2)
+- [Cập nhật AgentKit và các Kit](./updating)
+- [`ak update`](../reference/cli/update)
+- [`ak licenses`](../reference/cli/licenses)
+- [`ak backups checkpoint`](../reference/cli/backups/checkpoint)

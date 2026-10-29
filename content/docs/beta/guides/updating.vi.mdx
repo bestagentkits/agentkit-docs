@@ -189,6 +189,13 @@ bằng `ak update --status --ack --json`. Xem
 [tham chiếu `ak update`](../reference/cli/update) và check `auto_update` của
 [`ak doctor`](../reference/cli/doctor) để biết chi tiết.
 
+`AK_NO_AUTO_UPDATE=1` cũng ngăn `ak kit init`, `ak kit refresh` và `ak update`
+theo phạm vi thay thế `ak` để đáp ứng phiên bản CLI tối thiểu của kit: một bản
+release thấp hơn mức đó sẽ dừng trước mọi thay đổi kit và chỉ ra
+`ak self-update --yes` cùng lệnh cần chạy lại. Bản build không có phiên bản
+release (`dev`, hoặc stamp cục bộ như `cert-dev`) không bao giờ bị thay tự động;
+`ak kit init` in một thông báo trên stderr rồi tiếp tục với bản đó.
+
 Lần chạy nền dùng release channel từ `updates.channel`; khoá `auto_update:` chỉ
 chứa lịch chạy và các project đã opt-in. Project có thay đổi chưa commit hoặc có
 agent session đang chạy sẽ không được cập nhật; nó ở trạng thái chờ và được thử
@@ -213,9 +220,20 @@ Việc phát hiện session phụ thuộc vào các event mà runtime gửi tớ
 Kiểm tra git tree sạch vẫn bảo vệ thay đổi chưa commit khi một session không được
 phát hiện.
 
-Trên Windows, lần chạy nền phải tách khỏi job object của terminal. Khi job đó cấm
-breakaway, AgentKit không khởi động lần chạy bên trong job; nó ghi nhận lần chạy
-là `deferred (spawn_in_job)` và thử lại sau.
+Trên Windows, lần chạy nền yêu cầu tách khỏi job object của process gọi. Khi job
+đó cấm breakaway nhưng không kill process khi đóng, như ở một số desktop agent
+host, AgentKit khởi động lần chạy bên trong job, nơi nó tiếp tục chạy sau khi
+lệnh kết thúc. Chỉ khi job vừa cấm breakaway vừa là kill-on-close, AgentKit mới
+bỏ qua lần chạy, vì nó sẽ kết thúc cùng lệnh; AgentKit ghi nhận lần chạy là
+`deferred (spawn_in_job)` và thử lại sau. Lần chạy bên trong job vẫn có thể bị
+dừng nếu host đóng một job kill-on-close bên ngoài hoặc terminate job, giống như
+một lần `ak update` bạn khởi động từ host đó.
+
+Sau `ak rollback --to v2`, lần chạy nền không cài gì trong lúc trạng thái giữ
+rollback còn hiệu lực và ghi `deferred (rollback_hold)`; nó ghi
+`deferred (rollback_state_unreadable)` khi không đọc được journal của rollback.
+Đặt lại lịch không tự áp dụng gì. Xem
+[Rollback về v2](./rolling-back-to-v2#những-gì-bị-giữ-lại-sau-rollback).
 
 ## Xem trước cập nhật Kit global
 
@@ -279,6 +297,40 @@ Refresh tạo snapshot khôi phục, ghi lại output AgentKit hiện tại, và
 vẫn khớp. Lệnh giữ tập Skill được chọn trước đó và giữ nguyên đường dẫn đã sửa,
 không an toàn, là liên kết hoặc được dùng chung. Hãy xem lại màn hình xác nhận và
 tránh dùng `--no-backup`.
+
+## Cửa sổ cập nhật và gia hạn
+
+Bạn sở hữu các phiên bản Kit mình được cấp license và dùng được vĩnh viễn. Cập
+nhật được bao phủ trong 12 tháng, và gia hạn sẽ kéo dài cửa sổ đó. Sau khi cửa
+sổ kết thúc:
+
+- Kit đã cài, CLI và ứng dụng Desktop vẫn hoạt động. Cửa sổ đã kết thúc không
+  bao giờ vô hiệu hóa hay gỡ cài đặt thứ gì, dù online hay offline.
+- Bạn vẫn cài được các bản vá của minor cuối cùng còn được bao phủ, và cài lại
+  bất kỳ phiên bản nào cửa sổ đã bao phủ.
+- Các bản phát hành sau khi cửa sổ kết thúc cần gia hạn.
+
+Registry quyết định tài khoản của bạn được resolve những phiên bản nào, không
+phải đồng hồ máy bạn. Dùng `ak licenses` để xem tình trạng: cửa sổ của từng Kit,
+patch line, phiên bản mới nhất còn được bao phủ, nguồn của quyền cập nhật và
+liên kết gia hạn. Xem [`ak licenses`](../reference/cli/licenses).
+
+Cách mỗi lệnh hoạt động khi phiên bản nằm ngoài cửa sổ:
+
+| Lệnh | Kết quả |
+| --- | --- |
+| `ak update` (không có `--version`) | Cập nhật lên phiên bản mới nhất còn được bao phủ. Nếu registry từ chối Kit, dòng kết quả là `skipped` với `reason: "renewal_required"`, phiên bản đã cài được giữ nguyên và mã thoát là `0`. |
+| `ak update --version X` | Dòng kết quả là `failed` với `reason: "renewal_required"`. Một batch mà mọi lỗi đều là gia hạn thoát `15`. |
+| `ak kit init --version X` / `ak kit refresh --version X` | Không ghi gì và lệnh thoát `15`. Với `--json`, lỗi có `error_code: "renewal_required"` và đối tượng `updates` gồm `kit_id`, `latest_entitled_version`, `updates_through`, `renew_url`. |
+| `ak kit init` / `ak kit refresh` (không có `--version`) | Cài phiên bản mới nhất còn được bao phủ và in một dòng `ak: notice:` trên stderr khi có bản mới hơn cần gia hạn. |
+
+Không lệnh nào hỏi lại, nên script và CI hoạt động giống nhau. `ak self-update`
+và trình cập nhật Desktop dùng kênh phát hành binary có chữ ký, mà cửa sổ cập
+nhật không chặn. Khi offline, AgentKit chỉ dùng lại phiên bản đã xác minh cho
+đúng Kit, runtime và phiên bản; bản sao đã cache không bao giờ làm bản phát hành
+mới hơn khả dụng. Để tiếp tục, mở liên kết gia hạn từ `ak licenses` hoặc từ lỗi,
+gia hạn rồi chạy lại lệnh. Xem
+[Cần gia hạn](../troubleshooting/updates#cần-gia-hạn-khi-cập-nhật-bị-từ-chối).
 
 ## Xác minh cập nhật
 
@@ -362,3 +414,5 @@ hiểu trạng thái hiện tại. Từ chối restore trả mã `3`, backup loc
 ## Xem thêm
 
 - [Cài đặt Kit](./installing-kits)
+- [Nâng cấp từ v2 lên v3](./upgrading-to-v3)
+- [Rollback về v2](./rolling-back-to-v2)

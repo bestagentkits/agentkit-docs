@@ -84,8 +84,29 @@ JSON writes a result envelope to stdout:
 `data.status` is `ok` or `corrupt`; JSON omits the human file count, size, and
 mismatch path. A corrupt snapshot still gets the result envelope on stdout and
 then exits `1`. Failures that occur before a result, such as a missing snapshot,
-use a structured JSON error envelope on stderr. Flag-parse errors can remain
-plain text.
+use a structured JSON error envelope on stderr. With `--json` enabled, unknown or
+invalid flags use the shared JSON stderr error envelope
+(`error_code: validation_failed`, exit `2`). Human mode, including `--json=false`, prints `Usage`.
+
+## Verify a checkpoint
+
+When `<id>` names a checkpoint written by `ak backups checkpoint`, the command
+streams the compressed archive and checks every entry digest, the embedded
+manifest, the key-bound seal, and SQLite integrity. A missing checkpoint key is
+a warning, not a failure: everything except sealed secrets remains restorable.
+
+Human stdout reports:
+
+```text
+[OK] checkpoint <id> verified: <entries> entries, <databases> databases, <secrets> secrets (key <status>)
+```
+
+followed by `[!]` warning lines. `<status>` is `ok`, `missing`, or `none`.
+JSON uses `kind: backups.checkpoint_verify` with `data.id`, `data.ok`,
+`data.entries`, `data.bytes`, `data.databases`, `data.secrets`,
+`data.key_status`, and `data.warnings[]?`. A corrupt or tampered archive is a
+JSON error with `error_code` `security_violation`; an unknown checkpoint ID
+exits `5`.
 
 ## Exit status
 

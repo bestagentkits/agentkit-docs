@@ -1,0 +1,46 @@
+---
+title: "ak skills kit rebase"
+description: "Preview or apply moving a personal kit to a new foundation version"
+generated: true
+---
+
+Three-way merges every overlay of the personal kit from the pinned foundation version onto --to, using the target kits directory (--to-kits-dir, default the foundation directory). Disjoint edits merge; every other change is reported as a review finding with exact diffs. --dry-run writes nothing; with the skill store on it also shows the transaction an apply with the same --scope and --runtime runs (the roots and aliases it changes) and the apply token, which binds the preview, that transaction, the lock generation and, with --proposal, the exact proposal file (agentkit.skill-overlay-proposal/v1). Without --dry-run the rebase is applied only with --plan set to that apply token, re-checked under the lifecycle lock: a clean rebase projects the merged composition like ak skills kit apply, keeping the previous revision for rollback. A rebase that still needs review stops, keeps the running version, and writes AGENTKIT_HOME/state/personal-kits/&lt;name&gt;/conflict-report.json. A proposal that takes upstream content (use-upstream or fork) also needs --yes. The personal kit's own files are never rewritten.
+
+**Effects:** With --dry-run, read-only: reads personal kits, the foundation kits and a proposal file, and writes nothing. Otherwise: Applies without prompting unless the plan needs review; --dry-run prints the plan, its review findings and plan token, and writes nothing. In one journaled transaction under the kit lifecycle lock it writes the composed trees into the skill store under AGENTKIT_HOME, the projected files into each runtime's native skills root (mode 0644, never executable), and the scope's skill lock and receipts, owned by personal:&lt;name&gt;. Never rewrites the personal kit or the foundation kits, and never runs a script. Running sessions may see the new files as soon as the transaction commits. Needs the skill store on (after `ak update --ssot`, or AGENTKIT_SKILL_STORE=1). A stopped rebase writes only its conflict report.
+
+### Usage
+
+```bash
+ak skills kit rebase <name> --to <kit>@<version> (--dry-run | --plan <token>) [flags]
+```
+
+Global flags, output modes, and the base exit codes (`0`–`2`) are shared by every command — see [CLI conventions](../cli-conventions). The sections below list only what is specific to this command.
+
+### Flags
+
+| Flag | Description |
+| --- | --- |
+| `--dry-run` | Preview only; write nothing |
+| `--kits-dir string` | Foundation kits directory (default: $AGENTKIT_KITS_DIR or ./kits) |
+| `--plan string` | Token from --dry-run that approves applying the rebase (with --proposal, its approval token) |
+| `--proposal string` | Proposed resolution file to check, preview or apply |
+| `--runtime strings` | Runtimes of an apply: claude-code, codex (repeatable) |
+| `--scope string` | Lock and skills root scope of an apply: project (default) or global (default "project") |
+| `--to string` | Target foundation as &lt;kit>@&lt;version> |
+| `--to-kits-dir string` | Kits directory that holds the target version (default: --kits-dir) |
+
+### Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| `0` | success, or nothing to change |
+| `1` | command failure, such as a path too long or a recovery that is required |
+| `2` | the skill store disabled, invalid flags or arguments, or a malformed manifest or proposal |
+| `4` | another AgentKit operation holds the kit lifecycle lock |
+| `5` | personal kit, foundation, version, skill or previous revision not found (removing a kit that is not applied changes nothing and exits 0) |
+| `6` | review required, stale plan token, rebase conflict, alias collision (including a legacy kit alias), or an unowned or modified path |
+| `7` | revoked foundation, a link in a target path, or a digest mismatch |
+
+### Related commands
+
+- [`ak skills kit`](./ak_skills_kit) — Preview, apply, rebase and roll back personal kits built on kit skills

@@ -1,0 +1,77 @@
+---
+title: ak skills grants add
+description: Verify one installed skill entrypoint, show its permissions and audit, and record the grant that lets exec run it.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak skills grants add` to allow one entrypoint of an installed skill to run
+through [`ak skills exec`](../exec). Execution never prompts, so this command is
+the only way to grant. It never runs a script or an interpreter.
+
+## Usage
+
+```bash
+ak skills grants add <@publisher/slug@sha256:<hex>> --entrypoint <name> [flags]
+```
+
+Supply exactly one reference pinned by a `sha256` digest.
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--entrypoint <name>` | required | Select the declared entrypoint to grant. |
+| `--project <root>` | Global scope | Limit the grant to one project root. |
+| `--label <text>` | Empty | Attach a label of at most 128 printable characters. |
+| `--container-image <name@sha256:hex>` | Empty | Bind a container image pinned by digest. Give it together with `--container-interpreter`. |
+| `--container-interpreter <path>` | Empty | Absolute interpreter path inside the image. Give it together with `--container-image`. |
+| `--dry-run` | `false` | Show what would be granted without writing. |
+
+AgentKit never pulls the container image. Shared flags are described in
+[CLI conventions](../cli-conventions). `AGENTKIT_SKILL_EXEC_BROKER=1` is
+required.
+
+## What it does
+
+1. Verifies the content-store entry.
+2. Reads the manifest from a read-only copy and binds the interpreter.
+3. Prints the permission summary and an advisory script audit.
+4. Records the grant in `AGENTKIT_HOME/state/exec/grants.json`.
+
+The output states `identity unverified: the store proves only the tree digest,
+not who published it`. When the audit finds risky findings, a warning is also
+written to stderr.
+
+<Callout type="warning">
+  Review the permission summary and audit before you grant. The grant binds the
+  exact tree, entrypoint, capabilities, and interpreter, never expires, and
+  holds no secret. Revoke it with [`ak skills grants revoke`](./revoke).
+</Callout>
+
+An identical grant is a no-op that prints `Already granted as <id>`.
+
+## Output
+
+JSON uses `kind=skills.grants.add` with these fields under `data`:
+
+```text
+grant, key, created, dryRun, identityVerified, summary[], audit
+```
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | The grant was recorded, already existed, or the dry run finished. |
+| `1` | Command failure, such as a busy grants store. |
+| `2` | The broker is disabled, flags are invalid, the manifest is invalid, or the interpreter is unavailable. |
+| `5` | The store entry or entrypoint was not found. |
+| `7` | The store entry failed verification, or the grants file is invalid. |
+
+## Related commands
+
+- [Complete `ak skills grants add` command facts](../cli/ak_skills_grants_add)
+- [List grants](./list)
+- [Revoke grants](./revoke)
+- [Run a granted entrypoint](../exec)

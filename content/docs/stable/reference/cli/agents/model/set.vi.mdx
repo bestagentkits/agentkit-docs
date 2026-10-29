@@ -1,0 +1,87 @@
+---
+title: ak agents model set
+description: Ghim model hoặc reasoning effort của một Agent trong config user hoặc project và áp dụng vào các tệp đã cài do AgentKit sở hữu.
+---
+
+Dùng `ak agents model set` để chọn model mà một Agent chạy. Giá trị được lưu
+trong config của AgentKit nên install, update và refresh đều giữ nguyên.
+
+## Cách dùng
+
+```bash
+ak agents model set <agent> --runtime <runtime> [--model <id>] [--effort <level>] [--scope user|project] [--project <dir>]
+```
+
+Phải có đúng một tên Agent, cùng ít nhất một trong `--model` và `--effort`.
+Không truyền cờ nào thì thoát với mã `2` và không ghi gì.
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--runtime <runtime>` | bắt buộc | Một trong `claude-code`, `codex`, `cursor`, `omp`, `pi`. |
+| `--model <id>` | không có | Model ID của runtime, `inherit` để dùng model của session cha, hoặc alias `@role` trên `omp`. |
+| `--effort <level>` | không có | Reasoning effort, chỉ cho `codex` và `omp`: một từ viết thường như `low`, `medium` hoặc `high`. |
+| `--scope user\|project` | `user` | Config cần ghi: AgentKit home, hoặc `.agentkit/config.yaml` trong project. |
+| `--project <dir>` | config project gần nhất, nếu không có thì thư mục hiện tại | Project có bản cài và config được áp dụng. |
+
+## Lệnh ghi gì
+
+Lệnh ghi `agent_models.<runtime>.agents.<agent>.model` và, với `--effort`,
+`reasoning_effort` vào scope đã chọn. Giá trị project thắng giá trị user với
+bản cài project; bản cài global chỉ đọc config user.
+
+Model ID được kiểm tra theo dạng, không đối chiếu với catalog. Model ID phải là
+một token in được, không chứa khoảng trắng và không bắt đầu bằng ký tự YAML
+hoặc ký tự giống cờ. Model ID của Cursor không được kèm provider. Tên tier như
+`opus` bị từ chối với `codex`, `cursor`, `omp` và `pi`. Alias `@role` của OMP
+phải là một role đã được tài liệu hóa. `--effort` trên `claude-code`, `cursor`
+hoặc `pi` thoát với mã `2` vì các runtime đó mang effort trong model ID.
+
+## Tác động phụ
+
+- Lấy kit lifecycle lock.
+- Sao lưu rồi ghi lại `config.yaml` của scope khi tệp tồn tại. Project scope
+  tạo sẵn `.agentkit/config.yaml` trước khi cần. Nếu một chỉnh sửa sau đó thất
+  bại, config được khôi phục để các chỉnh sửa hoặc cùng thành công hoặc không
+  có gì được ghi.
+- Ghi lại các trường model của mọi tệp đã cài của Agent mà AgentKit vẫn sở hữu
+  model.
+- Tệp bị sửa trong runtime (`drift`) hoặc tệp mà AgentKit không chứng minh được
+  quyền sở hữu được để nguyên và nêu trong cảnh báo. Dùng `apply --yes` hoặc
+  `adopt`.
+- Tệp plugin của Claude Code có hiệu lực sau khi `ak kit refresh` kích hoạt lại
+  plugin; cảnh báo sẽ nói rõ điều này.
+- Khi Agent chưa có tệp đã cài, config vẫn được ghi và cảnh báo nói rằng giá
+  trị sẽ áp dụng khi một Kit cài Agent đó. Đây không phải lỗi.
+
+## Đầu ra
+
+Stdout cho người dùng báo `set <runtime> agent <agent> in <config path>` (hoặc
+config không có gì để đổi), một dòng `updated <path>` cho mỗi tệp được ghi lại,
+rồi đến bảng trạng thái.
+
+JSON thành công dùng:
+
+```text
+schema_version: 1
+kind: agents.model.set
+data.action, data.runtime, data.agent, data.scope
+data.config_path, data.config_changed
+data.backup_paths?, data.applied?
+data.agents[], data.warnings?
+```
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Config đã được ghi hoặc đã khớp sẵn. |
+| `1` | Lệnh thất bại, ví dụ lỗi ghi config. |
+| `2` | Thiếu cả `--model` lẫn `--effort`, tên Agent, model, effort hoặc scope không hợp lệ, runtime hoặc trường không được hỗ trợ, project scope mà không có thư mục project, hoặc thư mục `--project` không tồn tại. |
+| `4` | Một thao tác AgentKit khác đang giữ kit lifecycle lock. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak agents model set`](../cli/ak_agents_model_set)
+- [Chạy trên model của session cha](./inherit)
+- [Xóa một override](./reset)
+- [Chọn model cho subagent](../../../../guides/choosing-subagent-models)

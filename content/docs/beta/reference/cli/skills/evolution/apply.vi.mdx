@@ -1,0 +1,114 @@
+---
+title: ak skills evolution apply
+description: Xem trước một candidate đã ghi, hoặc áp dụng nó như một overlay vào personal kit với rollback record được ghi trước.
+---
+
+Dùng `ak skills evolution apply` để lấy một candidate mà
+[`ak skills improve --candidate`](../cli/ak_skills_improve) đã ghi và đưa nó vào một personal
+kit. Không có `--yes`, lệnh xem trước và không ghi gì. Foundation Kit không bao
+giờ bị sửa, và personal kit không được chiếu vào runtime cũng không được
+publish.
+
+## Cách dùng
+
+```bash
+ak skills evolution apply <candidateId> [--into <name>] [--plan <token>] [--kits-dir <dir>] [--yes] [--dry-run] [--json]
+```
+
+Phải có đúng một reference candidate.
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--into <name>` | Kit đang overlay Skill, nếu không có thì `mine` | Personal kit để áp dụng vào. `mine` được tạo ở lần apply đầu, mở rộng phiên bản Kit của Skill. |
+| `--plan <token>` | Trống | Plan token của bản xem trước đã review. Bắt buộc khi thay đổi cần review. |
+| `--kits-dir <dir>` | `$AGENTKIT_KITS_DIR` hoặc `./kits` | Thư mục foundation kit. |
+| `--yes` | `false` | Áp dụng thay vì xem trước. |
+| `--dry-run` | `false` | Chỉ xem trước; là mặc định khi không có `--yes`. |
+
+Các cờ dùng chung nằm trong [quy ước CLI](../cli-conventions).
+
+## Điều kiện
+
+Áp dụng cần skill store đang bật (sau `ak update --ssot`, hoặc
+`AGENTKIT_SKILL_STORE=1`). Xem trước thì không cần.
+
+## Apply ghi những gì
+
+Candidate được đưa vào dưới dạng personal overlay. Skill dùng chung không bao giờ
+được overlay: nó trở thành một fork cục bộ dưới alias không có tiền tố `ak-`.
+Bản xem trước hiển thị đánh giá được chạy lại, diff, permission delta, các file
+personal kit mà apply sẽ ghi, và phê duyệt còn cần.
+
+Với `--yes`, dưới kit lifecycle lock, lệnh:
+
+1. Ghi `AGENTKIT_HOME/state/skill-evolve/candidates/<id>/rollback.json` trước.
+2. Snapshot personal kit khi một file bị ghi đè.
+3. Ghi manifest và các file overlay dưới `AGENTKIT_HOME/kits/personal/<name>/`
+   trong một transaction có journal.
+4. Cập nhật evaluation slot và apply slot của candidate.
+
+Một lần apply trước của cùng candidate chưa được rollback, kể cả lần bị gián
+đoạn, sẽ từ chối lần apply mới. Base phải vẫn là base mà candidate được ghi
+trên đó; nếu không, apply lỗi `evolve.base_changed`. Personal kit mà các
+overlay, fork hay pin khác của nó không compose được candidate sẽ lỗi
+`evolve.apply_conflict`.
+
+## Phê duyệt
+
+Verdict `regressed` hoặc `blocked` từ chối apply với `evolve.apply_refused`.
+Candidate `improved` áp dụng được chỉ với `--yes` khi đủ các điều kiện sau:
+
+- gain trên các task evidence held-out có bao gồm routing;
+- không có review finding;
+- không có security check nào cần review;
+- evidence không mâu thuẫn giữa các session và không có độ tin cậy thấp;
+- personal kit không giữ overlay nào của Skill được viết tay.
+
+Nếu không, bản xem trước liệt kê lý do và apply còn cần `--plan <token>` từ bản
+xem trước đó. Token gắn phê duyệt với candidate, đánh giá của nó và personal kit
+đúng như lúc xem trước; `--yes` mà không có token khớp sẽ thoát `2` với
+`evolve.approval_required`.
+
+## Đầu ra
+
+Text in `would apply` hoặc `applied` cùng candidate, loại overlay (`overlay`
+hoặc `fork`), thư mục overlay, identity và personal kit, rồi đến đánh giá,
+permission delta, diff, từng thay đổi file, và hoặc `refused: ...` hoặc dòng
+`approve with:` kèm lý do cần review nếu có. Sau khi apply, lệnh in snapshot đã
+lấy và các dòng `next:` trỏ tới `ak skills kit apply <name> --dry-run`,
+`ak skills evolution rollback` và `ak skills kit publish <name> --private` tuỳ
+chọn.
+
+JSON dùng `kind=skills.evolution.apply`:
+
+```text
+schema_version: 1
+kind: skills.evolution.apply
+data: schema (agentkit.skill-evolution-plan/v1), action (apply),
+      status (preview | applied), candidateId, personalKit, created,
+      identity, kind, overlayDir, evaluation, diff[], permissionDelta[],
+      changes[]: path, action
+      approval?: required[], planToken, refused?, reasons[]
+      backup?, next[], sideEffects
+```
+
+`approval` có mặt ở bản xem trước và không có sau khi apply.
+
+## Kết quả và mã thoát
+
+| Mã thoát | Ý nghĩa |
+| --- | --- |
+| `0` | Thành công, kể cả xem trước. |
+| `1` | Không đọc hoặc ghi được candidate store, personal kit hay skill store, hoặc một record không qua xác minh (`store.corrupt`). |
+| `2` | Cờ hoặc argument không hợp lệ, skill store đang tắt, hoặc apply thiếu phê duyệt cần có (`evolve.approval_required`). |
+| `4` | Một thao tác AgentKit khác đang giữ kit lifecycle lock (`evolve.store_busy`). |
+| `5` | Không có candidate đã ghi nào khớp, hoặc không resolve được base của Skill (`evolve.base_unresolved`). |
+| `6` | Base đã đổi kể từ khi ghi candidate (`evolve.base_changed`), đánh giá từ chối apply (`evolve.apply_refused`), hoặc personal kit không giữ đúng những gì apply mong đợi (`evolve.apply_conflict`). |
+| `7` | Không chuẩn bị được redaction hoặc content gate (`evolve.redaction_failed`). |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skills evolution apply`](../cli/ak_skills_evolution_apply)
+- [Hoàn tác một lần apply](../cli/ak_skills_evolution_rollback)
+- [Chạy lại đánh giá](../cli/ak_skills_evolution_evaluate)
+- [Personal kit](../cli/ak_skills_kit)

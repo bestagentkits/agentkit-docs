@@ -13,7 +13,9 @@ Dùng `ak skills remove` để xoá một bản skill đã cài khỏi user Clau
 ak skills remove <kit>/<skill>
 ```
 
-Lệnh không có cờ riêng. Nên dùng canonical reference; shorthand reference `ak:`,
+Xoá `<kit>/<skill>` cục bộ không có cờ riêng; `--dry-run`, `--runtime` và
+`--scope` chỉ áp dụng cho [reference SkillX](#reference-skillx). Nên dùng
+canonical reference; shorthand reference `ak:`,
 `ake:` và `akm:` cũng được chấp nhận.
 
 ## Thứ tự xoá và giới hạn
@@ -27,13 +29,26 @@ Entry `~/.agentkit/cache/<runtime-hash>/` dùng chung được giữ. Nếu nộ
 đã không tồn tại, lệnh trả thành công mà không thử dọn orphan runtime record.
 
 <Callout type="warning">
-  Removal xảy ra ngay. Không có prompt, dry-run, ownership/drift check, backup,
+  Xoá cục bộ xảy ra ngay. Không có prompt, dry-run, ownership/drift check, backup,
   snapshot hoặc rollback. Nếu xoá nội dung thất bại sau khi runtime record đã bị
   xoá, nội dung có thể còn lại mà không có record.
 </Callout>
 
 Để khôi phục, hãy cài lại từ local kits source không đổi. Shared runtime cache
 được giữ có thể được tái sử dụng, nhưng nó không khôi phục nội dung đã xoá.
+
+## Reference SkillX
+
+Khi SkillX đang bật (sau `ak update --ssot`, hoặc `AGENTKIT_SKILLX=1`), argument
+`@publisher/slug` chỉ bỏ reference của bạn tới SkillX package đó. Tệp mà owner khác vẫn giữ sẽ được giữ lại, tệp bạn đã sửa
+được giữ và được báo cáo, và thư mục skill chỉ bị xoá khi đã trống. Thay đổi chạy
+trong một transaction có journal dưới kit lifecycle lock. `--dry-run` xem trước,
+`--runtime` giới hạn vào `claude-code` hoặc `codex` (mặc định: mọi runtime đã ghi
+nhận projection), và `--scope` chọn `project` (mặc định) hoặc `global`.
+
+```bash
+ak skills remove @publisher/review-guardrails --scope global
+```
 
 ## Đầu ra
 
@@ -52,8 +67,12 @@ Xoá destination không tồn tại trả `removed=false`, `not_installed=true` 
 | Mã | Ý nghĩa |
 | --- | --- |
 | `0` | Nội dung đã bị xoá hoặc vốn không tồn tại. |
-| `1` | Xoá runtime record hoặc nội dung thất bại. Argument theo vị trí bị thiếu hoặc thừa hiện cũng dùng đường này. |
-| `2` | Reference hoặc cờ không hợp lệ. |
+| `1` | Xoá runtime record hoặc nội dung thất bại. Argument theo vị trí bị thiếu hoặc thừa hiện cũng dùng đường này. Với SkillX, còn gồm offline mà không có bản đã xác minh, credential bị từ chối, đường dẫn quá dài, hoặc cần recovery. |
+| `2` | Reference hoặc cờ không hợp lệ. Với SkillX, còn gồm SkillX hoặc skill store bị tắt, hay alias đã được dành riêng. |
+| `4` | Chỉ SkillX: một thao tác AgentKit khác đang giữ kit lifecycle lock. |
+| `5` | Chỉ SkillX: không tìm thấy release hoặc không có entitlement. |
+| `6` | Chỉ SkillX: alias bị trùng, đường dẫn không thuộc sở hữu hay đã bị sửa, trạng thái project không được tin cậy, hoặc lock đã đổi trong lúc chạy. |
+| `7` | Chỉ SkillX: release đã bị thu hồi, yank, cách ly hoặc không được tin cậy, đường dẫn target chứa link, hoặc digest không khớp. |
 
 Với reference sai dạng, JSON error envelope hiện có thể ghi `exit_code: 1` trong
 khi process thoát `2`.

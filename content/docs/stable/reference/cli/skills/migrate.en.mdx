@@ -1,0 +1,88 @@
+---
+title: ak skills migrate
+description: Record the kit skills a legacy install wrote into the skill store without writing, moving, or removing any skill file.
+---
+
+Use `ak skills migrate` to adopt kit skill installs that predate the skill
+store. For each alias a kit's legacy record of a runtime and scope lists, when
+every listed file is on disk with its recorded bytes, the files become a store
+entry and the receipt and lock record the kit's reference. Running it again
+changes nothing.
+
+## Usage
+
+```bash
+ak skills migrate [--scope project|global] [--runtime <runtime>] [--dry-run] [--json]
+```
+
+The command accepts no positional arguments and applies without prompting.
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--scope <scope>` | `project` | Scope to migrate: `project` or `global`. |
+| `--runtime <runtime>` | all | Runtimes to migrate: `claude-code`, `codex`. Repeatable. |
+| `--dry-run` | `false` | Print the plan and write nothing. |
+
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+## Requirements
+
+The skill store must be on for the scope: after `ak update --ssot`, or with
+`AGENTKIT_SKILL_STORE=1`. Otherwise the command exits `2` and names the step
+that turns it on.
+
+## What is adopted and what stays legacy
+
+No skill file is written, moved, or removed. An alias stays a legacy install
+and is reported when it has a modified file, a file the record lists but is
+missing, a link, a flat-file skill, or another record listing it with other
+files. Kits whose records list the same files co-own the alias. A file no
+record lists is preserved and left out. A receipt reference whose kit no longer
+records the alias is dropped and its files kept.
+
+## Effects
+
+Before writing, the command snapshots the scope's skill lock, receipts, and
+root registry through the backups subsystem. It then writes the store entries,
+receipts, and lock in one journaled transaction under the kit lifecycle lock.
+An interrupted run is rolled back by the next mutating skills command, and
+legacy records are never changed. A failed migration reports
+`migration.failed`, commits nothing, and names the backup that holds the state
+before it.
+
+## Output
+
+JSON uses `kind=skills.migrate` with the same plan fields as
+[`ak skills sync`](../cli/ak_skills_sync) under `data`:
+
+```text
+operation (migrate), scope, dryRun, applied, changed, planDigest
+lockPath, lockGeneration
+packages[]
+targets[]: runtime, root, rootIdentity, alias, action, projectionDigest,
+           writes, removes, preserved
+warnings[]
+snapshot?
+```
+
+A target `action` is `adopt`, `readopt`, `co-own`, `release`, or
+`unchanged`. `snapshot` names the backup taken before an applied migration.
+An alias that stays legacy appears with a warning that says why.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Success, or nothing to change. |
+| `1` | Offline without a verified copy, a credential was refused, a path was too long, or recovery is required. |
+| `2` | The skill store is disabled, flags or arguments are invalid, or an alias is reserved. |
+| `4` | Another AgentKit operation holds the kit lifecycle lock. |
+| `5` | A release was not found or not entitled. |
+| `6` | Alias collision, an unowned or modified path, untrusted project state, or the lock changed during the run. |
+| `7` | A release is revoked, yanked, quarantined, or untrusted, a link sits in a target path, or a digest mismatched. |
+
+## Related commands
+
+- [Complete `ak skills migrate` command facts](../cli/ak_skills_migrate)
+- [Sync locked skills](../cli/ak_skills_sync)
+- [Install a SkillX release](../cli/ak_skills_install)

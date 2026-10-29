@@ -14,7 +14,9 @@ plugin root.
 ak skills remove <kit>/<skill>
 ```
 
-The command has no command-specific flags. Canonical references are recommended;
+Local `<kit>/<skill>` removal has no command-specific flags; `--dry-run`,
+`--runtime`, and `--scope` apply only to [SkillX references](#skillx-references).
+Canonical references are recommended;
 `ak:`, `ake:`, and `akm:` reference shorthands are accepted.
 
 ## Deletion order and limits
@@ -30,13 +32,27 @@ already absent, the command returns success without trying to clean an orphan
 runtime record.
 
 <Callout type="warning">
-  Removal is immediate. There is no prompt, dry-run, ownership/drift check,
+  Local removal is immediate. There is no prompt, dry-run, ownership/drift check,
   backup, snapshot, or rollback. If content deletion fails after runtime-record
   deletion, the content can remain without its record.
 </Callout>
 
 To recover, reinstall from the unchanged local kits source. Any preserved shared
 runtime cache may be reused, but it does not restore the deleted content.
+
+## SkillX references
+
+With SkillX on (after `ak update --ssot`, or `AGENTKIT_SKILLX=1`), an
+`@publisher/slug` argument drops only your reference to that SkillX package. Files another owner still holds stay, a file
+you changed is preserved and reported, and the skill directory is removed only
+when it is empty. The change runs in one journaled transaction under the kit
+lifecycle lock. `--dry-run` previews it, `--runtime` limits it to `claude-code`
+or `codex` (default: every runtime with a recorded projection), and `--scope`
+selects `project` (default) or `global`.
+
+```bash
+ak skills remove @publisher/review-guardrails --scope global
+```
 
 ## Output
 
@@ -56,8 +72,12 @@ remove.”
 | Exit | Meaning |
 | --- | --- |
 | `0` | Content was removed or was already absent. |
-| `1` | Runtime-record or content deletion failed. Missing or extra positional arguments also currently use this path. |
-| `2` | The reference or flags were invalid. |
+| `1` | Runtime-record or content deletion failed. Missing or extra positional arguments also currently use this path. For SkillX, also offline without a verified copy, a refused credential, a path that is too long, or required recovery. |
+| `2` | The reference or flags were invalid. For SkillX, also SkillX or the skill store is disabled, or the alias is reserved. |
+| `4` | SkillX only: another AgentKit operation holds the kit lifecycle lock. |
+| `5` | SkillX only: the release was not found or is not entitled. |
+| `6` | SkillX only: an alias collision, an unowned or modified path, untrusted project state, or the lock changed during the run. |
+| `7` | SkillX only: the release is revoked, yanked, quarantined, or untrusted, a target path contains a link, or a digest did not match. |
 
 For malformed references, the current JSON error envelope can report
 `exit_code: 1` while the process exits `2`.

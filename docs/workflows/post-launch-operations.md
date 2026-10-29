@@ -82,7 +82,7 @@ dialog and the checks call the same query implementation in
   query must not promote into the top three page groups, and `zeroResults` rows
   that must match nothing. A blanket landing-page boost or an overreaching alias
   fails here even though it would look fine on the positive rows.
-- **Payload** — the four shards share one 22 MiB aggregate budget; every asset
+- **Payload** — the four shards share one 24 MiB aggregate budget; every asset
   still has to stay below Cloudflare's 25 MiB per-file limit, and a shard under
   `api/search/` that is not one of the four required scopes is rejected and
   counted against the budget.
