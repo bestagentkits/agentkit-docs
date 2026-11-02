@@ -17,8 +17,8 @@ export const RELEASE_SHAPE_BASELINE = Object.freeze({
   // catalog guard separately enforces each channel's exact inventory snapshot.
   // The v3.0.0 promotion whole-copied Beta into Stable, so both channels carry
   // the same route set until Beta authors routes ahead of the next promotion.
-  sourceRoutesPerLocaleChannel: { stable: 561, beta: 561 },
-  routesPerLocaleChannel: { stable: 560, beta: 560 },
+  sourceRoutesPerLocaleChannel: { stable: 561, beta: 562 },
+  routesPerLocaleChannel: { stable: 560, beta: 561 },
   reviewedSourceOnlyRoutes: [
     {
       route: 'changelog',
