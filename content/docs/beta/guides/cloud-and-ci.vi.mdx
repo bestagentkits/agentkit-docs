@@ -1,0 +1,172 @@
+---
+title: Dùng AgentKit trên cloud và CI
+description: Đưa Kit tới cloud Agent và job CI, đăng nhập không cần người, cài và cập nhật không tương tác, giữ cố định binary ak và rẽ nhánh theo exit code.
+---
+
+Cloud Agent hay job CI không có người ngồi trước bàn phím, không có trình duyệt,
+và mỗi lần chạy lại có một thư mục home mới. Trang này trình bày hai cách đưa
+Kit vào môi trường như vậy: commit bản cài project scope vào repository, hoặc
+chạy `ak` trong job bằng API key.
+
+## Commit Kit của dự án (không cần `ak`)
+
+Bản cài project scope ghi file gốc của runtime vào repository, ví dụ `./.claude`
+cho Claude Code, và metadata vòng đời vào `./.agentkit`. Commit cả hai:
+
+```bash
+ak kit init engineer --yes
+git add .claude .agentkit
+git commit -m "feat: add the AgentKit engineer kit"
+```
+
+Mọi môi trường clone repository đều thấy ngay các Skill, Agent và Hook: Claude
+Code trên web, một routine chạy theo lịch hay một runner CI. Môi trường đó không
+cần binary `ak`, không cần đăng nhập, không cần secret, và mọi bản clone dùng
+cùng một phiên bản Kit. Khi muốn lên phiên bản mới, refresh Kit trên máy của bạn
+rồi commit kết quả. Hãy bắt đầu từ cách này, trừ khi chính job phải chạy `ak`.
+
+Với runtime và scope khác, xem [Cài đặt Kit](./installing-kits).
+
+## Chạy `ak` trong job
+
+Dùng cách này khi job phải cài Kit lúc chạy, đọc vault hoặc chạy `ak doctor`.
+
+### Cài CLI
+
+```bash
+curl -fsSL https://agentkit.best/install.sh | sh
+```
+
+Mặc định binary nằm ở `~/.local/bin/ak`. Nếu thư mục này chưa có trong `PATH`
+của runner, hãy thêm vào (với GitHub Actions, ghi thêm vào `$GITHUB_PATH`).
+`AK_VERSION` ghim một phiên bản CLI cụ thể và `AK_INSTALL_DIR` đổi thư mục đích;
+xem [Cài đặt](../getting-started/installation).
+
+### Đăng nhập bằng API key
+
+Tạo user API key ở trang tài khoản agentkit.best và lưu nó làm secret của môi
+trường, không bao giờ để trong file của repository. Sau đó dùng một trong hai
+cách giữ key ngoài danh sách tham số tiến trình:
+
+```bash
+printf '%s' "$AK_KEY" | ak login --api-key-stdin --no-interactive
+```
+
+```bash
+# AGENTKIT_API_KEY lấy từ kho secret của môi trường
+ak login --no-interactive
+```
+
+`AGENTKIT_API_KEY` chỉ được đọc khi không có cờ đăng nhập nào khác. Tránh
+`--api-key <key>`: cờ này vẫn chạy, nhưng người dùng khác trên máy và công cụ
+theo dõi tiến trình đều thấy key, và `ak` sẽ in cảnh báo. Email OTP cần terminal
+tương tác nên không chạy được trong CI. License key kích hoạt phiên thiết bị của
+App và không phải credential CLI cho Kit; xem [`ak login`](../reference/cli/login)
+để biết khác biệt.
+
+Key bị từ chối sẽ thoát với mã `1`; với `--json`, lỗi có
+`auth.code: invalid_api_key`. Chưa đăng nhập thành công thì cài Kit từ registry
+sẽ báo lỗi `remote install requires login`.
+
+### Cài và cập nhật không hỏi
+
+Mọi lệnh `ak` đều nhận `--no-interactive`, và `--json` ngầm bật cờ này. Thêm
+`--yes` cho các lệnh sẽ hỏi xác nhận:
+
+```bash
+ak kit init engineer --target claude-code --version <kit-version> --yes --no-interactive
+ak kit refresh engineer --yes --no-interactive
+```
+
+- Ghim `--version` để mỗi lần chạy cài cùng một bản phát hành Kit. Xem phiên bản
+  bạn đang dùng trên máy bằng `ak versions`.
+- `ak update` chạy từ script mà không có `--yes` chỉ xem trước và thoát với mã
+  `3`. Có `--yes`, `ak update` cập nhật binary `ak` trước (khi cần), rồi mới
+  refresh Kit. Khi binary phải giữ cố định, hãy dùng `ak kit init` hoặc
+  `ak kit refresh` với phiên bản đã ghim.
+
+### Giữ cố định binary
+
+Auto-update chạy nền chỉ bật khi ai đó đã bật bằng `ak update --schedule`, và nó
+không bao giờ khởi chạy khi `CI` là `1` hoặc `true`, hay khi `AK_NO_AUTO_UPDATE`
+là `1` hoặc `true`.
+
+`CI` không bao quát thêm một trường hợp. Khi bản phát hành Kit yêu cầu `ak` mới
+hơn bản đang chạy, việc cài Kit sẽ thay binary như một tác dụng phụ.
+`AK_NO_AUTO_UPDATE=1` chặn điều đó: lệnh sẽ báo lỗi và chỉ ra cách sửa là
+`ak self-update --yes`. Đặt biến này trong mọi job ghim CLI:
+
+```bash
+export AK_NO_AUTO_UPDATE=1
+```
+
+### Rẽ nhánh theo exit code, không theo chữ
+
+| Lệnh | Exit | Ý nghĩa |
+| --- | --- | --- |
+| `ak kit init`, `ak update` | `4` | Một thao tác AgentKit khác đang giữ khóa vòng đời; thử lại. |
+| `ak kit init`, `ak update` | `15` | `renewal_required`: registry từ chối bản phát hành nằm ngoài cửa sổ cập nhật của bạn. Các phiên bản đã cài vẫn chạy; lỗi JSON ghi phiên bản mới nhất còn được bao phủ. |
+| `ak update` | `3` | Chỉ xem trước, vì không truyền `--yes`. |
+| `ak doctor` | `0` | Đã chạy xong, kể cả khi có check lỗi, trừ khi bạn truyền `--exit-on-fail`. |
+
+Trang tham khảo của từng lệnh có bảng exit code đầy đủ. `ak doctor --json` báo
+tình trạng chung trong `data.healthy`; thêm `--exit-on-fail` để check lỗi làm job
+thất bại.
+
+## Ví dụ GitHub Actions
+
+```yaml
+name: agentkit-check
+on: [pull_request]
+
+jobs:
+  doctor:
+    runs-on: ubuntu-latest
+    env:
+      AK_NO_AUTO_UPDATE: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ak
+        run: |
+          curl -fsSL https://agentkit.best/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Sign in
+        env:
+          AGENTKIT_API_KEY: ${{ secrets.AGENTKIT_API_KEY }}
+        run: ak login --no-interactive
+      - name: Check the installation
+        run: ak doctor --json --exit-on-fail
+```
+
+Lưu `AGENTKIT_API_KEY` trong Actions secrets của repository. GitHub Actions tự
+đặt `CI=true`; `AK_NO_AUTO_UPDATE` được đặt rõ vì lý do ở trên.
+
+## Cloud Agent chạy theo lịch (routine của Claude Code)
+
+Routine chạy một Agent Claude Code theo lịch trong môi trường cloud có clone
+repository của bạn. Nó không chạy bên trong GitHub Actions.
+
+- Khi Kit của dự án đã được commit, Agent của routine có sẵn các Skill của Kit
+  như `/ak-plan`, `/ak-cook` và `/ak-ship`. Không cần gì thêm.
+- Nếu routine phải chạy `ak`, hãy cài trong setup script của môi trường và cung
+  cấp `AGENTKIT_API_KEY` làm secret của môi trường, giống hệt job CI. Đặt cả
+  `AK_NO_AUTO_UPDATE=1` ở đó.
+
+Các thực hành giúp Agent chạy không giám sát an toàn:
+
+1. **Chạy chế độ dry-run trước.** Cho prompt review, kiểm tra và báo cáo, nhưng
+   không đẩy ref và không ghi status cho tới khi mọi điều kiện đều thỏa.
+2. **Ghi rõ loại bằng chứng.** Check mà routine chạy trên VM của nó là bằng chứng
+   của routine, không phải bằng chứng CI. Báo cáo tách riêng hai loại.
+3. **Giới hạn ai được xác nhận.** Chỉ chấp nhận status của routine từ những tài
+   khoản bạn liệt kê.
+4. **Lấy khóa.** Nếu hai lần chạy chồng nhau, lần sau phải chờ hoặc thoát.
+
+## Checklist
+
+- Commit Kit project scope khi job không cần chạy `ak`.
+- Để API key trong kho secret của môi trường; đăng nhập bằng `--api-key-stdin`
+  hoặc `AGENTKIT_API_KEY`.
+- Truyền `--yes --no-interactive` (hoặc `--json`) cho mọi lệnh `ak`.
+- Ghim Kit bằng `--version` và đặt `AK_NO_AUTO_UPDATE=1`.
+- Rẽ nhánh theo exit code; dùng `ak doctor --exit-on-fail` để chặn job.
