@@ -1,0 +1,91 @@
+---
+title: ak render
+description: Validate và compile Page Spec của AK Render, hoặc chạy compiler dưới dạng MCP server, với đúng phiên bản compiler mà bản phát hành ak của bạn pin.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak render` để chạy compiler AK Render (`@bestagentkits/render`) ở đúng
+phiên bản mà bản phát hành `ak` của bạn pin. Các skill của Kit phát hành cùng
+(`--ak-render` trong preview, plan, explain và brainstorm) ghi cùng phiên bản
+này, nên spec bạn validate thủ công sẽ được compile giống hệt cách skill compile.
+`ak render --help` in ra phiên bản lệnh chạy. Nếu skill đã cài ghi một phiên bản
+khác, hãy chạy lệnh `npx` của skill đó.
+
+`ak render` là một wrapper mỏng: lệnh chạy `npx -y @bestagentkits/render@0.3.0`
+với các argument của bạn. Lệnh không đóng gói Node.js và không viết lại compiler.
+
+## Yêu cầu
+
+- Node.js 20.11 trở lên, có `npx` trong `PATH`.
+- Lần chạy đầu cần truy cập npm registry; các lần sau dùng npm cache.
+
+<Callout type="info">
+  Nếu `ak render --help` báo lệnh không tồn tại, bản `ak` của bạn cũ hơn wrapper
+  này. Hãy chạy trực tiếp package đã pin:
+  `npx -y @bestagentkits/render@0.3.0 validate page.page.yaml --json`.
+</Callout>
+
+## Cách dùng
+
+```bash
+ak render validate <spec.yaml|spec.json|-> [flags]
+ak render build <spec.yaml|spec.json|-> [--out page.html] [flags]
+ak render mcp
+```
+
+| Subcommand | Chạy | Tác động |
+| --- | --- | --- |
+| `validate` | `ak-render validate` | Kiểm tra Page Spec mà không render. Chỉ đọc. |
+| `build` | `ak-render compile` | Compile Page Spec thành một file HTML tự chứa, chạy offline. Ghi vào `--out`, hoặc stdout nếu không có. |
+| `mcp` | `ak-render mcp` | Cung cấp `catalog`, `search-catalog`, `describe`, `recipes`, `recipe`, `validate`, `render` và `themes` dưới dạng MCP tool qua stdio cho tới khi client đóng stdin. |
+
+Truyền `-` làm đường dẫn spec để đọc spec từ stdin.
+
+## Cờ
+
+Mọi argument sau subcommand được chuyển nguyên vẹn cho compiler, nên các cờ của
+compiler đều dùng được: `--json`, và với `build` thêm `--out <file>` và
+`--theme <preset>`. Chạy `npx -y @bestagentkits/render@0.3.0 --help` để xem đầy
+đủ cờ của compiler.
+
+`ak` tự xử lý các cờ `--yes`, `--no-interactive`, `--quiet` và `--verbose` của
+nó và không chuyển tiếp. `--json` được chuyển tiếp, vì compiler là bên ghi
+output JSON. Các argument sau dấu phân tách `--` được chuyển nguyên vẹn.
+`ak render` không bao giờ khởi chạy auto-update nền.
+
+## Ví dụ
+
+```bash
+# Validate và in diagnostic dạng máy đọc được.
+ak render validate plans/report/report.page.yaml --json
+
+# Compile cạnh spec với một theme preset.
+ak render build plans/report/report.page.yaml --out plans/report/report.html --theme editorial
+
+# Đăng ký compiler làm MCP server trong một MCP client.
+ak mcp add ak-render --command ak --arg render --arg mcp
+```
+
+Chạy từ thư mục gốc của project khi project lưu theme preset trong
+`.ak-render/themes/`; compiler chỉ tìm preset trong thư mục làm việc.
+
+## Output và exit code
+
+Output, tài liệu `--json` và exit status đều là của compiler.
+
+| Code | Ý nghĩa |
+| --- | --- |
+| `0` | Spec hợp lệ, trang đã compile, hoặc MCP server thoát bình thường. |
+| `1` | Nếu có diagnostic, spec có lỗi validate: sửa từng diagnostic tại `$.path` của nó rồi validate lại. Nếu không có diagnostic (stdout trống khi dùng `--json`), npx hoặc npm đã lỗi (registry, mạng hoặc cache); hãy đọc stderr và giữ nguyên spec. |
+| `2` | Lỗi cách dùng hoặc input/output, ví dụ spec không đọc được hoặc thiếu đường dẫn spec. |
+| `127` | Không tìm thấy `npx`; hãy cài Node.js 20.11 trở lên. Trên Windows, cũng trả về khi `npx` là batch shim không có `node.exe` và `npx-cli.js` của npm bên cạnh: `ak` không truyền argument qua `cmd.exe`, nên hãy chạy `npx` trực tiếp. |
+
+Khi chính `ak` lỗi (thiếu đường dẫn spec hoặc thiếu `npx`) và bạn truyền
+`--json`, lệnh in JSON error envelope chuẩn của `ak` ra stderr.
+
+## Liên quan
+
+- [`ak mcp`](./mcp) đăng ký MCP server với các coding agent của bạn.
+- [Skill preview](../../kits/engineer/skills/preview) mô tả route HTML AK Render
+  tuỳ chọn.
