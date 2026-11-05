@@ -44,7 +44,9 @@ phiên bản Kit mới nhất từ manifest registry có xác thực (chỉ meta
 hay cài gì). Kết quả được cache trong `~/.agentkit/cache/registry/index.json`
 (dưới `AGENTKIT_HOME` khi được đặt). Mục cache fresh được dùng lại; mục stale
 được giữ làm fallback offline và báo check state `stale`. Cache thiếu, hỏng hoặc
-không đọc được được xem là cache miss.
+không đọc được được xem là cache miss. Mục cache của binary được tách theo từng
+channel, nên pointer bản phát hành đọc từ một channel không bao giờ hiển thị cho
+channel khác.
 
 `--local-only` không gửi request mạng nào và không ghi cache; khi đó mọi dòng
 báo check state `not_checked`. `--remote-only` trả binary identity cùng mảng
@@ -73,7 +75,8 @@ JSON thành công dùng envelope ngoài `kind=versions` (envelope `schema_versio
 
 ```text
 data.schema_version: 2
-data.binary: version, commit, date, latest, check_state, version_state
+data.binary: version, commit, date, latest, channel, channel_source,
+  check_state, version_state
 data.kits[]: kit, runtime, scope, delivery_mode, destination,
   source_version, registry_version, available_version, origin, channel,
   channel_source, required_cli_version, emitted_by_cli, receipt_recorded,
@@ -90,6 +93,22 @@ và trường Kit tuỳ chọn bị thiếu là `null`. Tên trường của phi
 `data.kits[].name` và `version` không còn, nên hãy cập nhật parser đang đọc
 chúng. Lỗi trong chế độ JSON, kể cả lỗi phân tích cờ (mã thoát `2`), kết thúc
 stderr bằng [error envelope](../cli-conventions#output-json) dùng chung.
+
+## Channel của CLI và thứ tự phiên bản
+
+Dòng binary (`cli`) báo channel có pointer bản phát hành cung cấp `latest`, trong
+JSON là `data.binary.channel` và `data.binary.channel_source`, còn trong đầu ra
+cho người đọc là các dòng chi tiết `channel` và `channel_source`. Channel được
+resolve giống cách [`ak self-update`](./self-update) resolve: `updates.channel`
+đã lưu, rồi channel của bản build đang chạy, rồi `stable`. `channel_source` là
+`flag`, `preference`, `binary` hoặc `default`.
+
+Các phiên bản so sánh theo thứ tự ưu tiên SemVer giữa các channel. Bản stable
+`3.0.0` được kiểm tra với pointer beta `3.0.0-beta.41` là `ahead`, vì một bản
+phát hành có thứ hạng cao hơn các bản prerelease của chính nó. Nếu bản build
+mới hơn bản mới nhất trên channel do `updates.channel` chọn và hai channel
+khác nhau, dòng kết quả gợi ý chạy
+`ak config prefs set updates.channel <channel>` để theo channel của bản build.
 
 ## Kết quả và mã thoát
 
