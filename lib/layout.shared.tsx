@@ -1,4 +1,4 @@
-import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
+import { resolveLinkItems, type BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
 import {
   AccessibleFullSearchTrigger,
   AccessibleSearchTrigger,
@@ -37,6 +37,11 @@ export function baseOptions(locale: string): BaseLayoutProps {
       },
       themeSwitch: AccessibleThemeSwitch,
     },
-    githubUrl: `https://github.com/${gitConfig.user}/${gitConfig.repo}`,
+    links: resolveLinkItems({
+      githubUrl: `https://github.com/${gitConfig.user}/${gitConfig.repo}`,
+    }).map((link) => link.type === 'icon' ? {
+      ...link,
+      icon: <span aria-hidden="true" className="contents">{link.icon}</span>,
+    } : link),
   };
 }
