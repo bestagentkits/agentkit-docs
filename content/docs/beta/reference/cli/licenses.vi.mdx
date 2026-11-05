@@ -35,8 +35,9 @@ ak login --api-key ak_live_... --no-interactive
 ak licenses
 ```
 
-Không có phiên đã lưu vẫn là trạng thái thành công: lệnh không gửi request qua
-mạng, in `not logged in` và thoát `0`. Khi có phiên, lệnh kiểm tra registry của
+Khi không có phiên đã lưu, lệnh không gửi request qua mạng, in
+``not logged in; run `ak login` to sign in, or `ak login --license-key <key>`
+for an AgentKit App license`` và thoát `1`. Khi có phiên, lệnh kiểm tra registry của
 phiên, yêu cầu grant hiện tại và có thể xoay hoặc mint lại credential CLI hết
 hạn một lần. Việc gia hạn thành công sẽ ghi lại tệp phiên.
 
@@ -45,8 +46,11 @@ không kích hoạt, mua, revoke hay cài Kit.
 
 ## Đầu ra và luồng
 
-Stdout dành cho người dùng hiện gồm email tài khoản, rồi từng grant
-`kit (status)`. Dù phần trợ giúp tập trung vào Kit, lệnh dùng cùng view model với
+Stdout dành cho người dùng bắt đầu bằng `[OK] logged in as <email>`, rồi từng
+grant `kit (status)`. Khi không biết email, dòng này nêu phương thức đăng nhập
+(`logged in with a license key`, `logged in with an API key` hoặc `logged in by
+email`); danh sách grant rỗng in `no licensed kits`. Email lấy từ email đã ghi
+lúc đăng nhập. Dù phần trợ giúp tập trung vào Kit, lệnh dùng cùng view model với
 `ak whoami`.
 
 JSON cũng chủ đích dùng chung `kind=auth.whoami`, không dùng kind
@@ -67,8 +71,9 @@ JSON cũng chủ đích dùng chung `kind=auth.whoami`, không dùng kind
 }
 ```
 
-Khi chưa xác thực, các trường tài khoản và license tuỳ chọn bị lược bỏ. Lỗi
-runtime, registry và session dùng stderr cùng error envelope JSON dùng chung.
+Khi không có phiên đã lưu, `--json` in error envelope chung trên stderr với
+`auth.reason: "not_logged_in"`, `error_code: "unknown"` và `exit_code: 1`; stdout
+để trống. Lỗi runtime, registry và session dùng cùng error envelope trên stderr.
 Khi bật `--json`, cờ không xác định hoặc không hợp lệ dùng JSON error envelope
 chung trên stderr (`error_code: validation_failed`, mã thoát `2`). Chế độ human,
 kể cả `--json=false`, in `Usage`.
@@ -111,8 +116,8 @@ hóa Kit đã cài. Xem [Cửa sổ cập nhật và gia hạn](../../guides/upd
 
 | Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
 | --- | --- | --- |
-| `0` | Query hoàn tất, bao gồm trạng thái chưa xác thực hoặc danh sách grant rỗng. | Kiểm tra `data.authenticated`, rồi `licenses[].kitId` và `status` tương ứng. |
-| `1` | Session store lỗi, registry mismatch, gia hạn thất bại hoặc grant request trực tiếp thất bại. | Xác thực lại với registry dự định dùng rồi thử lại. |
+| `0` | Query hoàn tất với phiên đã đăng nhập, kể cả danh sách grant rỗng. | Kiểm tra `licenses[].kitId` và `status` tương ứng. |
+| `1` | Không có phiên đã lưu, session store lỗi, registry mismatch, gia hạn thất bại hoặc grant request trực tiếp thất bại. | Chạy `ak login` (hoặc `ak login --license-key <key>`), hoặc xác thực lại với registry dự định dùng rồi thử lại. |
 | `2` | Không parse được cờ. | Sửa cách gọi. |
 
 Lệnh không có preview, apply, force, backup hay rollback. Gia hạn credential là

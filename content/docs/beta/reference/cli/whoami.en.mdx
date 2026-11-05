@@ -31,8 +31,9 @@ The command first reads the preferred session from
 `~/.agentkit/auth/session.json` (`AGENTKIT_HOME` changes the base directory).
 The CLI slot takes precedence over the App slot.
 
-- With no stored session, it performs no registry request, reports
-  unauthenticated state, and exits `0`.
+- With no stored session, it performs no registry request, prints
+  ``not logged in; run `ak login` to sign in, or `ak login --license-key <key>`
+  for an AgentKit App license``, and exits `1`.
 - With a stored session, it rejects a registry mismatch before making a request.
 - With a matching session, it requests live entitlements. There is no
   entitlement-cache-only mode.
@@ -56,8 +57,12 @@ mismatch check.
 
 ## Output and streams
 
-Human output on stdout reports either `not logged in` or the account email plus
-one `kit (status)` line per grant.
+Human output on stdout reports `[OK] logged in as <email>` plus one
+`kit (status)` line per grant. When no email is known, the line names the
+sign-in method instead (`logged in with a license key`, `logged in with an API
+key`, or `logged in by email`). An empty grant list prints `no licensed kits`.
+The email falls back to the one recorded at sign-in, because the registry's
+entitlements response carries none.
 
 JSON success uses `kind=auth.whoami`:
 
@@ -76,9 +81,11 @@ JSON success uses `kind=auth.whoami`:
 }
 ```
 
-When unauthenticated, `data` contains only `authenticated: false`; optional
-account and license fields are omitted. Runtime, registry, and session errors
-use stderr and the shared JSON error envelope. With `--json` enabled, unknown or
+With no stored session, the command writes no success document. With `--json`,
+it prints the shared error envelope on stderr with `auth.reason:
+"not_logged_in"`, `error_code: "unknown"`, and `exit_code: 1`; stdout stays
+empty, so `data.authenticated: false` is never emitted. Runtime, registry, and
+session errors use the same stderr envelope. With `--json` enabled, unknown or
 invalid flags use the shared JSON stderr error envelope
 (`error_code: validation_failed`, exit `2`). Human mode, including `--json=false`, prints `Usage`.
 
@@ -86,8 +93,8 @@ invalid flags use the shared JSON stderr error envelope
 
 | Exit | Meaning | Safe next step |
 | --- | --- | --- |
-| `0` | The query completed, including the unauthenticated state. | Inspect `data.authenticated`; do not treat exit `0` alone as proof of login. |
-| `1` | The session store failed, registries mismatched, renewal failed, or the live entitlement request failed. | Correct the registry or run a fresh `ak login`, then retry. |
+| `0` | The query completed and a session is signed in. | Read the account and `licenses[]`. |
+| `1` | No session is stored, the session store failed, registries mismatched, renewal failed, or the live entitlement request failed. | Run `ak login` (or `ak login --license-key <key>` for an App license), correct the registry, then retry. |
 | `2` | A flag could not be parsed. | Correct the invocation. |
 
 The command has no preview, apply, force, backup, or rollback path. Its only
