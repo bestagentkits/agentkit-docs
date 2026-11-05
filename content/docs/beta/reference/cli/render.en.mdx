@@ -1,0 +1,93 @@
+---
+title: ak render
+description: Validate and compile AK Render Page Specs, or serve the compiler over MCP, with the exact compiler version your ak release pins.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak render` to run the AK Render compiler (`@bestagentkits/render`) at the
+exact version your `ak` release pins. The kit skills released alongside it
+(`--ak-render` in preview, plan, explain and brainstorm) name the same version,
+so a spec you validate by hand compiles the way the skill compiles it.
+`ak render --help` prints the version it runs. If an installed skill names a
+different version, run that skill's `npx` command instead.
+
+`ak render` is a thin wrapper: it runs `npx -y @bestagentkits/render@0.3.0`
+with your arguments. It does not bundle Node.js or reimplement the compiler.
+
+## Requirements
+
+- Node.js 20.11 or newer, with `npx` on `PATH`.
+- Network access to the npm registry on the first run; later runs use the npm
+  cache.
+
+<Callout type="info">
+  If `ak render --help` reports an unknown command, your `ak` predates the
+  wrapper. Run the pinned package directly instead:
+  `npx -y @bestagentkits/render@0.3.0 validate page.page.yaml --json`.
+</Callout>
+
+## Usage
+
+```bash
+ak render validate <spec.yaml|spec.json|-> [flags]
+ak render build <spec.yaml|spec.json|-> [--out page.html] [flags]
+ak render mcp
+```
+
+| Subcommand | Runs | Effect |
+| --- | --- | --- |
+| `validate` | `ak-render validate` | Checks a Page Spec without rendering it. Read-only. |
+| `build` | `ak-render compile` | Compiles a Page Spec to one self-contained, offline HTML file. Writes `--out`, or stdout without it. |
+| `mcp` | `ak-render mcp` | Serves `catalog`, `search-catalog`, `describe`, `recipes`, `recipe`, `validate`, `render` and `themes` as MCP tools over stdio until the client closes stdin. |
+
+Pass `-` as the spec path to read the spec from stdin.
+
+## Flags
+
+Every argument after the subcommand goes to the compiler unchanged, so the
+compiler's own flags apply: `--json`, and for `build` also `--out <file>` and
+`--theme <preset>`. Run `npx -y @bestagentkits/render@0.3.0 --help` for the
+full compiler flag list.
+
+`ak` consumes its own `--yes`, `--no-interactive`, `--quiet` and `--verbose`
+flags and does not forward them. `--json` is forwarded, because the compiler
+writes the JSON output. Arguments after a `--` separator are forwarded
+verbatim. `ak render` never starts a background auto-update.
+
+## Examples
+
+```bash
+# Validate and print machine-readable diagnostics.
+ak render validate plans/report/report.page.yaml --json
+
+# Compile beside the spec with a theme preset.
+ak render build plans/report/report.page.yaml --out plans/report/report.html --theme editorial
+
+# Register the compiler as an MCP server in an MCP client.
+ak mcp add ak-render --command ak --arg render --arg mcp
+```
+
+Run from the project root when the project keeps theme presets in
+`.ak-render/themes/`; the compiler discovers presets under the working
+directory.
+
+## Output and exit codes
+
+Output, `--json` documents and exit status are the compiler's own.
+
+| Code | Meaning |
+| --- | --- |
+| `0` | The spec is valid, the page compiled, or the MCP server exited cleanly. |
+| `1` | With diagnostics, the spec has validation errors: fix each diagnostic at its `$.path`, then validate again. Without diagnostics (empty stdout under `--json`), npx or npm failed (registry, network or cache); read stderr and leave the spec alone. |
+| `2` | Usage or input/output error, such as an unreadable spec or a missing spec path. |
+| `127` | `npx` was not found; install Node.js 20.11 or newer. On Windows, also returned when `npx` is a batch shim without `node.exe` and npm's `npx-cli.js` beside it: `ak` does not pass arguments through `cmd.exe`, so run `npx` directly. |
+
+When `ak` itself fails (a missing spec path or a missing `npx`) and you passed
+`--json`, it prints the standard `ak` JSON error envelope to stderr.
+
+## Related
+
+- [`ak mcp`](./mcp) registers MCP servers with your coding agents.
+- The [preview skill](../../kits/engineer/skills/preview) describes the opt-in
+  AK Render HTML route.

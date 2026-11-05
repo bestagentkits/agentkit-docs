@@ -1,0 +1,176 @@
+---
+title: Using AgentKit in the cloud and CI
+description: Give cloud agents and CI jobs your kit, sign in without a person, install and update non-interactively, keep the ak binary pinned, and branch on exit codes.
+---
+
+A cloud agent or CI job has no person at the keyboard, no browser, and a fresh
+home directory on every run. This page covers the two ways to give such an
+environment your kit: commit the project-scope install to the repository, or
+run `ak` in the job with an API key.
+
+## Commit the project kit (no `ak` needed)
+
+A project-scope install writes runtime-native files into the repository, for
+example `./.claude` for Claude Code, and lifecycle metadata into `./.agentkit`.
+Commit both:
+
+```bash
+ak kit init engineer --yes
+git add .claude .agentkit
+git commit -m "feat: add the AgentKit engineer kit"
+```
+
+Any environment that clones the repository sees the Skills, Agents, and Hooks
+immediately: Claude Code on the web, a scheduled routine, or a CI runner. It
+needs no `ak` binary, no login, and no secret, and every clone uses the same
+kit version. Refresh the kit on your own machine and commit the result when you
+want a newer version. Start here unless the job itself must run `ak`.
+
+For other runtimes and scopes, see [Installing kits](./installing-kits).
+
+## Run `ak` in a job
+
+Use this when the job must install a kit at run time, read the vault, or run
+`ak doctor`.
+
+### Install the CLI
+
+```bash
+curl -fsSL https://agentkit.best/install.sh | sh
+```
+
+The binary lands in `~/.local/bin/ak` by default. If that directory is not on
+`PATH` in your runner, add it (in GitHub Actions, append it to `$GITHUB_PATH`).
+`AK_VERSION` pins an exact CLI version and `AK_INSTALL_DIR` changes the
+destination; see [Installation](../getting-started/installation).
+
+### Sign in with an API key
+
+Create a user API key on your agentkit.best account page and store it as a
+secret of the environment, never in a file in the repository. Then use one of
+the two methods that keep the key out of the process argument list:
+
+```bash
+printf '%s' "$AK_KEY" | ak login --api-key-stdin --no-interactive
+```
+
+```bash
+# AGENTKIT_API_KEY comes from the environment's secret store
+ak login --no-interactive
+```
+
+`AGENTKIT_API_KEY` is read only when no other sign-in flag is given. Avoid
+`--api-key <key>`: it works, but the key is visible to other local users and
+process monitors, and `ak` prints a warning. Email OTP needs an interactive
+terminal and cannot run in CI. A license key activates an App device session
+and is not the CLI credential for a Kit; see
+[`ak login`](../reference/cli/login) for the difference.
+
+A rejected key exits `1`; with `--json` the error carries
+`auth.code: invalid_api_key`. Without a successful login, a remote kit install
+fails with `remote install requires login`.
+
+### Install and update without prompts
+
+Every `ak` command accepts `--no-interactive`, and `--json` implies it. Add
+`--yes` to commands that would otherwise ask for confirmation:
+
+```bash
+ak kit init engineer --target claude-code --version <kit-version> --yes --no-interactive
+ak kit refresh engineer --yes --no-interactive
+```
+
+- Pin `--version` so each run installs the same kit release. Find the version
+  you use locally with `ak versions`.
+- A scripted `ak update` without `--yes` only previews and exits `3`. With
+  `--yes`, `ak update` first updates the `ak` binary when needed, then refreshes
+  kits. Prefer `ak kit init` or `ak kit refresh` with a pinned version when the
+  binary must stay fixed.
+
+### Keep the binary pinned
+
+Background auto-update is off unless someone enabled it with
+`ak update --schedule`, and it never starts when `CI` is `1` or `true` or when
+`AK_NO_AUTO_UPDATE` is `1` or `true`.
+
+`CI` does not cover one more case. When a kit release requires a newer `ak`
+than the one running, a kit install replaces the binary as a side effect.
+`AK_NO_AUTO_UPDATE=1` stops that: the command fails instead and names
+`ak self-update --yes` as the fix. Set it in every job that pins the CLI:
+
+```bash
+export AK_NO_AUTO_UPDATE=1
+```
+
+### Branch on exit codes, not text
+
+| Command | Exit | Meaning |
+| --- | --- | --- |
+| `ak kit init`, `ak update` | `4` | Another AgentKit operation holds the lifecycle lock; retry. |
+| `ak kit init`, `ak update` | `15` | `renewal_required`: the registry refused a release your update window does not cover. Installed versions keep working; the JSON error names the latest covered version. |
+| `ak update` | `3` | Preview only, because `--yes` was not passed. |
+| `ak doctor` | `0` | Completed, even when a check fails, unless you pass `--exit-on-fail`. |
+
+Each command's reference page lists its full exit table. `ak doctor --json`
+reports overall health in `data.healthy`; add `--exit-on-fail` to make a failed
+check fail the job.
+
+## GitHub Actions example
+
+```yaml
+name: agentkit-check
+on: [pull_request]
+
+jobs:
+  doctor:
+    runs-on: ubuntu-latest
+    env:
+      AK_NO_AUTO_UPDATE: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ak
+        run: |
+          curl -fsSL https://agentkit.best/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Sign in
+        env:
+          AGENTKIT_API_KEY: ${{ secrets.AGENTKIT_API_KEY }}
+        run: ak login --no-interactive
+      - name: Check the installation
+        run: ak doctor --json --exit-on-fail
+```
+
+Store `AGENTKIT_API_KEY` under the repository's Actions secrets. GitHub Actions
+sets `CI=true` itself; `AK_NO_AUTO_UPDATE` is set explicitly for the reason
+above.
+
+## Scheduled cloud agents (Claude Code routines)
+
+A routine runs a Claude Code agent on a schedule in a cloud environment that
+clones your repository. It does not run inside GitHub Actions.
+
+- With the project kit committed, the routine's agent already has the kit's
+  Skills, such as `/ak-plan`, `/ak-cook`, and `/ak-ship`. Nothing else is
+  needed.
+- If the routine must run `ak`, install it in the environment's setup script
+  and supply `AGENTKIT_API_KEY` as an environment secret, exactly as in a CI
+  job. Set `AK_NO_AUTO_UPDATE=1` there too.
+
+Practices that make an unattended agent safe to leave running:
+
+1. **Run in a dry-run mode first.** Have the prompt review, verify, and report,
+   but push no refs and post no statuses until every precondition holds.
+2. **Label the evidence.** A check the routine ran on its own VM is the
+   routine's evidence, not CI evidence. Report them separately.
+3. **Restrict who can attest.** Accept a routine's status only from the
+   accounts you list.
+4. **Take a lock.** If two runs overlap, the later one waits or exits.
+
+## Checklist
+
+- Commit the project-scope kit when the job does not need to run `ak`.
+- Keep the API key in the environment's secret store; sign in with
+  `--api-key-stdin` or `AGENTKIT_API_KEY`.
+- Pass `--yes --no-interactive` (or `--json`) to every `ak` command.
+- Pin the kit with `--version` and set `AK_NO_AUTO_UPDATE=1`.
+- Branch on exit codes; use `ak doctor --exit-on-fail` to gate a job.

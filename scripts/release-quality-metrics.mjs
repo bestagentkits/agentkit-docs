@@ -44,8 +44,9 @@ export const RELEASE_QUALITY_BASELINE = Object.freeze({
     // Counts follow each channel's reviewed route inventory. Equal Kit artifact
     // snapshots require equal Kit route coverage across Stable and Beta. The
     // v3.0.0 promotion whole-copied Beta into Stable, so both shards index the
-    // same pages until Beta authors pages ahead of the next promotion.
-    searchPagesPerLocaleChannel: { stable: 559, beta: 559 },
+    // same pages until Beta authors pages ahead of the next promotion. Beta
+    // indexes guides/cloud-and-ci ahead of the next promotion.
+    searchPagesPerLocaleChannel: { stable: 559, beta: 561 },
     // Pages outside every channel (the unlisted `_showcase` visual QA page) are
     // real site routes but never search results: each shard must contain only
     // the pages served under its own locale/channel prefix.
