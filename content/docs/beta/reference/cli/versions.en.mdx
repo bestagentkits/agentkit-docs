@@ -45,7 +45,8 @@ resolves the latest kit versions from the authenticated registry manifest
 `~/.agentkit/cache/registry/index.json` (under `AGENTKIT_HOME` when set). A
 fresh cache entry is reused; a stale one is kept as an offline fallback and
 reported with check state `stale`. Missing, corrupt, or unreadable cache data
-is treated as a miss.
+is treated as a miss. The cache entry for the binary is scoped per channel, so a
+release pointer read on one channel is never shown for another.
 
 `--local-only` makes zero network requests and writes no cache; every row then
 reports check state `not_checked`. `--remote-only` returns binary identity and
@@ -74,7 +75,8 @@ JSON success uses an outer `kind=versions` envelope (envelope `schema_version`
 
 ```text
 data.schema_version: 2
-data.binary: version, commit, date, latest, check_state, version_state
+data.binary: version, commit, date, latest, channel, channel_source,
+  check_state, version_state
 data.kits[]: kit, runtime, scope, delivery_mode, destination,
   source_version, registry_version, available_version, origin, channel,
   channel_source, required_cli_version, emitted_by_cli, receipt_recorded,
@@ -91,6 +93,21 @@ when empty, and missing optional kit fields are `null`. Version 1 field names
 such as `data.kits[].name` and `version` are gone, so update parsers that read
 them. JSON-mode failures, including flag-parse errors (exit `2`), end stderr
 with the shared [error envelope](../cli-conventions#json-output).
+
+## CLI channel and version order
+
+The binary (`cli`) row reports the channel whose release pointer supplied
+`latest`, in JSON as `data.binary.channel` and `data.binary.channel_source`, and
+as `channel` and `channel_source` detail lines in human output. The channel is
+resolved the way [`ak self-update`](./self-update) resolves it: the stored
+`updates.channel`, then the running build's channel, then `stable`.
+`channel_source` is `flag`, `preference`, `binary`, or `default`.
+
+Versions compare by SemVer precedence across channels. A stable `3.0.0` checked
+against the beta pointer `3.0.0-beta.41` is `ahead`, because a release outranks
+its own prereleases. When a stored `updates.channel` points at another channel
+than the build belongs to, the human row adds a note that names
+`ak config prefs set updates.channel <channel>` to change it.
 
 ## Exit status
 
