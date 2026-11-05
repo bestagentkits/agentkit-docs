@@ -222,7 +222,9 @@ gọi đã thực thi, chẳng hạn transcript. Hãy coi giá trị đã giải
 trên host và rotate khi cần.
 
 Claude Code và Grok đăng ký Hook cho `Bash|PowerShell|WebFetch`, còn Codex thu
-hẹp thành `Bash`. Hỗ trợ Cursor cho Hook này chưa được xác lập trong bản phát hành này.
+hẹp thành `Bash`. Codex không thể hỏi trước một lệnh gọi, nên tại đó Hook từ chối
+tham chiếu cho đến khi `AGENTKIT_SECRETS_INJECT_AUTO_ALLOW=1` được đặt trong môi
+trường khởi chạy Codex. Hỗ trợ Cursor cho Hook này chưa được xác lập trong bản phát hành này.
 
 ## Liveness cho cập nhật nền tự động
 
@@ -303,6 +305,16 @@ Lời nhắc plan chỉ được export trên wildcard `Stop`, không phải `Su
 Khi không có plan đang hoạt động, hook trả mã `0` với stdout rỗng. Khi phù hợp,
 hook emit JSON chỉ với success field hợp lệ, có dạng
 `{"continue":true,"systemMessage":"..."}`, và luôn fail-open.
+
+### Quyết định chặn trên Codex
+
+Trên Codex, Hook bảo vệ khi chặn (privacy, scout, context firewall, tham chiếu
+secret và hard block của simplify gate) trả quyết định dưới dạng JSON trên
+stdout và thoát với mã `0`: `permissionDecision` là `deny` cho `PreToolUse`,
+hoặc `decision` là `block` cho `UserPromptSubmit`, kèm lý do. Claude Code vẫn
+dùng exit code `2` với lý do trên stderr. Trên Windows, Codex mặc định chạy
+Hook qua PowerShell, vốn đổi exit code `2` thành `1`, và Codex không chặn khi
+Hook thất bại. Quyết định JSON chặn được dưới mọi shell.
 
 ### Hỗ trợ chạy Hook trên Windows
 
