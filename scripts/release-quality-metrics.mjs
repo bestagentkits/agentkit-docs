@@ -33,8 +33,8 @@ export const RELEASE_QUALITY_BASELINE = Object.freeze({
   locales: ['en', 'vi'],
   deterministic: {
     outputBytes: 3_047_146_912,
-    // Preserve the previous per-route allowance as coverage grows 411 -> 449 -> 456 -> 481 -> 482 -> 485 -> 517 -> 541 -> 546 -> 578 -> 582 -> 653.
-    outputBudgetBytes: 4_560_500_540,
+    // Preserve the previous per-route allowance as coverage grows 411 -> 449 -> 456 -> 481 -> 482 -> 485 -> 517 -> 541 -> 546 -> 578 -> 582 -> 653 -> 672.
+    outputBudgetBytes: 4_693_195_043,
     fileCount: 23_584,
     // Grows with the same per-route file allowance as the 485 -> 517 step.
     fileCountBudget: 31_696,
