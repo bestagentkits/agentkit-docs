@@ -161,6 +161,18 @@ test('rewrites nested, legacy flat, and generated hrefs within the current chann
   );
 });
 
+test('leaves nested relative CLI links to ordinary relative resolution', () => {
+  const pages = channels.flatMap((channel) => inventory(channel, 'en'));
+  for (const [href, parentPath] of [
+    ['./alias/index', 'beta/reference/cli/secrets/index.en.mdx'],
+    ['./recovery/index', 'beta/reference/cli/secrets/index.en.mdx'],
+    ['./link/index', 'beta/reference/cli/skills/index.en.mdx'],
+    ['./features/list', 'beta/reference/cli/index.en.mdx'],
+  ]) {
+    assert.equal(resolveCliReferenceHref(href, pages, parentPath), undefined, href);
+  }
+});
+
 test('rebases non-CLI relatives from the legacy flat authored directory', () => {
   assert.equal(
     legacyCliSamplesParentPath('beta/reference/cli/kit/install.en.mdx'),
