@@ -21,6 +21,8 @@ and explicitly authorized live streaming.
 - You need HLS or DASH files from a local source.
 - You need local AI background removal and accept a model download.
 - You want to inspect media properties before selecting output settings.
+- You need a web video compressed with a verified before/after receipt, or a
+  read-only audit of how a site serves its videos.
 
 ### Choose another workflow when
 
@@ -90,7 +92,8 @@ $ak-media-processing "Inspect ./media/demo.mov, create ./artifacts/demo-web.mp4 
 | Task | Tool or helper | Important effect |
 | --- | --- | --- |
 | Video or audio conversion | FFmpeg or bundled `media_convert.py` | Re-encoding changes quality; stream copy is only valid when container and codecs are compatible |
-| Video size optimization | Bundled `video_optimize.py` | Can lower resolution, frame rate, audio bitrate, or video bitrate and writes FFmpeg pass logs temporarily |
+| Video size optimization | Bundled `video_optimize.py` | Writes a new derived file only after it decodes cleanly and is smaller; never touches the source or an existing output without `--replace-output` |
+| Web video audit | Bundled `video_web_audit.py` and `capture_rendered_videos.mjs` | Read-only; reports every video usage, measured rendered size, and a recommended target size |
 | Image resize or conversion | ImageMagick or bundled `batch_resize.py` | Cropping, forced dimensions, quality, color conversion, and `-strip` can remove information |
 | In-place image batch | `mogrify` | Overwrites matching source files unless `-path` points to another directory |
 | Background removal | RMBG or bundled shell and Node helpers | Downloads a local model on first use and writes a transparent PNG |
@@ -100,6 +103,35 @@ $ak-media-processing "Inspect ./media/demo.mov, create ./artifacts/demo-web.mp4 
 The bundled Python helpers support `--dry-run`; inspect the actual emitted
 command before a large batch. `batch_resize.py` also supports bounded parallel
 workers, while `media_convert.py` offers `web`, `archive`, and `mobile` presets.
+
+## Compress and audit web video
+
+Ask in plain language; the Skill picks the helper and loads only the guidance
+the request needs:
+
+```text
+/ak-media-processing "Compress ./public/hero.mov for the landing page and show the before and after sizes"
+/ak-media-processing "Compare H.264 and VP9 quality and size on a 5-second sample of ./media/demo.mp4"
+/ak-media-processing "Audit the videos on http://localhost:3000 and tell me which ones are larger than they are displayed"
+```
+
+- **Compress.** `video_optimize.py` keeps H.264/MP4 as the default and the
+  fallback; `--codec hevc`, `vp9` or `av1` add opt-in profiles with their own
+  quality scale. It keeps every audio track, text captions and the frame rate
+  unless you ask otherwise, refuses HDR or alpha loss, and writes
+  `<name>.optimized.<ext>` beside the source. The receipt lists bytes before
+  and after, codec, size, frame rate, tracks, encode time, the exact FFmpeg
+  command and the `<source type>` value. An output that is not smaller is
+  rejected rather than kept.
+- **Audit.** `video_web_audit.py` scans the project's source for `<video>`,
+  `<source>` and video references, probes the local files, and, with a
+  browser measurement from `capture_rendered_videos.mjs`, recommends at most
+  twice the largest rendered size. Videos with controls or a fullscreen use keep
+  their resolution. It never encodes or edits anything, and lists CDN, adaptive
+  and unresolved sources as not inspected.
+
+Savings depend on the source. The receipt reports measured bytes; audit savings
+are estimates until an encode measures them.
 
 ## Observe the processing stages
 
