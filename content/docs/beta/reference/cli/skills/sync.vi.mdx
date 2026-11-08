@@ -64,6 +64,10 @@ mode `0644` và không bao giờ executable.
   `offline_stale`. Package không có bản sao sẽ lỗi `source.offline` và không có
   gì thay đổi.
 - Digest không khớp với lock lỗi `store.digest_mismatch`.
+- Sync có khoá cài mọi pin hoặc không cài pin nào. Nếu có pin lỗi, không có gì
+  được ghi. Pin không hiển thị, bị revoke hoặc được phục vụ với digest khác
+  không chặn các pin còn lại tiếp tục resolve: lỗi liệt kê từng
+  `identity@version` thất bại kèm lỗi riêng, mỗi dòng một pin.
 
 <Callout type="warning">
   Sync là một transaction có journal dưới kit lifecycle lock, lock này chờ 10
@@ -97,9 +101,36 @@ warnings[]
 | `1` | Offline mà không có bản đã xác minh, credential bị từ chối, đường dẫn quá dài, hoặc cần recovery. |
 | `2` | SkillX hoặc store bị tắt, cờ hay argument không hợp lệ, hoặc alias bị dành riêng. |
 | `4` | Kit lifecycle lock đang bị thao tác khác giữ. |
-| `5` | Không tìm thấy release hoặc không được cấp quyền. |
+| `5` | Không tìm thấy release hoặc không được cấp quyền, và không pin nào vi phạm kiểm tra bảo mật. |
 | `6` | Alias collision, path không thuộc sở hữu hoặc đã bị sửa, project state untrusted, hoặc lock đổi trong lúc chạy. |
-| `7` | Release bị revoke, yank, quarantine hoặc untrusted, có link trong target path, hoặc digest không khớp. |
+| `7` | Release bị revoke, yank, quarantine hoặc untrusted, có link trong target path, hoặc digest không khớp. Khi nhiều pin lỗi, lỗi bảo mật như vậy quyết định mã thoát. |
+
+Khi nhiều pin lỗi, mã thoát lấy từ lỗi bảo mật đầu tiên theo thứ tự trong lock,
+nếu không có thì từ lỗi đầu tiên.
+
+## Khắc phục sự cố
+
+### Release được ghim không hiển thị
+
+Release private không hiển thị nếu không có credential SkillX, ví dụ sau
+`ak skills unlink`. Khi đó sync lỗi `source.not_found` (mã thoát `5`) với thông
+báo như dưới đây, và vẫn resolve mọi pin còn lại trước khi dừng:
+
+```text
+1 of 2 locked SkillX packages could not be resolved, so sync changed nothing (a locked sync installs every pin or none):
+  - @publisher/private-notes@0.1.0: source.not_found: SkillX answered 404 not_found: no such release is visible
+```
+
+- Khôi phục quyền truy cập bằng `ak skills link`, hoặc lưu API key bằng
+  `ak secrets set SKILLX_TOKEN`, rồi chạy lại sync.
+- Nếu không còn cần pin đó, gỡ bằng
+  `ak skills remove <identity> --scope <scope>`, rồi sync lại.
+
+Request gửi đi không kèm credential mà nhận 404 hoặc 403 sẽ nêu
+`ak skills link` và `ak secrets set SKILLX_TOKEN`. Credential bị từ chối
+(`source.unauthorized`), câu trả lời untrusted, hoặc SkillX offline mà không có
+bản đã xác minh sẽ dừng sync ngay và nêu pin đang resolve, không liệt kê các
+pin khác.
 
 ## Lệnh liên quan
 

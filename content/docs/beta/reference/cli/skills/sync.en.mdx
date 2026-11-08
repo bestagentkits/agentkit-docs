@@ -64,6 +64,10 @@ files have mode `0644` and are never executable.
   `offline_stale` warning. A package without a copy fails with `source.offline`
   and nothing changes.
 - A digest that does not match the lock fails with `store.digest_mismatch`.
+- A locked sync installs every pin or none. If any pin fails, nothing is written.
+  A pin that is not visible, revoked, or served with another digest does not
+  stop the other pins from resolving: the error lists each failing
+  `identity@version` with its own error, one per line.
 
 <Callout type="warning">
   The sync is one journaled transaction under the kit lifecycle lock, which
@@ -98,9 +102,35 @@ A target `action` is `create`, `replace`, `co-own`, `repair`, `unchanged`,
 | `1` | Offline without a verified copy, a credential was refused, a path was too long, or recovery is required. |
 | `2` | SkillX or the store is disabled, flags or arguments are invalid, or an alias is reserved. |
 | `4` | The kit lifecycle lock is held by another operation. |
-| `5` | A release was not found or not entitled. |
+| `5` | A release was not found or not entitled, and no pin failed a security check. |
 | `6` | Alias collision, an unowned or modified path, untrusted project state, or the lock changed during the run. |
-| `7` | A release is revoked, yanked, quarantined, or untrusted, a link sits in a target path, or a digest mismatched. |
+| `7` | A release is revoked, yanked, quarantined, or untrusted, a link sits in a target path, or a digest mismatched. When several pins fail, a security failure like this sets the exit code. |
+
+When several pins fail, the exit code comes from the first security failure in
+lock order, else from the first failure.
+
+## Troubleshooting
+
+### A pinned release is not visible
+
+A private release is invisible without a SkillX credential, for example after
+`ak skills unlink`. The sync then fails with `source.not_found` (exit `5`) and
+an error like this, which still resolves every other pin before it stops:
+
+```text
+1 of 2 locked SkillX packages could not be resolved, so sync changed nothing (a locked sync installs every pin or none):
+  - @publisher/private-notes@0.1.0: source.not_found: SkillX answered 404 not_found: no such release is visible
+```
+
+- Restore access with `ak skills link`, or store an API key with
+  `ak secrets set SKILLX_TOKEN`, then run the sync again.
+- If you no longer want a pin, drop it with
+  `ak skills remove <identity> --scope <scope>`, then sync again.
+
+A request sent without a credential that gets a 404 or 403 names `ak skills link`
+and `ak secrets set SKILLX_TOKEN`. A refused credential (`source.unauthorized`),
+an untrusted answer, or SkillX offline without a verified copy stops the sync at
+once and names the pin it was resolving, without listing the other pins.
 
 ## Related commands
 
