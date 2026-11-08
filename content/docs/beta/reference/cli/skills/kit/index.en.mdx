@@ -30,15 +30,16 @@ but `1` hides it. What each subcommand needs:
 
 | Need | Commands |
 | --- | --- |
-| Nothing: offline, for every user | `status`, `inspect`, and the `--dry-run` of `init`, `resolve` and `rebase` |
-| The skill store | `apply`, `rollback`, `remove` and `sync` (dry runs included), plus `init` and `resolve` |
+| Nothing: offline, for every user | `status`, `inspect`, and the `--dry-run` of `init`, `new-skill`, `resolve` and `rebase` |
+| The skill store | `apply`, `rollback`, `remove` and `sync` (dry runs included), plus `init`, `new-skill` and `resolve` |
 | SkillX | `publish`, `revisions`, `sync`, `unpublish` and `restore` |
 
 Both the skill store and SkillX turn on after `ak update --ssot`, or with
-`AGENTKIT_SKILL_STORE=1` and `AGENTKIT_SKILLX=1`. `init`, `resolve`, `publish`,
-`revisions`, `unpublish` and `restore` only touch `AGENTKIT_HOME` and follow its global scope from any
-directory; a projection follows `--scope`. An upload, `unpublish` and `restore` need an unscoped
-SkillX API key in `ak secrets` (`SKILLX_TOKEN`), used even while SkillX is linked.
+`AGENTKIT_SKILL_STORE=1` and `AGENTKIT_SKILLX=1`. `init`, `new-skill`, `resolve`,
+`publish`, `revisions`, `unpublish` and `restore` only touch `AGENTKIT_HOME` and
+follow its global scope from any directory; a projection follows `--scope`. An
+upload, `unpublish` and `restore` need an unscoped SkillX API key in
+`ak secrets` (`SKILLX_TOKEN`), used even while SkillX is linked.
 
 ## Subcommands
 
@@ -47,6 +48,7 @@ SkillX API key in `ak secrets` (`SKILLX_TOKEN`), used even while SkillX is linke
 | `ak skills kit status [name]` | Show whether personal kits resolve against their foundations. | Read-only. |
 | `ak skills kit inspect <name>` | Show the resolved composition plan. | Read-only. |
 | `ak skills kit init <name> --extends <kit>@<version>` | Create a personal kit manifest. | Writes the manifest. |
+| `ak skills kit new-skill <kit> <alias>` | Add a brand-new skill, authored in the personal kit. | Writes the manifest and the skill's `skills/<alias>/` tree. |
 | `ak skills kit apply <name>` | Project the composition into the skills roots. | Writes the skill store, skills roots, lock and receipts. |
 | `ak skills kit rebase <name> --to <kit>@<version>` | Preview or apply a move to a new foundation version. | Dry run is read-only; an apply projects, a stopped rebase writes its conflict report. |
 | `ak skills kit resolve <name> --path <path> --choice <choice>` | Record the user's resolution of a rebase finding. | Writes resolution records and the kit's own files. |
@@ -62,11 +64,85 @@ A plan that needs review is applied only with the plan token the user approved.
 The projecting commands never rewrite the personal kit or the foundation kits,
 and never run a script.
 
+## Add a new skill
+
+`ak skills kit new-skill <kit> <alias>` creates a skill that has no foundation:
+its identity is `@local/<alias>` and the personal kit `local/<kit>` is its only
+source. It is not a fork, so a [rebase](./rebase) never touches it. The
+personal kit must already exist ([`ak skills kit init`](./init)).
+
+```bash
+ak skills kit new-skill mine my-tool
+ak skills kit new-skill mine my-tool --description "Use when ..." --dry-run --json
+ak skills kit new-skill mine my-tool --from-dir ./drafts/my-tool
+```
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--from-dir <dir>` | none | Copy an existing skill directory instead of scaffolding one. It needs a `SKILL.md`; the `name` in its frontmatter is set to the alias. |
+| `--description <text>` | a placeholder | One-line description of the scaffolded `SKILL.md`. Ignored with `--from-dir`. |
+| `--kits-dir <dir>` | `$AGENTKIT_KITS_DIR` or `./kits` | Foundation kits directory. |
+| `--dry-run` | `false` | Print what would be written and write nothing. |
+
+The alias uses kit ID characters (lowercase letters, digits and single
+hyphens), must not start with `ak-` (reserved for AgentKit's own skills), and
+must not repeat an identity or alias the kit already provides.
+
+Without `--from-dir` the command scaffolds a minimal `SKILL.md`. A copied
+directory is checked like any personal kit tree: no links or special files,
+the skill tree size limits, and a `SKILL.md`. A tree that carries a secret or
+an absolute local path is refused with `personal_kit.payload_refused` and exit
+`7`; nothing is written, and the message names the rule, never the matched
+text.
+
+Without `--dry-run`, under the kit lifecycle lock and after store recovery,
+the command writes the manifest and the whole `skills/<alias>/` tree in one
+journaled transaction. An existing `skills/<alias>/` directory is refused with
+exit `6`, and a manifest changed since it was read stops the write, so nothing
+is overwritten. The command never projects: run
+[`ak skills kit apply <kit>`](./apply) next, which the output prints as
+`next:`.
+
+The new entry appears in the `skills:` list of
+`AGENTKIT_HOME/kits/personal/<kit>/personal-kit.yaml`:
+
+```yaml
+skills:
+  - identity: "@local/my-tool"
+    alias: my-tool
+    dir: skills/my-tool
+```
+
+`identity` must be `@local/<alias>` and `dir` must be `skills/<alias>`. The
+tree's `SKILL.md` `name` must equal the alias. A local skill's trust is
+`local-unverified`.
+
+JSON uses `kind=skills.kit.new-skill` with these fields under `data`:
+
+```text
+dryRun, personalKit, identity, alias, dir, source, files[],
+compositionDigest, exposure, scripts[], renamed, manifest, next
+```
+
+`source` is `scaffold` or `from-dir`, and `renamed` is `true` when a
+`--from-dir` `SKILL.md` name was set to the alias.
+
+### Improve, roll back and publish a local skill
+
+- [`ak skills improve @local/<alias>`](../improve) resolves its
+  base from the personal kit. [`ak skills evolution apply`](../evolution/apply)
+  rewrites `skills/<alias>/` in place, and
+  [`evolution rollback`](../evolution/rollback) restores it byte for byte. Apply and rollback preserve executable permissions; non-executable files use mode `0644`.
+- [`ak skills kit publish`](./publish) refuses a kit that holds a local skill
+  with `kit.local_skill_unsupported` and exit `10`, before anything is sent.
+  SkillX cannot accept a skill without a foundation yet. The skill stays usable
+  locally through `ak skills kit apply`.
+
 ## Output and exits
 
 Each subcommand writes human output or one JSON envelope. JSON kinds are
 `skills.kit.status`, `skills.kit.inspect`, `skills.kit.init`,
-`skills.kit.apply`, `skills.kit.rebase` (dry run), `skills.kit.rebase-apply`,
+`skills.kit.new-skill`, `skills.kit.apply`, `skills.kit.rebase` (dry run), `skills.kit.rebase-apply`,
 `skills.kit.resolve`, `skills.kit.rollback`, `skills.kit.remove`,
 `skills.kit.publish`, `skills.kit.revisions`, `skills.kit.sync`,
 `skills.kit.unpublish` and `skills.kit.restore`. Each page
@@ -88,6 +164,7 @@ lists its exit codes; the read-only and projecting commands share these:
 - [Check that personal kits resolve](./status)
 - [Inspect the composition plan](./inspect)
 - [Create a personal kit](../cli/ak_skills_kit_init)
+- [Add a new skill](#add-a-new-skill)
 - [Apply a personal kit](./apply)
 - [Rebase onto a new foundation version](./rebase)
 - [Resolve a rebase finding](./resolve)
