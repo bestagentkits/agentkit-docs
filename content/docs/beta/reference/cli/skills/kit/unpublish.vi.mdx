@@ -1,0 +1,89 @@
+---
+title: ak skills kit unpublish
+description: Gỡ (xoá mềm) một Kit cá nhân khỏi SkillX sau khi xác nhận, có thể khôi phục trong 30 ngày.
+---
+
+Dùng `ak skills kit unpublish` để gỡ khỏi SkillX Kit mà link record của Kit cá
+nhân ghi, hoặc Kit mà `--kit` nêu. SkillX ẩn Kit khỏi kit API, thư viện và MCP,
+từ chối revision mới dưới tên đó, và giữ Kit có thể khôi phục trong 30 ngày bằng
+[`ak skills kit restore`](./restore). Sau thời hạn đó, tên Kit không bao giờ
+được dùng lại.
+
+Kit cá nhân trên máy và các projection của nó vẫn giữ nguyên;
+[`ak skills kit remove`](./remove) mới gỡ projection. Bản đã sync sang máy khác
+không bị thu hồi.
+
+## Cách dùng
+
+```bash
+ak skills kit unpublish <name> [--kit @<handle>/<name>] [--yes] [flags]
+```
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--kit @<handle>/<name>` | Kit đã liên kết | Kit cá nhân trên SkillX cần gỡ. Bắt buộc khi Kit cá nhân chưa có link SkillX. |
+| `--yes` | Tắt | Bỏ qua bước xác nhận `[y/N]`. Bắt buộc khi dùng `--json` hoặc `--no-interactive`. |
+
+Các cờ dùng chung nằm trong [quy ước CLI](../cli-conventions).
+
+## Điều kiện
+
+SkillX phải bật, sau `ak update --ssot` hoặc với `AGENTKIT_SKILLX=1`. SkillX
+chỉ chấp nhận lệnh gỡ từ SkillX API key không giới hạn scope hoặc phiên đăng
+nhập trên [SkillX dashboard](https://skillx.sh/dashboard). Mọi credential có
+scope đều bị từ chối, kể cả link agentkit.best của `ak skills link`, nên hãy lưu
+một key không scope trước:
+
+```bash
+ak secrets set SKILLX_TOKEN
+```
+
+Với lệnh này, key đã lưu được dùng ngay cả khi tài khoản đã liên kết.
+
+## Xác nhận
+
+Lệnh hiển thị Kit và hỏi `[y/N]` một lần. Mọi câu trả lời khác `y` hoặc `yes`
+đều dừng lệnh với exit 3 và không gửi gì. Với `--json` hoặc `--no-interactive`
+mà thiếu `--yes`, lệnh thoát với exit 2 trước khi liên hệ SkillX.
+
+## Lệnh thay đổi gì
+
+Chỉ Kit trên SkillX. SkillX tăng generation của Kit thêm một. Khi skill store
+bật và link record `AGENTKIT_HOME/state/personal-kits/<name>/skillx.json` đang
+giữ generation trước lúc gỡ, lệnh cũng dời generation đó, để lần publish sau từ
+máy này không báo conflict generation. Yêu cầu chỉ được gửi một lần; chạy lại
+lệnh sau khi mất câu trả lời sẽ báo `unchanged` và cảnh báo rằng link record có
+thể chậm hơn Kit, nên hãy kiểm tra [`ak skills kit revisions`](./revisions)
+trước khi truyền `--expect-generation` cho lần publish tiếp theo.
+
+## Đầu ra
+
+JSON dùng `kind=skills.kit.unpublish` với các trường sau trong `data`:
+
+```text
+personalKit, kit, host, status, deletedAt, restoreDeadline, linkUpdated,
+warnings
+```
+
+`status` là `unpublished`, hoặc `unchanged` khi Kit đã được gỡ từ trước.
+
+## Mã thoát
+
+| Exit | Ý nghĩa |
+| --- | --- |
+| `0` | Đã gỡ, hoặc đã gỡ từ trước (`status: unchanged`). |
+| `1` | Lệnh thất bại: SkillX offline, hoặc credential bị từ chối (key có scope hoặc link token). |
+| `2` | SkillX hoặc cờ overlay đang tắt, cờ không hợp lệ, không có Kit liên kết và không có `--kit`, hoặc thiếu `--yes` khi chạy không tương tác. |
+| `3` | Người dùng không xác nhận; không gửi gì. |
+| `5` | Không tìm thấy Kit SkillX với credential này. |
+| `6` | Kit thay đổi trong lúc lệnh chạy. |
+| `7` | Publisher mà credential không sở hữu. |
+| `10` | Tài khoản của bạn chưa được bật Kit cá nhân (SkillX trả về `kit.api_disabled`). |
+
+## Lệnh liên quan
+
+- [Khôi phục Kit đã gỡ](./restore)
+- [Publish lên SkillX](./publish)
+- [Liệt kê revision SkillX](./revisions)

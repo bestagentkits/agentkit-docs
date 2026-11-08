@@ -1,0 +1,92 @@
+---
+title: ak skills kit unpublish
+description: Unpublish (soft-delete) a personal kit from SkillX after a confirmation, restorable for 30 days.
+---
+
+Use `ak skills kit unpublish` to take the SkillX kit a personal kit's link
+records, or the one `--kit` names, off SkillX. SkillX hides it from the kit
+API, the library and MCP, refuses new revisions under its name, and keeps it
+restorable for 30 days with [`ak skills kit restore`](./restore). After that
+window the name is never reused.
+
+The local personal kit and its projections stay as they are;
+[`ak skills kit remove`](./remove) drops the projections. Copies already synced
+to other machines are not recalled.
+
+## Usage
+
+```bash
+ak skills kit unpublish <name> [--kit @<handle>/<name>] [--yes] [flags]
+```
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--kit @<handle>/<name>` | The linked one | SkillX personal kit to unpublish. Required when the personal kit has no SkillX link. |
+| `--yes` | Off | Skip the `[y/N]` confirmation. Required with `--json` or `--no-interactive`. |
+
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+## Requirements
+
+SkillX must be on, after `ak update --ssot` or with `AGENTKIT_SKILLX=1`.
+SkillX accepts an unpublish only from an unscoped SkillX API key or a signed-in
+session on the [SkillX dashboard](https://skillx.sh/dashboard). It refuses
+every scoped credential, including the agentkit.best link of
+`ak skills link`, so store an unscoped key first:
+
+```bash
+ak secrets set SKILLX_TOKEN
+```
+
+For this command the stored key is used even when the account is linked.
+
+## Confirmation
+
+The command shows the kit and asks `[y/N]` once. Anything but `y` or `yes`
+stops it with exit 3 and sends nothing. With `--json` or `--no-interactive`
+and no `--yes`, it exits 2 before contacting SkillX.
+
+## What it changes
+
+Only the SkillX kit. SkillX moves the kit generation by one. With the skill
+store on, when the link record
+`AGENTKIT_HOME/state/personal-kits/<name>/skillx.json` holds the generation
+from before the unpublish, the command moves it too, so a later publish from
+this machine does not report a generation conflict. The request is sent once;
+running the command again after a lost answer reports `unchanged` and warns
+that the link may lag the kit, so check
+[`ak skills kit revisions`](./revisions) before passing `--expect-generation`
+to the next publish.
+
+## Output
+
+JSON uses `kind=skills.kit.unpublish` with these fields under `data`:
+
+```text
+personalKit, kit, host, status, deletedAt, restoreDeadline, linkUpdated,
+warnings
+```
+
+`status` is `unpublished`, or `unchanged` when the kit already was
+unpublished.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Unpublished, or already unpublished (`status: unchanged`). |
+| `1` | Command failure: SkillX offline, or the credential refused (a scoped key or the link token). |
+| `2` | SkillX or the overlay flag disabled, invalid flags, no linked kit and no `--kit`, or `--yes` missing in a non-interactive run. |
+| `3` | The confirmation was declined; nothing was sent. |
+| `5` | The SkillX kit was not found for this credential. |
+| `6` | The kit changed while the command ran. |
+| `7` | A publisher the credential does not own. |
+| `10` | Personal kits are not enabled for your account yet (SkillX answered `kit.api_disabled`). |
+
+## Related commands
+
+- [Restore an unpublished kit](./restore)
+- [Publish to SkillX](./publish)
+- [List SkillX revisions](./revisions)
