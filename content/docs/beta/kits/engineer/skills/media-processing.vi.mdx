@@ -21,6 +21,8 @@ streaming đã được cấp quyền rõ ràng.
 - Bạn cần tệp HLS hay DASH từ source local.
 - Bạn cần AI background removal local và chấp nhận tải model.
 - Bạn muốn inspect media property trước khi chọn output setting.
+- Bạn cần nén video cho web kèm receipt trước/sau đã xác minh, hoặc một audit
+  chỉ-đọc về cách website đang phục vụ video.
 
 ### Chọn workflow khác khi
 
@@ -90,7 +92,8 @@ $ak-media-processing "Inspect ./media/demo.mov, create ./artifacts/demo-web.mp4 
 | Task | Tool hoặc helper | Effect quan trọng |
 | --- | --- | --- |
 | Convert video hoặc audio | FFmpeg hoặc `media_convert.py` đi kèm | Re-encoding đổi quality; stream copy chỉ hợp lệ khi container cùng codec tương thích |
-| Optimize kích thước video | `video_optimize.py` đi kèm | Có thể giảm resolution, frame rate, audio bitrate hoặc video bitrate và ghi FFmpeg pass log tạm thời |
+| Optimize kích thước video | `video_optimize.py` đi kèm | Chỉ ghi tệp dẫn xuất mới sau khi tệp decode sạch và nhỏ hơn; không bao giờ đụng vào source hay output đã có nếu thiếu `--replace-output` |
+| Audit video trên web | `video_web_audit.py` và `capture_rendered_videos.mjs` đi kèm | Chỉ đọc; báo cáo mọi chỗ dùng video, kích thước render đo được và kích thước đích đề xuất |
 | Resize hoặc convert image | ImageMagick hoặc `batch_resize.py` đi kèm | Crop, forced dimension, quality, color conversion và `-strip` có thể xóa thông tin |
 | Batch image in-place | `mogrify` | Overwrite source file khớp trừ khi `-path` trỏ tới directory khác |
 | Xóa background | RMBG hoặc shell cùng Node helper đi kèm | Tải local model trong lần dùng đầu và ghi PNG trong suốt |
@@ -100,6 +103,34 @@ $ak-media-processing "Inspect ./media/demo.mov, create ./artifacts/demo-web.mp4 
 Các Python helper đi kèm hỗ trợ `--dry-run`; hãy inspect command thực tế trước
 batch lớn. `batch_resize.py` còn hỗ trợ số parallel worker có giới hạn, còn
 `media_convert.py` cung cấp preset `web`, `archive` và `mobile`.
+
+## Nén và audit video cho web
+
+Hãy yêu cầu bằng ngôn ngữ tự nhiên; Skill tự chọn helper và chỉ nạp phần hướng
+dẫn cần cho yêu cầu đó:
+
+```text
+/ak-media-processing "Nén ./public/hero.mov cho landing page và cho tôi xem dung lượng trước và sau"
+/ak-media-processing "So sánh chất lượng và dung lượng H.264 với VP9 trên một đoạn mẫu 5 giây của ./media/demo.mp4"
+/ak-media-processing "Audit các video trên http://localhost:3000 và cho biết video nào lớn hơn kích thước hiển thị"
+```
+
+- **Nén.** `video_optimize.py` giữ H.264/MP4 làm mặc định và làm fallback;
+  `--codec hevc`, `vp9` hoặc `av1` là các profile tùy chọn với thang chất lượng
+  riêng. Script giữ mọi audio track, phụ đề dạng text và frame rate trừ khi bạn
+  yêu cầu khác, từ chối làm mất HDR hoặc alpha, và ghi
+  `<name>.optimized.<ext>` cạnh source. Receipt liệt kê số byte trước và sau,
+  codec, kích thước, frame rate, các track, thời gian encode, lệnh FFmpeg chính
+  xác và giá trị `<source type>`. Output không nhỏ hơn sẽ bị loại thay vì giữ lại.
+- **Audit.** `video_web_audit.py` quét source của dự án tìm `<video>`,
+  `<source>` và các tham chiếu video, probe các tệp local, và khi có số đo trình
+  duyệt từ `capture_rendered_videos.mjs` thì đề xuất tối đa gấp đôi kích thước
+  render lớn nhất. Video có controls hoặc được dùng toàn màn hình giữ nguyên độ
+  phân giải. Audit không bao giờ encode hay sửa gì, và liệt kê source CDN,
+  adaptive hoặc không phân giải được là chưa kiểm tra.
+
+Mức tiết kiệm phụ thuộc vào source. Receipt báo số byte đo được; mức tiết kiệm
+trong audit chỉ là ước tính cho đến khi một lần encode đo được.
 
 ## Quan sát các giai đoạn xử lý
 
