@@ -18,8 +18,8 @@ export const RELEASE_SHAPE_BASELINE = Object.freeze({
   // The v3.0.0 promotion whole-copied Beta into Stable, so both channels carry
   // the same route set until Beta authors routes ahead of the next promotion.
   // Beta adds guides/cloud-and-ci ahead of the next promotion.
-  sourceRoutesPerLocaleChannel: { stable: 561, beta: 580 },
-  routesPerLocaleChannel: { stable: 560, beta: 579 },
+  sourceRoutesPerLocaleChannel: { stable: 561, beta: 584 },
+  routesPerLocaleChannel: { stable: 560, beta: 583 },
   reviewedSourceOnlyRoutes: [
     {
       route: 'changelog',
