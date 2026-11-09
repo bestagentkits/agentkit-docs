@@ -24,6 +24,10 @@ export function readDesktopRelease(root, channel) {
   return { tag: identity.tag, version: identity.version, platforms };
 }
 
+// Public download mirror. The GitHub release lives in a private repository, so
+// its asset URLs return 404 for readers without repository access.
+export const DESKTOP_DOWNLOAD_BASE = 'https://releases.agentkit.best/binaries';
+
 const text = (value) => ({ type: 'text', value });
 const cell = (...children) => ({ type: 'tableCell', children });
 const row = (...children) => ({ type: 'tableRow', children });
@@ -33,7 +37,7 @@ export function desktopDownloads(release, locale) {
       row(...(locale === 'vi' ? ['Nền tảng', 'Artifact', 'Bytes', 'SHA-256'] : ['Platform', 'Artifact', 'Bytes', 'SHA-256']).map((s) => cell(text(s)))),
       ...Object.entries(release.platforms).map(([key, asset]) => row(
         cell(text(LABELS[key] ?? key)),
-        cell({ type: 'link', url: `https://github.com/bestagentkits/agentkit/releases/download/${release.tag}/${asset.name}`, children: [{ type: 'inlineCode', value: asset.name }] }),
+        cell({ type: 'link', url: `${DESKTOP_DOWNLOAD_BASE}/${release.version}/${asset.name}`, children: [{ type: 'inlineCode', value: asset.name }] }),
         cell(text(asset.size.toLocaleString('en-US'))), cell({ type: 'inlineCode', value: asset.sha256 }),
       )),
     ],
