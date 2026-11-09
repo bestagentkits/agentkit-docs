@@ -33,6 +33,10 @@ test('release-only bump keeps MDX bytes and resolves exact channel data into Mar
         expandDesktopRelease(tree, release, locale);
         assert.equal(tree.children[0].type, 'table');
         assert.equal(tree.children[0].children.length, 5);
+        const links = JSON.stringify(tree.children[0]).match(/"url":"[^"]+"/g);
+        assert.equal(links.length, 4);
+        for (const link of links) assert.match(link, new RegExp(`"url":"https://releases\\.agentkit\\.best/binaries/${version.replaceAll('.', '\\.')}/ak-gui_`));
+        assert.doesNotMatch(JSON.stringify(tree), /github\.com/);
         assert.match(tree.children[1].value, new RegExp(version.replaceAll('.', '\\.')));
         assert.equal(tree.children[2].value, `${version}; verified 1.0.0`);
         assert.doesNotMatch(JSON.stringify(tree), /AK_DESKTOP_|DesktopDownloads/);
