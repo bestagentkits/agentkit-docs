@@ -1,0 +1,85 @@
+---
+title: ak skills unpublish
+description: Soft-delete a SkillX package you own, restorable for 30 days, or yank one published version.
+---
+
+Use `ak skills unpublish` to delete a SkillX package or to yank one of its
+releases. Both are reversible, so the command asks nothing first. It writes
+nothing locally.
+
+## Usage
+
+```bash
+ak skills unpublish <@publisher/slug> [--version <semver>] [flags]
+```
+
+```bash
+ak skills unpublish @alice/my-skill
+ak skills unpublish @alice/my-skill --version 1.0.0
+ak skills unpublish @alice/my-skill --json
+```
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--version <semver>` | None; the whole package is deleted | Yank this release instead of deleting the package. SemVer without build metadata. |
+
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+## Requirements
+
+| Need | Detail |
+| --- | --- |
+| SkillX on | After `ak update --ssot`, or with `AGENTKIT_SKILLX=1` or `features.skillx: true`. While off, the command exits `2`. |
+| An owner credential | Deleting and yanking are owner calls. The command sends `SKILLX_TOKEN` from `ak secrets` when one is stored, even while [`ak skills link`](./link/index) links SkillX, and otherwise the linked credential. A stored key must be unscoped: SkillX refuses scoped keys on owner calls. If SkillX refuses the linked token, store an unscoped key with `ak secrets set SKILLX_TOKEN`. |
+
+## What it does
+
+- Without `--version`, the command soft-deletes the package. Every SkillX read
+  path hides it and it takes no new version.
+  [`ak skills restore`](./restore) brings it back with its visibility and
+  releases until the restore deadline, 30 days later. After that the package
+  stays deleted and its name is never reused.
+- With `--version`, the command yanks that published release. It no longer
+  resolves by version, while lockfiles that pin its digest keep reading it.
+  Only a published release can be yanked.
+- Re-running is safe. An already deleted package, or an already yanked
+  release, succeeds with `changed: false`. A release in another state, such as
+  `quarantined`, is a conflict (exit `6`).
+
+## Output
+
+A delete prints `Deleted <@publisher/slug>` (or
+`already deleted; nothing changed`), the restore deadline, and the
+`ak skills restore` line that brings it back. A yank prints
+`Yanked <@publisher/slug>@<version>` (or `already yanked; nothing changed`).
+
+JSON uses `kind=skills.unpublish` with these fields under `data`:
+
+```text
+identity, action, changed, version, releaseDigest,
+deletedAt, restoreDeadline, restoreCommand, changedAt
+```
+
+`action` is `deleted` or `yanked`. A delete sets `restoreCommand`, and
+`restoreDeadline` when SkillX answered the delete; a yank sets `version` and
+`releaseDigest`.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Deleted, yanked, or already in that state. |
+| `1` | Command failure: SkillX offline, the credential missing or refused, or an untrusted answer. The change may have been applied; check with `ak skills visibility`. |
+| `2` | SkillX disabled, invalid flags or arguments (such as a `--version` that is not SemVer), or a request SkillX refused as invalid. |
+| `5` | Package or release not found for this credential, or release publishing not enabled on SkillX. |
+| `6` | Conflict with the package's current state: a release that is not published, or a concurrent change that left another state. |
+| `7` | SkillX refused the change: the credential's account does not own the publisher, the publisher is suspended, or an administrator deleted the package. |
+
+## Related commands
+
+- [Complete `ak skills unpublish` command facts](../cli/ak_skills_unpublish)
+- [Restore a deleted package](./restore)
+- [Show or change a package's visibility](./visibility)
+- [Publish a skill directory](./publish)

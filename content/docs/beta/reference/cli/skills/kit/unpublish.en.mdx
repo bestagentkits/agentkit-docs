@@ -1,0 +1,105 @@
+---
+title: ak skills kit unpublish
+description: Unpublish (soft-delete) a personal kit's SkillX kit, restorable for 30 days, without touching the local personal kit.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Use `ak skills kit unpublish` to take the SkillX kit a personal kit is linked
+to, or the one `--kit` names, off SkillX. SkillX soft-deletes it, so nobody
+can read or sync it, and keeps it restorable for 30 days with
+[`ak skills kit restore`](./restore). The name stays reserved.
+
+## Usage
+
+```bash
+ak skills kit unpublish <name> [--kit @<handle>/<name>] [--yes] [flags]
+```
+
+```bash
+ak skills kit unpublish mine
+ak skills kit unpublish mine --yes --json
+ak skills kit unpublish mine --kit @alice/mine --dry-run
+```
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--kit @<handle>/<name>` | The linked one | SkillX personal kit to unpublish. Required when the personal kit has no SkillX link. |
+| `--dry-run` | `false` | Show the kit that would be unpublished; send nothing. |
+| `--yes` | `false` | Confirm without a prompt. Required with `--json`, `--no-interactive` or no terminal. |
+
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+## Requirements
+
+SkillX must be on, after `ak update --ssot` or with `AGENTKIT_SKILLX=1`, and
+the personal kit commands must not be hidden by `AGENTKIT_SKILL_OVERLAYS`.
+
+SkillX accepts this call only from the kit's owner with an unscoped SkillX API
+key in `ak secrets` (`SKILLX_TOKEN`). The command uses that key even while
+[`ak skills link`](../link/index) links SkillX. The agentkit.best link alone is
+refused with a hint: store a key with `ak secrets set SKILLX_TOKEN`, or use the
+SkillX creator dashboard.
+
+The command only touches `AGENTKIT_HOME` and follows its global scope from any
+directory.
+
+## What it does
+
+The command reads the link record
+`AGENTKIT_HOME/state/personal-kits/<name>/skillx.json` to find the SkillX kit,
+unless `--kit` names one. With no link and no `--kit` it exits `2`.
+
+It then sends one delete request. SkillX hides the kit and its revisions at
+once and keeps the kit restorable for 30 days. A kit that is already
+unpublished reports `already_unpublished` and exits `0`.
+
+Nothing local changes: the personal kit, its projections and the link record
+stay, so `ak skills kit restore` can bring the kit back. To drop the
+projections, use [`ak skills kit remove`](./remove).
+
+<Callout type="warning">
+  On a terminal the command asks
+  `Unpublish <kit> from SkillX? It stays restorable for 30 days with ak skills kit restore. [y/N]`.
+  Declining exits `3` and sends nothing. With `--json`, `--no-interactive` or
+  no terminal it needs `--yes`; without it the command exits `2` with a
+  message that it needs confirmation and nothing was sent.
+</Callout>
+
+## Output
+
+The text output shows the personal kit and its SkillX kit with the outcome.
+After an unpublish it also prints the restore deadline and the
+`ak skills kit restore <name> --kit <kit>` line that brings the kit back. A
+dry run is marked `[dry run, nothing sent]`.
+
+JSON uses `kind=skills.kit.unpublish` with these fields under `data`:
+
+```text
+personalKit, kit, host, status, dryRun, deletedAt, restoreDeadline
+```
+
+`status` is `planned` for a dry run, `unpublished`, or `already_unpublished`.
+`deletedAt` and `restoreDeadline` are set when SkillX answered the delete.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Unpublished, already unpublished, or a dry run. |
+| `1` | Command failure: SkillX offline, or no unscoped SkillX API key (the agentkit.best link alone is refused). |
+| `2` | SkillX or the overlay flag disabled, invalid flags, no linked kit and no `--kit`, or `--yes` missing without a terminal. |
+| `3` | You declined the confirmation; nothing was sent. |
+| `5` | The SkillX kit was not found for this credential, or its 30-day restore window has passed. |
+| `7` | Refused by SkillX: the publisher is not owned, or an administrator deleted the kit. |
+| `10` | Personal kits are not enabled for your account yet (SkillX answered `kit.api_disabled`). Local personal kits keep working. |
+
+## Related commands
+
+- [Complete `ak skills kit unpublish` command facts](../cli/ak_skills_kit_unpublish)
+- [Restore an unpublished kit](./restore)
+- [List SkillX revisions](./revisions)
+- [Remove the projections](./remove)
+- [Publish to SkillX](./publish)

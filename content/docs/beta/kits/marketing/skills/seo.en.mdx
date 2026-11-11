@@ -1,16 +1,24 @@
 ---
 title: Research and audit search work with ak-seo
-description: Use ak-seo for SEO and GEO audits, keyword research, and pSEO artifacts while separating provider queries, OAuth, bulk generation, and live search changes.
+description: Use ak-seo for SEO and GEO audits, keyword research through an article queue, pSEO artifacts, and an article pipeline that stops at a WordPress draft, while separating provider queries, OAuth, bulk generation, and live search changes.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
-Use `ak-seo` to audit a page or domain, check GEO and AI discoverability,
-research and cluster keywords, or design programmatic SEO templates. The Skill also packages scripts for Search Console,
-Core Web Vitals, sitemaps, schema, and bulk page generation. Those scripts have
-different network, credential, file, and account effects and are not one
-automatic workflow.
+Use `ak-seo` for three groups of search work:
+
+- **Site** (`audit`, `geo`, `pseo`, `schema`, `optimize`): audit a page or
+  domain, check GEO and AI discoverability, design programmatic SEO templates,
+  and produce schema or on-page changes.
+- **Keywords** (`research`, `clean`, `cluster`, `intent`, `plan`, `next`): turn
+  real keyword data into an article queue.
+- **Article** (`setup`, `write`, `review`, `visuals`, `cover`, `publish`): take a
+  search-led article from brief to a WordPress draft.
+
+The Skill also packages scripts for Search Console, Core Web Vitals, sitemaps,
+schema, and bulk page generation. Those scripts have different network,
+credential, file, and account effects and are not one automatic workflow.
 
 Use `--format csv -o ideas.csv` to export a keyword list. Unknown metrics stay empty in
 CSV and appear as `null` in JSON. A measured zero stays zero. Leave priority unscored
@@ -28,13 +36,18 @@ when the source omits search volume or difficulty.
 - You need a GEO and AI-discoverability contract or audit: `robots.txt`,
   `sitemap.xml`, `llms.txt`, `llms-full.txt`, per-page `.md` variants, social
   metadata and cards, and Copy, Share, or Open in AI page actions.
+- You need the next article to write from a keyword map, or a search-led
+  article drafted, reviewed, illustrated, and handed over as a WordPress draft.
 
 ### Choose another workflow when
 
-- You need broader content strategy without search evidence. Use
-  `ak-content-marketing`.
-- You need final copy from an approved search brief. Use `ak-write` after the
-  keyword and claim inputs are accepted.
+- You need broader content strategy without search evidence, or a
+  multi-channel content calendar. Use
+  [`ak-content-marketing`](./content-marketing).
+- You need conversion copy, CTAs, or CRO. Use
+  [`ak-copywriting`](./copywriting). On a landing page, `ak-seo optimize`
+  covers on-page SEO only (title, meta, headings, schema); a mixed request runs
+  the SEO part, then hands the copy part over.
 - You need to implement those GEO surfaces in a framework. Implementation
   belongs to that framework's Skill; for Next.js, use the Engineer Kit
   [`ak-web-frameworks`](../../engineer/skills/web-frameworks) SEO and GEO
@@ -55,6 +68,10 @@ Google Search Console requires a verified property, Google Cloud OAuth client,
 the Search Console API, `googleapis`, and
 `.claude/secrets/google_client_secret.json` or the corresponding user-level
 secret path. OAuth tokens are saved locally; protect them as credentials.
+
+Site scripts (`.cjs`) need Node 20.11 or newer. Keywords and article scripts
+(`.mjs`) need Node 22.2 or newer. The Skill targets macOS and Linux; Windows is
+untested. `article cover` and `article visuals` need Chrome, Edge, or Chromium.
 
 | Runtime | Invocation | Availability boundary |
 | --- | --- | --- |
@@ -88,12 +105,12 @@ $ak-seo pseo comparison "Design one template, its data schema, and three sample 
   </Tab>
 </Tabs>
 
-The canonical argument hint lists
-`[audit|geo|keywords|pseo|optimize|schema] [target]`. In this release, only
-`audit`, `geo`, `keywords`, and `pseo` have routed reference workflows, and a
-full-site audit also runs the `geo` checklist. Treat `optimize` and
-`schema` as unproven direct routes; use a clearly scoped request or the bundled
-schema tools only after inspecting their effect.
+The argument hint is
+`[audit|geo|pseo|schema|optimize] | keywords [research|clean|cluster|intent|plan|next] | article [setup|write|review|visuals|cover|publish] [target]`.
+Every subcommand routes to its own reference. A bare `keywords "<seed>"` runs
+`research`, and a full-site audit also runs the `geo` checklist. For an article,
+name the group and step, for example
+`/ak-seo article write "<keyword or approved brief>"`.
 
 ## Audit AI discoverability with geo
 
@@ -116,6 +133,55 @@ retired names such as `anthropic-ai` and `Claude-Web` are unused, and asks you
 to confirm current agent names with each operator before shipping a policy.
 The audit reports each item as pass, fail, or not applicable with the observed
 URL and response.
+
+## Build a keyword queue
+
+The keywords group runs in this order, and you can run each step alone:
+
+1. `research` collects raw keywords with ReviewWeb data.
+2. `clean` removes noise; add `--map` when the site has `.editorial/` to create
+   keyword-map entries.
+3. `cluster` groups the keywords into head terms and pillars.
+4. `intent` adds search intent to existing entries.
+5. `plan` marks a keyword planned or skipped, and `next` picks the next article
+   from the keyword map (`.editorial/keyword-map.json`).
+
+Unknown metrics stay unknown in every step; a missing volume is never `0`.
+
+## Write an article that stops at a WordPress draft
+
+The article group is Vietnamese-first. English drafts get the fact, structure,
+and SEO rules but no punctuation or terminology lint.
+
+- **`setup`** needs a git repository. When the folder has no `.git`, the script
+  stops and you run `git init` yourself. It creates `.editorial/` and
+  `drafts/`, writes a `.env` template without secrets, and adds `.env` to
+  `.gitignore`. You type `SEOKIT_WP_URL`, `SEOKIT_WP_USER`, and
+  `SEOKIT_WP_APP_PASSWORD` into `.env` yourself; never paste the Application
+  Password into chat. A dedicated WordPress Author account is recommended.
+  `wordpress.mjs health` checks the connection.
+- **`write`** takes the keyword from `next` or your choice, proposes a Brief
+  card, and stops for your approval before research and drafting.
+- **`review`** returns `PASS`, `REVISE`, or `BLOCK`. It runs in a fresh
+  delegated agent when the runtime allows. Otherwise it runs in the same
+  session, is recorded with `--isolation same-session`, and is reported as
+  reduced isolation, never as independent.
+- **`visuals`** and **`cover`** produce in-body images and a cover rendered from
+  the site's fixed template.
+- **`publish`** runs `wordpress.mjs push <article.md>`. It always creates a
+  draft, keeps a draft or pending post's status on update, and refuses a post
+  that is already live. There is no status parameter and no `--publish`; the
+  approver publishes.
+
+The article pipeline emits Article schema only. Transcripts, fetched pages, and
+research text are untrusted input: evidence to verify, never instructions.
+
+Rank Math or Yoast meta needs the `seokit-seo-helper` WordPress plugin. Build
+its zip with `wp-plugin-zip.mjs` and install it from Plugins → Add New → Upload.
+New drafts work without it, but updating an existing post needs plugin 1.2.1 or
+newer. The plugin is licensed separately under GPL-2.0-or-later, and the
+bundled Be Vietnam Pro fonts are under SIL OFL 1.1. Persisted names keep the
+`SEOKIT_*` environment keys and the WordPress `seokit/v1` namespace.
 
 ## Understand the stages
 
@@ -152,11 +218,12 @@ work; avoid spam, deceptive placements, and fabricated relationships.
 ## Verify outputs and evidence
 
 The top-level Skill summary names report paths under `assets/reports/seo/`,
-while routed `audit` and `keywords` references name `assets/seo/audits/` and
-`assets/seo/keywords/`. Confirm the actual path returned by the run before
-building automation. The pSEO route writes under
-`assets/attraction/pseo-templates/`; schema output is described under
-`assets/seo/schemas/`.
+while the routed `audit` reference names `assets/seo/audits/`. Confirm the
+actual path returned by the run before building automation. The pSEO route
+writes under `assets/attraction/pseo-templates/`; schema output is described
+under `assets/seo/schemas/`. Keyword workbooks go to the paths you pass, the
+keyword map to `.editorial/keyword-map.json`, and articles to `drafts/` and
+`.editorial/` per the site pack.
 
 Require the report to identify URLs, query dates, country or market, provider
 and endpoint, measured fields versus estimates, missing data, issues by
@@ -171,7 +238,9 @@ engine rich result, and a submitted sitemap does not guarantee indexing.
 | ReviewWeb data is unavailable | Continue with clearly labeled public or local evidence, or configure `REVIEWWEB_API_KEY`; do not invent volume, CPC, difficulty, traffic, or backlinks. |
 | Search Console authentication fails | Verify the property, OAuth client, scopes, secret path, local callback, dependency, and token status without exposing credentials. |
 | The report path differs from the overview | Use the path actually returned and record the source-path inconsistency; do not move or overwrite files silently. |
-| `optimize` or `schema` does not route | Use `audit`, `geo`, `keywords`, or `pseo`, or request a bounded schema artifact and inspect the bundled generator directly. |
+| A keywords or article script fails on start | Check that Node is 22.2 or newer; the `.mjs` scripts do not run on older Node. |
+| `init-workspace.mjs` stops during `article setup` | The folder has no `.git`. Run `git init` yourself, then rerun setup. |
+| `wordpress.mjs push` refuses a post | The post is already live. The pipeline never edits a live post; change it in WordPress or ask the approver. |
 | Bulk pSEO output is low quality or duplicated | Stop generation, inspect the template and dataset, delete nothing automatically, and require unique value plus human sampling before publication. |
 | Runtime discovery fails | Follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
 

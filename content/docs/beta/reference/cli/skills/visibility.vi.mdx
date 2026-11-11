@@ -1,0 +1,80 @@
+---
+title: ak skills visibility
+description: Xem visibility của một package SkillX bạn sở hữu, hoặc đổi nó bằng compare-and-set không bao giờ ghi đè thay đổi đồng thời.
+---
+
+Dùng `ak skills visibility` để đọc visibility đã lưu của một package SkillX,
+hoặc đổi nó bằng `--set`. Lệnh không ghi gì cục bộ và không bao giờ hỏi.
+
+## Cách dùng
+
+```bash
+ak skills visibility <@publisher/slug> [--set private|unlisted|public] [flags]
+```
+
+```bash
+ak skills visibility @alice/my-skill
+ak skills visibility @alice/my-skill --set private
+ak skills visibility @alice/my-skill --set unlisted --json
+```
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--set <visibility>` | Không có; lệnh chỉ đọc | Visibility mới: `private`, `unlisted` hoặc `public`. |
+
+Các cờ dùng chung nằm trong [quy ước CLI](../cli-conventions).
+
+## Điều kiện
+
+| Cần | Chi tiết |
+| --- | --- |
+| SkillX đang bật | Sau `ak update --ssot`, hoặc với `AGENTKIT_SKILLX=1` hay `features.skillx: true`. Khi tắt, lệnh thoát `2`. |
+| Credential của chủ sở hữu | Việc đọc và đổi đều là owner call. Lệnh gửi `SKILLX_TOKEN` trong `ak secrets` khi đã lưu, kể cả khi [`ak skills link`](./link/index) đang liên kết SkillX, nếu không thì gửi credential đã liên kết. Key đã lưu phải không giới hạn scope: SkillX từ chối key có scope trên owner call. Nếu SkillX từ chối token liên kết, hãy lưu một key không giới hạn scope bằng `ak secrets set SKILLX_TOKEN`. |
+
+## Lệnh làm gì
+
+- Không có `--set`, lệnh đọc danh sách release của package và in visibility.
+- Có `--set`, lệnh đọc visibility rồi đổi từ giá trị đó. Đây là
+  compare-and-set, nên thay đổi xảy ra trong lúc đó không bao giờ bị ghi đè.
+  Đặt đúng giá trị hiện tại thì không đổi gì.
+- Khi package bị đổi trong lúc đó, lệnh đọc visibility thêm một lần. Nếu đã là
+  giá trị yêu cầu, lệnh thành công với `changed: false`; nếu không thì là
+  conflict (thoát `6`) và nêu visibility tìm thấy.
+- Thu hẹp (sang `private`, hoặc từ `public` sang `unlisted`) có hiệu lực ở lần
+  đọc kế tiếp.
+- Mở rộng (sang `unlisted` hoặc `public`) cần bạn duyệt trong một phiên SkillX
+  đã đăng nhập. Với token, SkillX từ chối (thoát `7`) và lỗi trỏ tới
+  https://skillx.sh/dashboard, nơi bạn duyệt thay đổi.
+
+## Đầu ra
+
+Đầu ra text là một dòng: package và visibility của nó,
+`changed from <old> to <new>`, hoặc `already <visibility>; nothing changed`.
+
+JSON dùng `kind=skills.visibility` với các trường sau dưới `data`:
+
+```text
+identity, visibility, from, changed, changedAt
+```
+
+`from` chỉ có khi dùng `--set`, còn `changedAt` chỉ có khi visibility đã đổi.
+
+## Kết quả và mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Đã đọc, đã đổi, hoặc đã đúng visibility yêu cầu. |
+| `1` | Lệnh thất bại: SkillX offline, credential thiếu hoặc bị từ chối, hoặc phản hồi không đáng tin. Thay đổi có thể đã được áp dụng; chạy lại lệnh không kèm `--set` để kiểm tra. |
+| `2` | SkillX bị tắt, cờ hoặc argument không hợp lệ, hoặc request bị SkillX từ chối vì không hợp lệ. |
+| `5` | Không tìm thấy package với credential này, hoặc SkillX chưa bật publish release. |
+| `6` | Package đã bị đổi trong lúc đó sang visibility khác. |
+| `7` | SkillX từ chối thay đổi: cần duyệt trên dashboard SkillX, tài khoản của credential không sở hữu publisher, publisher bị đình chỉ, hoặc quản trị viên đã xoá package. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skills visibility`](../cli/ak_skills_visibility)
+- [Publish một thư mục Skill](./publish)
+- [Xoá package hoặc yank một phiên bản](./unpublish)
+- [Khôi phục package đã xoá](./restore)
