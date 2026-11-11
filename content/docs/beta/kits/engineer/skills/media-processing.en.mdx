@@ -9,7 +9,9 @@ import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 Use `ak-media-processing` for local image, audio, and video transformations with
 FFmpeg, ImageMagick, and RMBG. The Skill covers format conversion, encoding,
 filters, thumbnails, batch images, background removal, HLS or DASH packaging,
-and explicitly authorized live streaming.
+web-video compression, codec comparison, a read-only audit of how a site serves
+its videos, and explicitly authorized live streaming. Composition Skills such as
+[`ak-remotion`](./remotion) hand their renders here for delivery encoding.
 
 ## Choose deterministic media tooling
 
@@ -21,6 +23,8 @@ and explicitly authorized live streaming.
 - You need HLS or DASH files from a local source.
 - You need local AI background removal and accept a model download.
 - You want to inspect media properties before selecting output settings.
+- You need a video compressed for the web, codecs compared on a sample, or an
+  inventory of the videos a site serves.
 
 ### Choose another workflow when
 
@@ -42,7 +46,8 @@ Before you start:
 - Install only the required local tools: FFmpeg and `ffprobe` for video or
   audio, ImageMagick for still images, and `rmbg-cli` for background removal.
   Verify with `ffmpeg -version`, `ffprobe -version`, `magick -version`, or
-  `rmbg --version` as applicable.
+  `rmbg --version` as applicable. The web-video capture script also needs Node,
+  and it measures rendered sizes only when Playwright is installed.
 - Preserve originals in a separate location and choose new output paths. Avoid
   an in-place `mogrify` command unless overwrite is intentional and recoverable.
 - Inspect codecs, streams, dimensions, frame rate, duration, color space,
@@ -90,7 +95,8 @@ $ak-media-processing "Inspect ./media/demo.mov, create ./artifacts/demo-web.mp4 
 | Task | Tool or helper | Important effect |
 | --- | --- | --- |
 | Video or audio conversion | FFmpeg or bundled `media_convert.py` | Re-encoding changes quality; stream copy is only valid when container and codecs are compatible |
-| Video size optimization | Bundled `video_optimize.py` | Can lower resolution, frame rate, audio bitrate, or video bitrate and writes FFmpeg pass logs temporarily |
+| Web video compression | Bundled `video_optimize.py <file>` | Never touches the source or overwrites an existing output: writes `<name>.optimized.<ext>` (then `-2`), and an explicit existing `-o` needs `--replace-output`, which keeps `<name>.bak-<UTC time>`. Promotes the staged encode only after a full decode and size, duration, track, frame, and alpha checks. Rejects an output that is not smaller (exit 3) unless `--keep-larger`. Keeps audio, text captions, and frame rate by default (`--audio drop`, `--drop-silent-audio`, and `--fps` are explicit). Refuses HDR or alpha loss unless `--allow-format-downgrade`. Offers `--codec h264\|hevc\|vp9\|av1`, `-n/--dry-run`, a `--json` receipt, and H.264-only `--two-pass`. |
+| Web video audit | Bundled `video_web_audit.py` with `capture_rendered_videos.mjs` | Read-only inventory of where and how a site uses each video; never encodes, moves, or edits. Rendered sizes need Playwright; without it, target sizes are marked as needing measurement. |
 | Image resize or conversion | ImageMagick or bundled `batch_resize.py` | Cropping, forced dimensions, quality, color conversion, and `-strip` can remove information |
 | In-place image batch | `mogrify` | Overwrites matching source files unless `-path` points to another directory |
 | Background removal | RMBG or bundled shell and Node helpers | Downloads a local model on first use and writes a transparent PNG |
@@ -156,6 +162,9 @@ A complete result should include:
   or skipped batch items.
 - CPU or GPU path, concurrency, elapsed time, model download, network endpoint,
   and any external publication effect.
+- For web video, measured bytes before and after from the receipt, never an
+  expected percentage. Replacing an original asset in a project is a
+  destructive change that needs its own approval.
 
 The
 release does not prove that every host FFmpeg build, ImageMagick delegate, RMBG

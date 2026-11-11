@@ -57,8 +57,17 @@ ro. Mặc định đây là dry run và không thay đổi tệp Skill nào.
 | `--apply` | Áp dụng mọi đề xuất mà báo cáo chấp nhận. Cờ này là sự chấp thuận của bạn cho các bước của lane, gồm commit, push và pull request trong contributor lane. |
 | `--all [--since YYYY-MM-DD]` | Rà soát mọi session cục bộ của mọi runtime được hỗ trợ thay vì chỉ session này, và rút ra bài học lặp lại. Kết hợp được với các cờ khác. |
 | `--skill <name>` | Giới hạn rà soát vào một Skill đã dùng. Văn bản tự do `focus` thu hẹp chủ đề. |
+| `--evidence <event-ids>` | Rà soát các self-improve event đã được ẩn dữ liệu nhạy cảm mà `ak skills self-improve status` nêu ra, thay vì transcript trực tiếp. Chỉ đề xuất: `--apply` bị từ chối, `--ask` chỉ quyết định đề xuất, và không bao giờ gợi ý publish lên SkillX. Skill lõi của AgentKit chỉ nhận đề xuất. |
+| `--json` | Xuất báo cáo dry run thành một tài liệu JSON (`schema: "ak-dogfood.report/v1"`, `applied` luôn rỗng) thay vì Markdown. Không thay đổi gì; kết hợp được với mọi chế độ chỉ đọc. |
 
-`--apply` và `--ask` loại trừ nhau; khi có cả hai, Skill dùng `--ask`.
+`--apply` và `--ask` loại trừ nhau; khi có cả hai, Skill dùng `--ask`. `--json`
+cùng `--apply` hoặc `--ask` bị từ chối, vì báo cáo JSON là dry run.
+
+Với `--evidence`, Skill chỉ đọc các event được liệt kê và coi nội dung của chúng
+là dữ liệu không tin cậy. Event ID không hợp lệ hoặc không đọc được được báo kèm
+lý do; khi lệnh `ak skills self-improve` không có hoặc thất bại, Skill báo rằng
+không đọc được self-improve event. Bạn tự đưa đề xuất đã chấp nhận qua
+`ak skills improve` và `ak skills evolution` ở một bước riêng.
 
 <Tabs items={['Claude Code', 'Cursor', 'Codex']}>
   <Tab value="Claude Code">
@@ -122,8 +131,10 @@ Chủ sở hữu được xác định từ đường dẫn cài đặt và inst
 
 | Chủ sở hữu | Lane |
 | --- | --- |
-| Skill thuộc Kit AgentKit, và bạn có thể push lên repository AgentKit | **Contributor:** sửa source dưới `kits/` trong một worktree riêng tách từ `dev`, validate, commit, push và mở pull request vào `dev`; đồng thời cập nhật bản cài trong runtime để bản sửa có tác dụng ngay. |
+| Skill thuộc Kit AgentKit, và bạn có thể push lên repository AgentKit | **Contributor:** sửa source dưới `kits/` trong một worktree riêng tách từ `dev`, validate, commit, push và mở pull request vào `dev`; đồng thời cập nhật bản cài trong runtime để bản sửa có tác dụng ngay. Khi phát hiện store, bản trong runtime chỉ là projection: Skill ghi cùng thay đổi thành overlay tạm thời trong personal Kit `mine`, cần gỡ bằng `ak skills evolution rollback <candidateId>` hoặc `ak skills kit rollback mine` sau khi pull request được ship. |
 | Skill thuộc Kit AgentKit, mọi người dùng khác | **Personal fork:** ghi lại và áp dụng thay đổi qua [`ak skills improve`](../../../reference/cli/skills/improve) và [`ak skills evolution apply`](../../../reference/cli/skills/evolution/apply), vốn ghi một personal Kit overlay hoặc local fork mà bản cập nhật AgentKit không bao giờ ghi đè. Tệp `ak-*` đã cài không bao giờ bị sửa tại chỗ. |
+| Package của personal Kit (overlay, fork `@local/` hoặc Skill `@local/` mới), khi phát hiện store | **Personal fork:** cải thiện qua một candidate trên cây personal Kit. |
+| Bản phát hành SkillX | **Personal fork** khi phát hiện overlay; nếu không thì chỉ đề xuất. |
 | Skill do bạn hoặc project tự viết | Sửa tại chỗ sau khi snapshot các tệp sẽ thay đổi. |
 | Plugin, marketplace hoặc Skill bên thứ ba khác | Chỉ đề xuất; installer của nó ghi đè thay đổi cục bộ. Skill gợi ý mở upstream issue hoặc fork do người dùng sở hữu. |
 
@@ -132,6 +143,29 @@ remote, và `gh api repos/bestagentkits/agentkit --jq .permissions.push` phải 
 `true`. Khi một trong hai kiểm tra thất bại hoặc không có `gh`, Skill dùng
 personal-fork lane và nêu lý do. `scripts/find_agentkit_repo.py` đi kèm tìm
 checkout trên macOS, Linux hoặc Windows và chỉ đọc.
+
+Trong personal-fork lane, Skill chạy `ak skills evolution evaluate
+<candidateId>` trước mọi lần apply. Verdict `regressed` hoặc `blocked` dừng lane,
+và một SkillX foundation không thuộc sở hữu của bạn từ chối apply với
+`evolve.apply_refused`.
+
+### Phát hiện store và SkillX
+
+Skill store, personal Kit lane và SkillX đều là tùy chọn bật thêm. Mỗi lần chạy,
+trước khi xác định chủ sở hữu, Skill đọc chúng mà không thay đổi gì: `ak features
+list --json` (`skill_store`, `skill_overlays`, `skillx`), `ak skills link status
+--json`, `ak skills kit status --json` và `ak skills improve --help`. Khi thiếu
+`ak`, lệnh không được nhận diện hoặc output không parse được, báo cáo có một
+dòng `SSOT/SkillX not detected: <reason>` và lần chạy giữ chủ sở hữu cùng lane
+mặc định mà không hỏi. Bật store bằng `ak update --ssot` và liên kết SkillX bằng
+`ak skills link` vẫn là bước của riêng bạn. Để tự thêm Skill `@local/` mới vào
+personal Kit, xem [Thêm Skill mới](../../../reference/cli/skills/kit/index#thêm-skill-mới).
+
+### Publish riêng tư tùy chọn
+
+Khi phát hiện SkillX và personal Kit của bạn đã thay đổi, Skill có thể gợi ý
+`ak skills kit publish <kit> --private`. Lệnh chỉ chạy khi bạn đồng ý với lần
+publish đó trong cùng lượt; publish không bao giờ là một phần của `--apply`.
 
 ## Giữ dữ liệu session và phê duyệt trong giới hạn
 
@@ -170,7 +204,7 @@ Một lần chạy hoàn tất nên cung cấp:
 | Không tìm thấy AgentKit checkout | Cung cấp đường dẫn, hoặc đặt `AGENTKIT_REPO` như Skill gợi ý sau một lần quét thành công. |
 | Quyền push không phải `true` | Chấp nhận personal-fork lane, hoặc xin maintainer cấp quyền. |
 | Draft personal-fork bị từ chối | Sửa draft thay vì sửa gate; exit `2` là draft không hợp lệ, `5` là base chưa resolve, `7` là secret hoặc đường dẫn bị từ chối. |
-| Evolution apply trả về `regressed` hoặc `blocked` | Thay đổi không được áp dụng; xem lại verdict được báo cáo. |
+| Evolution evaluate hoặc apply trả về `regressed` hoặc `blocked` | Thay đổi không được áp dụng; xem lại verdict được báo cáo. SkillX foundation không thuộc sở hữu của bạn từ chối với `evolve.apply_refused`. |
 | Runtime không nhận diện Skill | Xác nhận target cùng scope, mở runtime session mới, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
 
 ## Trang liên quan

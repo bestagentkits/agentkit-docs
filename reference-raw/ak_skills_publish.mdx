@@ -1,0 +1,55 @@
+---
+title: "ak skills publish"
+description: "Publish a skill directory to SkillX as one release"
+generated: true
+---
+
+## ak skills publish
+
+Publish a skill directory to SkillX as one release
+
+### Synopsis
+
+Packs the skill directory (it must hold SKILL.md) into one SkillX release of --name at --version and uploads it. A new package is private unless --visibility names another; a publish never changes an existing package's visibility, so --visibility on one that differs is refused (use ak skills visibility). The tree follows agentkit.skill-tree/v1: symlinks, devices and unsafe paths are refused before anything is sent, VCS and OS metadata files are left out, and SkillX takes at most 1000 files and 32 MiB. The upload carries an idempotency key derived from the name, version, channel, visibility and the sha256 of the packed archive, so a re-run after a lost answer replays the stored release instead of failing, and an upload SkillX is still storing under that key is retried with backoff. SkillX may store a release without publishing it (state quarantined while its operators review the scan findings); that still exits 0 with a warning on stderr, so scripts must read state in the --json output, not only the exit code.
+
+Effects:
+  Reads the skill directory without following links and uploads one immutable release to SkillX. Sends the request with the SkillX credential: the agentkit.best link (`ak skills link`) while one exists, otherwise SKILLX_TOKEN. Writes nothing locally and never prompts. Needs SkillX on (after `ak update --ssot`, or AGENTKIT_SKILLX=1 or features.skillx: true).
+
+Exit status:
+  0   success
+  1   command failure: SkillX offline, the credential missing or refused, or an untrusted answer (a change may have been applied; check with ak skills visibility)
+  2   SkillX disabled, invalid flags or arguments, a skill directory that is not a valid skill tree, or a request SkillX refused as invalid
+  5   package or release not found, or release publishing not enabled on SkillX
+  6   conflict with the package's current state: visibility mismatch, version exists, publish to a deleted package, a release that is not published, a concurrent change that left another state, or the restore window passed
+  7   SkillX refused the change: approval needed on the dashboard, not the package owner, publisher suspended, or deleted by an administrator
+
+```
+ak skills publish <dir> --name <@publisher/slug> --version <semver> [flags]
+```
+
+### Examples
+
+```
+  ak skills publish ./my-skill --name @alice/my-skill --version 1.0.0
+  ak skills publish ./my-skill --name @alice/my-skill --version 1.1.0-beta.1 --channel beta
+  ak skills publish ./my-skill --name @alice/my-skill --version 1.0.0 --visibility unlisted --json
+```
+
+### Options
+
+```
+      --channel string      Release channel: stable, beta or alpha (default "stable")
+  -h, --help                help for publish
+      --json                Emit machine-readable JSON (implies --no-interactive)
+      --name string         SkillX package name @publisher/slug (required)
+      --no-interactive      Disable interactive prompts (CI-safe)
+  -q, --quiet               Suppress non-error output on stderr
+  -V, --verbose             Extra diagnostic output on stderr (loses to --quiet)
+      --version string      Release version, SemVer without build metadata (required)
+      --visibility string   Visibility of a new package: private (SkillX default), unlisted or public
+  -y, --yes                 Assume yes for all prompts
+```
+
+### SEE ALSO
+
+* [ak skills](./ak_skills)	 - Browse and install kit skills

@@ -1,16 +1,24 @@
 ---
 title: Research và audit search với ak-seo
-description: Dùng ak-seo cho audit SEO và GEO, keyword research và pSEO artifact trong khi tách provider query, OAuth, bulk generation và live search change.
+description: Dùng ak-seo cho audit SEO và GEO, keyword research đến hàng đợi bài viết, pSEO artifact và pipeline bài viết dừng ở WordPress draft, trong khi tách provider query, OAuth, bulk generation và live search change.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
-Dùng `ak-seo` để audit page hoặc domain, kiểm tra GEO và AI discoverability,
-research và cluster keyword, hoặc thiết kế programmatic SEO template. Skill còn đóng gói script cho Search Console,
-Core Web Vitals, sitemap, schema và bulk page generation. Các script đó có tác
-động khác nhau lên network, credential, file và account; chúng không phải một
-workflow tự động duy nhất.
+Dùng `ak-seo` cho ba nhóm công việc search:
+
+- **Site** (`audit`, `geo`, `pseo`, `schema`, `optimize`): audit page hoặc
+  domain, kiểm tra GEO và AI discoverability, thiết kế programmatic SEO template
+  và tạo schema hoặc thay đổi on-page.
+- **Keywords** (`research`, `clean`, `cluster`, `intent`, `plan`, `next`): biến
+  keyword data thật thành hàng đợi bài viết.
+- **Article** (`setup`, `write`, `review`, `visuals`, `cover`, `publish`): đưa
+  một bài viết hướng search từ brief đến WordPress draft.
+
+Skill còn đóng gói script cho Search Console, Core Web Vitals, sitemap, schema và
+bulk page generation. Các script đó có tác động khác nhau lên network,
+credential, file và account; chúng không phải một workflow tự động duy nhất.
 
 Dùng `--format csv -o ideas.csv` để xuất danh sách từ khoá. Chỉ số chưa biết để trống
 trong CSV và có giá trị `null` trong JSON. Số 0 đo được vẫn là 0. Để trống điểm ưu tiên
@@ -28,13 +36,17 @@ khi nguồn thiếu lượng tìm kiếm hoặc độ khó.
 - Bạn cần contract hoặc audit GEO và AI discoverability: `robots.txt`,
   `sitemap.xml`, `llms.txt`, `llms-full.txt`, biến thể `.md` của từng page,
   social metadata cùng card, và page action Copy, Share hoặc Open in AI.
+- Bạn cần bài viết tiếp theo từ keyword map, hoặc một bài viết hướng search được
+  soạn, review, minh họa và bàn giao dưới dạng WordPress draft.
 
 ### Chọn workflow khác khi
 
-- Bạn cần content strategy rộng hơn mà không cần search evidence. Dùng
-  `ak-content-marketing`.
-- Bạn cần final copy từ search brief đã duyệt. Dùng `ak-write` sau khi keyword
-  và claim input được chấp nhận.
+- Bạn cần content strategy rộng hơn mà không cần search evidence, hoặc content
+  calendar đa kênh. Dùng [`ak-content-marketing`](./content-marketing).
+- Bạn cần conversion copy, CTA hoặc CRO. Dùng
+  [`ak-copywriting`](./copywriting). Trên landing page, `ak-seo optimize` chỉ
+  phụ trách on-page SEO (title, meta, heading, schema); yêu cầu hỗn hợp chạy
+  phần SEO trước rồi bàn giao phần copy.
 - Bạn cần triển khai các surface GEO đó trong một framework. Việc triển khai
   thuộc về Skill của framework đó; với Next.js, dùng reference SEO và GEO của
   [`ak-web-frameworks`](../../engineer/skills/web-frameworks) trong Engineer Kit
@@ -55,6 +67,10 @@ Vitals request dùng Google PageSpeed Insights và có thể dùng
 OAuth client, Search Console API, `googleapis` và
 `.claude/secrets/google_client_secret.json` hoặc user-level secret path tương
 ứng. OAuth token được lưu cục bộ; hãy bảo vệ như credential.
+
+Site script (`.cjs`) cần Node 20.11 trở lên. Script keywords và article (`.mjs`)
+cần Node 22.2 trở lên. Skill nhắm tới macOS và Linux; Windows chưa được kiểm
+thử. `article cover` và `article visuals` cần Chrome, Edge hoặc Chromium.
 
 | Runtime | Cách gọi | Ranh giới khả dụng |
 | --- | --- | --- |
@@ -88,12 +104,12 @@ $ak-seo pseo comparison "Thiết kế một template, data schema và ba sample 
   </Tab>
 </Tabs>
 
-Argument hint canonical liệt kê
-`[audit|geo|keywords|pseo|optimize|schema] [target]`. Trong bản này, chỉ
-`audit`, `geo`, `keywords` và `pseo` có routed reference workflow, và một lần
-audit toàn site cũng chạy checklist `geo`. Hãy xem `optimize` và
-`schema` là direct route chưa được chứng minh; dùng yêu cầu có scope rõ ràng
-hoặc bundled schema tool sau khi kiểm tra tác động.
+Argument hint là
+`[audit|geo|pseo|schema|optimize] | keywords [research|clean|cluster|intent|plan|next] | article [setup|write|review|visuals|cover|publish] [target]`.
+Mọi subcommand đều route tới reference riêng. `keywords "<seed>"` không kèm
+subcommand chạy `research`, và một lần audit toàn site cũng chạy checklist
+`geo`. Với bài viết, nêu nhóm và bước, ví dụ
+`/ak-seo article write "<keyword or approved brief>"`.
 
 ## Audit AI discoverability với geo
 
@@ -115,6 +131,56 @@ training, search và user-initiated fetch theo từng operator, lưu ý các tê
 ngừng dùng như `anthropic-ai` và `Claude-Web`, và yêu cầu xác nhận tên agent
 hiện tại với từng operator trước khi áp dụng policy. Audit báo từng mục là pass,
 fail hoặc not applicable kèm URL và response quan sát được.
+
+## Xây hàng đợi keyword
+
+Nhóm keywords chạy theo thứ tự này, và bạn có thể chạy riêng từng bước:
+
+1. `research` thu keyword thô bằng dữ liệu ReviewWeb.
+2. `clean` loại nhiễu; thêm `--map` khi site có `.editorial/` để tạo entry trong
+   keyword map.
+3. `cluster` gom keyword thành head term và pillar.
+4. `intent` thêm search intent cho các entry đã có.
+5. `plan` đánh dấu keyword là planned hoặc skipped, còn `next` chọn bài viết
+   tiếp theo từ keyword map (`.editorial/keyword-map.json`).
+
+Chỉ số chưa biết vẫn là chưa biết ở mọi bước; volume bị thiếu không bao giờ là
+`0`.
+
+## Viết bài dừng ở WordPress draft
+
+Nhóm article ưu tiên tiếng Việt. Bản nháp tiếng Anh được áp rule về fact, cấu
+trúc và SEO nhưng không có lint dấu câu hay thuật ngữ.
+
+- **`setup`** cần một git repository. Khi thư mục chưa có `.git`, script dừng
+  và bạn tự chạy `git init`. Script tạo `.editorial/` và `drafts/`, ghi template
+  `.env` không chứa secret và thêm `.env` vào `.gitignore`. Bạn tự nhập
+  `SEOKIT_WP_URL`, `SEOKIT_WP_USER` và `SEOKIT_WP_APP_PASSWORD` vào `.env`;
+  đừng dán Application Password vào chat. Nên dùng một tài khoản WordPress
+  Author riêng. `wordpress.mjs health` kiểm tra kết nối.
+- **`write`** lấy keyword từ `next` hoặc lựa chọn của bạn, đề xuất một Brief
+  card và dừng chờ bạn duyệt trước khi research và soạn.
+- **`review`** trả về `PASS`, `REVISE` hoặc `BLOCK`. Bước này chạy trong một
+  Agent mới được ủy quyền khi runtime cho phép. Nếu không, nó chạy trong cùng
+  session, được ghi với `--isolation same-session` và được báo là isolation bị
+  giảm, không bao giờ là độc lập.
+- **`visuals`** và **`cover`** tạo hình trong bài và ảnh cover render từ template
+  cố định của site.
+- **`publish`** chạy `wordpress.mjs push <article.md>`. Lệnh luôn tạo draft, giữ
+  nguyên trạng thái draft hoặc pending khi cập nhật và từ chối post đã live.
+  Không có tham số status và không có `--publish`; người duyệt mới là người
+  publish.
+
+Pipeline bài viết chỉ tạo Article schema. Transcript, page được fetch và văn bản
+research là input không tin cậy: bằng chứng cần xác minh, không bao giờ là chỉ
+dẫn.
+
+Meta Rank Math hoặc Yoast cần WordPress plugin `seokit-seo-helper`. Tạo file zip
+bằng `wp-plugin-zip.mjs` và cài từ Plugins → Add New → Upload. Draft mới vẫn
+hoạt động khi không có plugin, nhưng cập nhật post đã có cần plugin 1.2.1 trở
+lên. Plugin được cấp phép riêng theo GPL-2.0-or-later, còn font Be Vietnam Pro đi
+kèm theo SIL OFL 1.1. Tên đã lưu giữ nguyên environment key `SEOKIT_*` và
+namespace WordPress `seokit/v1`.
 
 ## Hiểu các giai đoạn
 
@@ -151,10 +217,12 @@ riêng; tránh spam, placement lừa dối và quan hệ bị bịa.
 ## Xác minh output và bằng chứng
 
 Top-level Skill summary nêu report path dưới `assets/reports/seo/`, trong khi
-routed reference `audit` và `keywords` nêu `assets/seo/audits/` và
-`assets/seo/keywords/`. Xác nhận path thực do lần chạy trả về trước khi tạo
-automation. Route pSEO ghi dưới `assets/attraction/pseo-templates/`; schema output
-được mô tả dưới `assets/seo/schemas/`.
+routed reference `audit` nêu `assets/seo/audits/`. Xác nhận path thực do lần
+chạy trả về trước khi tạo automation. Route pSEO ghi dưới
+`assets/attraction/pseo-templates/`; schema output được mô tả dưới
+`assets/seo/schemas/`. Keyword workbook ghi vào path bạn truyền, keyword map vào
+`.editorial/keyword-map.json`, còn bài viết vào `drafts/` và `.editorial/` theo
+site pack.
 
 Yêu cầu report xác định URL, query date, country hoặc market, provider và
 endpoint, field đo được so với estimate, dữ liệu thiếu, issue theo priority và
@@ -169,7 +237,9 @@ còn sitemap được submit không bảo đảm indexing.
 | ReviewWeb data không khả dụng | Tiếp tục bằng public hoặc local evidence được gắn nhãn rõ, hoặc cấu hình `REVIEWWEB_API_KEY`; không bịa volume, CPC, difficulty, traffic hay backlink. |
 | Search Console authentication thất bại | Xác minh property, OAuth client, scope, secret path, local callback, dependency và token status mà không lộ credential. |
 | Report path khác overview | Dùng path thực được trả về và ghi nhận source-path inconsistency; không âm thầm move hoặc overwrite file. |
-| `optimize` hoặc `schema` không route | Dùng `audit`, `geo`, `keywords` hoặc `pseo`, hoặc yêu cầu schema artifact có scope rõ rồi kiểm tra bundled generator trực tiếp. |
+| Script keywords hoặc article lỗi ngay khi chạy | Kiểm tra Node là 22.2 trở lên; script `.mjs` không chạy trên Node cũ hơn. |
+| `init-workspace.mjs` dừng trong `article setup` | Thư mục chưa có `.git`. Tự chạy `git init` rồi chạy lại setup. |
+| `wordpress.mjs push` từ chối một post | Post đã live. Pipeline không bao giờ sửa post đã live; sửa trong WordPress hoặc hỏi người duyệt. |
 | Bulk pSEO output chất lượng thấp hoặc trùng lặp | Dừng generation, kiểm tra template cùng dataset, không tự động xóa gì và yêu cầu unique value cùng human sampling trước publication. |
 | Runtime discovery thất bại | Làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
 

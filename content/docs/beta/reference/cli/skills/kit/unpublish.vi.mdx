@@ -1,0 +1,105 @@
+---
+title: ak skills kit unpublish
+description: Unpublish (xoá mềm) Kit SkillX của một Kit cá nhân, khôi phục được trong 30 ngày, mà không chạm vào Kit cá nhân cục bộ.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak skills kit unpublish` để gỡ khỏi SkillX Kit mà một Kit cá nhân đang
+liên kết, hoặc Kit mà `--kit` chỉ định. SkillX xoá mềm Kit đó, nên không ai
+đọc hay sync được, và giữ nó khôi phục được trong 30 ngày bằng
+[`ak skills kit restore`](./restore). Tên vẫn được giữ chỗ.
+
+## Cách dùng
+
+```bash
+ak skills kit unpublish <name> [--kit @<handle>/<name>] [--yes] [flags]
+```
+
+```bash
+ak skills kit unpublish mine
+ak skills kit unpublish mine --yes --json
+ak skills kit unpublish mine --kit @alice/mine --dry-run
+```
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--kit @<handle>/<name>` | Kit đã liên kết | Kit cá nhân trên SkillX cần unpublish. Bắt buộc khi Kit cá nhân chưa có liên kết SkillX. |
+| `--dry-run` | `false` | Hiển thị Kit sẽ bị unpublish; không gửi gì. |
+| `--yes` | `false` | Xác nhận mà không hỏi. Bắt buộc khi dùng `--json`, `--no-interactive` hoặc không có terminal. |
+
+Các cờ dùng chung nằm trong [quy ước CLI](../cli-conventions).
+
+## Điều kiện
+
+SkillX phải bật, sau `ak update --ssot` hoặc với `AGENTKIT_SKILLX=1`, và các
+lệnh Kit cá nhân không bị `AGENTKIT_SKILL_OVERLAYS` ẩn đi.
+
+SkillX chỉ nhận lệnh này từ chủ sở hữu Kit với một SkillX API key không giới
+hạn scope trong `ak secrets` (`SKILLX_TOKEN`). Lệnh dùng key đó kể cả khi
+[`ak skills link`](../link/index) đang liên kết SkillX. Chỉ có liên kết
+agentkit.best thì bị từ chối kèm gợi ý: lưu một key bằng
+`ak secrets set SKILLX_TOKEN`, hoặc dùng creator dashboard của SkillX.
+
+Lệnh chỉ chạm vào `AGENTKIT_HOME` và theo scope global của nó từ bất kỳ thư mục
+nào.
+
+## Lệnh làm gì
+
+Lệnh đọc link record `AGENTKIT_HOME/state/personal-kits/<name>/skillx.json` để
+tìm Kit trên SkillX, trừ khi `--kit` chỉ định một Kit. Không có liên kết và
+không có `--kit` thì lệnh thoát `2`.
+
+Sau đó lệnh gửi một request xoá. SkillX ẩn Kit và các revision của nó ngay lập
+tức và giữ Kit khôi phục được trong 30 ngày. Kit đã bị unpublish trước đó báo
+`already_unpublished` và thoát `0`.
+
+Không có gì cục bộ thay đổi: Kit cá nhân, các projection và link record vẫn
+còn, nên `ak skills kit restore` có thể đưa Kit trở lại. Để gỡ các projection,
+dùng [`ak skills kit remove`](./remove).
+
+<Callout type="warning">
+  Trên terminal, lệnh hỏi
+  `Unpublish <kit> from SkillX? It stays restorable for 30 days with ak skills kit restore. [y/N]`.
+  Từ chối sẽ thoát `3` và không gửi gì. Với `--json`, `--no-interactive` hoặc
+  không có terminal, lệnh cần `--yes`; thiếu nó, lệnh thoát `2` với thông báo
+  rằng cần xác nhận và chưa gửi gì.
+</Callout>
+
+## Đầu ra
+
+Đầu ra text hiển thị Kit cá nhân và Kit SkillX của nó cùng kết quả. Sau khi
+unpublish, lệnh còn in hạn khôi phục và dòng
+`ak skills kit restore <name> --kit <kit>` để đưa Kit trở lại. Dry run được
+đánh dấu `[dry run, nothing sent]`.
+
+JSON dùng `kind=skills.kit.unpublish` với các trường sau dưới `data`:
+
+```text
+personalKit, kit, host, status, dryRun, deletedAt, restoreDeadline
+```
+
+`status` là `planned` cho dry run, `unpublished`, hoặc `already_unpublished`.
+`deletedAt` và `restoreDeadline` có khi SkillX đã trả lời lệnh xoá.
+
+## Kết quả và mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Đã unpublish, đã unpublish từ trước, hoặc dry run. |
+| `1` | Lệnh thất bại: SkillX offline, hoặc không có SkillX API key không giới hạn scope (chỉ có liên kết agentkit.best thì bị từ chối). |
+| `2` | SkillX hoặc cờ overlay bị tắt, cờ không hợp lệ, không có Kit đã liên kết và không có `--kit`, hoặc thiếu `--yes` khi không có terminal. |
+| `3` | Bạn đã từ chối xác nhận; không gửi gì. |
+| `5` | Không tìm thấy Kit SkillX với credential này, hoặc đã quá khung khôi phục 30 ngày. |
+| `7` | SkillX từ chối: không sở hữu publisher, hoặc quản trị viên đã xoá Kit. |
+| `10` | Kit cá nhân chưa được bật cho tài khoản của bạn (SkillX trả về `kit.api_disabled`). Kit cá nhân cục bộ vẫn hoạt động. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skills kit unpublish`](../cli/ak_skills_kit_unpublish)
+- [Khôi phục Kit đã unpublish](./restore)
+- [Liệt kê revision SkillX](./revisions)
+- [Gỡ các projection](./remove)
+- [Publish lên SkillX](./publish)

@@ -1,0 +1,83 @@
+---
+title: ak skills unpublish
+description: Xoá mềm một package SkillX bạn sở hữu, khôi phục được trong 30 ngày, hoặc yank một phiên bản đã publish.
+---
+
+Dùng `ak skills unpublish` để xoá một package SkillX hoặc yank một release của
+nó. Cả hai đều đảo ngược được, nên lệnh không hỏi trước. Lệnh không ghi gì cục
+bộ.
+
+## Cách dùng
+
+```bash
+ak skills unpublish <@publisher/slug> [--version <semver>] [flags]
+```
+
+```bash
+ak skills unpublish @alice/my-skill
+ak skills unpublish @alice/my-skill --version 1.0.0
+ak skills unpublish @alice/my-skill --json
+```
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--version <semver>` | Không có; xoá cả package | Yank release này thay vì xoá package. SemVer không có build metadata. |
+
+Các cờ dùng chung nằm trong [quy ước CLI](../cli-conventions).
+
+## Điều kiện
+
+| Cần | Chi tiết |
+| --- | --- |
+| SkillX đang bật | Sau `ak update --ssot`, hoặc với `AGENTKIT_SKILLX=1` hay `features.skillx: true`. Khi tắt, lệnh thoát `2`. |
+| Credential của chủ sở hữu | Xoá và yank đều là owner call. Lệnh gửi `SKILLX_TOKEN` trong `ak secrets` khi đã lưu, kể cả khi [`ak skills link`](./link/index) đang liên kết SkillX, nếu không thì gửi credential đã liên kết. Key đã lưu phải không giới hạn scope: SkillX từ chối key có scope trên owner call. Nếu SkillX từ chối token liên kết, hãy lưu một key không giới hạn scope bằng `ak secrets set SKILLX_TOKEN`. |
+
+## Lệnh làm gì
+
+- Không có `--version`, lệnh xoá mềm package. Mọi đường đọc của SkillX đều ẩn
+  nó và nó không nhận phiên bản mới. [`ak skills restore`](./restore) đưa nó
+  trở lại cùng visibility và các release cho đến hạn khôi phục, 30 ngày sau.
+  Quá hạn đó, package vẫn bị xoá và tên của nó không bao giờ được dùng lại.
+- Có `--version`, lệnh yank release đã publish đó. Release không còn resolve
+  theo phiên bản, còn lockfile ghim digest của nó vẫn đọc được. Chỉ release đã
+  publish mới yank được.
+- Chạy lại an toàn. Package đã bị xoá, hoặc release đã bị yank, thành công với
+  `changed: false`. Release ở state khác, như `quarantined`, là conflict
+  (thoát `6`).
+
+## Đầu ra
+
+Xoá in `Deleted <@publisher/slug>` (hoặc `already deleted; nothing changed`),
+hạn khôi phục, và dòng `ak skills restore` để đưa package trở lại. Yank in
+`Yanked <@publisher/slug>@<version>` (hoặc `already yanked; nothing changed`).
+
+JSON dùng `kind=skills.unpublish` với các trường sau dưới `data`:
+
+```text
+identity, action, changed, version, releaseDigest,
+deletedAt, restoreDeadline, restoreCommand, changedAt
+```
+
+`action` là `deleted` hoặc `yanked`. Xoá đặt `restoreCommand`, cùng
+`restoreDeadline` khi SkillX đã trả lời lệnh xoá; yank đặt `version` và
+`releaseDigest`.
+
+## Kết quả và mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Đã xoá, đã yank, hoặc đã ở state đó. |
+| `1` | Lệnh thất bại: SkillX offline, credential thiếu hoặc bị từ chối, hoặc phản hồi không đáng tin. Thay đổi có thể đã được áp dụng; kiểm tra bằng `ak skills visibility`. |
+| `2` | SkillX bị tắt, cờ hoặc argument không hợp lệ (như `--version` không phải SemVer), hoặc request bị SkillX từ chối vì không hợp lệ. |
+| `5` | Không tìm thấy package hoặc release với credential này, hoặc SkillX chưa bật publish release. |
+| `6` | Conflict với state hiện tại của package: release chưa được publish, hoặc thay đổi đồng thời để lại state khác. |
+| `7` | SkillX từ chối thay đổi: tài khoản của credential không sở hữu publisher, publisher bị đình chỉ, hoặc quản trị viên đã xoá package. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skills unpublish`](../cli/ak_skills_unpublish)
+- [Khôi phục package đã xoá](./restore)
+- [Xem hoặc đổi visibility của package](./visibility)
+- [Publish một thư mục Skill](./publish)
