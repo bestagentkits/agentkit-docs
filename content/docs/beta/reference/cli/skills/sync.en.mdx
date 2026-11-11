@@ -65,6 +65,22 @@ files have mode `0644` and are never executable.
   and nothing changes.
 - A digest that does not match the lock fails with `store.digest_mismatch`.
 
+A locked sync installs every pin or none. When a pinned release cannot be
+resolved, such as a private release after `ak skills unlink`, the command
+still resolves the other pins, then fails with
+`N of M locked SkillX packages could not be resolved, so sync changed nothing`
+and lists each failing `identity@version` with its code. Codes that are
+collected this way are `source.not_found`, `source.revoked`,
+`store.digest_mismatch`, and any `identity.*` or `tree.*` code. The exit code
+comes from the first security failure in lock order, otherwise from the first
+failure. Restore access with `ak skills link` or `ak secrets set SKILLX_TOKEN`,
+or drop a pin you no longer need with
+`ak skills remove <identity> --scope <scope>`, then sync again.
+
+Any other failure stops the run at once and names the pin it was resolving,
+for example a refused or unreadable credential, `source.offline` without a
+verified copy, or an unreachable SkillX.
+
 <Callout type="warning">
   The sync is one journaled transaction under the kit lifecycle lock, which
   waits 10 seconds before reporting busy. It refuses a lock that changed during
@@ -98,7 +114,7 @@ A target `action` is `create`, `replace`, `co-own`, `repair`, `unchanged`,
 | `1` | Offline without a verified copy, a credential was refused, a path was too long, or recovery is required. |
 | `2` | SkillX or the store is disabled, flags or arguments are invalid, or an alias is reserved. |
 | `4` | The kit lifecycle lock is held by another operation. |
-| `5` | A release was not found or not entitled. |
+| `5` | A release was not found or not entitled, and no pin failed a security check. |
 | `6` | Alias collision, an unowned or modified path, untrusted project state, or the lock changed during the run. |
 | `7` | A release is revoked, yanked, quarantined, or untrusted, a link sits in a target path, or a digest mismatched. |
 

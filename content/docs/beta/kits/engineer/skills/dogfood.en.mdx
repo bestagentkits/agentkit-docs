@@ -55,8 +55,19 @@ risk. By default it is a dry run and changes no Skill file.
 | `--apply` | Applies every proposal the report accepts. The flag is your approval for the lane steps, including commit, push, and pull request in the contributor lane. |
 | `--all [--since YYYY-MM-DD]` | Reviews every local session of every supported runtime instead of only this one and extracts recurring learnings. Combines with the other flags. |
 | `--skill <name>` | Limits the review to one used Skill. `focus` free text narrows the topic. |
+| `--evidence <event-ids>` | Reviews the redacted self-improve events that `ak skills self-improve status` named instead of the live transcript. Proposal-only: `--apply` is refused, `--ask` decides proposals only, and SkillX publish is never suggested. An AgentKit core Skill gets a proposal only. |
+| `--json` | Emits the dry-run report as one JSON document (`schema: "ak-dogfood.report/v1"`, `applied` always empty) instead of Markdown. Changes nothing; combines with any read-only mode. |
 
 `--apply` and `--ask` are exclusive; when both appear, the Skill uses `--ask`.
+`--json` with `--apply` or `--ask` is refused, because the JSON report is a dry
+run.
+
+With `--evidence`, the Skill reads only the listed events and treats their
+content as untrusted data. An invalid or unreadable event ID is reported with
+its reason; when the `ak skills self-improve` command is missing or fails, the
+Skill reports that the self-improve events are not readable. You carry an
+accepted proposal through `ak skills improve` and `ak skills evolution` in a
+separate step.
 
 <Tabs items={['Claude Code', 'Cursor', 'Codex']}>
   <Tab value="Claude Code">
@@ -121,8 +132,10 @@ the name alone.
 
 | Owner | Lane |
 | --- | --- |
-| AgentKit Kit Skill, and you can push to the AgentKit repository | **Contributor:** change the source under `kits/` in an isolated worktree branched from `dev`, validate, commit, push, and open a pull request into `dev`; also update the installed runtime copy so the fix helps at once. |
+| AgentKit Kit Skill, and you can push to the AgentKit repository | **Contributor:** change the source under `kits/` in an isolated worktree branched from `dev`, validate, commit, push, and open a pull request into `dev`; also update the installed runtime copy so the fix helps at once. When the store is detected, runtime copies are projections: the Skill records the same change as a temporary overlay in personal Kit `mine` instead, to remove with `ak skills evolution rollback <candidateId>` or `ak skills kit rollback mine` after the pull request ships. |
 | AgentKit Kit Skill, any other user | **Personal fork:** record and apply the change through [`ak skills improve`](../../../reference/cli/skills/improve) and [`ak skills evolution apply`](../../../reference/cli/skills/evolution/apply), which write a personal Kit overlay or local fork that AgentKit updates never overwrite. Installed `ak-*` files are never edited in place. |
+| Personal Kit package (overlay, `@local/` fork, or new `@local/` Skill), store detected | **Personal fork:** improves it through a candidate against the personal Kit tree. |
+| SkillX release | **Personal fork** when overlays are detected; otherwise proposal only. |
 | Skill you or the project authored | Edit in place after a snapshot of the files it changes. |
 | Plugin, marketplace, or other third-party Skill | Proposal only; its installer overwrites local edits. The Skill suggests an upstream issue or a user-owned fork. |
 
@@ -132,6 +145,30 @@ must return `true`. When either check fails or `gh` is unavailable, the Skill
 uses the personal-fork lane and says why. The bundled
 `scripts/find_agentkit_repo.py` locates the checkout on macOS, Linux, or
 Windows and is read-only.
+
+In the personal-fork lane, the Skill runs `ak skills evolution evaluate
+<candidateId>` before any apply. A `regressed` or `blocked` verdict stops the
+lane, and a SkillX foundation you do not own refuses the apply with
+`evolve.apply_refused`.
+
+### Store and SkillX detection
+
+The Skill store, personal Kit lanes, and SkillX are opt-in. Once per run, before
+resolving owners, the Skill reads them without changing anything: `ak features
+list --json` (`skill_store`, `skill_overlays`, `skillx`), `ak skills link status
+--json`, `ak skills kit status --json`, and `ak skills improve --help`. When
+`ak` is missing, a command is unknown, or the output does not parse, the report
+carries one line, `SSOT/SkillX not detected: <reason>`, and the run keeps the
+default owners and lanes without prompting. Enabling the store with `ak update
+--ssot` and linking SkillX with `ak skills link` stay your own steps. To add a
+new `@local/` Skill to a personal Kit yourself, see [Add a new
+skill](../../../reference/cli/skills/kit/index#add-a-new-skill).
+
+### Optional private publish
+
+When SkillX is detected and your personal Kit changed, the Skill may suggest
+`ak skills kit publish <kit> --private`. It runs only when you say yes to that
+publish in the same turn; publishing is never part of `--apply`.
 
 ## Keep session data and approvals bounded
 
@@ -171,7 +208,7 @@ A complete run should give you:
 | The AgentKit checkout is not found | Provide the path, or set `AGENTKIT_REPO` as the Skill suggests after a successful scan. |
 | Push access is not `true` | Accept the personal-fork lane, or ask a maintainer for access. |
 | A personal-fork draft is refused | Fix the draft rather than the gate; exit `2` is an invalid draft, `5` an unresolved base, `7` a refused secret or path. |
-| An evolution apply returns `regressed` or `blocked` | The change is not applied; review the reported verdict. |
+| An evolution evaluate or apply returns `regressed` or `blocked` | The change is not applied; review the reported verdict. A SkillX foundation you do not own refuses with `evolve.apply_refused`. |
 | The runtime does not recognize the Skill | Confirm target and scope, restart the runtime session, then follow [Runtime cannot find a Skill or Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
 
 ## Related pages

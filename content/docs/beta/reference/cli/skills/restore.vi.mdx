@@ -1,0 +1,71 @@
+---
+title: ak skills restore
+description: Khôi phục một package SkillX đã xoá bằng ak skills unpublish, cùng visibility và các release, trong khung 30 ngày.
+---
+
+Dùng `ak skills restore` để đưa trở lại một package đã xoá bằng
+[`ak skills unpublish`](./unpublish) trước hạn khôi phục. Package giữ nguyên
+visibility và các release. Lệnh không ghi gì cục bộ và không bao giờ hỏi.
+
+## Cách dùng
+
+```bash
+ak skills restore <@publisher/slug> [flags]
+```
+
+```bash
+ak skills restore @alice/my-skill
+ak skills restore @alice/my-skill --json
+```
+
+Lệnh không có tuỳ chọn riêng. Các cờ dùng chung nằm trong
+[quy ước CLI](../cli-conventions).
+
+## Điều kiện
+
+| Cần | Chi tiết |
+| --- | --- |
+| SkillX đang bật | Sau `ak update --ssot`, hoặc với `AGENTKIT_SKILLX=1` hay `features.skillx: true`. Khi tắt, lệnh thoát `2`. |
+| Credential của chủ sở hữu | Khôi phục là owner call. Lệnh gửi `SKILLX_TOKEN` trong `ak secrets` khi đã lưu, kể cả khi [`ak skills link`](./link/index) đang liên kết SkillX, nếu không thì gửi credential đã liên kết. Key đã lưu phải không giới hạn scope: SkillX từ chối key có scope trên owner call. Nếu SkillX từ chối token liên kết, hãy lưu một key không giới hạn scope bằng `ak secrets set SKILLX_TOKEN`. |
+
+## Lệnh làm gì
+
+- Lệnh xoá trạng thái đã xoá của package trên SkillX, cho đến hạn khôi phục
+  30 ngày sau khi xoá.
+- Chạy lại an toàn: package chưa bị xoá thành công với `changed: false`.
+- Quá khung khôi phục, package vẫn bị xoá và tên của nó không được dùng lại
+  (thoát `6`).
+- Package do quản trị viên SkillX xoá chỉ quản trị viên mới khôi phục được
+  (thoát `7`).
+
+## Đầu ra
+
+Đầu ra text là một dòng:
+`Restored <@publisher/slug> (visibility <visibility>)`, hoặc
+`is not deleted; nothing changed`.
+
+JSON dùng `kind=skills.restore` với các trường sau dưới `data`:
+
+```text
+identity, changed, visibility, restoredAt
+```
+
+`visibility` để trống khi package chưa bị xoá và state của nó chưa được đọc.
+
+## Kết quả và mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Đã khôi phục, hoặc package chưa bị xoá. |
+| `1` | Lệnh thất bại: SkillX offline, credential thiếu hoặc bị từ chối, hoặc phản hồi không đáng tin. Thay đổi có thể đã được áp dụng; kiểm tra bằng `ak skills visibility`. |
+| `2` | SkillX bị tắt, cờ hoặc argument không hợp lệ, hoặc request bị SkillX từ chối vì không hợp lệ. |
+| `5` | Không tìm thấy package với credential này, hoặc SkillX chưa bật publish release. |
+| `6` | Đã quá khung khôi phục, hoặc thay đổi đồng thời để package vẫn ở trạng thái đã xoá. |
+| `7` | SkillX từ chối thay đổi: quản trị viên đã xoá package, tài khoản của credential không sở hữu publisher, hoặc publisher bị đình chỉ. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skills restore`](../cli/ak_skills_restore)
+- [Xoá package hoặc yank một phiên bản](./unpublish)
+- [Xem hoặc đổi visibility của package](./visibility)
+- [Publish một thư mục Skill](./publish)

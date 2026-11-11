@@ -1,0 +1,84 @@
+---
+title: ak skills visibility
+description: Show the visibility of a SkillX package you own, or change it with a compare-and-set that never overwrites a concurrent change.
+---
+
+Use `ak skills visibility` to read the stored visibility of a SkillX package,
+or to change it with `--set`. The command writes nothing locally and never
+prompts.
+
+## Usage
+
+```bash
+ak skills visibility <@publisher/slug> [--set private|unlisted|public] [flags]
+```
+
+```bash
+ak skills visibility @alice/my-skill
+ak skills visibility @alice/my-skill --set private
+ak skills visibility @alice/my-skill --set unlisted --json
+```
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--set <visibility>` | None; the command only reads | New visibility: `private`, `unlisted` or `public`. |
+
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+## Requirements
+
+| Need | Detail |
+| --- | --- |
+| SkillX on | After `ak update --ssot`, or with `AGENTKIT_SKILLX=1` or `features.skillx: true`. While off, the command exits `2`. |
+| An owner credential | The read and the change are owner calls. The command sends `SKILLX_TOKEN` from `ak secrets` when one is stored, even while [`ak skills link`](./link/index) links SkillX, and otherwise the linked credential. A stored key must be unscoped: SkillX refuses scoped keys on owner calls. If SkillX refuses the linked token, store an unscoped key with `ak secrets set SKILLX_TOKEN`. |
+
+## What it does
+
+- Without `--set`, the command reads the package's release list and prints its
+  visibility.
+- With `--set`, it reads the visibility, then changes it from that value. This
+  is a compare-and-set, so a change made meanwhile is never overwritten.
+  Setting the current value changes nothing.
+- When the package changed meanwhile, the command reads its visibility once
+  more. If it already has the requested value, the command succeeds with
+  `changed: false`; otherwise it is a conflict (exit `6`) that names the
+  visibility found.
+- Narrowing (to `private`, or from `public` to `unlisted`) takes effect on the
+  next read.
+- Widening (to `unlisted` or `public`) needs your approval in a signed-in
+  SkillX session. With a token SkillX refuses it (exit `7`), and the error
+  points to https://skillx.sh/dashboard, where you approve the change.
+
+## Output
+
+The text output is one line: the package and its visibility,
+`changed from <old> to <new>`, or `already <visibility>; nothing changed`.
+
+JSON uses `kind=skills.visibility` with these fields under `data`:
+
+```text
+identity, visibility, from, changed, changedAt
+```
+
+`from` is set only with `--set`, and `changedAt` only when the visibility
+changed.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Read, changed, or already the requested visibility. |
+| `1` | Command failure: SkillX offline, the credential missing or refused, or an untrusted answer. A change may have been applied; run the command again without `--set` to check. |
+| `2` | SkillX disabled, invalid flags or arguments, or a request SkillX refused as invalid. |
+| `5` | Package not found for this credential, or release publishing not enabled on SkillX. |
+| `6` | The package changed meanwhile to another visibility. |
+| `7` | SkillX refused the change: approval needed on the SkillX dashboard, the credential's account does not own the publisher, the publisher is suspended, or an administrator deleted the package. |
+
+## Related commands
+
+- [Complete `ak skills visibility` command facts](../cli/ak_skills_visibility)
+- [Publish a skill directory](./publish)
+- [Delete a package or yank one version](./unpublish)
+- [Restore a deleted package](./restore)

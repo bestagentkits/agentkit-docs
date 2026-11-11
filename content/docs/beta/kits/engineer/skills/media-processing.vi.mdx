@@ -8,8 +8,10 @@ import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
 Dùng `ak-media-processing` cho biến đổi image, audio và video local bằng FFmpeg,
 ImageMagick cùng RMBG. Skill bao phủ format conversion, encoding, filter,
-thumbnail, batch image, background removal, HLS hoặc DASH packaging và live
-streaming đã được cấp quyền rõ ràng.
+thumbnail, batch image, background removal, HLS hoặc DASH packaging, nén video
+cho web, so sánh codec, audit chỉ đọc về cách site phục vụ video và live
+streaming đã được cấp quyền rõ ràng. Các Skill dựng composition như
+[`ak-remotion`](./remotion) bàn giao bản render sang đây để encode cho delivery.
 
 ## Chọn media tooling xác định
 
@@ -21,6 +23,8 @@ streaming đã được cấp quyền rõ ràng.
 - Bạn cần tệp HLS hay DASH từ source local.
 - Bạn cần AI background removal local và chấp nhận tải model.
 - Bạn muốn inspect media property trước khi chọn output setting.
+- Bạn cần nén video cho web, so sánh codec trên một sample hoặc lập inventory
+  các video mà site phục vụ.
 
 ### Chọn workflow khác khi
 
@@ -42,7 +46,8 @@ Trước khi bắt đầu:
 - Chỉ cài local tool cần thiết: FFmpeg và `ffprobe` cho video hoặc audio,
   ImageMagick cho still image và `rmbg-cli` cho background removal. Xác minh
   bằng `ffmpeg -version`, `ffprobe -version`, `magick -version` hoặc
-  `rmbg --version` tùy task.
+  `rmbg --version` tùy task. Script capture cho web video còn cần Node, và chỉ
+  đo kích thước render khi đã cài Playwright.
 - Giữ original ở vị trí riêng và chọn output path mới. Tránh lệnh `mogrify`
   in-place trừ khi overwrite là chủ đích và có thể khôi phục.
 - Inspect codec, stream, dimension, frame rate, duration, color space, metadata,
@@ -90,7 +95,8 @@ $ak-media-processing "Inspect ./media/demo.mov, create ./artifacts/demo-web.mp4 
 | Task | Tool hoặc helper | Effect quan trọng |
 | --- | --- | --- |
 | Convert video hoặc audio | FFmpeg hoặc `media_convert.py` đi kèm | Re-encoding đổi quality; stream copy chỉ hợp lệ khi container cùng codec tương thích |
-| Optimize kích thước video | `video_optimize.py` đi kèm | Có thể giảm resolution, frame rate, audio bitrate hoặc video bitrate và ghi FFmpeg pass log tạm thời |
+| Nén video cho web | `video_optimize.py <file>` đi kèm | Không bao giờ chạm vào source hay ghi đè output đã có: ghi `<name>.optimized.<ext>` (rồi `-2`), còn `-o` trỏ tới file đã có cần `--replace-output`, vốn giữ `<name>.bak-<UTC time>`. Chỉ promote bản encode đã stage sau khi decode trọn vẹn và kiểm tra kích thước, thời lượng, track, frame cùng alpha. Từ chối output không nhỏ hơn (exit 3) trừ khi có `--keep-larger`. Mặc định giữ audio, text caption và frame rate (`--audio drop`, `--drop-silent-audio` và `--fps` phải truyền rõ). Từ chối làm mất HDR hoặc alpha trừ khi có `--allow-format-downgrade`. Hỗ trợ `--codec h264\|hevc\|vp9\|av1`, `-n/--dry-run`, receipt `--json` và `--two-pass` chỉ cho H.264. |
+| Audit video trên web | `video_web_audit.py` đi kèm cùng `capture_rendered_videos.mjs` | Inventory chỉ đọc về nơi và cách site dùng từng video; không bao giờ encode, move hay sửa. Kích thước render cần Playwright; nếu không có, target size được đánh dấu là cần đo. |
 | Resize hoặc convert image | ImageMagick hoặc `batch_resize.py` đi kèm | Crop, forced dimension, quality, color conversion và `-strip` có thể xóa thông tin |
 | Batch image in-place | `mogrify` | Overwrite source file khớp trừ khi `-path` trỏ tới directory khác |
 | Xóa background | RMBG hoặc shell cùng Node helper đi kèm | Tải local model trong lần dùng đầu và ghi PNG trong suốt |
@@ -154,6 +160,9 @@ Kết quả hoàn tất nên gồm:
   lỗi hay skip.
 - CPU hay GPU path, concurrency, elapsed time, model download, network endpoint
   cùng external publication effect.
+- Với web video, số byte đo được trước và sau từ receipt, không bao giờ là phần
+  trăm dự kiến. Thay asset gốc trong project là thay đổi phá hủy và cần phê
+  duyệt riêng.
 
 Release
 không chứng minh mọi FFmpeg build, ImageMagick delegate, RMBG download, hardware

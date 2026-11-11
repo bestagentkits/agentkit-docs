@@ -1,0 +1,74 @@
+---
+title: ak skills restore
+description: Restore a SkillX package deleted with ak skills unpublish, with its visibility and releases, within its 30-day window.
+---
+
+Use `ak skills restore` to bring back a package deleted with
+[`ak skills unpublish`](./unpublish) before its restore deadline. The package
+keeps its visibility and releases. The command writes nothing locally and
+never prompts.
+
+## Usage
+
+```bash
+ak skills restore <@publisher/slug> [flags]
+```
+
+```bash
+ak skills restore @alice/my-skill
+ak skills restore @alice/my-skill --json
+```
+
+The command has no options of its own. Shared flags are described in
+[CLI conventions](../cli-conventions).
+
+## Requirements
+
+| Need | Detail |
+| --- | --- |
+| SkillX on | After `ak update --ssot`, or with `AGENTKIT_SKILLX=1` or `features.skillx: true`. While off, the command exits `2`. |
+| An owner credential | A restore is an owner call. The command sends `SKILLX_TOKEN` from `ak secrets` when one is stored, even while [`ak skills link`](./link/index) links SkillX, and otherwise the linked credential. A stored key must be unscoped: SkillX refuses scoped keys on owner calls. If SkillX refuses the linked token, store an unscoped key with `ak secrets set SKILLX_TOKEN`. |
+
+## What it does
+
+- The command clears the package's deletion on SkillX, until the restore
+  deadline 30 days after the delete.
+- Re-running is safe: a package that is not deleted succeeds with
+  `changed: false`.
+- After the restore window the package stays deleted and its name is not
+  reused (exit `6`).
+- A package a SkillX administrator deleted can only be restored by an
+  administrator (exit `7`).
+
+## Output
+
+The text output is one line:
+`Restored <@publisher/slug> (visibility <visibility>)`, or
+`is not deleted; nothing changed`.
+
+JSON uses `kind=skills.restore` with these fields under `data`:
+
+```text
+identity, changed, visibility, restoredAt
+```
+
+`visibility` is empty when the package was not deleted and its state was not
+read.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Restored, or the package was not deleted. |
+| `1` | Command failure: SkillX offline, the credential missing or refused, or an untrusted answer. The change may have been applied; check with `ak skills visibility`. |
+| `2` | SkillX disabled, invalid flags or arguments, or a request SkillX refused as invalid. |
+| `5` | Package not found for this credential, or release publishing not enabled on SkillX. |
+| `6` | The restore window passed, or a concurrent change left the package deleted. |
+| `7` | SkillX refused the change: an administrator deleted the package, the credential's account does not own the publisher, or the publisher is suspended. |
+
+## Related commands
+
+- [Complete `ak skills restore` command facts](../cli/ak_skills_restore)
+- [Delete a package or yank one version](./unpublish)
+- [Show or change a package's visibility](./visibility)
+- [Publish a skill directory](./publish)

@@ -1,0 +1,103 @@
+---
+title: ak skills publish
+description: Publish một thư mục Skill lên SkillX thành một release bất biến của @publisher/slug; package mới là private trừ khi --visibility chọn giá trị khác.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Dùng `ak skills publish` để upload một thư mục Skill lên SkillX thành một
+release của `@<publisher>/<slug>` ở đúng một phiên bản. Lệnh đóng gói và kiểm
+tra tree tại máy, và không gửi gì cho đến khi mọi bước kiểm tra đều qua. Lệnh
+không ghi gì cục bộ và không bao giờ hỏi.
+
+## Cách dùng
+
+```bash
+ak skills publish <dir> --name <@publisher/slug> --version <semver> [flags]
+```
+
+```bash
+ak skills publish ./my-skill --name @alice/my-skill --version 1.0.0
+ak skills publish ./my-skill --name @alice/my-skill --version 1.1.0-beta.1 --channel beta
+ak skills publish ./my-skill --name @alice/my-skill --version 1.0.0 --visibility unlisted --json
+```
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--name <@publisher/slug>` | Không có; bắt buộc | Tên package trên SkillX. |
+| `--version <semver>` | Không có; bắt buộc | Phiên bản release, SemVer không có build metadata. |
+| `--channel <channel>` | `stable` | Kênh release: `stable`, `beta` hoặc `alpha`. |
+| `--visibility <visibility>` | Mặc định của SkillX, `private` | Visibility của package mới: `private`, `unlisted` hoặc `public`. Không bao giờ đổi package đã có. |
+
+Các cờ dùng chung nằm trong [quy ước CLI](../cli-conventions).
+
+## Điều kiện
+
+| Cần | Chi tiết |
+| --- | --- |
+| SkillX đang bật | Sau `ak update --ssot`, hoặc với `AGENTKIT_SKILLX=1` hay `features.skillx: true`. Khi tắt, lệnh thoát `2`. |
+| Credential SkillX | Upload dùng liên kết agentkit.best ([`ak skills link`](./link/index)) khi có, nếu không thì dùng `SKILLX_TOKEN` trong `ak secrets`. Token liên kết cần grant `skillx-kits:write`; API key cần scope `releases:publish:@<publisher>`. Không có credential thì không gửi gì. |
+
+## Lệnh làm gì
+
+- Thư mục phải có `SKILL.md` ở gốc. Tree theo `agentkit.skill-tree/v1`: không
+  đi theo link, symlink, device và đường dẫn không an toàn bị từ chối trước khi
+  gửi bất cứ thứ gì, còn file metadata của VCS và hệ điều hành bị bỏ qua.
+  SkillX nhận tối đa 1000 file và 32 MiB.
+- Package mới là private trừ khi `--visibility` chọn giá trị khác. Publish
+  không bao giờ đổi visibility của package đã có, nên `--visibility` với giá
+  trị khác sẽ bị từ chối (thoát `6`). Đổi bằng
+  [`ak skills visibility`](./visibility).
+- Phiên bản đã chứa nội dung khác bị từ chối (thoát `6`); hãy publish phiên bản
+  mới. Publish vào package đã bị xoá cũng bị từ chối; hãy khôi phục package
+  trước bằng [`ak skills restore`](./restore).
+- Upload mang một idempotency key suy ra từ tên, phiên bản, kênh, visibility và
+  sha256 của archive đã đóng gói. Chạy lại sau khi mất phản hồi sẽ replay
+  release đã lưu thay vì lỗi, và upload mà SkillX vẫn đang lưu dưới key đó được
+  thử lại với backoff.
+- Trên nền tảng không ghi file mode (Windows), mọi file được publish ở dạng
+  không executable, kèm cảnh báo trên stderr. Hãy publish từ macOS hoặc Linux
+  để giữ script executable.
+
+<Callout type="warning">
+  SkillX có thể lưu release mà không publish: state `quarantined` trong lúc
+  operator của SkillX xem xét kết quả quét. Lệnh vẫn thoát `0` và in cảnh báo
+  ra stderr, nên script phải đọc `state` trong đầu ra `--json`, không chỉ dựa
+  vào mã thoát.
+</Callout>
+
+## Đầu ra
+
+Đầu ra text nêu kết quả (`Published`, `Already published (same content)`
+hoặc `Already published (replayed)`), rồi visibility, kênh, state, release
+digest, số file và kích thước đã đóng gói, cùng một dòng cho mỗi finding và
+cảnh báo. Với package private, lệnh còn in dòng
+`ak skills visibility <@publisher/slug> --set unlisted` để chia sẻ nó.
+
+JSON dùng `kind=skills.publish` với các trường sau dưới `data`:
+
+```text
+identity, version, channel, visibility, releaseDigest, artifactDigest,
+state, created, replayed, files, archiveBytes, findings[], warnings[]
+```
+
+## Kết quả và mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Đã publish, đã publish với cùng nội dung, hoặc upload được replay. Release lưu ở state `quarantined` cũng thoát `0`; hãy đọc `state`. |
+| `1` | Lệnh thất bại: SkillX offline, credential thiếu hoặc bị từ chối, hoặc phản hồi không đáng tin. Thay đổi có thể đã được áp dụng; kiểm tra bằng `ak skills visibility`. |
+| `2` | SkillX bị tắt, cờ hoặc argument không hợp lệ, thư mục không phải skill tree hợp lệ, hoặc request bị SkillX từ chối vì không hợp lệ. |
+| `5` | Không tìm thấy package, hoặc SkillX chưa bật publish release. |
+| `6` | Conflict với state hiện tại của package: visibility không khớp, phiên bản đã tồn tại, hoặc publish vào package đã bị xoá. |
+| `7` | SkillX từ chối thay đổi: cần duyệt trên dashboard SkillX, tài khoản của credential không sở hữu publisher, publisher bị đình chỉ, hoặc quản trị viên đã xoá package. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skills publish`](../cli/ak_skills_publish)
+- [Xem hoặc đổi visibility của package](./visibility)
+- [Xoá package hoặc yank một phiên bản](./unpublish)
+- [Khôi phục package đã xoá](./restore)
+- [Liên kết SkillX với tài khoản agentkit.best](./link/index)

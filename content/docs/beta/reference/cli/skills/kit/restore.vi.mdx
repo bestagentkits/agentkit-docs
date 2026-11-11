@@ -1,0 +1,92 @@
+---
+title: ak skills kit restore
+description: Khôi phục Kit SkillX của một Kit cá nhân đã unpublish trong 30 ngày qua và chuyển link record sang generation đã khôi phục.
+---
+
+Dùng `ak skills kit restore` để đưa trở lại Kit SkillX mà một Kit cá nhân đang
+liên kết, hoặc Kit mà `--kit` chỉ định, sau khi unpublish, tại đây hoặc trên
+dashboard SkillX, trong vòng 30 ngày. Lệnh không bao giờ hỏi.
+
+## Cách dùng
+
+```bash
+ak skills kit restore <name> [--kit @<handle>/<name>] [flags]
+```
+
+```bash
+ak skills kit restore mine
+ak skills kit restore mine --kit @alice/mine --json
+```
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--kit @<handle>/<name>` | Kit đã liên kết | Kit cá nhân trên SkillX cần khôi phục. Bắt buộc khi Kit cá nhân chưa có liên kết SkillX. |
+
+Các cờ dùng chung nằm trong [quy ước CLI](../cli-conventions).
+
+## Điều kiện
+
+SkillX phải bật, sau `ak update --ssot` hoặc với `AGENTKIT_SKILLX=1`, và các
+lệnh Kit cá nhân không bị `AGENTKIT_SKILL_OVERLAYS` ẩn đi.
+
+SkillX chỉ nhận lệnh này từ chủ sở hữu Kit với một SkillX API key không giới
+hạn scope trong `ak secrets` (`SKILLX_TOKEN`). Lệnh dùng key đó kể cả khi
+[`ak skills link`](../link/index) đang liên kết SkillX. Chỉ có liên kết
+agentkit.best thì bị từ chối kèm gợi ý: lưu một key bằng
+`ak secrets set SKILLX_TOKEN`, hoặc dùng creator dashboard của SkillX.
+
+Lệnh chỉ chạm vào `AGENTKIT_HOME` và theo scope global của nó từ bất kỳ thư mục
+nào.
+
+## Lệnh làm gì
+
+Lệnh đọc link record `AGENTKIT_HOME/state/personal-kits/<name>/skillx.json` để
+tìm Kit trên SkillX, trừ khi `--kit` chỉ định một Kit. Không có liên kết và
+không có `--kit` thì lệnh thoát `2`.
+
+Sau đó lệnh gửi một request khôi phục. Kit đang hoạt động được báo là
+`already_live` và thoát `0`. Kit do quản trị viên xoá chỉ quản trị viên mới
+khôi phục được (thoát `7`), và Kit đã quá khung 30 ngày vẫn bị xoá (thoát `5`).
+
+Mỗi lần unpublish và khôi phục đều tăng generation của Kit thêm một. Khi link
+record chỉ đúng Kit vừa khôi phục trên cùng host, không có upload đang dở, và
+đã thấy generation ngay trước lần unpublish, lệnh chuyển record sang generation
+đã khôi phục qua journal của skill store, nên lần
+[`ak skills kit publish`](./publish) kế tiếp không cần `--expect-generation`.
+Nếu ghi thất bại, một cảnh báo nêu `--expect-generation <n>` cần truyền ở lần
+publish kế tiếp. Khi record không khớp, đầu ra text yêu cầu bạn kiểm tra Kit
+bằng [`ak skills kit revisions`](./revisions) trước lần publish kế tiếp.
+
+## Đầu ra
+
+Đầu ra text hiển thị Kit cá nhân, Kit SkillX của nó, host, thời điểm khôi phục
+và generation, hoặc cho biết Kit đang hoạt động và không có gì để khôi phục.
+
+JSON dùng `kind=skills.kit.restore` với các trường sau dưới `data`:
+
+```text
+personalKit, kit, host, status, restoredAt, generation, linkUpdated
+```
+
+`status` là `restored` hoặc `already_live`. `linkUpdated` là `true` khi link
+record đã được chuyển sang generation đã khôi phục.
+
+## Kết quả và mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Đã khôi phục, hoặc Kit đang hoạt động. |
+| `1` | Lệnh thất bại: SkillX offline, hoặc không có SkillX API key không giới hạn scope (chỉ có liên kết agentkit.best thì bị từ chối). |
+| `2` | SkillX hoặc cờ overlay bị tắt, cờ không hợp lệ, hoặc không có Kit đã liên kết và không có `--kit`. |
+| `5` | Không tìm thấy Kit SkillX với credential này, hoặc đã quá khung khôi phục 30 ngày. |
+| `7` | SkillX từ chối: không sở hữu publisher, hoặc quản trị viên đã xoá Kit. |
+| `10` | Kit cá nhân chưa được bật cho tài khoản của bạn (SkillX trả về `kit.api_disabled`). Kit cá nhân cục bộ vẫn hoạt động. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skills kit restore`](../cli/ak_skills_kit_restore)
+- [Unpublish Kit khỏi SkillX](./unpublish)
+- [Liệt kê revision SkillX](./revisions)
+- [Publish lên SkillX](./publish)

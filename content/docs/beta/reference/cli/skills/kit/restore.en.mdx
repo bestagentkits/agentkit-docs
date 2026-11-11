@@ -1,0 +1,95 @@
+---
+title: ak skills kit restore
+description: Restore a personal kit's SkillX kit unpublished in the last 30 days and move the link record to the restored generation.
+---
+
+Use `ak skills kit restore` to bring back the SkillX kit a personal kit is
+linked to, or the one `--kit` names, after an unpublish, here or on the SkillX
+dashboard, within 30 days. The command never prompts.
+
+## Usage
+
+```bash
+ak skills kit restore <name> [--kit @<handle>/<name>] [flags]
+```
+
+```bash
+ak skills kit restore mine
+ak skills kit restore mine --kit @alice/mine --json
+```
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--kit @<handle>/<name>` | The linked one | SkillX personal kit to restore. Required when the personal kit has no SkillX link. |
+
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+## Requirements
+
+SkillX must be on, after `ak update --ssot` or with `AGENTKIT_SKILLX=1`, and
+the personal kit commands must not be hidden by `AGENTKIT_SKILL_OVERLAYS`.
+
+SkillX accepts this call only from the kit's owner with an unscoped SkillX API
+key in `ak secrets` (`SKILLX_TOKEN`). The command uses that key even while
+[`ak skills link`](../link/index) links SkillX. The agentkit.best link alone is
+refused with a hint: store a key with `ak secrets set SKILLX_TOKEN`, or use the
+SkillX creator dashboard.
+
+The command only touches `AGENTKIT_HOME` and follows its global scope from any
+directory.
+
+## What it does
+
+The command reads the link record
+`AGENTKIT_HOME/state/personal-kits/<name>/skillx.json` to find the SkillX kit,
+unless `--kit` names one. With no link and no `--kit` it exits `2`.
+
+It then sends one restore request. A kit that is live already is reported as
+`already_live` and exits `0`. A kit an administrator deleted can only be
+restored by the administrator (exit `7`), and a kit whose 30-day window has
+passed stays deleted (exit `5`).
+
+An unpublish and a restore each move the kit's generation by one. When the
+link record names the restored kit on the same host, has no upload in
+progress, and saw the generation just before the unpublish, the command moves
+the record to the restored generation through the skill store journal, so the
+next [`ak skills kit publish`](./publish) needs no `--expect-generation`. If
+that write fails, a warning names the `--expect-generation <n>` to pass on the
+next publish. When the record does not match, the text output asks you to
+check the kit with [`ak skills kit revisions`](./revisions) before the next
+publish.
+
+## Output
+
+The text output shows the personal kit, its SkillX kit, the host, and the
+restore time and generation, or that the kit is live and there is nothing to
+restore.
+
+JSON uses `kind=skills.kit.restore` with these fields under `data`:
+
+```text
+personalKit, kit, host, status, restoredAt, generation, linkUpdated
+```
+
+`status` is `restored` or `already_live`. `linkUpdated` is `true` when the
+link record was moved to the restored generation.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Restored, or already live. |
+| `1` | Command failure: SkillX offline, or no unscoped SkillX API key (the agentkit.best link alone is refused). |
+| `2` | SkillX or the overlay flag disabled, invalid flags, or no linked kit and no `--kit`. |
+| `5` | The SkillX kit was not found for this credential, or its 30-day restore window has passed. |
+| `7` | Refused by SkillX: the publisher is not owned, or an administrator deleted the kit. |
+| `10` | Personal kits are not enabled for your account yet (SkillX answered `kit.api_disabled`). Local personal kits keep working. |
+
+## Related commands
+
+- [Complete `ak skills kit restore` command facts](../cli/ak_skills_kit_restore)
+- [Unpublish a kit from SkillX](./unpublish)
+- [List SkillX revisions](./revisions)
+- [Publish to SkillX](./publish)
