@@ -57,7 +57,7 @@ Shared flags are documented in [CLI conventions](../cli-conventions).
 
 | Selector | Route |
 | --- | --- |
-| No scope or mode flags | Broad user-scope cleanup: the recognized user plugin/legacy roots and registered global native lifecycle roots for the Kit. It does not select the current project-native route. |
+| No scope or mode flags | The scope `ak kit install` defaults to: the current directory's project-native lifecycle roots when the project holds a native install of the Kit (same plan as `--project-dir .`). Otherwise, or when the current directory routes to the user-level install (such as your home directory), broad user-scope cleanup: the recognized user plugin/legacy roots and registered global native lifecycle roots for the Kit. |
 | `--global` | Registered user/global native lifecycle roots. |
 | `--global --plugin-mode` | Only the Claude Code user plugin. |
 | `--project-dir <dir>` | Project-native lifecycle roots for the selected project. |
@@ -66,7 +66,15 @@ Shared flags are documented in [CLI conventions](../cli-conventions).
 
 `--global` cannot be combined with `--project-dir`. Project and user state are
 independent; a project-plugin uninstall does not authorize user-plugin or native
-cleanup.
+cleanup. When the default selects the project while the Kit is also installed
+for the user, the user install stays and a warning names
+`ak kit uninstall <kit> --global --yes`.
+
+When the selected scope holds nothing to remove, the command does not report a
+plain success: human output reads `nothing to uninstall in the <scope> scope`,
+and a warning names any other scope that still holds the Kit (a project-native
+install of the current directory, a project plugin there, or the user install)
+with the command that removes it.
 
 A project route is refused with exit `6` when it resolves to the user-level
 install, for example `--project-dir` set to your home directory, or a project
@@ -82,7 +90,7 @@ a project route or `--global` for registered user/global native roots.
 ## Examples
 
 ```bash
-# Preview the default broad user-scope plan.
+# Preview the default plan (the current project when it holds the Kit).
 ak kit uninstall engineer --dry-run
 
 # Apply the reviewed default plan.
@@ -113,7 +121,8 @@ mutation. A dry-run is lock-free because it does not change owned surfaces.
 ## Output and streams
 
 Human output goes to stdout. It reports `dry-run` or `uninstalled`, counts for
-delete, preserve, and skip, warnings, and every actionable recovery snapshot.
+delete, preserve, and skip with the selected scope, warnings, and every
+actionable recovery snapshot.
 
 With `--json`, stdout contains a versioned envelope with
 `kind=kit.uninstall`. Its `data` includes:
@@ -124,7 +133,15 @@ snapshotId, snapshotIds, recovery
 removedPaths, removedDiagnosticPaths, preservedPaths, skippedPaths, configPaths
 deactivationSteps, warnings, manifestResult
 deleted, preserved, skipped, success
+scope, scopeAutoSelected, nothingInScope, installedElsewhere
 ```
+
+`scope` is `project` or `global`. `scopeAutoSelected` is `true` when no scope
+flag was passed and the current project's install was selected.
+`nothingInScope` is `true` when the selected scope held nothing to remove; then
+`installedElsewhere` lists each other scope that holds the Kit as
+`{scope, paths, command}`. Treat `nothingInScope` as "not removed", not as a
+completed uninstall.
 
 A successful preview has `data.success=true` and `data.dryRun=true`, then the
 process exits `3`. Mutation failures in JSON mode write an error envelope to
