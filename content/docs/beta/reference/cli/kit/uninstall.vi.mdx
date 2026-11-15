@@ -56,12 +56,18 @@ Xem các cờ dùng chung tại [quy ước CLI](../cli-conventions).
 
 | Selector | Route |
 | --- | --- |
-| Không có cờ scope hoặc mode | Cleanup diện rộng ở user scope: user plugin/legacy root được nhận diện cùng global native lifecycle root đã đăng ký của Kit. Không chọn route project-native trong project hiện tại. |
+| Không có cờ scope hoặc mode | Giống `ak kit install`: khi thư mục hiện tại chứa bản cài native của Kit, chọn project-native lifecycle root của nó (cùng kế hoạch với `--project-dir .`). Nếu không, cleanup diện rộng ở user scope: user plugin/legacy root được nhận diện cùng global native lifecycle root đã đăng ký của Kit. |
 | `--global` | Các user/global native lifecycle root đã đăng ký. |
 | `--global --plugin-mode` | Chỉ Claude Code user plugin. |
 | `--project-dir <dir>` | Project-native lifecycle root của project đã chọn. |
 | `--plugin-mode` | Claude Code project plugin trong thư mục hiện tại. |
 | `--plugin-mode --project-dir <dir>` | Claude Code project plugin trong project đã chỉ định. |
+
+Khi không có cờ scope, thư mục hiện tại chỉ được chọn khi nó chứa bản cài
+native của Kit và route project của nó không phải bản cài user-level. Từ thư mục
+home, mặc định giữ user scope thay vì từ chối với mã thoát `6`. Đầu ra cho người
+dùng nêu project được chọn bằng dòng `scope:`, và một cảnh báo nêu bản cài
+user-level của cùng Kit vẫn còn lại.
 
 Không thể kết hợp `--global` với `--project-dir`. Trạng thái project và user độc
 lập; gỡ project plugin không cho phép cleanup user plugin hoặc native output.
@@ -80,7 +86,7 @@ project hoặc `--global` cho native root user/global đã đăng ký.
 ## Ví dụ
 
 ```bash
-# Preview kế hoạch user-scope rộng mặc định.
+# Preview kế hoạch mặc định: bản cài của project này, hoặc user scope.
 ak kit uninstall engineer --dry-run
 
 # Áp dụng kế hoạch mặc định đã rà soát.
@@ -114,6 +120,12 @@ Uninstall được áp dụng giữ khoá vòng đời Kit từ lúc lập kế 
 số lượng delete, preserve và skip, cảnh báo cùng mọi recovery snapshot có thể
 thực hiện.
 
+Khi scope được chọn không chứa gì của Kit, lệnh không in dòng `[OK]`. Nó in
+`nothing to remove in the <scope> scope` với dấu cảnh báo và, với mỗi bản cài
+của Kit ở scope khác, đích cài cùng lệnh để xoá nó, ví dụ
+`ak kit uninstall engineer --project-dir /path/to/app --yes`. Mã thoát không
+đổi: `0` khi áp dụng, `3` khi preview.
+
 Với `--json`, stdout chứa envelope có phiên bản với `kind=kit.uninstall`.
 `data` gồm:
 
@@ -123,7 +135,15 @@ snapshotId, snapshotIds, recovery
 removedPaths, removedDiagnosticPaths, preservedPaths, skippedPaths, configPaths
 deactivationSteps, warnings, manifestResult
 deleted, preserved, skipped, success
+scope, scopeSelection, projectDir, nothingToRemove, installedElsewhere
 ```
+
+`scope` là `project` hoặc `global`. `scopeSelection` là `flag`,
+`detected-project` (không có cờ scope; thư mục hiện tại chứa bản cài native),
+hoặc `default-user` (không có cờ scope và không có bản cài project).
+`nothingToRemove` là `true` khi scope được chọn không chứa tệp, mục config hay
+activation nào của Kit. `installedElsewhere` liệt kê các bản cài ngoài scope
+được chọn gồm `scope`, `deliveryMode`, `runtime`, `destination` và `command`.
 
 Preview thành công có `data.success=true` và `data.dryRun=true`, sau đó process
 thoát `3`. Lỗi thay đổi trong JSON mode ghi error envelope lên stderr cùng
@@ -174,7 +194,7 @@ kê hai file log trong `removedPaths`, tạo snapshot, xoá chúng và dọn th�
 `.logs` đã rỗng. File khác trong `.logs` và đường dẫn log dạng liên kết được giữ
 nguyên.
 
-Kế hoạch mặc định có thể trải qua nhiều provider ở user scope. Luôn xem
+Kế hoạch user-scope mặc định có thể trải qua nhiều provider. Luôn xem
 `removedPaths`, `configPaths` và `preservedPaths` trước khi thêm `--yes`.
 
 ## Khôi phục và giới hạn
