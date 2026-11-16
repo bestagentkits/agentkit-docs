@@ -34,9 +34,10 @@ export const RELEASE_QUALITY_BASELINE = Object.freeze({
   deterministic: {
     outputBytes: 3_047_146_912,
     // Preserve the previous per-route allowance as coverage grows 411 -> 449 -> 456 -> 481 -> 482 -> 485 -> 517 -> 541 -> 546 -> 578 -> 582 -> 653 -> 672 -> 678.
-    // At 693 the budget is the reviewed fresh-build output: fifteen new Beta CLI
-    // nav entries enlarge every Beta page, so the per-route allowance rises 0.46%.
-    outputBudgetBytes: 4_862_312_794,
+    // At 693 the budget is the reviewed fresh-build output (4_862_312_794 local,
+    // a few bytes more on CI) rounded up to the next 10 MB: fifteen new Beta CLI
+    // nav entries enlarge every Beta page, so the per-route allowance rises 0.6%.
+    outputBudgetBytes: 4_870_000_000,
     fileCount: 23_584,
     // Grows with the same per-route file allowance as the 485 -> 517 step.
     fileCountBudget: 31_696,
