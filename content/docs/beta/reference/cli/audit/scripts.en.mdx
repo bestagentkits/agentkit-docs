@@ -42,6 +42,27 @@ download-to-shell pipelines, absolute writes, environment or secret access, and
 network clients. Files above the limit are reported as `executable-only` rather
 than read in full.
 
+For JavaScript, TypeScript, Python, and shell, patterns match executable code
+only: comments, docstrings, regex literals, and the text of string literals,
+template literals, and heredocs do not raise findings. Rules that need a quoted
+argument, such as a `child_process` import or the absolute path passed to a
+write call, still read that argument. A finding's line and `evidence` always
+point at the original source line.
+
+- A method call such as `pattern.exec(text)` is not code execution. In
+  JavaScript, a bare `exec`, `execFile`, or `spawn` call and a `child_process`
+  import report once as `child-process`; `exec-call` covers Python and shell.
+- `absolute-write` needs a write call (`writeFile*`, `appendFile*`,
+  `createWriteStream`, or Python `open(..., "w" | "a" | "x" | "+")`) or a shell
+  redirect to an absolute path. Redirects to `/dev/null` and standard streams
+  are not reported.
+- `env-access` does not report a read of one named variable that only describes
+  the terminal, CI, or a well-known directory, such as `NO_COLOR`, `COLUMNS`,
+  `CI`, `HOME`, `TMPDIR`, or `XDG_CONFIG_HOME`. Other variables, dynamic names,
+  and copying the whole environment are still reported.
+
+Other languages are matched as raw text.
+
 ```bash
 ak audit scripts ./kits/engineer ./kits/core --json
 ak audit scripts ~/.claude/plugins/ak-engineer --no-interactive
