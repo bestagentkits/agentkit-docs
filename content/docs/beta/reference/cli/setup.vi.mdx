@@ -45,8 +45,8 @@ bạn chủ động chọn `--local --kits-dir`.
 
 | Tuỳ chọn | Mặc định | Mô tả |
 | --- | --- | --- |
-| `--adapter <ids>` | Runtime được phát hiện | Cấu hình tập adapter đã đăng ký, phân tách bằng dấu phẩy: `claude-code`, `codex`, `cursor`, `dsh`, `grok`, `omp` hoặc `pi`. `dsh` và `pi` cũng là emitter projection Kit (`ak kit init --target dsh`, `ak kit init --target pi`); liệt kê `pi` ở đây không cung cấp `ak run --target pi`. |
-| `--no-adapter <ids>` | Trống | Loại tập adapter đã đăng ký đó, phân tách bằng dấu phẩy. |
+| `--adapter <ids>` | `adapters.enabled` hiện tại | Thay `adapters.enabled` bằng tập adapter đã đăng ký, phân tách bằng dấu phẩy; adapter không được liệt kê sẽ bị tắt, nên hãy liệt kê mọi runtime muốn giữ. Adapter đã đăng ký: `claude-code`, `codex`, `cursor`, `dsh`, `grok`, `omp` hoặc `pi`. `dsh` và `pi` cũng là emitter projection Kit (`ak kit init --target dsh`, `ak kit init --target pi`); liệt kê `pi` ở đây không cung cấp `ak run --target pi`. |
+| `--no-adapter <ids>` | Trống | Loại tập adapter đã đăng ký đó, phân tách bằng dấu phẩy, khỏi danh sách `--adapter`, hoặc khỏi mọi adapter đã đăng ký khi không đặt `--adapter`. |
 | `--advanced` | `false` | Bao gồm provider key, tuỳ chọn provider/model và ghi đè Codex. |
 | `--config <path>` | Trống | Đọc câu trả lời cho script từ tệp YAML có key là setup step ID. |
 | `--step <id>` | Trống | Chỉ cập nhật một trường setup thay vì xử lý toàn bộ tập step. |
@@ -103,6 +103,8 @@ data.partial: boolean, present for --step
 data.auth.agentkit: session_present, not_authenticated, or unknown
 data.auth.kit_entitlement: not_checked or login_required
 data.auth.runtimes: array of adapter, state, and optional action
+data.previous_adapters: string, present when the run disabled an adapter
+data.disabled_adapters: array of adapter IDs, present when the run disabled an adapter
 ```
 
 Lỗi trong chế độ JSON, kể cả lỗi phân tích cờ (mã thoát `2`), kết thúc stderr
@@ -130,6 +132,11 @@ Basic setup tạo hoặc cập nhật atomically `~/.agentkit/config.yaml`, đ�
 giữ các trường YAML mà phiên bản này không quản lý. Advanced step còn có thể
 ghi atomically cấu hình adapter native đã chọn. Setup không tạo recovery
 snapshot.
+
+Khi một lần chạy bằng script tắt adapter vốn đang bật, setup in cảnh báo ra
+stderr, nêu tên các adapter bị tắt và lệnh khôi phục danh sách cũ, ví dụ
+`ak setup --adapter claude-code,codex --no-interactive`. Với `--json`, các giá
+trị này nằm ở `data.previous_adapters` và `data.disabled_adapters`.
 
 <Callout type="warning">
   Cấu hình AgentKit được lưu trước khi ghi adapter ở chế độ advanced. Nếu lần

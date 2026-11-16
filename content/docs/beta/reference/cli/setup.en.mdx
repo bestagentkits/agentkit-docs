@@ -46,8 +46,8 @@ registry by default unless you explicitly choose `--local --kits-dir`.
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `--adapter <ids>` | Detected runtimes | Configure a comma-separated set of registered adapters: `claude-code`, `codex`, `cursor`, `dsh`, `grok`, `omp`, or `pi`. `dsh` and `pi` also act as Kit projection emitters (`ak kit init --target dsh`, `ak kit init --target pi`); listing `pi` here does not provide `ak run --target pi`. |
-| `--no-adapter <ids>` | Empty | Exclude a comma-separated set of those registered adapters. |
+| `--adapter <ids>` | Current `adapters.enabled` | Replace `adapters.enabled` with a comma-separated set of registered adapters; adapters you do not list are disabled, so list every runtime to keep. Registered adapters: `claude-code`, `codex`, `cursor`, `dsh`, `grok`, `omp`, or `pi`. `dsh` and `pi` also act as Kit projection emitters (`ak kit init --target dsh`, `ak kit init --target pi`); listing `pi` here does not provide `ak run --target pi`. |
+| `--no-adapter <ids>` | Empty | Exclude a comma-separated set of those registered adapters from the `--adapter` list, or from all registered adapters when `--adapter` is not set. |
 | `--advanced` | `false` | Include provider keys, provider/model preferences, and Codex overrides. |
 | `--config <path>` | Empty | Read scripted answers from a YAML file whose keys are setup step IDs. |
 | `--step <id>` | Empty | Update one setup field instead of processing the complete step set. |
@@ -104,6 +104,8 @@ data.partial: boolean, present for --step
 data.auth.agentkit: session_present, not_authenticated, or unknown
 data.auth.kit_entitlement: not_checked or login_required
 data.auth.runtimes: array of adapter, state, and optional action
+data.previous_adapters: string, present when the run disabled an adapter
+data.disabled_adapters: array of adapter IDs, present when the run disabled an adapter
 ```
 
 JSON-mode failures, including flag-parse errors (exit `2`), end stderr with the
@@ -130,6 +132,12 @@ registry, validate paid-kit entitlement, populate the kit cache, or install a ki
 Basic setup atomically creates or updates `~/.agentkit/config.yaml`, preserving
 unmodelled YAML fields. Advanced steps can additionally write selected native
 adapter configuration atomically. Setup does not create a recovery snapshot.
+
+When a scripted run disables an adapter that was enabled before, setup prints a
+warning on stderr that names the disabled adapters and the command that restores
+the previous list, for example
+`ak setup --adapter claude-code,codex --no-interactive`. With `--json`, the same
+values appear as `data.previous_adapters` and `data.disabled_adapters`.
 
 <Callout type="warning">
   The AgentKit config is saved before advanced adapter writes. If a later
