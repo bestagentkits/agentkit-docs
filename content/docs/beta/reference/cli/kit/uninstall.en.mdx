@@ -57,12 +57,17 @@ Shared flags are documented in [CLI conventions](../cli-conventions).
 
 | Selector | Route |
 | --- | --- |
-| No scope or mode flags | Broad user-scope cleanup: the recognized user plugin/legacy roots and registered global native lifecycle roots for the Kit. It does not select the current project-native route. |
+| No scope or mode flags | The project-native lifecycle roots of the working directory when that project holds a native install of the Kit, the same scope `ak kit install` used. Otherwise broad user-scope cleanup: the recognized user plugin/legacy roots and registered global native lifecycle roots for the Kit. |
 | `--global` | Registered user/global native lifecycle roots. |
 | `--global --plugin-mode` | Only the Claude Code user plugin. |
 | `--project-dir <dir>` | Project-native lifecycle roots for the selected project. |
 | `--plugin-mode` | Claude Code project plugin in the current directory. |
 | `--plugin-mode --project-dir <dir>` | Claude Code project plugin in the specified project. |
+
+With no scope flag, a working directory whose project route is the user-level
+install, such as your home directory, keeps the user scope. After a removal from
+the detected project, a warning names any install of the Kit that remains in the
+user scope and the command that removes it.
 
 `--global` cannot be combined with `--project-dir`. Project and user state are
 independent; a project-plugin uninstall does not authorize user-plugin or native
@@ -82,7 +87,8 @@ a project route or `--global` for registered user/global native roots.
 ## Examples
 
 ```bash
-# Preview the default broad user-scope plan.
+# Preview the default plan: this project's native install when it holds one,
+# otherwise the broad user-scope plan.
 ak kit uninstall engineer --dry-run
 
 # Apply the reviewed default plan.
@@ -107,6 +113,12 @@ If `--yes` is absent, the command computes and renders the full plan, changes no
 owned surface, then exits `3`. `--dry-run` does the same even when `--yes` is
 also present. This exit is a completed preview, not a failed classification.
 
+When the selected scope holds no file, config entry, or plugin registration of
+the Kit, the result says `not installed in the <scope> scope` instead of
+reporting a removal. A warning names each other scope that holds the Kit and
+the exact `ak kit uninstall ... --yes` command for it. A preview then exits `3`
+with `nothing to remove in the <scope> scope`.
+
 An applied uninstall holds the Kit lifecycle lock from planning through
 mutation. A dry-run is lock-free because it does not change owned surfaces.
 
@@ -119,12 +131,20 @@ With `--json`, stdout contains a versioned envelope with
 `kind=kit.uninstall`. Its `data` includes:
 
 ```text
-kit, dryRun, pluginDir, pluginDirs
+kit, dryRun, scope, scopeDetected, nothingToRemove, installedElsewhere
+pluginDir, pluginDirs
 snapshotId, snapshotIds, recovery
 removedPaths, removedDiagnosticPaths, preservedPaths, skippedPaths, configPaths
 deactivationSteps, warnings, manifestResult
 deleted, preserved, skipped, success
 ```
+
+`scope` is the scope the run planned: `project`, `project-plugin`, `global`, or
+`global-plugin`. `scopeDetected` is `true` when the project scope was chosen
+because the working directory holds the Kit and no scope flag was set.
+`nothingToRemove` is `true` when the plan found nothing of the Kit in that
+scope. `installedElsewhere` lists other scopes that hold the Kit, each with
+`scope`, `path`, and `command`.
 
 A successful preview has `data.success=true` and `data.dryRun=true`, then the
 process exits `3`. Mutation failures in JSON mode write an error envelope to
@@ -176,7 +196,8 @@ last logger lists the two log files in `removedPaths`, snapshots them, removes
 them, and prunes the emptied `.logs` directory. Other files in `.logs` and
 linked log paths are preserved.
 
-The default plan can span several user-scope providers. Always inspect
+A flagless plan that stays on the user scope can span several user-scope
+providers. Always inspect
 `removedPaths`, `configPaths`, and `preservedPaths` before adding `--yes`.
 
 ## Recovery and limitations

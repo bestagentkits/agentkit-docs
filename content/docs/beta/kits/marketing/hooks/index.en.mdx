@@ -15,6 +15,7 @@ additional automatic behaviors.
 | Before tool use | Checks descriptive naming before writes, checks file and shell operations for privacy-sensitive access, catches broad read or shell exploration that should be narrowed, checks how much content a read, search, or shell command can return, and substitutes `${secret:NAME}` references in shell commands and fetch URLs. |
 | After edits | Tracks supported edit activity and can remind the workflow to simplify and review substantial changes. Claude Code includes `MultiEdit`; Codex narrows this matcher to `Edit|Write`. |
 | When you submit a prompt | Checks for requests that could expose secrets and surfaces applicable development-rule guidance. |
+| At session start and end | Keeps the auto-update liveness marker current. When skill self-improvement is on, Claude Code and Codex record a redacted event for each Skill a session invoked, and a later session can start with one line naming Skills worth an `ak-dogfood` review. |
 
 These behaviors can add guidance or stop an operation for review, depending on
 the event and runtime. They are workflow guardrails, not a general security
@@ -86,6 +87,26 @@ unacknowledged background-update result, acknowledged with
 `ak update --status --ack --json`. The Hook never blocks a session and exits
 `0` even on its own failure.
 
+## Skill self-improvement events
+
+Two reused Hooks feed [`ak skills self-improve`](../../../reference/cli/skills/self-improve),
+which is off by default:
+
+- `self-improve-recorder.cjs` runs at `SessionEnd`. It passes the runtime's
+  Hook payload to `ak skills self-improve record`, which checks your consent
+  and records a redacted local event for each Skill the session invoked. No
+  transcript text, tool output, secret, or path is stored, and no model runs.
+- `self-improve-nudge.cjs` runs at `SessionStart`. It asks
+  `ak skills self-improve nudge` for at most one line naming Skills worth an
+  `ak-dogfood` review, shown once per finding. Treat that line as a suggestion
+  to offer, not an instruction.
+
+Both Hooks act only on Claude Code and Codex; on other runtimes they do
+nothing. Turn recording on with `ak skills self-improve enable` and off with
+`ak skills self-improve disable`; a project config can only turn it off. The
+Hooks never block a session and exit `0` when the feature is off, the `ak`
+binary is missing, or the call fails or times out.
+
 ## Artifact entries are not behavior counts
 
 The Marketing manifest declares nine Hook file exports:
@@ -96,7 +117,7 @@ The Marketing manifest declares nine Hook file exports:
 - Six libraries support configuration and bounded runtime state.
 
 The separate `hooks.json` manifest wires the Marketing entrypoint together with
-nine reused core entrypoints, including `context-firewall`, `secrets-inject`, and `session-heartbeat`. Support libraries do not run independently, and
+eleven reused core entrypoints, including `context-firewall`, `secrets-inject`, `session-heartbeat`, `self-improve-recorder`, and `self-improve-nudge`. Support libraries do not run independently, and
 none of these entries is a Marketing command.
 
 `notifications/send-discord` is not referenced by `hooks.json`. It runs only

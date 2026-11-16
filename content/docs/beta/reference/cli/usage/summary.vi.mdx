@@ -1,0 +1,103 @@
+---
+title: ak usage summary
+description: Cộng mức dùng token cục bộ của Claude Code và Codex trong ngày, tuần hoặc tháng UTC hiện tại, theo runtime, provider và model, kèm chi phí ước tính.
+---
+
+Dùng `ak usage summary` để xem các session Claude Code và Codex của bạn đã dùng
+bao nhiêu token trong ngày, tuần hoặc tháng hiện tại. Lệnh chỉ đọc và không bao
+giờ mở network socket.
+
+## Cách dùng
+
+```bash
+ak usage summary [--period day|week|month] [--no-live] [flags]
+```
+
+```bash
+ak usage summary
+ak usage summary --period week
+ak usage summary --period month --json
+ak usage summary --no-live
+```
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--period <name>` | `day` | `day`, `week` hoặc `month`: kỳ lịch UTC hiện tại. |
+| `--no-live` | `false` | Không parse transcript của session khi analytics index không trả lời được. |
+
+Các cờ dùng chung nằm trong [quy ước CLI](../cli-conventions).
+
+## Lệnh đếm những gì
+
+Bản tóm tắt gồm mọi session Claude Code và Codex bắt đầu trong kỳ lịch UTC hiện
+tại, từ đầu kỳ tới bây giờ. Một tuần bắt đầu từ thứ Hai.
+
+- **Các lane token.** Input, output, cache write và cache read, cùng tổng của
+  chúng. Số token là chính xác.
+- **Phân nhóm.** Tổng cũng được nhóm theo runtime, theo provider và theo
+  model.
+- **Reasoning.** Token reasoning được tính bên trong output. Lane reasoning
+  riêng luôn được báo là không có (unavailable), không bao giờ là 0.
+- **Chi phí.** Ước tính theo giá API công khai được tích hợp trong bản phát
+  hành `ak` này. Khi bất kỳ model nào trong kỳ không có giá, chi phí không có
+  cho cả bản tóm tắt chứ không bao giờ là một phần.
+- **Cửa sổ của provider.** Cửa sổ subscription luôn không có ở đây. Dùng
+  [`ak usage limits`](./limits) cho cửa sổ trượt và hạn mức do provider báo
+  (khi bạn bật).
+
+## Số liệu lấy từ đâu
+
+Analytics index cục bộ trả lời trước. Kết quả có kèm thời điểm thế hệ index đó
+được publish; các session bắt đầu sau thời điểm này sẽ xuất hiện sau lần
+[`ak analytics refresh`](../cli/ak_analytics_refresh) kế tiếp.
+
+Khi index chưa có hoặc chưa sẵn sàng, lệnh parse trực tiếp transcript của các
+session trong kỳ và báo `source live`. Lệnh in một thông báo trên stderr trước,
+vì quét một lịch sử dài có thể mất thời gian. Với `--no-live`, lệnh bỏ qua bước
+quét đó và báo không có dữ liệu sử dụng, kèm gợi ý chạy `ak analytics enable`
+hoặc `ak analytics refresh`, hoặc chạy lại không có `--no-live`.
+
+Index được mở ở chế độ chỉ đọc dưới `~/.agentkit/analytics/` (`AGENTKIT_HOME`
+thay thư mục gốc). Lệnh không bao giờ ghi, refresh hay tạo index.
+
+## Đầu ra
+
+Đầu ra text in kỳ và mốc UTC của nó, số session và nguồn, một bảng token cho
+toàn bộ session và cho từng runtime, provider và model, chi phí, và một lời nhắc
+rằng cửa sổ của provider lấy từ `ak usage limits`.
+
+JSON dùng `kind=usage.summary` với các trường sau dưới `data`:
+
+```text
+schema_version, period, period_start, period_end, source, index_state,
+indexed_at, sessions, tokens, by_runtime[], by_provider[], by_model[], cost,
+usage_windows[], local_only
+tokens: input, output, cache_creation, cache_read, total, quality, reasoning
+by_*[]: key, runtime?, sessions, tokens
+cost: quality, amount_usd, basis?, as_of[], reason?
+```
+
+- `source` là `index`, `live` hoặc `unavailable`. `index_state` là `ready`,
+  `absent` hoặc `not_ready`. `indexed_at` để trống trừ khi `source` là `index`.
+- `cost.quality` là `estimated` kèm `amount_usd`, hoặc `unavailable` kèm một
+  `reason` như `no_data`, `pricing_unavailable`, `unpriced_runtime` hoặc
+  `unpriced_model`.
+- Mỗi mục `usage_windows` là `unavailable` với lý do
+  `provider_window_not_local`.
+- `local_only` luôn là `true`.
+
+## Kết quả và mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Thành công, kể cả khi kỳ không có dữ liệu sử dụng. |
+| `1` | Lệnh thất bại, ví dụ lỗi đọc index hoặc transcript. |
+| `2` | Cờ hoặc argument không hợp lệ, ví dụ `--period` không xác định. |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak usage summary`](../cli/ak_usage_summary)
+- [Xem cửa sổ giới hạn sử dụng theo provider](./limits)
+- [Refresh analytics index](../cli/ak_analytics_refresh)

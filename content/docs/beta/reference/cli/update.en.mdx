@@ -34,7 +34,11 @@ Target validation uses both the selected scope and source:
 | --- | --- |
 | Project, remote | `claude-code`, `codex`, `cursor`, `dsh`, `grok`, `omp`, or `pi` |
 | Global, remote | `claude-code`, `codex`, `cursor`, `dsh`, `grok`, or `omp` |
-| Global, local | `claude-code`, `codex`, `cursor`, `dsh`, `grok`, or `omp` |
+| Global, local | `claude-code`, `codex`, `cursor`, `dsh`, `grok`, `omp`, or `opencode` |
+
+`opencode` is valid only for a global update from a local source. It is a
+source-registered adapter, not a runtime shipped as a registry package, so no
+remote update refreshes it.
 
 An explicit target that does not apply to its scope or source is rejected before
 discovery or mutation and exits `2`. In the unified wizard, the same selection
@@ -76,6 +80,14 @@ kits tracked in `kits/` plus every kit with an owned project install.
 - If `--target` matches no installed project runtime and there is no tracked
   `kits/` tree, the command exits `2`.
 
+With the skill store on, `ak update`, global and project alike, refreshes every
+kit it selects in a runtime together (co-refresh). Each kit's refresh plans the
+other selected kits of that runtime, so kits that ship the same shared skills
+pass the skill alias preflight together, while divergent releases still fail
+before any write. The kits then commit one after another. A single
+`ak kit refresh <kit>` refreshes one kit and can still fail with
+`skill.alias_collision` against a sibling's older record.
+
 ## Background auto-update (opt-in)
 
 `--schedule daily|weekly` turns on a detached background update that starts on
@@ -88,7 +100,9 @@ no live agent session. A background project update refreshes only the tracked
 to run `ak update <dir> --yes` or `ak kit refresh <kit>` instead. `--no-project <dir>` (repeatable) opts a project back
 out, even if its directory no longer exists. `--status [--json]` reports the
 schedule and the last background result without changing anything; add
-`--ack` to mark that result as seen.
+`--ack` to mark that result as seen. For a failed run, `--status` also prints
+`cause: <last error line>` (JSON `detail`), taken from the background run's
+last error line with secrets redacted.
 
 These settings flags only write the `auto_update:` section of
 `~/.agentkit/config.yaml` — they update nothing immediately, and none of
@@ -247,14 +261,27 @@ source. An
 explicit source-incompatible target is an exit-`2` validation error, not a
 `source_inapplicable` result.
 
+A kit the signed-in account holds no license for is reported with
+`status: "skipped"` and `reason: "not_licensed"` in global and project updates
+alike. The installed copy is kept unchanged, and `next` points to
+`ak licenses`, signing in with the account that owns the kit, buying it, or
+`ak kit uninstall <kit>`.
+
 An implicit JSON preview prints a success envelope to stdout and then exits `3`. Command errors, including flag-parse errors (exit `2`), write the shared
 [error envelope](../cli-conventions#json-output) to stderr.
 
 Human and JSON execution errors show the recovery reason without requiring
 `--verbose`. Default disclosed errors redact known secret shapes and URL query
-strings while preserving paths. A global Kit result that completes with an
-attention item also shows its sanitized reason in human output without
-`--verbose`; this does not turn that result into a failed update.
+strings while preserving paths. A global Kit result that completes with
+attention items prints `N attention item(s):` followed by the redacted items
+in human output without `--verbose`; this does not turn that result into a
+failed update.
+
+A failed global batch ends with one line that leads with the first failed kit:
+`update --global: <kit>: <cause>; next: <step>; finished with N failure(s), M updated`.
+When another process replaced `ak` during the update, or another update still
+holds the update lock, the failed row explains that and says to close the other
+`ak` updates before you re-run.
 
 `--verbose` can expose raw execution errors and full warning lists. Review
 diagnostics before sharing them.
@@ -274,6 +301,9 @@ diagnostics before sharing them.
 
 Without `--version`, a kit the registry refuses for renewal is reported as `skipped` with `reason: "renewal_required"`, keeps its installed version, and does not change the exit code. See [Update windows and renewal](../../guides/updating#update-windows-and-renewal).
 
+A `not_licensed` skip also keeps the installed version and does not fail the
+run.
+
 ## Effects, safety, and recovery
 
 Project updates classify owned files. Clean files can be replaced; modified or newly occupied files are skipped unless `--force` is used. Apply also prunes AgentKit-owned files under `kits/<id>/` that the incoming source no longer ships, and only for kits present in that incoming set. Clean and already-missing copies are removed; a user-modified copy is preserved and reported unless `--force` is set. A path that is no longer a regular file is left in place. Empty directories left inside the kit tree are removed; the kit root is not.
@@ -282,7 +312,7 @@ By default, apply snapshots only the exact files it writes or prunes — a resto
 
 Writes are sequential, so an error can leave a partial update. Global updates continue across kits, report per-kit failures, and can create a support bundle under `~/.agentkit/support`. Global force mode may archive authorized legacy Codex skills, but it still preserves user modifications. Project `--force` never archives legacy ClaudeKit Codex skills: a project runtime pass that finds them reports a skipped row with reason `needs_legacy_migration`. Run [`ak migrate --from ck`](./migrate) from the project directory, then re-run the update. Archival through `--force` remains a `--global --force` consent.
 
-On Windows, `ak update` applies the signed CLI replacement in place under an exclusive update lock, validates the running binary preimage, then re-executes the original command inside a Windows Job Object so Kit refresh continues on the first invocation. Standalone [`ak self-update`](./self-update) still uses the staged detached helper handoff. Paired Desktop apply stages the matching CLI and Desktop artifacts, then a trusted helper commits the swap after the parent process releases the executables.
+On Windows, `ak update` applies the signed CLI replacement in place under an exclusive update lock, validates the running binary preimage, then re-executes the original command inside a Windows Job Object so Kit refresh continues on the first invocation. If the Job Object cannot be attached, it prints a warning and continues without process-tree cleanup. When `ak update` runs on, or moves to, the beta channel on Windows, it prints a one-line warning on stderr that beta Windows builds are not Authenticode-signed. The warning never blocks, prints once per run, and is silent with `--json` or `--quiet`. Standalone [`ak self-update`](./self-update) still uses the staged detached helper handoff. Paired Desktop apply stages the matching CLI and Desktop artifacts, then a trusted helper commits the swap after the parent process releases the executables.
 
 ## Related commands and limitations
 

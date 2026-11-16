@@ -1,0 +1,86 @@
+---
+title: ak skills self-improve status
+description: Show whether skill self-improve recording is on here and which skills crossed the review threshold, each with its exact ak-dogfood command.
+---
+
+Use `ak skills self-improve status` to check whether recording is on for the
+current directory and which skills are worth an `ak-dogfood` review. The
+command is read-only.
+
+## Usage
+
+```bash
+ak skills self-improve status [flags]
+```
+
+```bash
+ak skills self-improve status
+ak skills self-improve status --json
+```
+
+The command takes no arguments and has no flags of its own. Shared flags are
+described in [CLI conventions](../cli-conventions).
+
+## What it does
+
+The command resolves the effective consent from the user `config.yaml` and the
+nearest project `.agentkit/config.yaml` at or above the working directory.
+When recording is on, it screens the stored events: a skill qualifies when its
+events from the last 7 days, for its current digest, hold one strong signal or
+the same weak problem in at least 2 sessions.
+
+Each screened skill carries the exact review command:
+
+```text
+/ak-dogfood --skill <name> --evidence <ids>
+```
+
+Run it in your coding agent when you want the review. Nothing changes until
+you do.
+
+While recording is off, the list is empty even when events are stored. Use
+[`ak skills self-improve history`](./history) to see stored events whatever
+the consent.
+
+The command reads only the consent files and
+`AGENTKIT_HOME/state/self-improve/events.jsonl`. It writes nothing, runs no
+model, script, or network call, and skips the background update check.
+
+## Output
+
+The text output says whether self-improve is on, with the reason when it is
+off and the command to turn it on. When on, it prints the number of stored
+events, the window, and for each screened skill its signal strength, its
+number of reasons, and the `run:` command.
+
+JSON uses `kind=skills.self_improve.status` with these fields under `data`:
+
+```text
+enabled, policy_reason, project_restricted, window_days, events_total,
+candidates[]: skill, digest, strength, reasons[], event_ids[], suggested_command
+reasons[]: fingerprint, signal_type, error_class, strength, sessions
+```
+
+- `policy_reason` is `user_granted`, `user_disabled`, `project_disabled`,
+  `invalid_user_policy`, or `invalid_project_policy`.
+- `project_restricted` is `true` when a project config turned recording off or
+  is invalid.
+- `strength` is `strong` or `weak`. `suggested_command` is the `/ak-dogfood`
+  command.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Success, including a disabled feature or an empty store. |
+| `1` | The AgentKit home could not be resolved (`self_improve.home_unresolved`), the event store could not be read (`self_improve.store_failed`), or a consent policy is invalid (`self_improve.policy_invalid`). |
+| `2` | Invalid flags or arguments (`self_improve.invalid_input`). |
+| `4` | Another writer held the event store lock (`self_improve.store_busy`). |
+
+## Related commands
+
+- [Complete `ak skills self-improve status` command facts](../cli/ak_skills_self-improve_status)
+- [List recorded events](./history)
+- [Review screened skills](./review/index)
+- [Turn recording on](./enable)
+- [Skill self-improve overview](../cli/ak_skills_self-improve)

@@ -11,8 +11,8 @@ một thao tác không an toàn hoặc quá rộng, hay cập nhật trạng th�
 giới hạn. Bạn không gọi Hook như Skill hoặc command; runtime đã chọn sẽ gọi các
 handler được hỗ trợ khi event tương ứng xảy ra.
 
-Package Engineer đã resolve có **55 entry Hook**. Con số này là inventory của
-artifact, không phải 55 behavior độc lập. Nó bao gồm manifest của Hook, event
+Package Engineer đã resolve có **57 entry Hook**. Con số này là inventory của
+artifact, không phải 57 behavior độc lập. Nó bao gồm manifest của Hook, event
 handler, thư viện hỗ trợ dùng chung, cùng helper về trạng thái và statusline
 riêng của Engineer. Một handler có thể tham gia nhiều event, còn tệp hỗ trợ có
 thể không bao giờ tự chạy.
@@ -33,12 +33,12 @@ package:
 | `PreToolUse` | Cung cấp hướng dẫn đặt tên cho tệp mới, kiểm tra truy cập tệp nhạy cảm, dừng hoạt động scout quá rộng hoặc đi vào path bị bỏ qua khi request vượt ngoài ranh giới được hỗ trợ, kiểm tra lượng nội dung mà một lệnh read, search hoặc shell có thể trả về, và thay thế tham chiếu `${secret:NAME}` trong lệnh shell và URL fetch. Check có thể cho phép request, trả về hướng dẫn hoặc yêu cầu phê duyệt. |
 | `PostToolUse` | Giữ định dạng plan nhất quán sau khi edit và write, làm mới trạng thái task/session sau thao tác task được hỗ trợ, cập nhật trạng thái sử dụng sau hoạt động của tool và ghi lại số liệu tổng hợp có giới hạn về hoạt động tool cho agent behavior linter. |
 | `PreCompact` | Ghi lại đủ định hướng workflow để tiếp tục sau khi compact context và đánh dấu lần compact đó cho agent behavior linter. |
-| `SessionStart` | Khởi tạo context của project và session cho phiên mới, đồng thời làm mới marker liveness cho background auto-update của project này. Mỗi ngày một lần, session khởi động đầu tiên còn xóa các mục cũ hơn 30 ngày trong thư mục `file-history`, `shell-snapshots`, `todos` của Claude Code và `sessions` của Codex; đặt `AGENTKIT_STORAGE_GC_DRY_RUN=1` để chỉ báo cáo những gì sẽ bị xóa mà không xóa. Lần dọn bị lỗi chỉ được ghi log và không bao giờ chặn session. |
+| `SessionStart` | Khởi tạo context của project và session cho phiên mới, đồng thời làm mới marker liveness cho background auto-update của project này. Mỗi ngày một lần, session khởi động đầu tiên còn xóa các mục cũ hơn 30 ngày trong thư mục `file-history`, `shell-snapshots`, `todos` của Claude Code và `sessions` của Codex; đặt `AGENTKIT_STORAGE_GC_DRY_RUN=1` để chỉ báo cáo những gì sẽ bị xóa mà không xóa. Lần dọn bị lỗi chỉ được ghi log và không bao giờ chặn session. Khi tính năng tự cải thiện Skill đang bật, session Claude Code hoặc Codex còn có thể bắt đầu bằng một dòng `[agentkit self-improve]` nêu các Skill nên được rà soát bằng `ak-dogfood`; đó là gợi ý để đề xuất, không phải chỉ thị. |
 | `SubagentStart` | Khởi tạo trạng thái subagent và cung cấp team context liên quan. |
 | `Stop` | Làm mới trạng thái session và usage, đồng thời làm mới marker liveness auto-update. Khi có plan đang hoạt động, lời nhắc plan có thể trả JSON hợp lệ, không chặn với `continue` và `systemMessage`; nếu không, hook thoát im lặng. Agent behavior linter có thể thêm một báo cáo session mang tính tư vấn. |
 | `SubagentStop` | Làm mới trạng thái session dùng chung tại ranh giới subagent. |
 | `UserPromptSubmit` | Cung cấp hướng dẫn phát triển theo project, kiểm tra rủi ro output giống secret, áp dụng gate đơn giản hóa trước khi ship khi phù hợp, làm mới trạng thái usage và làm mới marker liveness auto-update. |
-| `SessionEnd` | Gỡ marker liveness auto-update của session này. |
+| `SessionEnd` | Gỡ marker liveness auto-update của session này. Khi tính năng tự cải thiện Skill đang bật, Claude Code và Codex còn ghi một event đã ẩn dữ liệu nhạy cảm, không chứa nội dung, cho mỗi Skill mà session đã gọi. |
 
 Những kết quả này hỗ trợ workflow Engineer; chúng không tự phê duyệt plan,
 commit, merge, deploy hay phát hành công việc thay bạn.
@@ -236,6 +236,26 @@ một dòng thông báo cho kết quả cập nhật nền chưa được xem, x
 `ak update --status --ack --json`. Hook không bao giờ chặn session và tự
 thoát `0` ngay cả khi lỗi.
 
+## Event tự cải thiện Skill
+
+Hai Hook cung cấp dữ liệu cho [`ak skills self-improve`](../../../reference/cli/skills/self-improve),
+tính năng mặc định tắt:
+
+- `self-improve-recorder.cjs` chạy ở `SessionEnd`. Nó chuyển payload Hook của
+  runtime cho `ak skills self-improve record`, lệnh này kiểm tra sự đồng ý của
+  bạn rồi ghi một event cục bộ đã ẩn dữ liệu nhạy cảm cho mỗi Skill mà session
+  đã gọi. Không lưu văn bản transcript, output của tool, secret hay path, và
+  không chạy model nào.
+- `self-improve-nudge.cjs` chạy ở `SessionStart`. Nó yêu cầu
+  `ak skills self-improve nudge` trả về tối đa một dòng nêu các Skill nên được
+  rà soát bằng `ak-dogfood`, mỗi phát hiện chỉ hiện một lần.
+
+Cả hai Hook chỉ hoạt động trên Claude Code và Codex; trên runtime khác chúng
+không làm gì. Bật ghi event bằng `ak skills self-improve enable` và tắt bằng
+`ak skills self-improve disable`; config của project chỉ có thể tắt tính năng
+này. Các Hook không bao giờ chặn session và thoát `0` khi tính năng đang tắt,
+không có binary `ak`, hoặc lệnh gọi thất bại hay hết thời gian.
+
 ## Path đã cấu hình khi bắt đầu session
 
 Handler `SessionStart` resolve tùy chọn path của project trước khi export môi
@@ -292,7 +312,8 @@ một group bị drop hoàn toàn và bốn matcher bị thu hẹp:
   nhưng giữ `secrets-inject.cjs` hoạt động cho Bash.
 
 Các đăng ký `agent-behavior-linter.cjs` trên `PostToolUse`, `PreCompact` và
-`Stop` được projection mà không bị thu hẹp.
+`Stop` được projection mà không bị thu hẹp. Codex cũng nhận một group
+`SessionEnd` chạy `session-heartbeat.cjs` và `self-improve-recorder.cjs`.
 
 Drop hoặc narrow không làm cài đặt thất bại. Output cho người dùng liệt kê chúng
 dưới **Hook groups not projected** và **Hook matchers narrowed

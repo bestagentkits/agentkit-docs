@@ -1,10 +1,11 @@
 ---
 title: ak skill install
-description: Provision môi trường Python hoặc Node đã pin, cache dùng chung và runtime record cục bộ cho một skill.
+description: Thêm một skill vào bản cài Claude Code native của một kit, rồi provision môi trường Python hoặc Node đã pin của skill đó.
 ---
 
-Dùng `ak skill install` sau khi nội dung skill đã có trong kits tree cục bộ và
-bạn cần môi trường Python hoặc Node mà skill khai báo.
+Dùng `ak skill install` để thêm một skill từ kits tree cục bộ vào kit bạn đã cài
+native cho Claude Code, và để provision môi trường Python hoặc Node mà skill
+khai báo.
 
 ## Cách dùng
 
@@ -16,6 +17,12 @@ Cần đúng một reference chuẩn. Lệnh đọc trực tiếp
 `<kits-dir>/<kit>/skills/<skill>/skill.yaml`; skill không cần có trong exports
 của `kit.yaml`.
 
+```bash
+ak skill install marketing/youtube
+ak skill install engineer/web-testing --kits-dir kits/
+ak skill install engineer/ak-advise --kits-dir kits/ --yes
+```
+
 ## Tuỳ chọn
 
 | Cờ | Mặc định | Mô tả |
@@ -25,7 +32,31 @@ của `kit.yaml`.
 Các cờ dùng chung nằm trong [quy ước CLI](../cli-conventions). Lệnh không hỏi
 xác nhận; `--yes` và `--no-interactive` không đổi policy mutation.
 
-## Dữ liệu được ghi
+## Thêm skill vào bản cài kit native
+
+Khi kit có bản cài Claude Code native global đang hoạt động, lệnh trước tiên
+thêm skill vào bản cài đó:
+
+- Lệnh chỉ ghi `~/.claude/skills/<skill>/`.
+- Lệnh ghi skill vào các ownership index của kit dưới
+  `~/.agentkit/adapters/claude-code/<kit>/.agentkit/`.
+- Lệnh mở rộng skill selection đã lưu của kit, nên lần `ak kit refresh` sau vẫn
+  giữ skill.
+
+Bước này giữ khoá vòng đời kit. Nếu một file trong thư mục skill chứa chỉnh sửa
+không do AgentKit ghi, lệnh không thay đổi gì và thoát `6`.
+
+Khi kit được phân phối dưới dạng Claude Code plugin, lệnh in cảnh báo, bỏ qua
+bước này và chỉ quản lý môi trường runtime; hãy chạy `ak kit refresh <kit>` để
+thay đổi skill của plugin. Codex, bản cài project và nguồn remote chưa được hỗ
+trợ cho bước này. Khi không có bản cài native lẫn plugin, lệnh chỉ quản lý môi
+trường runtime.
+
+## Dữ liệu được ghi cho môi trường
+
+Khi skill khai báo block `runtime:`, lệnh tiếp đó tạo hoặc refresh môi trường
+của skill. Skill chỉ có prompt đã được thêm vào bản cài kit thì không có môi
+trường, và đó không phải lỗi.
 
 Với runtime hash mới, AgentKit stage môi trường cạnh cache rồi rename vào vị trí
 sau khi tool hoàn tất. Sau đó lệnh ghi manifest theo skill một cách atomic:
@@ -47,30 +78,34 @@ yêu cầu trước khi cài package. Package spec phải pin chính xác như
 loại các biến môi trường ghi đè registry, từ chối URL/VCS, local file, flag
 injection và spec không an toàn, đồng thời truyền `--ignore-scripts` cho pnpm.
 
-Lệnh không truy cập AgentKit kit registry và không kiểm tra account hay
-entitlement. Package manager vẫn có thể dùng mạng.
+Việc provision môi trường không truy cập AgentKit kit registry và không kiểm
+tra account hay entitlement. Package manager vẫn có thể dùng mạng.
 
 ## Đầu ra và tự động hoá
 
-Khi thành công, lệnh ghi dạng sau ra stderr và để stdout trống:
+Khi thành công, lệnh ghi các dòng sau ra stderr; dòng đầu xuất hiện khi skill
+được thêm vào bản cài kit, dòng thứ hai khi môi trường được provision:
 
 ```text
+[OK] <kit>/<skill> added to the <kit> Claude Code install (N written, M unchanged)
 [OK] <kit>/<skill> env installed
 ```
 
-Điều này vẫn đúng với `--json` và `--quiet`; không có JSON success envelope.
-Lỗi thực thi JSON dùng error envelope có cấu trúc trên stderr. Hãy thu hai stream
-riêng biệt.
+Với `--json`, skill được thêm vào bản cài kit còn in một envelope có phiên bản
+với `kind: skill_install` ra stdout. Lần chạy chỉ xử lý môi trường vẫn để stdout
+trống và không có JSON success envelope. Lỗi thực thi JSON dùng error envelope
+có cấu trúc trên stderr. Hãy thu hai stream riêng biệt.
 
 ## Mã thoát
 
 | Mã | Ý nghĩa |
 | --- | --- |
-| `0` | Record đã được ghi hoặc cache sẵn sàng được tái sử dụng. Opt-out và declaration chỉ có runtime chưa được hỗ trợ cũng có thể hoàn tất dưới dạng no-op. |
+| `0` | Skill đã được thêm vào bản cài kit, record đã được ghi, hoặc cache sẵn sàng được tái sử dụng. Opt-out và declaration chỉ có runtime chưa được hỗ trợ cũng có thể hoàn tất dưới dạng no-op. |
 | `1` | Parse, path validation, chạy tool, package policy hoặc filesystem thất bại. |
 | `2` | Reference đơn bị sai dạng hoặc cờ không hợp lệ. |
-| `4` | Thiếu `uv` hoặc `pnpm`, hay skill không khai báo runtime được hỗ trợ. |
+| `4` | Thiếu `uv` hoặc `pnpm`, skill không khai báo runtime được hỗ trợ, hoặc một lần cài khác đang giữ khoá vòng đời kit. |
 | `5` | Không tìm thấy local kit hoặc skill manifest. |
+| `6` | Một file của skill chứa chỉnh sửa không do AgentKit ghi; không có gì bị thay đổi. |
 
 Cobra từ chối argument theo vị trí bị thiếu hoặc thừa trước renderer có phân
 loại; đường này hiện thoát `1`. Đừng dùng nó làm contract validation argument.

@@ -1,0 +1,122 @@
+---
+title: ak skills self-improve
+description: Chủ động bật việc ghi lại các vấn đề của Skill (đã ẩn thông tin nhạy cảm) khi session Claude Code và Codex kết thúc, rồi xem lại các Skill đã sàng lọc bằng ak-dogfood.
+---
+
+Dùng `ak skills self-improve` để AgentKit nhận ra những Skill liên tục gặp vấn
+đề và gợi ý một lần review bằng `ak-dogfood`. Tính năng tắt theo mặc định. Khi
+đang bật, không có gì trong Skill thay đổi cho tới khi chính bạn chạy lệnh
+review được gợi ý hoặc duyệt một candidate. Chạy lệnh nhóm không kèm lệnh con sẽ
+in help.
+
+## Cách dùng
+
+```bash
+ak skills self-improve <command>
+```
+
+```bash
+ak skills self-improve enable
+ak skills self-improve status --json
+ak skills self-improve review list
+ak skills self-improve disable
+```
+
+## Sự đồng ý
+
+Chỉ config người dùng mới bật được tính năng:
+[`enable`](./enable) ghi `skill_self_improve.enabled: true` vào `config.yaml`
+trong thư mục home của AgentKit, còn [`disable`](./disable) ghi `false`.
+
+Một project chỉ có thể tắt tính năng. Đặt giá trị sau trong
+`.agentkit/config.yaml` của project; file gần nhất tại hoặc phía trên thư mục
+làm việc sẽ được áp dụng:
+
+```yaml
+skill_self_improve:
+  enabled: false
+```
+
+Giá trị `true` ở project, một key không xác định, hoặc một giá trị không phải
+boolean là policy không hợp lệ: việc ghi vẫn tắt, và `status` thoát `1` với
+`self_improve.policy_invalid`. Điều tương tự áp dụng cho một mục không hợp lệ
+trong config người dùng.
+
+## Những gì được ghi
+
+Việc ghi và dòng nhắc khi bắt đầu session chỉ chạy trên Claude Code và Codex,
+qua các Hook session-end và session-start của Kit Engineer và Marketing. Các
+runtime khác không ghi gì và không hiện dòng nào.
+
+Khi session kết thúc, Hook ghi một event cục bộ cho mỗi Skill mà session đã gọi.
+Một event gồm:
+
+- ref session và ref project dạng mờ (opaque), không bao giờ là đường dẫn;
+- skill id và digest của bản Skill đã chạy;
+- một tín hiệu: tool call bị từ chối, người dùng ngắt, task thất bại, hoặc yêu
+  cầu `ak-dogfood` tường minh (mạnh), lỗi tool hoặc thử lại (yếu), hoặc một quan
+  sát không có vấn đề;
+- tối đa tám con trỏ vào transcript theo số dòng và tên tool.
+
+Không lưu nội dung transcript, đầu ra tool hay secret nào, và không có model nào
+chạy. Event nằm trong `AGENTKIT_HOME/state/self-improve/events.jsonl` trong 30
+ngày, tối đa 5000 event. Tắt tính năng vẫn giữ lại chúng.
+
+## Sàng lọc và dòng nhắc khi bắt đầu session
+
+Một Skill được sàng lọc là đáng review khi các event của nó trong 7 ngày gần
+nhất, ứng với digest hiện tại của Skill, có một tín hiệu mạnh hoặc cùng một vấn
+đề yếu trong ít nhất 2 session. Event ghi cho digest cũ bị bỏ qua.
+[`status`](./status) liệt kê các Skill đó, mỗi Skill kèm đúng lệnh
+`/ak-dogfood --skill <name> --evidence <ids>` để review.
+
+Khi tính năng đang bật, lần bắt đầu session Claude Code hoặc Codex kế tiếp hiện
+một dòng bắt đầu bằng `[agentkit self-improve]`, nêu tối đa ba Skill mới được
+sàng lọc kèm lệnh `/ak-dogfood` của chúng. Đó là gợi ý để đề xuất với bạn, không
+phải chỉ thị. Mỗi phát hiện chỉ hiện một lần; một Skill chỉ hiện lại khi digest
+hoặc các vấn đề được sàng lọc của nó thay đổi. Một quyết định
+[`review`](./review/index) cũng làm nó im lặng.
+
+## Lệnh con
+
+| Lệnh | Kết quả | Tác động lên đĩa |
+| --- | --- | --- |
+| [`ak skills self-improve status`](./status) | Hiện sự đồng ý đang có hiệu lực và các Skill đã sàng lọc. | Chỉ đọc. |
+| [`ak skills self-improve history`](./history) | Liệt kê các event đã ghi, mới nhất trước. | Chỉ đọc. |
+| [`ak skills self-improve enable`](./enable) | Bật việc ghi trong config người dùng. | Sao lưu rồi ghi lại `config.yaml` của người dùng. |
+| [`ak skills self-improve disable`](./disable) | Tắt việc ghi trong config người dùng. | Sao lưu rồi ghi lại `config.yaml` của người dùng. |
+| [`ak skills self-improve review`](./review/index) | Review các Skill đã sàng lọc và quyết định về các candidate cải tiến của chúng. | `list` và `inspect` chỉ đọc; các quyết định ghi `review.json`. |
+
+## Đầu ra
+
+JSON success envelope dùng các kind sau:
+
+```text
+skills.self_improve.status | skills.self_improve.history
+skills.self_improve.enable | skills.self_improve.disable
+skills.self_improve.review.list | skills.self_improve.review.inspect
+skills.self_improve.review.rejected | skills.self_improve.review.deferred
+skills.self_improve.review.proposed
+```
+
+Trang của từng lệnh con liệt kê các trường.
+
+## Kết quả và mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Thành công, kể cả khi tính năng tắt hoặc store trống. |
+| `1` | Không xác định được thư mục home của AgentKit (`self_improve.home_unresolved`), không đọc hoặc ghi được event store (`self_improve.store_failed`), không ghi được config (`self_improve.config_write_failed`), hoặc một policy đồng ý không hợp lệ (`self_improve.policy_invalid`). |
+| `2` | Cờ hoặc argument không hợp lệ (`self_improve.invalid_input`). |
+| `4` | Một tiến trình ghi khác đang giữ khoá của event store (`self_improve.store_busy`). |
+
+Các lệnh con của `review` thêm mã `5` cho Skill hoặc candidate không khớp.
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skills self-improve`](../cli/ak_skills_self-improve)
+- [Xem các Skill đã sàng lọc](./status)
+- [Review các Skill đã sàng lọc](./review/index)
+- [Biến evidence từ session thành candidate](../cli/ak_skills_improve)
+- [Skill `ak-dogfood`](../../kits/engineer/skills/dogfood)
+- [Các Hook của Kit Engineer](../../kits/engineer/hooks/index)

@@ -1,0 +1,85 @@
+---
+title: ak skills self-improve status
+description: Cho biết việc ghi skill self-improve có đang bật ở đây không và Skill nào đã vượt ngưỡng review, mỗi Skill kèm đúng lệnh ak-dogfood.
+---
+
+Dùng `ak skills self-improve status` để kiểm tra việc ghi có đang bật cho thư
+mục hiện tại không và Skill nào đáng được review bằng `ak-dogfood`. Lệnh chỉ
+đọc.
+
+## Cách dùng
+
+```bash
+ak skills self-improve status [flags]
+```
+
+```bash
+ak skills self-improve status
+ak skills self-improve status --json
+```
+
+Lệnh không nhận argument và không có cờ riêng. Các cờ dùng chung nằm trong
+[quy ước CLI](../cli-conventions).
+
+## Lệnh làm gì
+
+Lệnh xác định sự đồng ý đang có hiệu lực từ `config.yaml` của người dùng và
+`.agentkit/config.yaml` của project gần nhất tại hoặc phía trên thư mục làm
+việc. Khi việc ghi đang bật, lệnh sàng lọc các event đã lưu: một Skill đạt khi
+các event của nó trong 7 ngày gần nhất, ứng với digest hiện tại, có một tín hiệu
+mạnh hoặc cùng một vấn đề yếu trong ít nhất 2 session.
+
+Mỗi Skill đã sàng lọc kèm đúng lệnh review:
+
+```text
+/ak-dogfood --skill <name> --evidence <ids>
+```
+
+Chạy lệnh đó trong coding agent của bạn khi bạn muốn review. Không có gì thay
+đổi cho tới khi bạn chạy.
+
+Khi việc ghi đang tắt, danh sách trống kể cả khi có event đã lưu. Dùng
+[`ak skills self-improve history`](./history) để xem các event đã lưu bất kể sự
+đồng ý.
+
+Lệnh chỉ đọc các file đồng ý và `AGENTKIT_HOME/state/self-improve/events.jsonl`.
+Lệnh không ghi gì, không chạy model, script hay network call, và bỏ qua bước
+kiểm tra cập nhật chạy nền.
+
+## Đầu ra
+
+Đầu ra text cho biết self-improve có đang bật không, kèm lý do khi tắt và lệnh
+để bật. Khi bật, lệnh in số event đã lưu, độ dài cửa sổ, và với mỗi Skill đã
+sàng lọc là độ mạnh tín hiệu, số lý do và lệnh `run:`.
+
+JSON dùng `kind=skills.self_improve.status` với các trường sau dưới `data`:
+
+```text
+enabled, policy_reason, project_restricted, window_days, events_total,
+candidates[]: skill, digest, strength, reasons[], event_ids[], suggested_command
+reasons[]: fingerprint, signal_type, error_class, strength, sessions
+```
+
+- `policy_reason` là `user_granted`, `user_disabled`, `project_disabled`,
+  `invalid_user_policy` hoặc `invalid_project_policy`.
+- `project_restricted` là `true` khi config của project đã tắt việc ghi hoặc
+  không hợp lệ.
+- `strength` là `strong` hoặc `weak`. `suggested_command` là lệnh
+  `/ak-dogfood`.
+
+## Kết quả và mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Thành công, kể cả khi tính năng tắt hoặc store trống. |
+| `1` | Không xác định được thư mục home của AgentKit (`self_improve.home_unresolved`), không đọc được event store (`self_improve.store_failed`), hoặc một policy đồng ý không hợp lệ (`self_improve.policy_invalid`). |
+| `2` | Cờ hoặc argument không hợp lệ (`self_improve.invalid_input`). |
+| `4` | Một tiến trình ghi khác đang giữ khoá của event store (`self_improve.store_busy`). |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skills self-improve status`](../cli/ak_skills_self-improve_status)
+- [Liệt kê các event đã ghi](./history)
+- [Review các Skill đã sàng lọc](./review/index)
+- [Bật việc ghi](./enable)
+- [Tổng quan skill self-improve](../cli/ak_skills_self-improve)
