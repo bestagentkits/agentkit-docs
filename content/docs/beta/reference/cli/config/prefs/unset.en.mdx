@@ -73,7 +73,7 @@ Shared flags such as `--json`, `--no-interactive`, `--quiet`, `--verbose`, and
 | Scope | Config file | Result after removal |
 | --- | --- | --- |
 | `user` | `$AGENTKIT_HOME/config.yaml`, or `~/.agentkit/config.yaml` by default | A project value can still override the preference; otherwise the built-in default applies. |
-| `project` | `.agentkit/config.yaml` under the current working directory | The user value applies when present; otherwise the built-in default applies. |
+| `project` | `<project>/.agentkit/config.yaml` | The user value applies when present; otherwise the built-in default applies. |
 
 Unset a user preference:
 
@@ -101,8 +101,14 @@ ak config prefs unset agent_models.grok --scope project
 ak config prefs unset semantic_decision.enabled --scope project
 ```
 
-The command does not search parent directories for a project config. Run it
-from the project directory whose `.agentkit/config.yaml` you intend to edit.
+`<project>` is the nearest directory, walking up from the working directory,
+that holds `.agentkit/config.yaml` or a `.git` entry (file or directory), so a
+subdirectory edits the repository's own project config. With neither marker,
+the working directory itself is the project. The walk never accepts your home
+directory, any ancestor of it, or the directory whose `.agentkit` is
+`$AGENTKIT_HOME`; run from one of those, `--scope project` exits `1` with an
+error saying there is no project scope. Run from inside a project or use
+`--scope user`.
 
 ## Files, backups, and schema boundary
 
@@ -150,7 +156,7 @@ as success after a non-zero exit.
 | Exit | Meaning | Safe next step |
 | --- | --- | --- |
 | `0` | The key was removed, or it was already absent. | Inspect `found`, then resolve the effective value. |
-| `1` | The key or scope was invalid, or the config/backup/write operation failed. | Correct the key or scope; restore the reported backup if a later verification fails. |
+| `1` | The key or scope was invalid (including `--scope project` with no project scope), or the config/backup/write operation failed. | Correct the key or scope; restore the reported backup if a later verification fails. |
 | `2` | The argument count or flags were invalid. | Correct the invocation. |
 
 `--yes` and `--no-interactive` do not change this policy because `unset` never

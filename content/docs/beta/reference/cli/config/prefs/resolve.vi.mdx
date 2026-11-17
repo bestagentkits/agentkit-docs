@@ -6,7 +6,8 @@ description: Resolve preference đã ghi ở user và project hiện tại với
 import { Callout } from 'fumadocs-ui/components/callout';
 
 Dùng `ak config prefs resolve` để xem giá trị preference mà Kit Hook đọc cho
-working directory hiện tại. Lệnh chỉ đọc và hoạt động không cần mạng.
+project chứa working directory hiện tại. Lệnh chỉ đọc và hoạt động không cần
+mạng.
 
 ## Cách dùng
 
@@ -23,7 +24,15 @@ dạng payload; `--yes` và `--no-interactive` không thay đổi resolution.
 Lệnh xem xét đúng hai đường dẫn:
 
 1. `~/.agentkit/config.yaml` hoặc `$AGENTKIT_HOME/config.yaml` dưới scope `user`;
-2. `<current-working-directory>/.agentkit/config.yaml` dưới scope `project`.
+2. `<project>/.agentkit/config.yaml` dưới scope `project`.
+
+`<project>` là thư mục gần nhất, khi đi ngược lên từ working directory, có
+`.agentkit/config.yaml` hoặc một entry `.git` (tệp hay thư mục), nên chạy từ thư
+mục con vẫn resolve config project của chính repository. Nếu không có dấu hiệu
+nào, chính working directory là project. Quá trình tìm không bao giờ chấp nhận
+thư mục home của bạn, bất kỳ thư mục cha nào của nó, hay thư mục có `.agentkit`
+là `$AGENTKIT_HOME`; khi chạy từ một trong các thư mục đó thì không có project
+scope và chỉ tệp user đóng góp giá trị.
 
 Tệp thiếu được ghi là absent và không phải lỗi. Tệp không đọc được hoặc sai
 định dạng làm toàn bộ resolution thất bại để Hook không âm thầm fallback khi
@@ -70,7 +79,8 @@ nguyên văn. Mọi thứ dưới `extensions` được giữ nguyên, không đ
 ## Đầu ra dành cho người dùng
 
 Stdout dành cho người dùng in hai đường dẫn nguồn cùng trạng thái `present`
-hoặc `absent` trước. Sau đó lệnh in object preference đã resolve dưới dạng JSON
+hoặc `absent` trước. Khi không có project scope, dòng project thay vào đó là
+`project  (none: the working directory is not inside a project)`. Sau đó lệnh in object preference đã resolve dưới dạng JSON
 thụt dòng. Khi chưa ghi preference nào, lệnh in:
 
 ```text
@@ -90,13 +100,15 @@ No preferences are set; hooks use their built-in defaults.
   "prefs": {"hooks":{"simplify-gate":false}},
   "sources": [
     {"scope":"user","path":"/home/user/.agentkit/config.yaml","present":true},
-    {"scope":"project","path":"/work/project/.agentkit/config.yaml","present":false}
+    {"scope":"project","path":"/work/project/.agentkit/config.yaml","present":false,"root":"/work/project"}
   ]
 }
 ```
 
-`prefs` luôn là object, còn `sources` luôn gồm entry `user` rồi `project`. Kiểu
-giá trị được giữ từ YAML.
+`prefs` luôn là object, còn `sources` luôn gồm entry `user` rồi `project`.
+Field `root` của entry project nêu thư mục project đã resolve. Khi không có
+project scope, entry project là `{"scope":"project","path":"","present":false}`.
+Kiểu giá trị được giữ từ YAML.
 
 Chỉ tài liệu thành công được miễn envelope dùng chung. Lỗi trong chế độ JSON,
 kể cả lỗi parse cờ (mã thoát `2`), ghi error envelope dùng chung lên stderr. Hãy

@@ -36,8 +36,19 @@ process environment or `$AGENTKIT_HOME/.env`, never from config. See
 The candidate files are:
 
 1. user scope: `~/.agentkit/config.yaml`, or `$AGENTKIT_HOME/config.yaml`;
-2. project scope: `.agentkit/config.yaml` under the command's current working
-   directory.
+2. project scope: `<project>/.agentkit/config.yaml`.
+
+`resolve`, `set`, `unset`, and `validate` find `<project>` by walking up from the
+working directory to the nearest directory that holds `.agentkit/config.yaml`
+or a `.git` entry (file or directory), so a subdirectory reads and writes the
+repository's own project config. With neither marker, the working directory
+itself is the project. The walk never accepts your home directory, any ancestor
+of it, the directory whose `.agentkit` is `$AGENTKIT_HOME`, or anything inside
+`$AGENTKIT_HOME`; run from one of those, there is no project scope and only the
+user file applies. The nearest marker wins, so a nested repository is its own
+project. On macOS and Linux, a marker above the working directory counts only
+when you or root own it, so a marker another user plants in a shared directory
+such as `/tmp` is ignored.
 
 Resolve deep-merges project values over user values. A project mapping can
 override one nested key while preserving user values beside it. These are
@@ -46,8 +57,9 @@ Kit Hook applies its own built-in default when a value is absent, and
 `journal.auto` defaults to `true`.
 
 `set` and `unset` default to user scope; pass `--scope project` to select the
-current project's file. Scope is based on the process working directory, not a
-registered project chosen elsewhere.
+current project's file. The project comes from the walk above, not from a
+registered project chosen elsewhere. Without a project scope,
+`--scope project` fails; run from inside a project or use `--scope user`.
 
 `semantic_decision` is an exception to project-over-user precedence. Only user
 scope can grant provider consent or choose provider settings; project scope can

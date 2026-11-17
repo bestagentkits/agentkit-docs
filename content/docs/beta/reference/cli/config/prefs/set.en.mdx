@@ -27,7 +27,7 @@ Supply exactly two positional arguments.
 
 | Flag | Default | Description |
 | --- | --- | --- |
-| `--scope <scope>` | `user` | Select `user` under AgentKit home or `project` under the current working directory. |
+| `--scope <scope>` | `user` | Select `user` under AgentKit home or `project` under the project that contains the working directory. |
 
 Shared flags are described in [CLI conventions](../cli-conventions). The write
 does not prompt, so `--yes` and `--no-interactive` do not change it. There is no
@@ -167,7 +167,15 @@ ak config prefs set semantic_decision.consumers.test-impact true --scope user
 | Scope | Target | Additional effect |
 | --- | --- | --- |
 | `user` | `$AGENTKIT_HOME/config.yaml`, normally `~/.agentkit/config.yaml` | A missing file is created. |
-| `project` | `<cwd>/.agentkit/config.yaml` | If absent, AgentKit scaffolds the project template and `.agentkit/.gitignore` first. The project config is intended to be committed, so do not place credentials in it. |
+| `project` | `<project>/.agentkit/config.yaml` | If absent, AgentKit scaffolds the project template and `.agentkit/.gitignore` first. The project config is intended to be committed, so do not place credentials in it. |
+
+`<project>` is the nearest directory, walking up from the working directory,
+that holds `.agentkit/config.yaml` or a `.git` entry (file or directory); with
+neither marker it is the working directory itself. The walk never accepts your
+home directory, any ancestor of it, or the directory whose `.agentkit` is
+`$AGENTKIT_HOME`. Run from one of those, `--scope project` exits `1` before any
+write with an error saying there is no project scope; run from inside a project
+or use `--scope user`.
 
 The writer changes only the selected `hooks.<name>`, `journal.auto`,
 `worktree.root`, `secret_store.choice`, `updates.channel`, `agent_models.<runtime>.<tier>`, or
@@ -250,7 +258,7 @@ runtime error path instead.
 | Exit | Meaning | Safe next step |
 | --- | --- | --- |
 | `0` | The selected leaf was written and any reported backup completed first. | Run resolve and validate. |
-| `1` | The positional-argument count, key, value, scope (including a disallowed project-scope `updates.channel` or `semantic_decision` write), path, YAML shape, schema, backup, or write failed. | Correct the invocation or read the human error without exposing config secrets; do not force the write. |
+| `1` | The positional-argument count, key, value, scope (including a disallowed project-scope `updates.channel` or `semantic_decision` write, or `--scope project` with no project scope), path, YAML shape, schema, backup, or write failed. | Correct the invocation or read the human error without exposing config secrets; do not force the write. |
 | `2` | Flag parsing failed. | Correct the flags. |
 
 ## Verify the result
@@ -260,7 +268,7 @@ ak config prefs resolve --json
 ak config prefs validate
 ```
 
-For project scope, run resolve from that same project directory so the intended
+For project scope, run resolve from inside that same project so the intended
 project file participates in precedence.
 
 ## Related commands

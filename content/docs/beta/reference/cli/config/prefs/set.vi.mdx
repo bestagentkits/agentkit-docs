@@ -25,7 +25,7 @@ Cung cấp đúng hai argument theo vị trí.
 
 | Cờ | Mặc định | Mô tả |
 | --- | --- | --- |
-| `--scope <scope>` | `user` | Chọn `user` dưới AgentKit home hoặc `project` dưới working directory hiện tại. |
+| `--scope <scope>` | `user` | Chọn `user` dưới AgentKit home hoặc `project` dưới project chứa working directory. |
 
 Các cờ dùng chung được mô tả trong [quy ước CLI](../cli-conventions). Thao tác
 ghi không hỏi, nên `--yes` và `--no-interactive` không thay đổi hành vi. Lệnh
@@ -163,7 +163,15 @@ ak config prefs set semantic_decision.consumers.test-impact true --scope user
 | Scope | Target | Tác động thêm |
 | --- | --- | --- |
 | `user` | `$AGENTKIT_HOME/config.yaml`, thường là `~/.agentkit/config.yaml` | Tệp thiếu sẽ được tạo. |
-| `project` | `<cwd>/.agentkit/config.yaml` | Nếu thiếu, AgentKit scaffold project template và `.agentkit/.gitignore` trước. Project config được thiết kế để commit, vì vậy không đặt credential vào đó. |
+| `project` | `<project>/.agentkit/config.yaml` | Nếu thiếu, AgentKit scaffold project template và `.agentkit/.gitignore` trước. Project config được thiết kế để commit, vì vậy không đặt credential vào đó. |
+
+`<project>` là thư mục gần nhất, khi đi ngược lên từ working directory, có
+`.agentkit/config.yaml` hoặc một entry `.git` (tệp hay thư mục); nếu không có
+dấu hiệu nào thì đó chính là working directory. Quá trình tìm không bao giờ
+chấp nhận thư mục home của bạn, bất kỳ thư mục cha nào của nó, hay thư mục có
+`.agentkit` là `$AGENTKIT_HOME`. Khi chạy từ một trong các thư mục đó,
+`--scope project` trả exit `1` trước khi ghi với lỗi báo không có project
+scope; hãy chạy từ bên trong một project hoặc dùng `--scope user`.
 
 Writer chỉ thay leaf `hooks.<name>`, `journal.auto`, `worktree.root`,
 `secret_store.choice`, `updates.channel`, `agent_models.<runtime>.<tier>`, hoặc
@@ -241,7 +249,7 @@ chung.
 | Mã thoát | Ý nghĩa | Bước tiếp theo an toàn |
 | --- | --- | --- |
 | `0` | Leaf đã chọn được ghi và backup được báo đã hoàn tất trước. | Chạy resolve và validate. |
-| `1` | Số positional argument, key, value, scope (kể cả thao tác ghi `semantic_decision` không được phép ở project scope), path, cấu trúc YAML, schema, backup hoặc thao tác ghi không hợp lệ hay thất bại. | Sửa cách gọi hoặc đọc lỗi dành cho người dùng mà không làm lộ secret config; không force thao tác ghi. |
+| `1` | Số positional argument, key, value, scope (kể cả thao tác ghi `semantic_decision` không được phép ở project scope, hoặc `--scope project` khi không có project scope), path, cấu trúc YAML, schema, backup hoặc thao tác ghi không hợp lệ hay thất bại. | Sửa cách gọi hoặc đọc lỗi dành cho người dùng mà không làm lộ secret config; không force thao tác ghi. |
 | `2` | Parse cờ thất bại. | Sửa các cờ. |
 
 ## Xác minh kết quả
@@ -251,7 +259,7 @@ ak config prefs resolve --json
 ak config prefs validate
 ```
 
-Với project scope, hãy chạy resolve từ cùng thư mục project đó để tệp project
+Với project scope, hãy chạy resolve từ bên trong cùng project đó để tệp project
 dự định tham gia đúng thứ tự ưu tiên.
 
 ## Lệnh liên quan

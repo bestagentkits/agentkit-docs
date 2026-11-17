@@ -6,8 +6,8 @@ description: Resolve authored user and current-project preferences with exact me
 import { Callout } from 'fumadocs-ui/components/callout';
 
 Use `ak config prefs resolve` to see the preference values that Kit Hooks read
-for the current working directory. The command is read-only and works without
-network access.
+for the project that contains the current working directory. The command is
+read-only and works without network access.
 
 ## Usage
 
@@ -25,7 +25,15 @@ Shared flags are described in [CLI conventions](../cli-conventions). Only
 The command considers exactly two paths:
 
 1. `~/.agentkit/config.yaml`, or `$AGENTKIT_HOME/config.yaml`, as `user`;
-2. `<current-working-directory>/.agentkit/config.yaml` as `project`.
+2. `<project>/.agentkit/config.yaml` as `project`.
+
+`<project>` is the nearest directory, walking up from the working directory,
+that holds `.agentkit/config.yaml` or a `.git` entry (file or directory), so a
+subdirectory resolves the repository's own project config. With neither marker,
+the working directory itself is the project. The walk never accepts your home
+directory, any ancestor of it, or the directory whose `.agentkit` is
+`$AGENTKIT_HOME`; run from one of those, there is no project scope and only the
+user file contributes.
 
 A missing file is recorded as absent and is not an error. An unreadable or
 malformed file fails the whole resolution so Hooks do not silently fall back
@@ -72,7 +80,9 @@ passed through without renaming.
 
 ## Human output
 
-Human stdout first prints both source paths with `present` or `absent`. It then
+Human stdout first prints both source paths with `present` or `absent`. Without
+a project scope, the project line instead reads
+`project  (none: the working directory is not inside a project)`. It then
 prints the resolved preference object as indented JSON. When no preferences are
 authored, it instead prints:
 
@@ -93,13 +103,16 @@ No preferences are set; hooks use their built-in defaults.
   "prefs": {"hooks":{"simplify-gate":false}},
   "sources": [
     {"scope":"user","path":"/home/user/.agentkit/config.yaml","present":true},
-    {"scope":"project","path":"/work/project/.agentkit/config.yaml","present":false}
+    {"scope":"project","path":"/work/project/.agentkit/config.yaml","present":false,"root":"/work/project"}
   ]
 }
 ```
 
 `prefs` is always an object, and `sources` always contains the `user` then
-`project` entries. Value types are preserved from YAML.
+`project` entries. The project entry's `root` names the resolved project
+directory. Without a project scope, the project entry is
+`{"scope":"project","path":"","present":false}`. Value types are preserved from
+YAML.
 
 Only the success document is exempt from the shared envelope. JSON-mode
 failures, including flag-parse errors (exit `2`), write the shared error
