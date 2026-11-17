@@ -118,9 +118,20 @@ Claude Code đặt `CLAUDE_PROJECT_DIR` là thư mục gốc của project khi c
 line. Vì vậy tệp đã commit vẫn hoạt động sau khi bạn clone project sang máy khác
 hoặc sang đường dẫn khác, không cần chạy `ak` ở đó. Chạy `ak update` trên các máy
 khác nhau giữ mục này giống hệt nhau đến từng byte. Giống Hook của project, lệnh này tìm
-`node` trong `PATH` mà Claude Code dùng khi chạy. Bản cài theo người dùng
-(`--global`) và bản cài plugin vẫn ghi đường dẫn tuyệt đối tới binary `node` và
-tới script.
+`node` trong `PATH` mà Claude Code dùng khi chạy.
+
+Theo mặc định, bản cài plugin theo project đặt thư mục plugin tại
+`<project>/ak-<kit>/` và đăng ký
+status line trong cùng `.claude/settings.json` bằng dạng portable tương ứng:
+
+```text
+node "${CLAUDE_PROJECT_DIR}/ak-<kit>/ak-<kit>-statusline.cjs"
+```
+
+Bản cài theo người dùng (`--global`), kể cả bản cài plugin theo người dùng, và
+bản cài plugin theo project có script status line nằm ngoài thư mục
+`<project>/ak-<kit>/` đó vẫn ghi đường dẫn tuyệt đối tới binary `node` và tới
+script.
 
 Để quản lý Kit từ một bản clone mới, hãy chạy `ak kit init <kit> --yes` ở đó một
 lần. Bản clone không mang theo bản ghi cài đặt mà AgentKit lưu trong `.agentkit/`
@@ -135,12 +146,13 @@ Bản cài theo project do `ak` phiên bản cũ tạo ra thì ghi đường d�
 Hãy chạy `ak update` một lần (trong bản clone mới, chạy `ak kit init <kit> --yes`
 trước) rồi commit kết quả:
 AgentKit trỏ mục của chính nó sang dạng portable khi script nằm trong thư mục
-`.claude` của bản checkout này, hoặc khi script đã ghi không tồn tại trên máy này
+`.claude` của bản checkout này (hoặc, với bản cài plugin theo project, bất kỳ thư mục
+plugin `ak-<kit>` nào, kể cả của bản checkout khác), hoặc khi script đã ghi không tồn tại trên máy này
 (tệp được commit từ máy khác). Chạy lần thứ hai không thay đổi gì thêm. Gỡ cài
 đặt xóa dạng portable và dạng tuyệt đối của chính bản checkout này. Status line
 bạn đã tùy chỉnh, status line thuộc Kit hoặc công cụ khác, status line viết bằng
 biến khác như `$CLAUDE_PROJECT_DIR` không có ngoặc nhọn, hoặc status line có
-script đã ghi vẫn tồn tại ở nơi khác trên máy này (chẳng hạn một bản checkout
+script `.claude` đã ghi vẫn tồn tại ở nơi khác trên máy này (chẳng hạn một bản checkout
 khác của cùng project) được giữ nguyên, và AgentKit in cảnh báo hướng dẫn cách
 chuyển sang status line của AgentKit.
 
@@ -176,7 +188,7 @@ các bề mặt hoạt động khác nhau:
 
 | Runtime | Điều bạn nên mong đợi |
 | --- | --- |
-| Claude Code | Phân phối native hoặc plugin được chọn rõ ràng. Skills, agents, slash commands, rules, hooks và status line của AgentKit có thể hoạt động ở scope project hoặc người dùng. Bản cài native theo project đăng ký status line bằng lệnh portable dùng `${CLAUDE_PROJECT_DIR}`, nên `.claude/settings.json` đã commit hoạt động trên mọi bản clone. |
+| Claude Code | Phân phối native hoặc plugin được chọn rõ ràng. Skills, agents, slash commands, rules, hooks và status line của AgentKit có thể hoạt động ở scope project hoặc người dùng. Bản cài native theo project, và bản cài plugin theo project có thư mục plugin nằm trong project, đăng ký status line bằng lệnh portable dùng `${CLAUDE_PROJECT_DIR}`, nên `.claude/settings.json` đã commit hoạt động trên mọi bản clone. |
 | Codex | Khám phá Skill theo cơ chế native, rules và giao việc cho Agent qua AgentKit runtime cục bộ. Rules chỉ hoạt động khi cài ở scope người dùng: Codex không đọc `<project>/.codex/AGENTS.md` mà bản cài project ghi ra, và `ak doctor --check codex_runtime_limits` liệt kê các tệp đó. Hook chỉ được hỗ trợ một phần; group không được hỗ trợ sẽ không được chuyển sang runtime, còn trạng thái task được làm mới tại ranh giới lượt làm việc và subagent được hỗ trợ thay vì sau mọi lần gọi công cụ task. Tệp command của Kit chỉ được giữ làm nội dung hỗ trợ không hoạt động và Codex không có bề mặt status line của AgentKit. |
 | Cursor | Adapter chuyển Skills, agents, rules và hooks sang scope project hoặc người dùng. Tệp command của Kit chỉ được giữ làm nội dung hỗ trợ không hoạt động, không có bề mặt status line của AgentKit và adapter không cung cấp công cụ quản lý plan chuyên biệt. Script dùng cho hook của Kit cũng có bản sao chạy được dưới `.cursor/scripts/`, nằm cạnh hook, để `require('../scripts/...')` trong hook resolve được; cài đặt và refresh giữ các bản sao này luôn mới, gỡ cài đặt sẽ xóa chúng, nhưng Cursor không tự nạp cây thư mục đó. Phạm vi xác minh cài đặt, cập nhật và invocation trực tiếp chưa đầy đủ trên mọi thiết lập provider, vì vậy không suy ra parity hoàn toàn chỉ từ việc source có hỗ trợ. |
 | DeepSeek Harness | Target Kit registry đã ký với projection native dưới `<project>/.dsh/`, đồng thời hỗ trợ dispatch Skill qua `ak run --target dsh`. Setup ghi adapter đã bật và resolve `AGENTKIT_DSH_BIN` hoặc `dsh`; setup không cài package Kit. Hãy xác nhận đích user-scope từ install summary. Command và export không được hỗ trợ vẫn là sidecar không hoạt động. Cài từ nguồn cục bộ vẫn khả dụng cho development và CI. |
