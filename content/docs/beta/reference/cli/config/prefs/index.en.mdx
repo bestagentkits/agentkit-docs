@@ -51,20 +51,28 @@ when you or root own it, so a marker another user plants in a shared directory
 such as `/tmp` is ignored. Run as root through `sudo`, a marker owned by the
 user who ran `sudo` (`SUDO_UID`) counts too, as in git.
 
-When the walk skips such a marker, for example in a container or devcontainer
-whose bind-mounted repository belongs to the host user, or in a shared CI
-checkout owned by a service account, AgentKit does not fall back silently:
+When the walk skips such a marker, AgentKit does not fall back silently:
 
-- `resolve` and `validate` print one `[!]` note on stderr that names the
-  skipped marker and the directory to `cd` into. Nothing is printed under
+- `resolve`, `validate`, `set`, and `unset` print one `[!]` note on stderr that
+  names the skipped marker and the uid that owns it. Nothing is printed under
   `--json` or `--quiet`, and the `resolve --json` payload is unchanged.
-- `set` and `unset --scope project` exit `1` before any write instead of
-  scaffolding a stray `.agentkit/` in the subdirectory. Under `--json` the error
-  envelope has `error_code` `conflict` and `remediation.reason`
-  `config.prefs.untrusted_project_marker`.
+- When the marker's owner also owns the working directory, as in a container
+  or devcontainer whose bind-mounted repository belongs to the host user, or a
+  shared CI checkout owned by a service account, the note also names the
+  directory to `cd` into. In that case `set` and `unset --scope project` exit
+  `1` before any write instead of scaffolding a stray `.agentkit/` in the
+  subdirectory. Under `--json` the error envelope has `error_code` `conflict`
+  and `remediation.reason` `config.prefs.untrusted_project_marker`.
+- A marker someone else planted above a directory you own is never offered as
+  the project; the write goes to your own project scope.
 
-To use that project, run the command from its root (a marker in the working
-directory itself is always used), or as the user who owns it.
+To use a skipped project, run the command from its root (a marker in the
+working directory itself is always used), or as the user who owns it.
+
+Under `sudo`, `set` and `unset --scope project` exit `1` before any write when
+the project belongs to the user who ran `sudo`, because the rewritten file would
+become owned by root and unreadable to that user. The `--json` reason is
+`config.prefs.sudo_project_write`; re-run the command without `sudo`.
 
 Resolve deep-merges project values over user values. A project mapping can
 override one nested key while preserving user values beside it. These are

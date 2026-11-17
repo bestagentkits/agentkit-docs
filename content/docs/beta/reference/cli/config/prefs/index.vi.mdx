@@ -52,21 +52,29 @@ root sở hữu nó, nên dấu hiệu do user khác đặt trong thư mục dù
 `/tmp` sẽ bị bỏ qua. Khi chạy bằng root qua `sudo`, dấu hiệu thuộc về user đã
 gọi `sudo` (`SUDO_UID`) cũng được tính, giống git.
 
-Khi quá trình tìm bỏ qua một dấu hiệu như vậy, ví dụ trong container hoặc
-devcontainer có repository bind-mount thuộc user của máy host, hay một bản
-checkout CI dùng chung thuộc service account, AgentKit không âm thầm quay về
+Khi quá trình tìm bỏ qua một dấu hiệu như vậy, AgentKit không âm thầm quay về
 working directory:
 
-- `resolve` và `validate` in một ghi chú `[!]` trên stderr, nêu dấu hiệu bị bỏ
-  qua và thư mục cần `cd` vào. Không in gì khi dùng `--json` hoặc `--quiet`, và
-  payload của `resolve --json` không thay đổi.
-- `set` và `unset --scope project` trả exit `1` trước khi ghi, thay vì scaffold
-  một `.agentkit/` lạc trong thư mục con. Với `--json`, error envelope có
-  `error_code` là `conflict` và `remediation.reason` là
+- `resolve`, `validate`, `set` và `unset` in một ghi chú `[!]` trên stderr, nêu
+  dấu hiệu bị bỏ qua và uid sở hữu nó. Không in gì khi dùng `--json` hoặc
+  `--quiet`, và payload của `resolve --json` không thay đổi.
+- Khi user sở hữu dấu hiệu cũng sở hữu working directory, ví dụ trong container
+  hoặc devcontainer có repository bind-mount thuộc user của máy host, hay một
+  bản checkout CI dùng chung thuộc service account, ghi chú còn nêu thư mục cần
+  `cd` vào. Khi đó `set` và `unset --scope project` trả exit `1` trước khi ghi,
+  thay vì scaffold một `.agentkit/` lạc trong thư mục con. Với `--json`, error
+  envelope có `error_code` là `conflict` và `remediation.reason` là
   `config.prefs.untrusted_project_marker`.
+- Dấu hiệu do người khác đặt phía trên một thư mục bạn sở hữu không bao giờ
+  được gợi ý làm project; lệnh ghi vào project scope của chính bạn.
 
-Để dùng project đó, hãy chạy lệnh từ thư mục gốc của nó (dấu hiệu nằm ngay
-trong working directory luôn được dùng), hoặc chạy bằng user sở hữu nó.
+Để dùng một project bị bỏ qua, hãy chạy lệnh từ thư mục gốc của nó (dấu hiệu
+nằm ngay trong working directory luôn được dùng), hoặc chạy bằng user sở hữu nó.
+
+Khi chạy qua `sudo`, `set` và `unset --scope project` trả exit `1` trước khi ghi
+nếu project thuộc user đã gọi `sudo`, vì tệp được ghi lại sẽ thuộc root và user
+đó không đọc được. Reason trong `--json` là `config.prefs.sudo_project_write`;
+hãy chạy lại lệnh mà không dùng `sudo`.
 
 Resolve deep-merge giá trị project lên giá trị user. Mapping project có thể ghi
 đè một nested key nhưng vẫn giữ giá trị user bên cạnh. Kết quả chỉ gồm giá trị
