@@ -48,7 +48,23 @@ of it, the directory whose `.agentkit` is `$AGENTKIT_HOME`, or anything inside
 user file applies. The nearest marker wins, so a nested repository is its own
 project. On macOS and Linux, a marker above the working directory counts only
 when you or root own it, so a marker another user plants in a shared directory
-such as `/tmp` is ignored.
+such as `/tmp` is ignored. Run as root through `sudo`, a marker owned by the
+user who ran `sudo` (`SUDO_UID`) counts too, as in git.
+
+When the walk skips such a marker, for example in a container or devcontainer
+whose bind-mounted repository belongs to the host user, or in a shared CI
+checkout owned by a service account, AgentKit does not fall back silently:
+
+- `resolve` and `validate` print one `[!]` note on stderr that names the
+  skipped marker and the directory to `cd` into. Nothing is printed under
+  `--json` or `--quiet`, and the `resolve --json` payload is unchanged.
+- `set` and `unset --scope project` exit `1` before any write instead of
+  scaffolding a stray `.agentkit/` in the subdirectory. Under `--json` the error
+  envelope has `error_code` `conflict` and `remediation.reason`
+  `config.prefs.untrusted_project_marker`.
+
+To use that project, run the command from its root (a marker in the working
+directory itself is always used), or as the user who owns it.
 
 Resolve deep-merges project values over user values. A project mapping can
 override one nested key while preserving user values beside it. These are
