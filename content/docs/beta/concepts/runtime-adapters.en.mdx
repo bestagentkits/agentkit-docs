@@ -132,8 +132,19 @@ status line. The committed file therefore keeps working after you clone the
 project on another machine or into another path, without running `ak` there.
 Running `ak update` on different machines leaves the entry byte-identical. Like
 project Hooks, the command finds `node` on the `PATH` Claude Code runs with.
-User-scope (`--global`) installs and plugin installs still record the absolute
-`node` binary and script path.
+
+By default, a project-scope plugin install places its plugin directory at
+`<project>/ak-<kit>/` and registers the status line in the same `.claude/settings.json` with the
+equivalent portable form:
+
+```text
+node "${CLAUDE_PROJECT_DIR}/ak-<kit>/ak-<kit>-statusline.cjs"
+```
+
+User-scope (`--global`) installs, including user-scope plugin installs, and a
+project plugin whose status line script sits outside that
+`<project>/ak-<kit>/` directory still record the absolute `node` binary and
+script path.
 
 To manage the Kit from a fresh clone, run `ak kit init <kit> --yes` there
 once. The clone does not carry the install record that AgentKit keeps under
@@ -149,12 +160,14 @@ A project install made by an older `ak` records absolute paths. Run `ak update`
 once (in a fresh clone, run `ak kit init <kit> --yes` first) and commit the
 result: AgentKit re-points its own
 entry to the portable form when its script sits in this checkout's `.claude`
-directory, or when the recorded script is missing on this machine (a file
-committed on another machine). A second run changes nothing. Uninstall removes
+directory (or, for a project plugin install, any `ak-<kit>` plugin directory, including
+one in another checkout),
+or when the recorded script is missing on this machine (a file committed on
+another machine). A second run changes nothing. Uninstall removes
 the portable form and this checkout's absolute form. A status line you
 customized, one that belongs to another Kit or tool, one written with another
 variable such as `$CLAUDE_PROJECT_DIR` without braces, or one whose recorded
-script still exists elsewhere on this machine (such as another checkout of the
+`.claude` script still exists elsewhere on this machine (such as another checkout of the
 same project) stays untouched, and AgentKit prints a warning explaining how to
 switch to the AgentKit status line.
 
@@ -190,7 +203,7 @@ surfaces differ:
 
 | Runtime | What to expect |
 | --- | --- |
-| Claude Code | Native or explicit plugin delivery. Skills, agents, slash commands, rules, hooks, and the AgentKit status line can be active at project or user scope. A native project install registers the status line with a portable `${CLAUDE_PROJECT_DIR}` command, so a committed `.claude/settings.json` works on any clone. |
+| Claude Code | Native or explicit plugin delivery. Skills, agents, slash commands, rules, hooks, and the AgentKit status line can be active at project or user scope. A native project install, and a project plugin install whose plugin directory is inside the project, register the status line with a portable `${CLAUDE_PROJECT_DIR}` command, so a committed `.claude/settings.json` works on any clone. |
 | Codex | Native Skill discovery, rules, and Agent dispatch through the local AgentKit runtime. Rules are active for user-scope installs only: Codex does not read the `<project>/.codex/AGENTS.md` a project install writes, and `ak doctor --check codex_runtime_limits` lists such files. Hook support is partial; unsupported groups are not projected, and task-state refresh occurs at supported turn and subagent boundaries rather than after every task tool call. Kit command files remain inactive supporting content, and Codex has no AgentKit status-line surface. |
 | Cursor | The adapter projects Skills, agents, rules, and hooks at project or user scope. Kit command files remain inactive supporting content, there is no AgentKit status-line surface, and the adapter does not expose a dedicated plan-management tool. Kit hook scripts also get runnable copies below `.cursor/scripts/`, beside the hooks, so a hook's `require('../scripts/...')` resolves; install and refresh keep those copies current and uninstall removes them, but Cursor does not load that tree on its own. Live install, update, and invocation coverage is not complete across provider setups, so do not infer full parity from source support alone. |
 | DeepSeek Harness | Signed registry Kit target with native projection under `<project>/.dsh/`, plus Skill dispatch through `ak run --target dsh`. Setup records the enabled adapter and resolves `AGENTKIT_DSH_BIN` or `dsh`; it does not install Kit packages. Confirm the user-scope destination from the install summary. Commands and unsupported exports remain inactive sidecars. Explicit local-source installs remain available for development and CI. |
