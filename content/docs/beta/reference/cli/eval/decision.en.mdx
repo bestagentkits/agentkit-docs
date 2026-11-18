@@ -62,13 +62,13 @@ provider. See [providers and credentials](../../../guides/semantic-decision-expe
 | `semantic_decision.provider` | `typesafe` or `cloudflare`; required when enabled | unset |
 | `semantic_decision.model` | Model ID matching `^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$`; only `clef` or `clef-flash` with `cloudflare` | unset |
 | `semantic_decision.timeout_ms` | Integer from `100` to `30000` | `5000` |
-| `semantic_decision.consumers.<consumer>` | `true` or `false` for `domain-routing`, `fix-complexity`, `orchestration-risk`, `skill-routing-eval`, or `e2e-classification` | unset |
+| `semantic_decision.consumers.<consumer>` | `true` or `false` for `domain-routing`, `fix-complexity`, `orchestration-risk`, `skill-routing-eval`, `test-impact`, or `e2e-classification` | unset |
 
 If you omit `semantic_decision.model`, the command uses the provider's model
 only when the provider lists exactly one; otherwise the result is `unavailable`
 with `model_required`. With no user `consumers` map, `domain-routing`,
 `fix-complexity`, and `orchestration-risk` are permitted, but
-`skill-routing-eval` and `e2e-classification` are not: each needs an explicit
+`skill-routing-eval`, `test-impact`, and `e2e-classification` are not: each needs an explicit
 `semantic_decision.consumers.<consumer>` entry set to `true`. An empty
 map permits none; a non-empty map permits only entries set to `true`.
 
@@ -93,7 +93,7 @@ trailing data are rejected.
 
 | Field | Meaning |
 | --- | --- |
-| `consumer` | The profile to run: `fix-complexity`, `orchestration-risk`, `domain-routing`, `skill-routing-eval`, or `e2e-classification`. The `review-triage`, `workflow-controller`, and `ui-regression` consumers run through [`ak eval triage`](./triage), [`ak eval workflow`](./workflow), and [`ak eval ui`](./ui). |
+| `consumer` | The profile to run: `fix-complexity`, `orchestration-risk`, `domain-routing`, `skill-routing-eval`, `test-impact`, or `e2e-classification`. The `review-triage`, `workflow-controller`, and `ui-regression` consumers run through [`ak eval triage`](./triage), [`ak eval workflow`](./workflow), and [`ak eval ui`](./ui). |
 | `state` | Compact facts for that profile. |
 | `legacy` | Your existing decision: exactly one valid answer for each profile question. |
 
@@ -104,6 +104,7 @@ trailing data are rejected.
 | `domain-routing` | `summary` (non-empty, up to 2000 bytes), `catalog`: 1 to 15 entries, each with a unique `id` matching `^[a-z][a-z0-9-]{0,63}$` and a `description` of up to 500 bytes | `domain`: a catalog `id` or `none` |
 | `skill-routing-eval` | `catalog`: 2 to 127 entries, each with a unique `id` matching `^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$` (not `none`), a non-empty `name` of up to 256 bytes, a non-empty `description` of up to 2048 bytes, and optional `when_to_use` (up to 2048 bytes) and `keywords` (up to 32, each up to 128 bytes); `cases`: 1 to 8 entries, each with a unique `id` and a non-empty `prompt` of up to 1500 bytes | For each case `id`: a catalog `id` or `none` |
 | `e2e-classification` | `state` is an array of 1 to 8 entries, each with a unique `id` matching `^[a-z][a-z0-9-]{0,63}$` and optional booleans `global_mutation`, `process_mutation`, `external_runtime`, `harness_calls`, and `unknown_effects` | For each entry `id`: `parallel-hermetic`, `serial-global`, `exclusive-process`, or `external-runtime` |
+| `test-impact` | `changed_paths` (paths), optional `summary`, `groups`: 1 or 2 entries, each with a unique non-empty `id`, `owned_paths`, `mandatory` and `critical` booleans, `class` (`parallel-hermetic`, `serial-global`, `exclusive-process`, or `external-runtime`), and optional `dependencies`, `test_names`, `co_changes`, and `failures` | For group `N` (`0` or `1`): `g<N>-relevance` and `g<N>-broaden`: `true` or `false`; `g<N>-risk`: `low`, `moderate`, or `high`; `g<N>-class`: one of the four classes |
 
 A `skill-routing-eval` case prompt must not name a catalog skill directly, for
 example as `/<id>` or `$<id>`; such a request is rejected.
@@ -142,7 +143,7 @@ Without `--json`, the command prints the result as one JSON object. With
 | `profile_version` | Present only for `skill-routing-eval`: the routing profile version, currently `skill-routing-v1`. |
 | `legacy_decision` | The `legacy` answers you supplied. |
 | `effective_decision` | Always equal to `legacy_decision`. |
-| `agreement` | Present only when `completed`: `true` per question when the provider chose your legacy answer. |
+| `agreement` | Present only when `completed`: `true` per question when the provider's answer matches your legacy answer. A boolean answer counts as `true` when `probability_true` is at least 0.5, and a score answer as the rubric label at its rounded score. |
 | `policy_reason` | `user_disabled`, `user_granted`, or `project_disabled`; `offline_validation` with `--validate-only`. |
 | `consent_scope` | `user` when the grant is enabled. |
 | `project_restriction_applied` | `true` when project config narrowed or disabled the grant. |

@@ -63,14 +63,15 @@ provider. Xem [provider và credential](../../../guides/semantic-decision-experi
 | `semantic_decision.provider` | `typesafe` hoặc `cloudflare`; bắt buộc khi bật | chưa đặt |
 | `semantic_decision.model` | Model ID khớp `^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$`; chỉ `clef` hoặc `clef-flash` với `cloudflare` | chưa đặt |
 | `semantic_decision.timeout_ms` | Số nguyên từ `100` đến `30000` | `5000` |
-| `semantic_decision.consumers.<consumer>` | `true` hoặc `false` cho `domain-routing`, `fix-complexity`, `orchestration-risk`, `skill-routing-eval` hoặc `e2e-classification` | chưa đặt |
+| `semantic_decision.consumers.<consumer>` | `true` hoặc `false` cho `domain-routing`, `fix-complexity`, `orchestration-risk`, `skill-routing-eval`, `test-impact` hoặc `e2e-classification` | chưa đặt |
 
 Nếu bạn bỏ qua `semantic_decision.model`, lệnh chỉ dùng model của provider khi
 provider liệt kê đúng một model; nếu không, kết quả là `unavailable` với
 `model_required`. Khi config user không có map `consumers`, `domain-routing`,
-`fix-complexity` và `orchestration-risk` được phép, nhưng `skill-routing-eval`
-và `e2e-classification` thì không: mỗi consumer này cần mục
-`semantic_decision.consumers.<consumer>` đặt tường minh là `true`. Map rỗng không cho phép consumer nào; map không rỗng
+`fix-complexity` và `orchestration-risk` được phép, nhưng `skill-routing-eval`,
+`test-impact` và `e2e-classification` thì không: mỗi consumer này cần mục
+`semantic_decision.consumers.<consumer>` đặt tường minh là `true`. Map rỗng
+không cho phép consumer nào; map không rỗng
 chỉ cho phép các mục đặt là `true`.
 
 Config project chỉ có thể thu hẹp quyền đã cấp ở user scope. Tệp
@@ -94,7 +95,7 @@ thừa phía sau bị từ chối.
 
 | Field | Ý nghĩa |
 | --- | --- |
-| `consumer` | Profile cần chạy: `fix-complexity`, `orchestration-risk`, `domain-routing`, `skill-routing-eval` hoặc `e2e-classification`. Các consumer `review-triage`, `workflow-controller` và `ui-regression` chạy qua [`ak eval triage`](./triage), [`ak eval workflow`](./workflow) và [`ak eval ui`](./ui). |
+| `consumer` | Profile cần chạy: `fix-complexity`, `orchestration-risk`, `domain-routing`, `skill-routing-eval`, `test-impact` hoặc `e2e-classification`. Các consumer `review-triage`, `workflow-controller` và `ui-regression` chạy qua [`ak eval triage`](./triage), [`ak eval workflow`](./workflow) và [`ak eval ui`](./ui). |
 | `state` | Các dữ kiện gọn cho profile đó. |
 | `legacy` | Quyết định hiện có của bạn: đúng một câu trả lời hợp lệ cho mỗi câu hỏi của profile. |
 
@@ -105,6 +106,7 @@ thừa phía sau bị từ chối.
 | `domain-routing` | `summary` (không rỗng, tối đa 2000 byte), `catalog`: 1 đến 15 mục, mỗi mục có `id` duy nhất khớp `^[a-z][a-z0-9-]{0,63}$` và `description` tối đa 500 byte | `domain`: một `id` trong catalog hoặc `none` |
 | `skill-routing-eval` | `catalog`: 2 đến 127 mục, mỗi mục có `id` duy nhất khớp `^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$` (không phải `none`), `name` không rỗng tối đa 256 byte, `description` không rỗng tối đa 2048 byte, cùng `when_to_use` (tối đa 2048 byte) và `keywords` (tối đa 32 mục, mỗi mục tối đa 128 byte) tuỳ chọn; `cases`: 1 đến 8 mục, mỗi mục có `id` duy nhất và `prompt` không rỗng tối đa 1500 byte | Với mỗi `id` của case: một `id` trong catalog hoặc `none` |
 | `e2e-classification` | `state` là một mảng 1 đến 8 mục, mỗi mục có `id` duy nhất khớp `^[a-z][a-z0-9-]{0,63}$` và các boolean tuỳ chọn `global_mutation`, `process_mutation`, `external_runtime`, `harness_calls` và `unknown_effects` | Với mỗi `id` của mục: `parallel-hermetic`, `serial-global`, `exclusive-process` hoặc `external-runtime` |
+| `test-impact` | `changed_paths` (các path), `summary` tuỳ chọn, `groups`: 1 hoặc 2 mục, mỗi mục có `id` duy nhất không rỗng, `owned_paths`, các boolean `mandatory` và `critical`, `class` (`parallel-hermetic`, `serial-global`, `exclusive-process` hoặc `external-runtime`), cùng `dependencies`, `test_names`, `co_changes` và `failures` tuỳ chọn | Với group `N` (`0` hoặc `1`): `g<N>-relevance` và `g<N>-broaden`: `true` hoặc `false`; `g<N>-risk`: `low`, `moderate` hoặc `high`; `g<N>-class`: một trong bốn class |
 
 Prompt của một case `skill-routing-eval` không được gọi tên trực tiếp một skill
 trong catalog, ví dụ dưới dạng `/<id>` hoặc `$<id>`; request như vậy bị từ chối.
@@ -142,7 +144,7 @@ cùng object đó nằm trong `data` của envelope dùng chung với `kind`
 | `profile_version` | Chỉ có với `skill-routing-eval`: phiên bản routing profile, hiện là `skill-routing-v1`. |
 | `legacy_decision` | Các câu trả lời `legacy` bạn đã cung cấp. |
 | `effective_decision` | Luôn bằng `legacy_decision`. |
-| `agreement` | Chỉ có khi `completed`: `true` cho từng câu hỏi khi provider chọn đúng câu trả lời legacy của bạn. |
+| `agreement` | Chỉ có khi `completed`: `true` cho từng câu hỏi khi câu trả lời của provider khớp câu trả lời legacy của bạn. Câu trả lời boolean được tính là `true` khi `probability_true` từ 0.5 trở lên; câu trả lời score được tính là nhãn rubric tại điểm đã làm tròn. |
 | `policy_reason` | `user_disabled`, `user_granted` hoặc `project_disabled`; `offline_validation` khi dùng `--validate-only`. |
 | `consent_scope` | `user` khi quyền đã được bật. |
 | `project_restriction_applied` | `true` khi config project đã thu hẹp hoặc tắt quyền. |
