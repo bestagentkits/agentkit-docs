@@ -71,7 +71,7 @@ Chọn đúng một provider; AgentKit không bao giờ tự đổi provider.
 
 | Provider | Model | Credential |
 | --- | --- | --- |
-| `typesafe` | Lấy từ provider | `TYPESAFE_API_KEY` |
+| `typesafe` | Lấy từ provider, hoặc một bản ghim phiên bản của alias `-latest` được liệt kê | `TYPESAFE_API_KEY` |
 | `cloudflare` | Chỉ `clef` hoặc `clef-flash` | `CLOUDFLARE_ACCOUNT_ID` và `CLOUDFLARE_API_TOKEN` |
 
 Mỗi credential được đọc từ môi trường của process trước, sau đó từ tệp `.env`
@@ -113,6 +113,15 @@ một model, model đó được chọn tự động. Nếu provider có nhiều
 `model_required` cho đến khi bạn đặt một model. Cloudflare luôn có hai model, vì
 vậy hãy đặt `semantic_decision.model` là `clef` hoặc `clef-flash`.
 
+Model đã cấu hình phải là model mà provider liệt kê, trừ một ngoại lệ cho bản
+ghim phiên bản. Khi discovery liệt kê một alias động `<family>-latest`, một bản
+ghim dạng số của family đó, như `<family>-1.14.0` hoặc `<family>-1.14`, được gửi
+nguyên vẹn tới provider. Lệnh gọi với bản ghim chỉ hoàn tất khi provider báo
+đang phục vụ đúng model đó, được ghi trong provenance là `resolved_model`; một
+model bị thay thế hoặc provider từ chối request sẽ báo `model_unavailable`. Mọi
+model khác mà provider không liệt kê đều báo `model_unavailable` trước khi gửi
+request quyết định nào.
+
 ## Kiểm tra trạng thái
 
 Chạy check `semantic_decision` của [`ak doctor`](../reference/cli/doctor) để xem
@@ -123,17 +132,23 @@ ak doctor --check semantic_decision
 ak doctor --check semantic_decision --json
 ```
 
-Check này, hiển thị là **Semantic decisions**, chỉ đọc và chạy offline. Nó
-phân giải cùng consent policy với các lệnh semantic, không bao giờ liên hệ
-provider, và chỉ báo credential có phân giải được hay không, không bao giờ in giá
-trị. Với `--json`, `details` gồm `enabled`, `provider`, `model`, `consumers`,
-`project_restricted` và `credential_available`.
+Check này, hiển thị là **Semantic decisions**, chỉ đọc. Nó phân giải cùng
+consent policy với các lệnh semantic và chỉ báo credential có phân giải được hay
+không, không bao giờ in giá trị. Với `typesafe`, khi các điều kiện về consent,
+credential và model đã thoả và có ít nhất một consumer được phép, check hỏi
+provider một lần, giới hạn 5 giây, để lấy danh mục model. Không gửi payload
+quyết định nào. Với `--offline`, hoặc khi không có consumer nào được phép, check
+không gọi mạng. Với `--json`, `details` gồm `enabled`, `provider`, `model`,
+`consumers`, `project_restricted` và `credential_available`, cùng `model_check`
+khi bước kiểm tra danh mục được áp dụng: `verified`, `pinned`, `skipped`,
+`model_unavailable`, `model_required`, `authentication_failed`, hoặc lý do cố
+định khiến discovery thất bại.
 
 | Trạng thái | Ý nghĩa |
 | --- | --- |
 | `skip` | Chưa cấp consent (mặc định), hoặc policy của project này tắt tính năng. Không có lệnh gọi provider nào. |
-| `warn` | Consent policy không hợp lệ, credential của provider không phân giải được, hoặc đã chọn `cloudflare` mà chưa đặt `semantic_decision.model`. Phần evidence nêu điều cần sửa. |
-| `ok` | Consent, provider, model và credential đều sẵn sàng. Phần evidence liệt kê provider, model và các consumer được phép. |
+| `warn` | Consent policy không hợp lệ, credential của provider không phân giải được, hoặc đã chọn `cloudflare` mà chưa đặt `semantic_decision.model`. Với `typesafe`, cũng cảnh báo khi provider từ chối credential (phần evidence nêu `TYPESAFE_API_KEY`), không cung cấp model đã cấu hình và model đó không phải bản ghim của một alias `-latest` được liệt kê, hoặc có nhiều model mà chưa chọn model nào; hai trường hợp sau gợi ý `ak config prefs set semantic_decision.model <listed-model> --scope user` với một model provider đã liệt kê. |
+| `ok` | Consent, provider, model và credential đều sẵn sàng. Phần evidence liệt kê provider, model và các consumer được phép. Discovery thất bại, ví dụ do timeout, vẫn giữ `ok` và ghi `model not verified (<reason>)`. Bản ghim chỉ được kiểm tra theo alias của nó, vì vậy hãy xác nhận bằng `resolved_model` của một lệnh gọi thật. |
 
 Kết quả `ok` nghĩa là có thể gọi provider, không có nghĩa là đã có lệnh gọi nào.
 Provider chỉ được gọi khi một consumer được phép chạy, ví dụ `ak eval decision`,
@@ -144,9 +159,13 @@ của từng lệnh để xác nhận một lệnh gọi cụ thể.
 ## Chạy một phép so sánh
 
 [`ak eval decision`](../reference/cli/eval/decision) chạy một shadow profile:
-`domain-routing`, `fix-complexity`, `orchestration-risk` hoặc
-`skill-routing-eval`. Request chứa consumer, state ngắn gọn và các câu trả lời
-legacy.
+`domain-routing`, `fix-complexity`, `orchestration-risk`,
+`skill-routing-eval` hoặc `e2e-classification`. Request chứa consumer, state
+ngắn gọn và các câu trả lời legacy. Các consumer `review-triage`,
+`workflow-controller` và `ui-regression` có lệnh riêng:
+[`ak eval triage`](../reference/cli/eval/triage),
+[`ak eval workflow`](../reference/cli/eval/workflow) và
+[`ak eval ui`](../reference/cli/eval/ui).
 
 ```bash
 ak eval decision request.json --validate-only --json

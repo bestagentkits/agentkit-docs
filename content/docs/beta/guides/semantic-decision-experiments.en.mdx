@@ -70,7 +70,7 @@ Pick one provider explicitly; AgentKit never switches providers on its own.
 
 | Provider | Models | Credentials |
 | --- | --- | --- |
-| `typesafe` | Discovered from the provider | `TYPESAFE_API_KEY` |
+| `typesafe` | Discovered from the provider, or a version pin of a listed `-latest` alias | `TYPESAFE_API_KEY` |
 | `cloudflare` | `clef` or `clef-flash` only | `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` |
 
 Each credential is read from the process environment first, then from the user
@@ -109,6 +109,15 @@ leave `semantic_decision.model` unset. If the provider offers several models,
 the result reports `model_required` until you set one. Cloudflare always offers
 two models, so set `semantic_decision.model` to `clef` or `clef-flash`.
 
+A configured model must be one the provider lists, with one exception for
+version pins. When discovery lists a floating `<family>-latest` alias, a numeric
+pin of that family, such as `<family>-1.14.0` or `<family>-1.14`, is sent to the
+provider unchanged. A pinned call completes only when the provider reports
+serving exactly that model, recorded as `resolved_model` in provenance; a
+substituted model or a provider refusal reports `model_unavailable`. Any other
+model the provider does not list reports `model_unavailable` before a decision
+request is sent.
+
 ## Check the status
 
 Run the `semantic_decision` check of [`ak doctor`](../reference/cli/doctor) to
@@ -119,17 +128,22 @@ ak doctor --check semantic_decision
 ak doctor --check semantic_decision --json
 ```
 
-The check, shown as **Semantic decisions**, is read-only and offline. It
-resolves the same consent policy as the semantic commands, never contacts the
-provider, and reports only whether a credential resolves, never its value. With
+The check, shown as **Semantic decisions**, is read-only. It resolves the same
+consent policy as the semantic commands and reports only whether a credential
+resolves, never its value. For `typesafe`, once consent, credential, and model
+preconditions hold and at least one consumer is permitted, it asks the provider
+once, with a 5-second limit, for its model catalog. No decision payload is sent.
+With `--offline`, or with no permitted consumer, it makes no network call. With
 `--json`, its `details` include `enabled`, `provider`, `model`, `consumers`,
-`project_restricted`, and `credential_available`.
+`project_restricted`, and `credential_available`, plus `model_check` when the
+catalog step applies: `verified`, `pinned`, `skipped`, `model_unavailable`,
+`model_required`, `authentication_failed`, or the fixed reason discovery failed.
 
 | Status | Meaning |
 | --- | --- |
 | `skip` | Consent is not granted (the default), or this project's policy turns the feature off. No provider calls are made. |
-| `warn` | The consent policy is invalid, the provider credential does not resolve, or `cloudflare` is selected without `semantic_decision.model`. The evidence names what to fix. |
-| `ok` | Consent, provider, model, and credential are all in place. The evidence lists the provider, model, and permitted consumers. |
+| `warn` | The consent policy is invalid, the provider credential does not resolve, or `cloudflare` is selected without `semantic_decision.model`. For `typesafe`, the provider also refuses the credential (the evidence names `TYPESAFE_API_KEY`), does not offer the configured model and it is not a pin of a listed `-latest` alias, or offers several models with none selected; the last two suggest `ak config prefs set semantic_decision.model <listed-model> --scope user` with a model the provider listed. |
+| `ok` | Consent, provider, model, and credential are all in place. The evidence lists the provider, model, and permitted consumers. A discovery failure such as a timeout keeps `ok` and says `model not verified (<reason>)`. A pin is checked only against its alias, so confirm it with the `resolved_model` of a real call. |
 
 An `ok` result means calls are possible, not that any happened. A provider is
 called only when a permitted consumer runs, such as `ak eval decision`, so an
@@ -139,9 +153,13 @@ log or usage counter; inspect each command's result to confirm a specific call.
 ## Run a comparison
 
 [`ak eval decision`](../reference/cli/eval/decision) runs one shadow profile:
-`domain-routing`, `fix-complexity`, `orchestration-risk`, or
-`skill-routing-eval`. The request holds the consumer, compact state, and the
-legacy answers.
+`domain-routing`, `fix-complexity`, `orchestration-risk`,
+`skill-routing-eval`, or `e2e-classification`. The request holds the consumer,
+compact state, and the legacy answers. The `review-triage`,
+`workflow-controller`, and `ui-regression` consumers have their own commands:
+[`ak eval triage`](../reference/cli/eval/triage),
+[`ak eval workflow`](../reference/cli/eval/workflow), and
+[`ak eval ui`](../reference/cli/eval/ui).
 
 ```bash
 ak eval decision request.json --validate-only --json
