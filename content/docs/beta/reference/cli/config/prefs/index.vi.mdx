@@ -36,8 +36,13 @@ của process hoặc `$AGENTKIT_HOME/.env`, không bao giờ từ config. Xem
 Hai tệp ứng viên là:
 
 1. user scope: `~/.agentkit/config.yaml` hoặc `$AGENTKIT_HOME/config.yaml`;
-2. project scope: `.agentkit/config.yaml` dưới working directory hiện tại của
-   lệnh.
+2. project scope: `.agentkit/config.yaml` trong thư mục project.
+
+Thư mục project là thư mục gần nhất, tính từ working directory trở lên, có
+`.agentkit/config.yaml` hoặc `.git`; nếu không tìm thấy thì là chính working
+directory. Việc tìm kiếm không bao giờ chọn thư mục home của bạn, thư mục nằm
+trên home, hoặc thư mục home của AgentKit, nên khi chạy từ thư mục home sẽ không
+có project scope, và lệnh ghi ở project scope tại đó thất bại với mã thoát `1`.
 
 Resolve deep-merge giá trị project lên giá trị user. Mapping project có thể ghi
 đè một nested key nhưng vẫn giữ giá trị user bên cạnh. Kết quả chỉ gồm giá trị
@@ -46,8 +51,20 @@ dụng default tích hợp khi không có giá trị, và `journal.auto` mặc �
 `true`.
 
 `set` và `unset` mặc định dùng user scope; truyền `--scope project` để chọn tệp
-của project hiện tại. Scope dựa trên working directory của process, không dựa
-vào project đã đăng ký được chọn ở nơi khác.
+project tìm được từ working directory, nên lệnh chạy từ thư mục con đọc và ghi
+cùng tệp với lệnh chạy từ gốc repository. Scope không dựa vào project đã đăng ký
+được chọn ở nơi khác.
+
+Marker nằm trên working directory chỉ được tính khi bạn, root hoặc người dùng đã
+chạy `sudo` sở hữu nó, và thư mục `.agentkit` chứa nó không phải là liên kết.
+Khi đọc, lệnh bỏ qua marker hoặc config không đáng tin và ghi chú ra stderr (im
+lặng với `--json` hoặc `--quiet`); `resolve` hiển thị config project bị bỏ qua là
+`skipped: not trusted`. `set` hoặc `unset` ở project scope từ chối với mã thoát
+`1` và `error_code` là `conflict` khi lệnh ghi sẽ rơi vào config không đáng tin
+(`config.prefs.untrusted_project_config`), vào config lạc dưới một repository
+có marker bị bỏ qua (`config.prefs.untrusted_project_marker`), hoặc, khi chạy
+bằng root, vào project do người dùng khác sở hữu
+(`config.prefs.root_project_write`).
 
 `semantic_decision` là ngoại lệ của thứ tự ưu tiên project trên user. Chỉ user
 scope mới cấp được sự đồng ý dùng provider hoặc chọn thiết lập provider;

@@ -16,9 +16,9 @@ ak backups list
 ## Before you run
 
 The command reads the local backup store under `~/.agentkit/backups/`. It does
-not require authentication or network access. Each readable manifest is also
-verified against its data while the list is built, so a large backup set can
-take longer than a directory listing.
+not require authentication or network access. It reads snapshot manifests only
+and does not hash captured files, so it stays fast on a large backup set. Run
+`ak backups verify <id>` to check one snapshot against its data.
 
 Malformed directory names, non-directory entries, and unreadable or invalid
 manifests are skipped. A missing backup root is treated as an empty list.
@@ -53,8 +53,10 @@ An empty array means no readable committed snapshot was found.
 ## Output and streams
 
 Human output on stdout contains `ID`, `WHEN`, `KIND`, `SIZE`, and `STATUS`
-columns plus verified and unverified totals. With no records, it prints a
-`No backups found.` empty state.
+columns. Because the list does not hash data, `STATUS` shows `- not checked`,
+and the summary line reads
+`N backups - 0 verified - 0 unverified - N not checked (ak backups verify <id>)`.
+With no records, it prints a `No backups found.` empty state.
 
 JSON success uses the shared envelope on stdout:
 
@@ -93,8 +95,8 @@ they form a separate `data.checkpoints[]` array, omitted when there are none:
 }
 ```
 
-The JSON snapshot entry intentionally omits the human table's byte size and verification
-status. An empty result is `"backups": []`. Runtime errors in JSON mode use a
+The JSON snapshot entry intentionally omits the human table's byte size and `STATUS`
+column. An empty result is `"backups": []`. Runtime errors in JSON mode use a
 structured error envelope on stderr. With `--json` enabled, unknown or invalid
 flags use the shared JSON stderr error envelope (`error_code: validation_failed`,
 exit `2`). Human mode, including `--json=false`, prints `Usage`.
@@ -112,11 +114,12 @@ The command does not use exits `3`, `4`, or `5` for individual skipped entries.
 ## Effects, safety, and recovery
 
 The command is read-only. It does not acquire the mutation lock, change a
-manifest, delete a snapshot, or modify live runtime files. Verification reads
-every manifest-listed regular file and recomputes hashes.
+manifest, delete a snapshot, or modify live runtime files. It reads manifests
+only; `ak backups verify <id>` is the command that rereads files and recomputes
+hashes.
 
-An `unverified` human row can mean corruption or another verification error;
-run `ak backups verify <id>` for a classified result. A corrupt manifest can be
+The list never reports a snapshot as verified or unverified. Run
+`ak backups verify <id>` for a classified result. A corrupt manifest can be
 absent from the list entirely, so an empty or shorter list is not proof that no
 snapshot directory exists on disk.
 

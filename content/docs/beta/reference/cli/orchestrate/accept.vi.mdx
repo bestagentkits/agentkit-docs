@@ -8,6 +8,48 @@ Ghi nhận chấp nhận kết quả theo contract orchestration.
 Đây là thao tác ghi run state và chạy declared verification command. CLI dispatch
 chỉ có trên Darwin; không dùng kết quả từ harness nội bộ để suy ra host hỗ trợ.
 
+Lệnh cũng ghi một tệp `.fingerprint-cache` chứa mã băm của các tệp sở hữu vào thư mục run.
+
+Job có workspace hoặc artifact đã được chấp nhận nhưng sau đó thay đổi là job
+cũ (stale), và lệnh accept thông thường từ chối job đó với `error_code`
+`conflict`. Khôi phục đúng các tệp hoặc commit đã được chấp nhận sẽ đưa job trở
+lại; một commit mới, kể cả `git revert`, thì không. Để giữ thay đổi, hãy khôi
+phục bằng `--reaccept` cùng một receipt thành công nêu digest hiện tại của
+artifact: input đã khai báo vẫn phải khớp với attempt, các dependency phải đã
+được chấp nhận, và verification đã khai báo sẽ chạy lại. Lần chấp nhận lại chỉ
+ghi artifact và fingerprint mới; các trường khác của receipt giữ nguyên từ lần
+chấp nhận ban đầu. Hãy khôi phục dependency trước. Job phụ thuộc chỉ tự trở lại
+khi evidence của dependency đúng như lúc nó được chấp nhận; nếu không, job đó cần
+`--reaccept` riêng. Nếu input hoặc artifact được bàn giao đã thay đổi, hãy
+prepare một run mới cho job đó.
+
+Receipt (`--result`) là một object JSON với các khoá chính xác, phân biệt chữ hoa
+chữ thường. Receipt có khoá lạ, trùng hoặc viết sai, sai kiểu, thiếu `success`
+hoặc có giá trị không hợp lệ bị từ chối với mã thoát `2` (`error_code`
+`validation_failed`, `remediation.reason` dạng `receipt_*`) trước khi run được
+đọc. Các check phụ thuộc vào run, như hash của artifact và trạng thái settle,
+chạy trong lúc accept và thoát với mã `1`.
+
+- `success`: boolean, bắt buộc. `false` settle attempt là thất bại và ghi lý do
+  vào attempt.
+- `settled`: boolean, phải là `true` để xác nhận attempt đã thực thi xong.
+- `attempt_id`: string, tuỳ chọn. Nếu có, phải bằng `--attempt`.
+- `artifacts`: mảng `{path, sha256, from_job?, from_path?}`. Khi `success` là
+  `true`, mảng phải liệt kê mọi output đã khai báo kèm `sha256`.
+- `error_class`: string tuỳ chọn, lớp lỗi dùng cho quyết định retry; tối đa 256
+  byte, không có ký tự điều khiển hay ngắt dòng.
+- `observed`: object `{source, runtime?, provider?, model?, model_family?}`, tuỳ
+  chọn; `source` là bắt buộc.
+- `arbiter_verdict`: `"pass"`, `"fail"` hoặc `"blocked"`, tuỳ chọn.
+- `interventions`: số nguyên không âm, tuỳ chọn.
+- `usage`: object `{input_tokens?, output_tokens?, cost_usd?}`, tuỳ chọn, giá
+  trị không âm.
+
+Lý do từ chối: `receipt_malformed`, `receipt_unknown_field`,
+`receipt_duplicate_field`, `receipt_success_missing`,
+`receipt_success_not_boolean`, `receipt_field_type`, `receipt_field_value`,
+`receipt_attempt_mismatch`.
+
 Dùng `ak orchestrate accept` với đối số và tùy chọn dưới đây. Phần help nguyên bản giữ nguyên thuật ngữ, cú pháp, tác động và điều kiện thực thi của CLI để đối chiếu chính xác.
 
 ## Contract và help của lệnh
@@ -16,16 +58,28 @@ Verify and accept one settled attempt's artifact receipt
 
 ### Synopsis
 
-Verify and accept one settled attempt's artifact receipt. CLI dispatch requires Darwin; internal dispatch belongs to the active harness.
+Verify and accept one settled attempt's artifact receipt. CLI dispatch requires Darwin; internal dispatch belongs to the active harness. A job whose accepted workspace or artifacts changed afterwards is stale, and ordinary acceptance refuses it with error_code "conflict". Restoring the accepted files or commit restores it; a new commit, including git revert, does not. To keep the change, recover with --reaccept and a success receipt naming the current artifact digests: declared inputs must still match the attempt, dependencies must be accepted, and declared verification runs again. Re-acceptance records only the new artifacts and fingerprint; other receipt fields stay from the original acceptance. Recover dependencies first. A dependent restores itself only when its dependency's evidence is exactly what it was accepted against; otherwise it needs its own --reaccept. If inputs or a handed-off artifact changed, prepare a new run for that job instead.
+
+Receipt (--result) is one JSON object with exact, case-sensitive keys. A receipt with an unknown, duplicate or misspelled key, a wrong type, a missing success or an invalid field value is refused with exit 2 (error_code validation_failed, remediation.reason receipt_*) before the run is read. Checks that depend on the run, such as artifact hashes and settlement, run during acceptance and exit 1.
+- success: boolean, required. false settles the attempt as failed and records the reason on the attempt.
+- settled: boolean, required true to attest settled execution.
+- attempt_id: string, optional. Must equal --attempt when present.
+- artifacts: array of &#123;path, sha256, from_job?, from_path?&#125;. Must list every declared output with its sha256 when success is true.
+- error_class: string, optional failure class used for retry decisions; at most 256 bytes, no control characters or line breaks.
+- observed: object &#123;source, runtime?, provider?, model?, model_family?&#125;, optional; source is required.
+- arbiter_verdict: "pass", "fail" or "blocked", optional.
+- interventions: non-negative integer, optional.
+- usage: object &#123;input_tokens?, output_tokens?, cost_usd?&#125;, optional, non-negative.
+Refusal reasons: receipt_malformed, receipt_unknown_field, receipt_duplicate_field, receipt_success_missing, receipt_success_not_boolean, receipt_field_type, receipt_field_value, receipt_attempt_mismatch.
 
 Effects:
-  Writes private jobs.yaml, state.json and metrics.jsonl in the run directory. Acceptance runs declared verification commands; advance may copy declared artifacts and spawn CLI jobs.
+  Writes private jobs.yaml, state.json, metrics.jsonl and a .fingerprint-cache of owned-file digests in the run directory. Acceptance runs declared verification commands; advance may copy declared artifacts and spawn CLI jobs.
 
 Exit status:
   0 success, 1 command failure, 2 invalid flags or arguments
 
 ```
-ak orchestrate accept <run-dir> <job-id> --attempt <id> --result <receipt.json> [flags]
+ak orchestrate accept <run-dir> <job-id> --attempt <id> --result <receipt.json> [--reaccept] [flags]
 ```
 
 ### Examples
@@ -33,6 +87,7 @@ ak orchestrate accept <run-dir> <job-id> --attempt <id> --result <receipt.json> 
 ```
   ak orchestrate accept ./run build --attempt build-1 --result receipt.json
   ak orchestrate accept ./run build --attempt build-1 --result receipt.json --json
+  ak orchestrate accept ./run build --attempt build-1 --result receipt.json --reaccept
 ```
 
 ### Options
@@ -43,6 +98,7 @@ ak orchestrate accept <run-dir> <job-id> --attempt <id> --result <receipt.json> 
       --json             Emit machine-readable JSON (implies --no-interactive)
       --no-interactive   Disable interactive prompts (CI-safe)
   -q, --quiet            Suppress non-error output on stderr
+      --reaccept         Recover a stale job: accept its settled, previously accepted attempt against the current workspace
       --result string    JSON receipt with settled outcome and artifact hashes
   -V, --verbose          Extra diagnostic output on stderr (loses to --quiet)
   -y, --yes              Assume yes for all prompts

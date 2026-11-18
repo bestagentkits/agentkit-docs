@@ -62,7 +62,8 @@ parseable JSON stream.
 ## Submit intentionally
 
 Submission loads the local AgentKit session, checks that its registry matches
-the selected registry, and sends a bearer-authenticated JSON POST. It requires
+the selected registry, and sends a bearer-authenticated JSON POST. If the
+session token has expired, the command renews it once and retries. It requires
 network access and a valid session; it does not purchase or change kit
 entitlements.
 
@@ -81,11 +82,13 @@ confirmation and submit immediately once required fields are present.
   exactly the rendered report before making a network submission.
 </Callout>
 
-If submission fails for authentication, registry, rate-limit, response, or
-network reasons, the command tries to save a timestamped
-`agentkit-feedback-YYYYMMDD-HHMMSS.md` fallback in the current directory, then
-still exits `4`. Check stderr for the exact path. This fallback write can happen
-even when you did not pass `--export`.
+If submission fails, the command tries to save a timestamped
+`agentkit-feedback-YYYYMMDD-HHMMSS.md` fallback in the current directory and
+names the path on stderr. A sign-in failure (no session, a rejected session, or
+a registry mismatch) exits `4` with `error_code` `auth_required`; run
+`ak login --email <email>` or `ak login --api-key-stdin`. A rate-limit, response,
+or network failure exits `1`. This fallback write can happen even when you did
+not pass `--export`.
 
 ## Diagnostics and privacy
 
@@ -132,10 +135,10 @@ envelope (`error_code: validation_failed`, exit `2`). Human mode, including
 | Exit | Meaning | Safe next step |
 | --- | --- | --- |
 | `0` | Export or submission completed. | Inspect the exported path or returned issue target. |
-| `1` | Export or result output could not be written, or a positional argument was supplied. | Choose a writable new path or correct the invocation while preserving any earlier file. |
+| `1` | Export or result output could not be written, a positional argument was supplied, or the registry or network rejected submission (the report is saved locally). | Choose a writable new path or correct the invocation while preserving any earlier file. After a rejected submission, inspect the fallback export before retrying. |
 | `2` | The type or flags were invalid, draft prompting failed, or submission was cancelled. | Correct the type or stop without retrying. |
 | `3` | The title/details were missing, or diagnostics collection, feedback validation, rendering, or payload limits failed. | Complete or reduce the report, or resolve diagnostics locally. |
-| `4` | Authentication or registry validation failed, or the registry/network rejected submission. | Inspect the fallback export before reauthenticating or retrying. |
+| `4` | Not signed in, or the session was rejected (`auth_required`). The report is saved locally. | Run `ak login --email <email>`, then submit the saved report again. |
 
 ## Related commands
 
