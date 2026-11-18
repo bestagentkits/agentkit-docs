@@ -167,8 +167,8 @@ provider behavior.
 
 Before judging a Skill's text, `audit` and `optimize` measure how the Skill
 actually ran in local agent sessions. The bundled `scripts/session_usage.py`
-reads local Claude Code and Codex transcripts and reports metrics such as
-turns, tokens, tool calls, tool errors, repeated calls, tool wait time,
+reads local Claude Code, Codex, and Oh My Pi (OMP) transcripts and reports
+metrics such as turns, tokens, tool calls, tool errors, repeated calls, tool wait time,
 delegation and subagent usage, and which Skill files were loaded. It is
 read-only and never prints prompt, reply, or tool-output text.
 
@@ -193,8 +193,12 @@ triggers, the Skill files named in tool arguments, and `invoked`, which is false
 for a Skill that only appears in paths. `--all [--since YYYY-MM-DD]` inventories
 every local transcript and ranks each invoked Skill by sessions, errors,
 duplicate calls, interruptions, and compactions, with up to five lead sessions
-per Skill. A full scan can take minutes on a machine with many transcripts, so
-narrow it with `--since` or `--runtime` when you can.
+per Skill. Errors, duplicate calls, and interruptions count only inside the
+Skill's own spans, from its trigger or `SKILL.md` load to the next human
+prompt; `session_totals` keeps the whole-session counts. A forked Codex session
+and the session it was forked from count once. A full scan can take minutes on
+a machine with many transcripts, so narrow it with `--since` or `--runtime`
+(`claude-code`, `codex`, or `omp`) when you can.
 
 `optimize` applies session-based changes one goal at a time and accepts a
 change only when output quality holds; a faster or shorter run that loses a
@@ -305,20 +309,26 @@ grades artifacts that already exist, and summarizes records. It never calls a
 provider or executes commands, so you run the consumer yourself first.
 
 ```bash
-python3 scripts/eval_skill.py validate /absolute/target-skill/evals/evals.json
+python scripts/eval_skill.py validate /absolute/target-skill/evals/evals.json
 
-python3 scripts/eval_skill.py grade /absolute/target-skill/evals/evals.json \
+python scripts/eval_skill.py grade /absolute/target-skill/evals/evals.json \
   --case-id normalize-valid --outputs /absolute/run/outputs \
   --run-id unique-session-id --variant candidate \
   --model effective-model-id --runtime observed-runtime-version \
   --skill /absolute/skill-snapshot > /absolute/run/record.json
 
-python3 scripts/eval_skill.py summarize /absolute/run-a/record.json \
+python scripts/eval_skill.py summarize /absolute/run-a/record.json \
   /absolute/run-b/record.json > /absolute/comparison.json
 ```
 
-* Assertions are `file-exists`, `json-equals`, `text-contains`, or `rubric`
-  (the default). Artifact paths are relative to the outputs root; escaping paths
+The Skill runs its Python scripts as `python <script>`. On macOS or Linux
+without a `python` command, use `python3`. On Windows, never use `python3`,
+because it opens the Microsoft Store stub.
+
+* Assertions are `file-exists`, `json-equals`, `text-contains`, `text-absent`,
+  or `rubric` (the default). `text-absent` passes when the artifact exists and a
+  forbidden literal, such as a decoy secret or leaked state, does not appear in
+  it. Artifact paths are relative to the outputs root; escaping paths
   and symlinks fail. Rubric checks stay ungraded until an independent reviewer
   fills them with cited evidence.
 * For the no-Skill baseline, pass `--variant without_skill` and omit `--skill`;

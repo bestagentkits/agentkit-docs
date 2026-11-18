@@ -53,7 +53,7 @@ ak config prefs set semantic_decision.enabled true --scope user
 ```
 
 The writable keys are `semantic_decision.enabled`, `provider`, `model`,
-`timeout_ms`, and `consumers.<name>`. Run `ak config prefs set --help` from the
+`base_url`, `timeout_ms`, and `consumers.<name>`. Run `ak config prefs set --help` from the
 binary you will use to confirm its current surface.
 
 After enabling, the original `domain-routing`, `fix-complexity`, and
@@ -72,6 +72,23 @@ Pick one provider explicitly; AgentKit never switches providers on its own.
 | --- | --- | --- |
 | `typesafe` | Discovered from the provider | `TYPESAFE_API_KEY` |
 | `cloudflare` | `clef` or `clef-flash` only | `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` |
+| `openrouter` | Required: any model ID you set | `OPENROUTER_API_KEY` |
+| `openai-compatible` | Required: any model ID you set | `OPENAI_COMPATIBLE_API_KEY` |
+
+`openrouter` sends requests to
+`https://openrouter.ai/api/v1/chat/completions`. `openai-compatible` sends them
+to `<semantic_decision.base_url>/chat/completions`, so set
+`semantic_decision.base_url` at user scope before you enable it; an enabled
+`openai-compatible` policy without a base URL is invalid. The base URL must be
+an `https` URL, or `http` only for a loopback host such as `localhost`, with no
+user info, query, or fragment, and at most 2048 bytes. Other providers ignore a
+stored base URL.
+
+```bash
+ak config prefs set semantic_decision.provider openai-compatible --scope user
+ak config prefs set semantic_decision.base_url https://llm.example.com/v1 --scope user
+ak config prefs set semantic_decision.model <model-id> --scope user
+```
 
 Each credential is read from the process environment first, then from the user
 AgentKit home `.env` file (`$AGENTKIT_HOME/.env`, by default `~/.agentkit/.env`):
@@ -81,6 +98,8 @@ AgentKit home `.env` file (`$AGENTKIT_HOME/.env`, by default `~/.agentkit/.env`)
 TYPESAFE_API_KEY=...
 CLOUDFLARE_ACCOUNT_ID=...
 CLOUDFLARE_API_TOKEN=...
+OPENROUTER_API_KEY=...
+OPENAI_COMPATIBLE_API_KEY=...
 ```
 
 - A blank environment value counts as unset.
@@ -108,6 +127,8 @@ For `typesafe`, a single discovered model is selected automatically when you
 leave `semantic_decision.model` unset. If the provider offers several models,
 the result reports `model_required` until you set one. Cloudflare always offers
 two models, so set `semantic_decision.model` to `clef` or `clef-flash`.
+`openrouter` and `openai-compatible` have no model discovery, so both require
+`semantic_decision.model`.
 
 ## Check the status
 
@@ -128,8 +149,8 @@ provider, and reports only whether a credential resolves, never its value. With
 | Status | Meaning |
 | --- | --- |
 | `skip` | Consent is not granted (the default), or this project's policy turns the feature off. No provider calls are made. |
-| `warn` | The consent policy is invalid, the provider credential does not resolve, or `cloudflare` is selected without `semantic_decision.model`. The evidence names what to fix. |
-| `ok` | Consent, provider, model, and credential are all in place. The evidence lists the provider, model, and permitted consumers. |
+| `warn` | The consent policy is invalid, the provider credential does not resolve, or `cloudflare`, `openrouter`, or `openai-compatible` is selected without `semantic_decision.model`. The evidence names what to fix; for a missing model it suggests `ak config prefs set semantic_decision.model <model-id> --scope user` (or `clef-flash` for `cloudflare`). |
+| `ok` | Consent, provider, model, and credential are all in place. The evidence lists the provider, model, and permitted consumers, and for `openai-compatible` names the base URL that requests go to. |
 
 An `ok` result means calls are possible, not that any happened. A provider is
 called only when a permitted consumer runs, such as `ak eval decision`, so an

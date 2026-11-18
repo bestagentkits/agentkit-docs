@@ -43,6 +43,16 @@ ak config prefs set hooks.context-firewall false
 ak config prefs set hooks.agent-behavior-linter false
 ```
 
+Some keys turn off one part of a Hook instead of the whole Hook.
+`hooks.rules-section` controls the rules section that `dev-rules-reminder` adds
+to each prompt: the development-rules path, the Markdown locations, and the
+KISS/DRY reminders. It is on by default; set it to `false` to drop that section
+while the rest of the reminder still runs:
+
+```bash
+ak config prefs set hooks.rules-section false
+```
+
 ## Restore the default with unset
 
 `unset` removes your explicit override so the preference falls back to the
@@ -72,13 +82,17 @@ ak config prefs set hooks.simplify-gate false --scope project
 | Scope | Persisted at | Effect |
 | --- | --- | --- |
 | `user` (default) | `$AGENTKIT_HOME/config.yaml`, normally `~/.agentkit/config.yaml` | Applies to every project this user runs, unless a project overrides it. |
-| `project` | `.agentkit/config.yaml` under the current working directory | Applies to that project only. Intended to be committed, so keep it free of credentials. |
+| `project` | `.agentkit/config.yaml` in the project directory found from the working directory | Applies to that project only. Intended to be committed, so keep it free of credentials. |
 
 When both scopes set the same `hooks.<name>` key, AgentKit deep-merges project
-over user, so the **project value wins**. Run `set`, `unset`, and `resolve`
-from the project directory whose `.agentkit/config.yaml` you mean to affect —
-scope is based on the process working directory, not a registered project
-chosen elsewhere.
+over user, so the **project value wins**. The project directory is the nearest
+directory, from the working directory upward, that holds
+`.agentkit/config.yaml` or `.git`; if none is found, it is the working
+directory. So `set`, `unset`, `resolve`, and the Hooks themselves use the same
+project file from any subdirectory of a repository. The search never selects
+your home directory, a directory above it, or the AgentKit home: from your home
+directory there is no project scope, and `--scope project` fails with exit `1`.
+Scope is not based on a registered project chosen elsewhere.
 
 ## Verify the effective value
 

@@ -155,13 +155,15 @@ script đi kèm Skill, nên project chỉ chứa dữ liệu, không chứa code
    dài render theo từng phần, và các ứng viên short được chọn từ transcript
    ngay khi lên kế hoạch.
 4. **Caption, timeline và mix.** Caption tiếng Việt đã biên tập theo từng
-   đoạn, cùng TIMING contract với mode voice-over, và nhạc nền được duck rồi
-   chuẩn hóa về −14 LUFS.
+   đoạn, cùng TIMING contract với mode voice-over, nhạc nền được duck rồi
+   chuẩn hóa về −14 LUFS, và các cue hiệu ứng âm thanh tùy chọn từ
+   `data/cues.json` được mix vào SFX stem riêng.
 5. **Dựng, render và hoàn thiện.** Scene builder điền mỗi scene vào một file
    fragment và kiểm tra nhanh theo dải nhỏ; mỗi phần được render, và
    `finish.py` ghép webcam picture-in-picture cùng bản mix nguyên vẹn.
 6. **Short, sau khi bạn duyệt bản master.** Mỗi short là một clip 9:16 theo
-   dải scene, có tiêu đề riêng, đuôi nhạc 1,2 giây và fade.
+   dải scene, có tiêu đề riêng, đuôi nhạc 1,2 giây và fade. Bản remix phần
+   đuôi của short có cả SFX stem, nên hiệu ứng vẫn còn sau khi cắt.
 
 Bước phiên âm gửi audio trong bản ghi của bạn tới ElevenLabs qua multix, nên
 áp dụng cùng ranh giới chi phí và phê duyệt như bước tạo giọng.
@@ -299,7 +301,10 @@ gia; footage AI text-to-video hoặc image-to-video vẫn thuộc về
    riêng. Override theo tỷ lệ được viết ngay khi dựng bản master, được kiểm
    bằng `audit-ratio-scope.py` để bản master không bị hồi quy, và được đo theo
    vùng an toàn bằng `check-bounds.mjs`. Quick fit hoặc crop bằng ffmpeg là lựa
-   chọn nhanh hơn nhưng chất lượng thấp hơn, phù hợp cho preview.
+   chọn nhanh hơn nhưng chất lượng thấp hơn, phù hợp cho preview. Khi bản master
+   không có override 9:16 nhưng short dùng để đăng, designed fit đặt khung hình
+   16:9 với toàn bộ chiều rộng giữa một dải tiêu đề và caption karaoke cỡ lớn;
+   chữ trong khung hình vẫn chỉ còn 56% kích thước.
 
 ## Giữ generation, chi phí và publishing có gate
 
@@ -351,6 +356,10 @@ Skill báo số liệu đã đo, không phải cảm nhận. Nó chỉ xong khi:
 - `build-timeline` không in cảnh báo clip, overlap hay thiếu từ.
 - Mỗi bản 1:1 hoặc 9:16 được yêu cầu pass cùng các check lint, check, ffprobe,
   loudness và blackdetect như bản gốc.
+- Bản render cuối của mọi edition và ngôn ngữ đã được xem dưới dạng contact
+  sheet (`scripts/contact-sheet.py`) trước khi sao chép hoặc bàn giao, vì các
+  probe không thấy được glyph bị cắt, caption mồ côi hay nhãn nằm ngoài vùng an
+  toàn.
 - Fact trên màn hình truy được về nguồn đã thu thập lúc bắt đầu.
 - Không có hai scene liền kề nào dùng chung camera move, và không khung hình
   nào giữ quá khoảng 8 giây.
@@ -370,6 +379,8 @@ Skill báo số liệu đã đo, không phải cảm nhận. Nó chỉ xong khi:
 | Short 9:16 có chữ tràn khung hoặc kết thúc dang dở | Chạy `check-bounds.mjs` trên build của short, sửa override `html[data-ratio="9x16"]` của scene trong bản master, kiểm bằng `audit-ratio-scope.py`, rồi build lại short. |
 | Route ảnh Codex thất bại (chưa đăng nhập hoặc lỗi driver) | Skill chuyển sang route ảnh Gemini cho cả video và ghi chú trong plan. Đăng nhập `codex` trước video kế tiếp nếu bạn muốn dùng route OpenAI. |
 | Chỉ visual thay đổi | Chạy lại `lint`, `check`, `render` và remux; không cần tạo lại audio. |
+| `validate.py` hết thời gian ở `check` với một bản build đầy đủ | Truyền timeout tải trang dài hơn theo mili giây, ví dụ `validate.py builds/full --timeout 90000`; giá trị này chỉ áp dụng cho `check`. |
+| Dấu tiếng Việt hoặc glyph cao bị cắt trên chữ reveal hoặc chữ gradient | Mở rộng `clipPath: inset(...)` theo chiều dọc ra ngoài khung chữ hoặc cho dòng `line-height` cao hơn kèm padding; thêm padding cho phần tử chữ gradient (`background-clip: text`) rồi bù bằng margin âm tương đương. Sau đó xem một frame của chữ đã reveal. |
 | Bản 1:1 hoặc 9:16 vẫn hiển thị layout cỡ 1920/1080 | Đọc cảnh báo của `reframe.py` cho các dòng bị ảnh hưởng, thêm override `data-ratio` còn thiếu và tạo lại bản edition; không bao giờ tự sửa tay thư mục edition đã sinh ra. |
 
 Tiếp tục với [tổng quan Marketing Kit](../../marketing),

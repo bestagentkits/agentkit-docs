@@ -56,12 +56,17 @@ Xem các cờ dùng chung tại [quy ước CLI](../cli-conventions).
 
 | Selector | Route |
 | --- | --- |
-| Không có cờ scope hoặc mode | Cleanup diện rộng ở user scope: user plugin/legacy root được nhận diện cùng global native lifecycle root đã đăng ký của Kit. Không chọn route project-native trong project hiện tại. |
+| Không có cờ scope hoặc mode | Project-native lifecycle root của thư mục làm việc khi project đó có bản cài native của Kit, cùng scope mà `ak kit install` đã dùng. Nếu không, cleanup diện rộng ở user scope: user plugin/legacy root được nhận diện cùng global native lifecycle root đã đăng ký của Kit. |
 | `--global` | Các user/global native lifecycle root đã đăng ký. |
 | `--global --plugin-mode` | Chỉ Claude Code user plugin. |
 | `--project-dir <dir>` | Project-native lifecycle root của project đã chọn. |
 | `--plugin-mode` | Claude Code project plugin trong thư mục hiện tại. |
 | `--plugin-mode --project-dir <dir>` | Claude Code project plugin trong project đã chỉ định. |
+
+Khi không có cờ scope, thư mục làm việc có route project trỏ vào bản cài cấp
+người dùng, chẳng hạn thư mục home của bạn, vẫn giữ user scope. Sau khi gỡ khỏi
+project được phát hiện, một cảnh báo nêu mọi bản cài của Kit còn lại ở user
+scope và lệnh để gỡ bản đó.
 
 Không thể kết hợp `--global` với `--project-dir`. Trạng thái project và user độc
 lập; gỡ project plugin không cho phép cleanup user plugin hoặc native output.
@@ -80,7 +85,8 @@ project hoặc `--global` cho native root user/global đã đăng ký.
 ## Ví dụ
 
 ```bash
-# Preview kế hoạch user-scope rộng mặc định.
+# Preview kế hoạch mặc định: bản cài native của project này nếu có,
+# nếu không thì kế hoạch user-scope rộng.
 ak kit uninstall engineer --dry-run
 
 # Áp dụng kế hoạch mặc định đã rà soát.
@@ -105,6 +111,11 @@ Nếu thiếu `--yes`, lệnh tính và render toàn bộ kế hoạch, không t
 owned rồi thoát `3`. `--dry-run` cũng làm như vậy kể cả khi có `--yes`. Mã thoát
 này biểu thị preview đã hoàn tất, không phải lỗi phân loại.
 
+Khi scope đã chọn không có file, mục config hay plugin registration nào của Kit,
+kết quả ghi `not installed in the <scope> scope` thay vì báo đã gỡ. Một cảnh báo
+nêu từng scope khác đang có Kit và lệnh `ak kit uninstall ... --yes` chính xác
+cho scope đó. Khi đó preview thoát `3` với `nothing to remove in the <scope> scope`.
+
 Uninstall được áp dụng giữ khoá vòng đời Kit từ lúc lập kế hoạch đến khi thay
 đổi xong. Dry-run không giữ khoá vì không thay đổi bề mặt owned.
 
@@ -118,12 +129,20 @@ Với `--json`, stdout chứa envelope có phiên bản với `kind=kit.uninstal
 `data` gồm:
 
 ```text
-kit, dryRun, pluginDir, pluginDirs
+kit, dryRun, scope, scopeDetected, nothingToRemove, installedElsewhere
+pluginDir, pluginDirs
 snapshotId, snapshotIds, recovery
 removedPaths, removedDiagnosticPaths, preservedPaths, skippedPaths, configPaths
 deactivationSteps, warnings, manifestResult
 deleted, preserved, skipped, success
 ```
+
+`scope` là scope mà lần chạy đã lập kế hoạch: `project`, `project-plugin`,
+`global` hoặc `global-plugin`. `scopeDetected` là `true` khi scope project được
+chọn vì thư mục làm việc có Kit và không có cờ scope. `nothingToRemove` là
+`true` khi kế hoạch không tìm thấy gì của Kit trong scope đó.
+`installedElsewhere` liệt kê các scope khác đang có Kit, mỗi mục có `scope`,
+`path` và `command`.
 
 Preview thành công có `data.success=true` và `data.dryRun=true`, sau đó process
 thoát `3`. Lỗi thay đổi trong JSON mode ghi error envelope lên stderr cùng
@@ -159,6 +178,15 @@ hiện tại được build lại:
 - Tệp dùng chung và entry thuộc Kit khác hoặc người dùng được giữ lại.
 - Symlink không an toàn, mutation boundary đã đổi, ownership evidence hỏng và
   trạng thái dùng chung mơ hồ đều fail closed.
+- Gỡ cài đặt cấp dự án giữ lại các đường dẫn nằm ngoài dự án mà không root khai
+  báo nào bao phủ, các đường dẫn đi qua liên kết, và tệp của bản cài dự án lồng
+  bên trong, rồi báo chúng là được giữ lại.
+- Nếu một Kit khác đã được commit vào các tệp Claude Code của dự án nhưng chưa
+  được khởi tạo trên máy này, các tệp `.claude` dùng chung được giữ lại, kèm cảnh
+  báo nêu `ak kit init <kit> --yes`.
+- Nếu dự án đã bị di chuyển hoặc sao chép, bản xem trước báo rằng các bản ghi sở
+  hữu vẫn trỏ tới vị trí cũ và giữ các tệp đó; lần chạy đã xác nhận trước tiên
+  gán lại khoá cho các bản ghi sang dự án này, kèm snapshot các index gốc.
 
 Với Hook Codex global, ownership evidence do quá trình cài tạo ra tham gia vào
 rollback. Cleanup của owner cuối cùng có thể xoá group, event và wrapper `hooks`
@@ -174,7 +202,8 @@ kê hai file log trong `removedPaths`, tạo snapshot, xoá chúng và dọn th�
 `.logs` đã rỗng. File khác trong `.logs` và đường dẫn log dạng liên kết được giữ
 nguyên.
 
-Kế hoạch mặc định có thể trải qua nhiều provider ở user scope. Luôn xem
+Kế hoạch không có cờ mà vẫn ở user scope có thể trải qua nhiều provider ở user
+scope. Luôn xem
 `removedPaths`, `configPaths` và `preservedPaths` trước khi thêm `--yes`.
 
 ## Khôi phục và giới hạn

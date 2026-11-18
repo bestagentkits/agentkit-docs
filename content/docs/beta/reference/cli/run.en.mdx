@@ -1,6 +1,6 @@
 ---
 title: ak run
-description: Resolve a local Kit skill and stream it through Claude Code, Codex, Cursor, DeepSeek Harness, Grok Build, or Oh My Pi with explicit stdin, timeout, output, and dependency behavior.
+description: Resolve a local Kit skill and stream it through Claude Code, Codex, Cursor, DeepSeek Harness, Grok Build, Oh My Pi, or OpenCode with explicit stdin, timeout, output, and dependency behavior.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
@@ -24,7 +24,7 @@ form. Unprefixed bundled skill names can resolve their `ak-` export, so
 
 | Flag | Default | Description |
 | --- | --- | --- |
-| `--target <adapter>` | `claude-code` | Select `claude-code`, `codex`, `cursor`, `dsh`, `grok`, or `omp`. |
+| `--target <adapter>` | `claude-code` | Select `claude-code`, `codex`, `cursor`, `dsh`, `grok`, `omp`, or `opencode`. |
 | `--kits-dir <dir>` | `AGENTKIT_KITS_DIR` or `./kits` | Select the local Kit source directory. |
 | `--timeout <duration>` | `0s` | Set an invocation deadline; zero disables the command timeout. |
 
@@ -42,6 +42,11 @@ ak run engineer/scout --target dsh
 ak run engineer/scout --target omp
 ```
 
+`--target opencode` dispatches through the OpenCode adapter, a spike that has
+no runtime certification yet. No OpenCode Kit package is released, so its Kit
+projection installs only from a local Kit source. See
+[Runtime adapters](../../concepts/runtime-adapters).
+
 ## Backend and credential behavior
 
 | Target | Backend invocation | Pre-dispatch gate |
@@ -52,6 +57,7 @@ ak run engineer/scout --target omp
 | `dsh` | `AGENTKIT_DSH_BIN` or `dsh` on `PATH`. | DeepSeek Harness owns model, credentials and permissions. |
 | `grok` | `AGENTKIT_GROK_BIN` or `grok` on `PATH`; uses `--prompt-file <temporary-file> --output-format streaming-json`. | Provider gate is skipped; Grok owns authentication, model, trust, permissions, sandbox, and `config.toml`. |
 | `omp` | `AGENTKIT_OMP_BIN` or `omp` on `PATH`; runs `omp -p --mode json --no-session --cwd <cwd> @<prompt-file>`. | Provider gate is skipped; Oh My Pi owns its configured backend and credentials. |
+| `opencode` | `AGENTKIT_OPENCODE_BIN` or `opencode` on `PATH`; runs `opencode run --format json` with the prompt in an attached file. | Provider gate is skipped; OpenCode owns its provider credentials (`opencode auth login`). |
 
 <Callout type="warning">
   `ak run --target grok` dispatches through the native Grok adapter and leaves
@@ -91,9 +97,10 @@ The command does not redact secrets in skill text, arguments, backend output,
 or errors. Avoid passing credentials as arguments. JSON mode escapes child
 bytes into event strings; escaping is not redaction.
 
-For OMP, AgentKit writes the generated prompt to a temporary mode-`0600` file,
-passes only its `@<path>` reference to the process, and removes the file when
-the process finishes. This keeps prompt text out of the process argument list;
+For OMP and OpenCode, AgentKit writes the generated prompt to a temporary
+mode-`0600` file, passes only a reference to it to the process (`@<path>` for
+OMP, `--file <path>` for OpenCode), and removes the file when the process
+finishes. This keeps prompt text out of the process argument list;
 it does not change the provider transmission or redaction boundary above.
 
 When a skill declares a Python or Node runtime, AgentKit activates its existing

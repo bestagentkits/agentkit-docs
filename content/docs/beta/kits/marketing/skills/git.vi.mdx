@@ -47,7 +47,7 @@ Trước khi bắt đầu:
 
 | Runtime | Cách gọi | Ranh giới khả dụng |
 | --- | --- | --- |
-| Claude Code | `/ak-git ...` | Skill delegate phần thực thi Git nhiều output cho agent `git-manager` đã cài. |
+| Claude Code | `/ak-git ...` | Skill chạy Git trực tiếp. Skill chỉ delegate cho agent `git-manager` đã cài khi việc cô lập hoặc phối hợp có ích và delegation được phép. |
 | Cursor | `/ak-git ...` | Dùng cách viết slash đã được người dùng xác minh; chưa xác lập tính tương đương của agent delegation và chooser tương tác. |
 | Codex | `$ak-git ...` | Dùng cơ chế khám phá native của Codex; việc thực thi vẫn phụ thuộc khả năng Git, GitHub và agent được cung cấp. |
 
@@ -81,7 +81,7 @@ Khi không có đối số, Skill hiển thị chooser thao tác. Các thao tác
 
 | Thao tác | Hiệu ứng cục bộ | Hiệu ứng remote hoặc bên ngoài |
 | --- | --- | --- |
-| `cm` | Chạy `git add -A`, phân tích thay đổi đã stage và tạo một hoặc nhiều commit | Mặc định không có |
+| `cm` | Stage các path được phép bằng `git add -- <paths>`, phân tích thay đổi đã stage và tạo một hoặc nhiều commit | Mặc định không có |
 | `cp` | Thực hiện workflow commit | Push branch hiện tại sau khi commit |
 | `pr [to-branch] [from-branch]` | Phân tích so sánh remote branch | Push source branch khi cần và tạo GitHub pull request; target mặc định là `main`, source là branch hiện tại |
 | `merge [to-branch] [from-branch]` | Checkout và cập nhật target, rồi merge `origin/<from-branch>` bằng merge commit | Push target branch; target mặc định là `main`, source là branch hiện tại |
@@ -92,12 +92,16 @@ Khi không có đối số, Skill hiển thị chooser thao tác. Các thao tác
 
 ## Hiểu hành vi commit và push
 
-1. **Skill stage working tree.** `cm` và `cp` dùng `git add -A`, nên path đã
-   tracked, chưa tracked và đã xóa trong repo đều có thể vào tập stage.
+1. **Skill chỉ stage các path được phép.** `cm` và `cp` xác định các path thuộc
+   thay đổi và stage chúng bằng `git add -- <paths>`. Skill không stage toàn bộ,
+   và giữ nguyên các thay đổi đã stage không liên quan.
 2. **Skill tóm tắt staged diff.** Skill báo thay đổi tệp và dòng, đồng thời phân
    loại path theo code, test, tài liệu, cấu hình hoặc dependency.
-3. **Skill quét nội dung đã stage.** Một lượt quét keyword và pattern credential
-   sẽ chặn commit khi phát hiện secret khả nghi.
+3. **Skill quét nội dung đã stage để tìm secret có hình dạng giá trị thật.** Skill
+   ưu tiên scanner đã cài như `gitleaks protect --staged --redact`; nếu không có,
+   Skill tìm trong các tệp đã stage những dạng credential như AWS access key,
+   khối private key, key của GitHub, Slack, `sk-` và Google API, cùng URL chứa
+   credential. Một keyword như `token` hay `password` tự nó không phải secret.
 4. **Skill quyết định ranh giới commit.** Type hoặc scope hỗn hợp được tách; thay
    đổi nhỏ cùng type và scope có thể nằm trong một commit.
 5. **Skill viết conventional commit.** Message dùng `type(scope): description`,
@@ -157,15 +161,17 @@ Workflow `merge-pr`:
 ## Giữ quyền và an toàn trong tay bạn
 
 <Callout type="warn" title="Chọn thao tác trước khi gọi Skill">
-  `cm` stage toàn bộ repo bằng `git add -A`. `cp`, `pr`, `merge` và `merge-pr` có
-  thể thay đổi trạng thái remote. Hãy review công việc không liên quan, branch
+  `cm` stage và commit các path mà Skill coi là được phép; hãy review tập staged
+  trước khi commit. `cp`, `pr`, `merge` và `merge-pr` có thể thay đổi trạng thái
+  remote. Hãy review công việc không liên quan, branch
   target và policy repo trước khi tiếp tục.
 </Callout>
 
 Các gate quan trọng:
 
-- Secret khả nghi sẽ chặn tạo commit. Hãy xóa hoặc ignore nội dung và chạy lại
-  scan; đừng bỏ qua cảnh báo.
+- Chỉ credential thật mới chặn tạo commit. Skill báo `file:line` của nó với giá
+  trị đã được che. Hãy xóa hoặc ignore nội dung và chạy lại scan; đừng bỏ qua
+  lượt chặn.
 - Push yêu cầu thao tác có khả năng push được chọn rõ. Commit thường không cho
   phép push.
 - Không bao giờ force push lên `main`, `master`, production hay release branch.
@@ -196,7 +202,7 @@ Bằng chứng mong đợi gồm:
 | Triệu chứng | Bước tiếp theo an toàn |
 | --- | --- |
 | Tệp không liên quan đã được stage | Dừng trước commit, review tập staged và xác định nhóm ownership dự kiến. |
-| Phát hiện pattern secret | Kiểm tra dòng staged khớp, unstage path, chuyển giá trị vào secret store được phê duyệt và cập nhật ignore rule khi phù hợp. |
+| Credential thật được báo tại `file:line` | Kiểm tra dòng staged được báo, unstage path, chuyển giá trị vào secret store được phê duyệt và cập nhật ignore rule khi phù hợp. |
 | Không có thay đổi | Thoát sạch; đừng tạo empty commit. |
 | Push bị từ chối | Fetch và đối chiếu remote theo policy repo; đừng force push protected branch. |
 | Pull request có diff rỗng | Xác minh remote source và target branch cùng việc local commit đã được push hay chưa. |
@@ -209,7 +215,8 @@ Bằng chứng mong đợi gồm:
 - Việc tách commit dùng heuristic theo path và kích thước; hãy review ranh giới
   đề xuất về tính đúng đắn ngữ nghĩa.
 - So sánh remote loại trừ công việc chưa push theo thiết kế.
-- Secret scan có thể gắn cờ text vô hại hoặc bỏ sót secret ngoài pattern.
+- Secret scan cố ý bỏ qua các kết quả chỉ khớp keyword, và có thể bỏ sót secret
+  có giá trị không khớp dạng credential đã biết.
 - `merge-pr` có thể quan sát và phản ứng với CI repo nhưng không thể bypass outage
   bên ngoài, thiếu quyền, review bắt buộc hay branch protection.
 - Cách gọi slash trên Cursor là bằng chứng do người dùng xác minh, không chứng

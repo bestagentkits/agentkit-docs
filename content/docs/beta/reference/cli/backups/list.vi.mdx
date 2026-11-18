@@ -16,9 +16,9 @@ ak backups list
 ## Trước khi chạy
 
 Lệnh đọc backup store cục bộ dưới `~/.agentkit/backups/`. Lệnh không cần xác
-thực hoặc mạng. Trong lúc tạo danh sách, lệnh cũng xác minh từng manifest có thể
-đọc với dữ liệu tương ứng, vì vậy tập backup lớn có thể mất nhiều thời gian hơn
-việc chỉ liệt kê thư mục.
+thực hoặc mạng. Lệnh chỉ đọc manifest của snapshot, không băm các tệp đã chụp,
+nên vẫn nhanh với tập backup lớn. Chạy `ak backups verify <id>` để kiểm tra một
+snapshot với dữ liệu của nó.
 
 Tên thư mục sai định dạng, entry không phải thư mục và manifest không đọc được
 hoặc không hợp lệ đều bị bỏ qua. Backup root chưa tồn tại được xem là danh sách
@@ -53,8 +53,10 @@ Mảng trống nghĩa là không tìm thấy recovery snapshot đã commit có t
 ## Đầu ra và luồng
 
 Đầu ra cho người dùng trên stdout có các cột `ID`, `WHEN`, `KIND`, `SIZE` và
-`STATUS`, cùng tổng số verified và unverified. Khi không có bản ghi, lệnh in
-trạng thái trống `No backups found.`.
+`STATUS`. Vì danh sách không băm dữ liệu, `STATUS` hiển thị `- not checked`, và
+dòng tổng kết là
+`N backups - 0 verified - 0 unverified - N not checked (ak backups verify <id>)`.
+Khi không có bản ghi, lệnh in trạng thái trống `No backups found.`.
 
 JSON thành công dùng envelope chung trên stdout:
 
@@ -93,7 +95,7 @@ tạo thành mảng `data.checkpoints[]` riêng, bị bỏ qua khi không có ch
 }
 ```
 
-Entry JSON của snapshot chủ động không chứa kích thước byte và trạng thái xác minh có trong
+Entry JSON của snapshot chủ động không chứa kích thước byte và cột `STATUS` có trong
 bảng cho người dùng. Kết quả trống là `"backups": []`. Lỗi runtime trong chế
 độ JSON dùng error envelope có cấu trúc trên stderr. Khi bật `--json`, cờ không xác
 định hoặc không hợp lệ dùng JSON error envelope chung trên stderr
@@ -112,11 +114,11 @@ Lệnh không dùng mã `3`, `4` hoặc `5` cho từng entry bị bỏ qua.
 ## Tác động, an toàn và khôi phục
 
 Lệnh chỉ đọc. Lệnh không lấy mutation lock, thay đổi manifest, xoá snapshot hay
-thay đổi tệp runtime đang hoạt động. Bước xác minh đọc từng tệp regular có trong
-manifest và tính lại hash.
+thay đổi tệp runtime đang hoạt động. Lệnh chỉ đọc manifest; `ak backups verify <id>`
+mới là lệnh đọc lại tệp và tính lại hash.
 
-Dòng `unverified` ở đầu ra cho người dùng có thể nghĩa là corrupt hoặc một lỗi
-xác minh khác; hãy chạy `ak backups verify <id>` để nhận kết quả đã phân loại.
+Danh sách không bao giờ báo một snapshot là đã xác minh hay chưa xác minh. Hãy
+chạy `ak backups verify <id>` để nhận kết quả đã phân loại.
 Manifest corrupt có thể biến mất hoàn toàn khỏi danh sách, nên danh sách trống
 hoặc ngắn hơn không chứng minh trên đĩa không còn thư mục snapshot.
 

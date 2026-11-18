@@ -56,7 +56,11 @@ ak migrate rollback
 
 JSON output is the shared success envelope with kind `migrate.run`. Its `data` contains a `status` object with `from`, `dry_run`, `status`, `message`, `schema_version`, and optional `backup_id`. Generic migrations add `discovery`, optional `plan`, `transition_preview`, `terminal`, and `prefs`. Legacy migrations use `legacy_discovery`, `legacy_plan`, optional `legacy_terminal`, and `prefs`.
 
-Status values include `planned`, `completed`, `failed`, and `no_candidates`. A failed apply writes the `migrate.run` envelope with status `failed` to stdout and exits `1` without a second error envelope. Errors that occur before the result is written, including flag-parse errors (exit `2`), write the shared error envelope to stderr. Human progress uses stdout; failures use stderr.
+Status values include `planned`, `completed`, `failed`, `skipped`, and `no_candidates`. A failed apply writes the `migrate.run` envelope with status `failed` to stdout and exits `1` without a second error envelope. Errors that occur before the result is written, including flag-parse errors (exit `2`), write the shared error envelope to stderr. Human progress uses stdout; failures use stderr.
+
+A legacy Kit your account is not licensed for is skipped and its ClaudeKit files are kept unchanged. Migrate prints `[!] Skipped <kit>: … Next: …` on stderr and lists the Kit in JSON `legacy_skipped_kits[]` (`kit`, `reason: not_licensed`, `why`, `next`). If no licensed Kit remains, the status is `skipped` and the command exits `3`. The license check is skipped when `AGENTKIT_KITS_DIR` is set.
+
+If a legacy transition's Kit install is your account's first counted Kit download, the refund-policy notice the registry sends with it is reported with the run's notices and in a `refund_notice` field of the JSON result, also when the apply then fails.
 
 ## Exit status
 
@@ -65,13 +69,13 @@ Status values include `planned`, `completed`, `failed`, and `no_candidates`. A f
 | `0` | Preview, migration, preference-only migration, rollback, or no-op rollback completed. |
 | `1` | Discovery, snapshot, runtime, apply, or partial migration failed. |
 | `2` | Flags or the migration source are invalid. |
-| `3` | Apply lacked `--yes`, or unresolved conflicts block the transition. |
+| `3` | Apply lacked `--yes`, unresolved conflicts block the transition, or the account is licensed for none of the planned legacy Kits. |
 | `4` | Another AgentKit operation holds the kit lifecycle lock. With `--json`, the error envelope names `error_code` `lock_held`. Retry after it finishes. |
 | `5` | Apply found neither a migratable source nor preferences to migrate. |
 
 ## Effects, safety, and recovery
 
-Apply mode first recovers a pending legacy transition when possible, then discovers content in supported Claude, ClaudeKit, project, and Codex locations. A generic transition snapshots the AgentKit target, excluding its backups root, before sequential writes and preserves its journal. A legacy transition can archive, quarantine, or neutralize authorized legacy content and install an AgentKit replacement.
+Apply mode first recovers a pending legacy transition when possible, then discovers content in supported Claude, ClaudeKit, project, and Codex locations. A generic transition first snapshots exactly the target files its plan writes, deletes, or overwrites, recording a file the plan creates as absent so a restore removes it, then writes sequentially and preserves its journal. A legacy transition can archive, quarantine, or neutralize authorized legacy content and install an AgentKit replacement.
 
 Failures preserve pending state or a journal for resume or rollback. `ak migrate rollback` acts immediately without prompting, chooses the newest recoverable transition, restores recorded content, and removes a completed journal. It does not remove an AgentKit replacement installed during a legacy transition. There is no option to select a backup or journal by ID.
 

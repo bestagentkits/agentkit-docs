@@ -79,8 +79,11 @@ hoặc spec được cung cấp khai báo là acceptance constraint: job đó b�
 bao giờ được chuyển đổi. Chỉ trong spec do Skill tự soạn, Skill mới liệt kê check
 command trong `checks:`, chạy chúng trong harness và ghi nhận là
 harness-attested. Skill không bao giờ bypass supervision gate, launch process
-không được giám sát để thay thế, hay advance lại job đã bị kẹt ở gate đó. Khi
-cũng không có session nào của runtime hiện tại đủ điều kiện, lần chạy block và nêu lý do.
+không được giám sát để thay thế, hay advance lại job đã bị kẹt ở gate đó. Trước
+khi kết luận không có session route, Skill probe session host herdr-core (`hc`)
+nếu bạn đã cài (xem [Dispatch session trước](#dispatch-session-trước)); job CLI
+hoặc Pi bị block vì nền tảng vẫn bị block. Khi cũng không có session route nào
+đủ điều kiện, lần chạy block và nêu lý do.
 
 ## Chạy Skill
 
@@ -140,9 +143,18 @@ subagent không phải worker.
   cầu (ví dụ "as pi sessions"). Mỗi cách là một opt-in tương đương cho runtime
   đó. Runtime được nêu tên mà thiếu hoặc chưa authenticated sẽ chạy onboarding
   như một bước setup hiển thị, rồi được probe lại.
+- **herdr-core là session host tùy chọn.** Nếu bạn đã cài herdr-core (`hc`),
+  Skill probe nó trước khi kết luận không có session route. AgentKit không đóng
+  gói, cài đặt hay cấu hình công cụ này. Route chỉ đủ điều kiện sau khi `hc`
+  tạo, quan sát, gửi message và hủy một session thử. Nó host session của runtime
+  hiện tại cho job `runtime: internal`, mỗi job một worktree, và không bao giờ
+  chạy job CLI hoặc Pi đã bị block với `unsupported_platform`. Vì `hc` không đặt
+  được permission posture, job cần approval gate hoặc có tác động phá hủy không
+  được dispatch qua nó trừ khi chính cờ của runtime được host đặt posture đó.
+  Kết quả check của nó được ghi là harness-attested.
 - **Không khả dụng thì hiển thị rõ.** Khi runtime hiện tại không khởi chạy được
-  session đủ điều kiện và không có candidate đã opt-in nào đủ điều kiện, job
-  được báo `blocked` kèm probe evidence. Skill không bao giờ âm thầm mở rộng
+  session đủ điều kiện, không có candidate đã opt-in nào đủ điều kiện và không
+  có route herdr-core nào đủ điều kiện, job được báo `blocked` kèm probe evidence. Skill không bao giờ âm thầm mở rộng
   scope hay ghi đè pin runtime, model hoặc role-profile rõ ràng.
 - **Permission fallback là route subagent duy nhất.** Khi runtime từ chối khởi
   chạy session vì coordinator thiếu quyền (standing policy hoặc permission mode,
@@ -227,7 +239,10 @@ Khi bị áp lực quota, cost hoặc tài nguyên host, Skill ngừng gọi `ad
 **Failure class.** Mỗi attempt lỗi hoặc kẹt được phân loại trước khi hành động.
 Coordinator class nằm trong `status.json` và report, còn `error_class` đã map
 của plan engine nằm trong receipt của `accept` (ví dụ `rate_limited` map thành
-`rate-limit`, và lỗi transient map thành `timeout` khi hết bound):
+`rate-limit`, và lỗi transient map thành `timeout` khi hết bound). Receipt là một
+object JSON nghiêm ngặt: key lạ, trùng hoặc sai chính tả sẽ thoát với mã `2` và
+`validation_failed`, nên các trường coordinator khác thuộc về `status.json` và
+report:
 
 | Class | Ví dụ | Retry |
 | --- | --- | --- |
@@ -316,6 +331,10 @@ Một lần chạy hoàn tất nên cung cấp:
 - Per-job status, resolved route, risk cùng capability classification,
   artifact, error, timeout và attempt.
 - Failed hoặc interrupted evidence được giữ thay vì silent retry.
+- Trạng thái check cho mỗi attempt đã accept: `pass` khi engine đã chạy
+  `verification:`, `harness-attested` khi chỉ có `checks:` mô tả, hoặc
+  `not-requested` khi job không khai báo cả hai. Verification thất bại được ghi
+  là `fail`.
 - Arbiter verdict kiểm tra mọi required artifact cùng contradiction.
 - Final report nêu successful, failed và blocked job, check, worktree diff chờ
   integration cùng unresolved question.
@@ -330,6 +349,7 @@ evidence, contradiction được giải quyết và arbiter pass.
 | Agent báo orchestrate cần macOS | Chỉ giám sát CLI bên ngoài mới cần Darwin. Skill route job qua session của runtime hiện tại; job cần CLI có giám sát được báo `blocked`. |
 | Session không khởi chạy được và job `blocked` | Đọc probe evidence. Opt-in runtime khác bằng `--cross-runtime` hoặc chuỗi `fallback_runtime`, hoặc sửa session surface của runtime hiện tại. |
 | Skill in cảnh báo `--internal` đã deprecated | Bỏ cờ này. Session của runtime hiện tại đã là mặc định. |
+| `accept` từ chối job đã accept vì stale với `conflict` | Owned path, artifact hoặc base revision đã đổi sau khi accept. Khôi phục các tệp đã accept hoặc reset về commit đã accept (`git revert` không tính), hoặc giữ thay đổi bằng `ak orchestrate accept ... --reaccept` với receipt chứa digest artifact hiện tại, xử lý dependency trước. Chỉ prepare run mới khi declared input hoặc artifact được bàn giao đã đổi. |
 | Runtime thiếu hoặc chưa authenticated | Đánh giá fallback đã opt-in trong run directory mới qua cùng live gate, hoặc hoàn tất setup ngoài lần chạy rồi preflight lại. |
 | Model hoặc flag bị reject | Quay lại live help hoặc official documentation hiện tại; không đoán hay mang identifier sang runtime khác. |
 | Permission prompt xuất hiện | Dừng job và giải quyết approval boundary chính xác. Không retry với bypass. |

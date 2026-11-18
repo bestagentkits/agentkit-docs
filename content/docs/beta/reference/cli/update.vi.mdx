@@ -33,13 +33,18 @@ Việc xác minh target dùng cả scope và nguồn đã chọn:
 | Scope và nguồn | Target hợp lệ |
 | --- | --- |
 | Project, remote | `claude-code`, `codex`, `cursor`, `dsh`, `grok`, `omp` hoặc `pi` |
-| Global, remote | `claude-code`, `codex`, `cursor`, `dsh`, `grok` hoặc `omp` |
-| Global, local | `claude-code`, `codex`, `cursor`, `dsh`, `grok` hoặc `omp` |
+| Global, remote | `claude-code`, `codex`, `cursor`, `dsh`, `grok`, `omp` hoặc `pi` |
+| Global, local | `claude-code`, `codex`, `cursor`, `dsh`, `grok`, `omp`, `opencode` hoặc `pi` |
+
+`opencode` chỉ hợp lệ cho cập nhật global từ nguồn local. Đây là adapter được
+đăng ký trong mã nguồn, không phải runtime được phát hành dưới dạng package
+trên registry, nên không có cập nhật remote nào refresh nó.
 
 Target tường minh không áp dụng cho scope hoặc nguồn sẽ bị từ chối trước
 discovery hay mutation và trả mã `2`. Trong wizard hợp nhất, cùng lựa chọn đó
-được chiếu lên từng bước: target chỉ dành cho project như `pi` bị bỏ qua ở bước
-global nhưng vẫn khả dụng cho bước project. Nếu không target nào đã chọn áp
+được chiếu lên từng bước: target không có bước refresh global sẽ bị bỏ khỏi bước
+global, bước này in `[i] global step ignores project-only target(s): …`, và
+target đó vẫn khả dụng cho bước project. Nếu không target nào đã chọn áp
 dụng được ở global scope, wizard bỏ qua bước đó rồi tiếp tục.
 
 Ở cả hai scope, `--target a,b` lọc những runtime đã cài sẽ được refresh; nếu bỏ
@@ -75,6 +80,14 @@ runtime. Danh sách kit được xét là `--kits` khi có, nếu không thì g�
 - Nếu `--target` không khớp runtime dự án nào đã cài và không có cây `kits/`
   được theo dõi, lệnh thoát `2`.
 
+Khi skill store đang bật, `ak update`, ở cả global lẫn project, refresh cùng lúc
+mọi kit mà nó chọn trong một runtime (co-refresh). Lượt refresh của mỗi kit lập
+kế hoạch cho các kit khác đã chọn trong runtime đó, nên các kit cùng ship Skill
+dùng chung vượt qua bước preflight alias Skill cùng nhau, còn các bản phát hành
+khác nhau vẫn thất bại trước mọi thao tác ghi. Sau đó các kit được commit lần
+lượt. Một lệnh `ak kit refresh <kit>` riêng lẻ chỉ refresh một kit và vẫn có thể
+thất bại với `skill.alias_collision` khi gặp bản ghi cũ hơn của kit anh em.
+
 ## Cập nhật nền tự động (opt-in)
 
 `--schedule daily|weekly` bật cập nhật nền tách rời, khởi động ở lệnh `ak`
@@ -87,7 +100,9 @@ refresh bản cài runtime của project. Thay vào đó nó ghi một thông b�
 chạy `ak update <dir> --yes` hoặc `ak kit refresh <kit>`.
 `--no-project <dir>` (lặp lại được) đưa một project ra khỏi danh sách, kể cả
 khi thư mục đó không còn tồn tại. `--status [--json]` báo schedule và kết quả
-nền gần nhất mà không đổi gì; thêm `--ack` để đánh dấu kết quả đó đã xem.
+nền gần nhất mà không đổi gì; thêm `--ack` để đánh dấu kết quả đó đã xem. Với
+lần chạy thất bại, `--status` còn in `cause: <dòng lỗi cuối>` (JSON `detail`),
+lấy từ dòng lỗi cuối của lần chạy nền và đã che bí mật.
 
 Các cờ settings này chỉ ghi section `auto_update:` trong
 `~/.agentkit/config.yaml` — không cập nhật gì ngay, và không cờ nào trong số
@@ -245,14 +260,31 @@ dùng nguồn local. Lệnh báo bản cài đó bằng `status: "skipped"` và
 local tường minh. Target tường minh không tương thích với nguồn là lỗi xác minh trả mã
 `2`, không phải kết quả `source_inapplicable`.
 
+Kit mà tài khoản đang đăng nhập không có license được báo với
+`status: "skipped"` và `reason: "not_licensed"` ở cả cập nhật global lẫn
+project. Bản đã cài được giữ nguyên, và `next` hướng tới `ak licenses`, đăng
+nhập bằng tài khoản sở hữu kit, mua kit đó, hoặc `ak kit uninstall <kit>`.
+
+Nếu lượt tải từ xa của một lần cập nhật project là lượt tải Kit đầu tiên được
+tính của tài khoản bạn, thông báo về chính sách hoàn tiền mà registry gửi kèm
+được báo cùng các thông báo của lần chạy, kể cả khi lần chạy sau đó thất bại
+hoặc bạn từ chối cập nhật.
+
 Lần xem trước JSON ngầm định in envelope thành công ra stdout rồi thoát `3`. Lỗi lệnh, kể cả lỗi phân tích cờ (mã thoát `2`), ghi
 [error envelope](../cli-conventions#output-json) dùng chung ra stderr.
 
 Lỗi thực thi dành cho người dùng và JSON hiển thị lý do cần để khôi phục mà
 không cần `--verbose`. Lỗi được hiển thị theo mặc định che các dạng bí mật đã
 biết và query string của URL, nhưng giữ đường dẫn. Kết quả Kit global hoàn tất
-kèm mục cần chú ý cũng hiển thị lý do đã che trong output dành cho người dùng
-mà không cần `--verbose`; điều này không biến kết quả đó thành cập nhật thất bại.
+kèm mục cần chú ý in `N attention item(s):` rồi các mục đã che trong output dành
+cho người dùng mà không cần `--verbose`; điều này không biến kết quả đó thành
+cập nhật thất bại.
+
+Batch global thất bại kết thúc bằng một dòng bắt đầu từ kit thất bại đầu tiên:
+`update --global: <kit>: <cause>; next: <step>; finished with N failure(s), M updated`.
+Khi một process khác đã thay `ak` trong lúc cập nhật, hoặc một lần cập nhật khác
+vẫn giữ update lock, dòng thất bại giải thích điều đó và yêu cầu đóng các lần
+cập nhật `ak` khác trước khi chạy lại.
 
 `--verbose` có thể lộ lỗi thực thi thô và toàn bộ danh sách warning. Hãy kiểm
 tra chẩn đoán trước khi chia sẻ.
@@ -272,6 +304,9 @@ tra chẩn đoán trước khi chia sẻ.
 
 Không có `--version`, Kit bị registry từ chối vì cần gia hạn được báo là `skipped` với `reason: "renewal_required"`, giữ nguyên phiên bản đã cài và không đổi mã thoát. Xem [Cửa sổ cập nhật và gia hạn](../../guides/updating#cửa-sổ-cập-nhật-và-gia-hạn).
 
+Trường hợp bỏ qua `not_licensed` cũng giữ nguyên phiên bản đã cài và không làm
+lần chạy thất bại.
+
 ## Tác động, an toàn và khôi phục
 
 Cập nhật dự án phân loại tệp thuộc quyền sở hữu. Tệp sạch có thể được thay thế; tệp đã sửa hoặc vị trí mới bị chiếm được bỏ qua trừ khi dùng `--force`. Apply cũng prune các tệp AgentKit sở hữu dưới `kits/<id>/` mà source tới không còn ship, và chỉ với kit có trong incoming set. Bản sạch và bản đã missing bị xóa; bản user đã sửa được giữ và báo cáo trừ khi có `--force`. Path không còn là regular file được để nguyên. Directory trống còn lại trong kit tree bị xóa; kit root thì không.
@@ -280,7 +315,7 @@ Theo mặc định, apply chỉ snapshot đúng những tệp nó ghi hoặc pru
 
 Các tệp được ghi tuần tự nên lỗi có thể để lại cập nhật một phần. Cập nhật toàn cục tiếp tục qua các kit, báo cáo lỗi theo kit và có thể tạo gói hỗ trợ trong `~/.agentkit/support`. Chế độ force toàn cục có thể lưu trữ các Skill Codex cũ được cho phép, nhưng vẫn giữ nguyên sửa đổi của người dùng. `--force` ở project không bao giờ lưu trữ các Skill Codex cũ của ClaudeKit: lượt refresh runtime của dự án gặp chúng sẽ báo một dòng bỏ qua với reason `needs_legacy_migration`. Chạy [`ak migrate --from ck`](./migrate) từ thư mục dự án, rồi chạy lại cập nhật. Việc lưu trữ qua `--force` vẫn chỉ là sự đồng ý của `--global --force`.
 
-Trên Windows, `ak update` thay CLI đã ký tại chỗ dưới update lock độc quyền, kiểm tra preimage của binary đang chạy, rồi re-execute lệnh gốc trong Windows Job Object để Kit refresh tiếp tục ngay lần gọi đầu. [`ak self-update`](./self-update) độc lập vẫn dùng staged detached helper. Paired Desktop apply stage các artifact CLI và Desktop khớp nhau, rồi helper đáng tin cậy commit thao tác thay thế sau khi process cha nhả các executable.
+Trên Windows, `ak update` thay CLI đã ký tại chỗ dưới update lock độc quyền, kiểm tra preimage của binary đang chạy, rồi re-execute lệnh gốc trong Windows Job Object để Kit refresh tiếp tục ngay lần gọi đầu. Nếu không gắn được Job Object, lệnh in cảnh báo và tiếp tục mà không dọn cây process. Khi `ak update` chạy trên, hoặc chuyển sang, kênh beta trên Windows, lệnh in một dòng cảnh báo trên stderr rằng bản build beta cho Windows không được ký Authenticode. Cảnh báo không bao giờ chặn lệnh, chỉ in một lần mỗi lần chạy, và im lặng với `--json` hoặc `--quiet`. [`ak self-update`](./self-update) độc lập vẫn dùng staged detached helper. Paired Desktop apply stage các artifact CLI và Desktop khớp nhau, rồi helper đáng tin cậy commit thao tác thay thế sau khi process cha nhả các executable.
 
 ## Lệnh liên quan và giới hạn
 

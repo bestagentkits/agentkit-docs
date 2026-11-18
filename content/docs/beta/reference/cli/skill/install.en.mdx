@@ -1,10 +1,11 @@
 ---
 title: ak skill install
-description: Provision one skill's pinned Python or Node environment, shared cache, and local runtime record.
+description: Add one skill to a kit's native Claude Code install, then provision its pinned Python or Node environment.
 ---
 
-Use `ak skill install` after the skill content already exists in a local kits
-tree and you need its declared Python or Node environment.
+Use `ak skill install` to add one skill from a local kits tree to a kit you
+already installed natively for Claude Code, and to provision the skill's
+declared Python or Node environment.
 
 ## Usage
 
@@ -16,6 +17,12 @@ Exactly one canonical reference is required. The command reads
 `<kits-dir>/<kit>/skills/<skill>/skill.yaml` directly; the skill does not need
 to be listed in `kit.yaml` exports.
 
+```bash
+ak skill install marketing/youtube
+ak skill install engineer/web-testing --kits-dir kits/
+ak skill install engineer/ak-advise --kits-dir kits/ --yes
+```
+
 ## Option
 
 | Flag | Default | Description |
@@ -25,7 +32,31 @@ to be listed in `kit.yaml` exports.
 Shared flags are described in [CLI conventions](../cli-conventions). The command
 never prompts; `--yes` and `--no-interactive` do not change its mutation policy.
 
-## What it writes
+## Add the skill to a native kit install
+
+When the kit has an active global native Claude Code install, the command first
+adds the skill into it:
+
+- It writes only `~/.claude/skills/<skill>/`.
+- It records the skill in the kit's ownership indexes under
+  `~/.agentkit/adapters/claude-code/<kit>/.agentkit/`.
+- It extends the kit's saved skill selection, so a later `ak kit refresh`
+  keeps the skill.
+
+This step holds the kit lifecycle lock. If a file in the skill directory holds
+edits AgentKit did not write, the command changes nothing and exits `6`.
+
+When the kit is delivered as a Claude Code plugin, the command prints a warning,
+skips this step, and manages only the runtime environment; run
+`ak kit refresh <kit>` to change the plugin's skills. Codex, project installs,
+and remote sources are not supported for this step yet. With no native install
+and no plugin, the command manages only the runtime environment.
+
+## What it writes for the environment
+
+When the skill declares a `runtime:` block, the command then creates or
+refreshes its environment. A prompt-only skill that was added to the kit install
+has no environment, and that is not an error.
 
 For a new runtime hash, AgentKit stages the environment beside the cache and
 renames it into place after the tools complete. It then writes the per-skill
@@ -48,30 +79,35 @@ runtime before package installation. Package specs must be exact pins such as
 and npm, removes common registry override variables, rejects URL/VCS, local-file,
 flag-injection, and unsafe specs, and passes `--ignore-scripts` to pnpm.
 
-The command does not contact the AgentKit kit registry and performs no account
-or entitlement check. Package-manager network access is still possible.
+Provisioning the environment does not contact the AgentKit kit registry and
+performs no account or entitlement check. Package-manager network access is
+still possible.
 
 ## Output and automation
 
-Success writes this form to stderr and leaves stdout empty:
+Success writes these lines to stderr; the first appears when the skill was
+added to the kit install, the second when an environment was provisioned:
 
 ```text
+[OK] <kit>/<skill> added to the <kit> Claude Code install (N written, M unchanged)
 [OK] <kit>/<skill> env installed
 ```
 
-This remains true with `--json` and `--quiet`; there is no JSON success envelope.
-JSON execution failures use a structured error envelope on stderr. Capture the
-two streams separately.
+With `--json`, a skill added to the kit install also prints a versioned envelope
+with `kind: skill_install` on stdout. An environment-only run still leaves
+stdout empty and has no JSON success envelope. JSON execution failures use a
+structured error envelope on stderr. Capture the two streams separately.
 
 ## Exit behavior
 
 | Exit | Meaning |
 | --- | --- |
-| `0` | The record was written or a ready cache was reused. Opt-out and unsupported-only runtime declarations can also complete as no-ops. |
+| `0` | The skill was added to the kit install, the record was written, or a ready cache was reused. Opt-out and unsupported-only runtime declarations can also complete as no-ops. |
 | `1` | Parsing, path validation, tool execution, package policy, or filesystem work failed. |
 | `2` | The single reference was malformed, or flags were invalid. |
-| `4` | `uv` or `pnpm` was missing, or the skill declared no supported runtime block. |
+| `4` | `uv` or `pnpm` was missing, the skill declared no supported runtime block, or another install holds the kit lifecycle lock. |
 | `5` | The local kit or skill manifest was not found. |
+| `6` | A skill file holds edits AgentKit did not write; nothing was changed. |
 
 Cobra rejects a missing or extra positional argument before the command's
 classified renderer; that path currently exits `1`. Do not use it as an

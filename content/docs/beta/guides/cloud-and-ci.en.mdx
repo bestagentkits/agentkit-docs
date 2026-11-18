@@ -26,6 +26,25 @@ needs no `ak` binary, no login, and no secret, and every clone uses the same
 kit version. Refresh the kit on your own machine and commit the result when you
 want a newer version. Start here unless the job itself must run `ak`.
 
+The Claude Code status line works on every clone too. `ak` registers it in
+`.claude/settings.json` as `node "${CLAUDE_PROJECT_DIR}/.claude/ak-<kit>-statusline.cjs"`,
+the same portable form the project Hooks use, so it holds no machine-specific
+path. A project plugin install uses
+`node "${CLAUDE_PROJECT_DIR}/ak-<kit>/ak-<kit>-statusline.cjs"` instead. If your committed file came from an older `ak` and still holds absolute
+paths, run `ak update` once on your machine and commit the result. See
+[Committing a project install](../concepts/runtime-adapters#committing-a-project-install).
+
+A fresh clone has the committed kit files but not the ownership records under
+`./.agentkit`, which stay out of version control. To manage the kit from a
+clone, run `ak kit init engineer --yes` there once, without `--force`. It adopts
+every committed file that is byte-identical to what the kit ships, rebuilds the
+ownership records, and rewrites nothing; `ak update` works from then on. A file
+a teammate edited is kept as-is and reported. If a hook runtime file or the
+`.claude/hooks/.agentkit-runtime.json` marker differs, for example because the
+clone uses a different kit version, the command stops without changing anything
+and names `ak kit init engineer --target claude-code --force --yes`, which takes
+a recovery snapshot before replacing those files.
+
 For other runtimes and scopes, see [Installing kits](./installing-kits).
 
 ## Run `ak` in a job
@@ -102,6 +121,23 @@ than the one running, a kit install replaces the binary as a side effect.
 export AK_NO_AUTO_UPDATE=1
 ```
 
+### Give a job vault secrets with a CI bundle
+
+A job that needs secrets from your vault does not sign in to it. Seal the
+selected secrets into an encrypted bundle with
+[`ak secrets bundle`](../reference/cli/secrets/bundle), store the decryption key
+in the environment's secret store, and start the program with
+[`ak secrets run --bundle`](../reference/cli/secrets/run#ci-bundle-mode):
+
+```bash
+# AK_CI_DECRYPT_KEY comes from the environment's secret store
+ak secrets run --bundle ci-production.akv --profile ci-production -- ./deploy.sh
+```
+
+The key is the whole authorization: no vault, grant, or prompt is used. Use one
+key and bundle per trust boundary. Under GitHub Actions, the
+`pull_request_target` event is refused.
+
 ### Branch on exit codes, not text
 
 | Command | Exit | Meaning |
@@ -155,6 +191,14 @@ clones your repository. It does not run inside GitHub Actions.
 - If the routine must run `ak`, install it in the environment's setup script
   and supply `AGENTKIT_API_KEY` as an environment secret, exactly as in a CI
   job. Set `AK_NO_AUTO_UPDATE=1` there too.
+- To run a vault-backed command on your own machine instead of in the
+  routine's environment, sign in with
+  [`ak secrets remote login`](../reference/cli/secrets/remote/login) and use
+  [`ak secrets remote run`](../reference/cli/secrets/remote/run) (preview). The
+  values stay on your relay device and never reach the cloud environment. A
+  token exported for `AK_VAULT_MCP_REFRESH_TOKEN` is spent on its first use,
+  so an environment that does not keep its AgentKit home between runs needs a
+  new sign-in each time.
 
 Practices that make an unattended agent safe to leave running:
 

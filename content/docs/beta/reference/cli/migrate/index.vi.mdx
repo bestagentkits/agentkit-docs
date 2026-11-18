@@ -56,7 +56,11 @@ ak migrate rollback
 
 Đầu ra JSON là success envelope dùng chung với kind `migrate.run`. `data` chứa đối tượng `status` với `from`, `dry_run`, `status`, `message`, `schema_version` và `backup_id` tùy chọn. Di chuyển chung thêm `discovery`, `plan` tùy chọn, `transition_preview`, `terminal` và `prefs`. Di chuyển cũ dùng `legacy_discovery`, `legacy_plan`, `legacy_terminal` tùy chọn và `prefs`.
 
-Các giá trị trạng thái gồm `planned`, `completed`, `failed` và `no_candidates`. Lần áp dụng thất bại ghi envelope `migrate.run` với trạng thái `failed` ra stdout và thoát `1` mà không có error envelope thứ hai. Lỗi xảy ra trước khi kết quả được ghi, kể cả lỗi phân tích cờ (mã thoát `2`), ghi error envelope dùng chung lên stderr. Tiến trình dễ đọc dùng stdout; lỗi dùng stderr.
+Các giá trị trạng thái gồm `planned`, `completed`, `failed`, `skipped` và `no_candidates`. Lần áp dụng thất bại ghi envelope `migrate.run` với trạng thái `failed` ra stdout và thoát `1` mà không có error envelope thứ hai. Lỗi xảy ra trước khi kết quả được ghi, kể cả lỗi phân tích cờ (mã thoát `2`), ghi error envelope dùng chung lên stderr. Tiến trình dễ đọc dùng stdout; lỗi dùng stderr.
+
+Kit cũ mà tài khoản của bạn không có giấy phép sẽ bị bỏ qua và các tệp ClaudeKit của Kit đó được giữ nguyên. Migrate in `[!] Skipped <kit>: … Next: …` ra stderr và liệt kê Kit đó trong JSON `legacy_skipped_kits[]` (`kit`, `reason: not_licensed`, `why`, `next`). Nếu không còn Kit nào có giấy phép, trạng thái là `skipped` và lệnh thoát `3`. Bước kiểm tra giấy phép bị bỏ qua khi đặt `AGENTKIT_KITS_DIR`.
+
+Nếu lần cài Kit trong một chuyển đổi cũ là lượt tải Kit đầu tiên được tính của tài khoản bạn, thông báo về chính sách hoàn tiền mà registry gửi kèm được báo cùng các thông báo của lần chạy và trong trường `refund_notice` của kết quả JSON, kể cả khi lần áp dụng sau đó thất bại.
 
 ## Trạng thái thoát
 
@@ -65,13 +69,13 @@ Các giá trị trạng thái gồm `planned`, `completed`, `failed` và `no_can
 | `0` | Xem trước, di chuyển, di chuyển chỉ tùy chọn, rollback hoặc rollback không có việc hoàn tất. |
 | `1` | Phát hiện, snapshot, runtime, áp dụng hoặc di chuyển một phần thất bại. |
 | `2` | Cờ hoặc nguồn di chuyển không hợp lệ. |
-| `3` | Lần áp dụng thiếu `--yes` hoặc xung đột chưa xử lý chặn chuyển đổi. |
+| `3` | Lần áp dụng thiếu `--yes`, xung đột chưa xử lý chặn chuyển đổi, hoặc tài khoản không có giấy phép cho Kit cũ nào trong kế hoạch. |
 | `4` | Một thao tác AgentKit khác đang giữ lock vòng đời Kit. Với `--json`, error envelope ghi `error_code` `lock_held`. Chạy lại sau khi thao tác đó xong. |
 | `5` | Lần áp dụng không tìm thấy nguồn có thể di chuyển hoặc tùy chọn cần di chuyển. |
 
 ## Tác động, an toàn và khôi phục
 
-Chế độ áp dụng trước tiên khôi phục chuyển đổi cũ đang chờ khi có thể, rồi phát hiện nội dung ở các vị trí Claude, ClaudeKit, dự án và Codex được hỗ trợ. Chuyển đổi chung tạo snapshot đích AgentKit, ngoại trừ thư mục gốc chứa backup, trước khi ghi tuần tự và giữ journal. Chuyển đổi cũ có thể lưu trữ, cách ly hoặc vô hiệu hóa nội dung cũ được cho phép và cài bản thay thế AgentKit.
+Chế độ áp dụng trước tiên khôi phục chuyển đổi cũ đang chờ khi có thể, rồi phát hiện nội dung ở các vị trí Claude, ClaudeKit, dự án và Codex được hỗ trợ. Chuyển đổi chung trước tiên tạo snapshot đúng các tệp đích mà kế hoạch sẽ ghi, xoá hoặc ghi đè, đồng thời ghi tệp mà kế hoạch tạo mới là chưa tồn tại để khi khôi phục tệp đó bị xoá, rồi mới ghi tuần tự và giữ journal. Chuyển đổi cũ có thể lưu trữ, cách ly hoặc vô hiệu hóa nội dung cũ được cho phép và cài bản thay thế AgentKit.
 
 Lỗi giữ trạng thái đang chờ hoặc journal để tiếp tục hay rollback. `ak migrate rollback` thực thi ngay mà không hỏi, chọn chuyển đổi có thể khôi phục mới nhất, phục hồi nội dung đã ghi nhận và xóa journal đã hoàn tất. Lệnh không xóa bản thay thế AgentKit đã cài trong chuyển đổi cũ. Không có tùy chọn chọn backup hoặc journal theo ID.
 

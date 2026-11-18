@@ -27,7 +27,7 @@ Supply exactly two positional arguments.
 
 | Flag | Default | Description |
 | --- | --- | --- |
-| `--scope <scope>` | `user` | Select `user` under AgentKit home or `project` under the current working directory. |
+| `--scope <scope>` | `user` | Select `user` under AgentKit home or `project` in the project directory found from the working directory. |
 
 Shared flags are described in [CLI conventions](../cli-conventions). The write
 does not prompt, so `--yes` and `--no-interactive` do not change it. There is no
@@ -64,7 +64,7 @@ These key shapes are accepted:
 - `agent_models.omp.roles.<role>.<field>` — binds an OMP role to a model;
   `<field>` is `model` or `reasoning_effort`.
 - `semantic_decision.<leaf>` — `<leaf>` is `enabled`, `provider`, `model`,
-  `timeout_ms`, or `consumers.<consumer>`, where `<consumer>` is
+  `base_url`, `timeout_ms`, or `consumers.<consumer>`, where `<consumer>` is
   `domain-routing`, `fix-complexity`, `orchestration-risk`,
   `skill-routing-eval`, `review-triage`, `workflow-controller`,
   `ui-regression`, `test-impact`, or `e2e-classification`.
@@ -102,8 +102,8 @@ any `agent_models.<runtime>` outside that runtime set, any unrecognized
 tier, Agent field, or OMP role, and any `semantic_decision` leaf not listed
 above (such as `semantic_decision.api_key`) are rejected before a preference write. This
 allowlist prevents the command from being used as a general secret or config
-editor. A capability-gated runtime, `grok` or `dsh`, is rejected with its
-reason; run with `--verbose` or `--json` to see it.
+editor. A capability-gated runtime, `grok` or `dsh`, is rejected, and the
+error shows the reason by default.
 
 For a Hook toggle, `false` lets a Hook that honors this preference exit early
 on its next run; `true` records the opposite preference. Harness registration
@@ -132,8 +132,9 @@ These keys control opt-in semantic evaluation by
 | Key | Accepted value | Default |
 | --- | --- | --- |
 | `semantic_decision.enabled` | `true` or `false` | `false` |
-| `semantic_decision.provider` | `typesafe` or `cloudflare` | unset |
-| `semantic_decision.model` | Model ID matching `^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$`; only `clef` or `clef-flash` with `cloudflare` | unset |
+| `semantic_decision.provider` | `typesafe`, `cloudflare`, `openrouter`, or `openai-compatible` | unset |
+| `semantic_decision.model` | Model ID matching `^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$`; only `clef` or `clef-flash` with `cloudflare`; required with `openrouter` and `openai-compatible` | unset |
+| `semantic_decision.base_url` | User scope only. An `https` URL, or `http` for a loopback host only; no user info, query, or fragment; at most 2048 bytes. Required to enable `openai-compatible`; other providers ignore it | unset |
 | `semantic_decision.timeout_ms` | Integer from `100` to `30000` | `5000` |
 | `semantic_decision.consumers.<consumer>` | `true` or `false` | unset |
 
@@ -143,6 +144,10 @@ false` are accepted; they restrict the user grant for that project. Any other
 semantic key or value at project scope exits `1` before a project config is
 scaffolded or written. Set `semantic_decision.provider` before enabling, because
 an enabled user policy without a provider is invalid when evaluated.
+`openrouter` sends requests to `https://openrouter.ai/api/v1/chat/completions`
+and reads `OPENROUTER_API_KEY`. `openai-compatible` sends them to
+`<semantic_decision.base_url>/chat/completions` and reads
+`OPENAI_COMPATIBLE_API_KEY`.
 
 Without a user `consumers` map, only `domain-routing`, `fix-complexity`, and
 `orchestration-risk` are permitted. The other six consumers
@@ -167,7 +172,7 @@ ak config prefs set semantic_decision.consumers.test-impact true --scope user
 | Scope | Target | Additional effect |
 | --- | --- | --- |
 | `user` | `$AGENTKIT_HOME/config.yaml`, normally `~/.agentkit/config.yaml` | A missing file is created. |
-| `project` | `<cwd>/.agentkit/config.yaml` | If absent, AgentKit scaffolds the project template and `.agentkit/.gitignore` first. The project config is intended to be committed, so do not place credentials in it. |
+| `project` | `<project-directory>/.agentkit/config.yaml`, where the project directory is the nearest directory from the working directory upward that holds `.agentkit/config.yaml` or `.git`, else the working directory | Refused with exit `1` when run from your home directory or above it (no project scope), or when the target config is not trusted (`error_code` `conflict`). If absent, AgentKit scaffolds the project template and `.agentkit/.gitignore` first. The project config is intended to be committed, so do not place credentials in it. |
 
 The writer changes only the selected `hooks.<name>`, `journal.auto`,
 `worktree.root`, `secret_store.choice`, `updates.channel`, `agent_models.<runtime>.<tier>`, or
@@ -234,7 +239,7 @@ backed up prior config to /home/user/.agentkit/backups/config/config-<timestamp>
 ```
 
 Inside `data`, a boolean is reported in `value`. A string value, such as `worktree.root`,
-`secret_store.choice`, `updates.channel`, an agent model ID, `semantic_decision.provider`, or `semantic_decision.model`,
+`secret_store.choice`, `updates.channel`, an agent model ID, `semantic_decision.provider`, `semantic_decision.model`, or `semantic_decision.base_url`,
 is reported in `value_string` instead, and `semantic_decision.timeout_ms` in
 `value_int`.
 
@@ -260,8 +265,8 @@ ak config prefs resolve --json
 ak config prefs validate
 ```
 
-For project scope, run resolve from that same project directory so the intended
-project file participates in precedence.
+For project scope, run resolve from anywhere inside that same project; it finds
+the same project file and reports its directory as `root`.
 
 ## Related commands
 

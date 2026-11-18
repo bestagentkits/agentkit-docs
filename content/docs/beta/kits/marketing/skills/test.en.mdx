@@ -8,7 +8,8 @@ import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
 Use `ak-test` to turn a change or quality question into fresh validation
 evidence. The Skill can run unit, integration, end-to-end, build, coverage, and
-browser-based UI checks. It can also create a covering test suite, optimize a
+browser-based UI checks. It can also create a covering test suite, update tests
+after an accepted behavior or contract change, optimize a
 suite and its CI cost, or audit a suite for weak tests. The Skill's
 test-principles rules govern scope, layer, environment, and execution for every
 operation; load them before designing or changing tests.
@@ -61,11 +62,12 @@ Before you start:
 
 ## Select the operation
 
-The Skill accepts `[context]`, `ui [url]`, or `create|optimize|audit [scope]`.
+The Skill accepts `[context]`, `run|exec [context]`, `ui [url]`, or `create|update|optimize|audit|review [scope]`.
 If you provide a scope, the Skill proceeds with relevant code validation. With
 no arguments, it asks which operation to run. Use `ui <url>` to select the
-browser workflow directly, or start with `create`, `optimize`, or `audit` to
-work on the test suite itself.
+browser workflow directly, or start with `create`, `update`, `optimize`, or
+`audit` to work on the test suite itself. `run` and `exec` name the default
+code-testing operation explicitly, and `review` is an alias of `audit`.
 
 <Tabs items={['Claude Code', 'Cursor', 'Codex']}>
   <Tab value="Claude Code">
@@ -105,13 +107,14 @@ $ak-test ui https://staging.example.com/pricing --mobile — inspect only; do no
 
 | Operation | What it covers | Useful input |
 | --- | --- | --- |
-| Code testing (default) | Type or syntax checks, unit, integration, end-to-end, coverage, and production build | Changed behavior, affected modules, required commands, and project thresholds |
+| Code testing (default, `run`, `exec`) | Type or syntax checks, unit, integration, end-to-end, coverage, and production build | Changed behavior, affected modules, required commands, and project thresholds |
 | `ui <url> [options]` | Page discovery, screenshots, responsive behavior, accessibility, forms, console errors, and user flows | Authorized URL, optional `--headless`, `--mobile`, or `--auth`, viewports, and data-safety boundary |
 | `create [scope]` | Scout code and docs, build a coverage matrix, then create or extend a test suite | Features or workflows to cover, existing framework, and critical paths |
+| `update [scope]` | Reconcile existing tests with an accepted behavior or contract change, changing an assertion only where the accepted contract changed | The change and its authority (issue, plan, spec, schema, API contract, or your decision), and behaviors that must stay unchanged |
 | `optimize [scope]` | Analyze CI/CD, git history, code, and docs, then reduce test time and cost without dropping coverage | Slow jobs, CI timing evidence, safety-critical groups, and allowed workflow changes |
-| `audit [scope]` | Find deceptive, disabled, unfinished, ineffective, redundant, outdated, or unsafe tests and report ranked findings with proposed repairs | Suite or CI scope, trust concerns, and known skips |
+| `audit [scope]` (alias `review`) | Find deceptive, disabled, unfinished, ineffective, redundant, outdated, or unsafe tests and report ranked findings with proposed repairs | Suite or CI scope, trust concerns, and known skips |
 
-For `create`, `optimize`, and `audit`, add `--advice` for `kongming` advisory
+For `create`, `update`, `optimize`, and `audit`, add `--advice` for `kongming` advisory
 checkpoints or `--interview` to approve each proposed change group before edits.
 `--ultra` runs five independent read-only analysis candidates in one parallel
 wave with one verifier: `create` and `optimize` select one winning design
@@ -121,11 +124,16 @@ or fewer than five usable results after retry fails closed. The flags compose.
 Without `--interview`, `create` and `optimize` apply in-scope changes directly and
 report the full change list. Audit remains report-only unless suite repair is
 separately authorized; omitting the flag does not authorize repairs or retirement.
+With `audit`, `review`, or `optimize`, `--report` is read-only: the Skill
+writes the findings or the proposed optimization plan as a report and changes no
+test, CI workflow, or configuration.
 
 ```text
 /ak-test create "Cover the newsletter signup workflow" --interview
+/ak-test update "Align tests with the accepted signup form change"
 /ak-test optimize "Reduce pull-request CI time" --advice
 /ak-test audit "Check skipped and ineffective form tests" --ultra
+/ak-test optimize "Plan pull-request CI savings" --report
 ```
 
 Project-defined commands and coverage thresholds take priority. When the project
@@ -146,6 +154,16 @@ not justify retirement. Review the remaining suite jointly, preserve required
 tests and mandatory gates, and obtain suite-repair authority for retirement.
 After authorized changes, rerun affected contracts and the same valid sampled
 faults against the remaining suite, followed by required gates.
+
+`update` reconciles existing tests with an accepted behavior or contract change.
+It names the change and its authority; a diff alone is not authority for a new
+expectation. It runs the affected tests before editing and classifies each
+failure: an assertion changes only when the new contract expects it, a test
+that exposes an implementation defect stays and the defect goes to `ak-debug`
+or `ak-fix`, and an environment problem leaves the assertion untouched.
+Snapshots or golden files are regenerated only after their diff is read. Each
+updated test must fail against the old behavior or a deliberate mutation.
+`update` never deletes, skips, or loosens a failing test to get a green run.
 
 ## Use impact selection and optional semantic modes
 
@@ -213,6 +231,12 @@ no findings or a cache hit does not verify unexercised release claims.
 - Test commands may create coverage files, screenshots, build output, temporary
   data, or browser state. State allowed artifact locations, execution/retry
   budgets, and cleanup requirements; clean only resources owned by this run.
+- Servers, watchers, browsers, containers, and temporary roots a run starts are
+  recorded and stopped on success, failure, timeout, and cancellation. The Skill
+  reuses a matching process or stops only one this session started, keeps a
+  deterministic port instead of moving to a new one on "address in use",
+  verifies cleanup, and never stops another session's or the user's process
+  without confirmation. A timed-out command is unverified, not a pass.
 - Mutation proof is selective, not a routine execution or CI requirement. Use
   bounded fault injections only in owned disposable copies, never the active
   worktree. Record source identity, restore the copy exactly even on failure,

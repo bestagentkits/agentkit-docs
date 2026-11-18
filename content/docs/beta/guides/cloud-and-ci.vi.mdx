@@ -25,6 +25,27 @@ cần binary `ak`, không cần đăng nhập, không cần secret, và mọi b�
 cùng một phiên bản Kit. Khi muốn lên phiên bản mới, refresh Kit trên máy của bạn
 rồi commit kết quả. Hãy bắt đầu từ cách này, trừ khi chính job phải chạy `ak`.
 
+Status line của Claude Code cũng hoạt động trên mọi bản clone. `ak` đăng ký nó
+trong `.claude/settings.json` dưới dạng
+`node "${CLAUDE_PROJECT_DIR}/.claude/ak-<kit>-statusline.cjs"`, cùng dạng
+portable mà Hook của project dùng, nên không chứa đường dẫn riêng của từng máy.
+Bản cài plugin theo project thì dùng
+`node "${CLAUDE_PROJECT_DIR}/ak-<kit>/ak-<kit>-statusline.cjs"`. Nếu tệp bạn đã commit được tạo bởi `ak` phiên bản cũ và vẫn chứa đường dẫn tuyệt
+đối, hãy chạy `ak update` một lần trên máy của bạn rồi commit kết quả. Xem
+[Commit bản cài theo project](../concepts/runtime-adapters#commit-bản-cài-theo-project).
+
+Bản clone mới có đủ các file Kit đã commit nhưng không có bản ghi quyền sở hữu
+trong `./.agentkit`, vì phần này nằm ngoài version control. Để quản lý Kit từ
+bản clone, hãy chạy `ak kit init engineer --yes` một lần ở đó, không cần
+`--force`. Lệnh này nhận lại mọi file đã commit trùng khớp từng byte với nội dung
+Kit phát hành, dựng lại bản ghi quyền sở hữu và không ghi đè file nào; từ đó
+`ak update` hoạt động bình thường. File mà đồng đội đã sửa được giữ nguyên và
+được báo lại. Nếu một file runtime của Hook hoặc marker
+`.claude/hooks/.agentkit-runtime.json` khác đi, chẳng hạn vì bản clone dùng phiên
+bản Kit khác, lệnh dừng mà không thay đổi gì và chỉ ra lệnh
+`ak kit init engineer --target claude-code --force --yes`, lệnh này tạo snapshot
+khôi phục trước khi thay các file đó.
+
 Với runtime và scope khác, xem [Cài đặt Kit](./installing-kits).
 
 ## Chạy `ak` trong job
@@ -100,6 +121,23 @@ hơn bản đang chạy, việc cài Kit sẽ thay binary như một tác dụng
 export AK_NO_AUTO_UPDATE=1
 ```
 
+### Cấp secret từ vault cho job bằng CI bundle
+
+Job cần secret từ vault của bạn không đăng nhập vào vault. Hãy niêm phong các
+secret đã chọn vào một bundle mã hoá bằng
+[`ak secrets bundle`](../reference/cli/secrets/bundle), lưu khoá giải mã trong
+kho secret của môi trường, rồi khởi chạy chương trình bằng
+[`ak secrets run --bundle`](../reference/cli/secrets/run#chế-độ-ci-bundle):
+
+```bash
+# AK_CI_DECRYPT_KEY lấy từ kho secret của môi trường
+ak secrets run --bundle ci-production.akv --profile ci-production -- ./deploy.sh
+```
+
+Khoá là toàn bộ sự cho phép: không dùng vault, grant hay prompt. Dùng một khoá
+và một bundle cho mỗi ranh giới tin cậy. Trong GitHub Actions, event
+`pull_request_target` bị từ chối.
+
 ### Rẽ nhánh theo exit code, không theo chữ
 
 | Lệnh | Exit | Ý nghĩa |
@@ -151,6 +189,14 @@ repository của bạn. Nó không chạy bên trong GitHub Actions.
 - Nếu routine phải chạy `ak`, hãy cài trong setup script của môi trường và cung
   cấp `AGENTKIT_API_KEY` làm secret của môi trường, giống hệt job CI. Đặt cả
   `AK_NO_AUTO_UPDATE=1` ở đó.
+- Để chạy một lệnh dùng vault trên máy của bạn thay vì trong môi trường của
+  routine, đăng nhập bằng
+  [`ak secrets remote login`](../reference/cli/secrets/remote/login) và dùng
+  [`ak secrets remote run`](../reference/cli/secrets/remote/run) (bản xem
+  trước). Các giá trị ở lại trên relay device của bạn và không bao giờ tới môi
+  trường cloud. Token xuất ra cho `AK_VAULT_MCP_REFRESH_TOKEN` bị dùng hết ngay
+  ở lần dùng đầu tiên, nên môi trường không giữ lại thư mục home của AgentKit
+  giữa các lần chạy cần đăng nhập lại mỗi lần.
 
 Các thực hành giúp Agent chạy không giám sát an toàn:
 

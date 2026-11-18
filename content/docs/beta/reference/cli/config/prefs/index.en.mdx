@@ -36,8 +36,14 @@ process environment or `$AGENTKIT_HOME/.env`, never from config. See
 The candidate files are:
 
 1. user scope: `~/.agentkit/config.yaml`, or `$AGENTKIT_HOME/config.yaml`;
-2. project scope: `.agentkit/config.yaml` under the command's current working
-   directory.
+2. project scope: `.agentkit/config.yaml` in the project directory.
+
+The project directory is the nearest directory, from the working directory
+upward, that holds `.agentkit/config.yaml` or `.git`; if none is found, it is
+the working directory. The search never selects your home directory, a
+directory above it, or the AgentKit home, so there is no project scope when you
+run from your home directory, and a project-scope write there fails with exit
+`1`.
 
 Resolve deep-merges project values over user values. A project mapping can
 override one nested key while preserving user values beside it. These are
@@ -46,8 +52,19 @@ Kit Hook applies its own built-in default when a value is absent, and
 `journal.auto` defaults to `true`.
 
 `set` and `unset` default to user scope; pass `--scope project` to select the
-current project's file. Scope is based on the process working directory, not a
-registered project chosen elsewhere.
+project file found from the working directory, so a command run from a
+subdirectory reads and writes the same file as one run from the repository
+root. Scope is not based on a registered project chosen elsewhere.
+
+A marker above the working directory counts only when you, root, or the user
+who ran `sudo` owns it, and the `.agentkit` directory holding it is not a link.
+Reads skip an untrusted marker or config with a note on stderr (silent with
+`--json` or `--quiet`); `resolve` shows the skipped project config as
+`skipped: not trusted`. A project-scope `set` or `unset` refuses with exit `1`
+and `error_code` `conflict` when the write would land in an untrusted config
+(`config.prefs.untrusted_project_config`), in a stray config below a repository
+whose marker was skipped (`config.prefs.untrusted_project_marker`), or, when run
+as root, in a project another user owns (`config.prefs.root_project_write`).
 
 `semantic_decision` is an exception to project-over-user precedence. Only user
 scope can grant provider consent or choose provider settings; project scope can

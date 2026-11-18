@@ -1,0 +1,82 @@
+---
+title: ak skills self-improve review list
+description: Liệt kê mọi Skill đã sàng lọc cùng quyết định mới nhất, các candidate cải tiến đã ghi và kết quả đánh giá của chúng, và các lệnh tiếp theo.
+---
+
+Dùng `ak skills self-improve review list` để xem mọi Skill có event đã vượt
+ngưỡng review, bất kể sự đồng ý hiện tại. Lệnh chỉ đọc.
+
+## Cách dùng
+
+```bash
+ak skills self-improve review list [flags]
+```
+
+```bash
+ak skills self-improve review list
+ak skills self-improve review list --json
+```
+
+Lệnh không nhận argument và không có cờ riêng. Các cờ dùng chung nằm trong
+[quy ước CLI](../cli-conventions).
+
+## Lệnh làm gì
+
+Với mỗi Skill đã sàng lọc, lệnh hiện quyết định mới nhất, các candidate mà
+[`ak skills improve`](../cli/ak_skills_improve) đã ghi cho Skill đó, kết quả
+đánh giá của từng candidate (`not_run` cho tới khi được đánh giá), và các lệnh
+tiếp theo:
+
+- khi chưa có candidate, lệnh review `/ak-dogfood`;
+- với mỗi candidate, `ak skills evolution evaluate <id>` khi chưa được đánh giá,
+  rồi `ak skills self-improve review approve <id>`;
+- `ak skills self-improve review reject <skill>` và
+  `ak skills self-improve review defer <skill>`.
+
+Khi không đọc được candidate store, lệnh cảnh báo và chỉ liệt kê các Skill đã
+sàng lọc. Candidate không qua được bước xác minh bị bỏ ra kèm cảnh báo
+`store.corrupt`.
+
+Lệnh đọc `AGENTKIT_HOME/state/self-improve/events.jsonl`, `review.json` và các
+record candidate dưới `AGENTKIT_HOME/state/skill-evolve/candidates/`. Lệnh
+không ghi gì và không chạy model, script hay network call.
+
+## Đầu ra
+
+Mỗi mục text hiện Skill, độ mạnh tín hiệu, số lý do và số candidate, và quyết
+định của nó (`undecided` khi chưa có), sau đó là một dòng cho mỗi candidate và
+một dòng `next:` cho mỗi lệnh.
+
+JSON dùng `kind=skills.self_improve.review.list` với các trường sau dưới
+`data`:
+
+```text
+items[]: skill, digest, strength, reasons[], event_ids[], suggested_command,
+         decision, nudged, evolution_candidates[], next_steps[]
+decision: decision, digest, decided_at, until?, candidate_id?
+evolution_candidates[]: candidate_id, identity, owner, proposal_only,
+                        eval_outcome, apply_state
+```
+
+- `decision` là `null` cho tới khi bạn quyết định. Giá trị `decision` bên trong
+  là `approved`, `proposed`, `rejected` hoặc `deferred`.
+- `nudged` là `true` khi dòng nhắc khi bắt đầu session đã hiện phát hiện hiện
+  tại và không có quyết định nào làm nó im lặng.
+- `owner` là `user` với Skill thuộc personal kit của chính bạn và `agentkit`
+  trong các trường hợp còn lại; `proposal_only` là `true` với `agentkit`.
+
+## Kết quả và mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Thành công, kể cả khi danh sách trống. |
+| `1` | Không xác định được thư mục home của AgentKit (`self_improve.home_unresolved`), hoặc không đọc được event store (`self_improve.store_failed`). |
+| `2` | Cờ hoặc argument không hợp lệ (`self_improve.invalid_input`). |
+| `4` | Một tiến trình ghi khác đang giữ khoá của event store (`self_improve.store_busy`). |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skills self-improve review list`](../cli/ak_skills_self-improve_review_list)
+- [Xem chi tiết một Skill đã sàng lọc](./inspect)
+- [Duyệt một candidate](./approve)
+- [Tổng quan review](../cli/ak_skills_self-improve_review)

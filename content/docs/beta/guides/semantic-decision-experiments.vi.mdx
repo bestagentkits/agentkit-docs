@@ -54,7 +54,7 @@ ak config prefs set semantic_decision.enabled true --scope user
 ```
 
 Các key ghi được là `semantic_decision.enabled`, `provider`, `model`,
-`timeout_ms` và `consumers.<name>`. Chạy `ak config prefs set --help` từ binary
+`base_url`, `timeout_ms` và `consumers.<name>`. Chạy `ak config prefs set --help` từ binary
 bạn sẽ dùng để xác nhận các key hiện có.
 
 Sau khi bật, các consumer ban đầu `domain-routing`, `fix-complexity` và
@@ -73,6 +73,22 @@ Chọn đúng một provider; AgentKit không bao giờ tự đổi provider.
 | --- | --- | --- |
 | `typesafe` | Lấy từ provider | `TYPESAFE_API_KEY` |
 | `cloudflare` | Chỉ `clef` hoặc `clef-flash` | `CLOUDFLARE_ACCOUNT_ID` và `CLOUDFLARE_API_TOKEN` |
+| `openrouter` | Bắt buộc: model ID bất kỳ bạn đặt | `OPENROUTER_API_KEY` |
+| `openai-compatible` | Bắt buộc: model ID bất kỳ bạn đặt | `OPENAI_COMPATIBLE_API_KEY` |
+
+`openrouter` gửi request tới `https://openrouter.ai/api/v1/chat/completions`.
+`openai-compatible` gửi tới `<semantic_decision.base_url>/chat/completions`, vì
+vậy hãy đặt `semantic_decision.base_url` ở user scope trước khi bật; policy
+`openai-compatible` đã bật mà không có base URL là không hợp lệ. Base URL phải là
+URL `https`, hoặc `http` chỉ với máy loopback như `localhost`, không có thông
+tin người dùng, query hay fragment, và tối đa 2048 byte. Các provider khác bỏ
+qua base URL đã lưu.
+
+```bash
+ak config prefs set semantic_decision.provider openai-compatible --scope user
+ak config prefs set semantic_decision.base_url https://llm.example.com/v1 --scope user
+ak config prefs set semantic_decision.model <model-id> --scope user
+```
 
 Mỗi credential được đọc từ môi trường của process trước, sau đó từ tệp `.env`
 trong AgentKit home của user (`$AGENTKIT_HOME/.env`, mặc định
@@ -83,6 +99,8 @@ trong AgentKit home của user (`$AGENTKIT_HOME/.env`, mặc định
 TYPESAFE_API_KEY=...
 CLOUDFLARE_ACCOUNT_ID=...
 CLOUDFLARE_API_TOKEN=...
+OPENROUTER_API_KEY=...
+OPENAI_COMPATIBLE_API_KEY=...
 ```
 
 - Giá trị môi trường rỗng được coi là chưa đặt.
@@ -111,7 +129,9 @@ Cloudflare bị thiếu hoặc sai dạng), kết quả báo `credential_missing
 Với `typesafe`, nếu bạn để trống `semantic_decision.model` và provider chỉ có
 một model, model đó được chọn tự động. Nếu provider có nhiều model, kết quả báo
 `model_required` cho đến khi bạn đặt một model. Cloudflare luôn có hai model, vì
-vậy hãy đặt `semantic_decision.model` là `clef` hoặc `clef-flash`.
+vậy hãy đặt `semantic_decision.model` là `clef` hoặc `clef-flash`. `openrouter`
+và `openai-compatible` không có model discovery, nên cả hai đều cần
+`semantic_decision.model`.
 
 ## Kiểm tra trạng thái
 
@@ -132,8 +152,8 @@ trị. Với `--json`, `details` gồm `enabled`, `provider`, `model`, `consumer
 | Trạng thái | Ý nghĩa |
 | --- | --- |
 | `skip` | Chưa cấp consent (mặc định), hoặc policy của project này tắt tính năng. Không có lệnh gọi provider nào. |
-| `warn` | Consent policy không hợp lệ, credential của provider không phân giải được, hoặc đã chọn `cloudflare` mà chưa đặt `semantic_decision.model`. Phần evidence nêu điều cần sửa. |
-| `ok` | Consent, provider, model và credential đều sẵn sàng. Phần evidence liệt kê provider, model và các consumer được phép. |
+| `warn` | Consent policy không hợp lệ, credential của provider không phân giải được, hoặc đã chọn `cloudflare`, `openrouter` hay `openai-compatible` mà chưa đặt `semantic_decision.model`. Phần evidence nêu điều cần sửa; khi thiếu model, check gợi ý `ak config prefs set semantic_decision.model <model-id> --scope user` (hoặc `clef-flash` với `cloudflare`). |
+| `ok` | Consent, provider, model và credential đều sẵn sàng. Phần evidence liệt kê provider, model và các consumer được phép, và với `openai-compatible` thì nêu base URL nơi request được gửi tới. |
 
 Kết quả `ok` nghĩa là có thể gọi provider, không có nghĩa là đã có lệnh gọi nào.
 Provider chỉ được gọi khi một consumer được phép chạy, ví dụ `ak eval decision`,

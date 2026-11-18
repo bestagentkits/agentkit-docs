@@ -104,8 +104,10 @@ before mutation while the Codex row says `updated`, Codex was updated; do not
 describe the whole update as failed.
 
 Do not treat generic terminal guidance about disk space or backup permissions as
-the root cause. Current guidance uses that classification for any raw error that
-contains `snapshot`. A printed snapshot ID proves that at least one earlier
+the root cause. The CLI still uses that classification for any raw error that
+contains `snapshot` and that it does not recognize more specifically; versions
+before 3.2.0-beta.7 also applied it to recovery hints that only mention a
+snapshot. A printed snapshot ID proves that at least one earlier
 capture succeeded. It does not prove a partial write, and a later capture can
 still fail because of disk space, ACL or security software, a locked or
 unreadable Claude path, a foreign-home refusal, or another snapshot-path error.
@@ -152,6 +154,32 @@ with `--no-backup`.
   `ak kit init engineer --global --channel <channel>`, replacing `<channel>`
   with the release channel selected in the docs header. This is an ownership
   decision, not a permissions error.
+- For `runtime marker ... is not owned by an AgentKit install` or
+  `runtime marker ... has foreign or modified content`, the update stopped
+  before changing any runtime file. This is an ownership refusal, not a snapshot or
+  disk-space failure. If the install is yours, run the exact
+  `ak kit init ... --force --yes` command printed in the detail; it takes a
+  recovery snapshot, then replaces the marker.
+- For `checking target before snapshot` or `inspect ... before snapshot`, a path
+  in the target is not the type AgentKit expected, for example a symlinked file
+  where a directory belongs. Move that path aside, retry, then restore it if you
+  still need it.
+- For `statusline target ... is not owned by an AgentKit install` or
+  `statusline target ... has foreign or modified content`, the update stopped
+  before changing any runtime file. If the statusLine is yours to replace, run
+  the exact `ak kit init ... --force --yes` command printed in the detail; it
+  takes a recovery snapshot, then replaces the statusLine.
+- Some snapshot failures are not about disk space; the detail says which one.
+  For a path that is not a regular file, move it aside, retry, then
+  restore it. For a file that changed during capture, close the runtime that
+  uses it, then retry. For a Skill that exceeds the safety limit, remove large
+  or generated files from the named Skill folder. For a recovery snapshot that
+  failed verification, check it with `ak backups verify <id>`, then retry. For a
+  stable directory snapshot or a plugin activation snapshot, retry once nothing
+  is writing to that path; if it repeats, report it with the support bundle.
+- For `... require a recovery snapshot` or
+  `--fresh always takes a verified recovery snapshot`, the run used
+  `--no-backup`. Run it again without that flag.
 
 After correcting the cause, retry only the failed runtime:
 
@@ -247,6 +275,24 @@ ak licenses --json
 An unpinned `ak update` does not fail: it skips the kit with
 `reason: "renewal_required"` and exits `0`. See
 [Update windows and renewal](../guides/updating#update-windows-and-renewal).
+
+## A kit is skipped as `not_licensed`
+
+If `ak update` reports a kit with `status: "skipped"` and
+`reason: "not_licensed"`, the signed-in account holds no license for that kit.
+Nothing was written for it: the installed copy is kept unchanged. The skip
+does not fail the run, and re-running the update does not change it.
+
+```bash
+ak licenses
+```
+
+1. Run `ak licenses` to see which kits this account owns.
+2. If another account owns the kit, sign in with that account, then rerun the
+   update.
+3. Otherwise buy the kit, then rerun the update.
+4. If you no longer need the kit, remove it with `ak kit uninstall <kit>` (add
+   `--global` for a global install).
 
 ## Check the result
 

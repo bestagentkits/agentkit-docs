@@ -159,7 +159,7 @@ hơn tự nó không chứng minh tiết kiệm token hoặc hành vi provider.
 
 Trước khi đánh giá text của Skill, `audit` và `optimize` đo cách Skill thực sự
 chạy trong các local agent session. `scripts/session_usage.py` đi kèm đọc
-transcript Claude Code và Codex cục bộ và báo cáo các chỉ số như turn, token,
+transcript Claude Code, Codex và Oh My Pi (OMP) cục bộ và báo cáo các chỉ số như turn, token,
 tool call, tool error, lệnh gọi lặp lại, thời gian chờ tool, delegation và
 usage của subagent, cùng các tệp Skill đã được load. Script chỉ đọc và không
 bao giờ in nội dung prompt, reply hay tool output.
@@ -184,8 +184,13 @@ kèm trigger, các tệp Skill được nêu trong tool argument, và `invoked`,
 trị false với Skill chỉ xuất hiện trong đường dẫn. `--all [--since YYYY-MM-DD]`
 inventory mọi transcript cục bộ và xếp hạng từng Skill đã được gọi theo số
 session, lỗi, lệnh gọi lặp lại, lần bị ngắt và compaction, kèm tối đa năm lead
-session cho mỗi Skill. Một lần quét toàn bộ có thể mất vài phút trên máy có
-nhiều transcript, nên hãy thu hẹp bằng `--since` hoặc `--runtime` khi có thể.
+session cho mỗi Skill. Lỗi, lệnh gọi lặp lại và lần bị ngắt chỉ được đếm bên
+trong các span của chính Skill đó, từ trigger hoặc lúc load `SKILL.md` đến
+prompt tiếp theo của người dùng; `session_totals` giữ số đếm của toàn session.
+Một Codex session được fork và session gốc của nó chỉ được tính một lần. Một
+lần quét toàn bộ có thể mất vài phút trên máy có nhiều transcript, nên hãy thu
+hẹp bằng `--since` hoặc `--runtime` (`claude-code`, `codex` hoặc `omp`) khi có
+thể.
 
 `optimize` áp dụng thay đổi dựa trên session theo từng mục tiêu một và chỉ chấp
 nhận thay đổi khi chất lượng output được giữ; một lần chạy nhanh hơn hoặc ngắn
@@ -291,20 +296,26 @@ artifact đã có và tóm tắt record. Nó không bao giờ gọi provider hay
 lệnh, nên bạn tự chạy consumer trước.
 
 ```bash
-python3 scripts/eval_skill.py validate /absolute/target-skill/evals/evals.json
+python scripts/eval_skill.py validate /absolute/target-skill/evals/evals.json
 
-python3 scripts/eval_skill.py grade /absolute/target-skill/evals/evals.json \
+python scripts/eval_skill.py grade /absolute/target-skill/evals/evals.json \
   --case-id normalize-valid --outputs /absolute/run/outputs \
   --run-id unique-session-id --variant candidate \
   --model effective-model-id --runtime observed-runtime-version \
   --skill /absolute/skill-snapshot > /absolute/run/record.json
 
-python3 scripts/eval_skill.py summarize /absolute/run-a/record.json \
+python scripts/eval_skill.py summarize /absolute/run-a/record.json \
   /absolute/run-b/record.json > /absolute/comparison.json
 ```
 
-* Assertion gồm `file-exists`, `json-equals`, `text-contains` hoặc `rubric`
-  (mặc định). Đường dẫn artifact tương đối với outputs root; đường dẫn thoát ra
+Skill chạy các script Python dưới dạng `python <script>`. Trên macOS hoặc Linux
+không có lệnh `python`, hãy dùng `python3`. Trên Windows, không bao giờ dùng
+`python3`, vì lệnh này mở stub của Microsoft Store.
+
+* Assertion gồm `file-exists`, `json-equals`, `text-contains`, `text-absent`
+  hoặc `rubric` (mặc định). `text-absent` đạt khi artifact tồn tại và một chuỗi
+  literal bị cấm, như secret mồi nhử hoặc state bị lộ, không xuất hiện trong đó.
+  Đường dẫn artifact tương đối với outputs root; đường dẫn thoát ra
   ngoài và symlink đều fail. Rubric check giữ trạng thái ungraded cho đến khi
   reviewer độc lập điền kèm bằng chứng được trích dẫn.
 * Với baseline không có Skill, truyền `--variant without_skill` và bỏ

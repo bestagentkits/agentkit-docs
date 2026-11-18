@@ -28,7 +28,7 @@ Interactive setup needs terminal input and output. In automation, select
 adapters explicitly or provide a YAML answers file:
 
 ```bash
-ak setup --adapter claude-code,codex,cursor,dsh,grok,omp,pi --no-interactive
+ak setup --adapter claude-code,codex,cursor,dsh,grok,omp,opencode,pi --no-interactive
 ak setup --config setup.yaml --no-interactive
 ```
 
@@ -42,15 +42,28 @@ local binary resolves. It also enables that runtime as a Kit projection target. 
 or Grok authentication, or choose a runtime model; Kit installation uses the signed remote
 registry by default unless you explicitly choose `--local --kits-dir`.
 
+Selecting `opencode` checks only that the `opencode` binary resolves (or
+`AGENTKIT_OPENCODE_BIN`); OpenCode keeps its own provider credentials, set with
+`opencode auth login`, and setup never reads them. OpenCode is a spike adapter
+with no released Kit package, so install Kits for it from a local source with
+`ak kit init --local --kits-dir <dir> --target opencode`.
+
 ## Options
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `--adapter <ids>` | Detected runtimes | Configure a comma-separated set of registered adapters: `claude-code`, `codex`, `cursor`, `dsh`, `grok`, `omp`, or `pi`. `dsh` and `pi` also act as Kit projection emitters (`ak kit init --target dsh`, `ak kit init --target pi`); listing `pi` here does not provide `ak run --target pi`. |
-| `--no-adapter <ids>` | Empty | Exclude a comma-separated set of those registered adapters. |
+| `--adapter <ids>` | Current `adapters.enabled` | Set the enabled adapters to a comma-separated set of registered adapters: `claude-code`, `codex`, `cursor`, `dsh`, `grok`, `omp`, `opencode`, or `pi`. The list replaces `adapters.enabled`, so adapters you do not list are disabled; `none` disables every adapter, and an empty value is refused. `dsh` and `pi` also act as Kit projection emitters (`ak kit init --target dsh`, `ak kit init --target pi`); listing `pi` here does not provide `ak run --target pi`. |
+| `--no-adapter <ids>` | Empty | Disable a comma-separated set of those registered adapters. With `--adapter`, it filters that list; used alone, it removes them from the current `adapters.enabled` and keeps the rest. |
 | `--advanced` | `false` | Include provider keys, provider/model preferences, and Codex overrides. |
 | `--config <path>` | Empty | Read scripted answers from a YAML file whose keys are setup step IDs. |
 | `--step <id>` | Empty | Update one setup field instead of processing the complete step set. |
+
+Without `--adapter`, `--no-adapter`, or an `enabled_adapters` answer in
+`--config`, setup keeps the current `adapters.enabled`; a first run picks a
+default. When the new selection disables an adapter that was enabled before,
+setup prints a warning on stderr that names the previous value, the disabled
+adapters, and the command that restores them
+(`ak setup --adapter <ids> --no-interactive`).
 
 Unknown step IDs and conflicting adapter selections fail before configuration
 is written. See [CLI conventions](../cli-conventions) for shared flags such as
@@ -69,6 +82,9 @@ Update only the enabled adapters:
 ```bash
 ak setup --step enabled_adapters
 ```
+
+In the wizard, the adapter step is a multi-select pre-checked with the current
+adapters. Selecting none stores `none`.
 
 Apply a scripted file and return structured output:
 
@@ -104,6 +120,9 @@ data.partial: boolean, present for --step
 data.auth.agentkit: session_present, not_authenticated, or unknown
 data.auth.kit_entitlement: not_checked or login_required
 data.auth.runtimes: array of adapter, state, and optional action
+data.previous_adapters: string, present when the run disabled an adapter
+data.disabled_adapters: array of adapter IDs, present with previous_adapters
+data.restore_command: string, present when the previous adapters can be restored
 ```
 
 JSON-mode failures, including flag-parse errors (exit `2`), end stderr with the

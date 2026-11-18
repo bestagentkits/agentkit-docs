@@ -51,7 +51,9 @@ your runtime; Skill flags are not universal `omp` or `ak` CLI flags.
 
 Antigravity (`agy`) uses a separate global projection and strips incompatible
 model tiers. OpenCode and portable export do not establish an active AgentKit
-subagent/model mapping. A target accepting Skills or exporting files does not
+subagent/model mapping; a local-source OpenCode install projects Agents as
+`mode: subagent` without a model, so the session or `opencode.json` model
+applies. A target accepting Skills or exporting files does not
 prove it can dispatch every named Agent. See [Runtime adapters](../concepts/runtime-adapters)
 for broader capability and delivery differences.
 
@@ -80,7 +82,7 @@ Codex uses per-Agent pins rather than the four OMP roles:
 
 | Engineer Agents | Model | Reasoning effort |
 | --- | --- | --- |
-| `Explore` (Codex slug `explore`), `git-manager` | `gpt-5.4-mini` | Runtime default; no effort emitted |
+| `Explore` (Codex slug `explore`), `git-manager` | `gpt-5.4-mini` only with a confirmed API-key Codex login; otherwise no model line | Runtime default; no effort emitted |
 | `fullstack-developer`, `ui-ux-designer` | `gpt-5.6-luna` | `max` |
 | `project-manager`, `researcher`, `docs-manager`, `journal-writer` | `gpt-5.6-luna` | `high` |
 | `planner`, `brainstormer`, `code-reviewer`, `code-simplifier`, `debugger`, `tester` | `gpt-5.6-sol` | `medium` |
@@ -90,6 +92,18 @@ For example, Engineer's `tester` uses the `haiku` Kit tier but is pinned to
 Sol / medium on Codex. Its `fullstack-developer` and `planner` share the `opus`
 tier, but Codex pins them to Luna / max and Sol / medium respectively. Read the top-level TOML fields, not a `model:` line
 quoted inside `developer_instructions`.
+
+`gpt-5.4-mini` works only with an API-key Codex login; a ChatGPT-account login
+rejects it. AgentKit therefore writes that pin, for `explore`, `git-manager`,
+and any Agent on the `haiku` tier, only when `$CODEX_HOME/auth.json` confirms
+an API-key login. Under a ChatGPT login, or when the login mode cannot be read,
+the role file has no top-level model line and Codex uses its own default. The
+published Codex package's `explore.toml` and `git-manager.toml` therefore show
+no model line. `ak agents model list` and
+`ak doctor --check codex_agent_model_login` warn about an installed role file
+whose model the current login rejects and name the
+`ak agents model inherit <agent> --runtime codex` command that hands the choice
+back to Codex.
 
 AgentKit's Codex integration can expose Agents through the registered local
 Agent runtime. Merely finding a TOML file is not proof the current session has

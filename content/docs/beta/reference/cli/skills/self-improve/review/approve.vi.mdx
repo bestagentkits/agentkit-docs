@@ -1,0 +1,99 @@
+---
+title: ak skills self-improve review approve
+description: Xem trước một candidate cải tiến đã ghi, rồi áp dụng nó vào personal kit của bạn hoặc ghi lại thành đề xuất cho Skill của AgentKit.
+---
+
+Dùng `ak skills self-improve review approve` để xử lý một candidate mà
+[`ak skills improve`](../cli/ak_skills_improve) đã ghi. Không có `--yes` thì
+lệnh chỉ xem trước. Việc `--yes` làm gì phụ thuộc vào ai sở hữu Skill.
+
+## Cách dùng
+
+```bash
+ak skills self-improve review approve <candidateId> [--yes] [--plan <token>] [--into <name>] [--kits-dir <dir>] [--dry-run] [flags]
+```
+
+```bash
+ak skills self-improve review approve 3f2a91c0
+ak skills self-improve review approve 3f2a91c0 --yes --plan sha256:... --json
+```
+
+Cần đúng một tham chiếu candidate: candidate ID, hoặc ID rút gọn mà
+[`review list`](./list) in ra.
+
+## Tuỳ chọn
+
+| Cờ | Mặc định | Mô tả |
+| --- | --- | --- |
+| `--yes` | `false` | Áp dụng hoặc ghi lại thay vì xem trước. |
+| `--plan <token>` | Trống | Plan token của bản xem trước đã review. Bắt buộc khi thay đổi cần review. |
+| `--into <name>` | Kit đang overlay Skill đó, nếu không thì `mine` | Personal kit để áp dụng vào. |
+| `--kits-dir <dir>` | `$AGENTKIT_KITS_DIR` hoặc `./kits` | Thư mục foundation kit. |
+| `--dry-run` | `false` | Chỉ xem trước và không ghi gì; là mặc định khi không có `--yes`. |
+
+Các cờ dùng chung nằm trong [quy ước CLI](../cli-conventions).
+
+## Skill thuộc personal kit của bạn
+
+Với Skill thuộc personal kit của chính bạn (`@local/`), lệnh hoạt động y hệt
+[`ak skills evolution apply`](../cli/ak_skills_evolution_apply):
+
+- Không có `--yes`, hoặc có `--dry-run`, lệnh xem trước đánh giá được chạy lại,
+  diff và phần duyệt mà lần áp dụng còn cần, và không ghi gì.
+- Với `--yes`, lệnh áp dụng candidate: rollback record trước, một snapshot, và
+  một lần ghi personal kit có journal. Việc áp dụng cần bật skill store.
+- Thay đổi cần review còn cần `--plan <token>` từ bản xem trước bạn đã review.
+- Kết luận `regressed` hoặc `blocked` sẽ từ chối việc áp dụng. `not_run` và
+  `inconclusive` là kết quả bình thường và cần plan token.
+
+Sau khi áp dụng thành công, lệnh ghi quyết định `approved` vào `review.json`.
+Nếu bước ghi đó thất bại, việc áp dụng vẫn giữ nguyên và một cảnh báo báo điều
+đó. Hoàn tác việc áp dụng bằng
+[`ak skills evolution rollback`](../cli/ak_skills_evolution_rollback).
+
+## Skill của AgentKit
+
+Mọi Skill khác, kể cả Skill của AgentKit, chỉ ở dạng đề xuất. Lệnh không bao giờ
+ghi file Kit nào cho chúng:
+
+- Không có `--yes`, lệnh cho biết nó sẽ ghi một đề xuất, và hướng bạn tới
+  `ak skills evolution show <id>` để xem diff và đề xuất lên upstream dưới dạng
+  pull request nếu bạn muốn.
+- Với `--yes`, lệnh ghi quyết định `proposed` vào `review.json`, làm im lặng
+  dòng nhắc khi bắt đầu session cho digest hiện tại của Skill.
+
+## Đầu ra
+
+Với Skill thuộc personal kit, đầu ra text và JSON là của
+`ak skills evolution apply`: JSON dùng `kind=skills.evolution.apply`.
+
+Với Skill chỉ ở dạng đề xuất, đầu ra text ghi `would record proposed` hoặc
+`recorded proposed` cho Skill đó, kèm một ghi chú. JSON dùng
+`kind=skills.self_improve.review.proposed` với các trường sau dưới `data`:
+
+```text
+skill, decision, recorded, evolution_candidate, note
+decision: decision, digest, decided_at, candidate_id
+```
+
+`recorded` là `false` với bản xem trước.
+
+## Kết quả và mã thoát
+
+| Mã | Ý nghĩa |
+| --- | --- |
+| `0` | Thành công, kể cả khi chỉ xem trước. |
+| `1` | Không đọc hoặc ghi được candidate store, personal kit hoặc skill store, hoặc một record không qua được bước xác minh (`store.corrupt`). |
+| `2` | Cờ hoặc argument không hợp lệ, hoặc áp dụng mà thiếu phần duyệt cần có (`evolve.approval_required`). |
+| `4` | Một thao tác AgentKit khác đang giữ khoá vòng đời Kit (`evolve.store_busy`). |
+| `5` | Không có candidate đã ghi nào khớp, hoặc không xác định được base của Skill (`evolve.base_unresolved`). |
+| `6` | Base đã thay đổi kể từ khi ghi candidate (`evolve.base_changed`), đánh giá từ chối việc áp dụng (`evolve.apply_refused`), hoặc personal kit không chứa thứ mà lần áp dụng mong đợi (`evolve.apply_conflict`). |
+| `7` | Không chuẩn bị được bước ẩn thông tin nhạy cảm hoặc content gate (`evolve.redaction_failed`). |
+
+## Lệnh liên quan
+
+- [Thông tin đầy đủ của `ak skills self-improve review approve`](../cli/ak_skills_self-improve_review_approve)
+- [Áp dụng candidate trực tiếp](../cli/ak_skills_evolution_apply)
+- [Hoàn tác một lần áp dụng](../cli/ak_skills_evolution_rollback)
+- [Từ chối thay vào đó](./reject)
+- [Tổng quan review](../cli/ak_skills_self-improve_review)

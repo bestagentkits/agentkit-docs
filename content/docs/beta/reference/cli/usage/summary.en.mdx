@@ -1,0 +1,107 @@
+---
+title: ak usage summary
+description: Sum local Claude Code and Codex token usage for the current UTC day, week, or month, by runtime, provider, and model, with an estimated cost.
+---
+
+Use `ak usage summary` to see how many tokens your Claude Code and Codex
+sessions used in the current day, week, or month. The command is read-only and
+never opens a network socket.
+
+## Usage
+
+```bash
+ak usage summary [--period day|week|month] [--no-live] [flags]
+```
+
+```bash
+ak usage summary
+ak usage summary --period week
+ak usage summary --period month --json
+ak usage summary --no-live
+```
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--period <name>` | `day` | `day`, `week`, or `month`: the current UTC calendar period. |
+| `--no-live` | `false` | Do not parse session transcripts when the analytics index cannot answer. |
+
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+## What it counts
+
+The summary covers every Claude Code and Codex session that started in the
+current UTC calendar period, from the period start up to now. A week starts on
+Monday.
+
+- **Token lanes.** Input, output, cache write, and cache read, plus their
+  total. Token counts are exact.
+- **Breakdowns.** Totals are also grouped by runtime, by provider, and by
+  model.
+- **Reasoning.** Reasoning tokens are counted inside output. A separate
+  reasoning lane is always reported as unavailable, never as zero.
+- **Cost.** An estimate at the public API rates built into this release of
+  `ak`. When any model in the period has no known rate, the cost is
+  unavailable as a whole rather than partial.
+- **Provider windows.** Subscription windows are always unavailable here. Use
+  [`ak usage limits`](./limits) for rolling windows and opt-in
+  provider-reported quotas.
+
+## Where the numbers come from
+
+The local analytics index answers first. Its results include the time that
+index generation was published; sessions that started after it appear after
+the next [`ak analytics refresh`](../cli/ak_analytics_refresh).
+
+When the index is absent or not ready, the command parses the session
+transcripts for the period directly and reports `source live`. It prints a
+notice on stderr first, because a long history can take a while to scan. With
+`--no-live` it skips that scan and reports no usage data, with a hint to run
+`ak analytics enable` or `ak analytics refresh`, or to rerun without
+`--no-live`.
+
+The index is opened read-only under `~/.agentkit/analytics/`
+(`AGENTKIT_HOME` overrides the base directory). The command never writes,
+refreshes, or creates it.
+
+## Output
+
+The text output prints the period and its UTC bounds, the session count and
+source, a token table for all sessions and for each runtime, provider, and
+model, the cost, and a reminder that provider windows come from
+`ak usage limits`.
+
+JSON uses `kind=usage.summary` with these fields under `data`:
+
+```text
+schema_version, period, period_start, period_end, source, index_state,
+indexed_at, sessions, tokens, by_runtime[], by_provider[], by_model[], cost,
+usage_windows[], local_only
+tokens: input, output, cache_creation, cache_read, total, quality, reasoning
+by_*[]: key, runtime?, sessions, tokens
+cost: quality, amount_usd, basis?, as_of[], reason?
+```
+
+- `source` is `index`, `live`, or `unavailable`. `index_state` is `ready`,
+  `absent`, or `not_ready`. `indexed_at` is empty unless `source` is `index`.
+- `cost.quality` is `estimated` with an `amount_usd`, or `unavailable` with a
+  `reason` such as `no_data`, `pricing_unavailable`, `unpriced_runtime`, or
+  `unpriced_model`.
+- Each `usage_windows` entry is `unavailable` with the reason
+  `provider_window_not_local`.
+- `local_only` is always `true`.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Success, including a period with no usage data. |
+| `1` | Command failure, such as an index or transcript read error. |
+| `2` | Invalid flags or arguments, such as an unknown `--period`. |
+
+## Related commands
+
+- [Complete `ak usage summary` command facts](../cli/ak_usage_summary)
+- [Show usage-limit windows per provider](./limits)
+- [Refresh the analytics index](../cli/ak_analytics_refresh)
