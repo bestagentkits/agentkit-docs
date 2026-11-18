@@ -1,0 +1,120 @@
+---
+title: ak skills self-improve
+description: Opt in to recording redacted skill problems at Claude Code and Codex session end, then review the screened skills with ak-dogfood.
+---
+
+Use `ak skills self-improve` to let AgentKit notice skills that keep running
+into problems and suggest an `ak-dogfood` review. It is off by default. While
+it is on, nothing about a skill changes until you run the suggested review or
+approve a candidate yourself. Running the group command itself prints help.
+
+## Usage
+
+```bash
+ak skills self-improve <command>
+```
+
+```bash
+ak skills self-improve enable
+ak skills self-improve status --json
+ak skills self-improve review list
+ak skills self-improve disable
+```
+
+## Consent
+
+Only the user config can turn the feature on:
+[`enable`](./enable) writes `skill_self_improve.enabled: true` to
+`config.yaml` in your AgentKit home, and [`disable`](./disable) writes `false`.
+
+A project can only turn it off. Set this in the project's
+`.agentkit/config.yaml`; the nearest one at or above the working directory
+applies:
+
+```yaml
+skill_self_improve:
+  enabled: false
+```
+
+A project value of `true`, an unknown key, or a value that is not a boolean is
+an invalid policy: recording stays off, and `status` exits `1` with
+`self_improve.policy_invalid`. The same applies to an invalid user section.
+
+## What is recorded
+
+Recording and the session-start line run only on Claude Code and Codex, through
+the session-end and session-start Hooks of the Engineer and Marketing Kits.
+Other runtimes record nothing and show no line.
+
+At session end, the Hook records one local event for each skill the session
+invoked. An event holds:
+
+- opaque session and project refs, never a path;
+- the skill id and the digest of the skill revision that ran;
+- a signal: a denied tool call, a user interrupt, a task failure, or an
+  explicit `ak-dogfood` request (strong), a tool error or a retry (weak), or a
+  clean observation;
+- up to eight pointers into the transcript by line number and tool name.
+
+No transcript text, tool output, or secret is stored, and no model runs. Events
+live in `AGENTKIT_HOME/state/self-improve/events.jsonl` for 30 days, at most
+5000 of them. Turning the feature off keeps them.
+
+## Screening and the session-start line
+
+A skill is screened as worth a review when its events from the last 7 days,
+for the skill's current digest, hold one strong signal or the same weak
+problem in at least 2 sessions. Events recorded for an older digest are
+ignored. [`status`](./status) lists those skills, each with the exact
+`/ak-dogfood --skill <name> --evidence <ids>` command to review them.
+
+While the feature is on, the next Claude Code or Codex session start shows one
+line that begins `[agentkit self-improve]` and names up to three newly
+screened skills with their `/ak-dogfood` command. It is a suggestion to offer
+you, not an instruction. Each finding is shown once; a skill is shown again
+only when its digest or its screened problems change. A
+[`review`](./review/index) decision also silences it.
+
+## Subcommands
+
+| Command | Outcome | Disk effect |
+| --- | --- | --- |
+| [`ak skills self-improve status`](./status) | Show the effective consent and the screened skills. | Read-only. |
+| [`ak skills self-improve history`](./history) | List recorded events, newest first. | Read-only. |
+| [`ak skills self-improve enable`](./enable) | Turn recording on in the user config. | Backs up and rewrites the user `config.yaml`. |
+| [`ak skills self-improve disable`](./disable) | Turn recording off in the user config. | Backs up and rewrites the user `config.yaml`. |
+| [`ak skills self-improve review`](./review/index) | Review screened skills and decide on their improvement candidates. | `list` and `inspect` read; decisions write `review.json`. |
+
+## Output
+
+JSON success envelopes use these kinds:
+
+```text
+skills.self_improve.status | skills.self_improve.history
+skills.self_improve.enable | skills.self_improve.disable
+skills.self_improve.review.list | skills.self_improve.review.inspect
+skills.self_improve.review.rejected | skills.self_improve.review.deferred
+skills.self_improve.review.proposed
+```
+
+Each subcommand page lists its fields.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Success, including a disabled feature or an empty store. |
+| `1` | The AgentKit home could not be resolved (`self_improve.home_unresolved`), the event store could not be read or written (`self_improve.store_failed`), the config could not be written (`self_improve.config_write_failed`), or a consent policy is invalid (`self_improve.policy_invalid`). |
+| `2` | Invalid flags or arguments (`self_improve.invalid_input`). |
+| `4` | Another writer held the event store lock (`self_improve.store_busy`). |
+
+The `review` subcommands add `5` for a skill or candidate that does not match.
+
+## Related commands
+
+- [Complete `ak skills self-improve` command facts](../cli/ak_skills_self-improve)
+- [Show the screened skills](./status)
+- [Review screened skills](./review/index)
+- [Turn session evidence into a candidate](../cli/ak_skills_improve)
+- [The `ak-dogfood` Skill](../../kits/engineer/skills/dogfood)
+- [Engineer Kit Hooks](../../kits/engineer/hooks/index)

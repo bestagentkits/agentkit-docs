@@ -1,0 +1,84 @@
+---
+title: ak skills self-improve review list
+description: List every screened skill with its latest decision, its recorded improvement candidates and their evaluation outcome, and the next commands.
+---
+
+Use `ak skills self-improve review list` to see every skill whose events
+crossed the review threshold, whatever the current consent. The command is
+read-only.
+
+## Usage
+
+```bash
+ak skills self-improve review list [flags]
+```
+
+```bash
+ak skills self-improve review list
+ak skills self-improve review list --json
+```
+
+The command takes no arguments and has no flags of its own. Shared flags are
+described in [CLI conventions](../cli-conventions).
+
+## What it does
+
+For each screened skill, the command shows its latest decision, the candidates
+[`ak skills improve`](../cli/ak_skills_improve) recorded for it, each
+candidate's evaluation outcome (`not_run` until evaluated), and the next
+commands:
+
+- with no candidate, the `/ak-dogfood` review command;
+- for each candidate, `ak skills evolution evaluate <id>` while it is not
+  evaluated, then `ak skills self-improve review approve <id>`;
+- `ak skills self-improve review reject <skill>` and
+  `ak skills self-improve review defer <skill>`.
+
+When the candidate store cannot be read, the command warns and lists the
+screened skills only. A candidate that fails verification is left out with a
+`store.corrupt` warning.
+
+The command reads `AGENTKIT_HOME/state/self-improve/events.jsonl`,
+`review.json`, and the candidate records under
+`AGENTKIT_HOME/state/skill-evolve/candidates/`. It writes nothing and runs no
+model, script, or network call.
+
+## Output
+
+Each text item shows the skill, its signal strength, its number of reasons and
+candidates, and its decision (`undecided` when none), then one line per
+candidate and one `next:` line per command.
+
+JSON uses `kind=skills.self_improve.review.list` with these fields under
+`data`:
+
+```text
+items[]: skill, digest, strength, reasons[], event_ids[], suggested_command,
+         decision, nudged, evolution_candidates[], next_steps[]
+decision: decision, digest, decided_at, until?, candidate_id?
+evolution_candidates[]: candidate_id, identity, owner, proposal_only,
+                        eval_outcome, apply_state
+```
+
+- `decision` is `null` until you decide. Its `decision` is `approved`,
+  `proposed`, `rejected`, or `deferred`.
+- `nudged` is `true` when the session-start line already showed the current
+  finding and no decision silences it.
+- `owner` is `user` for a skill of your own personal kit and `agentkit`
+  otherwise; `proposal_only` is `true` for `agentkit`.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Success, including an empty list. |
+| `1` | The AgentKit home could not be resolved (`self_improve.home_unresolved`), or the event store could not be read (`self_improve.store_failed`). |
+| `2` | Invalid flags or arguments (`self_improve.invalid_input`). |
+| `4` | Another writer held the event store lock (`self_improve.store_busy`). |
+
+## Related commands
+
+- [Complete `ak skills self-improve review list` command facts](../cli/ak_skills_self-improve_review_list)
+- [Inspect one screened skill](./inspect)
+- [Approve a candidate](./approve)
+- [Review overview](../cli/ak_skills_self-improve_review)

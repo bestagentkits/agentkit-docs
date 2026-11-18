@@ -1,0 +1,100 @@
+---
+title: ak skills self-improve review approve
+description: Preview a recorded improvement candidate, then apply it to your personal kit or record it as a proposal for an AgentKit skill.
+---
+
+Use `ak skills self-improve review approve` to act on a candidate that
+[`ak skills improve`](../cli/ak_skills_improve) recorded. Without `--yes` it
+only previews. What `--yes` does depends on who owns the skill.
+
+## Usage
+
+```bash
+ak skills self-improve review approve <candidateId> [--yes] [--plan <token>] [--into <name>] [--kits-dir <dir>] [--dry-run] [flags]
+```
+
+```bash
+ak skills self-improve review approve 3f2a91c0
+ak skills self-improve review approve 3f2a91c0 --yes --plan sha256:... --json
+```
+
+Exactly one candidate reference is required: the candidate ID, or the short
+ID that [`review list`](./list) prints.
+
+## Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--yes` | `false` | Apply or record instead of previewing. |
+| `--plan <token>` | Empty | Plan token of the reviewed preview. Required when the change needs review. |
+| `--into <name>` | The kit already overlaying the skill, else `mine` | Personal kit to apply into. |
+| `--kits-dir <dir>` | `$AGENTKIT_KITS_DIR` or `./kits` | Foundation kits directory. |
+| `--dry-run` | `false` | Preview only and write nothing; the default without `--yes`. |
+
+Shared flags are described in [CLI conventions](../cli-conventions).
+
+## A skill of your own personal kit
+
+For a skill of your own personal kit (`@local/`), the command behaves exactly
+like [`ak skills evolution apply`](../cli/ak_skills_evolution_apply):
+
+- Without `--yes`, or with `--dry-run`, it previews the re-run evaluation, the
+  diff, and the approval the apply still needs, and writes nothing.
+- With `--yes`, it applies the candidate: a rollback record first, a snapshot,
+  and a journaled personal kit write. Applying needs the skill store on.
+- A change that needs review also needs `--plan <token>` from the preview you
+  reviewed.
+- A `regressed` or `blocked` verdict refuses the apply. `not_run` and
+  `inconclusive` are ordinary outcomes and need the plan token.
+
+After a successful apply, the command records an `approved` decision in
+`review.json`. If that write fails, the apply stands and a warning says so.
+Undo the apply with
+[`ak skills evolution rollback`](../cli/ak_skills_evolution_rollback).
+
+## An AgentKit skill
+
+Every other skill, including an AgentKit skill, is proposal-only. The command
+never writes a kit file for it:
+
+- Without `--yes`, it says it would record a proposal, and points you to
+  `ak skills evolution show <id>` to review the diff and propose it upstream as
+  a pull request if you want it.
+- With `--yes`, it records a `proposed` decision in `review.json`, which
+  silences the session-start line for the skill's current digest.
+
+## Output
+
+For a personal kit skill, the text and JSON output are those of
+`ak skills evolution apply`: JSON uses `kind=skills.evolution.apply`.
+
+For a proposal-only skill, the text output says `would record proposed` or
+`recorded proposed` for the skill, with a note. JSON uses
+`kind=skills.self_improve.review.proposed` with these fields under `data`:
+
+```text
+skill, decision, recorded, evolution_candidate, note
+decision: decision, digest, decided_at, candidate_id
+```
+
+`recorded` is `false` for a preview.
+
+## Exit behavior
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Success, including a preview. |
+| `1` | The candidate store, the personal kit, or the skill store could not be read or written, or a record failed verification (`store.corrupt`). |
+| `2` | Invalid flags or arguments, or an apply without the approval it needs (`evolve.approval_required`). |
+| `4` | Another AgentKit operation holds the kit lifecycle lock (`evolve.store_busy`). |
+| `5` | No recorded candidate matches, or the skill's base cannot be resolved (`evolve.base_unresolved`). |
+| `6` | The base moved since the candidate was recorded (`evolve.base_changed`), the evaluation refuses the apply (`evolve.apply_refused`), or the personal kit does not hold what the apply expects (`evolve.apply_conflict`). |
+| `7` | Redaction or the content gate could not be prepared (`evolve.redaction_failed`). |
+
+## Related commands
+
+- [Complete `ak skills self-improve review approve` command facts](../cli/ak_skills_self-improve_review_approve)
+- [Apply a candidate directly](../cli/ak_skills_evolution_apply)
+- [Undo an apply](../cli/ak_skills_evolution_rollback)
+- [Reject instead](./reject)
+- [Review overview](../cli/ak_skills_self-improve_review)

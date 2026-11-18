@@ -156,13 +156,15 @@ pipeline code:
    Long videos render in parts, and short candidates are picked from the
    transcript while planning.
 4. **Captions, timeline, and mix.** Edited Vietnamese captions per segment,
-   the same TIMING contract as the voice-over mode, and a ducked music bed
-   normalized to −14 LUFS.
+   the same TIMING contract as the voice-over mode, a ducked music bed
+   normalized to −14 LUFS, and optional sound-effect cues from `data/cues.json`
+   mixed into their own SFX stem.
 5. **Build, render, and finish.** Scene builders fill one fragment file per
    scene and fast-check small ranges; each part renders, and `finish.py`
    composites the webcam picture-in-picture with the untouched mix.
 6. **Shorts, after you approve the master.** Each short is a 9:16 scene-range
-   clip with its own title, a 1.2-second music tail, and a fade.
+   clip with its own title, a 1.2-second music tail, and a fade. The short's
+   tail remix includes the SFX stem, so the effects survive the cut.
 
 Transcription sends your recording's audio to ElevenLabs through multix, so it
 follows the same spend and approval boundary as voice generation.
@@ -301,7 +303,10 @@ involved; AI text-to-video or image-to-video footage still belongs to
    music tail. Ratio overrides are written while the master is built, checked
    with `audit-ratio-scope.py` so the master never regresses, and measured
    against the safe areas with `check-bounds.mjs`. A quick ffmpeg fit or crop
-   is a faster, lower-fidelity alternative for previews.
+   is a faster, lower-fidelity alternative for previews. When the master has
+   no 9:16 overrides but the shorts are for publishing, a designed fit places
+   the 16:9 picture at full width between a title band and large karaoke
+   captions; the picture still shows text at 56% of its size.
 
 ## Keep generation, spend, and publishing gated
 
@@ -354,6 +359,10 @@ The Skill reports measured numbers, not impressions. It is done only when:
 - `build-timeline` printed no clip, overlap, or missing-word warnings.
 - Each requested 1:1 or 9:16 edition passes the same lint, check, ffprobe,
   loudness, and blackdetect checks as the master.
+- The final render of every edition and language was reviewed as a contact
+  sheet (`scripts/contact-sheet.py`) before it is copied or delivered, because
+  the probes cannot see clipped glyphs, orphan captions, or labels outside the
+  safe area.
 - On-screen facts trace to the sources collected at the start.
 - No two adjacent scenes share a camera move, and no framing holds past about
   8 seconds.
@@ -373,6 +382,8 @@ The Skill reports measured numbers, not impressions. It is done only when:
 | A 9:16 short shows text outside the frame or an unfinished ending | Run `check-bounds.mjs` on the short's build, fix the scene's `html[data-ratio="9x16"]` override in the master, audit it with `audit-ratio-scope.py`, and rebuild the short. |
 | The Codex image route fails (not signed in or a driver error) | The Skill falls back to the Gemini image route for the whole video and notes it in the plan. Sign in to `codex` before the next video if you want the OpenAI route. |
 | Only visuals changed | Re-run `lint`, `check`, `render`, and the remux; audio does not need regeneration. |
+| `validate.py` times out in `check` on a full build | Pass a longer page-load timeout in milliseconds, for example `validate.py builds/full --timeout 90000`; the value applies to `check` only. |
+| Vietnamese marks or tall glyphs are clipped on revealed or gradient text | Open the vertical `clipPath: inset(...)` past the text box or give the line a taller `line-height` with padding; pad a gradient-text (`background-clip: text`) element and cancel the padding with an equal negative margin. Then look at a frame of the revealed text. |
 | A 1:1 or 9:16 edition still shows 1920/1080-sized layout | Read `reframe.py`'s warnings for the affected lines, add the missing `data-ratio` override, and regenerate the edition; never hand-edit the generated edition directory. |
 
 Continue with the [Marketing Kit overview](../../marketing),

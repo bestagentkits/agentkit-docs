@@ -9,6 +9,7 @@ import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 Dùng `ak-test` để biến một thay đổi hoặc câu hỏi quality thành bằng chứng
 validation mới. Skill có thể chạy unit, integration, end-to-end, build,
 coverage và browser-based UI check. Skill cũng có thể tạo test suite bao phủ,
+cập nhật test sau một thay đổi behavior hoặc contract đã được chấp nhận,
 tối ưu suite cùng chi phí CI hoặc audit suite để tìm test yếu. Audit chỉ báo cáo
 trừ khi việc sửa suite được cấp quyền riêng. Các rule test-principles của Skill
 chi phối scope, layer, environment và cách thực thi cho mọi operation; hãy nạp
@@ -63,8 +64,9 @@ Trước khi bắt đầu:
 
 Nếu bạn cung cấp scope, Skill tiếp tục với code validation liên quan. Khi không
 có argument, Skill hỏi operation cần chạy. Dùng `ui <url>` để chọn trực tiếp
-browser workflow hoặc bắt đầu bằng `create`, `optimize` hay `audit` để làm việc
-trên chính test suite. Mọi thay đổi suite, đề xuất optimize hoặc audit, hay
+browser workflow hoặc bắt đầu bằng `create`, `update`, `optimize` hay `audit` để
+làm việc trên chính test suite. `run` và `exec` là tên tường minh của operation
+kiểm thử code mặc định, còn `review` là alias của `audit`. Mọi thay đổi suite, đề xuất optimize hoặc audit, hay
 QA report đều phải nhất quán với các rule test-principles.
 
 <Tabs items={['Claude Code', 'Cursor', 'Codex']}>
@@ -106,13 +108,14 @@ $ak-test ui http://localhost:3000/settings
 | Operation | Nội dung bao phủ | Input hữu ích |
 | --- | --- | --- |
 | Test principles | Scope, layer, environment, chạy tuần tự hay song song, test đắt và triage failure | Chọn những gì cần test, một test chậm hoặc song song có đáng giữ, triage failure, hoặc đối chiếu test với specification đã đổi |
-| Kiểm thử code | Type hoặc syntax check, unit, integration, end-to-end, coverage và production build | Behavior đã đổi, module bị ảnh hưởng, command bắt buộc, threshold project và giới hạn thời gian |
+| Kiểm thử code (mặc định, `run`, `exec`) | Type hoặc syntax check, unit, integration, end-to-end, coverage và production build | Behavior đã đổi, module bị ảnh hưởng, command bắt buộc, threshold project và giới hạn thời gian |
 | `ui <url>` | Page discovery, screenshot, responsive behavior, accessibility, form, console error và user flow đã chọn | URL, state mong đợi, viewport, cách auth, ranh giới data safety và browser availability |
 | `create [scope]` | Scout code cùng docs, lập coverage matrix, rồi tạo hoặc mở rộng test suite | Feature hoặc workflow cần bao phủ, framework hiện có, critical path và threshold project |
+| `update [scope]` | Đối chiếu test hiện có với thay đổi behavior hoặc contract đã được chấp nhận, chỉ đổi assertion ở chỗ contract được chấp nhận đã thay đổi | Thay đổi cùng nguồn thẩm quyền (issue, plan, spec, schema, API contract hoặc quyết định của bạn), và các behavior phải giữ nguyên |
 | `optimize [scope]` | Phân tích CI/CD, git history, code cùng docs, rồi giảm thời gian và chi phí test mà không mất coverage | Job chậm, bằng chứng CI timing, group quan trọng về safety và workflow change được phép |
-| `audit [scope]` | Tìm test deceptive, disabled, unfinished, ineffective, redundant, outdated hoặc unsafe và báo cáo finding đã xếp hạng kèm đề xuất sửa | Scope suite hoặc CI, lo ngại về độ tin cậy, skip đã biết và path nhạy cảm về security |
+| `audit [scope]` (alias `review`) | Tìm test deceptive, disabled, unfinished, ineffective, redundant, outdated hoặc unsafe và báo cáo finding đã xếp hạng kèm đề xuất sửa | Scope suite hoặc CI, lo ngại về độ tin cậy, skip đã biết và path nhạy cảm về security |
 
-Với `create`, `optimize` và `audit`, thêm `--advice` để dùng checkpoint tư vấn
+Với `create`, `update`, `optimize` và `audit`, thêm `--advice` để dùng checkpoint tư vấn
 của `kongming` hoặc `--interview` để duyệt từng proposed change group trước khi
 edit. `--ultra` chạy năm analysis candidate read-only: `create` và `optimize`
 chọn nguyên vẹn một design thắng cuộc, còn `audit` trả về union finding đã được
@@ -122,11 +125,16 @@ dispatch song song read-only hoặc sau retry vẫn có dưới năm kết quả
 chạy fail closed. Khi không có `--interview`, `create` và `optimize` áp dụng trực
 tiếp thay đổi trong scope và báo cáo đầy đủ change list; bỏ flag không cấp quyền
 sửa audit hay retirement test.
+Với `audit`, `review` hoặc `optimize`, `--report` là read-only: Skill ghi
+finding hoặc kế hoạch optimize đề xuất thành report và không thay đổi test, CI
+workflow hay cấu hình nào.
 
 ```text
 /ak-test create "Cover the account recovery workflow" --interview
+/ak-test update "Align tests with the accepted session timeout change"
 /ak-test optimize "Reduce pull-request CI time" --advice
 /ak-test audit "Check skipped and ineffective authorization tests" --ultra
+/ak-test optimize "Plan pull-request CI savings" --report
 ```
 
 Command và threshold do project định nghĩa được ưu tiên. Khi project không định
@@ -146,6 +154,16 @@ mutation kill được lấy mẫu hay line coverage không đổi không đủ 
 Review toàn bộ suite còn lại, giữ test bắt buộc cùng mandatory gate và có quyền
 sửa suite cho retirement. Sau thay đổi được cấp quyền, chạy lại contract bị ảnh
 hưởng và cùng các fault lấy mẫu hợp lệ trên suite còn lại, rồi chạy gate bắt buộc.
+
+`update` đối chiếu test hiện có với một thay đổi behavior hoặc contract đã được
+chấp nhận. Skill nêu thay đổi cùng nguồn thẩm quyền; riêng một diff không phải
+nguồn thẩm quyền cho expectation mới. Skill chạy các test bị ảnh hưởng trước khi
+edit và phân loại từng failure: assertion chỉ đổi khi contract mới yêu cầu, test
+làm lộ lỗi implementation được giữ nguyên còn lỗi được chuyển cho `ak-debug`
+hoặc `ak-fix`, và vấn đề environment không làm thay đổi assertion. Snapshot hoặc
+golden file chỉ được tạo lại sau khi đã đọc diff của chúng. Mỗi test được cập
+nhật phải fail với behavior cũ hoặc một mutation có chủ đích. `update` không bao
+giờ xóa, skip hay nới lỏng test đang fail để có lần chạy xanh.
 
 ## Dùng impact selection và các mode semantic tùy chọn
 
@@ -220,6 +238,12 @@ Operation mặc định và `ui` theo validation flow này:
 - Test command có thể tạo coverage file, screenshot, build output, temporary
   data hoặc browser state. Hãy nêu artifact location, giới hạn execution/retry và
   yêu cầu cleanup được phép; chỉ dọn resource do lần chạy này sở hữu.
+- Server, watcher, browser, container và temporary root mà lần chạy khởi động
+  được ghi lại và dừng khi thành công, thất bại, hết thời gian hoặc bị hủy. Skill
+  tái dùng process phù hợp hoặc chỉ dừng process do session này khởi động, giữ
+  port tất định thay vì chuyển sang port mới khi gặp "address in use", xác minh
+  cleanup, và không bao giờ dừng process của session khác hay của người dùng khi
+  chưa được xác nhận. Command hết thời gian là chưa được xác minh, không phải pass.
 - Mutation proof có chọn lọc, không phải yêu cầu cho execution thường lệ hay CI.
   Chỉ fault injection có giới hạn trong disposable copy do lần chạy sở hữu,
   không trên active worktree. Ghi source identity, restore copy chính xác cả khi

@@ -1,6 +1,6 @@
 ---
 title: ak run
-description: Resolve local Kit skill và stream qua Claude Code, Codex, Cursor, DeepSeek Harness, Grok Build hoặc Oh My Pi với hành vi stdin, timeout, output và dependency rõ ràng.
+description: Resolve local Kit skill và stream qua Claude Code, Codex, Cursor, DeepSeek Harness, Grok Build, Oh My Pi hoặc OpenCode với hành vi stdin, timeout, output và dependency rõ ràng.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
@@ -23,7 +23,7 @@ chọn skill export `ak-scout`.
 
 | Cờ | Mặc định | Mô tả |
 | --- | --- | --- |
-| `--target <adapter>` | `claude-code` | Chọn `claude-code`, `codex`, `cursor`, `dsh`, `grok` hoặc `omp`. |
+| `--target <adapter>` | `claude-code` | Chọn `claude-code`, `codex`, `cursor`, `dsh`, `grok`, `omp` hoặc `opencode`. |
 | `--kits-dir <dir>` | `AGENTKIT_KITS_DIR` hoặc `./kits` | Chọn thư mục Kit source cục bộ. |
 | `--timeout <duration>` | `0s` | Đặt deadline cho invocation; zero tắt command timeout. |
 
@@ -41,6 +41,10 @@ ak run engineer/scout --target dsh
 ak run engineer/scout --target omp
 ```
 
+`--target opencode` dispatch qua adapter OpenCode, một spike chưa có chứng nhận
+runtime. Chưa có gói Kit OpenCode nào được phát hành, nên projection Kit của nó
+chỉ cài từ Kit source cục bộ. Xem [Runtime adapter](../../concepts/runtime-adapters).
+
 ## Backend và credential
 
 | Target | Backend invocation | Gate trước dispatch |
@@ -51,6 +55,7 @@ ak run engineer/scout --target omp
 | `dsh` | `AGENTKIT_DSH_BIN` hoặc `dsh` trên `PATH`. | DeepSeek Harness quản lý model, credential và quyền thực thi. |
 | `grok` | `AGENTKIT_GROK_BIN` hoặc `grok` trên `PATH`; dùng `--prompt-file <temporary-file> --output-format streaming-json`. | Bỏ provider gate; Grok quản lý auth, model, trust, permission, sandbox và `config.toml`. |
 | `omp` | `AGENTKIT_OMP_BIN` hoặc `omp` trên `PATH`; chạy `omp -p --mode json --no-session --cwd <cwd> @<prompt-file>`. | Bỏ provider gate; Oh My Pi sở hữu backend và credential đã cấu hình. |
+| `opencode` | `AGENTKIT_OPENCODE_BIN` hoặc `opencode` trên `PATH`; chạy `opencode run --format json` với prompt trong file đính kèm. | Bỏ provider gate; OpenCode sở hữu credential của provider (`opencode auth login`). |
 
 <Callout type="warning">
   `ak run --target grok` dispatch qua adapter Grok native và để Grok sở hữu
@@ -89,8 +94,9 @@ Lệnh không redaction secret trong skill text, argument, backend output hay
 error. Tránh truyền credential làm argument. JSON mode escape child bytes thành
 event string; escaping không phải redaction.
 
-Với OMP, AgentKit ghi prompt đã tạo vào file tạm mode `0600`, chỉ truyền tham
-chiếu `@<path>` của file cho process rồi xóa file khi process kết thúc. Cơ chế
+Với OMP và OpenCode, AgentKit ghi prompt đã tạo vào file tạm mode `0600`, chỉ
+truyền tham chiếu tới file cho process (`@<path>` với OMP, `--file <path>` với
+OpenCode) rồi xóa file khi process kết thúc. Cơ chế
 này giữ nội dung prompt khỏi danh sách argument của process; nó không thay đổi
 ranh giới truyền tới provider hoặc redaction ở trên.
 

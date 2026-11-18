@@ -70,6 +70,8 @@ At the next Desktop launch, AgentKit rereads the pending transaction, verifies
 the staged sizes and SHA-256 values again, and replaces the CLI and Desktop as
 one transaction before opening the window. Temporary backups are removed after
 a successful commit. There is no retained user-facing rollback copy afterward.
+On macOS and Linux, that launch then restarts into the new version; if the
+restart fails, the update takes effect on the next launch.
 
 You can also drive the paired flow from the CLI. On Windows this stages the
 artifacts and launches the handoff helper instead of replacing Desktop in-process:
@@ -81,6 +83,37 @@ ak self-update --include-desktop --yes
 Restart Desktop to complete the staged transaction. See the
 [`ak self-update` reference](../reference/cli/self-update) for manager
 ownership, dry-run, output, and exit behavior.
+
+## When a Kit needs a newer AgentKit
+
+A Kit release can require a newer AgentKit than the running Desktop. When you
+install a Kit from the Kits page or the onboarding Kit step, or apply a Kit
+update, Desktop reads the AgentKit version that each selected Kit requires for
+every selected runtime before it writes anything. If the app is too old, a
+notice titled **This kit needs a newer AgentKit** names the required and
+current versions, and Desktop recovers in four steps:
+
+1. **Preparing update**: Desktop saves the Kit action, then downloads and
+   verifies the matching CLI and Desktop from your release channel through the
+   signed flow above. It never switches channels or updates the CLI alone to
+   satisfy a Kit. Only a download that failed on the network is retried, at
+   most twice.
+2. **Restarting when safe**: Desktop waits until no task is running and no
+   page has unsaved changes. On Windows it then restarts by itself, and
+   **Restart now** restarts it at once. On macOS and Linux, quit and reopen
+   AgentKit; that launch completes the staged update. If the notice says the
+   update has not finished yet, quit and reopen AgentKit once more.
+3. **Resuming kit action**: on the next launch, Desktop checks the requirement
+   again and runs the saved action once. A Kit update resumes as a review:
+   open **Kits → Update** to review and apply it.
+4. **Completed**: AgentKit is updated and the Kit action finished.
+
+A saved action that has not resumed within 24 hours is dropped, and your
+installed Kits stay as they were. The setting **Update AgentKit automatically
+when a kit needs it**, in **Settings → App → Updates**, is on by default and
+independent of automatic update checks. Turn it off to update AgentKit yourself
+before you retry the Kit action. When recovery cannot run, see
+[An update will not complete](./troubleshooting#an-update-will-not-complete).
 
 ## After a rollback to v2
 
