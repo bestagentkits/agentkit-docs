@@ -40,8 +40,14 @@ tool_timeout_sec = 600
 
 It also sets `features.hooks = true`. A drifted AgentKit stanza is replaced
 with these values. Other MCP servers and unmodeled Codex config values are
-preserved by value, but a changed file is re-encoded into deterministic TOML,
-so ordering, whitespace, and comments are not a preservation contract.
+kept. Only the lines that hold the AgentKit stanza and `features.hooks`
+change; user comments, the `# --- ak-managed-... ---` kit registry fences,
+ordering, and whitespace elsewhere stay as they were, and an inline comment on
+a changed line is kept. When the existing layout cannot be edited line by line
+(for example the stanza is an inline table, or `[features]` is defined through
+a dotted key such as `features.web_search = true`), the file is re-encoded into
+deterministic TOML with every value kept but without comments, and a warning
+says so.
 
 Registration waits up to five seconds for a sibling `config.toml.lock`. If
 locking is unavailable on the platform, it continues with a warning; other
@@ -55,15 +61,16 @@ an identical registration returns `changed=false` and preserves the file mtime.
 
 <Callout type="warning">
   The command does not create a backup or rollback record. Copy `config.toml`
-  before registration when comments or exact formatting matter. Running
+  before registration if it uses a layout that forces a re-encode and its
+  comments matter. Running
   `unregister` later removes only the MCP stanza; it does not restore the prior
   file or reset `features.hooks`.
 </Callout>
 
 ## Output and streams
 
-Human success is one line on stdout. Lock-degradation warnings are written to
-stderr.
+Human success is one line on stdout. Lock-degradation and re-encode warnings
+are written to stderr.
 
 `--json` success writes the shared envelope with kind
 `codex_agent_runtime.register` to stdout. Its `data` object has this shape:
