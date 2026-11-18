@@ -11,10 +11,13 @@ work state và direct message. Skill giữ decomposition, ownership, integration
 verification, shutdown cùng cleanup thuộc trách nhiệm lead.
 
 <Callout type="warn" title="ak-team cần live team lifecycle">
-  Claude Code và Cursor gọi Skill này bằng `/ak-team`; Codex gọi bằng `$ak-team`.
+  Claude Code và Cursor gọi Skill này bằng `/ak-team`. Codex không nhận Skill
+  này: projection Codex bỏ `ak-team` vì Codex không có team lifecycle đầy đủ.
   Việc thực thi cần live team creation, shared work, messaging, waiting, shutdown
   và cleanup. Nếu thiếu bất kỳ capability bắt buộc nào, workflow phải hard-stop
-  thay vì âm thầm dùng ordinary subagent thay thế.
+  thay vì âm thầm dùng ordinary subagent thay thế. Ngoại lệ duy nhất là session
+  route herdr-core (`hc`) đã cài, được mô tả trong
+  [Biết các giới hạn hiện tại](#biết-các-giới-hạn-hiện-tại).
 </Callout>
 
 ## Chọn ak-team cho live collaboration
@@ -54,14 +57,14 @@ Trước khi bắt đầu:
 | --- | --- | --- |
 | Claude Code | `/ak-team ...` | Skill chỉ dùng live Agent Teams surface khi session hiện tại cung cấp lifecycle cùng control capability cần thiết. |
 | Cursor | `/ak-team ...` | Slash invocation theo cách gọi Engineer Skill do người dùng xác minh. Skill discovery không chứng minh live team surface; workflow abort nếu thiếu capability bắt buộc. |
-| Codex | `$ak-team ...` | Skill discovery không chứng minh live team surface; workflow abort nếu thiếu bất kỳ lifecycle hoặc control capability bắt buộc nào. |
+| Codex | Không được project | Codex không có Agent Teams lifecycle đầy đủ và ordinary subagent không phải fallback an toàn, nên `ak-team` không bao giờ được cài cho Codex. Bản sao do lần cài trước để lại trong thư mục Skill của Codex sẽ bị gỡ khi các file khớp với nội dung AgentKit đã cài hoặc phát hành; bản sao có nội dung khác được giữ lại kèm cảnh báo. |
 
 Capability name, parameter, model routing, limit, permission, isolation và
 cleanup behavior hiện tại phải được khám phá trong lần chạy.
 
 ## Chạy Skill
 
-<Tabs items={['Claude Code', 'Cursor', 'Codex']}>
+<Tabs items={['Claude Code', 'Cursor']}>
   <Tab value="Claude Code">
 
 ```text
@@ -73,13 +76,6 @@ cleanup behavior hiện tại phải được khám phá trong lần chạy.
 
 ```text
 /ak-team review "Review the checkout change for security, accessibility, and failure-path coverage; return evidence only" --reviewers 3 --delegate
-```
-
-  </Tab>
-  <Tab value="Codex">
-
-```text
-$ak-team review "Review the checkout change for security, accessibility, and failure-path coverage; return evidence only" --reviewers 3 --delegate
 ```
 
   </Tab>
@@ -121,7 +117,8 @@ criteria cần cho scope của mình.
 1. **Lead phân rã request.** Lead tạo work thực sự độc lập với output rõ và
    ownership không chồng lấn.
 2. **Lead khám phá và tạo team.** Thiếu lifecycle capability sẽ dừng workflow;
-   không kích hoạt hidden substitute.
+   không kích hoạt hidden substitute. Khi Agent Teams không khả dụng, một route
+   herdr-core (`hc`) đủ điều kiện có thể host các teammate thay thế.
 3. **Lead đăng ký shared work.** Mỗi item có acceptance criteria, dependency,
    owner và durable destination.
 4. **Lead spawn teammate.** Scope độc lập chạy concurrent. Concurrent writer
@@ -176,14 +173,14 @@ tra và integrated verification mới thiết lập completion.
 
 | Triệu chứng | Bước tiếp theo an toàn |
 | --- | --- |
-| Team creation không khả dụng | Báo live capability error và chọn workflow khác rõ ràng; không giả ordinary subagent là cùng team. |
+| Team creation không khả dụng | Báo live capability error và chọn workflow khác rõ ràng; không giả ordinary subagent là cùng team. Nếu bạn dùng herdr-core (`hc`), kiểm tra route của nó có đủ điều kiện không; route này có thể host teammate khi Agent Teams không khả dụng. |
 | Teammate có vẻ idle | Kiểm tra shared work cùng message, liên hệ owner và chờ bounded response. Idle không tự là failure. |
 | Hai writer chồng lấn | Dừng cả hai scope, giải quyết ownership và giữ cả hai worktree trước integration. |
 | Plan bị reject | Gửi revision feedback cụ thể và giữ teammate read-only đến khi approval thành công. |
 | Teammate fail | Giữ bounded handoff, shutdown rồi giao cùng scope cho replacement mà không mở rộng ownership. |
 | Integrated test fail | Giữ team result chưa hoàn tất và giao diagnosis hoặc correction trước shutdown. |
 | Cleanup fail | Báo observed error và dùng runtime recovery guidance hiện tại; không xóa state directory phỏng đoán. |
-| Codex không nhận diện Skill | Xác nhận Engineer Skill đã được chọn, kiểm tra `.agents/skills/ak-team/` trong đúng scope, mở lại Codex rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
+| Codex không liệt kê Skill | Đây là hành vi đúng: `ak-team` không được project cho Codex. Chạy team từ Claude Code hoặc Cursor, hoặc dùng `ak-orchestrate` cho headless job có ghi nhận. |
 | Runtime khác không nhận diện Skill | Xác nhận target cùng scope, mở lại session, rồi làm theo [Runtime không tìm thấy Skill hoặc Agent](../../../troubleshooting/runtime-cannot-find-skill-or-agent). |
 
 So sánh `ak-orchestrate` cho captured headless job, hoặc tiếp tục với
@@ -192,9 +189,17 @@ So sánh `ak-orchestrate` cho captured headless job, hoặc tiếp tục với
 
 ## Biết các giới hạn hiện tại
 
-- Skill cần live team surface. Mọi runtime, gồm Codex, đều abort khi thiếu
+- Skill cần live team surface. Codex không nhận Skill này; mọi runtime khác
+  đều abort khi thiếu
   capability bắt buộc cho creation, shared work, messaging, waiting, shutdown
   hoặc cleanup.
+- Có một ngoại lệ khi Agent Teams không khả dụng và route herdr-core (`hc`) đã
+  cài đủ điều kiện, theo cùng lượt probe của `ak-orchestrate`: mỗi teammate chạy
+  như một session `hc` trong worktree riêng. `hc` chỉ cung cấp session, direct
+  message, kiểm tra trạng thái và shutdown, nên lead giữ shared task list,
+  dependency và ownership. Skill vẫn abort khi template cần plan approval hoặc
+  capability khác mà route không có, và check của teammate được báo là
+  harness-attested. Không có route `hc` đủ điều kiện thì Skill abort như trước.
 - Model list, limit, permission, isolation, display mode, memory, resume và
   cleanup behavior do runtime sở hữu và phải được kiểm tra trực tiếp.
 - Persistent teammate memory chỉ dùng khi runtime cung cấp và project policy

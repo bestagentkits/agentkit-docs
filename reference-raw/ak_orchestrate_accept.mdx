@@ -10,16 +10,28 @@ Verify and accept one settled attempt's artifact receipt
 
 ### Synopsis
 
-Verify and accept one settled attempt's artifact receipt. CLI dispatch requires Darwin; internal dispatch belongs to the active harness.
+Verify and accept one settled attempt's artifact receipt. CLI dispatch requires Darwin; internal dispatch belongs to the active harness. A job whose accepted workspace or artifacts changed afterwards is stale, and ordinary acceptance refuses it with error_code "conflict". Restoring the accepted files or commit restores it; a new commit, including git revert, does not. To keep the change, recover with --reaccept and a success receipt naming the current artifact digests: declared inputs must still match the attempt, dependencies must be accepted, and declared verification runs again. Re-acceptance records only the new artifacts and fingerprint; other receipt fields stay from the original acceptance. Recover dependencies first. A dependent restores itself only when its dependency's evidence is exactly what it was accepted against; otherwise it needs its own --reaccept. If inputs or a handed-off artifact changed, prepare a new run for that job instead.
+
+Receipt (--result) is one JSON object with exact, case-sensitive keys. A receipt with an unknown, duplicate or misspelled key, a wrong type, a missing success or an invalid field value is refused with exit 2 (error_code validation_failed, remediation.reason receipt_*) before the run is read. Checks that depend on the run, such as artifact hashes and settlement, run during acceptance and exit 1.
+- success: boolean, required. false settles the attempt as failed and records the reason on the attempt.
+- settled: boolean, required true to attest settled execution.
+- attempt_id: string, optional. Must equal --attempt when present.
+- artifacts: array of &#123;path, sha256, from_job?, from_path?&#125;. Must list every declared output with its sha256 when success is true.
+- error_class: string, optional failure class used for retry decisions; at most 256 bytes, no control characters or line breaks.
+- observed: object &#123;source, runtime?, provider?, model?, model_family?&#125;, optional; source is required.
+- arbiter_verdict: "pass", "fail" or "blocked", optional.
+- interventions: non-negative integer, optional.
+- usage: object &#123;input_tokens?, output_tokens?, cost_usd?&#125;, optional, non-negative.
+Refusal reasons: receipt_malformed, receipt_unknown_field, receipt_duplicate_field, receipt_success_missing, receipt_success_not_boolean, receipt_field_type, receipt_field_value, receipt_attempt_mismatch.
 
 Effects:
-  Writes private jobs.yaml, state.json and metrics.jsonl in the run directory. Acceptance runs declared verification commands; advance may copy declared artifacts and spawn CLI jobs.
+  Writes private jobs.yaml, state.json, metrics.jsonl and a .fingerprint-cache of owned-file digests in the run directory. Acceptance runs declared verification commands; advance may copy declared artifacts and spawn CLI jobs.
 
 Exit status:
   0 success, 1 command failure, 2 invalid flags or arguments
 
 ```
-ak orchestrate accept <run-dir> <job-id> --attempt <id> --result <receipt.json> [flags]
+ak orchestrate accept <run-dir> <job-id> --attempt <id> --result <receipt.json> [--reaccept] [flags]
 ```
 
 ### Examples
@@ -27,6 +39,7 @@ ak orchestrate accept <run-dir> <job-id> --attempt <id> --result <receipt.json> 
 ```
   ak orchestrate accept ./run build --attempt build-1 --result receipt.json
   ak orchestrate accept ./run build --attempt build-1 --result receipt.json --json
+  ak orchestrate accept ./run build --attempt build-1 --result receipt.json --reaccept
 ```
 
 ### Options
@@ -37,6 +50,7 @@ ak orchestrate accept <run-dir> <job-id> --attempt <id> --result <receipt.json> 
       --json             Emit machine-readable JSON (implies --no-interactive)
       --no-interactive   Disable interactive prompts (CI-safe)
   -q, --quiet            Suppress non-error output on stderr
+      --reaccept         Recover a stale job: accept its settled, previously accepted attempt against the current workspace
       --result string    JSON receipt with settled outcome and artifact hashes
   -V, --verbose          Extra diagnostic output on stderr (loses to --quiet)
   -y, --yes              Assume yes for all prompts

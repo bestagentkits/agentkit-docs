@@ -6,7 +6,7 @@ description: Resolve preference đã ghi ở user và project hiện tại với
 import { Callout } from 'fumadocs-ui/components/callout';
 
 Dùng `ak config prefs resolve` để xem giá trị preference mà Kit Hook đọc cho
-working directory hiện tại. Lệnh chỉ đọc và hoạt động không cần mạng.
+project chứa working directory hiện tại. Lệnh chỉ đọc và hoạt động không cần mạng.
 
 ## Cách dùng
 
@@ -23,7 +23,15 @@ dạng payload; `--yes` và `--no-interactive` không thay đổi resolution.
 Lệnh xem xét đúng hai đường dẫn:
 
 1. `~/.agentkit/config.yaml` hoặc `$AGENTKIT_HOME/config.yaml` dưới scope `user`;
-2. `<current-working-directory>/.agentkit/config.yaml` dưới scope `project`.
+2. `<project-directory>/.agentkit/config.yaml` dưới scope `project`.
+
+Thư mục project là thư mục gần nhất, tính từ working directory trở lên, có
+`.agentkit/config.yaml` hoặc `.git`; nếu không tìm thấy thì là chính working
+directory. Việc tìm kiếm không bao giờ chọn thư mục home của bạn, thư mục nằm
+trên home, hoặc thư mục home của AgentKit, nên khi chạy từ thư mục home sẽ không
+có nguồn project. Marker hoặc config project nằm trên working directory mà
+người dùng khác sở hữu, hoặc có `.agentkit` là liên kết, sẽ không được tin cậy:
+lệnh bỏ qua nó và ghi chú ra stderr (im lặng với `--json` hoặc `--quiet`).
 
 Tệp thiếu được ghi là absent và không phải lỗi. Tệp không đọc được hoặc sai
 định dạng làm toàn bộ resolution thất bại để Hook không âm thầm fallback khi
@@ -69,8 +77,10 @@ nguyên văn. Mọi thứ dưới `extensions` được giữ nguyên, không đ
 
 ## Đầu ra dành cho người dùng
 
-Stdout dành cho người dùng in hai đường dẫn nguồn cùng trạng thái `present`
-hoặc `absent` trước. Sau đó lệnh in object preference đã resolve dưới dạng JSON
+Stdout dành cho người dùng in hai đường dẫn nguồn cùng trạng thái `present`,
+`absent` hoặc `skipped: not trusted` trước. Khi working directory không nằm trong
+project nào, dòng project là
+`(none: the working directory is not inside a project)`. Sau đó lệnh in object preference đã resolve dưới dạng JSON
 thụt dòng. Khi chưa ghi preference nào, lệnh in:
 
 ```text
@@ -90,12 +100,15 @@ No preferences are set; hooks use their built-in defaults.
   "prefs": {"hooks":{"simplify-gate":false}},
   "sources": [
     {"scope":"user","path":"/home/user/.agentkit/config.yaml","present":true},
-    {"scope":"project","path":"/work/project/.agentkit/config.yaml","present":false}
+    {"scope":"project","path":"/work/project/.agentkit/config.yaml","present":false,"root":"/work/project"}
   ]
 }
 ```
 
-`prefs` luôn là object, còn `sources` luôn gồm entry `user` rồi `project`. Kiểu
+`prefs` luôn là object, còn `sources` luôn gồm entry `user` rồi `project`.
+Entry `project` có `root` là thư mục project, có thể là thư mục cha của working
+directory. Entry này có `path` rỗng khi không có project scope, và có
+`"skipped": true` khi config của nó không được tin cậy nên không được đọc. Kiểu
 giá trị được giữ từ YAML.
 
 Chỉ tài liệu thành công được miễn envelope dùng chung. Lỗi trong chế độ JSON,

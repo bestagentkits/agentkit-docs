@@ -49,7 +49,7 @@ Before you start:
 
 | Runtime | Invocation | Availability boundary |
 | --- | --- | --- |
-| Claude Code | `/ak-git ...` | The Skill delegates verbose Git execution to the installed `git-manager` agent. |
+| Claude Code | `/ak-git ...` | The Skill runs Git directly. It delegates to the installed `git-manager` agent only when isolation or coordination helps and delegation is permitted. |
 | Cursor | `/ak-git ...` | Uses the user-verified slash spelling; agent delegation and interactive chooser parity are not established. |
 | Codex | `$ak-git ...` | Uses native Codex discovery; execution still depends on exposed Git, GitHub, and agent capabilities. |
 
@@ -84,7 +84,7 @@ are:
 
 | Operation | Local effect | Remote or external effect |
 | --- | --- | --- |
-| `cm` | Runs `git add -A`, analyzes staged changes, and creates one or more commits | None by default |
+| `cm` | Stages the authorized paths with `git add -- <paths>`, analyzes staged changes, and creates one or more commits | None by default |
 | `cp` | Performs the commit workflow | Pushes the current branch after committing |
 | `pr [to-branch] [from-branch]` | Analyzes the remote branch comparison | Pushes the source branch when needed and creates a GitHub pull request; target defaults to `main`, source to the current branch |
 | `merge [to-branch] [from-branch]` | Checks out and updates the target, then merges `origin/<from-branch>` with a merge commit | Pushes the target branch; target defaults to `main`, source to the current branch |
@@ -95,14 +95,18 @@ documented defaults when omitted.
 
 ## Understand commit and push behavior
 
-1. **The Skill stages the working tree.** `cm` and `cp` use `git add -A`, so
-   tracked, untracked, and deleted paths in the repository can enter the staged
-   set.
+1. **The Skill stages only the authorized paths.** `cm` and `cp` identify the
+   paths that belong to the change and stage them with `git add -- <paths>`.
+   Blanket staging is not used, and unrelated staged work is preserved.
 2. **The Skill summarizes the staged diff.** It reports file and line changes
    and classifies paths by code, tests, documentation, configuration, or
    dependencies.
-3. **The Skill scans staged content.** A keyword and credential-pattern scan
-   blocks the commit when it detects a possible secret.
+3. **The Skill scans staged content for value-shaped secrets.** It prefers an
+   installed scanner such as `gitleaks protect --staged --redact`; otherwise it
+   searches the staged files for credential shapes such as AWS access keys,
+   private-key blocks, GitHub, Slack, `sk-`, and Google API keys, and URLs with
+   inline credentials. A keyword such as `token` or `password` alone is not a
+   secret.
 4. **The Skill decides commit boundaries.** Mixed types or scopes are split;
    small changes with one type and scope can remain a single commit.
 5. **The Skill writes conventional commits.** Messages use
@@ -163,15 +167,17 @@ The `merge-pr` workflow:
 ## Keep authority and safety with you
 
 <Callout type="warn" title="Choose the operation before you invoke it">
-  `cm` stages the entire repository with `git add -A`. `cp`, `pr`, `merge`, and
-  `merge-pr` can mutate remote state. Review unrelated work, branch targets, and
+  `cm` stages and commits the paths it treats as authorized; review the staged
+  set before it commits. `cp`, `pr`, `merge`, and `merge-pr` can mutate remote
+  state. Review unrelated work, branch targets, and
   repository policy before proceeding.
 </Callout>
 
 Important gates:
 
-- A possible secret blocks commit creation. Remove or ignore the material and
-  rerun the scan; do not bypass the warning.
+- Only a real credential blocks commit creation. The Skill reports its
+  `file:line` with the value redacted. Remove or ignore the material and rerun
+  the scan; do not bypass the block.
 - Push requires an explicit push-capable operation. A plain commit does not
   authorize push.
 - Force push is never allowed to `main`, `master`, production, or release
@@ -203,7 +209,7 @@ Expected evidence includes:
 | Symptom | Safe next step |
 | --- | --- |
 | Unrelated files are staged | Stop before committing, review the staged set, and define the intended ownership groups. |
-| A secret pattern is detected | Inspect the matching staged lines, unstage the path, move the value to an approved secret store, and update ignore rules when appropriate. |
+| A real credential is reported at `file:line` | Inspect the reported staged line, unstage the path, move the value to an approved secret store, and update ignore rules when appropriate. |
 | There are no changes | Exit cleanly; do not create an empty commit. |
 | A push is rejected | Fetch and reconcile the remote according to repository policy; do not force push a protected branch. |
 | A pull request has an empty diff | Verify the remote source and target branches and whether local commits were pushed. |
@@ -216,7 +222,8 @@ Expected evidence includes:
 - Commit splitting uses path and size heuristics; review the proposed boundaries
   for semantic correctness.
 - Remote comparisons exclude unpushed work by design.
-- The secret scan can flag harmless text or miss secrets outside its patterns.
+- The secret scan ignores keyword-only matches by design, and it can miss
+  secrets whose values do not match a known credential shape.
 - `merge-pr` can observe and react to repository CI but cannot bypass external
   outages, missing permissions, required review, or branch protection.
 - Cursor slash invocation is user-verified evidence, not proof of agent or

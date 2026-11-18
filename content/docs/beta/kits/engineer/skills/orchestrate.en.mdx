@@ -80,8 +80,11 @@ acceptance constraint: that job is blocked, never converted. Only in a spec the
 Skill authors does it list check commands under `checks:`, run them in the
 harness, and record them as harness-attested. The Skill never bypasses the
 supervision gate, launches an unsupervised process instead, or re-advances a
-job already stuck on it. When no current-runtime session qualifies either, the run
-blocks and says why.
+job already stuck on it. Before declaring that no session route exists, the
+Skill probes a herdr-core (`hc`) session host if you installed one (see
+[Dispatch sessions first](#dispatch-sessions-first)); a CLI or Pi job blocked
+for the platform stays blocked. When no session route qualifies either, the
+run blocks and says why.
 
 ## Run the Skill
 
@@ -141,9 +144,19 @@ spec. Nested in-harness subagents are not workers.
   in the request (for example "as pi sessions"). Each is an equivalent opt-in
   for that runtime. A named runtime that is missing or unauthenticated runs
   its onboarding as a visible setup step, then is probed again.
+- **herdr-core is an optional session host.** If you already installed
+  herdr-core (`hc`), the Skill probes it before declaring no session route.
+  AgentKit does not ship, install, or configure it. The route qualifies only
+  after `hc` creates, observes, messages, and cancels a throwaway session. It
+  hosts current-runtime sessions for `runtime: internal` jobs, one worktree per
+  job, and never runs a CLI or Pi job that was blocked with
+  `unsupported_platform`. Because `hc` cannot set a permission posture, jobs
+  that need approval gates or destructive effects are not dispatched through
+  it unless the hosted runtime's own flags set one. Its check results are
+  recorded as harness-attested.
 - **Unavailable is visible.** When the current runtime cannot start a
-  qualifying session and no opted-in candidate qualifies, the job is reported
-  `blocked` with the probe evidence. The Skill never widens scope silently or
+  qualifying session, no opted-in candidate qualifies, and no herdr-core route
+  qualifies, the job is reported `blocked` with the probe evidence. The Skill never widens scope silently or
   overrides an explicit runtime, model, or role-profile pin.
 - **Permission fallback is the only subagent route.** When the runtime refuses
   to start a session because the coordinator lacks permission (standing policy
@@ -231,7 +244,9 @@ not start. The reason for any reduced concurrency is recorded in the report.
 action. The coordinator class stays in `status.json` and the report, and the
 plan engine's mapped `error_class` goes in the `accept` receipt (for example
 `rate_limited` maps to `rate-limit`, and a transient failure maps to `timeout`
-when the bound expired):
+when the bound expired). The receipt is one strict JSON object: an unknown,
+duplicate, or misspelled key exits `2` with `validation_failed`, so other
+coordinator fields belong in `status.json` and the report:
 
 | Class | Examples | Retry |
 | --- | --- | --- |
@@ -324,6 +339,10 @@ A complete run should provide:
 - Per-job status, resolved route, risk and capability classification, artifacts,
   errors, timeouts, and attempts.
 - Preserved failed or interrupted evidence rather than silent retries.
+- A check state for each accepted attempt: `pass` when the engine ran
+  `verification:`, `harness-attested` for descriptive `checks:` alone, or
+  `not-requested` when the job declares neither. A failed verification records
+  `fail`.
 - An arbiter verdict that checks every required artifact and contradiction.
 - A final report naming successful, failed, and blocked jobs, checks, worktree
   diffs awaiting integration, and unresolved questions.
@@ -338,6 +357,7 @@ claims have evidence, contradictions are resolved, and the arbiter passes.
 | The agent says orchestrate needs macOS | Only external CLI supervision needs Darwin. The Skill routes the jobs through current-runtime sessions; jobs that need a supervised CLI are reported `blocked`. |
 | A session cannot start and the job is `blocked` | Read the probe evidence. Opt in another runtime with `--cross-runtime` or a `fallback_runtime` chain, or fix the current runtime's session surface. |
 | The Skill prints that `--internal` is deprecated | Drop the flag. Current-runtime sessions are already the default. |
+| `accept` refuses an accepted job as stale with `conflict` | An owned path, artifact, or base revision changed after acceptance. Restore the accepted files or reset to the accepted commit (`git revert` does not count), or keep the change with `ak orchestrate accept ... --reaccept` and a receipt of the current artifact digests, dependencies first. Prepare a new run only when declared inputs or a handed-off artifact changed. |
 | A runtime is missing or unauthenticated | Evaluate opted-in fallbacks in a new run directory through the same live gate, or complete setup outside the run and preflight again. |
 | A model or flag is rejected | Return to live help or current official documentation; do not guess or carry identifiers across runtimes. |
 | A permission prompt appears | Stop the job and resolve the exact approval boundary. Do not retry with a bypass. |

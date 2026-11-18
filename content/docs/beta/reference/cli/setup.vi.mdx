@@ -51,11 +51,17 @@ bằng `ak kit init --local --kits-dir <dir> --target opencode`.
 
 | Tuỳ chọn | Mặc định | Mô tả |
 | --- | --- | --- |
-| `--adapter <ids>` | Runtime được phát hiện | Cấu hình tập adapter đã đăng ký, phân tách bằng dấu phẩy: `claude-code`, `codex`, `cursor`, `dsh`, `grok`, `omp`, `opencode` hoặc `pi`. `dsh` và `pi` cũng là emitter projection Kit (`ak kit init --target dsh`, `ak kit init --target pi`); liệt kê `pi` ở đây không cung cấp `ak run --target pi`. |
-| `--no-adapter <ids>` | Trống | Loại tập adapter đã đăng ký đó, phân tách bằng dấu phẩy. |
+| `--adapter <ids>` | `adapters.enabled` hiện tại | Đặt các adapter được bật thành tập adapter đã đăng ký, phân tách bằng dấu phẩy: `claude-code`, `codex`, `cursor`, `dsh`, `grok`, `omp`, `opencode` hoặc `pi`. Danh sách này thay thế `adapters.enabled`, nên adapter không được liệt kê sẽ bị tắt; `none` tắt mọi adapter, và giá trị rỗng bị từ chối. `dsh` và `pi` cũng là emitter projection Kit (`ak kit init --target dsh`, `ak kit init --target pi`); liệt kê `pi` ở đây không cung cấp `ak run --target pi`. |
+| `--no-adapter <ids>` | Trống | Tắt tập adapter đã đăng ký đó, phân tách bằng dấu phẩy. Khi đi cùng `--adapter`, cờ này lọc danh sách đó; khi dùng riêng, cờ này gỡ các adapter đó khỏi `adapters.enabled` hiện tại và giữ phần còn lại. |
 | `--advanced` | `false` | Bao gồm provider key, tuỳ chọn provider/model và ghi đè Codex. |
 | `--config <path>` | Trống | Đọc câu trả lời cho script từ tệp YAML có key là setup step ID. |
 | `--step <id>` | Trống | Chỉ cập nhật một trường setup thay vì xử lý toàn bộ tập step. |
+
+Khi không có `--adapter`, `--no-adapter` hay câu trả lời `enabled_adapters`
+trong `--config`, setup giữ nguyên `adapters.enabled` hiện tại; lần chạy đầu
+tiên chọn giá trị mặc định. Khi lựa chọn mới tắt một adapter đang bật, setup in
+cảnh báo ra stderr, nêu giá trị trước đó, các adapter bị tắt và lệnh khôi phục
+chúng (`ak setup --adapter <ids> --no-interactive`).
 
 Step ID không tồn tại và lựa chọn adapter xung đột sẽ thất bại trước khi ghi cấu
 hình. Xem [quy ước CLI](../cli-conventions) để biết các cờ dùng chung như
@@ -74,6 +80,9 @@ Chỉ cập nhật adapter đang bật:
 ```bash
 ak setup --step enabled_adapters
 ```
+
+Trong wizard, bước chọn adapter cho phép chọn nhiều và đã tích sẵn các adapter
+hiện tại. Không chọn gì sẽ lưu `none`.
 
 Áp dụng tệp cho script và trả về đầu ra có cấu trúc:
 
@@ -109,6 +118,9 @@ data.partial: boolean, present for --step
 data.auth.agentkit: session_present, not_authenticated, or unknown
 data.auth.kit_entitlement: not_checked or login_required
 data.auth.runtimes: array of adapter, state, and optional action
+data.previous_adapters: string, present when the run disabled an adapter
+data.disabled_adapters: array of adapter IDs, present with previous_adapters
+data.restore_command: string, present when the previous adapters can be restored
 ```
 
 Lỗi trong chế độ JSON, kể cả lỗi phân tích cờ (mã thoát `2`), kết thúc stderr

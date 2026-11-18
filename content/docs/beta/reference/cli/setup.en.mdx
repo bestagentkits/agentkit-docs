@@ -52,11 +52,18 @@ with no released Kit package, so install Kits for it from a local source with
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `--adapter <ids>` | Detected runtimes | Configure a comma-separated set of registered adapters: `claude-code`, `codex`, `cursor`, `dsh`, `grok`, `omp`, `opencode`, or `pi`. `dsh` and `pi` also act as Kit projection emitters (`ak kit init --target dsh`, `ak kit init --target pi`); listing `pi` here does not provide `ak run --target pi`. |
-| `--no-adapter <ids>` | Empty | Exclude a comma-separated set of those registered adapters. |
+| `--adapter <ids>` | Current `adapters.enabled` | Set the enabled adapters to a comma-separated set of registered adapters: `claude-code`, `codex`, `cursor`, `dsh`, `grok`, `omp`, `opencode`, or `pi`. The list replaces `adapters.enabled`, so adapters you do not list are disabled; `none` disables every adapter, and an empty value is refused. `dsh` and `pi` also act as Kit projection emitters (`ak kit init --target dsh`, `ak kit init --target pi`); listing `pi` here does not provide `ak run --target pi`. |
+| `--no-adapter <ids>` | Empty | Disable a comma-separated set of those registered adapters. With `--adapter`, it filters that list; used alone, it removes them from the current `adapters.enabled` and keeps the rest. |
 | `--advanced` | `false` | Include provider keys, provider/model preferences, and Codex overrides. |
 | `--config <path>` | Empty | Read scripted answers from a YAML file whose keys are setup step IDs. |
 | `--step <id>` | Empty | Update one setup field instead of processing the complete step set. |
+
+Without `--adapter`, `--no-adapter`, or an `enabled_adapters` answer in
+`--config`, setup keeps the current `adapters.enabled`; a first run picks a
+default. When the new selection disables an adapter that was enabled before,
+setup prints a warning on stderr that names the previous value, the disabled
+adapters, and the command that restores them
+(`ak setup --adapter <ids> --no-interactive`).
 
 Unknown step IDs and conflicting adapter selections fail before configuration
 is written. See [CLI conventions](../cli-conventions) for shared flags such as
@@ -75,6 +82,9 @@ Update only the enabled adapters:
 ```bash
 ak setup --step enabled_adapters
 ```
+
+In the wizard, the adapter step is a multi-select pre-checked with the current
+adapters. Selecting none stores `none`.
 
 Apply a scripted file and return structured output:
 
@@ -110,6 +120,9 @@ data.partial: boolean, present for --step
 data.auth.agentkit: session_present, not_authenticated, or unknown
 data.auth.kit_entitlement: not_checked or login_required
 data.auth.runtimes: array of adapter, state, and optional action
+data.previous_adapters: string, present when the run disabled an adapter
+data.disabled_adapters: array of adapter IDs, present with previous_adapters
+data.restore_command: string, present when the previous adapters can be restored
 ```
 
 JSON-mode failures, including flag-parse errors (exit `2`), end stderr with the
