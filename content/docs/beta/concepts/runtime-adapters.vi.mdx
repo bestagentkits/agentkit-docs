@@ -1,6 +1,6 @@
 ---
 title: Runtime adapter
-description: So sánh runtime adapter cho Claude Code, Codex, Cursor, DeepSeek Harness, Grok, Pi, Oh My Pi và spike OpenCode.
+description: So sánh runtime adapter cho Claude Code, Codex, Cursor, DeepSeek Harness, Grok, Pi, Oh My Pi và OpenCode.
 ---
 
 Các coding assistant không dùng chung cấu trúc tệp, bộ công cụ hay mô hình
@@ -16,9 +16,9 @@ trợ.
 
 `ak setup` và onboarding đưa ra bảy runtime ID đã phát hành, và
 `ak kit init --target` cũng chấp nhận chúng (đồng thời chấp nhận `agy` và
-`portable` là export-only). `ak setup --adapter` còn liệt kê `opencode`, một
-spike đã đăng ký ở source nhưng nằm ngoài bản phát hành; xem
-[OpenCode](#opencode-spike-đã-đăng-ký-ở-source). Giai
+`portable` là export-only). `ak kit init --target` và `ak setup --adapter` cũng
+chấp nhận `opencode`, target mới nhất được phát hành; xem
+[OpenCode](#opencode). Giai
 đoạn adapter lấy từ ma trận hỗ trợ runtime của AgentKit và cho biết adapter đã
 được phát triển đến đâu. Giai đoạn không phải là cam kết hỗ trợ: một adapter
 Production vẫn có thể lỗi trên một hệ điều hành, và một adapter Spike có thể đã
@@ -33,6 +33,7 @@ Production vẫn có thể lỗi trên một hệ điều hành, và một adapt
 | Grok Build | `grok` | Spike |
 | Oh My Pi | `omp` | Spike |
 | Pi | `pi` | Spike |
+| OpenCode | `opencode` | Spike |
 
 Ba capability sau là riêng biệt, một target có thể có capability này mà không có
 capability khác:
@@ -40,8 +41,8 @@ capability khác:
 - **Projection** ghi nội dung Kit vào tệp của runtime. Cả bảy target đều hỗ trợ,
   nhưng projection tệp không chứng minh hành vi runtime thực tế.
 - **Skill dispatch** chạy một Skill đã phân giải bằng `ak run --target`. Tính năng
-  này nhận `claude-code`, `codex`, `cursor`, `dsh`, `grok`, `omp` và spike
-  `opencode` chưa được chứng nhận. Pi chỉ có projection và không có
+  này nhận `claude-code`, `codex`, `cursor`, `dsh`, `grok`, `omp` và
+  `opencode`. Pi chỉ có projection và không có
   `ak run --target pi`.
 - **Điều phối agent và session** là capability của runtime hoặc workflow, không
   phải kết quả của việc cài Kit.
@@ -50,17 +51,19 @@ Hai tên khác không phải target setup. `agy` và `portable` là tuyến expo
 chỉ ghi tệp mà không tạo trạng thái vòng đời đã cài, còn Cloud Harness là kênh
 phân phối chứ không phải runtime setup cục bộ.
 
-### OpenCode: spike đã đăng ký ở source
+### OpenCode
 
-OpenCode có adapter native trong source AgentKit, ở giai đoạn Spike, nhưng không
-thuộc bản phát hành. `ak setup --adapter opencode` ghi nhận adapter và kiểm tra
-binary `opencode` có resolve được hay không, còn `ak run --target opencode`
-dispatch Skill tới OpenCode khi chưa có chứng nhận runtime. Kit chỉ được
-projection vào OpenCode từ source cục bộ, bằng
-`ak kit init --local --kits-dir <dir> --target opencode`, và
-`ak update --global --local` làm mới bản cài ở user scope. Signed registry không
-phát hành package OpenCode nào, nên cài hoặc cập nhật từ registry không có gì để
-cài cho nó, và ứng dụng Desktop không đưa ra lựa chọn này.
+OpenCode là target đã phát hành. Adapter của nó ở giai đoạn Spike, và signed
+registry phát hành package OpenCode cho mọi Kit đăng ký được, nên
+`ak kit init <kit> --target opencode` cài từ registry và `ak update` làm mới bản
+cài. OpenCode 1.x và 2.x dùng chung một layout. `ak setup --adapter opencode`
+ghi nhận adapter và kiểm tra binary `opencode` có resolve được hay không, còn
+`ak run --target opencode` dispatch Skill tới OpenCode. Source cục bộ vẫn dùng
+được với `ak kit init --local --kits-dir <dir> --target opencode`. Ứng dụng
+Desktop chưa đưa ra lựa chọn OpenCode.
+
+OpenCode được chứng nhận trên macOS (Apple silicon) và ở mức assumed trên
+Windows và Linux cho đến khi các host đó được đo; xem support tier bên dưới.
 
 ## Tier hỗ trợ: certified và assumed
 
@@ -80,6 +83,7 @@ Tier hiện tại:
 | Claude Code | Certified | Certified | Certified |
 | Pi | Certified | Certified | Certified |
 | Oh My Pi | Certified | Certified | Certified |
+| OpenCode | Certified | Assumed | Assumed |
 | DeepSeek Harness | Certified | Certified | Certified |
 | Codex | Certified | Assumed | Certified |
 | Cursor | Assumed | Assumed | Assumed |
@@ -211,7 +215,7 @@ các bề mặt hoạt động khác nhau:
 | Grok Build | Target Kit registry đã ký với projection native. Rule, Skill, Agent và Hook được hỗ trợ nằm dưới `<project>/.grok` hoặc `${GROK_HOME:-~/.grok}`; metadata lifecycle nằm riêng dưới `<project>/.agentkit/adapters/grok/<kit>` hoặc `${AGENTKIT_HOME:-~/.agentkit}/adapters/grok/<kit>`. Script dùng cho hook của Kit có bản sao chạy được dưới `.grok/hooks/scripts/`, nằm cạnh hook, để `require('../scripts/...')` trong hook resolve được; cài đặt và refresh giữ chúng luôn mới, gỡ cài đặt sẽ xóa chúng. Command và export không được hỗ trợ vẫn là sidecar không hoạt động. Cài từ nguồn cục bộ vẫn khả dụng cho development và CI. |
 | Pi | Projection Kit `--target pi` đã đăng ký ở source. `ak setup --adapter` và onboard `--target` liệt kê `pi` như Kit target chỉ emit. Bản cài project ghi Skill portable `ak-<slug>` dưới `.pi/skills/`, Agent đã remap dưới `.pi/agents/`, rule thuộc sở hữu dưới `.pi/rules/` và extension first-party dưới `.pi/extensions/`. Bản cài global có điều kiện ghi trực tiếp dưới profile Pi coding-agent đang hoạt động. Pi vẫn là spike cho dispatch: không có `ak run --target pi`, không wrap harness đầy đủ, không ghi `.pi/commands/`, và sidecar không hoạt động vẫn nằm trong lifecycle ownership. Pi giữ native TUI footer theo mặc định; AgentKit chỉ gọi `setFooter` khi được truyền `statuslineMode` khác `none` một cách tường minh. |
 | Oh My Pi | Target cài native cho scope project hoặc người dùng, đồng thời hỗ trợ dispatch Skill không tương tác qua `ak run --target omp`. Skill, Agent, rule và instruction của Kit dùng các bề mặt discovery native của OMP; export không được hỗ trợ vẫn là sidecar không hoạt động. Oh My Pi tự quản backend và credential đã cấu hình. |
-| OpenCode | Projection spike chỉ từ source cục bộ. Skill, Agent và command nằm dưới `<project>/.opencode/` hoặc `$XDG_CONFIG_HOME/opencode` (mặc định `~/.config/opencode`, ghi đè bằng `AGENTKIT_OPENCODE_HOME`), còn rule được gộp vào một phần Kit có marker giới hạn trong `AGENTS.md`, và gỡ cài đặt chỉ xoá phần đó. Agent được projection với `mode: subagent` và không có model, nên model của session hoặc `opencode.json` được áp dụng. MCP, Hook, status line, output style, schema và script vẫn là sidecar không hoạt động. OpenCode cũng nạp `.claude/skills` và `.agents/skills`, nên một Skill Claude Code hoặc Codex cùng tên sẽ được hiển thị hai lần; bản cài cảnh báo và không đụng tới bản nào. |
+| OpenCode | Projection native từ package registry hoặc source cục bộ. Skill, Agent và command nằm dưới `<project>/.opencode/` hoặc `$XDG_CONFIG_HOME/opencode` (mặc định `~/.config/opencode`, ghi đè bằng `AGENTKIT_OPENCODE_HOME`), còn rule được gộp vào một phần Kit có marker giới hạn trong `AGENTS.md`, và gỡ cài đặt chỉ xoá phần đó. Agent được projection với `mode: subagent` và không có model, nên model của session hoặc `opencode.json` được áp dụng. MCP, Hook, status line, output style, schema và script vẫn là sidecar không hoạt động. OpenCode cũng nạp `.claude/skills` và `.agents/skills`, nên một Skill Claude Code hoặc Codex cùng tên sẽ được hiển thị hai lần; bản cài cảnh báo và không đụng tới bản nào. |
 
 ### Projection và discovery trên Pi
 
@@ -385,7 +389,7 @@ Package phụ thuộc bản phát hành; cài đặt được không chứng min
 | Cloud Harness (`cloud-harness`) | Có (chỉ phân phối) | Không / Không | Không | Không | Package đã ký được phát hành cho Cloud Harness MCP harness; `ak` từ chối dùng nó làm target cài đặt cục bộ |
 | AGY | Không | Không / Có | Không | Không | Chỉ export Skill và Agent tùy chọn ở global; nguồn là package Claude Code đã ký; không project, Hook hoặc MCP projection |
 | Portable | Không | Export với `--out` | Không | Không | File độc lập; không có lifecycle của runtime đã cài |
-| OpenCode | Không | Có / Có (chỉ source cục bộ) | Chỉ setup | Có (spike) | Spike đã đăng ký ở source, nằm ngoài bản phát hành; MCP vẫn là sidecar; chưa có chứng nhận runtime |
+| OpenCode | Có | Có / Có | Chỉ setup | Có | MCP vẫn là sidecar; ứng dụng Desktop chưa hỗ trợ |
 
 AGY không có đầy đủ contract refresh như các target chính. Export global và cleanup ownership không đồng nghĩa hỗ trợ `ak run --target agy`. Setup không liệt kê target export-only. Tương tự, `cloud-harness` không phải target của `kit init`, setup hay `ak run`; Cloud Harness MCP harness dùng trực tiếp package đã ký của nó. Bảng này không tuyên bố đã chạy live canary mới với provider.
 
