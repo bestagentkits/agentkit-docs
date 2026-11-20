@@ -5,13 +5,13 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
-const script = resolve(repoRoot, '.agents/skills/ak-release-update/scripts/classify-pr-prefix.sh');
+const script = '.agents/skills/ak-release-update/scripts/classify-pr-prefix.sh';
 
 // execFileSync, not execFile: the async form has no `input` option, so the
 // script would block on a stdin pipe that is never written or closed.
 function classify(entries) {
   const input = `${entries.map((entry) => JSON.stringify({ pr: '0', url: '', ...entry })).join('\n')}\n`;
-  const stdout = execFileSync('bash', [script], { input, encoding: 'utf8' });
+  const stdout = execFileSync('bash', [script], { cwd: repoRoot, input, encoding: 'utf8' });
   return stdout
     .split('\n')
     .filter(Boolean)
@@ -51,7 +51,7 @@ test('release-engineering scopes stay skipped and unknown scopes stay unclassifi
 
 test('a final line with no trailing newline is still classified', () => {
   const input = JSON.stringify({ prefix: 'codex', subject: 'no trailing newline', pr: '0', url: '' });
-  const stdout = execFileSync('bash', [script], { input, encoding: 'utf8' });
+  const stdout = execFileSync('bash', [script], { cwd: repoRoot, input, encoding: 'utf8' });
   const rows = stdout.split('\n').filter(Boolean).map((line) => JSON.parse(line));
   assert.equal(rows.length, 1);
   assert.equal(rows[0].tab, 'runtime');
