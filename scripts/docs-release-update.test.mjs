@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { cp, mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import {
@@ -350,7 +350,7 @@ async function snapshot(path) {
   for (const entry of entries) {
     if (!entry.isFile()) continue;
     const full = join(entry.parentPath ?? entry.path, entry.name);
-    files[full.slice(path.length)] = await readFile(full, 'utf8');
+    files[`/${relative(path, full).split(sep).join('/')}`] = await readFile(full, 'utf8');
   }
   return files;
 }

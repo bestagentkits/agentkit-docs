@@ -130,6 +130,11 @@ two models, so set `semantic_decision.model` to `clef` or `clef-flash`.
 `openrouter` and `openai-compatible` have no model discovery, so both require
 `semantic_decision.model`.
 
+From CLI `v3.3.0-beta.1`, TypeSafe also accepts numeric version pins of a
+listed `<family>-latest` alias, such as `<family>-1.14.0`. The decision
+completes only if the provider reports the exact pinned version as
+`resolved_model`. A refused or substituted pin returns `model_unavailable`.
+
 ## Check the status
 
 Run the `semantic_decision` check of [`ak doctor`](../reference/cli/doctor) to
@@ -140,9 +145,9 @@ ak doctor --check semantic_decision
 ak doctor --check semantic_decision --json
 ```
 
-The check, shown as **Semantic decisions**, is read-only and offline. It
-resolves the same consent policy as the semantic commands, never contacts the
-provider, and reports only whether a credential resolves, never its value. With
+The check, shown as **Semantic decisions**, is read-only. It resolves the same
+consent policy as the semantic commands and reports whether a credential
+resolves without printing its value. With
 `--json`, its `details` include `enabled`, `provider`, `model`, `consumers`,
 `project_restricted`, and `credential_available`.
 
@@ -152,10 +157,15 @@ provider, and reports only whether a credential resolves, never its value. With
 | `warn` | The consent policy is invalid, the provider credential does not resolve, or `cloudflare`, `openrouter`, or `openai-compatible` is selected without `semantic_decision.model`. The evidence names what to fix; for a missing model it suggests `ak config prefs set semantic_decision.model <model-id> --scope user` (or `clef-flash` for `cloudflare`). |
 | `ok` | Consent, provider, model, and credential are all in place. The evidence lists the provider, model, and permitted consumers, and for `openai-compatible` names the base URL that requests go to. |
 
-An `ok` result means calls are possible, not that any happened. A provider is
-called only when a permitted consumer runs, such as `ak eval decision`, so an
-idle setup makes no requests and shows no provider usage. AgentKit keeps no call
-log or usage counter; inspect each command's result to confirm a specific call.
+From CLI `v3.3.0-beta.1`, an online TypeSafe check can make one catalog
+request with a five-second limit after local consent and credential checks
+pass and at least one consumer is permitted. It sends no decision
+payload. Use `--offline` to keep the check local as in earlier builds.
+Inspect `details.model_check` for model verification. A refused credential,
+an unavailable model, or several available models with none selected triggers
+a warning. If discovery is unavailable for another reason, Doctor reports
+that it could not verify the model. For a pin, the catalog verifies its
+alias; inspect `resolved_model` on a completed decision to verify the version.
 
 ## Run a comparison
 
@@ -163,6 +173,9 @@ log or usage counter; inspect each command's result to confirm a specific call.
 `domain-routing`, `fix-complexity`, `orchestration-risk`, or
 `skill-routing-eval`. The request holds the consumer, compact state, and the
 legacy answers.
+
+CLI `v3.3.0-beta.1` also supports `e2e-classification` and `test-impact`.
+Check the [request contract](../reference/cli/eval/decision) for these profiles.
 
 ```bash
 ak eval decision request.json --validate-only --json
