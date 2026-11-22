@@ -317,6 +317,33 @@ A `403` or `404` from the package host, or a size or checksum mismatch, is
 different: AgentKit never falls back to the cache for those, because they can
 mean the package itself is wrong.
 
+## An untracked hook runtime file stops a Claude Code update
+
+An install made by an older AgentKit release can hold Claude Code hook support
+files, such as `hooks/lib/ck-config-utils.cjs` or `hooks/lib/colors.cjs`, that
+the install record does not list. Before the fix for
+[agentkit#3529](https://github.com/bestagentkits/agentkit/issues/3529), every
+later `ak update` stopped with
+`the untracked native hook runtime file "hooks/lib/..." differs from this kit's version`.
+
+A build that includes that fix checks the file's exact contents against every
+version AgentKit has shipped at that path. When they match, the update first
+saves the old copies in a recovery snapshot, then replaces them and continues.
+The JSON result lists this under `notices` with the backup ID and the restore
+command, for example `ak backups restore <id>`. A refresh after such a restore
+needs `--force`. With `--no-backup`, the notice says no snapshot was taken.
+
+The update still stops when the file holds other content, for example because
+you edited it or another tool wrote it. Keep your copy somewhere safe if you
+need it, then run the command the error names; it takes a recovery snapshot
+before replacing the file. For a global install it looks like this:
+
+```bash
+ak update --global --target claude-code --force --yes
+```
+
+Afterwards, `ak doctor --json` should report `hook_registration` as ok.
+
 ## Check the result
 
 ```bash
