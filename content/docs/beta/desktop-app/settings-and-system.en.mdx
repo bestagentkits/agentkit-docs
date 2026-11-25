@@ -143,7 +143,7 @@ limits card. Open the badge, choose a provider (`claude`, `codex`, `cursor`, `gr
 or `all`), and choose a window (`5h`, `week`, `monthly`, or `all`). Claude Code
 and Codex rows are counted from the local analytics index; Cursor and Grok keep
 no local transcripts, so their rows show figures only while advanced polling is
-on for them.
+on for them. Advanced polling is on by default.
 
 The badge itself reads as one of four states — `ok`, `warn`, `danger`, or
 `stale`. By default the popover auto-refreshes every 60 seconds and rows carry
@@ -155,36 +155,54 @@ stay empty until the local index has counted usage; if you switched the index
 off, turn it back on in the Database tab.
 
 A cold or absent index returns zeroed windows together with an index state, so
-the view explains the empty state instead of showing a misleading zero. Unless
-you turn on advanced polling, nothing leaves this machine; rebuild the index
-from the Database tab when the windows look stale.
+the view explains the empty state instead of showing a misleading zero. Rebuild
+the index from the Database tab when the windows look stale. Only advanced
+polling, described below, sends anything off this machine.
 
 ### Advanced provider polling (experimental)
 
-Advanced polling is off by default. When you turn it on, AgentKit asks each
-enabled provider for its own usage percentages and adds them to the same rows.
-The **Advanced polling** panel appears in Settings in every build that includes
-the polling code; release builds do. No environment variable is needed. A build
-compiled without advanced polling hides the panel, and polling cannot be
-turned on there.
+Advanced polling is on by default. AgentKit asks each provider you are signed
+in to (Claude Code, Codex, Cursor, and Grok) for its own usage percentages and
+adds them to the same rows, so the badge, popover, Dashboard card, and
+[`ak usage limits`](../reference/cli/usage/limits) show provider-reported quota
+without any setup. The **Advanced polling** panel appears in Settings in every
+build that includes the polling code; release builds do. A build compiled
+without advanced polling hides the panel and stays local-only.
 
-Setting **Advanced provider polling** to **On** opens an acknowledgement
-dialog. **Enable polling** stays disabled until you tick all three statements:
+Polling calls undocumented provider endpoints:
 
-- The usage endpoints are undocumented, and polling them may be against the
-  provider's terms of service.
+- Polling them may be against the provider's terms of service.
 - The provider can change or remove the endpoints at any time, and polling then
   stops working without notice.
 - Polling may lead the provider to rate-limit, restrict, or suspend your
   account.
 
-The acknowledgement is not remembered: turning polling off and on again shows
-the dialog again, with every box cleared. While polling is on, the panel shows
-when you last acknowledged. Turning polling off takes effect immediately.
+#### Turn polling off or back on
 
-While polling is on, the panel shows a switch for each provider — Claude Code
-and Codex (on by default), and Cursor and Grok (off by default, because every
-figure they show comes from polling) — and a **Refresh interval** of 30 s, 60 s
+Set **Advanced provider polling** to **Off** to stay local-only. The change
+takes effect immediately, and nothing leaves this machine afterwards. An
+explicit off is sticky: AgentKit stores `usage_limits.advanced.enabled: false`
+with the time you opted out (`usage_limits.opted_out_at`) and never turns
+polling back on by itself, including after an update. To opt out by editing the
+config instead, set both keys; a bare `enabled: false` without
+`opted_out_at` is the value older builds wrote on every save, so AgentKit reads
+it as the default and keeps polling on.
+
+Setting the switch back to **On** after an explicit off opens an
+acknowledgement dialog. **Enable polling** stays disabled until you tick all
+three statements above. The acknowledgement is not remembered: every time you
+turn polling back on, the dialog appears again with every box cleared. While
+polling is on, the panel shows when you last acknowledged.
+
+To keep one process local-only whatever the stored setting says — for a
+script, a CI job, or a test suite — set `AGENTKIT_USAGE_LIMITS_LOCAL_ONLY=1`
+(`true`, `yes`, and `on` also work). That process makes no provider calls and
+does not change the stored setting.
+
+#### Providers and refresh interval
+
+While polling is on, the panel shows a switch for each provider — Claude Code,
+Codex, Cursor, and Grok, all on by default — and a **Refresh interval** of 30 s, 60 s
 (default), 2 min, or 5 min. The badge, popover, and Dashboard card refresh at
 that interval. Between polls every surface reads the cached answer, and each
 provider is capped at a burst of three requests a minute.
@@ -199,10 +217,13 @@ requests, refreshes, or writes a token.
 | Cursor | `POST https://api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage` (monthly window) | `CURSOR_ACCESS_TOKEN`, then a private copy of Cursor's `state.vscdb`, then the macOS keychain item |
 | Grok | `GET https://cli-chat-proxy.grok.com/v1/billing` (weekly window) | `GROK_ACCESS_TOKEN`, then `~/.grok/auth.json` |
 
-On macOS, the first fetch asks you to allow access to the Claude Code keychain
-item. If you deny it, Claude keeps showing local counts and polling stays on;
-allow access later from Keychain Access, or set `ANTHROPIC_OAUTH_TOKEN`
-instead.
+On macOS, the first Claude Code or Cursor fetch may show the system's one-time
+prompt to allow access to that provider's keychain item. If you deny it,
+AgentKit switches polling off for that provider and marks it auto-disabled, so
+the prompt does not come back on every refresh; its rows keep showing local
+counts. To poll it again, allow access from Keychain Access (or set
+`ANTHROPIC_OAUTH_TOKEN` or `CURSOR_ACCESS_TOKEN`), then turn the provider back
+on.
 
 Rows the provider answered switch to `provider_reported` provenance and show
 the provider's used percent; the local token counts stay. Cursor and Grok rows
