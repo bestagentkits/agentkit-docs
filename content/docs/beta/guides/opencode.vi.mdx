@@ -1,0 +1,103 @@
+---
+title: Dùng AgentKit với OpenCode
+description: Cài Kit AgentKit cho OpenCode 1.x và 2.x, chạy Skill qua OpenCode và xử lý các giới hạn hiện tại.
+---
+
+AgentKit cài Kit theo cách native vào [OpenCode](https://opencode.ai). Adapter
+`opencode` ở giai đoạn Production và được phát hành trên **kênh beta**: dùng
+AgentKit `v3.3.0-beta.15` trở lên với `--channel beta` cho đến khi một bản
+stable có adapter này.
+
+| Phiên bản OpenCode | Trạng thái |
+| --- | --- |
+| 1.x | Certified trên 1.18.18 (macOS, Apple silicon) |
+| 2.x | Đã kiểm thử thực tế trên 2.4.1 (macOS, Apple silicon) |
+
+Windows và Linux ở tier Assumed: dự kiến hoạt động nhưng chưa được đo. Xem
+[tier hỗ trợ](../concepts/runtime-adapters#tier-hỗ-trợ-certified-và-assumed).
+
+## Cài Kit
+
+Từ thư mục gốc của dự án:
+
+```bash
+ak kit init engineer --target opencode --channel beta
+```
+
+Thay `engineer` bằng Kit bạn sở hữu (ví dụ `marketing`). Thêm `--global` để cài
+vào thư mục cấu hình OpenCode thay vì dự án.
+
+Bản cài ghi:
+
+- Skill, Agent và command dưới `.opencode/` (dự án) hoặc
+  `$XDG_CONFIG_HOME/opencode` (global, mặc định `~/.config/opencode`).
+- Một phần Kit có marker giới hạn trong `AGENTS.md`. Các dòng của bạn được giữ
+  nguyên, và gỡ cài đặt chỉ xoá phần đó. `AGENTS.md` là symlink sẽ không bao giờ
+  bị ghi xuyên qua; bản cài chỉ cảnh báo.
+
+Agent được cài dưới dạng subagent không có model, nên model của session
+OpenCode hoặc `opencode.json` được áp dụng.
+
+Làm mới hoặc gỡ Kit bằng:
+
+```bash
+ak kit refresh engineer --target opencode --channel beta
+```
+
+```bash
+ak kit uninstall engineer
+```
+
+Gỡ cài đặt giữ lại Skill của bạn và một bản sao lưu `.opencode` để khôi phục
+thủ công. Các tệp do chính OpenCode ghi, như `.opencode/node_modules`, không bị
+đụng tới.
+
+## Chạy Skill qua OpenCode
+
+```bash
+ak run engineer/ak-bro "Giải thích repo này" --target opencode
+```
+
+`ak run` khởi chạy `opencode run` với provider bạn đã cấu hình. OpenCode cần
+đăng nhập vào một provider hoạt động trước.
+
+## Giới hạn đã biết
+
+- **Hook, output style và status line chỉ được giữ lại, không chạy.** Chúng
+  được lưu dưới dạng sidecar không hoạt động vì OpenCode chạy plugin JS/TS thay
+  vì shell hook và không có bề mặt output style hay status line.
+- **MCP server chưa được thêm vào `opencode.json`.** Cấu hình MCP của Kit vẫn là
+  sidecar không hoạt động; hiện tại hãy tự thêm server vào `opencode.json`. Theo
+  dõi tại
+  [bestagentkits/agentkit#937](https://github.com/bestagentkits/agentkit/issues/937).
+- **OpenCode 2.x chưa có cách liệt kê Skill ổn định.** `opencode debug skill`
+  chỉ có trên 1.x; trên 2.x, hãy hỏi model liệt kê Skill.
+- **Skill trùng tên.** OpenCode cũng nạp `.claude/skills` và `.agents/skills`,
+  nên Skill Claude Code hoặc Codex cùng tên sẽ xuất hiện hai lần. Bản cài cảnh
+  báo và không đụng tới bản nào.
+
+## Khoá provider và `ak secrets run`
+
+OpenCode ưu tiên credential đã lưu bằng `opencode auth login` hơn biến môi
+trường. Vì vậy khoá truyền qua `ak secrets run` có thể bị bỏ qua khi còn một
+credential đã lưu cũ hoặc hết hạn.
+
+- **OpenCode 1.x:** trỏ provider tới biến môi trường trong `opencode.json` của
+  dự án:
+
+  ```json
+  {
+    "provider": {
+      "<provider-id>": {
+        "options": { "apiKey": "{env:YOUR_KEY_VAR}" }
+      }
+    }
+  }
+  ```
+
+  Sau đó chạy qua `ak secrets run` như bình thường.
+- **OpenCode 2.x:** chạy lại `opencode auth login` để thay credential đã lưu.
+
+Theo dõi tại
+[bestagentkits/agentkit#3686](https://github.com/bestagentkits/agentkit/issues/3686).
+Xem [Secrets vault](./secrets-vault) về `ak secrets run`.
