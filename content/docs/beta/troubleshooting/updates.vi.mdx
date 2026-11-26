@@ -310,6 +310,32 @@ Lỗi `403` hoặc `404` từ máy chủ gói, hoặc sai kích thước hay che
 khác: AgentKit không bao giờ dùng cache thay thế cho các lỗi đó, vì chúng có
 thể có nghĩa là chính gói bị sai.
 
+## File hook runtime không được ghi nhận làm dừng cập nhật Claude Code
+
+Một bản cài từ phiên bản AgentKit cũ có thể chứa file hỗ trợ hook của Claude
+Code, ví dụ `hooks/lib/ck-config-utils.cjs` hoặc `hooks/lib/colors.cjs`, mà hồ sơ
+cài đặt không liệt kê. Trước bản sửa cho
+[agentkit#3529](https://github.com/bestagentkits/agentkit/issues/3529), mọi lần
+`ak update` sau đó đều dừng với lỗi
+`the untracked native hook runtime file "hooks/lib/..." differs from this kit's version`.
+
+Bản build có bản sửa đó so khớp chính xác nội dung file với mọi phiên bản
+AgentKit từng phát hành tại đường dẫn đó. Khi khớp, lệnh cập nhật lưu bản cũ vào
+một recovery snapshot, rồi thay thế và tiếp tục. Kết quả JSON ghi việc này trong
+`notices` kèm ID bản sao lưu và lệnh khôi phục, ví dụ `ak backups restore <id>`.
+Sau khi khôi phục như vậy, lần refresh tiếp theo cần `--force`. Với
+`--no-backup`, notice cho biết không có snapshot nào được tạo.
+
+Lệnh cập nhật vẫn dừng khi file có nội dung khác, ví dụ do bạn đã sửa nó hoặc
+công cụ khác ghi vào. Hãy lưu bản của bạn ra nơi khác nếu cần, rồi chạy lệnh mà
+thông báo lỗi nêu; lệnh này tạo recovery snapshot trước khi thay file. Với bản cài global, lệnh có dạng:
+
+```bash
+ak update --global --target claude-code --force --yes
+```
+
+Sau đó, `ak doctor --json` nên báo `hook_registration` là ok.
+
 ## Kiểm tra kết quả
 
 ```bash
