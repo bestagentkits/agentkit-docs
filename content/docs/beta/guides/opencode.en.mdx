@@ -1,0 +1,103 @@
+---
+title: Using AgentKit with OpenCode
+description: Install AgentKit Kits for OpenCode 1.x and 2.x, run Skills through OpenCode, and work around the current limits.
+---
+
+AgentKit installs Kits natively into [OpenCode](https://opencode.ai). The
+`opencode` adapter is at the Production stage and ships on the **beta channel**:
+use AgentKit `v3.3.0-beta.15` or later with `--channel beta` until a stable
+release includes it.
+
+| OpenCode version | Status |
+| --- | --- |
+| 1.x | Certified on 1.18.18 (macOS, Apple silicon) |
+| 2.x | Live-tested on 2.4.1 (macOS, Apple silicon) |
+
+Windows and Linux are Assumed: expected to work, not yet measured. See
+[support tiers](../concepts/runtime-adapters#support-tiers-certified-and-assumed).
+
+## Install a Kit
+
+From your project root:
+
+```bash
+ak kit init engineer --target opencode --channel beta
+```
+
+Replace `engineer` with any Kit you own (for example `marketing`). Add
+`--global` to install into your OpenCode config root instead of the project.
+
+The install writes:
+
+- Skills, Agents, and commands below `.opencode/` (project) or
+  `$XDG_CONFIG_HOME/opencode` (global, default `~/.config/opencode`).
+- One marker-bounded Kit section in `AGENTS.md`. Your own lines stay untouched,
+  and uninstall removes only that section. A symlinked `AGENTS.md` is never
+  written through; the install warns instead.
+
+Agents are installed as subagents without a model, so the model from your
+OpenCode session or `opencode.json` applies.
+
+Refresh or remove the Kit with:
+
+```bash
+ak kit refresh engineer --target opencode --channel beta
+```
+
+```bash
+ak kit uninstall engineer
+```
+
+Uninstall keeps your own skills and a backup of `.opencode` for manual
+recovery. Files OpenCode writes itself, such as `.opencode/node_modules`, are
+left alone.
+
+## Run a Skill through OpenCode
+
+```bash
+ak run engineer/ak-bro "Explain this repo" --target opencode
+```
+
+`ak run` starts `opencode run` with your configured provider. OpenCode must be
+signed in to a working provider first.
+
+## Known limits
+
+- **Hooks, output styles, and the status line are kept, not run.** They are
+  stored as inactive sidecars because OpenCode runs JS/TS plugins instead of
+  shell hooks and has no output-style or status-line surface.
+- **MCP servers are not added to `opencode.json` yet.** Kit MCP config stays an
+  inactive sidecar; add servers to `opencode.json` yourself for now. Tracked in
+  [bestagentkits/agentkit#937](https://github.com/bestagentkits/agentkit/issues/937).
+- **OpenCode 2.x has no stable skill listing.** `opencode debug skill` exists
+  only on 1.x; on 2.x, ask the model to list its skills.
+- **Duplicate skills.** OpenCode also loads `.claude/skills` and
+  `.agents/skills`, so a Claude Code or Codex Skill with the same name appears
+  twice. The install warns and touches neither copy.
+
+## Provider keys and `ak secrets run`
+
+OpenCode prefers the credentials it stored with `opencode auth login` over
+environment variables. A key passed through `ak secrets run` can therefore be
+ignored when an older or expired stored credential exists.
+
+- **OpenCode 1.x:** point the provider at the environment variable in your
+  project `opencode.json`:
+
+  ```json
+  {
+    "provider": {
+      "<provider-id>": {
+        "options": { "apiKey": "{env:YOUR_KEY_VAR}" }
+      }
+    }
+  }
+  ```
+
+  Then run through `ak secrets run` as usual.
+- **OpenCode 2.x:** re-run `opencode auth login` to replace the stored
+  credential.
+
+Tracked in
+[bestagentkits/agentkit#3686](https://github.com/bestagentkits/agentkit/issues/3686).
+See [Secrets vault](./secrets-vault) for `ak secrets run`.

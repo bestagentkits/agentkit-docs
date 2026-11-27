@@ -159,7 +159,10 @@ with `--no-backup`.
   before changing any runtime file. This is an ownership refusal, not a snapshot or
   disk-space failure. If the install is yours, run the exact
   `ak kit init ... --force --yes` command printed in the detail; it takes a
-  recovery snapshot, then replaces the marker.
+  recovery snapshot, then replaces the marker. A marker that differs only in
+  CRLF line endings (a Windows checkout with `core.autocrlf=true`) is no longer
+  refused; when the detail names `core.autocrlf`, add a `.gitattributes` rule
+  such as `.claude/** text=auto eol=lf` so Git keeps AgentKit files LF.
 - For `checking target before snapshot` or `inspect ... before snapshot`, a path
   in the target is not the type AgentKit expected, for example a symlinked file
   where a directory belongs. Move that path aside, retry, then restore it if you
@@ -293,6 +296,53 @@ ak licenses
 3. Otherwise buy the kit, then rerun the update.
 4. If you no longer need the kit, remove it with `ak kit uninstall <kit>` (add
    `--global` for a global install).
+
+## A kit download says the package host is temporarily unavailable
+
+An error containing `kit package host is temporarily unavailable`
+means the host that serves kit packages kept answering with a timeout,
+rate-limit, or server error (HTTP 408, 429, or 5xx) through every automatic
+retry. This is a service-side outage, not a blocked network and not a bad
+package. That step did not change your installed kit files.
+
+When AgentKit already verified the same kit, runtime, and version on this
+machine, `ak update` and `ak setup` reuse that cached copy and you do not see
+this error. You see it only when no usable verified copy exists.
+
+1. Wait a few minutes, then rerun the same command.
+2. If it keeps failing, run `ak doctor` and report the failure with the
+   generated support bundle.
+
+A `403` or `404` from the package host, or a size or checksum mismatch, is
+different: AgentKit never falls back to the cache for those, because they can
+mean the package itself is wrong.
+
+## An untracked hook runtime file stops a Claude Code update
+
+An install made by an older AgentKit release can hold Claude Code hook support
+files, such as `hooks/lib/ck-config-utils.cjs` or `hooks/lib/colors.cjs`, that
+the install record does not list. Before the fix for
+[agentkit#3529](https://github.com/bestagentkits/agentkit/issues/3529), every
+later `ak update` stopped with
+`the untracked native hook runtime file "hooks/lib/..." differs from this kit's version`.
+
+A build that includes that fix checks the file's exact contents against every
+version AgentKit has shipped at that path. When they match, the update first
+saves the old copies in a recovery snapshot, then replaces them and continues.
+The JSON result lists this under `notices` with the backup ID and the restore
+command, for example `ak backups restore <id>`. A refresh after such a restore
+needs `--force`. With `--no-backup`, the notice says no snapshot was taken.
+
+The update still stops when the file holds other content, for example because
+you edited it or another tool wrote it. Keep your copy somewhere safe if you
+need it, then run the command the error names; it takes a recovery snapshot
+before replacing the file. For a global install it looks like this:
+
+```bash
+ak update --global --target claude-code --force --yes
+```
+
+Afterwards, `ak doctor --json` should report `hook_registration` as ok.
 
 ## Check the result
 

@@ -156,7 +156,10 @@ Giữ nguyên `.agentkit`, `.claude` và snapshot. Không bypass safety boundary
   trước khi thay đổi bất kỳ runtime file nào. Đây là từ chối ownership, không phải lỗi
   snapshot hay dung lượng disk. Nếu install này là của bạn, chạy đúng lệnh
   `ak kit init ... --force --yes` in trong detail; lệnh đó tạo recovery
-  snapshot rồi mới thay marker.
+  snapshot rồi mới thay marker. Marker chỉ khác ký tự xuống dòng CRLF (checkout
+  trên Windows với `core.autocrlf=true`) không còn bị từ chối; nếu detail nhắc
+  `core.autocrlf`, hãy thêm quy tắc `.gitattributes` như `.claude/** text=auto eol=lf`
+  để Git giữ file AgentKit ở dạng LF.
 - Nếu detail là `checking target before snapshot` hoặc
   `inspect ... before snapshot`, một path trong target không đúng loại AgentKit
   mong đợi, ví dụ file symlink ở chỗ cần thư mục. Tạm chuyển path đó đi chỗ
@@ -287,6 +290,51 @@ ak licenses
 3. Nếu không, hãy mua Kit rồi chạy lại cập nhật.
 4. Nếu không còn cần Kit, gỡ nó bằng `ak kit uninstall <kit>` (thêm `--global`
    cho bản cài global).
+
+## Tải kit báo máy chủ gói tạm thời không khả dụng
+
+Lỗi có chứa `kit package host is temporarily unavailable` nghĩa là
+máy chủ phát gói kit liên tục trả về lỗi timeout, giới hạn tần suất hoặc lỗi
+máy chủ (HTTP 408, 429 hoặc 5xx) qua mọi lần thử lại tự động. Đây là sự cố
+phía dịch vụ, không phải mạng bị chặn và không phải gói bị hỏng. Bước đó chưa
+thay đổi file kit đã cài của bạn.
+
+Khi AgentKit đã xác minh cùng kit, runtime và phiên bản đó trên máy này,
+`ak update` và `ak setup` dùng lại bản cache đó và bạn không thấy lỗi này. Bạn
+chỉ thấy lỗi khi không có bản đã xác minh nào dùng được.
+
+1. Đợi vài phút rồi chạy lại đúng lệnh đó.
+2. Nếu vẫn lỗi, chạy `ak doctor` và báo lỗi kèm support bundle được tạo ra.
+
+Lỗi `403` hoặc `404` từ máy chủ gói, hoặc sai kích thước hay checksum, thì
+khác: AgentKit không bao giờ dùng cache thay thế cho các lỗi đó, vì chúng có
+thể có nghĩa là chính gói bị sai.
+
+## File hook runtime không được ghi nhận làm dừng cập nhật Claude Code
+
+Một bản cài từ phiên bản AgentKit cũ có thể chứa file hỗ trợ hook của Claude
+Code, ví dụ `hooks/lib/ck-config-utils.cjs` hoặc `hooks/lib/colors.cjs`, mà hồ sơ
+cài đặt không liệt kê. Trước bản sửa cho
+[agentkit#3529](https://github.com/bestagentkits/agentkit/issues/3529), mọi lần
+`ak update` sau đó đều dừng với lỗi
+`the untracked native hook runtime file "hooks/lib/..." differs from this kit's version`.
+
+Bản build có bản sửa đó so khớp chính xác nội dung file với mọi phiên bản
+AgentKit từng phát hành tại đường dẫn đó. Khi khớp, lệnh cập nhật lưu bản cũ vào
+một recovery snapshot, rồi thay thế và tiếp tục. Kết quả JSON ghi việc này trong
+`notices` kèm ID bản sao lưu và lệnh khôi phục, ví dụ `ak backups restore <id>`.
+Sau khi khôi phục như vậy, lần refresh tiếp theo cần `--force`. Với
+`--no-backup`, notice cho biết không có snapshot nào được tạo.
+
+Lệnh cập nhật vẫn dừng khi file có nội dung khác, ví dụ do bạn đã sửa nó hoặc
+công cụ khác ghi vào. Hãy lưu bản của bạn ra nơi khác nếu cần, rồi chạy lệnh mà
+thông báo lỗi nêu; lệnh này tạo recovery snapshot trước khi thay file. Với bản cài global, lệnh có dạng:
+
+```bash
+ak update --global --target claude-code --force --yes
+```
+
+Sau đó, `ak doctor --json` nên báo `hook_registration` là ok.
 
 ## Kiểm tra kết quả
 
